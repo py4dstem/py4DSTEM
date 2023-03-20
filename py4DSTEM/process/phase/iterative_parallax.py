@@ -811,7 +811,6 @@ class ParallaxReconstruction(PhaseReconstruction):
         asnumpy = self._asnumpy
 
         # Fourier coordinates
-        print(self._recon_BF.shape)
         kx = xp.fft.fftfreq(self._recon_BF.shape[0], self._scan_sampling[0])
         ky = xp.fft.fftfreq(self._recon_BF.shape[1], self._scan_sampling[1])
         kra2 = (kx[:, None]) ** 2 + (ky[None, :]) ** 2
@@ -881,8 +880,6 @@ class ParallaxReconstruction(PhaseReconstruction):
             ax.set_ylabel("x [A]")
             ax.set_xlabel("y [A]")
             ax.set_title("Parallax-Corrected Phase Image")
-
-
 
 
     def depth_section(
@@ -966,14 +963,7 @@ class ParallaxReconstruction(PhaseReconstruction):
             stack_depth[a0] = asnumpy(xp.real(xp.fft.ifft2(
                 im_depth * CTF_corr
             ))) / self._stack_BF.shape[0]
-
-            # if needed, add low pass filter output image
             
-
-        # # Output phase image
-        # self._recon_phase_corrected = xp.real(xp.fft.ifft2(im_fft_corr))
-        # self.recon_phase_corrected = asnumpy(self._recon_phase_corrected)
-
         # plotting
         if plot_last_image:
             figsize = kwargs.get("figsize", (6, 6))
