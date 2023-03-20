@@ -117,7 +117,7 @@ class ParallaxReconstruction(PhaseReconstruction):
         # get mean diffraction pattern
         if self._dp_mean is not None:
             self._dp_mean = xp.asarray(self._dp_mean, dtype=xp.float32)
-        if "dp_mean" in self._datacube.tree.keys():
+        elif "dp_mean" in self._datacube.tree.keys():
             self._dp_mean = xp.asarray(
                 self._datacube.tree["dp_mean"].data, dtype=xp.float32
             )
@@ -127,14 +127,14 @@ class ParallaxReconstruction(PhaseReconstruction):
             )
 
         # extract calibrations
-        self._extract_intensities_and_calibrations_from_datacube(
+        self._intensities = self._extract_intensities_and_calibrations_from_datacube(
             self._datacube,
             require_calibrations=True,
         )
 
         # make sure mean diffraction pattern is shaped correctly
-        if (self._dp_mean.shape[0] != self._intensities_shape[2]) or (
-            self._dp_mean.shape[1] != self._intensities_shape[3]
+        if (self._dp_mean.shape[0] != self._intensities.shape[2]) or (
+            self._dp_mean.shape[1] != self._intensities.shape[3]
         ):
             raise ValueError(
                 "dp_mean must match the datacube shape. Try setting dp_mean = None."
@@ -154,24 +154,24 @@ class ParallaxReconstruction(PhaseReconstruction):
         self._kr = xp.sqrt(xp.sum(self._kxy**2, axis=1))
 
         # Window function
-        x = xp.linspace(-1, 1, self._intensities_shape[0] + 1)[1:]
+        x = xp.linspace(-1, 1, self._grid_scan_shape[0] + 1)[1:]
         x -= (x[1] - x[0]) / 2
         wx = (
             xp.sin(
                 xp.clip(
-                    (1 - xp.abs(x)) * self._intensities_shape[0] / edge_blend / 2, 0, 1
+                    (1 - xp.abs(x)) * self._grid_scan_shape[0] / edge_blend / 2, 0, 1
                 )
                 * (xp.pi / 2)
             )
             ** 2
         )
 
-        y = xp.linspace(-1, 1, self._intensities_shape[1] + 1)[1:]
+        y = xp.linspace(-1, 1, self._grid_scan_shape[1] + 1)[1:]
         y -= (y[1] - y[0]) / 2
         wy = (
             xp.sin(
                 xp.clip(
-                    (1 - xp.abs(y)) * self._intensities_shape[1] / edge_blend / 2, 0, 1
+                    (1 - xp.abs(y)) * self._grid_scan_shape[1] / edge_blend / 2, 0, 1
                 )
                 * (xp.pi / 2)
             )
@@ -182,14 +182,14 @@ class ParallaxReconstruction(PhaseReconstruction):
         self._window_inv = 1 - self._window_edge
         self._window_pad = xp.zeros(
             (
-                self._intensities_shape[0] + object_padding_px[0],
-                self._intensities_shape[1] + object_padding_px[1],
+                self._grid_scan_shape[0] + object_padding_px[0],
+                self._grid_scan_shape[1] + object_padding_px[1],
             )
         )
         self._window_pad[
-            object_padding_px[0] // 2 : self._intensities_shape[0]
+            object_padding_px[0] // 2 : self._grid_scan_shape[0]
             + object_padding_px[0] // 2,
-            object_padding_px[1] // 2 : self._intensities_shape[1]
+            object_padding_px[1] // 2 : self._grid_scan_shape[1]
             + object_padding_px[1] // 2,
         ] = self._window_edge
 
@@ -202,17 +202,17 @@ class ParallaxReconstruction(PhaseReconstruction):
             all_means = xp.mean(all_bfs, axis=(0, 1))
 
         stack_shape = (
-            self._intensities_shape[0] + object_padding_px[0],
-            self._intensities_shape[1] + object_padding_px[1],
+            self._grid_scan_shape[0] + object_padding_px[0],
+            self._grid_scan_shape[1] + object_padding_px[1],
             self._num_bf_images,
         )
 
         self._stack_BF = xp.full(stack_shape, all_means[None, None])
 
         self._stack_BF[
-            object_padding_px[0] // 2 : self._intensities_shape[0]
+            object_padding_px[0] // 2 : self._grid_scan_shape[0]
             + object_padding_px[0] // 2,
-            object_padding_px[1] // 2 : self._intensities_shape[1]
+            object_padding_px[1] // 2 : self._grid_scan_shape[1]
             + object_padding_px[1] // 2,
         ] = (
             self._window_inv[:, :, None] * all_means[None, None]
@@ -285,8 +285,8 @@ class ParallaxReconstruction(PhaseReconstruction):
 
             self._visualize_figax(fig, ax, **kwargs)
 
-            ax.set_xlabel("x [A]")
-            ax.set_ylabel("y [A]")
+            ax.set_ylabel("x [A]")
+            ax.set_xlabel("y [A]")
             ax.set_title("Average Bright Field Image")
 
         self._preprocessed = True
@@ -868,8 +868,8 @@ class ParallaxReconstruction(PhaseReconstruction):
                 **kwargs,
             )
 
-            ax.set_xlabel("x [A]")
-            ax.set_ylabel("y [A]")
+            ax.set_ylabel("x [A]")
+            ax.set_xlabel("y [A]")
             ax.set_title("CTF-Corrected Bright Field Image")
 
     def _crop_padded_object(
@@ -1002,8 +1002,8 @@ class ParallaxReconstruction(PhaseReconstruction):
 
         self._visualize_figax(fig, ax, **kwargs)
 
-        ax.set_xlabel("x [A]")
-        ax.set_ylabel("y [A]")
+        ax.set_ylabel("x [A]")
+        ax.set_xlabel("y [A]")
         ax.set_title("Reconstructed Bright Field Image")
 
         return self
