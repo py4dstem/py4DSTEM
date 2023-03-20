@@ -1,10 +1,10 @@
-# Reader for py4DSTEM v0.6 files
+# Reader for py4DSTEM v0.5 files
 
 import h5py
 import numpy as np
 from os.path import splitext
 from py4DSTEM.io.legacy.read_utils import is_py4DSTEM_file, get_py4DSTEM_topgroups, get_py4DSTEM_version, version_is_geq
-from py4DSTEM.io.legacy.read_utils_v0_6 import get_py4DSTEM_dataobject_info
+from py4DSTEM.io.legacy.legacy12.read_utils_v0_5 import get_py4DSTEM_dataobject_info
 from emdfile import (
     PointList,
     PointListArray
@@ -16,9 +16,9 @@ from py4DSTEM.classes import (
 )
 from emdfile import tqdmnd
 
-def read_v0_6(fp, **kwargs):
+def read_v0_5(fp, **kwargs):
     """
-    File reader for files written by py4DSTEM v0.6.  Precise behavior is detemined by which
+    File reader for files written by py4DSTEM v0.5.  Precise behavior is detemined by which
     arguments are passed -- see below.
 
     ***NOTE: this function has not yet been tested on all legacy py4DSTEM formats. Please report
@@ -79,7 +79,7 @@ def read_v0_6(fp, **kwargs):
             return None,None
 
     version = get_py4DSTEM_version(fp, tg)
-    assert(version == (0,6,0)), "File must be v0.6.0."
+    assert(version == (0,5,0)), "File must be v0.5.0."
     _data_id = 'data_id' in kwargs.keys()  # Flag indicating if data was requested
 
     # Validate inputs
@@ -257,9 +257,9 @@ def get_datacube_from_grp(g,mem='RAM',binfactor=1,bindtype=None):
     assert binfactor == 1, "Bin on load is currently unsupported for EMD files."
 
     if (mem, binfactor) == ("RAM", 1):
-        data = np.array(g['data'])
+        data = np.array(g['datacube'])
     elif (mem, binfactor) == ("MEMMAP", 1):
-        data = g['data']
+        data = g['datacube']
     
     name = g.name.split('/')[-1]
     return DataCube(data=data,name=name)
@@ -274,31 +274,35 @@ def get_diffractionslice_from_grp(g):
     """ Accepts an h5py Group corresponding to a diffractionslice in an open, correctly formatted H5 file,
         and returns a DiffractionSlice.
     """
-    data = np.array(g['data'])
+    data = np.array(g['diffractionslice'])
     name = g.name.split('/')[-1]
+    Q_Nx,Q_Ny = data.shape[:2]
     if len(data.shape)==2:
-        return DiffractionSlice(data=data,name=name)
+        return DiffractionSlice(data=data,Q_Nx=Q_Nx,Q_Ny=Q_Ny,name=name)
     else:
         lbls = g['dim3']
         if('S' in lbls.dtype.str): # Checks if dim3 is composed of fixed width C strings
-            lbls = lbls.astype('S64')[:]
+            with lbls.astype('S64'):
+                lbls = lbls[:]
             lbls = [lbl.decode('UTF-8') for lbl in lbls]
-        return DiffractionSlice(data=data,name=name,slicelabels=lbls)
+        return DiffractionSlice(data=data,Q_Nx=Q_Nx,Q_Ny=Q_Ny,name=name,slicelabels=lbls)
 
 def get_realslice_from_grp(g):
     """ Accepts an h5py Group corresponding to a realslice in an open, correctly formatted H5 file,
         and returns a RealSlice.
     """
-    data = np.array(g['data'])
+    data = np.array(g['realslice'])
     name = g.name.split('/')[-1]
+    R_Nx,R_Ny = data.shape[:2]
     if len(data.shape)==2:
-        return RealSlice(data=data,name=name)
+        return RealSlice(data=data,R_Nx=R_Nx,R_Ny=R_Ny,name=name)
     else:
         lbls = g['dim3']
         if('S' in lbls.dtype.str): # Checks if dim3 is composed of fixed width C strings
-            lbls = lbls.astype('S64')[:]
+            with lbls.astype('S64'):
+                lbls = lbls[:]
             lbls = [lbl.decode('UTF-8') for lbl in lbls]
-        return RealSlice(data=data,name=name,slicelabels=lbls)
+        return RealSlice(data=data,R_Nx=R_Nx,R_Ny=R_Ny,name=name,slicelabels=lbls)
 
 def get_pointlist_from_grp(g):
     """ Accepts an h5py Group corresponding to a pointlist in an open, correctly formatted H5 file,
@@ -307,17 +311,17 @@ def get_pointlist_from_grp(g):
     name = g.name.split('/')[-1]
     coordinates = []
     coord_names = list(g.keys())
-    length = len(g[coord_names[0]+'/data'])
+    length = len(g[coord_names[0]+'/pointlist'])
     if length==0:
         for coord in coord_names:
             coordinates.append((coord,None))
     else:
         for coord in coord_names:
-            dtype = type(g[coord+'/data'][0])
+            dtype = type(g[coord+'/pointlist'][0])
             coordinates.append((coord, dtype))
     data = np.zeros(length,dtype=coordinates)
     for coord in coord_names:
-        data[coord] = np.array(g[coord+'/data'])
+        data[coord] = np.array(g[coord+'/pointlist'])
     return PointList(data=data,name=name)
 
 def get_pointlistarray_from_grp(g):
@@ -330,19 +334,31 @@ def get_pointlistarray_from_grp(g):
     shape = (np.max(ar[:,0])+1,np.max(ar[:,1])+1)
     coord_names = list(g['0_0'])
     N = len(coord_names)
-    coord_types = [type(np.array(g['0_0/'+coord_names[i]+'/data'])[0]) for i in range(N)]
+    coord_types = [type(np.array(g['0_0/'+coord_names[i]+'/pointlistarray'])[0]) for i in range(N)]
     coordinates = [(coord_names[i],coord_types[i]) for i in range(N)]
     pla = PointListArray(dtype=coordinates,shape=shape,name=name)
     for (i,j) in tqdmnd(range(shape[0]),range(shape[1]),desc="Reading PointListArray",unit="PointList"):
         g_pl = g[str(i)+'_'+str(j)]
-        L = len(np.array(g_pl[coordinates[0][0]+'/data']))
+        L = len(np.array(g_pl[coordinates[0][0]+'/pointlistarray']))
         data = np.zeros(L,dtype=coordinates)
         for i in range(N):
             coord = coordinates[i][0]
-            data[coord] = np.array(g_pl[coord+'/data'])
+            data[coord] = np.array(g_pl[coord+'/pointlistarray'])
         pla.get_pointlist(i,j).data = data
     return pla
 
+
+########### Metadata and log ############
+
+def get_metadata(fp,tg):
+    """ Accepts a fp to a valid py4DSTEM file, and return a dictionary with its metadata.
+    """
+    return #TODO
+
+def write_log(fp,tg):
+    """ Accepts a fp to a valid py4DSTEM file, then prints its processing log to splitext(fp)[0]+'.log'.
+    """
+    return #TODO
 
 
 

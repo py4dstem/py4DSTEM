@@ -4,7 +4,7 @@ import h5py
 import numpy as np
 from os.path import splitext, exists
 from py4DSTEM.io.legacy.read_utils import is_py4DSTEM_file, get_py4DSTEM_topgroups, get_py4DSTEM_version, version_is_geq
-from py4DSTEM.io.legacy.read_utils_v0_9 import get_py4DSTEM_dataobject_info
+from py4DSTEM.io.legacy.legacy12.read_utils_v0_9 import get_py4DSTEM_dataobject_info
 from emdfile import (
     PointList,
     PointListArray

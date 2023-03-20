@@ -5,19 +5,9 @@ import numpy as np
 import warnings
 from os.path import exists,basename,dirname,join
 from typing import Optional, Union
+
 from py4DSTEM.io.legacy.read_utils import is_py4DSTEM_version13
-
-
-from emdfile import (
-    Root,
-    Metadata,
-    Array,
-    PointList,
-    PointListArray
-)
-
-
-from py4DSTEM.classes import (
+from py4DSTEM.io.legacy.legacy13 import (
     Calibration,
     DataCube,
     DiffractionSlice,
@@ -28,6 +18,16 @@ from py4DSTEM.classes import (
     QPoints,
     BraggVectors
 )
+from py4DSTEM.io.legacy.legacy13 import (
+    Root,
+    Metadata,
+    Array,
+    PointList,
+    PointListArray
+)
+from py4DSTEM.io.legacy.legacy13 import v13_to_14
+
+
 
 
 def read_legacy13(
@@ -57,7 +57,7 @@ def read_legacy13(
             in the file tree.  If set to `'noroot'`, loads all other
             data groups nested under the root group in the file tree,
             but does *not* load the data inside the root group (allowing,
-            e.g., loading all the data nested under a DataCube without
+            e.g., loading all the data nested under a DataCube13 without
             loading the whole datacube).
     Returns:
         (the data)
@@ -101,16 +101,21 @@ def read_legacy13(
 
             # Read
             if tree is True:
-                return _read_with_tree(group_data)
+                data = _read_with_tree(group_data)
 
             elif tree is False:
-                return _read_without_tree(group_data)
+                data = _read_without_tree(group_data)
 
             elif tree == 'noroot':
-                return _read_without_root(group_data)
+                data = _read_without_root(group_data)
 
         except KeyError:
             raise Exception(f"the provided root {root} is not a valid path to a recognized data group")
+
+
+    # convert version 13 -> 14
+    data = v13_to_14(data)
+    return data
 
 
 
@@ -132,9 +137,11 @@ def _read_without_tree(grp):
             data.calibration = cal
         return data
 
-    # read all other data
-    __class__ = _get_class(grp)
+    # read data as v13 objects
+    __class__ = _get_v13_class(grp)
     data = __class__.from_h5(grp)
+
+    # handle calibration
     if not isinstance(data, Calibration):
         cal = _add_calibration(
             data.tree,
@@ -171,7 +178,7 @@ def _read_without_root(grp):
 
 def _add_calibration(tree,grp):
     keys = [k for k in grp.keys() if isinstance(grp[k],h5py.Group)]
-    keys = [k for k in keys if (_get_class(grp[k]) == Calibration)]
+    keys = [k for k in keys if (_get_v13_class(grp[k]) == Calibration)]
     if len(keys)>0:
         k = keys[0]
         tree[k] = _read_without_tree(grp[k])
@@ -187,7 +194,7 @@ def _add_calibration(tree,grp):
 
 def _populate_tree(tree,grp):
     keys = [k for k in grp.keys() if isinstance(grp[k],h5py.Group)]
-    keys = [k for k in keys if (k[0] != '_' and not _get_class(
+    keys = [k for k in keys if (k[0] != '_' and not _get_v13_class(
                 grp[k]) == Calibration)]
     for key in keys:
         tree[key] = _read_without_tree(
@@ -249,7 +256,7 @@ def print_v13h5pyFile_tree(f, tablevel=0, linelevels=[], show_metadata=False):
 
 
 
-def _get_class(grp):
+def _get_v13_class(grp):
 
     lookup = {
         'Metadata' : Metadata,

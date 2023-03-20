@@ -1,5 +1,7 @@
 # File parser utility
 
+from os.path import splitext
+
 def _parse_filetype(fp):
     """ Accepts a path to a data file, and returns the file type as a string.
     """
@@ -11,7 +13,7 @@ def _parse_filetype(fp):
         ".py4dstem",
         ".emd",
     ]:
-        return "EMD"
+        return "H5"
     elif fext in [
         ".dm",
         ".dm3",

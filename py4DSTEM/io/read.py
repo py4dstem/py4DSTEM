@@ -1,6 +1,7 @@
 # Reader for native files
 
 from pathlib import Path
+from os.path import exists
 from typing import Optional,Union
 
 import py4DSTEM
@@ -64,7 +65,7 @@ def read(
     # parse filetype
     er1 = f"filepath must be a string or Path, not {type(filepath)}"
     er2 = f"specified filepath '{filepath}' does not exist"
-    assert(isinstance(filepath, (str,pathlib.Path) )), er1
+    assert(isinstance(filepath, (str,Path) )), er1
     assert(exists(filepath)), er2
 
     filetype = _parse_filetype(filepath)
@@ -85,18 +86,63 @@ def read(
         return data
 
 
-    # legacy py4DSTEM files (v <= 0.13.14)
+    # legacy py4DSTEM files (v <= 0.13)
     else:
-        assert is_py4DSTEM_file(filepath), "path points to an H5 file which is neither an EMD 1.0+ file, nor a recognized legacy py4DSTEM file."
-        version = get_py4DSTEM_version(filepath)
-        if verbose: print(f"Legacy py4DSTEM version {version[0]}.{version[1]}.{version[2]} file detected. Reading...")
-        kwargs['datapath'] = datapath
-        kwargs['tree'] = tree
-        data = legacy.read_legacy(
-            filepath=filepath,
-            **kwargs,
-        )
-        if verbose: print("Done.")
-        return data
+        assert legacy.is_py4DSTEM_file(filepath), "path points to an H5 file which is neither an EMD 1.0+ file, nor a recognized legacy py4DSTEM file."
+
+
+        # read v13
+        if legacy.is_py4DSTEM_version13(filepath):
+
+            # load the data
+            if verbose: print(f"Legacy py4DSTEM version 13 file detected. Reading...")
+            kwargs['root'] = datapath
+            kwargs['tree'] = tree
+            data = legacy.read_legacy13(
+                filepath=filepath,
+                **kwargs,
+            )
+            if verbose: print("Done.")
+            return data
+
+
+        # read <= v12
+        else:
+
+            # parse the root/data_id from the datapath arg
+            if datapath is not None:
+                datapath = datapath.split('/')
+                try:
+                    datapath.remove('')
+                except ValueError:
+                    pass
+                rootgroup = datapath[0]
+                if len(datapath)>1:
+                    datapath = '/'.join(rootgroups[1:])
+                else:
+                    datapath = None
+            else:
+                rootgroups = legacy.get_py4DSTEM_topgroups(filepath)
+                if len(rootgroups)>1:
+                    print('multiple root groups in a legacy file found - returning list of root names; please pass one as `datapath`')
+                    return rootgroups
+                elif len(rootgroups)==0:
+                    raise Exception('No rootgroups found')
+                else:
+                    rootgroup = rootgroups[0]
+                    datapath = None
+
+
+            # load the data
+            if verbose: print(f"Legacy py4DSTEM version <= 12 file detected. Reading...")
+            kwargs['topgroup'] = rootgroup
+            kwargs['data_id'] = datapath
+            data = legacy.read_legacy12(
+                filepath=filepath,
+                **kwargs,
+            )
+            if verbose: print("Done.")
+            return data
+
 
 
