@@ -736,8 +736,6 @@ class ParallaxReconstruction(PhaseReconstruction):
         k_info_power: float = 1.0,
         Wiener_filter = False,
         Wiener_signal_noise_ratio = 1.0,
-        transport_of_intensity = False,
-        transport_of_intensity_tau = 0.1,
         # LASSO_filter: bool = False,
         # LASSO_scale: float = 1.0,
         **kwargs,
@@ -767,58 +765,38 @@ class ParallaxReconstruction(PhaseReconstruction):
         ky = xp.fft.fftfreq(self._recon_BF.shape[1], self._scan_sampling[1])
         kra2 = (kx[:, None]) ** 2 + (ky[None, :]) ** 2
 
+        sin_chi = xp.sin((np.pi * self._wavelength * self.aberration_C1) * kra2)
 
-        if transport_of_intensity:
-            # Use the modified Transport of intensity equation to estimate phase
-            CTF_corr = 1 / xp.maximum(1 - transport_of_intensity_tau * kra2, 0.0001)
-            # im_fft_corr = xp.fft.fft2(self._recon_BF) * CTF_corr       
+        if Wiener_filter:
+            SNR_inv = xp.sqrt(1 + (kra2**k_info_power) / (
+                    (k_info_limit) ** (2 * k_info_power)
+                )) / Wiener_signal_noise_ratio
+            CTF_corr = xp.sign(sin_chi) / (
+                    sin_chi**2 + SNR_inv
+                )
+            # apply correction to mean reconstructed BF image
+            im_fft_corr = xp.fft.fft2(self._recon_BF) * CTF_corr
 
-            # Output phase image
-            self._recon_phase_corrected = -1.0*xp.log(xp.real(
-                xp.fft.ifft2(
-                    xp.fft.fft2(
-                        self._recon_BF / xp.mean(self._recon_BF)
-                        ) * CTF_corr
-                    )
-                ))
-            self.recon_phase_corrected = asnumpy(self._recon_phase_corrected)
-
-            fig,ax = plt.subplots(figsize=(8,8))
-            ax.imshow(np.fft.fftshift(CTF_corr))
-
+            # fig,ax = plt.subplots(figsize=(10,10))
+            # ax.imshow(np.fft.fftshift(np.abs(CTF_corr)))
+        
         else:
-            sin_chi = xp.sin((np.pi * self._wavelength * self.aberration_C1) * kra2)
+            # CTF without tilt correction (beyond the parallax operator)
+            CTF_corr = xp.sign(sin_chi)
+            CTF_corr[0, 0] = 0
 
-            if Wiener_filter:
-                SNR_inv = xp.sqrt(1 + (kra2**k_info_power) / (
-                        (k_info_limit) ** (2 * k_info_power)
-                    )) / Wiener_signal_noise_ratio
-                CTF_corr = xp.sign(sin_chi) / (
-                        sin_chi**2 + SNR_inv
-                    )
-                # apply correction to mean reconstructed BF image
-                im_fft_corr = xp.fft.fft2(self._recon_BF) * CTF_corr
+            # apply correction to mean reconstructed BF image
+            im_fft_corr = xp.fft.fft2(self._recon_BF) * CTF_corr
 
-                # fig,ax = plt.subplots(figsize=(10,10))
-                # ax.imshow(np.fft.fftshift(np.abs(CTF_corr)))
-            
-            else:
-                # CTF without tilt correction (beyond the parallax operator)
-                CTF_corr = xp.sign(sin_chi)
-                CTF_corr[0, 0] = 0
+            # if needed, add low pass filter output image
+            if k_info_limit is not None:
+                im_fft_corr /= 1 + (kra2**k_info_power) / (
+                    (k_info_limit) ** (2 * k_info_power)
+                )
 
-                # apply correction to mean reconstructed BF image
-                im_fft_corr = xp.fft.fft2(self._recon_BF) * CTF_corr
-
-                # if needed, add low pass filter output image
-                if k_info_limit is not None:
-                    im_fft_corr /= 1 + (kra2**k_info_power) / (
-                        (k_info_limit) ** (2 * k_info_power)
-                    )
-
-            # Output phase image
-            self._recon_phase_corrected = xp.real(xp.fft.ifft2(im_fft_corr))
-            self.recon_phase_corrected = asnumpy(self._recon_phase_corrected)
+        # Output phase image
+        self._recon_phase_corrected = xp.real(xp.fft.ifft2(im_fft_corr))
+        self.recon_phase_corrected = asnumpy(self._recon_phase_corrected)
 
         # if needed, Fourier filter output image
         # if LASSO_filter:
