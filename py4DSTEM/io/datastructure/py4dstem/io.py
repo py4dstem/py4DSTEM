@@ -87,12 +87,20 @@ def DataCube_from_Array(array):
     from py4DSTEM.io.datastructure.py4dstem.datacube import DataCube
     assert(array.rank == 4), "Array must have 4 dimensions"
     array.__class__ = DataCube
+    try:
+        R_pixel_size = array.dims[0][1]-array.dims[0][0]
+    except IndexError:
+        R_pixel_size = 1
+    try:
+        Q_pixel_size = array.dims[2][1]-array.dims[2][0]
+    except IndexError:
+        Q_pixel_size = 1
     array.__init__(
         data = array.data,
         name = array.name,
-        R_pixel_size = array.dims[0][1]-array.dims[0][0],
+        R_pixel_size = R_pixel_size,
         R_pixel_units = array.dim_units[0],
-        Q_pixel_size = array.dims[2][1]-array.dims[2][0],
+        Q_pixel_size = Q_pixel_size,
         Q_pixel_units = array.dim_units[2],
         slicelabels = array.slicelabels
     )
