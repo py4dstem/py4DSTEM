@@ -307,8 +307,8 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
             com_measured_y_0,
             com_fitted_x_0,
             com_fitted_y_0,
-            com_normalized_x_0, 
-            com_normalized_y_0
+            com_normalized_x_0,
+            com_normalized_y_0,
         ) = self._calculate_intensities_center_of_mass(
             intensities_0,
             dp_mask=self._dp_mask,
@@ -320,9 +320,9 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
             self._rotation_best_rad,
             self._rotation_best_transpose,
             _com_x_0,
-            _com_y_0, 
+            _com_y_0,
             com_x_0,
-            com_y_0
+            com_y_0,
         ) = self._solve_for_center_of_mass_relative_rotation(
             com_measured_x_0,
             com_measured_y_0,
@@ -347,7 +347,19 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         )
 
         # explicitly delete namescapes
-        del intensities_0, com_measured_x_0, com_measured_y_0, com_fitted_x_0, com_fitted_y_0, com_normalized_x_0, com_normalized_y_0, _com_x_0, _com_y_0, com_x_0, com_y_0
+        del (
+            intensities_0,
+            com_measured_x_0,
+            com_measured_y_0,
+            com_fitted_x_0,
+            com_fitted_y_0,
+            com_normalized_x_0,
+            com_normalized_y_0,
+            _com_x_0,
+            _com_y_0,
+            com_x_0,
+            com_y_0,
+        )
 
         # 2nd measurement
         (
@@ -375,8 +387,8 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
             com_measured_y_1,
             com_fitted_x_1,
             com_fitted_y_1,
-            com_normalized_x_1, 
-            com_normalized_y_1
+            com_normalized_x_1,
+            com_normalized_y_1,
         ) = self._calculate_intensities_center_of_mass(
             intensities_1,
             dp_mask=self._dp_mask,
@@ -388,9 +400,9 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
             _,
             _,
             _com_x_1,
-            _com_y_1, 
+            _com_y_1,
             com_x_1,
-            com_y_1
+            com_y_1,
         ) = self._solve_for_center_of_mass_relative_rotation(
             com_measured_x_1,
             com_measured_y_1,
@@ -413,9 +425,21 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
             com_fitted_x_1,
             com_fitted_y_1,
         )
-        
+
         # explicitly delete namescapes
-        del intensities_1, com_measured_x_1, com_measured_y_1, com_fitted_x_1, com_fitted_y_1, com_normalized_x_1, com_normalized_y_1, _com_x_1, _com_y_1, com_x_1, com_y_1
+        del (
+            intensities_1,
+            com_measured_x_1,
+            com_measured_y_1,
+            com_fitted_x_1,
+            com_fitted_y_1,
+            com_normalized_x_1,
+            com_normalized_y_1,
+            _com_x_1,
+            _com_y_1,
+            com_x_1,
+            com_y_1,
+        )
 
         # Optionally, 3rd measurement
         if self._num_sim_measurements == 3:
@@ -444,8 +468,8 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                 com_measured_y_2,
                 com_fitted_x_2,
                 com_fitted_y_2,
-                com_normalized_x_2, 
-                com_normalized_y_2
+                com_normalized_x_2,
+                com_normalized_y_2,
             ) = self._calculate_intensities_center_of_mass(
                 intensities_2,
                 dp_mask=self._dp_mask,
@@ -457,9 +481,9 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                 _,
                 _,
                 _com_x_2,
-                _com_y_2, 
+                _com_y_2,
                 com_x_2,
-                com_y_2
+                com_y_2,
             ) = self._solve_for_center_of_mass_relative_rotation(
                 com_measured_x_2,
                 com_measured_y_2,
@@ -484,8 +508,20 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
             )
 
             # explicitly delete namescapes
-            del intensities_2, com_measured_x_2, com_measured_y_2, com_fitted_x_2, com_fitted_y_2, com_normalized_x_2, com_normalized_y_2, _com_x_2, _com_y_2, com_x_2, com_y_2
-            
+            del (
+                intensities_2,
+                com_measured_x_2,
+                com_measured_y_2,
+                com_fitted_x_2,
+                com_fitted_y_2,
+                com_normalized_x_2,
+                com_normalized_y_2,
+                _com_x_2,
+                _com_y_2,
+                com_x_2,
+                com_y_2,
+            )
+
             self._amplitudes = (amplitudes_0, amplitudes_1, amplitudes_2)
             self._mean_diffraction_intensity = (
                 mean_diffraction_intensity_0
@@ -545,7 +581,7 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         # Vectorized Patches
         (
             self._vectorized_patch_indices_row,
-            self._vectorized_patch_indices_col
+            self._vectorized_patch_indices_col,
         ) = self._extract_vectorized_patch_indices()
 
         # Probe Initialization
@@ -2513,7 +2549,7 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
             )
             (
                 self._vectorized_patch_indices_row,
-                self._vectorized_patch_indices_col
+                self._vectorized_patch_indices_col,
             ) = self._extract_vectorized_patch_indices()
             self._exit_waves = (None,) * self._num_sim_measurements
         elif reset is None:
@@ -2572,7 +2608,7 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                 )
                 (
                     self._vectorized_patch_indices_row,
-                    self._vectorized_patch_indices_col
+                    self._vectorized_patch_indices_col,
                 ) = self._extract_vectorized_patch_indices()
 
                 amps = []

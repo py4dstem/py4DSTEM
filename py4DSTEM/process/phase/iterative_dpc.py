@@ -131,7 +131,8 @@ class DPCReconstruction(PhaseReconstruction):
         """
 
         self._intensities = self._extract_intensities_and_calibrations_from_datacube(
-            self._datacube, require_calibrations=False, 
+            self._datacube,
+            require_calibrations=False,
         )
 
         (
@@ -139,22 +140,22 @@ class DPCReconstruction(PhaseReconstruction):
             self._com_measured_y,
             self._com_fitted_x,
             self._com_fitted_y,
-            self._com_normalized_x, 
-            self._com_normalized_y
+            self._com_normalized_x,
+            self._com_normalized_y,
         ) = self._calculate_intensities_center_of_mass(
             self._intensities,
             dp_mask=self._dp_mask,
             fit_function=fit_function,
-            com_shifts = force_com_shifts,
+            com_shifts=force_com_shifts,
         )
 
         (
             self._rotation_best_rad,
             self._rotation_best_transpose,
             self._com_x,
-            self._com_y, 
+            self._com_y,
             self.com_x,
-            self.com_y
+            self.com_y,
         ) = self._solve_for_center_of_mass_relative_rotation(
             self._com_measured_x,
             self._com_measured_y,

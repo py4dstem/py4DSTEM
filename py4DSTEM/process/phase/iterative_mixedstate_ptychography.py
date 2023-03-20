@@ -254,8 +254,8 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
             self._com_measured_y,
             self._com_fitted_x,
             self._com_fitted_y,
-            self._com_normalized_x, 
-            self._com_normalized_y
+            self._com_normalized_x,
+            self._com_normalized_y,
         ) = self._calculate_intensities_center_of_mass(
             self._intensities,
             dp_mask=self._dp_mask,
@@ -267,9 +267,9 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
             self._rotation_best_rad,
             self._rotation_best_transpose,
             self._com_x,
-            self._com_y, 
+            self._com_y,
             self.com_x,
-            self.com_y
+            self.com_y,
         ) = self._solve_for_center_of_mass_relative_rotation(
             self._com_measured_x,
             self._com_measured_y,
@@ -335,7 +335,7 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
         # Vectorized Patches
         (
             self._vectorized_patch_indices_row,
-            self._vectorized_patch_indices_col
+            self._vectorized_patch_indices_col,
         ) = self._extract_vectorized_patch_indices()
 
         # Probe Initialization
@@ -1312,7 +1312,7 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
             )
             (
                 self._vectorized_patch_indices_row,
-                self._vectorized_patch_indices_col
+                self._vectorized_patch_indices_col,
             ) = self._extract_vectorized_patch_indices()
             self._exit_waves = None
         elif reset is None:
@@ -1368,7 +1368,7 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
                 )
                 (
                     self._vectorized_patch_indices_row,
-                    self._vectorized_patch_indices_col
+                    self._vectorized_patch_indices_col,
                 ) = self._extract_vectorized_patch_indices()
                 amplitudes = self._amplitudes[shuffled_indices[start:end]]
 
