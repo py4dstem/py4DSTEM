@@ -10,21 +10,20 @@ def get_py4DSTEM_topgroups(filepath):
     with h5py.File(filepath,'r') as f:
         for key in f.keys():
             if 'emd_group_type' in f[key].attrs:
-                if f[key].attrs['emd_group_type']==2:
-                    topgroups.append(key)
+                topgroups.append(key)
     return topgroups
 
 def is_py4DSTEM_version13(filepath):
     """ Returns True for data written by a py4DSTEM v0.13.x release.
     """
     with h5py.File(filepath,'r') as f:
-        if "emd_group_type" in f.attrs():
-            if f.attrs["emd_group_type"] == 'root':
-                if all([x in f.attrs for x in ("version_major","version_minor")]):
-                    if (f.attrs["version_major"],f.attrs["version_minor"]) == (0,13):
-                        return True
-        else:
-            return False
+        for k in f.keys():
+            if "emd_group_type" in f[k].attrs:
+                if f[k].attrs["emd_group_type"] == 'root':
+                    if all([x in f[k].attrs for x in ("version_major","version_minor")]):
+                        if (int(f[k].attrs["version_major"]),int(f[k].attrs["version_minor"])) == (0,13):
+                            return True
+    return False
 
 def is_py4DSTEM_file(filepath):
     """ Returns True iff filepath points to a py4DSTEM formatted (EMD type 2) file.
