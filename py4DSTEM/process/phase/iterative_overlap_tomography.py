@@ -240,6 +240,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         diffraction_patterns_rotate_degrees: float = None,
         diffraction_patterns_transpose: bool = None,
         force_com_shifts: Sequence[float] = None,
+        progress_bar: bool = True,
         **kwargs,
     ):
         """
@@ -274,40 +275,72 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         xp = self._xp
         asnumpy = self._asnumpy
 
-        #find size of experiment 
-        self._num_of_probes_per_tilt = [0]
+        # Prepopulate various arrays
+        num_probes_per_tilt = [0]
         for dc in self._datacube: 
             rx, ry = dc.Rshape
-            self._num_of_probes_per_tilt.append(rx*ry)
-        self._num_diffraction_patterns = sum(self._num_of_probes_per_tilt)
-        self._amplitudes = xp.empty([(self._num_diffraction_patterns,) + self._datacube[0].Qshape])
+            num_probes_per_tilt.append(rx*ry)
+        
+        self._num_diffraction_patterns = sum(num_probes_per_tilt)
+        self._cum_probes_per_tilt = np.cumsum(np.array(num_probes_per_tilt))
         self._num_tilts = len(self._datacube)
         
         self._mean_diffraction_intensity = 0
-        
-        self._positions_px = xp.empty([self._num_diffraction_patterns, 2])
+        self._positions_px_all = np.empty((self._num_diffraction_patterns, 2))
 
-        self._vectorized_patch_indices_col = xp.empty_like(self._amplitudes)
-        self._vectorized_patch_indices_row = xp.empty_like(self._amplitudes)
-        
-        self._rotation_best_rad = xp.deg2rad(diffraction_patterns_rotate_degrees)
+        self._rotation_best_rad = np.deg2rad(diffraction_patterns_rotate_degrees)
         self._rotation_best_transpose = diffraction_patterns_transpose
 
-        for tilt_index in self._num_tilts:
-            (
-                self._datacube[tilt_index],
-                self._vacuum_probe_intensity if tilt_index == 0 else _,
-                self._dp_mask if tilt_index == 0 else _,
-                force_com_shifts[tilt_index],
-            ) = self._preprocess_datacube_and_vacuum_probe(
-                self._datacube[tilt_index],
-                diffraction_intensities_shape=self._diffraction_intensities_shape,
-                reshaping_method=self._reshaping_method,
-                probe_roi_shape=self._probe_roi_shape,
-                vacuum_probe_intensity=self._vacuum_probe_intensity if tilt_index == 0 else None,
-                dp_mask=self._dp_mask if tilt_index == 0 else None,
-                com_shifts=force_com_shifts[tilt_index],
-            )
+        if force_com_shifts is None:
+            force_com_shifts = [None] * self._num_tilts
+        
+        if self._scan_positions is None:
+            self._scan_positions = [None] * self._num_tilts
+
+        for tilt_index in tqdmnd(
+                self._num_tilts,
+                desc="Preprocessing data",
+                unit="tilt",
+                disable = not progress_bar,
+            ):
+
+            if tilt_index == 0:
+                (
+                    self._datacube[tilt_index],
+                    self._vacuum_probe_intensity,
+                    self._dp_mask,
+                    force_com_shifts[tilt_index],
+                ) = self._preprocess_datacube_and_vacuum_probe(
+                    self._datacube[tilt_index],
+                    diffraction_intensities_shape=self._diffraction_intensities_shape,
+                    reshaping_method=self._reshaping_method,
+                    probe_roi_shape=self._probe_roi_shape,
+                    vacuum_probe_intensity=self._vacuum_probe_intensity,
+                    dp_mask=self._dp_mask,
+                    com_shifts=force_com_shifts[tilt_index],
+                )
+            
+                self._amplitudes = xp.empty((self._num_diffraction_patterns,) + self._datacube[0].Qshape)
+                self._region_of_interest_shape = np.array(self._amplitudes[0].shape[-2:])
+                self._vectorized_patch_indices_row = xp.empty((self._num_diffraction_patterns,self._region_of_interest_shape[0],1))
+                self._vectorized_patch_indices_col = xp.empty((self._num_diffraction_patterns,1,self._region_of_interest_shape[1]))
+            
+            else:
+                (
+                    self._datacube[tilt_index],
+                    _,
+                    _,
+                    force_com_shifts[tilt_index],
+                ) = self._preprocess_datacube_and_vacuum_probe(
+                    self._datacube[tilt_index],
+                    diffraction_intensities_shape=self._diffraction_intensities_shape,
+                    reshaping_method=self._reshaping_method,
+                    probe_roi_shape=self._probe_roi_shape,
+                    vacuum_probe_intensity=None,
+                    dp_mask=None,
+                    com_shifts=force_com_shifts[tilt_index],
+                )
+
 
             intensities = self._extract_intensities_and_calibrations_from_datacube(
                 self._datacube[tilt_index],
@@ -329,7 +362,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
             )
 
             (
-                self._amplitudes[self._num_of_probes_per_tilt[tilt_index]:self._num_of_probes_per_tilt[tilt_index+1]],
+                self._amplitudes[self._cum_probes_per_tilt[tilt_index]:self._cum_probes_per_tilt[tilt_index+1]],
                 mean_diffraction_intensity_temp,
             ) = self._normalize_diffraction_intensities(
                 intensities,
@@ -349,54 +382,51 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                 com_normalized_y,
             )
 
-            self._positions_px[self._num_of_probes_per_tilt[tilt_index]:self._num_of_probes_per_tilt[tilt_index+1]] = self._calculate_scan_positions_in_pixels(
+            self._positions_px_all[self._cum_probes_per_tilt[tilt_index]:self._cum_probes_per_tilt[tilt_index+1]] = self._calculate_scan_positions_in_pixels(
                 self._scan_positions[tilt_index]
             )
 
-            # Vectorized Patches
-            (
-                self._vectorized_patch_indices_row,
-                self._vectorized_patch_indices_col,
-            ) = self._extract_vectorized_patch_indices()
-
-
-        # explicitly delete namespace
-        self._region_of_interest_shape = np.array(self._amplitudes[0].shape[-2:])
-        
         self._mean_diffraction_intensity /= self._num_tilts 
 
-        
         # Object Initialization
         if self._object is None:
             pad_x, pad_y = self._object_padding_px
-            p, q = np.max(self._positions_px, axis=0)
+            p, q = np.max(self._positions_px_all, axis=0)
             p = np.max([np.round(p + pad_x), self._region_of_interest_shape[0]]).astype(
-                int
+                "int"
             )
             q = np.max([np.round(q + pad_y), self._region_of_interest_shape[1]]).astype(
-                int
+                "int"
             )
-            self._object = xp.ones((self._num_slices, p, q), dtype=xp.complex64)
+            self._object = xp.ones((p, q, q), dtype=xp.float32)
         else:
-            self._object = xp.asarray(self._object, dtype=xp.complex64)
+            self._object = xp.asarray(self._object, dtype=xp.float32)
 
         self._object_initial = self._object.copy()
-        self._object_shape = self._object.shape[-2:]
+        self._object_shape = self._object.shape[:2]
 
-        self._positions_px = xp.asarray(self._positions_px, dtype=xp.float32)
-        self._positions_px_com = xp.mean(self._positions_px, axis=0)
-        self._positions_px -= self._positions_px_com - xp.array(self._object_shape) / 2
-        self._positions_px_com = xp.mean(self._positions_px, axis=0)
-        self._positions_px_fractional = self._positions_px - xp.round(
-            self._positions_px
-        )
+        # Center Probes
+        self._positions_px_all = xp.asarray(self._positions_px_all, dtype=xp.float32)
+        self._positions_px_com_all = xp.empty((self._num_tilts,2))
+        
+        for tilt_index in range(self._num_tilts):
 
-        self._positions_px_initial = self._positions_px.copy()
-        self._positions_initial = self._positions_px_initial.copy()
-        self._positions_initial[:, 0] *= self.sampling[0]
-        self._positions_initial[:, 1] *= self.sampling[1]
+            self._positions_px = self._positions_px_all[self._cum_probes_per_tilt[tilt_index]:self._cum_probes_per_tilt[tilt_index+1]]
+            self._positions_px_com_all[tilt_index] = xp.mean(self._positions_px, axis=0)
+            self._positions_px -= self._positions_px_com_all[tilt_index] - xp.array(self._object_shape) / 2
+            self._positions_px_com_all[tilt_index] = xp.mean(self._positions_px, axis=0)
+            
+            (
+                self._vectorized_patch_indices_row[self._cum_probes_per_tilt[tilt_index]:self._cum_probes_per_tilt[tilt_index+1]],
+                self._vectorized_patch_indices_col[self._cum_probes_per_tilt[tilt_index]:self._cum_probes_per_tilt[tilt_index+1]],
+            ) = self._extract_vectorized_patch_indices()
+            
+            self._positions_px_all[self._cum_probes_per_tilt[tilt_index]:self._cum_probes_per_tilt[tilt_index+1]] = self._positions_px.copy()
 
-
+        self._positions_px_initial_all = self._positions_px_all.copy()
+        self._positions_initial_all = self._positions_px_initial_all.copy()
+        self._positions_initial_all[:, 0] *= self.sampling[0]
+        self._positions_initial_all[:, 1] *= self.sampling[1]
 
         # Probe Initialization
         if self._probe is None:
@@ -451,6 +481,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         self._probe_initial_fft_amplitude = xp.abs(xp.fft.fft2(self._probe_initial))
 
         # Precomputed propagator arrays
+        self._slice_thicknesses = np.tile(self._object_shape[1]*self.sampling[1]/self._num_slices, self._num_slices)
         self._propagator_arrays = self._precompute_propagator_arrays(
             self._region_of_interest_shape,
             self.sampling,
@@ -459,6 +490,10 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         )
 
         if plot_probe_overlaps:
+            self._positions_px = self._positions_px_all[:self._cum_probes_per_tilt[1]]
+            self._positions_px_fractional= self._positions_px - xp.round(
+                self._positions_px
+            )
             shifted_probes = fft_shift(self._probe, self._positions_px_fractional, xp)
             probe_intensities = xp.abs(shifted_probes) ** 2
             probe_overlap = self._sum_overlapping_patches_bincounts(probe_intensities)
@@ -517,3 +552,9 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         self._preprocessed = True
 
         return self
+
+    def reconstruct(self):
+        pass
+
+    def visualize(self):
+        pass
