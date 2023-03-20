@@ -118,15 +118,17 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         if device == "cpu":
             self._xp = np
             self._asnumpy = np.asarray
-            from scipy.ndimage import gaussian_filter
+            from scipy.ndimage import gaussian_filter, zoom
 
             self._gaussian_filter = gaussian_filter
+            self._zoom = zoom
         elif device == "gpu":
             self._xp = cp
             self._asnumpy = cp.asnumpy
-            from cupyx.scipy.ndimage import gaussian_filter
+            from cupyx.scipy.ndimage import gaussian_filter, zoom
 
             self._gaussian_filter = gaussian_filter
+            self._zoom = zoom
         else:
             raise ValueError(f"device must be either 'cpu' or 'gpu', not {device}")
 
@@ -243,6 +245,27 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         xp = self._xp
 
         return xp.fft.ifft2(xp.fft.fft2(array) * propagator_array)
+
+    def _expand_or_project_sliced_object(self, array: np.ndarray, output_z):
+        """
+        Expands supersliced object or projects voxelsliced object.
+
+        Parameters
+        ----------
+        array: np.ndarray
+            3D array to expand/project 
+        output_z: int
+            Output_dimension to expand/project array to.
+            If output_z > array.shape[-1] array is expanded, else it's projected
+
+        Returns
+        -------
+        expanded_or_projected_array: np.ndarray
+            expanded or projected array
+        """
+        zoom = self._zoom
+        input_z = array.shape[-1]
+        return zoom(array, (1,1,output_z/input_z), order=0, mode='nearest', grid_mode=True) * input_z / output_z
 
     def preprocess(
         self,
@@ -541,6 +564,8 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
             self._energy,
             self._slice_thicknesses,
         )
+
+        self._active_tilt_index = 0
 
         if plot_probe_overlaps:
             self._positions_px = self._positions_px_all[: self._cum_probes_per_tilt[1]]
