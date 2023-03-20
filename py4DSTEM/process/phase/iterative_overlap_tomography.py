@@ -26,7 +26,12 @@ from py4DSTEM.process.phase.utils import (
     polar_symbols,
     spatial_frequencies,
 )
-from py4DSTEM.process.utils import electron_wavelength_angstrom, get_CoM, get_shifted_ar
+from py4DSTEM.process.utils import (
+    electron_wavelength_angstrom,
+    electron_interaction_parameter,
+    get_CoM,
+    get_shifted_ar,
+)
 from py4DSTEM.utils.tqdmnd import tqdmnd
 
 warnings.simplefilter(action="always", category=UserWarning)
@@ -248,15 +253,15 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
 
     def _expand_or_project_sliced_object(self, array: np.ndarray, output_z):
         """
-        Expands supersliced object or projects voxelsliced object.
+        Expands supersliced object or projects voxel-sliced object.
 
         Parameters
         ----------
         array: np.ndarray
-            3D array to expand/project 
+            3D array to expand/project
         output_z: int
             Output_dimension to expand/project array to.
-            If output_z > array.shape[-1] array is expanded, else it's projected
+            If output_z > array.shape[0] array is expanded, else it's projected
 
         Returns
         -------
@@ -264,8 +269,18 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
             expanded or projected array
         """
         zoom = self._zoom
-        input_z = array.shape[-1]
-        return zoom(array, (1,1,output_z/input_z), order=0, mode='nearest', grid_mode=True) * input_z / output_z
+        input_z = array.shape[0]
+        return (
+            zoom(
+                array,
+                (output_z / input_z, 1, 1),
+                order=0,
+                mode="nearest",
+                grid_mode=True,
+            )
+            * input_z
+            / output_z
+        )
 
     def preprocess(
         self,
@@ -319,7 +334,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         self._num_diffraction_patterns = sum(num_probes_per_tilt)
         self._cum_probes_per_tilt = np.cumsum(np.array(num_probes_per_tilt))
 
-        self._mean_diffraction_intensity = 0
+        self._mean_diffraction_intensity = []
         self._positions_px_all = np.empty((self._num_diffraction_patterns, 2))
 
         self._rotation_best_rad = np.deg2rad(diffraction_patterns_rotate_degrees)
@@ -362,14 +377,16 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                         self._num_diffraction_patterns,
                         self._region_of_interest_shape[0],
                         1,
-                    )
+                    ),
+                    dtype="int",
                 )
                 self._vectorized_patch_indices_col = xp.empty(
                     (
                         self._num_diffraction_patterns,
                         1,
                         self._region_of_interest_shape[1],
-                    )
+                    ),
+                    dtype="int",
                 )
 
             else:
@@ -420,7 +437,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                 com_fitted_y,
             )
 
-            self._mean_diffraction_intensity += mean_diffraction_intensity_temp
+            self._mean_diffraction_intensity.append(mean_diffraction_intensity_temp)
 
             del (
                 intensities,
@@ -440,8 +457,6 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                 self._scan_positions[tilt_index]
             )
 
-        self._mean_diffraction_intensity /= self._num_tilts
-
         # Object Initialization
         if self._object is None:
             pad_x, pad_y = self._object_padding_px
@@ -452,12 +467,12 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
             q = np.max([np.round(q + pad_y), self._region_of_interest_shape[1]]).astype(
                 "int"
             )
-            self._object = xp.ones((p, q, q), dtype=xp.float32)
+            self._object = xp.ones((q, p, q), dtype=xp.float32)
         else:
             self._object = xp.asarray(self._object, dtype=xp.float32)
 
         self._object_initial = self._object.copy()
-        self._object_shape = self._object.shape[:2]
+        self._object_shape = self._object.shape[-2:]
 
         # Center Probes
         self._positions_px_all = xp.asarray(self._positions_px_all, dtype=xp.float32)
@@ -548,7 +563,9 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
 
         # Normalize probe to match mean diffraction intensity
         probe_intensity = xp.sum(xp.abs(xp.fft.fft2(self._probe)) ** 2)
-        self._probe *= np.sqrt(self._mean_diffraction_intensity / probe_intensity)
+        self._probe *= np.sqrt(
+            sum(self._mean_diffraction_intensity) / self._num_tilts / probe_intensity
+        )
 
         self._probe_initial = self._probe.copy()
         self._probe_initial_fft_amplitude = xp.abs(xp.fft.fft2(self._probe_initial))
@@ -630,6 +647,234 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         self._preprocessed = True
 
         return self
+
+    def _overlap_projection(self, current_object, current_probe):
+        """
+        Ptychographic overlap projection method.
+
+        Parameters
+        --------
+        current_object: np.ndarray
+            Current object estimate
+        current_probe: np.ndarray
+            Current probe estimate
+
+        Returns
+        --------
+        propagated_probes: np.ndarray
+            Prop[object^n*probe^n]
+        object_patches: np.ndarray
+            Patched object view
+        overlap: np.ndarray
+            object_patches^n * propagated_probes^n
+        """
+
+        xp = self._xp
+
+        shifted_probes = fft_shift(current_probe, self._positions_px_fractional, xp)
+
+        active_indices_row = self._vectorized_patch_indices_row[
+            self._cum_probes_per_tilt[
+                self._active_tilt_index
+            ] : self._cum_probes_per_tilt[self._active_tilt_index + 1]
+        ]
+
+        active_indices_col = self._vectorized_patch_indices_col[
+            self._cum_probes_per_tilt[
+                self._active_tilt_index
+            ] : self._cum_probes_per_tilt[self._active_tilt_index + 1]
+        ]
+        electron_sigma = electron_interaction_parameter(self._energy)
+        current_object_complex = xp.exp(1j * electron_sigma * current_object)
+        object_patches = current_object_complex[
+            :, active_indices_row, active_indices_col
+        ]
+
+        propagated_probes = xp.empty_like(object_patches)
+        propagated_probes[0] = shifted_probes
+        overlap = xp.empty_like(object_patches)
+
+        for s in range(self._num_slices):
+            overlap[s] = object_patches[s] * propagated_probes[s]
+
+            if s + 1 < self._num_slices:
+                propagated_probes[s + 1] = self._propagate_array(
+                    overlap[s], self._propagator_arrays[s]
+                )
+
+        return propagated_probes, object_patches, overlap
+
+    def _gradient_descent_fourier_projection(self, amplitudes, overlap):
+        """
+        Ptychographic fourier projection method for GD method.
+
+        Parameters
+        --------
+        amplitudes: np.ndarray
+            Normalized measured amplitudes
+        overlap: np.ndarray
+            object_patches^n * propagated_probes^n
+
+        Returns
+        --------
+        exit_waves:np.ndarray
+            Updated exit wave difference
+            Note: this function only increments the last slice
+        error: float
+            Reconstruction error
+        """
+
+        xp = self._xp
+        fourier_overlap = xp.fft.fft2(overlap[-1])
+
+        error = (
+            xp.mean(xp.abs(amplitudes - xp.abs(fourier_overlap)) ** 2)
+            / self._mean_diffraction_intensity[self._active_tilt_index]
+        )
+
+        modified_exit_wave = xp.fft.ifft2(
+            amplitudes * xp.exp(1j * xp.angle(fourier_overlap))
+        )
+
+        exit_waves = -overlap.copy()
+        exit_waves[-1] += modified_exit_wave
+
+        return exit_waves, error
+
+    def _projection_sets_fourier_projection(
+        self, amplitudes, overlap, exit_waves, projection_a, projection_b, projection_c
+    ):
+        """
+        Ptychographic fourier projection method for DM_AP and RAAR methods.
+        Generalized projection using three parameters: a,b,c
+
+            DM_AP(\alpha)   :   a =  -\alpha, b = 1, c = 1 + \alpha
+              DM: DM_AP(1.0), AP: DM_AP(0.0)
+
+            RAAR(\beta)     :   a = 1-2\beta, b = \beta, c = 2
+              DM : RAAR(1.0)
+
+            RRR(\gamma)     :   a = -\gamma, b = \gamma, c = 2
+              DM: RRR(1.0)
+
+            SUPERFLIP       :   a = 0, b = 1, c = 2
+
+        Parameters
+        --------
+        amplitudes: np.ndarray
+            Normalized measured amplitudes
+        overlap: np.ndarray
+            object_patches^n * propagated_probes^n
+        exit_waves: np.ndarray
+            previously estimated exit waves
+        projection_a: float
+        projection_b: float
+        projection_c: float
+
+        Returns
+        --------
+        exit_waves:np.ndarray
+            Updated exit wave difference
+            Note: this function only affects the last slice
+        error: float
+            Reconstruction error
+        """
+
+        xp = self._xp
+        projection_x = 1 - projection_a - projection_b
+        projection_y = 1 - projection_c
+
+        if exit_waves is None:
+            exit_waves = overlap.copy()
+
+        fourier_overlap = xp.fft.fft2(overlap[-1])
+        error = (
+            xp.mean(xp.abs(amplitudes - xp.abs(fourier_overlap)) ** 2)
+            / self._mean_diffraction_intensity[self._active_tilt_index]
+        )
+
+        factor_to_be_projected = (
+            projection_c * overlap[-1] + projection_y * exit_waves[-1]
+        )
+        fourier_projected_factor = xp.fft.fft2(factor_to_be_projected)
+
+        fourier_projected_factor = amplitudes * xp.exp(
+            1j * xp.angle(fourier_projected_factor)
+        )
+        projected_factor = xp.fft.ifft2(fourier_projected_factor)
+
+        exit_waves[-1] = (
+            projection_x * exit_waves[-1]
+            + projection_a * overlap[-1]
+            + projection_b * projected_factor
+        )
+
+        return exit_waves, error
+
+    def _forward(
+        self,
+        current_object,
+        current_probe,
+        amplitudes,
+        exit_waves,
+        use_projection_scheme,
+        projection_a,
+        projection_b,
+        projection_c,
+    ):
+        """
+        Ptychographic forward operator.
+        Calls _overlap_projection() and the appropriate _fourier_projection().
+
+        Parameters
+        --------
+        current_object: np.ndarray
+            Current object estimate
+        current_probe: np.ndarray
+            Current probe estimate
+        amplitudes: np.ndarray
+            Normalized measured amplitudes
+        exit_waves: np.ndarray
+            previously estimated exit waves
+        use_projection_scheme: bool,
+            If True, use generalized projection update
+        projection_a: float
+        projection_b: float
+        projection_c: float
+
+        Returns
+        --------
+        propagated_probes:np.ndarray
+            Prop[object^n*probe^n]
+        object_patches: np.ndarray
+            Patched object view
+        overlap: np.ndarray
+            object_patches^n * propagated_probes^n
+        exit_waves:np.ndarray
+            Updated exit_waves
+        error: float
+            Reconstruction error
+        """
+
+        propagated_probes, object_patches, overlap = self._overlap_projection(
+            current_object, current_probe
+        )
+        if use_projection_scheme:
+            exit_waves, error = self._projection_sets_fourier_projection(
+                amplitudes,
+                overlap,
+                exit_waves,
+                projection_a,
+                projection_b,
+                projection_c,
+            )
+
+        else:
+            exit_waves, error = self._gradient_descent_fourier_projection(
+                amplitudes, overlap
+            )
+
+        return propagated_probes, object_patches, overlap, exit_waves, error
 
     def reconstruct(self):
         pass
