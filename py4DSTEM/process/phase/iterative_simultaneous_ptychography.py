@@ -281,9 +281,6 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                 )
             )
 
-        # Note: a lot of the methods below modify state. The only two property we mind this for are
-        # self._amplitudes and self._mean_diffraction_intensity, so we simply proceed serially.
-
         # 1st measurement sets rotation angle and transposition
         (
             measurement_0,
@@ -300,18 +297,37 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
             com_shifts=force_com_shifts[0],
         )
 
-        self._extract_intensities_and_calibrations_from_datacube(
+        intensities_0 = self._extract_intensities_and_calibrations_from_datacube(
             measurement_0,
             require_calibrations=True,
         )
 
-        self._calculate_intensities_center_of_mass(
-            self._intensities,
+        (
+            com_measured_x_0,
+            com_measured_y_0,
+            com_fitted_x_0,
+            com_fitted_y_0,
+            com_normalized_x_0, 
+            com_normalized_y_0
+        ) = self._calculate_intensities_center_of_mass(
+            intensities_0,
             dp_mask=self._dp_mask,
             fit_function=fit_function,
+            com_shifts=force_com_shifts[0],
         )
 
-        self._solve_for_center_of_mass_relative_rotation(
+        (
+            self._rotation_best_rad,
+            self._rotation_best_transpose,
+            _com_x_0,
+            _com_y_0, 
+            com_x_0,
+            com_y_0
+        ) = self._solve_for_center_of_mass_relative_rotation(
+            com_measured_x_0,
+            com_measured_y_0,
+            com_normalized_x_0,
+            com_normalized_y_0,
             rotation_angles_deg=rotation_angles_deg,
             plot_rotation=plot_rotation,
             plot_center_of_mass=plot_center_of_mass,
@@ -321,24 +337,17 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
             **kwargs,
         )
 
-        if force_com_shifts[0] is None:
-            (
-                amplitudes_0,
-                mean_diffraction_intensity_0,
-            ) = self._normalize_diffraction_intensities(
-                self._intensities,
-                self._com_fitted_x,
-                self._com_fitted_y,
-            )
-        else:
-            (
-                amplitudes_0,
-                mean_diffraction_intensity_0,
-            ) = self._normalize_diffraction_intensities(
-                self._intensities,
-                xp.asarray(force_com_shifts[0][0]),
-                xp.asarray(force_com_shifts[0][1]),
-            )
+        (
+            amplitudes_0,
+            mean_diffraction_intensity_0,
+        ) = self._normalize_diffraction_intensities(
+            intensities_0,
+            com_fitted_x_0,
+            com_fitted_y_0,
+        )
+
+        # explicitly delete namescapes
+        del intensities_0, com_measured_x_0, com_measured_y_0, com_fitted_x_0, com_fitted_y_0, com_normalized_x_0, com_normalized_y_0, _com_x_0, _com_y_0, com_x_0, com_y_0
 
         # 2nd measurement
         (
@@ -356,18 +365,37 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
             com_shifts=force_com_shifts[1],
         )
 
-        self._extract_intensities_and_calibrations_from_datacube(
+        intensities_1 = self._extract_intensities_and_calibrations_from_datacube(
             measurement_1,
             require_calibrations=True,
         )
 
-        self._calculate_intensities_center_of_mass(
-            self._intensities,
+        (
+            com_measured_x_1,
+            com_measured_y_1,
+            com_fitted_x_1,
+            com_fitted_y_1,
+            com_normalized_x_1, 
+            com_normalized_y_1
+        ) = self._calculate_intensities_center_of_mass(
+            intensities_1,
             dp_mask=self._dp_mask,
             fit_function=fit_function,
+            com_shifts=force_com_shifts[1],
         )
 
-        self._solve_for_center_of_mass_relative_rotation(
+        (
+            _,
+            _,
+            _com_x_1,
+            _com_y_1, 
+            com_x_1,
+            com_y_1
+        ) = self._solve_for_center_of_mass_relative_rotation(
+            com_measured_x_1,
+            com_measured_y_1,
+            com_normalized_x_1,
+            com_normalized_y_1,
             rotation_angles_deg=rotation_angles_deg,
             plot_rotation=plot_rotation,
             plot_center_of_mass=plot_center_of_mass,
@@ -377,24 +405,17 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
             **kwargs,
         )
 
-        if force_com_shifts[1] is None:
-            (
-                amplitudes_1,
-                mean_diffraction_intensity_1,
-            ) = self._normalize_diffraction_intensities(
-                self._intensities,
-                self._com_fitted_x,
-                self._com_fitted_y,
-            )
-        else:
-            (
-                amplitudes_1,
-                mean_diffraction_intensity_1,
-            ) = self._normalize_diffraction_intensities(
-                self._intensities,
-                xp.asarray(force_com_shifts[1][0]),
-                xp.asarray(force_com_shifts[1][1]),
-            )
+        (
+            amplitudes_1,
+            mean_diffraction_intensity_1,
+        ) = self._normalize_diffraction_intensities(
+            intensities_1,
+            com_fitted_x_1,
+            com_fitted_y_1,
+        )
+        
+        # explicitly delete namescapes
+        del intensities_1, com_measured_x_1, com_measured_y_1, com_fitted_x_1, com_fitted_y_1, com_normalized_x_1, com_normalized_y_1, _com_x_1, _com_y_1, com_x_1, com_y_1
 
         # Optionally, 3rd measurement
         if self._num_sim_measurements == 3:
@@ -413,17 +434,37 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                 com_shifts=force_com_shifts[2],
             )
 
-            self._extract_intensities_and_calibrations_from_datacube(
-                measurement_2, require_calibrations=True, dp_mask=self._dp_mask
+            intensities_2 = self._extract_intensities_and_calibrations_from_datacube(
+                measurement_2,
+                require_calibrations=True,
             )
 
-            self._calculate_intensities_center_of_mass(
-                self._intensities,
+            (
+                com_measured_x_2,
+                com_measured_y_2,
+                com_fitted_x_2,
+                com_fitted_y_2,
+                com_normalized_x_2, 
+                com_normalized_y_2
+            ) = self._calculate_intensities_center_of_mass(
+                intensities_2,
                 dp_mask=self._dp_mask,
                 fit_function=fit_function,
+                com_shifts=force_com_shifts[2],
             )
 
-            self._solve_for_center_of_mass_relative_rotation(
+            (
+                _,
+                _,
+                _com_x_2,
+                _com_y_2, 
+                com_x_2,
+                com_y_2
+            ) = self._solve_for_center_of_mass_relative_rotation(
+                com_measured_x_2,
+                com_measured_y_2,
+                com_normalized_x_2,
+                com_normalized_y_2,
                 rotation_angles_deg=rotation_angles_deg,
                 plot_rotation=plot_rotation,
                 plot_center_of_mass=plot_center_of_mass,
@@ -433,25 +474,18 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                 **kwargs,
             )
 
-            if force_com_shifts[2] is None:
-                (
-                    amplitudes_2,
-                    mean_diffraction_intensity_2,
-                ) = self._normalize_diffraction_intensities(
-                    self._intensities,
-                    self._com_fitted_x,
-                    self._com_fitted_y,
-                )
-            else:
-                (
-                    amplitudes_2,
-                    mean_diffraction_intensity_2,
-                ) = self._normalize_diffraction_intensities(
-                    self._intensities,
-                    xp.asarray(force_com_shifts[2][0]),
-                    xp.asarray(force_com_shifts[2][1]),
-                )
+            (
+                amplitudes_2,
+                mean_diffraction_intensity_2,
+            ) = self._normalize_diffraction_intensities(
+                intensities_2,
+                com_fitted_x_2,
+                com_fitted_y_2,
+            )
 
+            # explicitly delete namescapes
+            del intensities_2, com_measured_x_2, com_measured_y_2, com_fitted_x_2, com_fitted_y_2, com_normalized_x_2, com_normalized_y_2, _com_x_2, _com_y_2, com_x_2, com_y_2
+            
             self._amplitudes = (amplitudes_0, amplitudes_1, amplitudes_2)
             self._mean_diffraction_intensity = (
                 mean_diffraction_intensity_0
@@ -471,7 +505,7 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
 
         # explicitly delete namespace
         self._num_diffraction_patterns = self._amplitudes[0].shape[0]
-        del self._intensities
+        self._region_of_interest_shape = np.array(self._amplitudes[0].shape[-2:])
 
         self._positions_px = self._calculate_scan_positions_in_pixels(
             self._scan_positions
@@ -509,13 +543,15 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         self._positions_initial[:, 1] *= self.sampling[1]
 
         # Vectorized Patches
-        self._set_vectorized_patch_indices()
+        (
+            self._vectorized_patch_indices_row,
+            self._vectorized_patch_indices_col
+        ) = self._extract_vectorized_patch_indices()
 
         # Probe Initialization
         if self._probe is None:
             if self._vacuum_probe_intensity is not None:
                 self._semiangle_cutoff = np.inf
-                # self._vacuum_probe_intensity = asnumpy(self._vacuum_probe_intensity)
                 self._vacuum_probe_intensity = xp.asarray(self._vacuum_probe_intensity)
                 probe_x0, probe_y0 = get_CoM(
                     self._vacuum_probe_intensity, device="cpu" if xp is np else "gpu"
@@ -558,7 +594,6 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                 self._probe = xp.asarray(self._probe, dtype=xp.complex64)
 
         # Normalize probe to match mean diffraction intensity
-        # if self._vacuum_probe_intensity is None:
         probe_intensity = xp.sum(xp.abs(xp.fft.fft2(self._probe)) ** 2)
         self._probe *= np.sqrt(self._mean_diffraction_intensity / probe_intensity)
 
@@ -597,8 +632,8 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                 cmap=cmap,
                 **kwargs,
             )
-            ax1.set_xlabel("x [A]")
-            ax1.set_ylabel("y [A]")
+            ax1.set_ylabel("x [A]")
+            ax1.set_xlabel("y [A]")
             ax1.set_title("Initial Probe Intensity")
 
             ax2.imshow(
@@ -613,8 +648,8 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                 s=2.5,
                 color=(1, 0, 0, 1),
             )
-            ax2.set_xlabel("x [A]")
-            ax2.set_ylabel("y [A]")
+            ax2.set_ylabel("x [A]")
+            ax2.set_xlabel("y [A]")
             ax2.set_xlim((extent[0], extent[1]))
             ax2.set_ylim((extent[2], extent[3]))
             ax2.set_title("Object Field of View")
@@ -2476,7 +2511,10 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
             self._positions_px_fractional = self._positions_px - xp.round(
                 self._positions_px
             )
-            self._set_vectorized_patch_indices()
+            (
+                self._vectorized_patch_indices_row,
+                self._vectorized_patch_indices_col
+            ) = self._extract_vectorized_patch_indices()
             self._exit_waves = (None,) * self._num_sim_measurements
         elif reset is None:
             if hasattr(self, "error"):
@@ -2532,7 +2570,10 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                 self._positions_px_fractional = self._positions_px - xp.round(
                     self._positions_px
                 )
-                self._set_vectorized_patch_indices()
+                (
+                    self._vectorized_patch_indices_row,
+                    self._vectorized_patch_indices_col
+                ) = self._extract_vectorized_patch_indices()
 
                 amps = []
                 for amplitudes in self._amplitudes:
@@ -2799,8 +2840,8 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                     cmap=cmap,
                     **kwargs,
                 )
-            ax.set_xlabel("x [A]")
-            ax.set_ylabel("y [A]")
+            ax.set_ylabel("x [A]")
+            ax.set_xlabel("y [A]")
             ax.set_title(f"Electrostatic object {object_mode}")
 
             if cbar:
@@ -2832,8 +2873,8 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                     cmap=cmap,
                     **kwargs,
                 )
-            ax.set_xlabel("x [A]")
-            ax.set_ylabel("y [A]")
+            ax.set_ylabel("x [A]")
+            ax.set_xlabel("y [A]")
             ax.set_title(f"Magnetic object {object_mode}")
 
             if cbar:
@@ -2852,8 +2893,8 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                 cmap="Greys_r",
                 **kwargs,
             )
-            ax.set_xlabel("x [A]")
-            ax.set_ylabel("y [A]")
+            ax.set_ylabel("x [A]")
+            ax.set_xlabel("y [A]")
             ax.set_title("Reconstructed probe intensity")
 
             if cbar:
@@ -2886,8 +2927,8 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                     cmap=cmap,
                     **kwargs,
                 )
-            ax.set_xlabel("x [A]")
-            ax.set_ylabel("y [A]")
+            ax.set_ylabel("x [A]")
+            ax.set_xlabel("y [A]")
             ax.set_title(f"Electrostatic object {object_mode}")
 
             if cbar:
@@ -2919,8 +2960,8 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                     cmap=cmap,
                     **kwargs,
                 )
-            ax.set_xlabel("x [A]")
-            ax.set_ylabel("y [A]")
+            ax.set_ylabel("x [A]")
+            ax.set_xlabel("y [A]")
             ax.set_title(f"Magnetic object {object_mode}")
 
             if cbar:
@@ -2986,7 +3027,7 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         plot_convergence: bool = True,
         plot_probe: bool = True,
         object_mode: str = "phase",
-        cbar: bool = False,
+        cbar: bool = True,
         padding: int = 0,
         relative_error: bool = True,
         **kwargs,

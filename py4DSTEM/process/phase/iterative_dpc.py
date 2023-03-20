@@ -86,6 +86,7 @@ class DPCReconstruction(PhaseReconstruction):
         fit_function: str = "plane",
         force_com_rotation: float = None,
         force_com_transpose: bool = None,
+        force_com_shifts: float = None,
         plot_center_of_mass: str = "default",
         plot_rotation: bool = True,
         **kwargs,
@@ -110,6 +111,8 @@ class DPCReconstruction(PhaseReconstruction):
             Force relative rotation angle between real and reciprocal space
         force_com_transpose: bool (optional)
             Force whether diffraction intensities need to be transposed.
+        force_com_shifts: tuple of ndarrays (CoMx, CoMy)
+            Force CoM fitted shifts
         plot_center_of_mass: str, optional
             If 'default', the corrected CoM arrays will be displayed
             If 'all', the computed and fitted CoM arrays will be displayed
@@ -127,17 +130,36 @@ class DPCReconstruction(PhaseReconstruction):
             Self to accommodate chaining
         """
 
-        self._extract_intensities_and_calibrations_from_datacube(
+        self._intensities = self._extract_intensities_and_calibrations_from_datacube(
             self._datacube, require_calibrations=False, 
         )
 
-        self._calculate_intensities_center_of_mass(
+        (
+            self._com_measured_x,
+            self._com_measured_y,
+            self._com_fitted_x,
+            self._com_fitted_y,
+            self._com_normalized_x, 
+            self._com_normalized_y
+        ) = self._calculate_intensities_center_of_mass(
             self._intensities,
             dp_mask=self._dp_mask,
             fit_function=fit_function,
+            com_shifts = force_com_shifts,
         )
 
-        self._solve_for_center_of_mass_relative_rotation(
+        (
+            self._rotation_best_rad,
+            self._rotation_best_transpose,
+            self._com_x,
+            self._com_y, 
+            self.com_x,
+            self.com_y
+        ) = self._solve_for_center_of_mass_relative_rotation(
+            self._com_measured_x,
+            self._com_measured_y,
+            self._com_normalized_x,
+            self._com_normalized_y,
             rotation_angles_deg=rotation_angles_deg,
             plot_rotation=plot_rotation,
             plot_center_of_mass=plot_center_of_mass,
@@ -337,10 +359,10 @@ class DPCReconstruction(PhaseReconstruction):
 
         # Initialization
         padded_object_shape = np.round(
-            self._intensities_shape[:2] * padding_factor
+            np.array(self._grid_scan_shape) * padding_factor
         ).astype("int")
         mask = xp.zeros(padded_object_shape, dtype="bool")
-        mask[: self._intensities_shape[0], : self._intensities_shape[1]] = True
+        mask[: self._grid_scan_shape[0], : self._grid_scan_shape[1]] = True
         mask_inv = xp.logical_not(mask)
 
         # Fourier coordinates and operators
@@ -400,7 +422,7 @@ class DPCReconstruction(PhaseReconstruction):
                 self.object_phase_iterations.append(
                     asnumpy(
                         self._padded_phase_object[
-                            : self._intensities_shape[0], : self._intensities_shape[1]
+                            : self._grid_scan_shape[0], : self._grid_scan_shape[1]
                         ].copy()
                     )
                 )
@@ -414,7 +436,7 @@ class DPCReconstruction(PhaseReconstruction):
 
         # crop result
         self._object_phase = self._padded_phase_object[
-            : self._intensities_shape[0], : self._intensities_shape[1]
+            : self._grid_scan_shape[0], : self._grid_scan_shape[1]
         ]
         self.object_phase = asnumpy(self._object_phase)
 
@@ -445,15 +467,15 @@ class DPCReconstruction(PhaseReconstruction):
 
         extent = [
             0,
-            self._scan_sampling[1] * self._intensities_shape[1],
-            self._scan_sampling[0] * self._intensities_shape[0],
+            self._scan_sampling[1] * self._grid_scan_shape[1],
+            self._scan_sampling[0] * self._grid_scan_shape[0],
             0,
         ]
 
         ax1 = fig.add_subplot(spec[0])
         im = ax1.imshow(self.object_phase, extent=extent, cmap=cmap, **kwargs)
-        ax1.set_xlabel(f"x [{self._scan_units[0]}]")
-        ax1.set_ylabel(f"y [{self._scan_units[1]}]")
+        ax1.set_ylabel(f"x [{self._scan_units[0]}]")
+        ax1.set_xlabel(f"y [{self._scan_units[1]}]")
         ax1.set_title(f"DPC Phase Reconstruction - RMS error: {self.error:.3e}")
 
         if cbar:
@@ -510,8 +532,8 @@ class DPCReconstruction(PhaseReconstruction):
 
         extent = [
             0,
-            self._scan_sampling[1] * self._intensities_shape[1],
-            self._scan_sampling[0] * self._intensities_shape[0],
+            self._scan_sampling[1] * self._grid_scan_shape[1],
+            self._scan_sampling[0] * self._grid_scan_shape[0],
             0,
         ]
 
@@ -537,8 +559,8 @@ class DPCReconstruction(PhaseReconstruction):
                 cmap=cmap,
                 **kwargs,
             )
-            ax.set_xlabel(f"x [{self._scan_units[0]}]")
-            ax.set_ylabel(f"y [{self._scan_units[1]}]")
+            ax.set_ylabel(f"x [{self._scan_units[0]}]")
+            ax.set_xlabel(f"y [{self._scan_units[1]}]")
             if cbar:
                 grid.cbar_axes[n].colorbar(im)
             ax.set_title(

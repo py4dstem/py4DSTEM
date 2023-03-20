@@ -223,18 +223,37 @@ class PtychographicReconstruction(PhaseReconstruction):
             com_shifts=force_com_shifts,
         )
 
-        self._extract_intensities_and_calibrations_from_datacube(
+        self._intensities = self._extract_intensities_and_calibrations_from_datacube(
             self._datacube,
             require_calibrations=True,
         )
 
-        self._calculate_intensities_center_of_mass(
+        (
+            self._com_measured_x,
+            self._com_measured_y,
+            self._com_fitted_x,
+            self._com_fitted_y,
+            self._com_normalized_x, 
+            self._com_normalized_y
+        ) = self._calculate_intensities_center_of_mass(
             self._intensities,
             dp_mask=self._dp_mask,
             fit_function=fit_function,
+            com_shifts = force_com_shifts,
         )
 
-        self._solve_for_center_of_mass_relative_rotation(
+        (
+            self._rotation_best_rad,
+            self._rotation_best_transpose,
+            self._com_x,
+            self._com_y, 
+            self.com_x,
+            self.com_y
+        ) = self._solve_for_center_of_mass_relative_rotation(
+            self._com_measured_x,
+            self._com_measured_y,
+            self._com_normalized_x,
+            self._com_normalized_y,
             rotation_angles_deg=rotation_angles_deg,
             plot_rotation=plot_rotation,
             plot_center_of_mass=plot_center_of_mass,
@@ -243,28 +262,19 @@ class PtychographicReconstruction(PhaseReconstruction):
             force_com_transpose=force_com_transpose,
             **kwargs,
         )
-
-        if force_com_shifts is None:
-            (
-                self._amplitudes,
-                self._mean_diffraction_intensity,
-            ) = self._normalize_diffraction_intensities(
-                self._intensities,
-                self._com_fitted_x,
-                self._com_fitted_y,
-            )
-        else:
-            (
-                self._amplitudes,
-                self._mean_diffraction_intensity,
-            ) = self._normalize_diffraction_intensities(
-                self._intensities,
-                xp.asarray(force_com_shifts[0]),
-                xp.asarray(force_com_shifts[1]),
-            )
+        
+        (
+            self._amplitudes,
+            self._mean_diffraction_intensity,
+        ) = self._normalize_diffraction_intensities(
+            self._intensities,
+            self._com_fitted_x,
+            self._com_fitted_y,
+        )
 
         # explicitly delete namespace
         self._num_diffraction_patterns = self._amplitudes.shape[0]
+        self._region_of_interest_shape = np.array(self._amplitudes.shape[-2:])
         del self._intensities
 
         self._positions_px = self._calculate_scan_positions_in_pixels(
@@ -302,13 +312,15 @@ class PtychographicReconstruction(PhaseReconstruction):
         self._positions_initial[:, 1] *= self.sampling[1]
 
         # Vectorized Patches
-        self._set_vectorized_patch_indices()
+        (
+            self._vectorized_patch_indices_row,
+            self._vectorized_patch_indices_col
+        ) = self._extract_vectorized_patch_indices()
 
         # Probe Initialization
         if self._probe is None:
             if self._vacuum_probe_intensity is not None:
                 self._semiangle_cutoff = np.inf
-                # self._vacuum_probe_intensity = asnumpy(self._vacuum_probe_intensity)
                 self._vacuum_probe_intensity = xp.asarray(self._vacuum_probe_intensity)
                 probe_x0, probe_y0 = get_CoM(
                     self._vacuum_probe_intensity, device="cpu" if xp is np else "gpu"
@@ -351,7 +363,6 @@ class PtychographicReconstruction(PhaseReconstruction):
                 self._probe = xp.asarray(self._probe, dtype=xp.complex64)
 
         # Normalize probe to match mean diffraction intensity
-        # if self._vacuum_probe_intensity is None:
         probe_intensity = xp.sum(xp.abs(xp.fft.fft2(self._probe)) ** 2)
         self._probe *= np.sqrt(self._mean_diffraction_intensity / probe_intensity)
 
@@ -390,8 +401,8 @@ class PtychographicReconstruction(PhaseReconstruction):
                 cmap=cmap,
                 **kwargs,
             )
-            ax1.set_xlabel("x [A]")
-            ax1.set_ylabel("y [A]")
+            ax1.set_ylabel("x [A]")
+            ax1.set_xlabel("y [A]")
             ax1.set_title("Initial Probe Intensity")
 
             ax2.imshow(
@@ -406,8 +417,8 @@ class PtychographicReconstruction(PhaseReconstruction):
                 s=2.5,
                 color=(1, 0, 0, 1),
             )
-            ax2.set_xlabel("x [A]")
-            ax2.set_ylabel("y [A]")
+            ax2.set_ylabel("x [A]")
+            ax2.set_xlabel("y [A]")
             ax2.set_xlim((extent[0], extent[1]))
             ax2.set_ylim((extent[2], extent[3]))
             ax2.set_title("Object Field of View")
@@ -1265,7 +1276,10 @@ class PtychographicReconstruction(PhaseReconstruction):
             self._positions_px_fractional = self._positions_px - xp.round(
                 self._positions_px
             )
-            self._set_vectorized_patch_indices()
+            (
+                self._vectorized_patch_indices_row,
+                self._vectorized_patch_indices_col
+            ) = self._extract_vectorized_patch_indices()
             self._exit_waves = None
         elif reset is None:
             if hasattr(self, "error"):
@@ -1318,7 +1332,10 @@ class PtychographicReconstruction(PhaseReconstruction):
                 self._positions_px_fractional = self._positions_px - xp.round(
                     self._positions_px
                 )
-                self._set_vectorized_patch_indices()
+                (
+                    self._vectorized_patch_indices_row,
+                    self._vectorized_patch_indices_col
+                ) = self._extract_vectorized_patch_indices()
                 amplitudes = self._amplitudes[shuffled_indices[start:end]]
 
                 # forward operator
@@ -1560,8 +1577,8 @@ class PtychographicReconstruction(PhaseReconstruction):
                     cmap=cmap,
                     **kwargs,
                 )
-            ax.set_xlabel("x [A]")
-            ax.set_ylabel("y [A]")
+            ax.set_ylabel("x [A]")
+            ax.set_xlabel("y [A]")
             ax.set_title(f"Reconstructed object {object_mode}")
 
             if cbar:
@@ -1580,8 +1597,8 @@ class PtychographicReconstruction(PhaseReconstruction):
                 cmap="Greys_r",
                 **kwargs,
             )
-            ax.set_xlabel("x [A]")
-            ax.set_ylabel("y [A]")
+            ax.set_ylabel("x [A]")
+            ax.set_xlabel("y [A]")
             ax.set_title("Reconstructed probe intensity")
 
             if cbar:
@@ -1613,8 +1630,8 @@ class PtychographicReconstruction(PhaseReconstruction):
                     cmap=cmap,
                     **kwargs,
                 )
-            ax.set_xlabel("x [A]")
-            ax.set_ylabel("y [A]")
+            ax.set_ylabel("x [A]")
+            ax.set_xlabel("y [A]")
             ax.set_title(f"Reconstructed object {object_mode}")
 
             if cbar:
@@ -1762,8 +1779,8 @@ class PtychographicReconstruction(PhaseReconstruction):
                 )
                 ax.set_title(f"Iter: {grid_range[n]} Intensity")
 
-            ax.set_xlabel("x [A]")
-            ax.set_ylabel("y [A]")
+            ax.set_ylabel("x [A]")
+            ax.set_xlabel("y [A]")
             if cbar:
                 grid.cbar_axes[n].colorbar(im)
 
@@ -1788,8 +1805,8 @@ class PtychographicReconstruction(PhaseReconstruction):
                 )
                 ax.set_title(f"Iter: {grid_range[n]} Probe")
 
-                ax.set_xlabel("x [A]")
-                ax.set_ylabel("y [A]")
+                ax.set_ylabel("x [A]")
+                ax.set_xlabel("y [A]")
 
                 if cbar:
                     grid.cbar_axes[n].colorbar(im)
@@ -1818,7 +1835,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         plot_convergence: bool = True,
         plot_probe: bool = True,
         object_mode: str = "phase",
-        cbar: bool = False,
+        cbar: bool = True,
         padding: int = 0,
         relative_error: bool = True,
         **kwargs,

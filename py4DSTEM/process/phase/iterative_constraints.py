@@ -195,7 +195,10 @@ def _positions_center_of_mass_constraint(self, current_positions):
     current_positions -= xp.mean(current_positions, axis=0) - self._positions_px_com
     self._positions_px_fractional = current_positions - xp.round(current_positions)
 
-    self._set_vectorized_patch_indices()
+    (
+        self._vectorized_patch_indices_row,
+        self._vectorized_patch_indices_col
+    ) = self._extract_vectorized_patch_indices()
 
     return current_positions
 
