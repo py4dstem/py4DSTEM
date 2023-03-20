@@ -197,7 +197,7 @@ def _positions_center_of_mass_constraint(self, current_positions):
 
     (
         self._vectorized_patch_indices_row,
-        self._vectorized_patch_indices_col
+        self._vectorized_patch_indices_col,
     ) = self._extract_vectorized_patch_indices()
 
     return current_positions

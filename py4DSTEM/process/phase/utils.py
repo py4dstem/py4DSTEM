@@ -2,14 +2,12 @@ from typing import Mapping, Tuple, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
-from mpl_toolkits.axes_grid1 import ImageGrid
 
 try:
     import cupy as cp
 except ImportError:
     cp = None
 
-from py4DSTEM.process.calibration import fit_origin
 from py4DSTEM.process.utils.utils import electron_wavelength_angstrom
 from scipy.ndimage import gaussian_filter
 
@@ -565,7 +563,9 @@ def fft_shift(array, positions, xp=np):
 
     return xp.fft.ifft2(shifted_fourier_array)
 
+
 ### Batching functions
+
 
 def subdivide_into_batches(
     num_items: int, num_batches: int = None, max_batch: int = None

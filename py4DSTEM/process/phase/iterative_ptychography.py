@@ -233,22 +233,22 @@ class PtychographicReconstruction(PhaseReconstruction):
             self._com_measured_y,
             self._com_fitted_x,
             self._com_fitted_y,
-            self._com_normalized_x, 
-            self._com_normalized_y
+            self._com_normalized_x,
+            self._com_normalized_y,
         ) = self._calculate_intensities_center_of_mass(
             self._intensities,
             dp_mask=self._dp_mask,
             fit_function=fit_function,
-            com_shifts = force_com_shifts,
+            com_shifts=force_com_shifts,
         )
 
         (
             self._rotation_best_rad,
             self._rotation_best_transpose,
             self._com_x,
-            self._com_y, 
+            self._com_y,
             self.com_x,
-            self.com_y
+            self.com_y,
         ) = self._solve_for_center_of_mass_relative_rotation(
             self._com_measured_x,
             self._com_measured_y,
@@ -262,7 +262,7 @@ class PtychographicReconstruction(PhaseReconstruction):
             force_com_transpose=force_com_transpose,
             **kwargs,
         )
-        
+
         (
             self._amplitudes,
             self._mean_diffraction_intensity,
@@ -314,7 +314,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         # Vectorized Patches
         (
             self._vectorized_patch_indices_row,
-            self._vectorized_patch_indices_col
+            self._vectorized_patch_indices_col,
         ) = self._extract_vectorized_patch_indices()
 
         # Probe Initialization
@@ -1278,7 +1278,7 @@ class PtychographicReconstruction(PhaseReconstruction):
             )
             (
                 self._vectorized_patch_indices_row,
-                self._vectorized_patch_indices_col
+                self._vectorized_patch_indices_col,
             ) = self._extract_vectorized_patch_indices()
             self._exit_waves = None
         elif reset is None:
@@ -1334,7 +1334,7 @@ class PtychographicReconstruction(PhaseReconstruction):
                 )
                 (
                     self._vectorized_patch_indices_row,
-                    self._vectorized_patch_indices_col
+                    self._vectorized_patch_indices_col,
                 ) = self._extract_vectorized_patch_indices()
                 amplitudes = self._amplitudes[shuffled_indices[start:end]]
 

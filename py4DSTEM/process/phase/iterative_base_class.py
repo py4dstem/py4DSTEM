@@ -37,15 +37,16 @@ class PhaseReconstruction(metaclass=ABCMeta):
     Defines various common functions and properties for all subclasses to inherit,
     as well as sets up various abstract methods each subclass must define.
     """
+
     from py4DSTEM.process.phase.iterative_constraints import (
-        _object_threshold_constraint, 
-        _object_gaussian_constraint, 
-        _object_butterworth_constraint, 
-        _probe_center_of_mass_constraint, 
-        _probe_fourier_amplitude_constraint, 
-        _probe_finite_support_constraint, 
-        _positions_center_of_mass_constraint, 
-        _positions_affine_transformation_constraint, 
+        _object_threshold_constraint,
+        _object_gaussian_constraint,
+        _object_butterworth_constraint,
+        _probe_center_of_mass_constraint,
+        _probe_fourier_amplitude_constraint,
+        _probe_finite_support_constraint,
+        _positions_center_of_mass_constraint,
+        _positions_affine_transformation_constraint,
     )
 
     @abstractmethod
@@ -272,7 +273,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
         -------
         intensities: (Rx,Ry,Qx,Qy) xp.ndarray
             Raw intensities array stored on device, with dtype xp.float32
-        
+
         Raises
         ------
         ValueError
@@ -448,14 +449,21 @@ class PhaseReconstruction(metaclass=ABCMeta):
         com_fitted_y = xp.asarray(com_shifts[1])
 
         # fix CoM units
-        com_normalized_x = (
-            com_measured_x - com_fitted_x
-        ) * self._reciprocal_sampling[0]
-        com_normalized_y = (
-            com_measured_y - com_fitted_y
-        ) * self._reciprocal_sampling[1]
+        com_normalized_x = (com_measured_x - com_fitted_x) * self._reciprocal_sampling[
+            0
+        ]
+        com_normalized_y = (com_measured_y - com_fitted_y) * self._reciprocal_sampling[
+            1
+        ]
 
-        return com_measured_x, com_measured_y, com_fitted_x, com_fitted_y, com_normalized_x, com_normalized_y
+        return (
+            com_measured_x,
+            com_measured_y,
+            com_fitted_x,
+            com_fitted_y,
+            com_normalized_x,
+            com_normalized_y,
+        )
 
     def _solve_for_center_of_mass_relative_rotation(
         self,
@@ -586,13 +594,9 @@ class PhaseReconstruction(metaclass=ABCMeta):
                     )
 
                 if maximize_divergence:
-                    _rotation_best_transpose = (
-                        rotation_div_transpose > rotation_div
-                    )
+                    _rotation_best_transpose = rotation_div_transpose > rotation_div
                 else:
-                    _rotation_best_transpose = (
-                        rotation_curl_transpose < rotation_curl
-                    )
+                    _rotation_best_transpose = rotation_curl_transpose < rotation_curl
 
                 if self._verbose:
                     if _rotation_best_transpose:
@@ -834,10 +838,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
                     ind_max = xp.argmax(rotation_div).item()
                     ind_trans_max = xp.argmax(rotation_div_transpose).item()
 
-                    if (
-                        rotation_div[ind_max]
-                        >= rotation_div_transpose[ind_trans_max]
-                    ):
+                    if rotation_div[ind_max] >= rotation_div_transpose[ind_trans_max]:
                         rotation_best_deg = rotation_angles_deg[ind_max]
                         _rotation_best_rad = rotation_angles_rad[ind_max]
                         _rotation_best_transpose = False
@@ -850,10 +851,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
                     ind_min = xp.argmin(rotation_curl).item()
                     ind_trans_min = xp.argmin(rotation_curl_transpose).item()
 
-                    if (
-                        rotation_curl[ind_min]
-                        <= rotation_curl_transpose[ind_trans_min]
-                    ):
+                    if rotation_curl[ind_min] <= rotation_curl_transpose[ind_trans_min]:
                         rotation_best_deg = rotation_angles_deg[ind_min]
                         _rotation_best_rad = rotation_angles_rad[ind_min]
                         _rotation_best_transpose = False
@@ -1022,7 +1020,14 @@ class PhaseReconstruction(metaclass=ABCMeta):
                 ax.set_xlabel(f"y [{self._scan_units[1]}]")
                 ax.set_title(title)
 
-        return _rotation_best_rad, _rotation_best_transpose, _com_x, _com_y, com_x, com_y
+        return (
+            _rotation_best_rad,
+            _rotation_best_transpose,
+            _com_x,
+            _com_y,
+            com_x,
+            com_y,
+        )
 
     def _normalize_diffraction_intensities(
         self,
@@ -1069,9 +1074,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
                 mean_intensity += xp.sum(intensities)
                 amplitudes[rx, ry] = xp.sqrt(xp.maximum(intensities, 0))
 
-        amplitudes = xp.reshape(
-            amplitudes, (-1,) + region_of_interest_shape
-        )
+        amplitudes = xp.reshape(amplitudes, (-1,) + region_of_interest_shape)
         mean_intensity /= amplitudes.shape[0]
 
         return amplitudes, mean_intensity
@@ -1522,7 +1525,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
 
         if return_values:
             return objects, convergence
-    
+
     def _position_correction(
         self,
         relevant_object,
@@ -1686,7 +1689,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
         return xp.fft.fftshift(
             xp.fft.fft2(xp.fft.ifftshift(probe, axes=(-2, -1))), axes=(-2, -1)
         )
-    
+
     def plot_fourier_probe(
         self,
         probe=None,
@@ -1736,7 +1739,6 @@ class PhaseReconstruction(metaclass=ABCMeta):
         )
         ax.set_xticks([])
         ax.set_yticks([])
-
 
     @property
     def probe_fourier(self):
