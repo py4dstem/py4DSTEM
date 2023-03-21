@@ -1,11 +1,11 @@
-from v13_emd_classes import (
+from .v13_emd_classes import (
     Root,
     Metadata,
     Array,
     PointList,
     PointListArray
 )
-from v13_py4dstem_classes import (
+from .v13_py4dstem_classes import (
     Calibration,
     DataCube,
     DiffractionSlice,
@@ -16,6 +16,6 @@ from v13_py4dstem_classes import (
     QPoints,
     BraggVectors,
 )
-from v13_to_14 import v13_to_14
+from .v13_to_14 import v13_to_14
 
 

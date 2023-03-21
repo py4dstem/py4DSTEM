@@ -50,7 +50,7 @@ from py4DSTEM.classes import (
 
 
 
-def v13_to_14(v13tree, v14tree):
+def v13_to_14( v13tree ):
     """
     Converts a v13 data tree to a v14 data tree
     """
@@ -59,25 +59,26 @@ def v13_to_14(v13tree, v14tree):
     if isinstance(v13tree, list):
         return v13tree
 
-    # get the root and a node to grow from
+    # make a root and fine the node to grow from
     if isinstance(v13tree,Root13):
-        root = startnode = _v13_to_14_cls(v13_tree)
+        node = _v13_to_14_cls(v13_tree)
     else:
-        startnode = _v13_to_14_cls(v13tree)
-        root = Root( name=startnode.name )
-        root.tree(startnode)
+        node = _v13_to_14_cls(v13tree)
+        root = Root( name=node.name )
+        root.tree(node)
 
     # populate tree
-    _populate_tree(startnode)
-    return startnode
+    _populate_tree(v13tree,node)
+    return node
 
 
 
-def _populate_tree(node):
-    for key in node.tree.keys():
-        newnode = _v13_to_14_cls(node.tree[key])
-        node.tree(newnode)
-        _populate_tree(newnode)
+def _populate_tree(node13,node14):
+    for key in node13.tree.keys():
+        newnode13 = node13.tree[key]
+        newnode14 = _v13_to_14_cls(newnode13)
+        node14.tree(newnode14)
+        _populate_tree(newnode13,newnode14)
 
 
 
@@ -102,7 +103,7 @@ def _v13_to_14_cls(obj):
         VirtualImage13,
         Probe13,
         QPoints13,
-        Braggvectors13
+        BraggVectors13
     ))), f"obj must be a v13 class instance, not type {type(obj)}"
 
     if isinstance(obj, Root13):
