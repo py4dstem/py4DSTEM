@@ -95,22 +95,23 @@ def read_legacy13(
     with h5py.File(filepath,'r') as f:
 
         # open the selected group
-        # and return
         try:
             group_data = f[root]
-
-            # Read
-            if tree is True:
-                data = _read_with_tree(group_data)
-
-            elif tree is False:
-                data = _read_without_tree(group_data)
-
-            elif tree == 'noroot':
-                data = _read_without_root(group_data)
-
         except KeyError:
             raise Exception(f"the provided root {root} is not a valid path to a recognized data group")
+
+        # Read
+        if tree is True:
+            data = _read_with_tree(group_data)
+
+        elif tree is False:
+            data = _read_without_tree(group_data)
+
+        elif tree == 'noroot':
+            data = _read_without_root(group_data)
+
+        else:
+            raise Exception(f"Unexpected value {tree} for `tree`")
 
 
     # convert version 13 -> 14
@@ -142,13 +143,13 @@ def _read_without_tree(grp):
     data = __class__.from_h5(grp)
 
     # handle calibration
-    if not isinstance(data, Calibration):
-        cal = _add_calibration(
-            data.tree,
-            grp
-        )
-        if cal is not None:
-            data.calibration = cal
+    #if not isinstance(data, Calibration):
+    #    cal = _add_calibration(
+    #        data.tree,
+    #        grp
+    #    )
+    #    if cal is not None:
+    #        data.calibration = cal
     return data
 
 
@@ -274,8 +275,18 @@ def _get_v13_class(grp):
         'QPoints' : QPoints,
         'BraggVectors' : BraggVectors
     }
-    try:
+    if 'py4dstem_class' in grp.attrs:
         classname = grp.attrs['py4dstem_class']
+    elif 'emd_group_type' in grp.attrs:
+        emd_group_type = grp.attrs['emd_group_type']
+        classname = {
+            'root' : 'root',
+            0 : Metadata,
+            1 : Array,
+            2 : PointList,
+            3 : PointListArray,
+        }[emd_group_type]
+    try:
         __class__ = lookup[classname]
         return __class__
     except KeyError:
