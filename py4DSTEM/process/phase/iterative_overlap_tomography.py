@@ -123,17 +123,19 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         if device == "cpu":
             self._xp = np
             self._asnumpy = np.asarray
-            from scipy.ndimage import gaussian_filter, zoom
+            from scipy.ndimage import gaussian_filter, zoom, rotate
 
             self._gaussian_filter = gaussian_filter
             self._zoom = zoom
+            self._rotate = rotate
         elif device == "gpu":
             self._xp = cp
             self._asnumpy = cp.asnumpy
-            from cupyx.scipy.ndimage import gaussian_filter, zoom
+            from cupyx.scipy.ndimage import gaussian_filter, zoom, rotate
 
             self._gaussian_filter = gaussian_filter
             self._zoom = zoom
+            self._rotate = rotate
         else:
             raise ValueError(f"device must be either 'cpu' or 'gpu', not {device}")
 
@@ -150,14 +152,12 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         self._set_polar_parameters(polar_parameters)
 
         num_tilts = len(tilt_angles_degrees)
-        tilt_angles_rad = [np.deg2rad(tilt_ang) for tilt_ang in tilt_angles_degrees]
-
         if initial_scan_positions is None:
             initial_scan_positions = [None] * num_tilts
 
         self._energy = energy
         self._num_slices = num_slices
-        self._tilt_angles_rad = tilt_angles_rad
+        self._tilt_angles_deg = tilt_angles_degrees
         self._num_tilts = num_tilts
         self._semiangle_cutoff = semiangle_cutoff
         self._rolloff = rolloff
@@ -339,7 +339,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
 
         self._rotation_best_rad = np.deg2rad(diffraction_patterns_rotate_degrees)
         self._rotation_best_transpose = diffraction_patterns_transpose
-
+        self._electron_sigma = electron_interaction_parameter(self._energy)
         if force_com_shifts is None:
             force_com_shifts = [None] * self._num_tilts
 
@@ -372,7 +372,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                 self._region_of_interest_shape = np.array(
                     self._amplitudes[0].shape[-2:]
                 )
-                self._vectorized_patch_indices_row = xp.empty(
+                self._vectorized_patch_indices_row_all = xp.empty(
                     (
                         self._num_diffraction_patterns,
                         self._region_of_interest_shape[0],
@@ -380,7 +380,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                     ),
                     dtype="int",
                 )
-                self._vectorized_patch_indices_col = xp.empty(
+                self._vectorized_patch_indices_col_all = xp.empty(
                     (
                         self._num_diffraction_patterns,
                         1,
@@ -473,6 +473,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
 
         self._object_initial = self._object.copy()
         self._object_shape = self._object.shape[-2:]
+        self._num_voxels = self._object.shape[0]
 
         # Center Probes
         self._positions_px_all = xp.asarray(self._positions_px_all, dtype=xp.float32)
@@ -493,12 +494,12 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
             self._positions_px_com_all[tilt_index] = xp.mean(self._positions_px, axis=0)
 
             (
-                self._vectorized_patch_indices_row[
+                self._vectorized_patch_indices_row_all[
                     self._cum_probes_per_tilt[tilt_index] : self._cum_probes_per_tilt[
                         tilt_index + 1
                     ]
                 ],
-                self._vectorized_patch_indices_col[
+                self._vectorized_patch_indices_col_all[
                     self._cum_probes_per_tilt[tilt_index] : self._cum_probes_per_tilt[
                         tilt_index + 1
                     ]
@@ -673,21 +674,9 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
 
         shifted_probes = fft_shift(current_probe, self._positions_px_fractional, xp)
 
-        active_indices_row = self._vectorized_patch_indices_row[
-            self._cum_probes_per_tilt[
-                self._active_tilt_index
-            ] : self._cum_probes_per_tilt[self._active_tilt_index + 1]
-        ]
-
-        active_indices_col = self._vectorized_patch_indices_col[
-            self._cum_probes_per_tilt[
-                self._active_tilt_index
-            ] : self._cum_probes_per_tilt[self._active_tilt_index + 1]
-        ]
-        electron_sigma = electron_interaction_parameter(self._energy)
-        current_object_complex = xp.exp(1j * electron_sigma * current_object)
+        current_object_complex = xp.exp(1j * self._electron_sigma * current_object)
         object_patches = current_object_complex[
-            :, active_indices_row, active_indices_col
+            :, self._vectorized_patch_indices_row, self._vectorized_patch_indices_col
         ]
 
         propagated_probes = xp.empty_like(object_patches)
@@ -876,8 +865,720 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
 
         return propagated_probes, object_patches, overlap, exit_waves, error
 
-    def reconstruct(self):
-        pass
+    def _gradient_descent_adjoint(
+        self,
+        current_object,
+        current_probe,
+        object_patches,
+        propagated_probes,
+        exit_waves,
+        step_size,
+        normalization_min,
+        fix_probe,
+    ):
+        """
+        Ptychographic adjoint operator for GD method.
+        Computes object and probe update steps.
+
+        Parameters
+        --------
+        current_object: np.ndarray
+            Current object estimate
+        current_probe: np.ndarray
+            Current probe estimate
+        object_patches: np.ndarray
+            Patched object view
+        propagated_probes:np.ndarray
+            Prop[object^n*probe^n]
+        exit_waves:np.ndarray
+            Updated exit_waves
+        step_size: float, optional
+            Update step size
+        normalization_min: float, optional
+            Probe normalization minimum as a fraction of the maximum overlap intensity
+        fix_probe: bool, optional
+            If True, probe will not be updated
+
+        Returns
+        --------
+        updated_object: np.ndarray
+            Updated object estimate
+        updated_probe: np.ndarray
+            Updated probe estimate
+        """
+        xp = self._xp
+
+        for s in reversed(range(self._num_slices)):
+            exit_wave = exit_waves[s]
+            probe = propagated_probes[s]
+            obj = object_patches[s]
+
+            probe_normalization = self._sum_overlapping_patches_bincounts(
+                xp.abs(probe) ** 2
+            )
+            probe_normalization = 1 / xp.sqrt(
+                1e-16
+                + ((1 - normalization_min) * probe_normalization) ** 2
+                + (normalization_min * xp.max(probe_normalization)) ** 2
+            )
+
+            current_object[s] += step_size * xp.real(
+                self._sum_overlapping_patches_bincounts(
+                    -1j
+                    * self._electron_sigma
+                    * xp.conj(obj)
+                    * xp.conj(probe)
+                    * exit_wave
+                )
+                * probe_normalization
+            )
+
+            if not fix_probe:
+                if s > 0:
+                    object_normalization = xp.abs(obj) ** 2
+                    object_normalization = 1 / xp.sqrt(
+                        1e-16
+                        + ((1 - normalization_min) * object_normalization) ** 2
+                        + (
+                            normalization_min
+                            * xp.max(object_normalization, axis=(-1, -2))[:, None, None]
+                        )
+                        ** 2
+                    )
+
+                    probe += step_size * xp.conj(obj) * exit_wave * object_normalization
+                    exit_waves[s - 1] += self._propagate_array(
+                        probe, xp.conj(self._propagator_arrays[s - 1])
+                    )
+                else:
+                    object_normalization = xp.sum(
+                        (xp.abs(obj) ** 2),
+                        axis=0,
+                    )
+                    object_normalization = 1 / xp.sqrt(
+                        1e-16
+                        + ((1 - normalization_min) * object_normalization) ** 2
+                        + (normalization_min * xp.max(object_normalization)) ** 2
+                    )
+
+                    current_probe += (
+                        step_size
+                        * xp.sum(
+                            xp.conj(obj) * exit_wave,
+                            axis=0,
+                        )
+                        * object_normalization
+                    )
+
+        return current_object, current_probe
+
+    def _projection_sets_adjoint(
+        self,
+        current_object,
+        current_probe,
+        object_patches,
+        propagated_probes,
+        exit_waves,
+        normalization_min,
+        fix_probe,
+    ):
+        """
+        Ptychographic adjoint operator for DM_AP and RAAR methods.
+        Computes object and probe update steps.
+
+        Parameters
+        --------
+        current_object: np.ndarray
+            Current object estimate
+        current_probe: np.ndarray
+            Current probe estimate
+        object_patches: np.ndarray
+            Patched object view
+        propagated_probes:np.ndarray
+            Prop[object^n*probe^n]
+        exit_waves:np.ndarray
+            Updated exit_waves
+        normalization_min: float, optional
+            Probe normalization minimum as a fraction of the maximum overlap intensity
+        fix_probe: bool, optional
+            If True, probe will not be updated
+
+        Returns
+        --------
+        updated_object: np.ndarray
+            Updated object estimate
+        updated_probe: np.ndarray
+            Updated probe estimate
+        """
+        xp = self._xp
+
+        for s in reversed(range(self._num_slices)):
+            exit_wave = exit_waves[s]
+            probe = propagated_probes[s]
+            obj = object_patches[s]
+
+            probe_normalization = self._sum_overlapping_patches_bincounts(
+                xp.abs(probe) ** 2
+            )
+            probe_normalization = 1 / xp.sqrt(
+                1e-16
+                + ((1 - normalization_min) * probe_normalization) ** 2
+                + (normalization_min * xp.max(probe_normalization)) ** 2
+            )
+
+            current_object[s] = xp.real(
+                self._sum_overlapping_patches_bincounts(
+                    -1j
+                    * self._electron_sigma
+                    * xp.conj(obj)
+                    * xp.conj(probe)
+                    * exit_wave
+                )
+                * probe_normalization
+            )
+
+            if not fix_probe:
+                if s > 0:
+                    object_normalization = xp.abs(obj) ** 2
+                    object_normalization = 1 / xp.sqrt(
+                        1e-16
+                        + ((1 - normalization_min) * object_normalization) ** 2
+                        + (
+                            normalization_min
+                            * xp.max(object_normalization, axis=(-1, -2))[:, None, None]
+                        )
+                        ** 2
+                    )
+
+                    probe = xp.conj(obj) * exit_wave * object_normalization
+                    exit_waves[s - 1] = self._propagate_array(
+                        probe, xp.conj(self._propagator_arrays[s - 1])
+                    )
+                else:
+                    object_normalization = xp.sum(
+                        (xp.abs(obj) ** 2),
+                        axis=0,
+                    )
+                    object_normalization = 1 / xp.sqrt(
+                        1e-16
+                        + ((1 - normalization_min) * object_normalization) ** 2
+                        + (normalization_min * xp.max(object_normalization)) ** 2
+                    )
+
+                    current_probe = (
+                        xp.sum(
+                            xp.conj(obj) * exit_wave,
+                            axis=0,
+                        )
+                        * object_normalization
+                    )
+
+        return current_object, current_probe
+
+    def _adjoint(
+        self,
+        current_object,
+        current_probe,
+        object_patches,
+        propagated_probes,
+        exit_waves,
+        use_projection_scheme: bool,
+        step_size: float,
+        normalization_min: float,
+        fix_probe: bool,
+    ):
+        """
+        Ptychographic adjoint operator for GD method.
+        Computes object and probe update steps.
+
+        Parameters
+        --------
+        current_object: np.ndarray
+            Current object estimate
+        current_probe: np.ndarray
+            Current probe estimate
+        object_patches: np.ndarray
+            Patched object view
+        propagated_probes:np.ndarray
+            fractionally-shifted probes
+        exit_waves:np.ndarray
+            Updated exit_waves
+        step_size: float, optional
+            Update step size
+        normalization_min: float, optional
+            Probe normalization minimum as a fraction of the maximum overlap intensity
+        fix_probe: bool, optional
+            If True, probe will not be updated
+
+        Returns
+        --------
+        updated_object: np.ndarray
+            Updated object estimate
+        updated_probe: np.ndarray
+            Updated probe estimate
+        """
+
+        if use_projection_scheme:
+            current_object, current_probe = self._projection_sets_adjoint(
+                current_object,
+                current_probe,
+                object_patches,
+                propagated_probes,
+                exit_waves,
+                normalization_min,
+                fix_probe,
+            )
+        else:
+            current_object, current_probe = self._gradient_descent_adjoint(
+                current_object,
+                current_probe,
+                object_patches,
+                propagated_probes,
+                exit_waves,
+                step_size,
+                normalization_min,
+                fix_probe,
+            )
+
+        return current_object, current_probe
+
+    def reconstruct(
+        self,
+        max_iter: int = 64,
+        reconstruction_method: str = "gradient-descent",
+        reconstruction_parameter: float = 1.0,
+        max_batch_size: int = None,
+        seed_random: int = None,
+        step_size: float = 0.9,
+        normalization_min: float = 1.0,
+        positions_step_size: float = 0.9,
+        pure_phase_object_iter: int = 0,
+        fix_com: bool = True,
+        fix_probe_iter: int = 0,
+        fix_probe_fourier_amplitude_iter: int = 0,
+        fix_positions_iter: int = np.inf,
+        global_affine_transformation: bool = True,
+        probe_support_relative_radius: float = 1.0,
+        probe_support_supergaussian_degree: float = 10.0,
+        gaussian_filter_sigma: float = None,
+        gaussian_filter_iter: int = np.inf,
+        butterworth_filter_iter: int = np.inf,
+        q_lowpass: float = None,
+        q_highpass: float = None,
+        kz_regularization_filter_iter: int = np.inf,
+        kz_regularization_gamma: float = None,
+        identical_slices_iter: int = 0,
+        store_iterations: bool = False,
+        progress_bar: bool = True,
+        reset: bool = None,
+    ):
+        """
+        Ptychographic reconstruction main method.
+
+        Parameters
+        --------
+        max_iter: int, optional
+            Maximum number of iterations to run
+        reconstruction_method: str, optional
+            Specifies which reconstruction algorithm to use, one of:
+            "generalized-projection",
+            "DM_AP" (or "difference-map_alternating-projections"),
+            "RAAR" (or "relaxed-averaged-alternating-reflections"),
+            "RRR" (or "relax-reflect-reflect"),
+            "SUPERFLIP" (or "charge-flipping"), or
+            "GD" (or "gradient_descent")
+        reconstruction_parameter: float, optional
+            Reconstruction parameter for various reconstruction methods above.
+        reconstruction_parameter: float, optional
+            Tuning parameter to interpolate b/w DM-AP and DM-RAAR
+        max_batch_size: int, optional
+            Max number of probes to update at once
+        seed_random: int, optional
+            Seeds the random number generator, only applicable when max_batch_size is not None
+        step_size: float, optional
+            Update step size
+        normalization_min: float, optional
+            Probe normalization minimum as a fraction of the maximum overlap intensity
+        positions_step_size: float, optional
+            Positions update step size
+        pure_phase_object: bool, optional
+            If True, object amplitude is set to unity
+        fix_com: bool, optional
+            If True, fixes center of mass of probe
+        fix_probe_iter: int, optional
+            Number of iterations to run with a fixed probe before updating probe estimate
+        fix_probe_amplitude: int, optional
+            Number of iterations to run with a fixed probe amplitude
+        fix_positions_iter: int, optional
+            Number of iterations to run with fixed positions before updating positions estimate
+        global_affine_transformation: bool, optional
+            If True, positions are assumed to be a global affine transform from initial scan
+        probe_support_relative_radius: float, optional
+            Radius of probe supergaussian support in scaled pixel units, between (0,1]
+        probe_support_supergaussian_degree: float, optional
+            Degree supergaussian support is raised to, higher is sharper cutoff
+        gaussian_filter_sigma: float, optional
+            Standard deviation of gaussian kernel
+        gaussian_filter_iter: int, optional
+            Number of iterations to run using object smoothness constraint
+        butterworth_filter_iter: int, optional
+            Number of iterations to run using high-pass butteworth filter
+        q_lowpass: float
+            Cut-off frequency in A^-1 for low-pass butterworth filter
+        q_highpass: float
+            Cut-off frequency in A^-1 for high-pass butterworth filter
+        kz_regularization_filter_iter: int, optional
+            Number of iterations to run using kz regularization filter
+        kz_regularization_gamma, float, optional
+            kz regularization strength
+        identical_slices_iter: int, optional
+            Number of iterations to run using identical slices
+        store_iterations: bool, optional
+            If True, reconstructed objects and probes are stored at each iteration
+        progress_bar: bool, optional
+            If True, reconstruction progress is displayed
+        reset: bool, optional
+            If True, previous reconstructions are ignored
+
+        Returns
+        --------
+        self: MultislicePtychographicReconstruction
+            Self to accommodate chaining
+        """
+        asnumpy = self._asnumpy
+        xp = self._xp
+
+        # Reconstruction method
+
+        if reconstruction_method == "generalized-projection":
+            if np.array(reconstruction_parameter).shape != (3,):
+                raise ValueError(
+                    (
+                        "reconstruction_parameter must be a list of three numbers "
+                        "when using `reconstriction_method`=generalized-projection."
+                    )
+                )
+
+            use_projection_scheme = True
+            projection_a, projection_b, projection_c = reconstruction_parameter
+            step_size = None
+        elif (
+            reconstruction_method == "DM_AP"
+            or reconstruction_method == "difference-map_alternating-projections"
+        ):
+            if reconstruction_parameter < 0.0 or reconstruction_parameter > 1.0:
+                raise ValueError("reconstruction_parameter must be between 0-1.")
+
+            use_projection_scheme = True
+            projection_a = -reconstruction_parameter
+            projection_b = 1
+            projection_c = 1 + reconstruction_parameter
+            step_size = None
+        elif (
+            reconstruction_method == "RAAR"
+            or reconstruction_method == "relaxed-averaged-alternating-reflections"
+        ):
+            if reconstruction_parameter < 0.0 or reconstruction_parameter > 1.0:
+                raise ValueError("reconstruction_parameter must be between 0-1.")
+
+            use_projection_scheme = True
+            projection_a = 1 - 2 * reconstruction_parameter
+            projection_b = reconstruction_parameter
+            projection_c = 2
+            step_size = None
+        elif (
+            reconstruction_method == "RRR"
+            or reconstruction_method == "relax-reflect-reflect"
+        ):
+            if reconstruction_parameter < 0.0 or reconstruction_parameter > 2.0:
+                raise ValueError("reconstruction_parameter must be between 0-2.")
+
+            use_projection_scheme = True
+            projection_a = -reconstruction_parameter
+            projection_b = reconstruction_parameter
+            projection_c = 2
+            step_size = None
+        elif (
+            reconstruction_method == "SUPERFLIP"
+            or reconstruction_method == "charge-flipping"
+        ):
+            use_projection_scheme = True
+            projection_a = 0
+            projection_b = 1
+            projection_c = 2
+            reconstruction_parameter = None
+            step_size = None
+        elif (
+            reconstruction_method == "GD" or reconstruction_method == "gradient-descent"
+        ):
+            use_projection_scheme = False
+            projection_a = None
+            projection_b = None
+            projection_c = None
+            reconstruction_parameter = None
+        else:
+            raise ValueError(
+                (
+                    "reconstruction_method must be one of 'DM_AP' (or 'difference-map_alternating-projections'), "
+                    "'RAAR' (or 'relaxed-averaged-alternating-reflections'), "
+                    "'RRR' (or 'relax-reflect-reflect'), "
+                    "'SUPERFLIP' (or 'charge-flipping'), "
+                    f"or 'GD' (or 'gradient-descent'), not  {reconstruction_method}."
+                )
+            )
+
+        if self._verbose:
+            if max_batch_size is not None:
+                if use_projection_scheme:
+                    raise ValueError(
+                        (
+                            "Stochastic object/probe updating is inconsistent with 'DM_AP', 'RAAR', 'RRR', and 'SUPERFLIP'. "
+                            "Use reconstruction_method='GD' or set max_batch_size=None."
+                        )
+                    )
+                else:
+                    print(
+                        (
+                            f"Performing {max_iter} iterations using the {reconstruction_method} algorithm, "
+                            f"with normalization_min: {normalization_min} and step _size: {step_size}, "
+                            f"in batches of max {max_batch_size} measurements."
+                        )
+                    )
+            else:
+                if reconstruction_parameter is not None:
+                    if np.array(reconstruction_parameter).shape == (3,):
+                        print(
+                            (
+                                f"Performing {max_iter} iterations using the {reconstruction_method} algorithm, "
+                                f"with normalization_min: {normalization_min} and (a,b,c): {reconstruction_parameter}."
+                            )
+                        )
+                    else:
+                        print(
+                            (
+                                f"Performing {max_iter} iterations using the {reconstruction_method} algorithm, "
+                                f"with normalization_min: {normalization_min} and α: {reconstruction_parameter}."
+                            )
+                        )
+                else:
+                    if step_size is not None:
+                        print(
+                            (
+                                f"Performing {max_iter} iterations using the {reconstruction_method} algorithm, "
+                                f"with normalization_min: {normalization_min}."
+                            )
+                        )
+                    else:
+                        print(
+                            (
+                                f"Performing {max_iter} iterations using the {reconstruction_method} algorithm, "
+                                f"with normalization_min: {normalization_min} and step _size: {step_size}."
+                            )
+                        )
+
+        # Batching
+
+        if max_batch_size is not None:
+            xp.random.seed(seed_random)
+        else:
+            max_batch_size = self._num_diffraction_patterns
+
+        # initialization
+        if store_iterations and (not hasattr(self, "object_iterations") or reset):
+            self.object_iterations = []
+            self.probe_iterations = []
+            self.error_iterations = []
+
+        if reset:
+            self._object = self._object_initial.copy()
+            self._probe = self._probe_initial.copy()
+            self._positions_px_all = self._positions_px_initial_all.copy()
+
+            self._exit_waves = None
+
+        elif reset is None:
+            if hasattr(self, "error"):
+                warnings.warn(
+                    (
+                        "Continuing reconstruction from previous result. "
+                        "Use reset=True for a fresh start."
+                    ),
+                    UserWarning,
+                )
+            else:
+                self._exit_waves = None
+
+        # Probe support mask initialization
+        x = xp.linspace(-1, 1, self._region_of_interest_shape[0], endpoint=False)
+        y = xp.linspace(-1, 1, self._region_of_interest_shape[1], endpoint=False)
+        xx, yy = xp.meshgrid(x, y, indexing="ij")
+        self._probe_support_mask = xp.exp(
+            -(
+                (
+                    (xx / probe_support_relative_radius) ** 2
+                    + (yy / probe_support_relative_radius) ** 2
+                )
+                ** probe_support_supergaussian_degree
+            )
+        )
+
+        # main loop
+        for a0 in tqdmnd(
+            max_iter,
+            desc="Reconstructing object and probe",
+            unit=" iter",
+            disable=not progress_bar,
+        ):
+
+            error = 0.0
+            for tilt_index in range(self._num_tilts):
+                self._active_tilt_index = tilt_index
+
+                self._object = self._rotate(
+                    self._object,
+                    self._tilt_angles_deg[self._active_tilt_index],
+                    axes=(0, 2),
+                    reshape=False,
+                    order=1,
+                )
+                self._object = self._expand_or_project_sliced_object(
+                    self._object, self._num_slices
+                )
+
+                start_tilt = self._cum_probes_per_tilt[self._active_tilt_index]
+                end_tilt = self._cum_probes_per_tilt[self._active_tilt_index + 1]
+
+                num_diffraction_patterns = end_tilt - start_tilt
+                shuffled_indices = np.arange(num_diffraction_patterns)
+                unshuffled_indices = np.zeros_like(shuffled_indices)
+
+                # randomize
+                if not use_projection_scheme:
+                    np.random.shuffle(shuffled_indices)
+                unshuffled_indices[shuffled_indices] = np.arange(
+                    num_diffraction_patterns
+                )
+
+                positions_px = self._positions_px_all[start_tilt:end_tilt].copy()[
+                    shuffled_indices
+                ]
+
+                vectorized_patch_indices_row = self._vectorized_patch_indices_row_all[
+                    start_tilt:end_tilt
+                ].copy()[shuffled_indices]
+
+                vectorized_patch_indices_col = self._vectorized_patch_indices_col_all[
+                    start_tilt:end_tilt
+                ].copy()[shuffled_indices]
+
+                for start, end in generate_batches(
+                    num_diffraction_patterns, max_batch=max_batch_size
+                ):
+                    # batch indices
+                    self._positions_px = positions_px[start:end]
+                    self._positions_px_fractional = self._positions_px - xp.round(
+                        self._positions_px
+                    )
+                    self._vectorized_patch_indices_row = vectorized_patch_indices_row[
+                        start:end
+                    ]
+                    self._vectorized_patch_indices_col = vectorized_patch_indices_col[
+                        start:end
+                    ]
+
+                    amplitudes = self._amplitudes[start_tilt:end_tilt][
+                        shuffled_indices[start:end]
+                    ]
+
+                    # forward operator
+                    (
+                        propagated_probes,
+                        object_patches,
+                        overlap,
+                        self._exit_waves,
+                        batch_error,
+                    ) = self._forward(
+                        self._object,
+                        self._probe,
+                        amplitudes,
+                        self._exit_waves,
+                        use_projection_scheme,
+                        projection_a,
+                        projection_b,
+                        projection_c,
+                    )
+
+                    # adjoint operator
+                    self._object, self._probe = self._adjoint(
+                        self._object,
+                        self._probe,
+                        object_patches,
+                        propagated_probes,
+                        self._exit_waves,
+                        use_projection_scheme=use_projection_scheme,
+                        step_size=step_size,
+                        normalization_min=normalization_min,
+                        fix_probe=a0 < fix_probe_iter,
+                    )
+
+                    # # position correction
+                    # if a0 >= fix_positions_iter:
+                    #     positions_px[start:end] = self._position_correction(
+                    #         self._object[-1],
+                    #         propagated_probes[-1],
+                    #         overlap[-1],
+                    #         amplitudes,
+                    #         self._positions_px,
+                    #         positions_step_size,
+                    #     )
+
+                    error += batch_error
+
+                self._object = self._expand_or_project_sliced_object(
+                    self._object, self._num_voxels
+                )
+                self._object = self._rotate(
+                    self._object,
+                    -self._tilt_angles_deg[self._active_tilt_index],
+                    axes=(0, 2),
+                    reshape=False,
+                    order=1,
+                )
+
+            # constraints
+            # self._object, self._probe, self._positions_px = self._constraints(
+            #     self._object,
+            #     self._probe,
+            #     self._positions_px,
+            #     pure_phase_object=a0 < pure_phase_object_iter,
+            #     fix_com=fix_com and a0 >= fix_probe_iter,
+            #     fix_probe_fourier_amplitude=a0 < fix_probe_fourier_amplitude_iter,
+            #     fix_positions=a0 < fix_positions_iter,
+            #     global_affine_transformation=global_affine_transformation,
+            #     gaussian_filter=a0 < gaussian_filter_iter
+            #     and gaussian_filter_sigma is not None,
+            #     gaussian_filter_sigma=gaussian_filter_sigma,
+            #     butterworth_filter=a0 < butterworth_filter_iter
+            #     and (q_lowpass is not None or q_highpass is not None),
+            #     q_lowpass=q_lowpass,
+            #     q_highpass=q_highpass,
+            #     kz_regularization_filter=a0 < kz_regularization_filter_iter
+            #     and kz_regularization_gamma is not None,
+            #     kz_regularization_gamma=kz_regularization_gamma,
+            #     identical_slices=a0 < identical_slices_iter,
+            # )
+
+            if store_iterations:
+                self.object_iterations.append(asnumpy(self._object.copy()))
+                self.probe_iterations.append(asnumpy(self._probe.copy()))
+                self.error_iterations.append(error.item())
+
+        # store result
+        self.object = asnumpy(self._object)
+        self.probe = asnumpy(self._probe)
+        self.error = error.item()
+
+        return self
 
     def visualize(self):
         pass
