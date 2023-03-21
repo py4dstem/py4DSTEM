@@ -1,5 +1,7 @@
 # Convert v13 to v14 classes
 
+from py4DSTEM import tqdmnd
+
 
 # v13 imports
 
@@ -104,46 +106,114 @@ def _v13_to_14_cls(obj):
     ))), f"obj must be a v13 class instance, not type {type(obj)}"
 
     if isinstance(obj, Root13):
-        pass
+        x = Root( name=obj.name )
 
     elif isinstance(obj, Metadata13):
-        pass
+        x = Metadata( name=obj.name )
+        x._params.update( obj._params )
 
     elif isinstance(obj, Array13):
-        pass
+
+        # prepare arguments
+        args = {
+            'name' : obj.name,
+            'data' : obj.data
+        }
+        if hasattr(obj,'units'): args['units'] = obj.units
+        if hasattr(obj,'dim_names'): args['dim_names'] = obj.dim_names
+        if hasattr(obj,'dim_units'): args['dim_units'] = obj.dim_units
+        if hasattr(obj,'slicelabels'): args['slicelabels'] = obj.slicelabels
+        if hasattr(obj,'dims'):
+            dims = []
+            for dim in obj.dims:
+                dims.append(dim)
+            args['dims'] = dims
+
+        # get the array
+        x = Array(
+            **args
+        )
 
     elif isinstance(obj, PointList13):
-        pass
+        x = PointList(
+            name = obj.name,
+            data = obj.data
+        )
 
     elif isinstance(obj, PointListArray13):
-        pass
+        x = PointListArray(
+            name = obj.name,
+            dtype = obj.dtype,
+            shape = obj.shape
+        )
+        for idx,jdx in tqdmnd(
+            x.shape,
+            desc='transferring PointListArray v13->14',
+            units='foolishness'):
+            x[idx,jdx] = obj[idx,jdx]
 
     elif isinstance(obj, Calibration13):
-        pass
+        x = Calibration( name=obj.name )
+        x._params.update( obj.params )
 
     elif isinstance(obj, DataCube13):
-        pass
+        x = DataCube(
+            name = obj.name,
+            data = obj.data,
+            slicelabels = obj.slicelabels
+        )
 
     elif isinstance(obj, DiffractionSlice13):
-        pass
+        x = DiffractionSlice(
+            name = obj.name,
+            data = obj.data,
+            units = obj.units,
+            slicelabels = obj.slicelabels
+        )
 
     elif isinstance(obj, VirtualDiffraction13):
-        pass
+        x = VirtualDiffraction(
+            name = obj.name,
+            data = obj.data
+        )
 
     elif isinstance(obj, RealSlice13):
+        x = RealSlice(
+            name = obj.name,
+            data = obj.data,
+            units = obj.units,
+            slicelabels = obj.slicelabels
+        )
         pass
 
     elif isinstance(obj, VirtualImage13):
+        x = VirtualImage(
+            name = obj.name,
+            data = obj.data
+        )
         pass
 
     elif isinstance(obj, Probe13):
-        pass
+        x = Probe(
+            name = obj.name,
+            data = obj.data
+        )
 
     elif isinstance(obj, QPoints13):
-        pass
+        x = PointList(
+            name = obj.name,
+            data = obj.data
+        )
 
     elif isinstance(obj, BraggVectors13):
-        pass
+        x = BraggVectors(
+            name = obj.name,
+            Rshape = obj.Rshape,
+            Qshape = obj.Qshape
+        )
+        x._v_uncal = obj._v_uncal
+        if hasattr(obj,'_v_cal'):
+            x._v_cal = obj._v_cal
 
     else:
         raise Exception(f"Unexpected object type {type(obj)}")
@@ -151,7 +221,15 @@ def _v13_to_14_cls(obj):
 
 
     # Handle metadata
+    if hasattr(obj,'metadata'):
+        for key in obj.metadata.keys():
+            md = obj.metadata[key]
+            dm = Metadata( name=md.name )
+            dm._params.update( md._params )
+            x.metadata = dm
 
 
 
+    # Return
+    return x
 
