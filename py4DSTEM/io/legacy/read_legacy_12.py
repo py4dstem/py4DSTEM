@@ -58,6 +58,7 @@ def read_legacy12(filepath, **kwargs):
     assert(exists(filepath)), "Error: specified filepath does not exist"
     assert(is_py4DSTEM_file(filepath)), "Error: {} isn't recognized as a py4DSTEM file.".format(filepath)
 
+
     # For HDF5 files containing multiple valid EMD type 2 files (i.e. py4DSTEM files),
     # disambiguate desired data
     tgs = get_py4DSTEM_topgroups(filepath)
@@ -73,6 +74,7 @@ def read_legacy12(filepath, **kwargs):
             for tg in tgs:
                 print(tg)
             return
+
 
     # Get py4DSTEM version and call the appropriate read function
     version = get_py4DSTEM_version(filepath, tg)
