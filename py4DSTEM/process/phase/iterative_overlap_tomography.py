@@ -270,6 +270,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         """
         zoom = self._zoom
         input_z = array.shape[0]
+
         return (
             zoom(
                 array,
@@ -340,6 +341,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         self._rotation_best_rad = np.deg2rad(diffraction_patterns_rotate_degrees)
         self._rotation_best_transpose = diffraction_patterns_transpose
         self._electron_sigma = electron_interaction_parameter(self._energy)
+
         if force_com_shifts is None:
             force_com_shifts = [None] * self._num_tilts
 
@@ -371,22 +373,6 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                 )
                 self._region_of_interest_shape = np.array(
                     self._amplitudes[0].shape[-2:]
-                )
-                self._vectorized_patch_indices_row_all = xp.empty(
-                    (
-                        self._num_diffraction_patterns,
-                        self._region_of_interest_shape[0],
-                        1,
-                    ),
-                    dtype="int",
-                )
-                self._vectorized_patch_indices_col_all = xp.empty(
-                    (
-                        self._num_diffraction_patterns,
-                        1,
-                        self._region_of_interest_shape[1],
-                    ),
-                    dtype="int",
                 )
 
             else:
@@ -467,7 +453,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
             q = np.max([np.round(q + pad_y), self._region_of_interest_shape[1]]).astype(
                 "int"
             )
-            self._object = xp.ones((q, p, q), dtype=xp.float32)
+            self._object = xp.zeros((q, p, q), dtype=xp.float32)
         else:
             self._object = xp.asarray(self._object, dtype=xp.float32)
 
@@ -477,7 +463,6 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
 
         # Center Probes
         self._positions_px_all = xp.asarray(self._positions_px_all, dtype=xp.float32)
-        self._positions_px_com_all = xp.empty((self._num_tilts, 2))
 
         for tilt_index in range(self._num_tilts):
 
@@ -486,25 +471,10 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                     tilt_index + 1
                 ]
             ]
-            self._positions_px_com_all[tilt_index] = xp.mean(self._positions_px, axis=0)
+            self._positions_px_com = xp.mean(self._positions_px, axis=0)
             self._positions_px -= (
-                self._positions_px_com_all[tilt_index]
-                - xp.array(self._object_shape) / 2
+                self._positions_px_com - xp.array(self._object_shape) / 2
             )
-            self._positions_px_com_all[tilt_index] = xp.mean(self._positions_px, axis=0)
-
-            (
-                self._vectorized_patch_indices_row_all[
-                    self._cum_probes_per_tilt[tilt_index] : self._cum_probes_per_tilt[
-                        tilt_index + 1
-                    ]
-                ],
-                self._vectorized_patch_indices_col_all[
-                    self._cum_probes_per_tilt[tilt_index] : self._cum_probes_per_tilt[
-                        tilt_index + 1
-                    ]
-                ],
-            ) = self._extract_vectorized_patch_indices()
 
             self._positions_px_all[
                 self._cum_probes_per_tilt[tilt_index] : self._cum_probes_per_tilt[
@@ -1142,6 +1112,211 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
 
         return current_object, current_probe
 
+    def _object_positivity_constraint(self, current_object):
+        """
+        Ptychographic positivity constraint.
+        Used to ensure electrostatic potential is positive.
+
+        Parameters
+        --------
+        current_object: np.ndarray
+            Current object estimate
+
+        Returns
+        --------
+        constrained_object: np.ndarray
+            Constrained object estimate
+        """
+        xp = self._xp
+        return xp.maximum(current_object, 0.0)
+
+    def _object_gaussian_constraint(self, current_object, gaussian_filter_sigma):
+        """
+        Ptychographic smoothness constraint.
+        Used for blurring object.
+
+        Parameters
+        --------
+        current_object: np.ndarray
+            Current object estimate
+        gaussian_filter_sigma: float
+            Standard deviation of gaussian kernel
+
+        Returns
+        --------
+        constrained_object: np.ndarray
+            Constrained object estimate
+        """
+        gaussian_filter = self._gaussian_filter
+
+        current_object = gaussian_filter(current_object, gaussian_filter_sigma)
+
+        return current_object
+
+    def _object_butterworth_constraint(self, current_object, q_lowpass, q_highpass):
+        """
+        Butterworth filter
+
+        Parameters
+        --------
+        current_object: np.ndarray
+            Current object estimate
+        q_lowpass: float
+            Cut-off frequency in A^-1 for low-pass butterworth filter
+        q_highpass: float
+            Cut-off frequency in A^-1 for high-pass butterworth filter
+
+        Returns
+        --------
+        constrained_object: np.ndarray
+            Constrained object estimate
+        """
+        xp = self._xp
+        qx = xp.fft.fftfreq(current_object.shape[1], self.sampling[0])
+        qy = xp.fft.fftfreq(current_object.shape[2], self.sampling[1])
+        qya, qxa = xp.meshgrid(qy, qx)
+        qra = xp.sqrt(qxa**2 + qya**2)
+
+        env = xp.ones_like(qra)
+        if q_highpass:
+            env *= 1 - 1 / (1 + (qra / q_highpass) ** 4)
+        if q_lowpass:
+            env *= 1 / (1 + (qra / q_lowpass) ** 4)
+
+        current_object = xp.fft.ifft2(xp.fft.fft2(current_object) * env[None])
+        return current_object
+
+    def _object_kz_regularization_constraint(
+        self, current_object, kz_regularization_gamma
+    ):
+        """
+        Arctan regularization filter
+
+        Parameters
+        --------
+        current_object: np.ndarray
+            Current object estimate
+        kz_regularization_gamma: float
+            Slice regularization strength
+
+        Returns
+        --------
+        constrained_object: np.ndarray
+            Constrained object estimate
+        """
+        xp = self._xp
+        qx = xp.fft.fftfreq(current_object.shape[1], self.sampling[0])
+        qy = xp.fft.fftfreq(current_object.shape[2], self.sampling[1])
+        qz = xp.fft.fftfreq(current_object.shape[0], self._slice_thicknesses[0])
+
+        qza, qxa, qya = xp.meshgrid(qz, qx, qy, indexing="ij")
+        qz2 = qza**2 * kz_regularization_gamma**2
+        qr2 = qxa**2 + qya**2
+
+        w = 1 - 2 / np.pi * xp.arctan2(qz2, qr2)
+
+        current_object = xp.fft.ifftn(xp.fft.fftn(current_object) * w)
+        return current_object
+
+    def _constraints(
+        self,
+        current_object,
+        current_probe,
+        current_positions,
+        fix_com,
+        fix_probe_fourier_amplitude,
+        fix_positions,
+        global_affine_transformation,
+        gaussian_filter,
+        gaussian_filter_sigma,
+        butterworth_filter,
+        q_lowpass,
+        q_highpass,
+        kz_regularization_filter,
+        kz_regularization_gamma,
+    ):
+        """
+        Ptychographic constraints operator.
+        Calls _threshold_object_constraint() and _probe_center_of_mass_constraint()
+
+        Parameters
+        --------
+        current_object: np.ndarray
+            Current object estimate
+        current_probe: np.ndarray
+            Current probe estimate
+        current_positions: np.ndarray
+            Current positions estimate
+        fix_com: bool
+            If True, probe CoM is fixed to the center
+        fix_probe_fourier_amplitude: bool
+            If True, probe fourier amplitude is set to initial probe
+        fix_positions: bool
+            If True, positions are not updated
+        gaussian_filter: bool
+            If True, applies real-space gaussian filter
+        gaussian_filter_sigma: float
+            Standard deviation of gaussian kernel
+        butterworth_filter: bool
+            If True, applies fourier-space butterworth filter
+        q_lowpass: float
+            Cut-off frequency in A^-1 for low-pass butterworth filter
+        q_highpass: float
+            Cut-off frequency in A^-1 for high-pass butterworth filter
+        kz_regularization_filter: bool
+            If True, applies fourier-space arctan regularization filter
+        identical_slices: bool
+            If True, forces all object slices to be identical
+
+        Returns
+        --------
+        constrained_object: np.ndarray
+            Constrained object estimate
+        constrained_probe: np.ndarray
+            Constrained probe estimate
+        constrained_positions: np.ndarray
+            Constrained positions estimate
+        """
+
+        if gaussian_filter:
+            current_object = self._object_gaussian_constraint(
+                current_object, gaussian_filter_sigma
+            )
+
+        if butterworth_filter:
+            current_object = self._object_butterworth_constraint(
+                current_object,
+                q_lowpass,
+                q_highpass,
+            )
+
+        if kz_regularization_filter:
+            current_object = self._object_kz_regularization_constraint(
+                current_object, kz_regularization_gamma
+            )
+
+        current_object = self._object_positivity_constraint(current_object)
+
+        if fix_probe_fourier_amplitude:
+            current_probe = self._probe_fourier_amplitude_constraint(current_probe)
+
+        current_probe = self._probe_finite_support_constraint(current_probe)
+
+        if fix_com:
+            current_probe = self._probe_center_of_mass_constraint(current_probe)
+
+        if not fix_positions:
+            current_positions = self._positions_center_of_mass_constraint(
+                current_positions
+            )
+
+            if global_affine_transformation:
+                current_positions = self._positions_affine_transformation_constraint(
+                    self._positions_px_initial, current_positions
+                )
+
+        return current_object, current_probe, current_positions
+
     def reconstruct(
         self,
         max_iter: int = 64,
@@ -1152,7 +1327,6 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         step_size: float = 0.9,
         normalization_min: float = 1.0,
         positions_step_size: float = 0.9,
-        pure_phase_object_iter: int = 0,
         fix_com: bool = True,
         fix_probe_iter: int = 0,
         fix_probe_fourier_amplitude_iter: int = 0,
@@ -1167,7 +1341,6 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         q_highpass: float = None,
         kz_regularization_filter_iter: int = np.inf,
         kz_regularization_gamma: float = None,
-        identical_slices_iter: int = 0,
         store_iterations: bool = False,
         progress_bar: bool = True,
         reset: bool = None,
@@ -1201,8 +1374,6 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
             Probe normalization minimum as a fraction of the maximum overlap intensity
         positions_step_size: float, optional
             Positions update step size
-        pure_phase_object: bool, optional
-            If True, object amplitude is set to unity
         fix_com: bool, optional
             If True, fixes center of mass of probe
         fix_probe_iter: int, optional
@@ -1231,8 +1402,6 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
             Number of iterations to run using kz regularization filter
         kz_regularization_gamma, float, optional
             kz regularization strength
-        identical_slices_iter: int, optional
-            Number of iterations to run using identical slices
         store_iterations: bool, optional
             If True, reconstructed objects and probes are stored at each iteration
         progress_bar: bool, optional
@@ -1431,6 +1600,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         ):
 
             error = 0.0
+
             for tilt_index in range(self._num_tilts):
                 self._active_tilt_index = tilt_index
 
@@ -1463,11 +1633,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                     shuffled_indices
                 ]
 
-                vectorized_patch_indices_row = self._vectorized_patch_indices_row_all[
-                    start_tilt:end_tilt
-                ].copy()[shuffled_indices]
-
-                vectorized_patch_indices_col = self._vectorized_patch_indices_col_all[
+                initial_positions_px = self._positions_px_initial_all[
                     start_tilt:end_tilt
                 ].copy()[shuffled_indices]
 
@@ -1476,15 +1642,16 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                 ):
                     # batch indices
                     self._positions_px = positions_px[start:end]
+                    self._positions_px_com = xp.mean(self._positions_px, axis=0)
+                    self._positions_px_initial = initial_positions_px[start:end]
                     self._positions_px_fractional = self._positions_px - xp.round(
                         self._positions_px
                     )
-                    self._vectorized_patch_indices_row = vectorized_patch_indices_row[
-                        start:end
-                    ]
-                    self._vectorized_patch_indices_col = vectorized_patch_indices_col[
-                        start:end
-                    ]
+
+                    (
+                        self._vectorized_patch_indices_row,
+                        self._vectorized_patch_indices_col,
+                    ) = self._extract_vectorized_patch_indices()
 
                     amplitudes = self._amplitudes[start_tilt:end_tilt][
                         shuffled_indices[start:end]
@@ -1521,18 +1688,46 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                         fix_probe=a0 < fix_probe_iter,
                     )
 
-                    # # position correction
-                    # if a0 >= fix_positions_iter:
-                    #     positions_px[start:end] = self._position_correction(
-                    #         self._object[-1],
-                    #         propagated_probes[-1],
-                    #         overlap[-1],
-                    #         amplitudes,
-                    #         self._positions_px,
-                    #         positions_step_size,
-                    #     )
+                    # position correction
+                    if a0 >= fix_positions_iter:
+                        positions_px[start:end] = self._position_correction(
+                            self._object[-1],
+                            propagated_probes[-1],
+                            overlap[-1],
+                            amplitudes,
+                            self._positions_px,
+                            positions_step_size,
+                        )
 
                     error += batch_error
+
+                # constraints
+                self._positions_px_all[start_tilt:end_tilt] = positions_px.copy()[
+                    unshuffled_indices
+                ]
+                (
+                    self._object,
+                    self._probe,
+                    self._positions_px_all[start_tilt:end_tilt],
+                ) = self._constraints(
+                    self._object,
+                    self._probe,
+                    self._positions_px_all[start_tilt:end_tilt],
+                    fix_com=fix_com and a0 >= fix_probe_iter,
+                    fix_probe_fourier_amplitude=a0 < fix_probe_fourier_amplitude_iter,
+                    fix_positions=a0 < fix_positions_iter,
+                    global_affine_transformation=global_affine_transformation,
+                    gaussian_filter=a0 < gaussian_filter_iter
+                    and gaussian_filter_sigma is not None,
+                    gaussian_filter_sigma=gaussian_filter_sigma,
+                    butterworth_filter=a0 < butterworth_filter_iter
+                    and (q_lowpass is not None or q_highpass is not None),
+                    q_lowpass=q_lowpass,
+                    q_highpass=q_highpass,
+                    kz_regularization_filter=a0 < kz_regularization_filter_iter
+                    and kz_regularization_gamma is not None,
+                    kz_regularization_gamma=kz_regularization_gamma,
+                )
 
                 self._object = self._expand_or_project_sliced_object(
                     self._object, self._num_voxels
@@ -1544,29 +1739,6 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                     reshape=False,
                     order=1,
                 )
-
-            # constraints
-            # self._object, self._probe, self._positions_px = self._constraints(
-            #     self._object,
-            #     self._probe,
-            #     self._positions_px,
-            #     pure_phase_object=a0 < pure_phase_object_iter,
-            #     fix_com=fix_com and a0 >= fix_probe_iter,
-            #     fix_probe_fourier_amplitude=a0 < fix_probe_fourier_amplitude_iter,
-            #     fix_positions=a0 < fix_positions_iter,
-            #     global_affine_transformation=global_affine_transformation,
-            #     gaussian_filter=a0 < gaussian_filter_iter
-            #     and gaussian_filter_sigma is not None,
-            #     gaussian_filter_sigma=gaussian_filter_sigma,
-            #     butterworth_filter=a0 < butterworth_filter_iter
-            #     and (q_lowpass is not None or q_highpass is not None),
-            #     q_lowpass=q_lowpass,
-            #     q_highpass=q_highpass,
-            #     kz_regularization_filter=a0 < kz_regularization_filter_iter
-            #     and kz_regularization_gamma is not None,
-            #     kz_regularization_gamma=kz_regularization_gamma,
-            #     identical_slices=a0 < identical_slices_iter,
-            # )
 
             if store_iterations:
                 self.object_iterations.append(asnumpy(self._object.copy()))
