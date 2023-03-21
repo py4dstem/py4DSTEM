@@ -894,7 +894,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
 
             current_object[s] += step_size * xp.real(
                 self._sum_overlapping_patches_bincounts(
-                    -1j
+                    - 1j
                     * self._electron_sigma
                     * xp.conj(obj)
                     * xp.conj(probe)
@@ -1129,7 +1129,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         """
         xp = self._xp
         return xp.maximum(current_object, 0.0)
-
+    
     def _object_gaussian_constraint(self, current_object, gaussian_filter_sigma):
         """
         Ptychographic smoothness constraint.
@@ -1183,7 +1183,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         if q_lowpass:
             env *= 1 / (1 + (qra / q_lowpass) ** 4)
 
-        current_object = xp.fft.ifft2(xp.fft.fft2(current_object) * env[None])
+        current_object = xp.real(xp.fft.ifft2(xp.fft.fft2(current_object) * env[None]))
         return current_object
 
     def _object_kz_regularization_constraint(
@@ -1215,7 +1215,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
 
         w = 1 - 2 / np.pi * xp.arctan2(qz2, qr2)
 
-        current_object = xp.fft.ifftn(xp.fft.fftn(current_object) * w)
+        current_object = xp.real(xp.fft.ifftn(xp.fft.fftn(current_object) * w))
         return current_object
 
     def _constraints(
