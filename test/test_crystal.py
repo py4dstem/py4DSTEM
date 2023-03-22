@@ -30,12 +30,6 @@ class TestCrystal:
         pass
 
 
-    def test_Crystal2(self):
-
-        #crystal = Crystal( **args )
-        #assert(isinstance(crystal,Crystal))
-
-        pass
 
 
 

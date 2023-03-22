@@ -3,7 +3,7 @@
 import numpy as np
 from scipy.ndimage import distance_transform_edt, binary_fill_holes
 
-from emdfile import Array
+from emdfile import Array, Metadata, Node
 
 
 
@@ -27,7 +27,7 @@ class DataCubeMethods:
                 data = data,
                 name = name
             )
-        self.tree[data.name] = data
+        self.tree( data )
 
     def set_scan_shape(
         self,
@@ -311,20 +311,29 @@ class DataCubeMethods:
         # wrap with a py4dstem class
         dp = VirtualDiffraction(
             data = dp,
-            name = name,
-            method = method,
-            mode = mode,
-            geometry = geometry,
-            shift_center = shift_center,
-            calibrated = calibrated,
+            name = name
+        )
+
+        # add the args used to gen this dp as metadata
+        dp.metadata = Metadata(
+            name='gen_params',
+            data = {
+                #'gen_func' : 
+                'method' : method,
+                'mode' : mode,
+                'geometry' : geometry,
+                'shift_center' : shift_center,
+                'calibrated' : calibrated,
+            }
         )
 
         # add to the tree
-        self.tree[name] = dp
+        self.tree( dp )
 
         # return
         if returncalc:
             return dp
+
 
     def get_dp_max(
         self,
@@ -400,20 +409,29 @@ class DataCubeMethods:
         # wrap with a py4dstem class
         dp = VirtualDiffraction(
             data = dp,
-            name = name,
-            method = method,
-            mode = mode,
-            geometry = geometry,
-            shift_center = shift_center,
-            calibrated = calibrated,
+            name = name
+        )
+
+        # add the args used to gen this dp as metadata
+        dp.metadata = Metadata(
+            name='gen_params',
+            data = {
+                #'gen_func' : 
+                'method' : method,
+                'mode' : mode,
+                'geometry' : geometry,
+                'shift_center' : shift_center,
+                'calibrated' : calibrated,
+            }
         )
 
         # add to the tree
-        self.tree[name] = dp
+        self.tree( dp )
 
         # return
         if returncalc:
             return dp
+
 
     def get_dp_mean(
         self,
@@ -491,15 +509,23 @@ class DataCubeMethods:
         dp = VirtualDiffraction(
             data = dp,
             name = name,
-            method = method,
-            mode = mode,
-            geometry = geometry,
-            shift_center = shift_center,
-            calibrated = calibrated,
+        )
+
+        # add the args used to gen this dp as metadata
+        dp.metadata = Metadata(
+            name='gen_params',
+            data = {
+                #'gen_func' : 
+                'method' : method,
+                'mode' : mode,
+                'geometry' : geometry,
+                'shift_center' : shift_center,
+                'calibrated' : calibrated,
+            }
         )
 
         # add to the tree
-        self.tree[name] = dp
+        self.tree( dp )
 
         # return
         if returncalc:
@@ -579,15 +605,23 @@ class DataCubeMethods:
         dp = VirtualDiffraction(
             data = dp,
             name = name,
-            method = method,
-            mode = mode,
-            geometry = geometry,
-            shift_center = shift_center,
-            calibrated = calibrated,
+        )
+
+        # add the args used to gen this dp as metadata
+        dp.metadata = Metadata(
+            name='gen_params',
+            data = {
+                #'gen_func' : 
+                'method' : method,
+                'mode' : mode,
+                'geometry' : geometry,
+                'shift_center' : shift_center,
+                'calibrated' : calibrated,
+            }
         )
 
         # add to the tree
-        self.tree[name] = dp
+        self.tree( dp )
 
         # return
         if returncalc:
@@ -694,13 +728,26 @@ class DataCubeMethods:
         im = VirtualImage(
             data = im,
             name = name,
-            mode = mode,
-            geometry = geometry,
-            shift_center = shift_center,
+        )
+
+        # add generating params as metadata
+        im.metadata = Metadata(
+            name = 'gen_params',
+            data = {
+                'mode' : mode,
+                'geometry' : geometry,
+                'shift_center' : shift_center,
+                'centered' : centered,
+                'calibrated' : calibrated,
+                'verbose' : verbose,
+                'dask' : dask,
+                'return_mask' : return_mask,
+                'test_config' : test_config
+            }
         )
 
         # add to the tree
-        self.tree[name] = im
+        self.tree( im )
 
         # return
         if returncalc:
@@ -717,9 +764,9 @@ class DataCubeMethods:
         centered = None,
         calibrated = None,
         shift_center = None,
+        invert = False,
         color = 'r',
-        alpha = 0.4,
-        test_config = False
+        alpha = 0.7,
     ):
         """
         Display a diffraction space image with an overlaid mask representing
@@ -751,12 +798,12 @@ class DataCubeMethods:
                 difference between the local origin position and the mean origin
                 position over all patterns, rounded to the nearest integer for
                 speed.
+            invert (bool): if True, invert the display mask
         """
 
         # parse inputs
         if scan_position is None:
             data = self
-            shift_center = False
         else:
             data = (self,scan_position[0],scan_position[1])
 
@@ -769,8 +816,9 @@ class DataCubeMethods:
             centered,
             calibrated,
             shift_center,
-            color = 'r',
-            alpha = 0.4
+            invert = invert,
+            color = color,
+            alpha = alpha,
         )
 
 
@@ -796,6 +844,8 @@ class DataCubeMethods:
                 a 4-tuple representing (Rxmin,Rxmax,Rymin,Rymax) of a
                 rectangular region to use.
 
+        Args for 
+
         Returns:
             (Probe) a Probe instance
 
@@ -820,7 +870,7 @@ class DataCubeMethods:
         )
 
         # add to the tree
-        self.tree[name] = x
+        self.tree( x )
 
         # return
         if returncalc:
@@ -830,12 +880,13 @@ class DataCubeMethods:
 
     def get_probe_size(
         self,
+        dp = None,
         thresh_lower=0.01,
         thresh_upper=0.99,
         N=100,
-        mode = None,
         plot = True,
         returncal = True,
+        write_to_cal = True,
         **kwargs,
         ):
         """
@@ -856,7 +907,7 @@ class DataCubeMethods:
         x0,y0.
 
         Args:
-            mode (str or array): specifies the diffraction pattern in which to
+            dp (str or array): specifies the diffraction pattern in which to
                 find the central disk. A position averaged, or shift-corrected
                 and averaged, DP works best. If mode is None, the diffraction
                 pattern stored in the tree from 'get_dp_mean' is used. If mode
@@ -869,6 +920,8 @@ class DataCubeMethods:
             plot (bool): if True plots results
             plot_params(dict): dictionary to modify defaults in plot
             return_calc (bool): if True returns 3-tuple described below
+            write_to_cal (bool): if True, looks for a Calibration instance
+                and writes the measured probe radius there
 
         Returns:
             (3-tuple): A 3-tuple containing:
@@ -880,16 +933,15 @@ class DataCubeMethods:
         #perform computation        
         from py4DSTEM.process.calibration import get_probe_size
 
-        if mode is None:
-            print('no mode specified, using mean diffraction pattern')
-            assert 'dp_mean' in self.tree.keys(), "calculate .get_dp_mean()"
-            DP = self.tree['dp_mean'].data
-        elif type(mode) == str:
-            assert mode in self.tree.keys(), "mode not found"
-            DP = self.tree[mode].data
-        elif type(mode) == np.ndarray:
-            assert len(mode.shape) == 2, "must be a 2D array"
-            DP = mode
+        if dp is None:
+            assert 'dp_mean' in self._branch.keys(), "calculate .get_dp_mean()"
+            DP = self.tree( 'dp_mean' ).data
+        elif type(dp) == str:
+            assert dp in self._branch.keys(), "mode not found"
+            DP = self.tree( dp )
+        elif type(dp) == np.ndarray:
+            assert len(dp.shape) == 2, "must be a 2D array"
+            DP = dp
 
         x = get_probe_size(
             DP,
@@ -899,11 +951,12 @@ class DataCubeMethods:
         )
 
         # try to add to calibration
-        try:
-            self.calibration.set_probe_param(x)
-        except AttributeError:
-            # should a warning be raised?
-            pass
+        if write_to_cal:
+            try:
+                self.calibration.set_probe_param(x)
+            except AttributeError:
+                # should we raise an error here?
+                pass
 
         #plot results 
         if plot:
@@ -952,8 +1005,6 @@ class DataCubeMethods:
         ml_model_path = None,
         ml_num_attempts = 1,
         ml_batch_size = 8,
-
-        _qt_progress_bar = None,
 
         name = 'braggvectors',
         returncalc = True,
@@ -1058,8 +1109,6 @@ class DataCubeMethods:
                       during processing
                 if distributed is None, which is the default, processing will be
                 in serial
-            _qt_progress_bar (QProgressBar instance): used only by the GUI for
-                serial execution
             name (str): name for the output BraggVectors
             returncalc (bool): if True, returns the answer
 
@@ -1107,19 +1156,42 @@ class DataCubeMethods:
             ml_model_path = ml_model_path,
             ml_num_attempts = ml_num_attempts,
             ml_batch_size = ml_batch_size,
-
-            _qt_progress_bar = _qt_progress_bar,
         )
 
-        # name
-        try:
-            peaks.name = name
-        except AttributeError:
-            pass
+        if isinstance(peaks,Node):
 
-        # add to tree
-        if data is None:
-            self.tree[name] = peaks
+            # add metadata
+            peaks.name = name
+            peaks.metadata = Metadata(
+                name = 'gen_params',
+                data = {
+                    #'gen_func' : 
+                    'template' : template,
+                    'filter_function' : filter_function,
+                    'corrPower' : corrPower,
+                    'sigma' : sigma,
+                    'subpixel' : subpixel,
+                    'upsample_factor' : upsample_factor,
+                    'minAbsoluteIntensity' : minAbsoluteIntensity,
+                    'minRelativeIntensity' : minRelativeIntensity,
+                    'relativeToPeak' : relativeToPeak,
+                    'minPeakSpacing' : minPeakSpacing,
+                    'edgeBoundary' : edgeBoundary,
+                    'maxNumPeaks' : maxNumPeaks,
+                    'CUDA' : CUDA,
+                    'CUDA_batched' : CUDA_batched,
+                    'distributed' : distributed,
+                    'ML' : ML,
+                    'ml_model_path' : ml_model_path,
+                    'ml_num_attempts' : ml_num_attempts,
+                    'ml_batch_size' : ml_batch_size,
+
+                }
+            )
+
+            # add to tree
+            if data is None:
+                self.tree( peaks )
 
         # return
         if returncalc:
@@ -1157,18 +1229,18 @@ class DataCubeMethods:
         """
 
         # Calculate dp_mean if needed
-        if not "dp_mean" in self.tree.keys():
+        if not "dp_mean" in self._branch.keys():
             self.get_dp_mean();
 
         # normalized dp_mean
-        int_sort = np.sort(self.tree["dp_mean"].data.ravel())
+        int_sort = np.sort(self.tree("dp_mean").data.ravel())
         ind = np.round(np.clip(
                 int_sort.shape[0]*threshold,
                 0,int_sort.shape[0])).astype('int')
         intensity_threshold = int_sort[ind]
 
         # Use threshold to calculate initial mask
-        mask_beamstop = self.tree["dp_mean"].data >= intensity_threshold
+        mask_beamstop = self.tree("dp_mean").data >= intensity_threshold
 
         # clean up mask
         mask_beamstop = np.logical_not(binary_fill_holes(np.logical_not(mask_beamstop)))
@@ -1185,9 +1257,27 @@ class DataCubeMethods:
         # Expand mask
         mask_beamstop = distance_transform_edt(mask_beamstop) < distance_edge
 
-        # Output mask for beamstop
-        self.name = name
-        self.tree[name] = mask_beamstop
+        # Wrap beamstop mask in a class
+        x = Array(
+            data = mask_beamstop,
+            name = name
+        )
+
+        # Add metadata
+        x.metadata = Metadata(
+            name = 'gen_params',
+            data = {
+                #'gen_func' : 
+                'threshold' : 0.25,
+                'distance_edge' : 4.0,
+                'include_edges' : True,
+                'name' : "mask_beamstop",
+                'returncalc' : True,
+            }
+        )
+
+        # Add to tree
+        self.tree( mask_beamstop )
 
         # return
         if returncalc:
