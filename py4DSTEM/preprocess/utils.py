@@ -32,6 +32,28 @@ def bin2D(array, factor, dtype=np.float64):
     return binned_ar
 
 
+def make_Fourier_coords2D(Nx, Ny, pixelSize=1):
+    """
+    Generates Fourier coordinates for a (Nx,Ny)-shaped 2D array.
+	Specifying the pixelSize argument sets a unit size.
+	"""
+    if hasattr(pixelSize, '__len__'):
+        assert len(pixelSize) == 2, "pixelSize must either be a scalar or have length 2"
+        pixelSize_x = pixelSize[0]
+        pixelSize_y = pixelSize[1]
+    else:
+        pixelSize_x = pixelSize
+        pixelSize_y = pixelSize
+
+    qx = np.fft.fftfreq(Nx, pixelSize_x)
+    qy = np.fft.fftfreq(Ny, pixelSize_y)
+    qy, qx = np.meshgrid(qy, qx)
+    return qx, qy
+
+
+
+
+
 def get_shifted_ar(
     ar,
     xshift,

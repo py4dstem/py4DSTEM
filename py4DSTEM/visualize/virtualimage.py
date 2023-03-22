@@ -11,8 +11,9 @@ def position_detector(
     centered,
     calibrated,
     shift_center,
+    invert = False,
     color = 'r',
-    alpha = 0.4,
+    alpha = 0.7,
     **kwargs
 ):
     """
@@ -41,6 +42,7 @@ def position_detector(
         calibrated: see py4DSTEM.process.get_virtual_image
         shift_center: see py4DSTEM.process.get_virtual_image; if True, `data`
             should be a 3-tuple (DataCube, rx, ry)
+        invert: if True, invert the mask
         **kwargs: all additional arguments are passed on to `show`
     """
     # Parse data
@@ -49,7 +51,7 @@ def position_detector(
         keys = ['dp_mean','dp_max','dp_median']
         for k in keys:
             try:
-                image = data.tree[k]
+                image = data.tree(k)
                 break
             except:
                 pass
@@ -92,6 +94,8 @@ def position_detector(
     # Get mask
     from py4DSTEM.process.virtualimage import make_detector
     mask = make_detector(image.shape, mode, g)
+    if not(invert):
+        mask = np.logical_not(mask)
 
     # Shift center
     if shift_center:
