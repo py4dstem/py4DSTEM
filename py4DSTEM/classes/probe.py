@@ -1,11 +1,11 @@
 
-from py4DSTEM.classes import DiffractionSlice
+from py4DSTEM.classes import DiffractionSlice, Data
 from py4DSTEM.classes.methods import ProbeMethods
 
 from typing import Optional
 import numpy as np
 
-class Probe(DiffractionSlice,ProbeMethods):
+class Probe(DiffractionSlice,ProbeMethods,Data):
     """
     Stores a vacuum probe.
     """

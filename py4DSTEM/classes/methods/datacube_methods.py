@@ -844,8 +844,6 @@ class DataCubeMethods:
                 a 4-tuple representing (Rxmin,Rxmax,Rymin,Rymax) of a
                 rectangular region to use.
 
-        Args for 
-
         Returns:
             (Probe) a Probe instance
 

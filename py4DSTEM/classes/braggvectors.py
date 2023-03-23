@@ -11,12 +11,13 @@ from emdfile import (
     Metadata
 )
 
+from py4DSTEM.classes import Data
 from py4DSTEM.classes.methods import BraggVectorMethods
 
 
 
 
-class BraggVectors(Custom,BraggVectorMethods):
+class BraggVectors(Custom,BraggVectorMethods,Data):
     """
     Stores bragg scattering information for a 4D datacube.
 
@@ -96,8 +97,7 @@ class BraggVectors(Custom,BraggVectorMethods):
             pass
         for k in self.metadata.keys():
             braggvector_copy.metadata = self.metadata[k].copy()
-        if hasattr(self,'calibration'):
-            braggvector_copy.calibration = self.calibration
+        self.root.tree(braggvector_copy)
 
         return braggvector_copy
 
