@@ -346,6 +346,7 @@ class ParallaxReconstruction(PhaseReconstruction):
         min_alignment_bin: int = 1,
         max_iter_at_min_bin: int = 2,
         upsample_factor: int = 8,
+        fast_averaging: bool = False,
         regularizer_matrix_size: Tuple[int, int] = (1, 1),
         regularize_shifts: bool = True,
         running_average: bool = True,
@@ -588,13 +589,16 @@ class ParallaxReconstruction(PhaseReconstruction):
             self._stack_mask = xp.roll(self._stack_mask, -xy_shifts_median, axis=(1, 2))
 
             # Generate new estimate
-            self._recon_mask = xp.sum(self._stack_mask, axis=0)
+            if fast_averaging:
+                self._recon_BF = xp.mean(self._stack_BF, axis=0)
 
-            mask_inv = 1 - np.clip(self._recon_mask, 0, 1)
-            self._recon_BF = (
-                self._stack_mean * mask_inv
-                + xp.sum(self._stack_BF * self._stack_mask, axis=0)
-            ) / (self._recon_mask + mask_inv)
+            else:
+                self._recon_mask = xp.sum(self._stack_mask, axis=0)
+                mask_inv = 1 - np.clip(self._recon_mask, 0, 1)
+                self._recon_BF = (
+                    self._stack_mean * mask_inv
+                    + xp.sum(self._stack_BF * self._stack_mask, axis=0)
+                ) / (self._recon_mask + mask_inv)
 
             self._recon_error = (
                 xp.atleast_1d(
@@ -635,6 +639,10 @@ class ParallaxReconstruction(PhaseReconstruction):
         plot_CTF_compare: bool = False,
         plot_dk: float = 0.005,
         plot_k_sigma: float = 0.02,
+        plot_k_scale_power: float = 1.0,
+        plot_log_y: bool = False,
+        plot_remove_DC: bool = True,
+        plot_return_variables: bool = False,
     ):
         """
         Fit aberrations to the measured image shifts.
@@ -647,7 +655,14 @@ class ParallaxReconstruction(PhaseReconstruction):
             Reciprocal bin-size for polar-averaged FFT
         plot_k_sigma: float, optional
             sigma to gaussian blur polar-averaged FFT by
-
+        plot_k_scale_power: float, optional
+            Multiply histogram by k**plot_k_scale_power
+        plot_log_y: bool, optional
+            Take the log of the histogram values
+        plot_remove_DC: bool, optional
+            Remove DC peak
+        plot_return_variables: bool, optional
+            Return k_bins, hist_plot, CTF_fit
         """
         xp = self._xp
         asnumpy = self._asnumpy
@@ -733,22 +748,34 @@ class ParallaxReconstruction(PhaseReconstruction):
             )
 
             # KDE and normalizing
-            k_sigma = plot_dk / plot_k_sigma
-            hist_exp[0] = 0.0
-            hist_exp = gaussian_filter(hist_exp, sigma=k_sigma, mode="nearest")
-            hist_norm = gaussian_filter(hist_norm, sigma=k_sigma, mode="nearest")
-            hist_exp /= hist_norm
+            if plot_remove_DC:
+                hist_exp[0] = 0.0
+            if plot_k_sigma > 0:
+                k_sigma = plot_k_sigma / plot_dk
+                hist_exp = gaussian_filter(hist_exp, sigma=k_sigma, mode="nearest")
+                hist_norm = gaussian_filter(hist_norm, sigma=k_sigma, mode="nearest")
+                hist_exp /= hist_norm
 
             # CTF comparison
             CTF_fit = xp.sin(
                 (-np.pi * self._wavelength * self.aberration_C1) * k_bins**2
             )
 
-            # plotting input - log scale
-            min_hist_val = xp.max(hist_exp) * 1e-3
-            hist_plot = xp.log(np.maximum(hist_exp, min_hist_val))
-            hist_plot -= xp.min(hist_plot)
-            hist_plot /= xp.max(hist_plot)
+            # Scale the plot away from the DC peak
+            if plot_k_sigma > 0:
+                ind_meas = np.ceil(k_sigma).astype('int')
+            else:
+                ind_meas = 0
+
+            # plotting input
+            hist_plot = hist_exp.copy()
+            if plot_k_scale_power > 0:
+                hist_plot *= (asnumpy(k_bins)**plot_k_scale_power)
+            if plot_log_y:
+                min_hist_val = xp.max(hist_exp[ind_meas:]) * 1e-3
+                hist_plot = xp.log(np.maximum(hist_exp, min_hist_val))
+            hist_plot -= xp.min(hist_plot[ind_meas:])
+            hist_plot /= xp.max(hist_plot[ind_meas:])
 
             hist_plot = asnumpy(hist_plot)
             k_bins = asnumpy(k_bins)
@@ -777,6 +804,8 @@ class ParallaxReconstruction(PhaseReconstruction):
             ax.set_xlim([0, k_bins[-1]])
             ax.set_ylim([0, 1.05])
 
+        if plot_return_variables:
+            return k_bins, hist_plot, CTF_fit
 
     def aberration_correct(
         self,
@@ -953,7 +982,7 @@ class ParallaxReconstruction(PhaseReconstruction):
             
             # CTF correction
             # TODO - check sign of Fresenal prop
-            sin_chi = xp.sin((xp.pi * self._wavelength * (self.aberration_C1+dz)) * kra2)
+            sin_chi = xp.sin((xp.pi * self._wavelength * (self.aberration_C1 - dz)) * kra2)
             CTF_corr = xp.sign(sin_chi)
             CTF_corr[0, 0] = 0
             if k_info_limit is not None:
