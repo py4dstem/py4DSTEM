@@ -504,15 +504,18 @@ class BraggVectorMethods:
         update_inplace = False,
         returncalc = True):
         """
-        This function applys a mask to bragg peaks .
-
+        Removes all bragg peaks which fall inside `mask` in the raw
+        (uncalibrated) positions.
 
         Args:
-            mask (bool):    binary image where peaks will be deleted
-
+            mask (bool): binary image where peaks will be deleted
+            update_inplace (bool): if True, removes peaks from this
+                BraggVectors instance. If False, returns a new
+                BraggVectors instance with the requested peaks removed
+            returncalc (bool): if True, return the BraggVectors
 
         Returns:
-
+            (BraggVectors or None)
         """
 
         # Copy peaks
@@ -528,16 +531,22 @@ class BraggVectorMethods:
                     self.Qshape)]
                 p.remove(sub)
 
+        # if modifying this BraggVectors instance was requested
         if update_inplace:
             self._v_uncal = v
+            ans = self
 
-            if returncalc:
-                return self
+        # if a new instance was requested
+        else:
+            ans = self.copy( name=self.name+'_masked' )
+            ans._v_uncal = v
 
+        # re-calibrate
+        ans.calibrate()
+
+        # return
         if returncalc:
-            bragg_vector_update = self.copy()
-            bragg_vector_update._v_uncal = v
-
-            return bragg_vector_update
-
+            return ans
+        else:
+            return
 

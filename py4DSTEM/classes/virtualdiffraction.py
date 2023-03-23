@@ -2,11 +2,11 @@
 from typing import Optional
 import numpy as np
 
-from py4DSTEM.classes import DiffractionSlice
+from py4DSTEM.classes import DiffractionSlice,Data
 
 
 
-class VirtualDiffraction(DiffractionSlice):
+class VirtualDiffraction(DiffractionSlice,Data):
     """
     Stores a diffraction-space shaped 2D image with metadata
     indicating how this image was generated from a datacube.

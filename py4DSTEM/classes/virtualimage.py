@@ -2,11 +2,11 @@
 from typing import Optional
 import numpy as np
 
-from py4DSTEM.classes import RealSlice
+from py4DSTEM.classes import RealSlice,Data
 
 
 
-class VirtualImage(RealSlice):
+class VirtualImage(RealSlice,Data):
     """
     Stores a real-space shaped 2D image with metadata
     indicating how this image was generated from a datacube.

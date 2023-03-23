@@ -24,6 +24,14 @@ from py4DSTEM.utils.configuration_checker import check_config
 
 # classes
 
+from emdfile import (
+    Node,
+    Metadata,
+    Array,
+    PointList,
+    PointListArray,
+    Custom
+)
 from py4DSTEM.classes import DataCube
 
 

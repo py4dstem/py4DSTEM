@@ -1,11 +1,12 @@
 # Defines the QPoints class, which stores PointLists with fields 'qx','qy','intensity'
 
 from emdfile import PointList
+from py4DSTEM.classes import Data
 
 from typing import Optional
 import numpy as np
 
-class QPoints(PointList):
+class QPoints(PointList,Data):
     """
     Stores a set of diffraction space points,
     with fields 'qx', 'qy' and 'intensity'
