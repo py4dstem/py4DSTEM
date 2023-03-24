@@ -25,6 +25,7 @@ from py4DSTEM.process.phase.utils import (
     polar_aliases,
     polar_symbols,
     spatial_frequencies,
+    fourier_rotate_real_volume,
 )
 from py4DSTEM.process.utils import (
     electron_wavelength_angstrom,
@@ -640,7 +641,8 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
 
         shifted_probes = fft_shift(current_probe, self._positions_px_fractional, xp)
 
-        object_patches = current_object[
+        complex_object = xp.exp(1j*current_object)
+        object_patches = complex_object[
             :, self._vectorized_patch_indices_row, self._vectorized_patch_indices_col
         ]
 
@@ -745,7 +747,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
 
         fourier_overlap = xp.fft.fft2(propagated_probes[-1])
         error = (
-            xp.mean(xp.abs(amplitudes - xp.abs(fourier_overlap)) ** 2)
+            xp.mean(xp.abs(amplitudes**2 - xp.abs(fourier_overlap) ** 2))
             / self._mean_diffraction_intensity[self._active_tilt_index]
         )
 
@@ -874,9 +876,9 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         xp = self._xp
 
         for s in reversed(range(self._num_slices)):
-            exit_wave = exit_waves[s]
-            probe = propagated_probes[s]
             obj = object_patches[s]
+            probe = propagated_probes[s]
+            exit_wave = exit_waves[s]
 
             probe_normalization = self._sum_overlapping_patches_bincounts(
                 xp.abs(probe) ** 2
@@ -888,21 +890,28 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
             )
 
             current_object[s] += step_size * (
-                self._sum_overlapping_patches_bincounts(xp.conj(probe) * exit_wave)
+                self._sum_overlapping_patches_bincounts(
+                    xp.real(
+                        - 1j
+                        * xp.conj(obj)
+                        * xp.conj(probe) 
+                        * exit_wave
+                        )
+                    )
                 * probe_normalization
             )
 
             if s > 0:
-                object_normalization = xp.abs(obj) ** 2
-                object_normalization = 1 / xp.sqrt(
-                    1e-16
-                    + ((1 - normalization_min) * object_normalization) ** 2
-                    + (
-                        normalization_min
-                        * xp.max(object_normalization, axis=(-1, -2))[:, None, None]
-                    )
-                    ** 2
-                )
+                #object_normalization = xp.abs(obj) ** 2
+                #object_normalization = 1 / xp.sqrt(
+                #    1e-16
+                #    + ((1 - normalization_min) * object_normalization) ** 2
+                #    + (
+                #        normalization_min
+                #        * xp.max(object_normalization, axis=(-1, -2))[:, None, None]
+                #    )
+                #    ** 2
+                #)
 
                 probe +=  xp.conj(obj) * exit_wave # * object_normalization
                 exit_waves[s - 1] += self._propagate_array(
@@ -1556,11 +1565,18 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                     reshape=False,
                     order=2,
                 )
+                
+                #self._object = fourier_rotate_real_volume(
+                #    self._object,
+                #    self._tilt_angles_deg[self._active_tilt_index],
+                #    axes=(0, 2),
+                #    xp = self._xp,
+                #)
                 self._object_sliced = self._expand_or_project_sliced_object(
                     self._object, self._num_slices
                 )
 
-                self._object_sliced_complex = xp.exp(1j*self._object_sliced)
+                self._object_sliced_old = self._object_sliced.copy()
 
                 start_tilt = self._cum_probes_per_tilt[self._active_tilt_index]
                 end_tilt = self._cum_probes_per_tilt[self._active_tilt_index + 1]
@@ -1613,7 +1629,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                         self._exit_waves,
                         batch_error,
                     ) = self._forward(
-                        self._object_sliced_complex,
+                        self._object_sliced,
                         self._probe,
                         amplitudes,
                         self._exit_waves,
@@ -1624,8 +1640,8 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                     )
 
                     # adjoint operator
-                    self._object_sliced_complex, self._probe = self._adjoint(
-                        self._object_sliced_complex,
+                    self._object_sliced, self._probe = self._adjoint(
+                        self._object_sliced,
                         self._probe,
                         object_patches,
                         propagated_probes,
@@ -1650,41 +1666,48 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                     error += batch_error
                 
                 self._object += self._expand_or_project_sliced_object(
-                        xp.angle(self._object_sliced_complex) - self._object_sliced, self._num_voxels
+                        self._object_sliced - self._object_sliced_old, self._num_voxels
                             )
                 self._object = self._rotate(
                     self._object,
                     -self._tilt_angles_deg[self._active_tilt_index],
                     axes=(0, 2),
                     reshape=False,
-                    order=1,
+                    order=2,
                 )
+                
+                #self._object = fourier_rotate_real_volume(
+                #    self._object,
+                #    -self._tilt_angles_deg[self._active_tilt_index],
+                #    axes=(0, 2),
+                #    xp = self._xp,
+                #)
                 
                 # constraints
                 self._positions_px_all[start_tilt:end_tilt] = positions_px.copy()[
                     unshuffled_indices
                 ]
                 
-                #(
-                #    self._object,
-                #    self._probe,
-                #    self._positions_px_all[start_tilt:end_tilt],
-                #) = self._constraints(
-                #    self._object,
-                #    self._probe,
-                #    self._positions_px_all[start_tilt:end_tilt],
-                #    fix_com=fix_com and a0 >= fix_probe_iter,
-                #    fix_probe_fourier_amplitude=a0 < fix_probe_fourier_amplitude_iter,
-                #    fix_positions=a0 < fix_positions_iter,
-                #   global_affine_transformation=global_affine_transformation,
-                #    gaussian_filter=a0 < gaussian_filter_iter
-                #    and gaussian_filter_sigma is not None,
-                #    gaussian_filter_sigma=gaussian_filter_sigma,
-                #    butterworth_filter=a0 < butterworth_filter_iter
-                #    and (q_lowpass is not None or q_highpass is not None),
-                #    q_lowpass=q_lowpass,
-                #    q_highpass=q_highpass,
-                #)
+                (
+                    self._object,
+                    self._probe,
+                    self._positions_px_all[start_tilt:end_tilt],
+                ) = self._constraints(
+                    self._object,
+                    self._probe,
+                    self._positions_px_all[start_tilt:end_tilt],
+                    fix_com=fix_com and a0 >= fix_probe_iter,
+                    fix_probe_fourier_amplitude=a0 < fix_probe_fourier_amplitude_iter,
+                    fix_positions=a0 < fix_positions_iter,
+                   global_affine_transformation=global_affine_transformation,
+                    gaussian_filter=a0 < gaussian_filter_iter
+                    and gaussian_filter_sigma is not None,
+                    gaussian_filter_sigma=gaussian_filter_sigma,
+                    butterworth_filter=a0 < butterworth_filter_iter
+                    and (q_lowpass is not None or q_highpass is not None),
+                    q_lowpass=q_lowpass,
+                    q_highpass=q_highpass,
+                )
 
             if store_iterations:
                 self.object_iterations.append(asnumpy(self._object.copy()))
