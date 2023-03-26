@@ -350,7 +350,6 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
             unit="tilt",
             disable=not progress_bar,
         ):
-
             if tilt_index == 0:
                 (
                     self._datacube[tilt_index],
@@ -464,7 +463,6 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         self._positions_px_all = xp.asarray(self._positions_px_all, dtype=xp.float32)
 
         for tilt_index in range(self._num_tilts):
-
             self._positions_px = self._positions_px_all[
                 self._cum_probes_per_tilt[tilt_index] : self._cum_probes_per_tilt[
                     tilt_index + 1
@@ -641,7 +639,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
 
         shifted_probes = fft_shift(current_probe, self._positions_px_fractional, xp)
 
-        complex_object = xp.exp(1j*current_object)
+        complex_object = xp.exp(1j * current_object)
         object_patches = complex_object[
             :, self._vectorized_patch_indices_row, self._vectorized_patch_indices_col
         ]
@@ -654,8 +652,8 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
             overlap[s] = object_patches[s] * propagated_probes[s]
 
             if s + 1 < self._num_slices:
-                propagated_probes[s+1] = self._propagate_array(
-                    overlap[s] , self._propagator_arrays[s]
+                propagated_probes[s + 1] = self._propagate_array(
+                    overlap[s], self._propagator_arrays[s]
                 )
 
         return propagated_probes, object_patches, overlap
@@ -745,7 +743,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
 
         fourier_overlap = xp.fft.fft2(overlap[-1])
         error = (
-            xp.mean(xp.abs(amplitudes**2 - xp.abs(fourier_overlap) ** 2))
+            xp.mean(xp.abs(amplitudes - xp.abs(fourier_overlap)) ** 2)
             / self._mean_diffraction_intensity[self._active_tilt_index]
         )
 
@@ -814,7 +812,10 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
             current_object, current_probe
         )
         if use_projection_scheme:
-            exit_waves[self._active_tilt_index], error = self._projection_sets_fourier_projection(
+            (
+                exit_waves[self._active_tilt_index],
+                error,
+            ) = self._projection_sets_fourier_projection(
                 amplitudes,
                 overlap,
                 exit_waves[self._active_tilt_index],
@@ -872,10 +873,10 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
             Updated probe estimate
         """
         xp = self._xp
-        
+
         # extra back-propagation step
         exit_waves[-1] = self._propagate_array(
-            exit_waves[-1] , xp.conj(self._propagator_arrays[- 1])
+            exit_waves[-1], xp.conj(self._propagator_arrays[-1])
         )
 
         for s in reversed(range(self._num_slices)):
@@ -892,23 +893,21 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                 + (normalization_min * xp.max(probe_normalization)) ** 2
             )
 
-            current_object[s] += step_size * (
-                self._sum_overlapping_patches_bincounts(
-                    xp.real(
-                        - 1j
-                        * xp.conj(obj)
-                        * xp.conj(probe)
-                        * exit_wave
-                        )
+            current_object[s] += (
+                step_size
+                * (
+                    self._sum_overlapping_patches_bincounts(
+                        xp.real(-1j * xp.conj(obj) * xp.conj(probe) * exit_wave)
                     )
-                * probe_normalization
-            ) / self._num_slices
+                    * probe_normalization
+                )
+                / self._num_slices
+            )
 
             if s > 0:
-
                 probe += exit_wave * xp.conj(obj)
                 exit_waves[s - 1] += self._propagate_array(
-                    probe , xp.conj(self._propagator_arrays[s - 1])
+                    probe, xp.conj(self._propagator_arrays[s - 1])
                 )
 
             elif not fix_probe:
@@ -972,10 +971,10 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
             Updated probe estimate
         """
         xp = self._xp
-        
+
         # extra back-propagation step
         exit_waves[-1] = self._propagate_array(
-            exit_waves[-1] , xp.conj(self._propagator_arrays[- 1])
+            exit_waves[-1], xp.conj(self._propagator_arrays[-1])
         )
 
         for s in reversed(range(self._num_slices)):
@@ -992,17 +991,16 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                 + (normalization_min * xp.max(probe_normalization)) ** 2
             )
 
-            current_object[s] = self._sum_overlapping_patches_bincounts(
-                    xp.real(
-                        -1j
-                        * xp.conj(obj)
-                        * xp.conj(probe)
-                        * exit_wave
-                        )
-                    ) * probe_normalization / self._num_slices / self._num_tilts
+            current_object[s] = (
+                self._sum_overlapping_patches_bincounts(
+                    xp.real(-1j * xp.conj(obj) * xp.conj(probe) * exit_wave)
+                )
+                * probe_normalization
+                / self._num_slices
+                / self._num_tilts # not sure if this is correct, or just unstable
+            )
 
             if s > 0:
-
                 probe = xp.conj(obj) * exit_wave
                 exit_waves[s - 1] = self._propagate_array(
                     probe, xp.conj(self._propagator_arrays[s - 1])
@@ -1095,7 +1093,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
             )
 
         return current_object, current_probe
-    
+
     def _object_positivity_constraint(self, current_object):
         """
         Ptychographic positivity constraint.
@@ -1113,7 +1111,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         """
         xp = self._xp
         return xp.maximum(current_object, 0.0)
-    
+
     def _object_gaussian_constraint(self, current_object, gaussian_filter_sigma):
         """
         Ptychographic smoothness constraint.
@@ -1160,7 +1158,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         qx = xp.fft.fftfreq(current_object.shape[1], self.sampling[0])
         qy = xp.fft.fftfreq(current_object.shape[2], self.sampling[1])
         qza, qxa, qya = xp.meshgrid(qz, qx, qy, indexing="ij")
-        qra = xp.sqrt(qza**2 + qxa**2 + qya**2 )
+        qra = xp.sqrt(qza**2 + qxa**2 + qya**2)
 
         env = xp.ones_like(qra)
         if q_highpass:
@@ -1482,6 +1480,12 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                             )
                         )
 
+        # Position Correction + Collective Updates not yet implemented
+        if fix_positions_iter < max_iter:
+            raise NotImplementedError(
+                "Position correction is currently incompatible with collective updates."
+            )
+
         # Batching
 
         if max_batch_size is not None:
@@ -1501,7 +1505,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
             self._positions_px_all = self._positions_px_initial_all.copy()
 
             if use_projection_scheme:
-                self._exit_waves = [None]*self._num_tilts
+                self._exit_waves = [None] * self._num_tilts
             else:
                 self._exit_waves = None
 
@@ -1516,7 +1520,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                 )
             else:
                 if use_projection_scheme:
-                    self._exit_waves = [None]*self._num_tilts
+                    self._exit_waves = [None] * self._num_tilts
                 else:
                     self._exit_waves = None
 
@@ -1541,9 +1545,8 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
             unit=" iter",
             disable=not progress_bar,
         ):
-
             error = 0.0
-            
+
             if collective_tilt_updates:
                 collective_object = xp.zeros_like(self._object)
 
@@ -1557,11 +1560,12 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                     reshape=False,
                     order=2,
                 )
-                
-                self._object_sliced = self._expand_or_project_sliced_object(
+
+                object_sliced = self._expand_or_project_sliced_object(
                     self._object, self._num_slices
                 )
-                self._object_sliced_old = self._object_sliced.copy()
+                if not use_projection_scheme:
+                    object_sliced_old = object_sliced.copy()
 
                 start_tilt = self._cum_probes_per_tilt[self._active_tilt_index]
                 end_tilt = self._cum_probes_per_tilt[self._active_tilt_index + 1]
@@ -1573,6 +1577,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                 # randomize
                 if not use_projection_scheme:
                     np.random.shuffle(shuffled_indices)
+
                 unshuffled_indices[shuffled_indices] = np.arange(
                     num_diffraction_patterns
                 )
@@ -1580,7 +1585,6 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                 positions_px = self._positions_px_all[start_tilt:end_tilt].copy()[
                     shuffled_indices
                 ]
-
                 initial_positions_px = self._positions_px_initial_all[
                     start_tilt:end_tilt
                 ].copy()[shuffled_indices]
@@ -1590,8 +1594,8 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                 ):
                     # batch indices
                     self._positions_px = positions_px[start:end]
-                    self._positions_px_com = xp.mean(self._positions_px, axis=0)
                     self._positions_px_initial = initial_positions_px[start:end]
+                    self._positions_px_com = xp.mean(self._positions_px, axis=0)
                     self._positions_px_fractional = self._positions_px - xp.round(
                         self._positions_px
                     )
@@ -1605,7 +1609,6 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                         shuffled_indices[start:end]
                     ]
 
-
                     # forward operator
                     (
                         propagated_probes,
@@ -1614,7 +1617,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                         self._exit_waves,
                         batch_error,
                     ) = self._forward(
-                        self._object_sliced,
+                        object_sliced,
                         self._probe,
                         amplitudes,
                         self._exit_waves,
@@ -1625,8 +1628,8 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                     )
 
                     # adjoint operator
-                    self._object_sliced, self._probe = self._adjoint(
-                        self._object_sliced,
+                    object_sliced, self._probe = self._adjoint(
+                        object_sliced,
                         self._probe,
                         object_patches,
                         propagated_probes,
@@ -1640,7 +1643,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                     # position correction
                     if a0 >= fix_positions_iter:
                         positions_px[start:end] = self._position_correction(
-                            self._object_sliced[-1],
+                            object_sliced[-1],
                             propagated_probes[-1],
                             overlap[-1],
                             amplitudes,
@@ -1649,13 +1652,13 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                         )
 
                     error += batch_error
-                
+
                 if not use_projection_scheme:
-                    self._object_sliced -= self._object_sliced_old
+                    object_sliced -= object_sliced_old
 
                 object_update = self._expand_or_project_sliced_object(
-                        self._object_sliced, self._num_voxels
-                        )
+                    object_sliced, self._num_voxels
+                )
                 if collective_tilt_updates:
                     collective_object += self._rotate(
                         object_update,
@@ -1674,7 +1677,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                     reshape=False,
                     order=2,
                 )
-                
+
                 # constraints
                 self._positions_px_all[start_tilt:end_tilt] = positions_px.copy()[
                     unshuffled_indices
@@ -1690,7 +1693,8 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                         self._probe,
                         self._positions_px_all[start_tilt:end_tilt],
                         fix_com=fix_com and a0 >= fix_probe_iter,
-                        fix_probe_fourier_amplitude=a0 < fix_probe_fourier_amplitude_iter,
+                        fix_probe_fourier_amplitude=a0
+                        < fix_probe_fourier_amplitude_iter,
                         fix_positions=a0 < fix_positions_iter,
                         global_affine_transformation=global_affine_transformation,
                         gaussian_filter=a0 < gaussian_filter_iter
@@ -1707,14 +1711,14 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                 (
                     self._object,
                     self._probe,
-                    self._positions_px_all,
+                    _,
                 ) = self._constraints(
                     self._object,
                     self._probe,
-                    self._positions_px_all,
+                    None,
                     fix_com=fix_com and a0 >= fix_probe_iter,
                     fix_probe_fourier_amplitude=a0 < fix_probe_fourier_amplitude_iter,
-                    fix_positions=a0 < fix_positions_iter,
+                    fix_positions=True,
                     global_affine_transformation=global_affine_transformation,
                     gaussian_filter=a0 < gaussian_filter_iter
                     and gaussian_filter_sigma is not None,
