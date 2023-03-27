@@ -4,7 +4,7 @@ namely overlap tomography.
 """
 
 import warnings
-from typing import Mapping, Sequence, Tuple, Union
+from typing import Mapping, Sequence, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -26,7 +26,7 @@ from py4DSTEM.process.phase.utils import (
     polar_aliases,
     polar_symbols,
     spatial_frequencies,
-    fourier_rotate_real_volume,
+    # fourier_rotate_real_volume,
 )
 from py4DSTEM.process.utils import (
     electron_wavelength_angstrom,
@@ -998,7 +998,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                 )
                 * probe_normalization
                 / self._num_slices
-                / self._num_tilts # not sure if this is correct, or just unstable
+                / self._num_tilts  # not sure if this is correct, or just unstable
             )
 
             if s > 0:
@@ -1741,7 +1741,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         self.error = error.item()
 
         return self
-    
+
     def _crop_rotate_object_manually(
         self,
         array,
@@ -1775,7 +1775,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         else:
             rotated_array = asnumpy(array)
 
-        return rotated_array[...,min_x:max_x,min_y:max_y]
+        return rotated_array[..., min_x:max_x, min_y:max_y]
 
     def _visualize_last_iteration_figax(
         self,
@@ -1785,9 +1785,9 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         cbar: bool,
         relative_error: bool,
         projection_angle_deg: float,
-        projection_axes: Tuple[int,int],
-        x_lims: Tuple[int,int],
-        y_lims: Tuple[int,int],
+        projection_axes: Tuple[int, int],
+        x_lims: Tuple[int, int],
+        y_lims: Tuple[int, int],
         **kwargs,
     ):
         """
@@ -1807,17 +1807,23 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
 
         cmap = kwargs.get("cmap", "magma")
         kwargs.pop("cmap", None)
-        
+
         asnumpy = self._asnumpy
-        
+
         if projection_angle_deg is not None:
-            rotated_3d_obj = self._rotate(self._object,projection_angle_deg,axes=projection_axes,reshape=False,order=2)
+            rotated_3d_obj = self._rotate(
+                self._object,
+                projection_angle_deg,
+                axes=projection_axes,
+                reshape=False,
+                order=2,
+            )
             rotated_3d_obj = asnumpy(rotated_3d_obj)
         else:
             rotated_3d_obj = self.object
 
         rotated_object = self._crop_rotate_object_manually(
-            rotated_3d_obj.sum(0), angle=None,x_lims=x_lims,y_lims=y_lims
+            rotated_3d_obj.sum(0), angle=None, x_lims=x_lims, y_lims=y_lims
         )
         rotated_shape = rotated_object.shape
 
@@ -1846,9 +1852,11 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
             kwargs.pop("vmin", None)
             kwargs.pop("vmax", None)
             errors = self.error_iterations
-            
+
             if relative_error:
-                convergence_ax.semilogy(np.arange(errors.shape[0]), errors / errors[0], **kwargs)
+                convergence_ax.semilogy(
+                    np.arange(errors.shape[0]), errors / errors[0], **kwargs
+                )
             else:
                 convergence_ax.semilogy(np.arange(errors.shape[0]), errors, **kwargs)
 
@@ -1859,9 +1867,9 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         plot_probe: bool,
         relative_error: bool,
         projection_angle_deg: float,
-        projection_axes: Tuple[int,int],
-        x_lims: Tuple[int,int],
-        y_lims: Tuple[int,int],
+        projection_axes: Tuple[int, int],
+        x_lims: Tuple[int, int],
+        y_lims: Tuple[int, int],
         **kwargs,
     ):
         """
@@ -1889,15 +1897,21 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         kwargs.pop("cmap", None)
 
         asnumpy = self._asnumpy
-        
+
         if projection_angle_deg is not None:
-            rotated_3d_obj = self._rotate(self._object,projection_angle_deg,axes=projection_axes,reshape=False,order=2)
+            rotated_3d_obj = self._rotate(
+                self._object,
+                projection_angle_deg,
+                axes=projection_axes,
+                reshape=False,
+                order=2,
+            )
             rotated_3d_obj = asnumpy(rotated_3d_obj)
         else:
             rotated_3d_obj = self.object
 
         rotated_object = self._crop_rotate_object_manually(
-            rotated_3d_obj.sum(0), angle=None,x_lims=x_lims,y_lims=y_lims
+            rotated_3d_obj.sum(0), angle=None, x_lims=x_lims, y_lims=y_lims
         )
         rotated_shape = rotated_object.shape
 
@@ -1958,7 +1972,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
 
             ax.set_ylabel("x [A]")
             ax.set_xlabel("y [A]")
-            ax.set_title(f"Reconstructed object projection")
+            ax.set_title("Reconstructed object projection")
 
             if cbar:
                 divider = make_axes_locatable(ax)
@@ -1996,7 +2010,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
             )
             ax.set_ylabel("x [A]")
             ax.set_xlabel("y [A]")
-            ax.set_title(f"Reconstructed object projection")
+            ax.set_title("Reconstructed object projection")
 
             if cbar:
                 divider = make_axes_locatable(ax)
@@ -2032,9 +2046,9 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         iterations_grid: Tuple[int, int],
         relative_error: bool,
         projection_angle_deg: float,
-        projection_axes: Tuple[int,int],
-        x_lims: Tuple[int,int],
-        y_lims: Tuple[int,int],
+        projection_axes: Tuple[int, int],
+        x_lims: Tuple[int, int],
+        y_lims: Tuple[int, int],
         **kwargs,
     ):
         """
@@ -2070,31 +2084,28 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         kwargs.pop("cmap", None)
 
         errors = np.array(self.error_iterations)
-        asnumpy = self._asnumpy
-        
+
         if projection_angle_deg is not None:
             objects = [
-                    self._crop_rotate_object_manually(
-                        rotate_np(
-                            obj,
-                            projection_angle_deg,
-                            axes=projection_axes,
-                            reshape=False,
-                            order=2).sum(0),
-                        angle=None, 
-                        x_lims = x_lims, 
-                        y_lims = y_lims
-                        )
-                    for obj in self.object_iterations
-                    ]
+                self._crop_rotate_object_manually(
+                    rotate_np(
+                        obj,
+                        projection_angle_deg,
+                        axes=projection_axes,
+                        reshape=False,
+                        order=2,
+                    ).sum(0),
+                    angle=None,
+                    x_lims=x_lims,
+                    y_lims=y_lims,
+                )
+                for obj in self.object_iterations
+            ]
         else:
             objects = [
                 self._crop_rotate_object_manually(
-                    obj.sum(0),
-                    angle=None, 
-                    x_lims = x_lims, 
-                    y_lims = y_lims
-                    )
+                    obj.sum(0), angle=None, x_lims=x_lims, y_lims=y_lims
+                )
                 for obj in self.object_iterations
             ]
 
@@ -2209,9 +2220,9 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         cbar: bool = True,
         relative_error: bool = True,
         projection_angle_deg: float = None,
-        projection_axes: Tuple[int,int] = (0,2),
-        x_lims = (None,None),
-        y_lims = (None,None),
+        projection_axes: Tuple[int, int] = (0, 2),
+        x_lims=(None, None),
+        y_lims=(None, None),
         **kwargs,
     ):
         """
@@ -2245,8 +2256,8 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                 relative_error=relative_error,
                 projection_angle_deg=projection_angle_deg,
                 projection_axes=projection_axes,
-                x_lims = x_lims,
-                y_lims = y_lims,
+                x_lims=x_lims,
+                y_lims=y_lims,
                 **kwargs,
             )
         else:
@@ -2258,10 +2269,9 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                 relative_error=relative_error,
                 projection_angle_deg=projection_angle_deg,
                 projection_axes=projection_axes,
-                x_lims = x_lims,
-                y_lims = y_lims,
+                x_lims=x_lims,
+                y_lims=y_lims,
                 **kwargs,
             )
 
         return self
-

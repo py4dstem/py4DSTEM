@@ -792,7 +792,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             Updated probe estimate
         """
         xp = self._xp
-        
+
         # extra back-propagation step
         exit_waves[-1] = self._propagate_array(
             exit_waves[-1], xp.conj(self._propagator_arrays[-1])
@@ -812,10 +812,14 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
                 + (normalization_min * xp.max(probe_normalization)) ** 2
             )
 
-            current_object[s] += step_size * (
-                self._sum_overlapping_patches_bincounts(xp.conj(probe) * exit_wave)
-                * probe_normalization
-            ) / self._num_slices
+            current_object[s] += (
+                step_size
+                * (
+                    self._sum_overlapping_patches_bincounts(xp.conj(probe) * exit_wave)
+                    * probe_normalization
+                )
+                / self._num_slices
+            )
 
             if s > 0:
                 object_normalization = xp.abs(obj) ** 2
@@ -899,7 +903,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         exit_waves[-1] = self._propagate_array(
             exit_waves[-1], xp.conj(self._propagator_arrays[-1])
         )
-        
+
         for s in reversed(range(self._num_slices)):
             exit_wave = exit_waves[s]
             probe = propagated_probes[s]
@@ -916,7 +920,8 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
 
             current_object[s] = (
                 self._sum_overlapping_patches_bincounts(xp.conj(probe) * exit_wave)
-                * probe_normalization / self._num_slices
+                * probe_normalization
+                / self._num_slices
             )
 
             if s > 0:
@@ -1674,9 +1679,11 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             kwargs.pop("vmin", None)
             kwargs.pop("vmax", None)
             errors = self.error_iterations
-            
+
             if relative_error:
-                convergence_ax.semilogy(np.arange(errors.shape[0]), errors / errors[0], **kwargs)
+                convergence_ax.semilogy(
+                    np.arange(errors.shape[0]), errors / errors[0], **kwargs
+                )
             else:
                 convergence_ax.semilogy(np.arange(errors.shape[0]), errors, **kwargs)
 
