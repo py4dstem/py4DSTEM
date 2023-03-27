@@ -792,6 +792,11 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             Updated probe estimate
         """
         xp = self._xp
+        
+        # extra back-propagation step
+        exit_waves[-1] = self._propagate_array(
+            exit_waves[-1], xp.conj(self._propagator_arrays[-1])
+        )
 
         for s in reversed(range(self._num_slices)):
             exit_wave = exit_waves[s]
@@ -810,44 +815,43 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             current_object[s] += step_size * (
                 self._sum_overlapping_patches_bincounts(xp.conj(probe) * exit_wave)
                 * probe_normalization
-            )
+            ) / self._num_slices
 
-            if not fix_probe:
-                if s > 0:
-                    object_normalization = xp.abs(obj) ** 2
-                    object_normalization = 1 / xp.sqrt(
-                        1e-16
-                        + ((1 - normalization_min) * object_normalization) ** 2
-                        + (
-                            normalization_min
-                            * xp.max(object_normalization, axis=(-1, -2))[:, None, None]
-                        )
-                        ** 2
+            if s > 0:
+                object_normalization = xp.abs(obj) ** 2
+                object_normalization = 1 / xp.sqrt(
+                    1e-16
+                    + ((1 - normalization_min) * object_normalization) ** 2
+                    + (
+                        normalization_min
+                        * xp.max(object_normalization, axis=(-1, -2))[:, None, None]
                     )
+                    ** 2
+                )
 
-                    probe += step_size * xp.conj(obj) * exit_wave * object_normalization
-                    exit_waves[s - 1] += self._propagate_array(
-                        probe, xp.conj(self._propagator_arrays[s - 1])
-                    )
-                else:
-                    object_normalization = xp.sum(
-                        (xp.abs(obj) ** 2),
+                probe += xp.conj(obj) * exit_wave * object_normalization
+                exit_waves[s - 1] += self._propagate_array(
+                    probe, xp.conj(self._propagator_arrays[s - 1])
+                )
+            elif not fix_probe:
+                object_normalization = xp.sum(
+                    (xp.abs(obj) ** 2),
+                    axis=0,
+                )
+                object_normalization = 1 / xp.sqrt(
+                    1e-16
+                    + ((1 - normalization_min) * object_normalization) ** 2
+                    + (normalization_min * xp.max(object_normalization)) ** 2
+                )
+
+                current_probe += (
+                    step_size
+                    * xp.sum(
+                        xp.conj(obj) * exit_wave,
                         axis=0,
                     )
-                    object_normalization = 1 / xp.sqrt(
-                        1e-16
-                        + ((1 - normalization_min) * object_normalization) ** 2
-                        + (normalization_min * xp.max(object_normalization)) ** 2
-                    )
-
-                    current_probe += (
-                        step_size
-                        * xp.sum(
-                            xp.conj(obj) * exit_wave,
-                            axis=0,
-                        )
-                        * object_normalization
-                    )
+                    * object_normalization
+                )
 
         return current_object, current_probe
 
@@ -891,6 +895,11 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         """
         xp = self._xp
 
+        # extra back-propagation step
+        exit_waves[-1] = self._propagate_array(
+            exit_waves[-1], xp.conj(self._propagator_arrays[-1])
+        )
+        
         for s in reversed(range(self._num_slices)):
             exit_wave = exit_waves[s]
             probe = propagated_probes[s]
@@ -907,44 +916,43 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
 
             current_object[s] = (
                 self._sum_overlapping_patches_bincounts(xp.conj(probe) * exit_wave)
-                * probe_normalization
+                * probe_normalization / self._num_slices
             )
 
-            if not fix_probe:
-                if s > 0:
-                    object_normalization = xp.abs(obj) ** 2
-                    object_normalization = 1 / xp.sqrt(
-                        1e-16
-                        + ((1 - normalization_min) * object_normalization) ** 2
-                        + (
-                            normalization_min
-                            * xp.max(object_normalization, axis=(-1, -2))[:, None, None]
-                        )
-                        ** 2
+            if s > 0:
+                object_normalization = xp.abs(obj) ** 2
+                object_normalization = 1 / xp.sqrt(
+                    1e-16
+                    + ((1 - normalization_min) * object_normalization) ** 2
+                    + (
+                        normalization_min
+                        * xp.max(object_normalization, axis=(-1, -2))[:, None, None]
                     )
+                    ** 2
+                )
 
-                    probe = xp.conj(obj) * exit_wave * object_normalization
-                    exit_waves[s - 1] = self._propagate_array(
-                        probe, xp.conj(self._propagator_arrays[s - 1])
-                    )
-                else:
-                    object_normalization = xp.sum(
-                        (xp.abs(obj) ** 2),
+                probe = xp.conj(obj) * exit_wave * object_normalization
+                exit_waves[s - 1] = self._propagate_array(
+                    probe, xp.conj(self._propagator_arrays[s - 1])
+                )
+            elif not fix_probe:
+                object_normalization = xp.sum(
+                    (xp.abs(obj) ** 2),
+                    axis=0,
+                )
+                object_normalization = 1 / xp.sqrt(
+                    1e-16
+                    + ((1 - normalization_min) * object_normalization) ** 2
+                    + (normalization_min * xp.max(object_normalization)) ** 2
+                )
+
+                current_probe = (
+                    xp.sum(
+                        xp.conj(obj) * exit_wave,
                         axis=0,
                     )
-                    object_normalization = 1 / xp.sqrt(
-                        1e-16
-                        + ((1 - normalization_min) * object_normalization) ** 2
-                        + (normalization_min * xp.max(object_normalization)) ** 2
-                    )
-
-                    current_probe = (
-                        xp.sum(
-                            xp.conj(obj) * exit_wave,
-                            axis=0,
-                        )
-                        * object_normalization
-                    )
+                    * object_normalization
+                )
 
         return current_object, current_probe
 
@@ -1612,9 +1620,10 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         self,
         fig,
         object_ax,
-        convergence_ax: None,
+        convergence_ax,
         cbar: bool,
-        padding: int = 0,
+        padding: int,
+        relative_error: bool,
         **kwargs,
     ):
         """
@@ -1661,10 +1670,15 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             fig.colorbar(im, cax=ax_cb)
 
         if convergence_ax is not None and hasattr(self, "error_iterations"):
+            errors = np.array(self.error_iterations)
             kwargs.pop("vmin", None)
             kwargs.pop("vmax", None)
             errors = self.error_iterations
-            convergence_ax.semilogy(np.arange(len(errors)), errors, **kwargs)
+            
+            if relative_error:
+                convergence_ax.semilogy(np.arange(errors.shape[0]), errors / errors[0], **kwargs)
+            else:
+                convergence_ax.semilogy(np.arange(errors.shape[0]), errors, **kwargs)
 
     def _visualize_last_iteration(
         self,
