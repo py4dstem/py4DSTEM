@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.gridspec import GridSpec
 from mpl_toolkits.axes_grid1 import ImageGrid, make_axes_locatable
+from scipy.ndimage import rotate as rotate_np
 
 try:
     import cupy as cp
@@ -1740,6 +1741,527 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         self.error = error.item()
 
         return self
+    
+    def _crop_rotate_object_manually(
+        self,
+        array,
+        angle,
+        x_lims,
+        y_lims,
+    ):
+        """
+        Crops and rotated object to FOV bounded by current pixel positions.
 
-    def visualize(self):
-        pass
+        Parameters
+        ----------
+        array: np.ndarray
+            Object array to crop and rotate. Only operates on numpy arrays for comptatibility.
+        padding: int, optional
+            Optional padding outside pixel positions
+
+        Returns
+        cropped_rotated_array: np.ndarray
+            Cropped and rotated object array
+        """
+
+        asnumpy = self._asnumpy
+        min_x, max_x = x_lims
+        min_y, max_y = y_lims
+
+        if angle is not None:
+            rotated_array = rotate_np(
+                asnumpy(array), np.rad2deg(angle), reshape=False, axes=(-2, -1)
+            )
+        else:
+            rotated_array = asnumpy(array)
+
+        return rotated_array[...,min_x:max_x,min_y:max_y]
+
+    def _visualize_last_iteration_figax(
+        self,
+        fig,
+        object_ax,
+        convergence_ax,
+        cbar: bool,
+        relative_error: bool,
+        projection_angle_deg: float,
+        projection_axes: Tuple[int,int],
+        x_lims: Tuple[int,int],
+        y_lims: Tuple[int,int],
+        **kwargs,
+    ):
+        """
+        Displays last reconstructed object on a given fig/ax.
+
+        Parameters
+        --------
+        fig: Figure
+            Matplotlib figure object_ax lives in
+        object_ax: Axes
+            Matplotlib axes to plot reconstructed object in
+        convergence_ax: Axes, optional
+            Matplotlib axes to plot convergence plot in
+        cbar: bool, optional
+            If true, displays a colorbar
+        """
+
+        cmap = kwargs.get("cmap", "magma")
+        kwargs.pop("cmap", None)
+        
+        asnumpy = self._asnumpy
+        
+        if projection_angle_deg is not None:
+            rotated_3d_obj = self._rotate(self._object,projection_angle_deg,axes=projection_axes,reshape=False,order=2)
+            rotated_3d_obj = asnumpy(rotated_3d_obj)
+        else:
+            rotated_3d_obj = self.object
+
+        rotated_object = self._crop_rotate_object_manually(
+            rotated_3d_obj.sum(0), angle=None,x_lims=x_lims,y_lims=y_lims
+        )
+        rotated_shape = rotated_object.shape
+
+        extent = [
+            0,
+            self.sampling[1] * rotated_shape[1],
+            self.sampling[0] * rotated_shape[0],
+            0,
+        ]
+
+        im = object_ax.imshow(
+            rotated_object,
+            extent=extent,
+            cmap=cmap,
+            **kwargs,
+        )
+
+        if cbar:
+            divider = make_axes_locatable(object_ax)
+            ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
+            fig.add_axes(ax_cb)
+            fig.colorbar(im, cax=ax_cb)
+
+        if convergence_ax is not None and hasattr(self, "error_iterations"):
+            errors = np.array(self.error_iterations)
+            kwargs.pop("vmin", None)
+            kwargs.pop("vmax", None)
+            errors = self.error_iterations
+            
+            if relative_error:
+                convergence_ax.semilogy(np.arange(errors.shape[0]), errors / errors[0], **kwargs)
+            else:
+                convergence_ax.semilogy(np.arange(errors.shape[0]), errors, **kwargs)
+
+    def _visualize_last_iteration(
+        self,
+        cbar: bool,
+        plot_convergence: bool,
+        plot_probe: bool,
+        relative_error: bool,
+        projection_angle_deg: float,
+        projection_axes: Tuple[int,int],
+        x_lims: Tuple[int,int],
+        y_lims: Tuple[int,int],
+        **kwargs,
+    ):
+        """
+        Displays last reconstructed object and probe iterations.
+
+        Parameters
+        --------
+        plot_convergence: bool, optional
+            If true, the RMS error plot is displayed
+        cbar: bool, optional
+            If true, displays a colorbar
+        plot_probe: bool
+            If true, the reconstructed probe intensity is also displayed
+        object_mode: str
+            Specifies the attribute of the object to plot.
+            One of 'phase', 'amplitude', 'intensity'
+        relative_error: bool
+            Sets the error to be relative to the first iteration.
+            TODO - update to be relative to empty object wave error (RMS of all measurements).
+
+        """
+        figsize = kwargs.get("figsize", (8, 5))
+        cmap = kwargs.get("cmap", "magma")
+        kwargs.pop("figsize", None)
+        kwargs.pop("cmap", None)
+
+        asnumpy = self._asnumpy
+        
+        if projection_angle_deg is not None:
+            rotated_3d_obj = self._rotate(self._object,projection_angle_deg,axes=projection_axes,reshape=False,order=2)
+            rotated_3d_obj = asnumpy(rotated_3d_obj)
+        else:
+            rotated_3d_obj = self.object
+
+        rotated_object = self._crop_rotate_object_manually(
+            rotated_3d_obj.sum(0), angle=None,x_lims=x_lims,y_lims=y_lims
+        )
+        rotated_shape = rotated_object.shape
+
+        extent = [
+            0,
+            self.sampling[1] * rotated_shape[1],
+            self.sampling[0] * rotated_shape[0],
+            0,
+        ]
+
+        probe_extent = [
+            0,
+            self.sampling[1] * self._region_of_interest_shape[1],
+            self.sampling[0] * self._region_of_interest_shape[0],
+            0,
+        ]
+
+        if plot_convergence:
+            if plot_probe:
+                spec = GridSpec(
+                    ncols=2,
+                    nrows=2,
+                    height_ratios=[4, 1],
+                    hspace=0.15,
+                    width_ratios=[
+                        (extent[1] / extent[2]) / (probe_extent[1] / probe_extent[2]),
+                        1,
+                    ],
+                    wspace=0.35,
+                )
+            else:
+                spec = GridSpec(ncols=1, nrows=2, height_ratios=[4, 1], hspace=0.15)
+        else:
+            if plot_probe:
+                spec = GridSpec(
+                    ncols=2,
+                    nrows=1,
+                    width_ratios=[
+                        (extent[1] / extent[2]) / (probe_extent[1] / probe_extent[2]),
+                        1,
+                    ],
+                    wspace=0.35,
+                )
+            else:
+                spec = GridSpec(ncols=1, nrows=1)
+
+        fig = plt.figure(figsize=figsize)
+
+        if plot_probe:
+            # Object
+            ax = fig.add_subplot(spec[0, 0])
+            im = ax.imshow(
+                rotated_object,
+                extent=extent,
+                cmap=cmap,
+                **kwargs,
+            )
+
+            ax.set_ylabel("x [A]")
+            ax.set_xlabel("y [A]")
+            ax.set_title(f"Reconstructed object projection")
+
+            if cbar:
+                divider = make_axes_locatable(ax)
+                ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
+                fig.add_axes(ax_cb)
+                fig.colorbar(im, cax=ax_cb)
+
+            # Probe
+            kwargs.pop("vmin", None)
+            kwargs.pop("vmax", None)
+            ax = fig.add_subplot(spec[0, 1])
+            im = ax.imshow(
+                np.abs(self.probe) ** 2,
+                extent=probe_extent,
+                cmap="Greys_r",
+                **kwargs,
+            )
+            ax.set_ylabel("x [A]")
+            ax.set_xlabel("y [A]")
+            ax.set_title("Reconstructed probe intensity")
+
+            if cbar:
+                divider = make_axes_locatable(ax)
+                ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
+                fig.add_axes(ax_cb)
+                fig.colorbar(im, cax=ax_cb)
+
+        else:
+            ax = fig.add_subplot(spec[0])
+            im = ax.imshow(
+                rotated_object,
+                extent=extent,
+                cmap=cmap,
+                **kwargs,
+            )
+            ax.set_ylabel("x [A]")
+            ax.set_xlabel("y [A]")
+            ax.set_title(f"Reconstructed object projection")
+
+            if cbar:
+                divider = make_axes_locatable(ax)
+                ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
+                fig.add_axes(ax_cb)
+                fig.colorbar(im, cax=ax_cb)
+
+        if plot_convergence and hasattr(self, "error_iterations"):
+            kwargs.pop("vmin", None)
+            kwargs.pop("vmax", None)
+            errors = np.array(self.error_iterations)
+            if plot_probe:
+                ax = fig.add_subplot(spec[1, :])
+            else:
+                ax = fig.add_subplot(spec[1])
+            if relative_error:
+                ax.semilogy(np.arange(errors.shape[0]), errors / errors[0], **kwargs)
+                ax.set_ylabel("Log Rel. RMS error")
+            else:
+                ax.semilogy(np.arange(errors.shape[0]), errors, **kwargs)
+                ax.set_ylabel("Log RMS error")
+            ax.set_xlabel("Iteration Number")
+            ax.yaxis.tick_right()
+
+        fig.suptitle(f"RMS error: {self.error:.3e}")
+        spec.tight_layout(fig)
+
+    def _visualize_all_iterations(
+        self,
+        cbar: bool,
+        plot_convergence: bool,
+        plot_probe: bool,
+        iterations_grid: Tuple[int, int],
+        relative_error: bool,
+        projection_angle_deg: float,
+        projection_axes: Tuple[int,int],
+        x_lims: Tuple[int,int],
+        y_lims: Tuple[int,int],
+        **kwargs,
+    ):
+        """
+        Displays all reconstructed object and probe iterations.
+
+        Parameters
+        --------
+        plot_convergence: bool, optional
+            If true, the RMS error plot is displayed
+        iterations_grid: Tuple[int,int]
+            Grid dimensions to plot reconstruction iterations
+        cbar: bool, optional
+            If true, displays a colorbar
+        plot_probe: bool
+            If true, the reconstructed probe intensity is also displayed
+        object_mode: str
+            Specifies the attribute of the object to plot.
+            One of 'phase', 'amplitude', 'intensity'
+        relative_error: bool
+            Sets the error to be relative to the first iteration.
+            TODO - update to be relative to empty object wave error (RMS of all measurements).
+
+        """
+        if iterations_grid == "auto":
+            iterations_grid = (2, 4)
+        else:
+            if plot_probe and iterations_grid[0] != 2:
+                raise ValueError()
+
+        figsize = kwargs.get("figsize", (12, 7))
+        cmap = kwargs.get("cmap", "magma")
+        kwargs.pop("figsize", None)
+        kwargs.pop("cmap", None)
+
+        errors = np.array(self.error_iterations)
+        asnumpy = self._asnumpy
+        
+        if projection_angle_deg is not None:
+            objects = [
+                    self._crop_rotate_object_manually(
+                        rotate_np(
+                            obj,
+                            projection_angle_deg,
+                            axes=projection_axes,
+                            reshape=False,
+                            order=2).sum(0),
+                        angle=None, 
+                        x_lims = x_lims, 
+                        y_lims = y_lims
+                        )
+                    for obj in self.object_iterations
+                    ]
+        else:
+            objects = [
+                self._crop_rotate_object_manually(
+                    obj.sum(0),
+                    angle=None, 
+                    x_lims = x_lims, 
+                    y_lims = y_lims
+                    )
+                for obj in self.object_iterations
+            ]
+
+        if plot_probe:
+            total_grids = (np.prod(iterations_grid) / 2).astype("int")
+            probes = self.probe_iterations
+        else:
+            total_grids = np.prod(iterations_grid)
+        max_iter = len(objects) - 1
+        grid_range = range(0, max_iter + 1, max_iter // (total_grids - 1))
+
+        extent = [
+            0,
+            self.sampling[1] * objects[0].shape[1],
+            self.sampling[0] * objects[0].shape[0],
+            0,
+        ]
+
+        probe_extent = [
+            0,
+            self.sampling[1] * self._region_of_interest_shape[1],
+            self.sampling[0] * self._region_of_interest_shape[0],
+            0,
+        ]
+
+        if plot_convergence:
+            if plot_probe:
+                spec = GridSpec(ncols=1, nrows=3, height_ratios=[4, 4, 1], hspace=0)
+            else:
+                spec = GridSpec(ncols=1, nrows=2, height_ratios=[4, 1], hspace=0)
+        else:
+            if plot_probe:
+                spec = GridSpec(ncols=1, nrows=2)
+            else:
+                spec = GridSpec(ncols=1, nrows=1)
+
+        fig = plt.figure(figsize=figsize)
+
+        grid = ImageGrid(
+            fig,
+            spec[0],
+            nrows_ncols=(1, iterations_grid[1]) if plot_probe else iterations_grid,
+            axes_pad=(0.75, 0.5) if cbar else 0.5,
+            cbar_mode="each" if cbar else None,
+            cbar_pad="2.5%" if cbar else None,
+        )
+
+        for n, ax in enumerate(grid):
+            im = ax.imshow(
+                objects[grid_range[n]],
+                extent=extent,
+                cmap=cmap,
+                **kwargs,
+            )
+            ax.set_title(f"Iter: {grid_range[n]} Object")
+
+            ax.set_ylabel("x [A]")
+            ax.set_xlabel("y [A]")
+            if cbar:
+                grid.cbar_axes[n].colorbar(im)
+
+        if plot_probe:
+            kwargs.pop("vmin", None)
+            kwargs.pop("vmax", None)
+            grid = ImageGrid(
+                fig,
+                spec[1],
+                nrows_ncols=(1, iterations_grid[1]),
+                axes_pad=(0.75, 0.5) if cbar else 0.5,
+                cbar_mode="each" if cbar else None,
+                cbar_pad="2.5%" if cbar else None,
+            )
+
+            for n, ax in enumerate(grid):
+                im = ax.imshow(
+                    np.abs(probes[grid_range[n]]) ** 2,
+                    extent=probe_extent,
+                    cmap="Greys_r",
+                    **kwargs,
+                )
+                ax.set_title(f"Iter: {grid_range[n]} Probe")
+
+                ax.set_ylabel("x [A]")
+                ax.set_xlabel("y [A]")
+
+                if cbar:
+                    grid.cbar_axes[n].colorbar(im)
+
+        if plot_convergence:
+            kwargs.pop("vmin", None)
+            kwargs.pop("vmax", None)
+            if plot_probe:
+                ax2 = fig.add_subplot(spec[2])
+            else:
+                ax2 = fig.add_subplot(spec[1])
+            if relative_error:
+                ax2.semilogy(np.arange(errors.shape[0]), errors / errors[0], **kwargs)
+                ax2.set_ylabel("Log Rel. RMS error")
+            else:
+                ax2.semilogy(np.arange(errors.shape[0]), errors, **kwargs)
+                ax2.set_ylabel("Log RMS error")
+            ax2.set_xlabel("Iteration Number")
+            ax2.yaxis.tick_right()
+
+        spec.tight_layout(fig)
+
+    def visualize(
+        self,
+        iterations_grid: Tuple[int, int] = None,
+        plot_convergence: bool = True,
+        plot_probe: bool = True,
+        cbar: bool = True,
+        relative_error: bool = True,
+        projection_angle_deg: float = None,
+        projection_axes: Tuple[int,int] = (0,2),
+        x_lims = (None,None),
+        y_lims = (None,None),
+        **kwargs,
+    ):
+        """
+        Displays reconstructed object and probe.
+
+        Parameters
+        --------
+        plot_convergence: bool, optional
+            If true, the RMS error plot is displayed
+        iterations_grid: Tuple[int,int]
+            Grid dimensions to plot reconstruction iterations
+        cbar: bool, optional
+            If true, displays a colorbar
+        plot_probe: bool
+            If true, the reconstructed probe intensity is also displayed
+        relative_error: bool
+            Sets the error to be relative to the first iteration.
+            TODO - update to be relative to empty object wave error (RMS of all measurements).
+
+        Returns
+        --------
+        self: PtychographicReconstruction
+            Self to accommodate chaining
+        """
+
+        if iterations_grid is None:
+            self._visualize_last_iteration(
+                plot_convergence=plot_convergence,
+                plot_probe=plot_probe,
+                cbar=cbar,
+                relative_error=relative_error,
+                projection_angle_deg=projection_angle_deg,
+                projection_axes=projection_axes,
+                x_lims = x_lims,
+                y_lims = y_lims,
+                **kwargs,
+            )
+        else:
+            self._visualize_all_iterations(
+                plot_convergence=plot_convergence,
+                iterations_grid=iterations_grid,
+                plot_probe=plot_probe,
+                cbar=cbar,
+                relative_error=relative_error,
+                projection_angle_deg=projection_angle_deg,
+                projection_axes=projection_axes,
+                x_lims = x_lims,
+                y_lims = y_lims,
+                **kwargs,
+            )
+
+        return self
+
