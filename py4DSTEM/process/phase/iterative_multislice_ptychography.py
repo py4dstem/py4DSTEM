@@ -144,11 +144,11 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
 
         slice_thicknesses = np.array(slice_thicknesses)
         if slice_thicknesses.shape == ():
-            slice_thicknesses = np.tile(slice_thicknesses, num_slices)
-        elif slice_thicknesses.shape[0] != num_slices:
+            slice_thicknesses = np.tile(slice_thicknesses, num_slices-1)
+        elif slice_thicknesses.shape[0] != (num_slices-1):
             raise ValueError(
                 (
-                    f"slice_thicknesses must have length {num_slices}, "
+                    f"slice_thicknesses must have length {num_slices-1}, "
                     f"not {slice_thicknesses.shape[0]}."
                 )
             )
@@ -565,8 +565,8 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         ]
 
         propagated_probes = xp.empty_like(object_patches)
-        propagated_probes[0] = shifted_probes
         overlap = xp.empty_like(object_patches)
+        propagated_probes[0] = shifted_probes
 
         for s in range(self._num_slices):
             overlap[s] = object_patches[s] * propagated_probes[s]
@@ -792,12 +792,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             Updated probe estimate
         """
         xp = self._xp
-
-        # extra back-propagation step
-        exit_waves[-1] = self._propagate_array(
-            exit_waves[-1], xp.conj(self._propagator_arrays[-1])
-        )
-
+        
         for s in reversed(range(self._num_slices)):
             exit_wave = exit_waves[s]
             probe = propagated_probes[s]
@@ -818,7 +813,6 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
                     self._sum_overlapping_patches_bincounts(xp.conj(probe) * exit_wave)
                     * probe_normalization
                 )
-                / self._num_slices
             )
 
             if s > 0:
@@ -899,11 +893,6 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         """
         xp = self._xp
 
-        # extra back-propagation step
-        exit_waves[-1] = self._propagate_array(
-            exit_waves[-1], xp.conj(self._propagator_arrays[-1])
-        )
-
         for s in reversed(range(self._num_slices)):
             exit_wave = exit_waves[s]
             probe = propagated_probes[s]
@@ -921,7 +910,6 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             current_object[s] = (
                 self._sum_overlapping_patches_bincounts(xp.conj(probe) * exit_wave)
                 * probe_normalization
-                / self._num_slices
             )
 
             if s > 0:
