@@ -84,12 +84,9 @@ def _object_butterworth_constraint(self, current_object, q_lowpass, q_highpass):
         Constrained object estimate
     """
     xp = self._xp
-    qx = xp.fft.fftfreq(
-        current_object.shape[0], self.sampling[0] if self._energy is not None else 1
-    )
-    qy = xp.fft.fftfreq(
-        current_object.shape[1], self.sampling[1] if self._energy is not None else 1
-    )
+    qx = xp.fft.fftfreq(current_object.shape[0], self.sampling[0])
+    qy = xp.fft.fftfreq(current_object.shape[1], self.sampling[1])
+
     qya, qxa = xp.meshgrid(qy, qx)
     qra = xp.sqrt(qxa**2 + qya**2)
 
