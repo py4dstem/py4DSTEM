@@ -175,8 +175,6 @@ class DPCReconstruction(PhaseReconstruction):
             force_com_transpose=force_com_transpose,
             **kwargs,
         )
-
-        self._region_of_interest_shape = np.array(self._intensities.shape[-2:])
         self._preprocessed = True
 
         return self
@@ -699,3 +697,9 @@ class DPCReconstruction(PhaseReconstruction):
             )
 
         return self
+
+    @property
+    def sampling(self):
+        """Sampling [Å]"""
+
+        return self._scan_sampling
