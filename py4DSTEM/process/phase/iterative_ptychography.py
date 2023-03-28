@@ -869,7 +869,6 @@ class PtychographicReconstruction(PhaseReconstruction):
     ):
         """
         Ptychographic constraints operator.
-        Calls _threshold_object_constraint() and _probe_center_of_mass_constraint()
 
         Parameters
         --------
