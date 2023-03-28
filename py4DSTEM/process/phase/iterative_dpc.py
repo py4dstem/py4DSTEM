@@ -67,9 +67,15 @@ class DPCReconstruction(PhaseReconstruction):
         if device == "cpu":
             self._xp = np
             self._asnumpy = np.asarray
+            from scipy.ndimage import gaussian_filter
+
+            self._gaussian_filter = gaussian_filter
         elif device == "gpu":
             self._xp = cp
             self._asnumpy = cp.asnumpy
+            from cupyx.scipy.ndimage import gaussian_filter
+
+            self._gaussian_filter = gaussian_filter
         else:
             raise ValueError(f"device must be either 'cpu' or 'gpu', not {device}")
 
@@ -170,6 +176,7 @@ class DPCReconstruction(PhaseReconstruction):
             **kwargs,
         )
 
+        self._region_of_interest_shape = np.array(self._intensities.shape[-2:])
         self._preprocessed = True
 
         return self
@@ -306,6 +313,55 @@ class DPCReconstruction(PhaseReconstruction):
         padded_phase_object += step_size * phase_update
         return padded_phase_object
 
+    def _constraints(
+        self,
+        current_object,
+        gaussian_filter,
+        gaussian_filter_sigma,
+        butterworth_filter,
+        q_lowpass,
+        q_highpass,
+    ):
+        """
+        DPC constraints operator.
+
+        Parameters
+        --------
+        current_object: np.ndarray
+            Current object estimate
+        gaussian_filter: bool
+            If True, applies real-space gaussian filter
+        gaussian_filter_sigma: float
+            Standard deviation of gaussian kernel
+        butterworth_filter: bool
+            If True, applies high-pass butteworth filter
+        q_lowpass: float
+            Cut-off frequency in A^-1 for low-pass butterworth filter
+        q_highpass: float
+            Cut-off frequency in A^-1 for high-pass butterworth filter
+
+
+        Returns
+        --------
+        constrained_object: np.ndarray
+            Constrained object estimate
+        """
+        xp = self._xp
+        if gaussian_filter:
+            current_object = self._object_gaussian_constraint(
+                current_object, gaussian_filter_sigma, False
+            )
+
+        if butterworth_filter:
+            current_object = self._object_butterworth_constraint(
+                current_object,
+                q_lowpass,
+                q_highpass,
+            )
+            current_object = xp.real(current_object)
+
+        return current_object
+
     def reconstruct(
         self,
         reset: bool = None,
@@ -314,6 +370,11 @@ class DPCReconstruction(PhaseReconstruction):
         step_size: float = 1.0,
         stopping_criterion: float = 1e-6,
         progress_bar: bool = True,
+        gaussian_filter_sigma: float = None,
+        gaussian_filter_iter: int = np.inf,
+        butterworth_filter_iter: int = np.inf,
+        q_lowpass: float = None,
+        q_highpass: float = None,
         store_iterations: bool = False,
     ):
         """
@@ -333,6 +394,16 @@ class DPCReconstruction(PhaseReconstruction):
             step_size below which reconstruction exits
         progress_bar: bool, optional
             If True, reconstruction progress bar will be printed
+        gaussian_filter_sigma: float, optional
+            Standard deviation of gaussian kernel
+        gaussian_filter_iter: int, optional
+            Number of iterations to run using object smoothness constraint
+        butterworth_filter_iter: int, optional
+            Number of iterations to run using high-pass butteworth filter
+        q_lowpass: float
+            Cut-off frequency in A^-1 for low-pass butterworth filter
+        q_highpass: float
+            Cut-off frequency in A^-1 for high-pass butterworth filter
         store_iterations: bool, optional
             If True, all reconstruction iterations will be stored
 
@@ -417,6 +488,18 @@ class DPCReconstruction(PhaseReconstruction):
             # update
             self._padded_phase_object = self._update(
                 self._padded_phase_object, phase_update, self._step_size
+            )
+
+            # constraints
+            (self._padded_phase_object) = self._constraints(
+                self._padded_phase_object,
+                gaussian_filter=a0 < gaussian_filter_iter
+                and gaussian_filter_sigma is not None,
+                gaussian_filter_sigma=gaussian_filter_sigma,
+                butterworth_filter=a0 < butterworth_filter_iter
+                and (q_lowpass is not None or q_highpass is not None),
+                q_lowpass=q_lowpass,
+                q_highpass=q_highpass,
             )
 
             if store_iterations:
