@@ -549,11 +549,11 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         Returns
         --------
         propagated_probes: np.ndarray
-            Prop[object^n*probe^n]
+            Final shifted probes following N-1 propagations
         object_patches: np.ndarray
             Patched object view
-        overlap: np.ndarray
-            object_patches^n * propagated_probes^n
+        transmitted_probes: np.ndarray
+            Transmitted probes at each layer
         """
 
         xp = self._xp
@@ -578,7 +578,9 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
 
         return propagated_probes, object_patches, transmitted_probes
 
-    def _gradient_descent_fourier_projection(self, amplitudes, propagated_probes):
+    def _gradient_descent_fourier_projection(
+        self, amplitudes, final_transmitted_probes
+    ):
         """
         Ptychographic fourier projection method for GD method.
 
@@ -586,20 +588,19 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         --------
         amplitudes: np.ndarray
             Normalized measured amplitudes
-        overlap: np.ndarray
-            object_patches^n * propagated_probes^n
+        final_transmitted_probes: np.ndarray
+            Transmitted probes at last layer
 
         Returns
         --------
         exit_waves:np.ndarray
-            Updated exit wave difference
-            Note: this function only increments the last slice
+            Exit wave difference
         error: float
             Reconstruction error
         """
 
         xp = self._xp
-        fourier_exit_waves = xp.fft.fft2(propagated_probes)
+        fourier_exit_waves = xp.fft.fft2(final_transmitted_probes)
 
         error = (
             xp.mean(xp.abs(amplitudes - xp.abs(fourier_exit_waves)) ** 2)
@@ -610,14 +611,14 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             amplitudes * xp.exp(1j * xp.angle(fourier_exit_waves))
         )
 
-        exit_waves = modified_exit_wave - propagated_probes
+        exit_waves = modified_exit_wave - final_transmitted_probes
 
         return exit_waves, error
 
     def _projection_sets_fourier_projection(
         self,
         amplitudes,
-        propagated_probes,
+        final_transmitted_probes,
         exit_waves,
         projection_a,
         projection_b,
@@ -642,8 +643,8 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         --------
         amplitudes: np.ndarray
             Normalized measured amplitudes
-        overlap: np.ndarray
-            object_patches^n * propagated_probes^n
+        final_transmitted_probes: np.ndarray
+            Transmitted probes at last layer
         exit_waves: np.ndarray
             previously estimated exit waves
         projection_a: float
@@ -654,7 +655,6 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         --------
         exit_waves:np.ndarray
             Updated exit wave difference
-            Note: this function only affects the last slice
         error: float
             Reconstruction error
         """
@@ -664,16 +664,16 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         projection_y = 1 - projection_c
 
         if exit_waves is None:
-            exit_waves = propagated_probes.copy()
+            exit_waves = final_transmitted_probes.copy()
 
-        fourier_exit_waves = xp.fft.fft2(propagated_probes)
+        fourier_exit_waves = xp.fft.fft2(final_transmitted_probes)
         error = (
             xp.mean(xp.abs(amplitudes - xp.abs(fourier_exit_waves)) ** 2)
             / self._mean_diffraction_intensity
         )
 
         factor_to_be_projected = (
-            projection_c * propagated_probes + projection_y * exit_waves
+            projection_c * final_transmitted_probes + projection_y * exit_waves
         )
         fourier_projected_factor = xp.fft.fft2(factor_to_be_projected)
 
@@ -684,7 +684,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
 
         exit_waves = (
             projection_x * exit_waves
-            + projection_a * propagated_probes
+            + projection_a * final_transmitted_probes
             + projection_b * projected_factor
         )
 
@@ -727,8 +727,8 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             Prop[object^n*probe^n]
         object_patches: np.ndarray
             Patched object view
-        overlap: np.ndarray
-            object_patches^n * propagated_probes^n
+        transmitted_probes: np.ndarray
+            Transmitted probes at each layer
         exit_waves:np.ndarray
             Updated exit_waves
         error: float
@@ -781,8 +781,8 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             Current probe estimate
         object_patches: np.ndarray
             Patched object view
-        propagated_probes:np.ndarray
-            Prop[object^n*probe^n]
+        transmitted_probes: np.ndarray
+            Transmitted probes at each layer
         exit_waves:np.ndarray
             Updated exit_waves
         step_size: float, optional
@@ -873,8 +873,8 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             Current probe estimate
         object_patches: np.ndarray
             Patched object view
-        propagated_probes:np.ndarray
-            Prop[object^n*probe^n]
+        transmitted_probes: np.ndarray
+            Transmitted probes at each layer
         exit_waves:np.ndarray
             Updated exit_waves
         normalization_min: float, optional
@@ -969,8 +969,8 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             Current probe estimate
         object_patches: np.ndarray
             Patched object view
-        propagated_probes:np.ndarray
-            fractionally-shifted probes
+        transmitted_probes: np.ndarray
+            Transmitted probes at each layer
         exit_waves:np.ndarray
             Updated exit_waves
         step_size: float, optional
@@ -1026,13 +1026,13 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
 
         Parameters
         --------
-        relevant_object: np.ndarray
+        current_object: np.ndarray
             Current object estimate
-        relevant_probes:np.ndarray
+        current_probe:np.ndarray
             fractionally-shifted probes
-        relevant_overlap: np.ndarray
-            object * probe overlap
-        relevant_amplitudes: np.ndarray
+        transmitted_probes: np.ndarray
+            Transmitted probes at each layer
+        amplitudes: np.ndarray
             Measured amplitudes
         current_positions: np.ndarray
             Current positions estimate
