@@ -401,6 +401,8 @@ class ParallaxReconstruction(PhaseReconstruction):
         convergence: np.ndarray
             array of convergence values from reconstructions
         """
+        asnumpy = self._asnumpy
+
         if angle_guess is None:
             angle_guess = 0
         if defocus_guess is None:
@@ -471,7 +473,7 @@ class ParallaxReconstruction(PhaseReconstruction):
             if return_values:
                 recon_BF.append(self.recon_BF)
             if return_values or plot_convergence:
-                convergence.append(self._recon_error[0])
+                convergence.append(asnumpy(self._recon_error[0]))
 
         if plot_convergence:
             from mpl_toolkits.axes_grid1.axes_divider import make_axes_locatable
