@@ -980,11 +980,13 @@ class ParallaxReconstruction(PhaseReconstruction):
         xp = self._xp
         asnumpy = self._asnumpy
 
-        if not hasattr(self,"aberration_C1"):
-            raise ValueError((
-                "CTF correction is meant to be ran after alignment and aberration fitting. "
-                "Please run the `reconstruct()` and `aberration_fit()` functions first."
-                ))
+        if not hasattr(self, "aberration_C1"):
+            raise ValueError(
+                (
+                    "CTF correction is meant to be ran after alignment and aberration fitting. "
+                    "Please run the `reconstruct()` and `aberration_fit()` functions first."
+                )
+            )
 
         # Fourier coordinates
         kx = xp.fft.fftfreq(self._recon_BF.shape[0], self._scan_sampling[0])
@@ -1060,14 +1062,13 @@ class ParallaxReconstruction(PhaseReconstruction):
             ax.set_xlabel("y [A]")
             ax.set_title("Parallax-Corrected Phase Image")
 
-
     def depth_section(
         self,
-        depth_angstroms = np.arange(-250,260,100),
-        plot_depth_sections = True,
+        depth_angstroms=np.arange(-250, 260, 100),
+        plot_depth_sections=True,
         k_info_limit: float = None,
         k_info_power: float = 1.0,
-        progress_bar = True,
+        progress_bar=True,
         **kwargs,
     ):
         """
@@ -1076,7 +1077,7 @@ class ParallaxReconstruction(PhaseReconstruction):
         Parameters
         ----------
         depth_angstroms: np.array
-            Specify the depths 
+            Specify the depths
         k_info_limit: float, optional
             maximum allowed frequency in butterworth filter
         k_info_power: float, optional
@@ -1086,7 +1087,7 @@ class ParallaxReconstruction(PhaseReconstruction):
         Returns
         -------
         stack_depth: np.array
-            stack of phase images at different depths with shape [depth Nx Ny] 
+            stack of phase images at different depths with shape [depth Nx Ny]
 
         """
 
@@ -1094,11 +1095,13 @@ class ParallaxReconstruction(PhaseReconstruction):
         asnumpy = self._asnumpy
         depth_angstroms = xp.atleast_1d(depth_angstroms)
 
-        if not hasattr(self,"aberration_C1"):
-            raise ValueError((
-                "Depth sectioning is meant to be ran after alignment and aberration fitting. "
-                "Please run the `reconstruct()` and `aberration_fit()` functions first."
-                ))
+        if not hasattr(self, "aberration_C1"):
+            raise ValueError(
+                (
+                    "Depth sectioning is meant to be ran after alignment and aberration fitting. "
+                    "Please run the `reconstruct()` and `aberration_fit()` functions first."
+                )
+            )
 
         # Fourier coordinates
         kx = xp.fft.fftfreq(self._recon_BF.shape[0], self._scan_sampling[0])
@@ -1107,17 +1110,15 @@ class ParallaxReconstruction(PhaseReconstruction):
 
         # information limit
         if k_info_limit is not None:
-            k_filt = 1 / (1 + (kra2**k_info_power) / (
-                (k_info_limit) ** (2 * k_info_power)
-            ))
+            k_filt = 1 / (
+                1 + (kra2**k_info_power) / ((k_info_limit) ** (2 * k_info_power))
+            )
 
         # init
-        stack_depth = xp.zeros((
-            depth_angstroms.shape[0],
-            self._recon_BF.shape[0],
-            self._recon_BF.shape[1]
-        ))
-        
+        stack_depth = xp.zeros(
+            (depth_angstroms.shape[0], self._recon_BF.shape[0], self._recon_BF.shape[1])
+        )
+
         # plotting
         if plot_depth_sections:
             num_plots = depth_angstroms.shape[0]
@@ -1140,37 +1141,39 @@ class ParallaxReconstruction(PhaseReconstruction):
 
         # main loop
         for a0 in tqdmnd(
-                depth_angstroms.shape[0],
-                desc="Depth sectioning ",
-                unit="plane",
-                disable=not progress_bar,
-            ):
+            depth_angstroms.shape[0],
+            desc="Depth sectioning ",
+            unit="plane",
+            disable=not progress_bar,
+        ):
             dz = depth_angstroms[a0]
 
             # Parallax
-            im_depth = xp.zeros_like(self._recon_BF, dtype='complex')
+            im_depth = xp.zeros_like(self._recon_BF, dtype="complex")
             for a1 in range(self._stack_BF.shape[0]):
-                dx = self._probe_angles[a1,0] * dz
-                dy = self._probe_angles[a1,1] * dz
+                dx = self._probe_angles[a1, 0] * dz
+                dy = self._probe_angles[a1, 1] * dz
                 im_depth += xp.fft.fft2(self._stack_BF[a1]) * xp.exp(
-                    self._qx_shift*dx + self._qy_shift*dy
-                    )
-            
+                    self._qx_shift * dx + self._qy_shift * dy
+                )
+
             # CTF correction
             # TODO - check sign of Fresnel prop
-            sin_chi = xp.sin((xp.pi * self._wavelength * (self.aberration_C1+dz)) * kra2)
+            sin_chi = xp.sin(
+                (xp.pi * self._wavelength * (self.aberration_C1 + dz)) * kra2
+            )
             CTF_corr = xp.sign(sin_chi)
             CTF_corr[0, 0] = 0
             if k_info_limit is not None:
                 CTF_corr *= k_filt
 
             # apply correction to mean reconstructed BF image
-            stack_depth[a0] = xp.real(xp.fft.ifft2(
-                im_depth * CTF_corr
-            )) / self._stack_BF.shape[0]
-        
+            stack_depth[a0] = (
+                xp.real(xp.fft.ifft2(im_depth * CTF_corr)) / self._stack_BF.shape[0]
+            )
+
             if plot_depth_sections:
-                
+
                 row_index, col_index = np.unravel_index(a0, (nrows, ncols))
                 ax = fig.add_subplot(spec[row_index, col_index])
 
