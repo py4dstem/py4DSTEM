@@ -1111,6 +1111,10 @@ def get_beamstop_mask(
             pixel, while 1 uses the brighted pixels.
         distance_edge: (float)  How many pixels to expand the mask.
         include_edges: (bool)   If set to True, edge pixels will be included in the mask.
+        sigma: (float)          Blurring to apply in pixels before thresholding.
+        use_max_dp: (bool)      Set to True to use max diffraction pattern instead of beam.
+        scale_radial: (float)   Scale image intensities from distance from image center * this value.
+                                This can help when the center spot is extremely bright under the beam stop.
         name: (string)          Name of the output array.
         returncalc: (bool):     Set to true to return the result.
 
