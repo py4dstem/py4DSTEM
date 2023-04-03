@@ -154,6 +154,50 @@ def DiffractionSlice_from_Array(array):
 
 
 
+# RealSlice
+
+# read
+
+def RealSlice_from_h5(group:h5py.Group):
+    """
+    Takes a valid HDF5 group for an HDF5 file object which is open in
+    read mode. Determines if it's a valid Array, and if so loads and
+    returns it as a RealSlice. Otherwise, raises an exception.
+
+    Accepts:
+        group (HDF5 group)
+
+    Returns:
+        A RealSlice instance
+    """
+    realslice = Array_from_h5(group)
+    realslice = RealSlice_from_Array(realslice)
+    return realslice
+
+
+def RealSlice_from_Array(array):
+    """
+    Converts an Array to a RealSlice.
+
+    Accepts:
+        array (Array)
+
+    Returns:
+        (RealSlice)
+    """
+    from py4DSTEM.io.datastructure.py4dstem.realslice import RealSlice
+    assert(array.rank == 2), "Array must have 2 dimensions"
+    array.__class__ = RealSlice
+    array.__init__(
+        data = array.data,
+        name = array.name,
+        slicelabels = array.slicelabels
+    )
+    return array
+
+
+
+
 
 
 # VirtualDiffraction
