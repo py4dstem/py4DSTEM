@@ -214,7 +214,6 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
     def preprocess(
         self,
         fit_function: str = "plane",
-        plot_center_of_mass: str = "default",
         plot_rotation: bool = True,
         maximize_divergence: bool = False,
         rotation_angles_deg: np.ndarray = np.arange(-89.0, 90.0, 1.0),
@@ -241,9 +240,6 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         ----------
         fit_function: str, optional
             2D fitting function for CoM fitting. One of 'plane','parabola','bezier_two'
-        plot_center_of_mass: str, optional
-            If 'default', the corrected CoM arrays will be displayed
-            If 'all', the computed and fitted CoM arrays will be displayed
         plot_rotation: bool, optional
             If True, the CoM curl minimization search result will be displayed
         maximize_divergence: bool, optional
@@ -330,7 +326,7 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
             com_normalized_y_0,
             rotation_angles_deg=rotation_angles_deg,
             plot_rotation=plot_rotation,
-            plot_center_of_mass=plot_center_of_mass,
+            plot_center_of_mass=False,
             maximize_divergence=maximize_divergence,
             force_com_rotation=force_com_rotation,
             force_com_transpose=force_com_transpose,
@@ -410,7 +406,7 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
             com_normalized_y_1,
             rotation_angles_deg=rotation_angles_deg,
             plot_rotation=plot_rotation,
-            plot_center_of_mass=plot_center_of_mass,
+            plot_center_of_mass=False,
             maximize_divergence=maximize_divergence,
             force_com_rotation=np.rad2deg(self._rotation_best_rad),
             force_com_transpose=self._rotation_best_transpose,
@@ -491,7 +487,7 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                 com_normalized_y_2,
                 rotation_angles_deg=rotation_angles_deg,
                 plot_rotation=plot_rotation,
-                plot_center_of_mass=plot_center_of_mass,
+                plot_center_of_mass=False,
                 maximize_divergence=maximize_divergence,
                 force_com_rotation=np.rad2deg(self._rotation_best_rad),
                 force_com_transpose=self._rotation_best_transpose,
@@ -1330,7 +1326,7 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                 / 3
             )
 
-            magnetic_obj -= step_size * xp.conj(
+            magnetic_obj += step_size * xp.conj(
                 self._sum_overlapping_patches_bincounts(
                     probe_conj * electrostatic_conj * exit_waves_reverse
                 )
