@@ -59,6 +59,7 @@ def show_lattice_points(
         cmap="gray",
         # cmap="turbo"
         )
+
     for m in self.model:
         if "Lattice" in m.name:
             ux, uy = m.params["ux"].initial_value, m.params["uy"].initial_value

@@ -74,8 +74,6 @@ class Parameter:
         else:
             self.set_params(initial_value, lower_bound, upper_bound)
 
-
-
     def set_params(
         self, 
         initial_value, 
