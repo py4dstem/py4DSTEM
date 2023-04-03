@@ -284,11 +284,12 @@ def show(
             determining the display value range; False indicates that all pixel values
             will be used to determine the intensity range, True indicates only unmasked
             pixels will be used
-        scalebar (None or dict or False): if None, and a DiffractionSlice or RealSlice
-            with calibrations is passed, adds a scalebar.  If None and anything else is
-            passed or if False, does not add a scalebar.  If a dict is passed, it is
-            propagated to the add_scalebar function which will attempt to use it to
-            overlay a scalebar.
+        scalebar (None or dict or Bool): if None, and a DiffractionSlice or RealSlice
+            with calibrations is passed, adds a scalebar.  If scalebar is not displaying the proper
+            calibration, check .calibration pixel_size and pixel_units. If None and an array is passed, 
+            does not add a scalebar.  If a dict is passed, it is propagated to the add_scalebar function 
+            which will attempt to use it to overlay a scalebar. If True, uses calibraiton or pixelsize/pixelunits 
+            for scalebar. If False, no scalebar is added.
         **kwargs: any keywords accepted by matplotlib's ax.matshow()
 
     Returns:
@@ -368,6 +369,9 @@ def show(
 
             # Output image for plotting
             ar = ar_rgb
+
+    if scalebar == True: 
+        scalebar = {}
 
     # support for native data types
     elif not isinstance(ar,np.ndarray):

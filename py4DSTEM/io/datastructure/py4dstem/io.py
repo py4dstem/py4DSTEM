@@ -87,12 +87,20 @@ def DataCube_from_Array(array):
     from py4DSTEM.io.datastructure.py4dstem.datacube import DataCube
     assert(array.rank == 4), "Array must have 4 dimensions"
     array.__class__ = DataCube
+    try:
+        R_pixel_size = array.dims[0][1]-array.dims[0][0]
+    except IndexError:
+        R_pixel_size = 1
+    try:
+        Q_pixel_size = array.dims[2][1]-array.dims[2][0]
+    except IndexError:
+        Q_pixel_size = 1
     array.__init__(
         data = array.data,
         name = array.name,
-        R_pixel_size = array.dims[0][1]-array.dims[0][0],
+        R_pixel_size = R_pixel_size,
         R_pixel_units = array.dim_units[0],
-        Q_pixel_size = array.dims[2][1]-array.dims[2][0],
+        Q_pixel_size = Q_pixel_size,
         Q_pixel_units = array.dim_units[2],
         slicelabels = array.slicelabels
     )
@@ -136,6 +144,50 @@ def DiffractionSlice_from_Array(array):
     from py4DSTEM.io.datastructure.py4dstem.diffractionslice import DiffractionSlice
     assert(array.rank == 2), "Array must have 2 dimensions"
     array.__class__ = DiffractionSlice
+    array.__init__(
+        data = array.data,
+        name = array.name,
+        slicelabels = array.slicelabels
+    )
+    return array
+
+
+
+
+# RealSlice
+
+# read
+
+def RealSlice_from_h5(group:h5py.Group):
+    """
+    Takes a valid HDF5 group for an HDF5 file object which is open in
+    read mode. Determines if it's a valid Array, and if so loads and
+    returns it as a RealSlice. Otherwise, raises an exception.
+
+    Accepts:
+        group (HDF5 group)
+
+    Returns:
+        A RealSlice instance
+    """
+    realslice = Array_from_h5(group)
+    realslice = RealSlice_from_Array(realslice)
+    return realslice
+
+
+def RealSlice_from_Array(array):
+    """
+    Converts an Array to a RealSlice.
+
+    Accepts:
+        array (Array)
+
+    Returns:
+        (RealSlice)
+    """
+    from py4DSTEM.io.datastructure.py4dstem.realslice import RealSlice
+    assert(array.rank == 2), "Array must have 2 dimensions"
+    array.__class__ = RealSlice
     array.__init__(
         data = array.data,
         name = array.name,
@@ -309,7 +361,6 @@ def Probe_from_Array(array):
     """
     from py4DSTEM.io.datastructure.py4dstem.probe import Probe
     assert(array.rank == 2), "Array must have 2 dimensions"
-
     # get diffraction image metadata
     try:
         md = array.metadata['probe']

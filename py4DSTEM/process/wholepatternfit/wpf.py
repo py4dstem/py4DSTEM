@@ -81,15 +81,20 @@ class WholePatternFit:
         self.use_jacobian = use_jacobian
 
         if hasattr(x0, "__iter__") and hasattr(y0, "__iter__"):
-            # the initial position was specified with bounds
-            try:
+            x0 = np.array(x0)
+            y0 = np.array(y0)
+            if x0.size == 2:
+                self.global_xy0_lb = np.array([x0[0] - x0[1], y0[0] - y0[1]])
+                self.global_xy0_ub = np.array([x0[0] + x0[1], y0[0] + y0[1]])
+            elif x0.size == 3:
                 self.global_xy0_lb = np.array([x0[1], y0[1]])
                 self.global_xy0_ub = np.array([x0[2], y0[2]])
-            except:
+            else:
                 self.global_xy0_lb = np.array([0.0, 0.0])
                 self.global_xy0_ub = np.array([datacube.Q_Nx, datacube.Q_Ny])
             x0 = x0[0]
             y0 = y0[0]
+
         else:
             self.global_xy0_lb = np.array([0.0, 0.0])
             self.global_xy0_ub = np.array([datacube.Q_Nx, datacube.Q_Ny])
