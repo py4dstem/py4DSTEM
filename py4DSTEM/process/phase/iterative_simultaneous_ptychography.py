@@ -1359,11 +1359,25 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                 / 2
             )
 
+            # Need to subtract electrostatic ?
+
+            # magnetic_obj += step_size * (
+            #   self._sum_overlapping_patches_bincounts(
+            #         (probe_conj * electrostatic_conj * exit_waves_forward) - (probe_conj * exit_waves_neutral)
+            #   )
+            #     * probe_electrostatic_normalization
+            # )
+
             magnetic_obj += step_size * (
                 self._sum_overlapping_patches_bincounts(
-                    probe_conj * electrostatic_conj * exit_waves_forward
+                    (probe_conj * electrostatic_conj * exit_waves_forward)
                 )
                 * probe_electrostatic_normalization
+            )
+
+            magnetic_obj -= step_size * (
+                self._sum_overlapping_patches_bincounts(probe_conj * exit_waves_neutral)
+                * probe_normalization
             )
 
         if not fix_probe:
@@ -1700,28 +1714,7 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
             )
 
         else:
-            exit_waves_neutral, exit_waves_forward = exit_waves
-
-            electrostatic_obj = (
-                self._sum_overlapping_patches_bincounts(probe_conj * exit_waves_neutral)
-                * probe_normalization
-                / 2
-            )
-
-            electrostatic_obj += (
-                self._sum_overlapping_patches_bincounts(
-                    probe_conj * magnetic_conj * exit_waves_forward
-                )
-                * probe_magnetic_normalization
-                / 2
-            )
-
-            magnetic_obj = (
-                self._sum_overlapping_patches_bincounts(
-                    probe_conj * electrostatic_conj * exit_waves_forward
-                )
-                * probe_electrostatic_normalization
-            )
+            raise NotImplementedError()
 
         if not fix_probe:
             electrostatic_magnetic_abs = xp.abs(
@@ -2467,6 +2460,11 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                     "'SUPERFLIP' (or 'charge-flipping'), "
                     f"or 'GD' (or 'gradient-descent'), not  {reconstruction_method}."
                 )
+            )
+
+        if use_projection_scheme and self._sim_recon_mode == 2:
+            raise NotImplementedError(
+                "simultaneous_measurements_mode == '0+' and projection set algorithms are currently incompatible."
             )
 
         if self._verbose:
