@@ -1,3 +1,5 @@
+_emd_hook = True
+
 from py4DSTEM.classes.calibration import Calibration
 from py4DSTEM.classes.data import Data
 from py4DSTEM.classes.datacube import DataCube
