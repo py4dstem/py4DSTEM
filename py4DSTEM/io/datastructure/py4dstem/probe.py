@@ -14,7 +14,7 @@ class Probe(DiffractionSlice):
     """
 
     from py4DSTEM.io.datastructure.py4dstem.probe_fns import (
-        get_kernel
+        get_kernel,get_probe_size
     )
 
     def __init__(
