@@ -67,9 +67,15 @@ class DPCReconstruction(PhaseReconstruction):
         if device == "cpu":
             self._xp = np
             self._asnumpy = np.asarray
+            from scipy.ndimage import gaussian_filter
+
+            self._gaussian_filter = gaussian_filter
         elif device == "gpu":
             self._xp = cp
             self._asnumpy = cp.asnumpy
+            from cupyx.scipy.ndimage import gaussian_filter
+
+            self._gaussian_filter = gaussian_filter
         else:
             raise ValueError(f"device must be either 'cpu' or 'gpu', not {device}")
 
@@ -86,6 +92,7 @@ class DPCReconstruction(PhaseReconstruction):
         fit_function: str = "plane",
         force_com_rotation: float = None,
         force_com_transpose: bool = None,
+        force_com_shifts: float = None,
         plot_center_of_mass: str = "default",
         plot_rotation: bool = True,
         **kwargs,
@@ -110,6 +117,8 @@ class DPCReconstruction(PhaseReconstruction):
             Force relative rotation angle between real and reciprocal space
         force_com_transpose: bool (optional)
             Force whether diffraction intensities need to be transposed.
+        force_com_shifts: tuple of ndarrays (CoMx, CoMy)
+            Force CoM fitted shifts
         plot_center_of_mass: str, optional
             If 'default', the corrected CoM arrays will be displayed
             If 'all', the computed and fitted CoM arrays will be displayed
@@ -127,17 +136,37 @@ class DPCReconstruction(PhaseReconstruction):
             Self to accommodate chaining
         """
 
-        self._extract_intensities_and_calibrations_from_datacube(
-            self._datacube, require_calibrations=False, 
+        self._intensities = self._extract_intensities_and_calibrations_from_datacube(
+            self._datacube,
+            require_calibrations=False,
         )
 
-        self._calculate_intensities_center_of_mass(
+        (
+            self._com_measured_x,
+            self._com_measured_y,
+            self._com_fitted_x,
+            self._com_fitted_y,
+            self._com_normalized_x,
+            self._com_normalized_y,
+        ) = self._calculate_intensities_center_of_mass(
             self._intensities,
             dp_mask=self._dp_mask,
             fit_function=fit_function,
+            com_shifts=force_com_shifts,
         )
 
-        self._solve_for_center_of_mass_relative_rotation(
+        (
+            self._rotation_best_rad,
+            self._rotation_best_transpose,
+            self._com_x,
+            self._com_y,
+            self.com_x,
+            self.com_y,
+        ) = self._solve_for_center_of_mass_relative_rotation(
+            self._com_measured_x,
+            self._com_measured_y,
+            self._com_normalized_x,
+            self._com_normalized_y,
             rotation_angles_deg=rotation_angles_deg,
             plot_rotation=plot_rotation,
             plot_center_of_mass=plot_center_of_mass,
@@ -146,7 +175,6 @@ class DPCReconstruction(PhaseReconstruction):
             force_com_transpose=force_com_transpose,
             **kwargs,
         )
-
         self._preprocessed = True
 
         return self
@@ -283,6 +311,55 @@ class DPCReconstruction(PhaseReconstruction):
         padded_phase_object += step_size * phase_update
         return padded_phase_object
 
+    def _constraints(
+        self,
+        current_object,
+        gaussian_filter,
+        gaussian_filter_sigma,
+        butterworth_filter,
+        q_lowpass,
+        q_highpass,
+    ):
+        """
+        DPC constraints operator.
+
+        Parameters
+        --------
+        current_object: np.ndarray
+            Current object estimate
+        gaussian_filter: bool
+            If True, applies real-space gaussian filter
+        gaussian_filter_sigma: float
+            Standard deviation of gaussian kernel
+        butterworth_filter: bool
+            If True, applies high-pass butteworth filter
+        q_lowpass: float
+            Cut-off frequency in A^-1 for low-pass butterworth filter
+        q_highpass: float
+            Cut-off frequency in A^-1 for high-pass butterworth filter
+
+
+        Returns
+        --------
+        constrained_object: np.ndarray
+            Constrained object estimate
+        """
+        xp = self._xp
+        if gaussian_filter:
+            current_object = self._object_gaussian_constraint(
+                current_object, gaussian_filter_sigma, False
+            )
+
+        if butterworth_filter:
+            current_object = self._object_butterworth_constraint(
+                current_object,
+                q_lowpass,
+                q_highpass,
+            )
+            current_object = xp.real(current_object)
+
+        return current_object
+
     def reconstruct(
         self,
         reset: bool = None,
@@ -291,6 +368,11 @@ class DPCReconstruction(PhaseReconstruction):
         step_size: float = 1.0,
         stopping_criterion: float = 1e-6,
         progress_bar: bool = True,
+        gaussian_filter_sigma: float = None,
+        gaussian_filter_iter: int = np.inf,
+        butterworth_filter_iter: int = np.inf,
+        q_lowpass: float = None,
+        q_highpass: float = None,
         store_iterations: bool = False,
     ):
         """
@@ -310,6 +392,16 @@ class DPCReconstruction(PhaseReconstruction):
             step_size below which reconstruction exits
         progress_bar: bool, optional
             If True, reconstruction progress bar will be printed
+        gaussian_filter_sigma: float, optional
+            Standard deviation of gaussian kernel
+        gaussian_filter_iter: int, optional
+            Number of iterations to run using object smoothness constraint
+        butterworth_filter_iter: int, optional
+            Number of iterations to run using high-pass butteworth filter
+        q_lowpass: float
+            Cut-off frequency in A^-1 for low-pass butterworth filter
+        q_highpass: float
+            Cut-off frequency in A^-1 for high-pass butterworth filter
         store_iterations: bool, optional
             If True, all reconstruction iterations will be stored
 
@@ -337,10 +429,10 @@ class DPCReconstruction(PhaseReconstruction):
 
         # Initialization
         padded_object_shape = np.round(
-            self._intensities_shape[:2] * padding_factor
+            np.array(self._grid_scan_shape) * padding_factor
         ).astype("int")
         mask = xp.zeros(padded_object_shape, dtype="bool")
-        mask[: self._intensities_shape[0], : self._intensities_shape[1]] = True
+        mask[: self._grid_scan_shape[0], : self._grid_scan_shape[1]] = True
         mask_inv = xp.logical_not(mask)
 
         # Fourier coordinates and operators
@@ -396,11 +488,23 @@ class DPCReconstruction(PhaseReconstruction):
                 self._padded_phase_object, phase_update, self._step_size
             )
 
+            # constraints
+            (self._padded_phase_object) = self._constraints(
+                self._padded_phase_object,
+                gaussian_filter=a0 < gaussian_filter_iter
+                and gaussian_filter_sigma is not None,
+                gaussian_filter_sigma=gaussian_filter_sigma,
+                butterworth_filter=a0 < butterworth_filter_iter
+                and (q_lowpass is not None or q_highpass is not None),
+                q_lowpass=q_lowpass,
+                q_highpass=q_highpass,
+            )
+
             if store_iterations:
                 self.object_phase_iterations.append(
                     asnumpy(
                         self._padded_phase_object[
-                            : self._intensities_shape[0], : self._intensities_shape[1]
+                            : self._grid_scan_shape[0], : self._grid_scan_shape[1]
                         ].copy()
                     )
                 )
@@ -414,7 +518,7 @@ class DPCReconstruction(PhaseReconstruction):
 
         # crop result
         self._object_phase = self._padded_phase_object[
-            : self._intensities_shape[0], : self._intensities_shape[1]
+            : self._grid_scan_shape[0], : self._grid_scan_shape[1]
         ]
         self.object_phase = asnumpy(self._object_phase)
 
@@ -445,15 +549,15 @@ class DPCReconstruction(PhaseReconstruction):
 
         extent = [
             0,
-            self._scan_sampling[1] * self._intensities_shape[1],
-            self._scan_sampling[0] * self._intensities_shape[0],
+            self._scan_sampling[1] * self._grid_scan_shape[1],
+            self._scan_sampling[0] * self._grid_scan_shape[0],
             0,
         ]
 
         ax1 = fig.add_subplot(spec[0])
         im = ax1.imshow(self.object_phase, extent=extent, cmap=cmap, **kwargs)
-        ax1.set_xlabel(f"x [{self._scan_units[0]}]")
-        ax1.set_ylabel(f"y [{self._scan_units[1]}]")
+        ax1.set_ylabel(f"x [{self._scan_units[0]}]")
+        ax1.set_xlabel(f"y [{self._scan_units[1]}]")
         ax1.set_title(f"DPC Phase Reconstruction - RMS error: {self.error:.3e}")
 
         if cbar:
@@ -510,8 +614,8 @@ class DPCReconstruction(PhaseReconstruction):
 
         extent = [
             0,
-            self._scan_sampling[1] * self._intensities_shape[1],
-            self._scan_sampling[0] * self._intensities_shape[0],
+            self._scan_sampling[1] * self._grid_scan_shape[1],
+            self._scan_sampling[0] * self._grid_scan_shape[0],
             0,
         ]
 
@@ -537,8 +641,8 @@ class DPCReconstruction(PhaseReconstruction):
                 cmap=cmap,
                 **kwargs,
             )
-            ax.set_xlabel(f"x [{self._scan_units[0]}]")
-            ax.set_ylabel(f"y [{self._scan_units[1]}]")
+            ax.set_ylabel(f"x [{self._scan_units[0]}]")
+            ax.set_xlabel(f"y [{self._scan_units[1]}]")
             if cbar:
                 grid.cbar_axes[n].colorbar(im)
             ax.set_title(
@@ -593,3 +697,9 @@ class DPCReconstruction(PhaseReconstruction):
             )
 
         return self
+
+    @property
+    def sampling(self):
+        """Sampling [Å]"""
+
+        return self._scan_sampling
