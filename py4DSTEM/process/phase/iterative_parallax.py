@@ -1,5 +1,5 @@
 """
-Module for reconstructing virtual parallax (also known as tilted bright field)
+Module for reconstructing virtual parallax (also known as tilted-shifted bright field)
 images by aligning each virtual BF image.
 """
 
@@ -80,7 +80,9 @@ class ParallaxReconstruction(PhaseReconstruction):
         edge_blend: int = 16,
         threshold_intensity: float = 0.8,
         normalize_images: bool = True,
+        normalize_order=0,
         defocus_guess: float = None,
+        rotation_guess: float = None,
         plot_average_bf: bool = True,
         **kwargs,
     ):
@@ -98,9 +100,15 @@ class ParallaxReconstruction(PhaseReconstruction):
             Fraction of max of dp_mean for bright-field pixels
         normalize_images: bool, optional
             If True, bright images normalized to have a mean of 1
+        normalize_order: integer, optional
+            Polynomial order for normalization. 0 means constant, 1 means linear, etc.
+            Higher orders not yet implemented.
         defocus_guess: float, optional
-            Initial guess of defocus value
+            Initial guess of defocus value (defocus dF) in A
             If None, first iteration is assumed to be in-focus
+        rotation_guess: float, optional
+            Initial guess of defocus value in degrees
+            If None, first iteration assumed to be 0
         plot_average_bf: bool, optional
             If True, plots the average bright field image, using defocus_guess
 
@@ -117,7 +125,7 @@ class ParallaxReconstruction(PhaseReconstruction):
         # get mean diffraction pattern
         if self._dp_mean is not None:
             self._dp_mean = xp.asarray(self._dp_mean, dtype=xp.float32)
-        if "dp_mean" in self._datacube.tree.keys():
+        elif "dp_mean" in self._datacube.tree.keys():
             self._dp_mean = xp.asarray(
                 self._datacube.tree["dp_mean"].data, dtype=xp.float32
             )
@@ -127,14 +135,14 @@ class ParallaxReconstruction(PhaseReconstruction):
             )
 
         # extract calibrations
-        self._extract_intensities_and_calibrations_from_datacube(
+        self._intensities = self._extract_intensities_and_calibrations_from_datacube(
             self._datacube,
             require_calibrations=True,
         )
 
         # make sure mean diffraction pattern is shaped correctly
-        if (self._dp_mean.shape[0] != self._intensities_shape[2]) or (
-            self._dp_mean.shape[1] != self._intensities_shape[3]
+        if (self._dp_mean.shape[0] != self._intensities.shape[2]) or (
+            self._dp_mean.shape[1] != self._intensities.shape[3]
         ):
             raise ValueError(
                 "dp_mean must match the datacube shape. Try setting dp_mean = None."
@@ -154,71 +162,116 @@ class ParallaxReconstruction(PhaseReconstruction):
         self._kr = xp.sqrt(xp.sum(self._kxy**2, axis=1))
 
         # Window function
-        x = xp.linspace(-1, 1, self._intensities_shape[0] + 1)[1:]
+        x = xp.linspace(-1, 1, self._grid_scan_shape[0] + 1)[1:]
         x -= (x[1] - x[0]) / 2
         wx = (
             xp.sin(
                 xp.clip(
-                    (1 - xp.abs(x)) * self._intensities_shape[0] / edge_blend / 2, 0, 1
+                    (1 - xp.abs(x)) * self._grid_scan_shape[0] / edge_blend / 2, 0, 1
                 )
                 * (xp.pi / 2)
             )
             ** 2
         )
-
-        y = xp.linspace(-1, 1, self._intensities_shape[1] + 1)[1:]
+        y = xp.linspace(-1, 1, self._grid_scan_shape[1] + 1)[1:]
         y -= (y[1] - y[0]) / 2
         wy = (
             xp.sin(
                 xp.clip(
-                    (1 - xp.abs(y)) * self._intensities_shape[1] / edge_blend / 2, 0, 1
+                    (1 - xp.abs(y)) * self._grid_scan_shape[1] / edge_blend / 2, 0, 1
                 )
                 * (xp.pi / 2)
             )
             ** 2
         )
-
         self._window_edge = wx[:, None] * wy[None, :]
         self._window_inv = 1 - self._window_edge
         self._window_pad = xp.zeros(
             (
-                self._intensities_shape[0] + object_padding_px[0],
-                self._intensities_shape[1] + object_padding_px[1],
+                self._grid_scan_shape[0] + object_padding_px[0],
+                self._grid_scan_shape[1] + object_padding_px[1],
             )
         )
         self._window_pad[
-            object_padding_px[0] // 2 : self._intensities_shape[0]
+            object_padding_px[0] // 2 : self._grid_scan_shape[0]
             + object_padding_px[0] // 2,
-            object_padding_px[1] // 2 : self._intensities_shape[1]
+            object_padding_px[1] // 2 : self._grid_scan_shape[1]
             + object_padding_px[1] // 2,
         ] = self._window_edge
 
         # Collect BF images
-        all_bfs = self._intensities[:, :, self._xy_inds[:, 0], self._xy_inds[:, 1]]
-        if normalize_images:
-            all_bfs /= xp.mean(all_bfs, axis=(0, 1))
-            all_means = xp.ones(self._num_bf_images)
-        else:
-            all_means = xp.mean(all_bfs, axis=(0, 1))
+        all_bfs = xp.moveaxis(
+            self._intensities[:, :, self._xy_inds[:, 0], self._xy_inds[:, 1]],
+            (0, 1, 2),
+            (1, 2, 0),
+        )
+        # if normalize_images:
+        #     all_bfs /= xp.mean(all_bfs, axis=(0, 1))
+        #     all_means = xp.ones(self._num_bf_images)
+        # else:
+        #     all_means = xp.mean(all_bfs, axis=(0, 1))
 
+        # initalize
         stack_shape = (
-            self._intensities_shape[0] + object_padding_px[0],
-            self._intensities_shape[1] + object_padding_px[1],
             self._num_bf_images,
+            self._grid_scan_shape[0] + object_padding_px[0],
+            self._grid_scan_shape[1] + object_padding_px[1],
         )
+        if normalize_images:
+            self._stack_BF = xp.ones(stack_shape)
 
-        self._stack_BF = xp.full(stack_shape, all_means[None, None])
+            if normalize_order == 0:
+                all_bfs /= xp.mean(all_bfs, axis=(1, 2))[:, None, None]
+                self._stack_BF[
+                    :,
+                    object_padding_px[0] // 2 : self._grid_scan_shape[0]
+                    + object_padding_px[0] // 2,
+                    object_padding_px[1] // 2 : self._grid_scan_shape[1]
+                    + object_padding_px[1] // 2,
+                ] = (
+                    self._window_inv[None] + self._window_edge[None] * all_bfs
+                )
 
-        self._stack_BF[
-            object_padding_px[0] // 2 : self._intensities_shape[0]
-            + object_padding_px[0] // 2,
-            object_padding_px[1] // 2 : self._intensities_shape[1]
-            + object_padding_px[1] // 2,
-        ] = (
-            self._window_inv[:, :, None] * all_means[None, None]
-            + self._window_edge[:, :, None] * all_bfs
-        )
-        self._stack_BF = xp.moveaxis(self._stack_BF, [0, 1, 2], [1, 2, 0])
+            elif normalize_order == 1:
+                x = np.linspace(-0.5, 0.5, all_bfs.shape[1])
+                y = np.linspace(-0.5, 0.5, all_bfs.shape[2])
+                ya, xa = xp.meshgrid(y, x)
+                basis = np.vstack(
+                    (
+                        xp.ones(xa.size),
+                        xa.ravel(),
+                        ya.ravel(),
+                    )
+                ).T
+                for a0 in range(all_bfs.shape[0]):
+                    coefs = np.linalg.lstsq(basis, all_bfs[a0].ravel(), rcond=None)
+
+                    self._stack_BF[
+                        a0,
+                        object_padding_px[0] // 2 : self._grid_scan_shape[0]
+                        + object_padding_px[0] // 2,
+                        object_padding_px[1] // 2 : self._grid_scan_shape[1]
+                        + object_padding_px[1] // 2,
+                    ] = self._window_inv[None] + self._window_edge[None] * all_bfs[
+                        a0
+                    ] / xp.reshape(
+                        basis @ coefs[0], all_bfs.shape[1:3]
+                    )
+
+        else:
+            all_means = xp.mean(all_bfs, axis=(1, 2))
+            self._stack_BF = xp.full(stack_shape, all_means[:, None, None])
+            self._stack_BF[
+                :,
+                object_padding_px[0] // 2 : self._grid_scan_shape[0]
+                + object_padding_px[0] // 2,
+                object_padding_px[1] // 2 : self._grid_scan_shape[1]
+                + object_padding_px[1] // 2,
+            ] = (
+                self._window_inv[None] * all_means[:, None, None]
+                + self._window_edge[None] * all_bfs
+            )
+        # self._stack_BF = xp.moveaxis(self._stack_BF, [0, 1, 2], [1, 2, 0])
 
         # Fourier space operators for image shifts
         qx = xp.fft.fftfreq(self._stack_BF.shape[1], d=1)
@@ -235,6 +288,14 @@ class ParallaxReconstruction(PhaseReconstruction):
             self._xy_shifts = (
                 -self._probe_angles * defocus_guess / xp.array(self._scan_sampling)
             )
+
+            if rotation_guess:
+                angle = xp.deg2rad(rotation_guess)
+                rotation_matrix = xp.array(
+                    [[np.cos(angle), np.sin(angle)], [-np.sin(angle), np.cos(angle)]]
+                )
+                self._xy_shifts = xp.dot(self._xy_shifts, rotation_matrix)
+
             dx = self._xy_shifts[:, 0]
             dy = self._xy_shifts[:, 1]
 
@@ -285,12 +346,172 @@ class ParallaxReconstruction(PhaseReconstruction):
 
             self._visualize_figax(fig, ax, **kwargs)
 
-            ax.set_xlabel("x [A]")
-            ax.set_ylabel("y [A]")
+            ax.set_ylabel("x [A]")
+            ax.set_xlabel("y [A]")
             ax.set_title("Average Bright Field Image")
 
         self._preprocessed = True
         return self
+
+    def tune_angle_and_defocus(
+        self,
+        angle_guess=None,
+        defocus_guess=None,
+        angle_step_size=5,
+        defocus_step_size=100,
+        num_angle_values=5,
+        num_defocus_values=5,
+        return_values=False,
+        plot_reconstructions=True,
+        plot_convergence=True,
+        **kwargs,
+    ):
+        """
+        Run parallax reconstruction over a parameters space of pre-determined angles
+        and defocus
+
+        Parameters
+        ----------
+        angle_guess: float (degrees), optional
+            initial starting guess for rotation angle between real and reciprocal space
+            if None, uses 0
+        defocus_guess: float (A), optional
+            initial starting guess for defocus (defocus dF)
+            if None, uses 0
+        angle_step_size: float (degrees), optional
+            size of change of rotation angle between real and reciprocal space for
+            each step in parameter space
+        defocus_step_size: float (A), optional
+            size of change of defocus for each step in parameter space
+        num_angle_values: int, optional
+            number of values of angle to test, must be >= 1.
+        num_defocus_values: int,optional
+            number of values of defocus to test, must be >= 1
+        plot_reconstructions: bool, optional
+            if True, plot phase of reconstructed objects
+        plot_convergence: bool, optional
+            if True, makes 2D plot of error metrix
+        return_values: bool, optional
+            if True, returns objects, convergence
+
+        Returns
+        -------
+        objects: list
+            reconstructed objects
+        convergence: np.ndarray
+            array of convergence values from reconstructions
+        """
+        asnumpy = self._asnumpy
+
+        if angle_guess is None:
+            angle_guess = 0
+        if defocus_guess is None:
+            defocus_guess = 0
+
+        if num_angle_values == 1:
+            angle_step_size = 0
+
+        if num_defocus_values == 1:
+            defocus_step_size = 0
+
+        angles = np.linspace(
+            angle_guess - angle_step_size * (num_angle_values - 1) / 2,
+            angle_guess + angle_step_size * (num_angle_values - 1) / 2,
+            num_angle_values,
+        )
+
+        defocus_values = np.linspace(
+            defocus_guess - defocus_step_size * (num_defocus_values - 1) / 2,
+            defocus_guess + defocus_step_size * (num_defocus_values - 1) / 2,
+            num_defocus_values,
+        )
+        if return_values or plot_convergence:
+            recon_BF = []
+            convergence = []
+
+        if plot_reconstructions:
+            spec = GridSpec(
+                ncols=num_defocus_values,
+                nrows=num_angle_values,
+                hspace=0.15,
+                wspace=0.35,
+            )
+            figsize = kwargs.get(
+                "figsize", (4 * num_defocus_values, 4 * num_angle_values)
+            )
+
+            fig = plt.figure(figsize=figsize)
+
+        # run loop and plot along the way
+        self._verbose = False
+        for flat_index, (angle, defocus) in enumerate(
+            tqdmnd(angles, defocus_values, desc="Tuning angle and defocus")
+        ):
+            self.preprocess(
+                defocus_guess=defocus,
+                rotation_guess=angle,
+                plot_average_bf=False,
+                **kwargs,
+            )
+
+            if plot_reconstructions:
+                row_index, col_index = np.unravel_index(
+                    flat_index, (num_angle_values, num_defocus_values)
+                )
+                object_ax = fig.add_subplot(spec[row_index, col_index])
+                self._visualize_figax(
+                    fig,
+                    ax=object_ax,
+                )
+
+                object_ax.set_title(
+                    f" angle = {angle:.1f} °, defocus = {defocus:.1f} A \n error = {self._recon_error[0]:.3e}"
+                )
+                object_ax.set_xticks([])
+                object_ax.set_yticks([])
+
+            if return_values:
+                recon_BF.append(self.recon_BF)
+            if return_values or plot_convergence:
+                convergence.append(asnumpy(self._recon_error[0]))
+
+        if plot_convergence:
+            from mpl_toolkits.axes_grid1.axes_divider import make_axes_locatable
+
+            fig, ax = plt.subplots()
+            ax.set_title("convergence")
+            im = ax.imshow(
+                np.array(convergence).reshape(angles.shape[0], defocus_values.shape[0]),
+                cmap="magma",
+            )
+
+            if angles.shape[0] > 1:
+                ax.set_ylabel("angles")
+                ax.set_yticks(np.arange(angles.shape[0]))
+                ax.set_yticklabels([f"{angle:.1f} °" for angle in angles])
+            else:
+                ax.set_yticks([])
+                ax.set_ylabel(f"angle {angles[0]:.1f}")
+
+            if defocus_values.shape[0] > 1:
+                ax.set_xlabel("defocus values")
+                ax.set_xticks(np.arange(defocus_values.shape[0]))
+                ax.set_xticklabels([f"{df:.1f}" for df in defocus_values])
+            else:
+                ax.set_xticks([])
+                ax.set_xlabel(f"defocus value: {defocus_values[0]:.1f}")
+
+            divider = make_axes_locatable(ax)
+            cax = divider.append_axes("right", size="5%", pad=0.05)
+            plt.colorbar(im, cax=cax)
+
+            plt.tight_layout()
+
+        if return_values:
+            convergence = np.array(convergence).reshape(
+                angles.shape[0], defocus_values.shape[0]
+            )
+            return recon_BF, convergence
 
     def reconstruct(
         self,
@@ -731,120 +952,91 @@ class ParallaxReconstruction(PhaseReconstruction):
 
     def aberration_correct(
         self,
-        plot_corrected_bf: bool = True,
+        plot_corrected_phase: bool = True,
         k_info_limit: float = None,
-        k_info_power: float = 2.0,
-        LASSO_filter: bool = False,
-        LASSO_scale: float = 1.0,
+        k_info_power: float = 1.0,
+        Wiener_filter=False,
+        Wiener_signal_noise_ratio=1.0,
+        Wiener_filter_low_only=False,
         **kwargs,
     ):
         """
-        CTF correction of the BF image using the measured defocus aberration.
+        CTF correction of the phase image using the measured defocus aberration.
 
         Parameters
         ----------
-        plot_corrected_bf: bool, optional
-            If True, the CTF-corrected bright field average image is plotted
+        plot_corrected_phase: bool, optional
+            If True, the CTF-corrected phase is plotted
         k_info_limit: float, optional
             maximum allowed frequency in butterworth filter
         k_info_power: float, optional
             power of butterworth filter
-        LASSO_filter: bool, optional
-            If True, the measured CTF is fitted to a LASSO-type curve_fit
-        LASSO_scale: float, optional
-            scale of LASSO filter
+        Wiener_filter: bool, optional
+            Use Wiener filtering instead of CTF sign correction.
+        Wiener_signal_noise_ratio: float, optional
+            Signal to noise radio at k = 0 for Wiener filter
+        Wiener_filter_low_only: bool, optional
+            Apply Wiener filtering only to the CTF portions before the 1st CTF maxima.
         """
 
         xp = self._xp
         asnumpy = self._asnumpy
 
+        if not hasattr(self, "aberration_C1"):
+            raise ValueError(
+                (
+                    "CTF correction is meant to be ran after alignment and aberration fitting. "
+                    "Please run the `reconstruct()` and `aberration_fit()` functions first."
+                )
+            )
+
         # Fourier coordinates
         kx = xp.fft.fftfreq(self._recon_BF.shape[0], self._scan_sampling[0])
         ky = xp.fft.fftfreq(self._recon_BF.shape[1], self._scan_sampling[1])
         kra2 = (kx[:, None]) ** 2 + (ky[None, :]) ** 2
-        sin_chi = xp.sin((np.pi * self._wavelength * self.aberration_C1) * kra2)
 
-        # CTF without tilt correction (beyond the parallax operator)
-        CTF_corr = xp.sign(sin_chi)
-        CTF_corr[0, 0] = 0
+        # CTF
+        sin_chi = xp.sin((xp.pi * self._wavelength * self.aberration_C1) * kra2)
 
-        # apply correction to mean reconstructed BF image
-        im_fft_corr = xp.fft.fft2(self._recon_BF) * CTF_corr
-
-        # if needed, Fourier filter output image
-        if LASSO_filter:
-
-            def CTF_fit(kra2_CTFmag, I0, I1, I2, I3, sigma1, sigma2, sigma3):
-                kra2, CTF_mag = kra2_CTFmag
-                int_fit = (
-                    I0
-                    + I1 * np.exp(kra2 / (-2 * sigma1**2))
-                    + I2 * np.exp(kra2 / (-2 * sigma2**2))
-                    + I3 * np.exp(kra2 / (-2 * sigma3**2)) * CTF_mag
+        if Wiener_filter:
+            SNR_inv = (
+                xp.sqrt(
+                    1 + (kra2**k_info_power) / ((k_info_limit) ** (2 * k_info_power))
                 )
-                return int_fit.ravel()
-
-            sin_chi = asnumpy(sin_chi)
-            im_fft_corr = asnumpy(im_fft_corr)
-
-            CTF_mag = np.abs(sin_chi)
-            sig = np.abs(im_fft_corr)
-            sig_mean = np.mean(sig)
-            sig_min = np.min(sig)
-            sig_max = np.max(sig)
-            k_max = np.max(asnumpy(kx))
-            coefs = (
-                sig_min,
-                sig_max,
-                sig_mean,
-                sig_mean,
-                k_max / 16.0,
-                k_max / 4.0,
-                k_max / 1.0,
+                / Wiener_signal_noise_ratio
             )
-            lb = (
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                k_max / 100.0,
-                k_max / 10.0,
-                k_max / 10.0,
-            )
-            ub = (np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf)
+            CTF_corr = xp.sign(sin_chi) / (sin_chi**2 + SNR_inv)
+            if Wiener_filter_low_only:
+                # limit Wiener filter to only the part of the CTF before 1st maxima
+                k_thresh = 1 / xp.sqrt(
+                    2.0 * self._wavelength * xp.abs(self.aberration_C1)
+                )
+                k_mask = kra2 >= k_thresh**2
+                CTF_corr[k_mask] = xp.sign(sin_chi[k_mask])
 
-            # curve_fit the background image
-            coefs, pcov = curve_fit(
-                CTF_fit,
-                (kra2, CTF_mag),
-                sig.ravel(),
-                p0=coefs,
-                bounds=(lb, ub),
-                maxfev=1000,
-            )
-            coefs_bg = coefs.copy()
-            coefs_bg[3] = 0
-            sig_bg = np.reshape(CTF_fit((kra2, CTF_mag), *coefs_bg), sig.shape)
+            # apply correction to mean reconstructed BF image
+            im_fft_corr = xp.fft.fft2(self._recon_BF) * CTF_corr
 
-            # apply LASSO filter
-            im_fft_corr = np.clip(
-                np.abs(im_fft_corr) - sig_bg * LASSO_scale, 0, np.inf
-            ) * np.exp(1j * np.angle(im_fft_corr))
+        else:
+            # CTF without tilt correction (beyond the parallax operator)
+            CTF_corr = xp.sign(sin_chi)
+            CTF_corr[0, 0] = 0
 
-            im_fft_corr = xp.asarray(im_fft_corr)
+            # apply correction to mean reconstructed BF image
+            im_fft_corr = xp.fft.fft2(self._recon_BF) * CTF_corr
 
-        # if needed, add low pass filter output image
-        if k_info_limit is not None:
-            im_fft_corr /= 1 + (kra2**k_info_power) / (
-                (k_info_limit) ** (2 * k_info_power)
-            )
+            # if needed, add low pass filter output image
+            if k_info_limit is not None:
+                im_fft_corr /= 1 + (kra2**k_info_power) / (
+                    (k_info_limit) ** (2 * k_info_power)
+                )
 
-        # Output image
-        self._recon_BF_corrected = xp.real(xp.fft.ifft2(im_fft_corr))
-        self.recon_BF_corrected = asnumpy(self._recon_BF_corrected)
+        # Output phase image
+        self._recon_phase_corrected = xp.real(xp.fft.ifft2(im_fft_corr))
+        self.recon_phase_corrected = asnumpy(self._recon_phase_corrected)
 
         # plotting
-        if plot_corrected_bf:
+        if plot_corrected_phase:
             figsize = kwargs.get("figsize", (6, 6))
             cmap = kwargs.get("cmap", "magma")
             kwargs.pop("figsize", None)
@@ -852,7 +1044,7 @@ class ParallaxReconstruction(PhaseReconstruction):
 
             fig, ax = plt.subplots(figsize=figsize)
 
-            cropped_object = self._crop_padded_object(self._recon_BF_corrected)
+            cropped_object = self._crop_padded_object(self._recon_phase_corrected)
 
             extent = [
                 0,
@@ -868,9 +1060,146 @@ class ParallaxReconstruction(PhaseReconstruction):
                 **kwargs,
             )
 
-            ax.set_xlabel("x [A]")
-            ax.set_ylabel("y [A]")
-            ax.set_title("CTF-Corrected Bright Field Image")
+            ax.set_ylabel("x [A]")
+            ax.set_xlabel("y [A]")
+            ax.set_title("Parallax-Corrected Phase Image")
+
+    def depth_section(
+        self,
+        depth_angstroms=np.arange(-250, 260, 100),
+        plot_depth_sections=True,
+        k_info_limit: float = None,
+        k_info_power: float = 1.0,
+        progress_bar=True,
+        **kwargs,
+    ):
+        """
+        CTF correction of the BF image using the measured defocus aberration.
+
+        Parameters
+        ----------
+        depth_angstroms: np.array
+            Specify the depths
+        k_info_limit: float, optional
+            maximum allowed frequency in butterworth filter
+        k_info_power: float, optional
+            power of butterworth filter
+
+
+        Returns
+        -------
+        stack_depth: np.array
+            stack of phase images at different depths with shape [depth Nx Ny]
+
+        """
+
+        xp = self._xp
+        asnumpy = self._asnumpy
+        depth_angstroms = xp.atleast_1d(depth_angstroms)
+
+        if not hasattr(self, "aberration_C1"):
+            raise ValueError(
+                (
+                    "Depth sectioning is meant to be ran after alignment and aberration fitting. "
+                    "Please run the `reconstruct()` and `aberration_fit()` functions first."
+                )
+            )
+
+        # Fourier coordinates
+        kx = xp.fft.fftfreq(self._recon_BF.shape[0], self._scan_sampling[0])
+        ky = xp.fft.fftfreq(self._recon_BF.shape[1], self._scan_sampling[1])
+        kra2 = (kx[:, None]) ** 2 + (ky[None, :]) ** 2
+
+        # information limit
+        if k_info_limit is not None:
+            k_filt = 1 / (
+                1 + (kra2**k_info_power) / ((k_info_limit) ** (2 * k_info_power))
+            )
+
+        # init
+        stack_depth = xp.zeros(
+            (depth_angstroms.shape[0], self._recon_BF.shape[0], self._recon_BF.shape[1])
+        )
+
+        # plotting
+        if plot_depth_sections:
+            num_plots = depth_angstroms.shape[0]
+            nrows = int(np.sqrt(num_plots))
+            ncols = int(np.ceil(num_plots / nrows))
+
+            spec = GridSpec(
+                ncols=ncols,
+                nrows=nrows,
+                hspace=0.15,
+                wspace=0.15,
+            )
+
+            figsize = kwargs.get("figsize", (4 * ncols, 4 * nrows))
+            cmap = kwargs.get("cmap", "magma")
+            kwargs.pop("figsize", None)
+            kwargs.pop("cmap", None)
+
+            fig = plt.figure(figsize=figsize)
+
+        # main loop
+        for a0 in tqdmnd(
+            depth_angstroms.shape[0],
+            desc="Depth sectioning ",
+            unit="plane",
+            disable=not progress_bar,
+        ):
+            dz = depth_angstroms[a0]
+
+            # Parallax
+            im_depth = xp.zeros_like(self._recon_BF, dtype="complex")
+            for a1 in range(self._stack_BF.shape[0]):
+                dx = self._probe_angles[a1, 0] * dz
+                dy = self._probe_angles[a1, 1] * dz
+                im_depth += xp.fft.fft2(self._stack_BF[a1]) * xp.exp(
+                    self._qx_shift * dx + self._qy_shift * dy
+                )
+
+            # CTF correction
+            # TODO - check sign of Fresnel prop
+            sin_chi = xp.sin(
+                (xp.pi * self._wavelength * (self.aberration_C1 + dz)) * kra2
+            )
+            CTF_corr = xp.sign(sin_chi)
+            CTF_corr[0, 0] = 0
+            if k_info_limit is not None:
+                CTF_corr *= k_filt
+
+            # apply correction to mean reconstructed BF image
+            stack_depth[a0] = (
+                xp.real(xp.fft.ifft2(im_depth * CTF_corr)) / self._stack_BF.shape[0]
+            )
+
+            if plot_depth_sections:
+
+                row_index, col_index = np.unravel_index(a0, (nrows, ncols))
+                ax = fig.add_subplot(spec[row_index, col_index])
+
+                cropped_object = self._crop_padded_object(asnumpy(stack_depth[a0]))
+
+                extent = [
+                    0,
+                    self._scan_sampling[1] * cropped_object.shape[1],
+                    self._scan_sampling[0] * cropped_object.shape[0],
+                    0,
+                ]
+
+                ax.imshow(
+                    cropped_object,
+                    extent=extent,
+                    cmap=cmap,
+                    **kwargs,
+                )
+
+                ax.set_xticks([])
+                ax.set_yticks([])
+                ax.set_title(f"Depth section: {dz}A")
+
+        return stack_depth
 
     def _crop_padded_object(
         self,
@@ -943,7 +1272,7 @@ class ParallaxReconstruction(PhaseReconstruction):
 
     def _visualize_shifts(
         self,
-        scale_arrows=0.002,
+        scale_arrows=1,
         **kwargs,
     ):
         """
@@ -969,8 +1298,12 @@ class ParallaxReconstruction(PhaseReconstruction):
         ax.quiver(
             asnumpy(self._kxy[:, 1]),
             asnumpy(self._kxy[:, 0]),
-            asnumpy(self._xy_shifts[:, 1] * scale_arrows),
-            asnumpy(self._xy_shifts[:, 0] * scale_arrows),
+            asnumpy(
+                self._xy_shifts[:, 1] * scale_arrows * self._reciprocal_sampling[0]
+            ),
+            asnumpy(
+                self._xy_shifts[:, 0] * scale_arrows * self._reciprocal_sampling[1]
+            ),
             color=color,
             angles="xy",
             scale_units="xy",
@@ -1002,8 +1335,8 @@ class ParallaxReconstruction(PhaseReconstruction):
 
         self._visualize_figax(fig, ax, **kwargs)
 
-        ax.set_xlabel("x [A]")
-        ax.set_ylabel("y [A]")
+        ax.set_ylabel("x [A]")
+        ax.set_xlabel("y [A]")
         ax.set_title("Reconstructed Bright Field Image")
 
         return self
