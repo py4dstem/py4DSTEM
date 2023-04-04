@@ -37,6 +37,7 @@ jobs:
           git commit -a -m "Auto-update version number (GH Action)"
           git push origin main
   sync_with_dev:
+    needs: update_version
     runs-on: ubuntu-latest
     name: Sync main with dev
     steps:
@@ -54,11 +55,13 @@ jobs:
           git pull origin main --commit --no-edit
           git push origin dev
   deploy:
-    needs: update_version
+    needs: sync_with_dev
     runs-on: ubuntu-latest
     name: Deploy to PyPI
     steps:
       - uses: actions/checkout@v3
+        with:
+          ref: main
       - name: Set up Python
         uses: actions/setup-python@v2
         with:
