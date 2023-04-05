@@ -233,8 +233,8 @@ class ParallaxReconstruction(PhaseReconstruction):
                 )
 
             elif normalize_order == 1:
-                x = np.linspace(-0.5, 0.5, all_bfs.shape[1])
-                y = np.linspace(-0.5, 0.5, all_bfs.shape[2])
+                x = xp.linspace(-0.5, 0.5, all_bfs.shape[1])
+                y = xp.linspace(-0.5, 0.5, all_bfs.shape[2])
                 ya, xa = xp.meshgrid(y, x)
                 basis = np.vstack(
                     (
