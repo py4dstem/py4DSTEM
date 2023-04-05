@@ -602,9 +602,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         xp = self._xp
         fourier_exit_waves = xp.fft.fft2(final_transmitted_probes)
 
-        error = (
-            xp.sum(xp.abs(amplitudes - xp.abs(fourier_exit_waves)) ** 2)
-        )
+        error = xp.sum(xp.abs(amplitudes - xp.abs(fourier_exit_waves)) ** 2)
 
         modified_exit_wave = xp.fft.ifft2(
             amplitudes * xp.exp(1j * xp.angle(fourier_exit_waves))
@@ -666,9 +664,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             exit_waves = final_transmitted_probes.copy()
 
         fourier_exit_waves = xp.fft.fft2(final_transmitted_probes)
-        error = (
-            xp.sum(xp.abs(amplitudes - xp.abs(fourier_exit_waves)) ** 2)
-        )
+        error = xp.sum(xp.abs(amplitudes - xp.abs(fourier_exit_waves)) ** 2)
 
         factor_to_be_projected = (
             projection_c * final_transmitted_probes + projection_y * exit_waves
@@ -1688,8 +1684,8 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
                 error += batch_error
 
             # Normalize Error
-            error /= (self._mean_diffraction_intensity*self._num_diffraction_patterns)
-            
+            error /= self._mean_diffraction_intensity * self._num_diffraction_patterns
+
             # constraints
             self._positions_px = positions_px.copy()[unshuffled_indices]
             self._object, self._probe, self._positions_px = self._constraints(

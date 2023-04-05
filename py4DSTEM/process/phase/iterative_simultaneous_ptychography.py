@@ -816,9 +816,7 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         xp = self._xp
 
         fourier_overlap = xp.fft.fft2(overlap[0])
-        error = (
-            xp.sum(xp.abs(amplitudes[0] - xp.abs(fourier_overlap)) ** 2)
-        )
+        error = xp.sum(xp.abs(amplitudes[0] - xp.abs(fourier_overlap)) ** 2)
 
         fourier_modified_overlap = amplitudes[0] * xp.exp(
             1j * xp.angle(fourier_overlap)
@@ -856,9 +854,7 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         exit_waves = []
         for amp, overl in zip(amplitudes, overlap):
             fourier_overl = xp.fft.fft2(overl)
-            error += (
-                xp.sum(xp.abs(amp - xp.abs(fourier_overl)) ** 2)
-            )
+            error += xp.sum(xp.abs(amp - xp.abs(fourier_overl)) ** 2)
 
             fourier_modified_overl = amp * xp.exp(1j * xp.angle(fourier_overl))
             modified_overl = xp.fft.ifft2(fourier_modified_overl)
@@ -918,9 +914,7 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
             exit_wave = overlap[0].copy()
 
         fourier_overlap = xp.fft.fft2(overlap[0])
-        error = (
-            xp.sum(xp.abs(amplitudes[0] - xp.abs(fourier_overlap)) ** 2)
-        )
+        error = xp.sum(xp.abs(amplitudes[0] - xp.abs(fourier_overlap)) ** 2)
 
         factor_to_be_projected = projection_c * overlap[0] + projection_y * exit_wave
         fourier_projected_factor = xp.fft.fft2(factor_to_be_projected)
@@ -989,9 +983,7 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                 exit_wave = overl.copy()
 
             fourier_overl = xp.fft.fft2(overl)
-            error += (
-                xp.sum(xp.abs(amp - xp.abs(fourier_overl)) ** 2)
-            )
+            error += xp.sum(xp.abs(amp - xp.abs(fourier_overl)) ** 2)
 
             factor_to_be_projected = projection_c * overl + projection_y * exit_wave
             fourier_projected_factor = xp.fft.fft2(factor_to_be_projected)
@@ -2653,8 +2645,8 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                 error += batch_error
 
             # Normalize Error
-            error /= (self._mean_diffraction_intensity*self._num_diffraction_patterns)
-            
+            error /= self._mean_diffraction_intensity * self._num_diffraction_patterns
+
             # constraints
             self._positions_px = positions_px.copy()[unshuffled_indices]
             self._object, self._probe, self._positions_px = self._constraints(
