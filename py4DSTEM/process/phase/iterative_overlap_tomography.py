@@ -750,9 +750,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         xp = self._xp
         fourier_exit_waves = xp.fft.fft2(final_transmitted_probes)
 
-        error = (
-            xp.sum(xp.abs(amplitudes - xp.abs(fourier_exit_waves)) ** 2)
-        )
+        error = xp.sum(xp.abs(amplitudes - xp.abs(fourier_exit_waves)) ** 2)
 
         modified_exit_wave = xp.fft.ifft2(
             amplitudes * xp.exp(1j * xp.angle(fourier_exit_waves))
@@ -814,9 +812,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
             exit_waves = final_transmitted_probes.copy()
 
         fourier_exit_waves = xp.fft.fft2(final_transmitted_probes)
-        error = (
-            xp.sum(xp.abs(amplitudes - xp.abs(fourier_exit_waves)) ** 2)
-        )
+        error = xp.sum(xp.abs(amplitudes - xp.abs(fourier_exit_waves)) ** 2)
 
         factor_to_be_projected = (
             projection_c * final_transmitted_probes + projection_y * exit_waves
@@ -1748,6 +1744,8 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
             for tilt_index in tilt_indices:
                 self._active_tilt_index = tilt_index
 
+                tilt_error = 0.0
+
                 self._object = self._rotate(
                     self._object,
                     self._tilt_angles_deg[self._active_tilt_index],
@@ -1846,8 +1844,8 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                             positions_step_size,
                         )
 
-                    error += batch_error
-            
+                    tilt_error += batch_error
+
                 if not use_projection_scheme:
                     object_sliced -= object_sliced_old
 
@@ -1873,9 +1871,13 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                     reshape=False,
                     order=2,
                 )
-            
+
                 # Normalize Error
-                error /= (self._mean_diffraction_intensity[self._active_tilt_index]*num_diffraction_patterns)
+                tilt_error /= (
+                    self._mean_diffraction_intensity[self._active_tilt_index]
+                    * num_diffraction_patterns
+                )
+                error += tilt_error
 
                 # constraints
                 self._positions_px_all[start_tilt:end_tilt] = positions_px.copy()[
@@ -1904,10 +1906,10 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                         q_lowpass=q_lowpass,
                         q_highpass=q_highpass,
                     )
-                
+
             # Normalize Error Over Tilts
             error /= self._num_tilts
-            
+
             if collective_tilt_updates:
                 self._object += collective_object / self._num_tilts
 

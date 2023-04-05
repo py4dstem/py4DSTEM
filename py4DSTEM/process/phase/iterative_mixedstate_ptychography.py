@@ -535,9 +535,7 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
         xp = self._xp
         fourier_overlap = xp.fft.fft2(overlap)
         intensity_norm = xp.sqrt(xp.sum(xp.abs(fourier_overlap) ** 2, axis=1))
-        error = (
-            xp.sum(xp.abs(amplitudes - intensity_norm) ** 2)
-        )
+        error = xp.sum(xp.abs(amplitudes - intensity_norm) ** 2)
 
         intensity_norm[intensity_norm == 0.0] = np.inf
         amplitude_modification = amplitudes / intensity_norm
@@ -596,9 +594,7 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
 
         fourier_overlap = xp.fft.fft2(overlap)
         intensity_norm = xp.sqrt(xp.sum(xp.abs(fourier_overlap) ** 2, axis=1))
-        error = (
-            xp.sum(xp.abs(amplitudes - intensity_norm) ** 2)
-        )
+        error = xp.sum(xp.abs(amplitudes - intensity_norm) ** 2)
 
         factor_to_be_projected = projection_c * overlap + projection_y * exit_waves
         fourier_projected_factor = xp.fft.fft2(factor_to_be_projected)
@@ -1415,8 +1411,8 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
                 error += batch_error
 
             # Normalize Error
-            error /= (self._mean_diffraction_intensity*self._num_diffraction_patterns)
-            
+            error /= self._mean_diffraction_intensity * self._num_diffraction_patterns
+
             # constraints
             self._positions_px = positions_px.copy()[unshuffled_indices]
             self._object, self._probe, self._positions_px = self._constraints(

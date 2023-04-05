@@ -483,9 +483,7 @@ class PtychographicReconstruction(PhaseReconstruction):
 
         xp = self._xp
         fourier_overlap = xp.fft.fft2(overlap)
-        error = (
-            xp.sum(xp.abs(amplitudes - xp.abs(fourier_overlap)) ** 2)
-        )
+        error = xp.sum(xp.abs(amplitudes - xp.abs(fourier_overlap)) ** 2)
 
         fourier_modified_overlap = amplitudes * xp.exp(1j * xp.angle(fourier_overlap))
         modified_overlap = xp.fft.ifft2(fourier_modified_overlap)
@@ -540,9 +538,7 @@ class PtychographicReconstruction(PhaseReconstruction):
             exit_waves = overlap.copy()
 
         fourier_overlap = xp.fft.fft2(overlap)
-        error = (
-            xp.sum(xp.abs(amplitudes - xp.abs(fourier_overlap)) ** 2)
-        )
+        error = xp.sum(xp.abs(amplitudes - xp.abs(fourier_overlap)) ** 2)
 
         factor_to_be_projected = projection_c * overlap + projection_y * exit_waves
         fourier_projected_factor = xp.fft.fft2(factor_to_be_projected)
@@ -1294,8 +1290,8 @@ class PtychographicReconstruction(PhaseReconstruction):
                 error += batch_error
 
             # Normalize Error
-            error /= (self._mean_diffraction_intensity*self._num_diffraction_patterns)
-            
+            error /= self._mean_diffraction_intensity * self._num_diffraction_patterns
+
             # constraints
             self._positions_px = positions_px.copy()[unshuffled_indices]
             self._object, self._probe, self._positions_px = self._constraints(
