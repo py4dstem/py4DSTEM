@@ -751,8 +751,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         fourier_exit_waves = xp.fft.fft2(final_transmitted_probes)
 
         error = (
-            xp.mean(xp.abs(amplitudes - xp.abs(fourier_exit_waves)) ** 2)
-            / self._mean_diffraction_intensity[self._active_tilt_index]
+            xp.sum(xp.abs(amplitudes - xp.abs(fourier_exit_waves)) ** 2)
         )
 
         modified_exit_wave = xp.fft.ifft2(
@@ -816,8 +815,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
 
         fourier_exit_waves = xp.fft.fft2(final_transmitted_probes)
         error = (
-            xp.mean(xp.abs(amplitudes - xp.abs(fourier_exit_waves)) ** 2)
-            / self._mean_diffraction_intensity[self._active_tilt_index]
+            xp.sum(xp.abs(amplitudes - xp.abs(fourier_exit_waves)) ** 2)
         )
 
         factor_to_be_projected = (
@@ -1849,7 +1847,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                         )
 
                     error += batch_error
-
+            
                 if not use_projection_scheme:
                     object_sliced -= object_sliced_old
 
@@ -1875,6 +1873,9 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                     reshape=False,
                     order=2,
                 )
+            
+                # Normalize Error
+                error /= (self._mean_diffraction_intensity[self._active_tilt_index]*num_diffraction_patterns)
 
                 # constraints
                 self._positions_px_all[start_tilt:end_tilt] = positions_px.copy()[
@@ -1903,7 +1904,10 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                         q_lowpass=q_lowpass,
                         q_highpass=q_highpass,
                     )
-
+                
+            # Normalize Error Over Tilts
+            error /= self._num_tilts
+            
             if collective_tilt_updates:
                 self._object += collective_object / self._num_tilts
 
@@ -2063,7 +2067,6 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         cbar: bool,
         plot_convergence: bool,
         plot_probe: bool,
-        relative_error: bool,
         projection_angle_deg: float,
         projection_axes: Tuple[int, int],
         x_lims: Tuple[int, int],
@@ -2076,7 +2079,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         Parameters
         --------
         plot_convergence: bool, optional
-            If true, the RMS error plot is displayed
+            If true, the normalized mean squared error (NMSE) plot is displayed
         cbar: bool, optional
             If true, displays a colorbar
         plot_probe: bool
@@ -2084,9 +2087,6 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         object_mode: str
             Specifies the attribute of the object to plot.
             One of 'phase', 'amplitude', 'intensity'
-        relative_error: bool
-            Sets the error to be relative to the first iteration.
-            TODO - update to be relative to empty object wave error (RMS of all measurements).
 
         """
         figsize = kwargs.get("figsize", (8, 5))
@@ -2224,16 +2224,12 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                 ax = fig.add_subplot(spec[1, :])
             else:
                 ax = fig.add_subplot(spec[1])
-            if relative_error:
-                ax.semilogy(np.arange(errors.shape[0]), errors / errors[0], **kwargs)
-                ax.set_ylabel("Log Rel. RMS error")
-            else:
-                ax.semilogy(np.arange(errors.shape[0]), errors, **kwargs)
-                ax.set_ylabel("Log RMS error")
+            ax.semilogy(np.arange(errors.shape[0]), errors, **kwargs)
+            ax.set_ylabel("NMSE")
             ax.set_xlabel("Iteration Number")
             ax.yaxis.tick_right()
 
-        fig.suptitle(f"RMS error: {self.error:.3e}")
+        fig.suptitle(f"Normalized Mean Squared Error: {self.error:.3e}")
         spec.tight_layout(fig)
 
     def _visualize_all_iterations(
@@ -2242,7 +2238,6 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         plot_convergence: bool,
         plot_probe: bool,
         iterations_grid: Tuple[int, int],
-        relative_error: bool,
         projection_angle_deg: float,
         projection_axes: Tuple[int, int],
         x_lims: Tuple[int, int],
@@ -2255,7 +2250,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         Parameters
         --------
         plot_convergence: bool, optional
-            If true, the RMS error plot is displayed
+            If true, the normalized mean squared error (NMSE) plot is displayed
         iterations_grid: Tuple[int,int]
             Grid dimensions to plot reconstruction iterations
         cbar: bool, optional
@@ -2265,9 +2260,6 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         object_mode: str
             Specifies the attribute of the object to plot.
             One of 'phase', 'amplitude', 'intensity'
-        relative_error: bool
-            Sets the error to be relative to the first iteration.
-            TODO - update to be relative to empty object wave error (RMS of all measurements).
 
         """
         if iterations_grid == "auto":
@@ -2399,12 +2391,8 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                 ax2 = fig.add_subplot(spec[2])
             else:
                 ax2 = fig.add_subplot(spec[1])
-            if relative_error:
-                ax2.semilogy(np.arange(errors.shape[0]), errors / errors[0], **kwargs)
-                ax2.set_ylabel("Log Rel. RMS error")
-            else:
-                ax2.semilogy(np.arange(errors.shape[0]), errors, **kwargs)
-                ax2.set_ylabel("Log RMS error")
+            ax2.semilogy(np.arange(errors.shape[0]), errors, **kwargs)
+            ax2.set_ylabel("NMSE")
             ax2.set_xlabel("Iteration Number")
             ax2.yaxis.tick_right()
 
@@ -2416,7 +2404,6 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         plot_convergence: bool = True,
         plot_probe: bool = True,
         cbar: bool = True,
-        relative_error: bool = True,
         projection_angle_deg: float = None,
         projection_axes: Tuple[int, int] = (0, 2),
         x_lims=(None, None),
@@ -2429,16 +2416,13 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         Parameters
         --------
         plot_convergence: bool, optional
-            If true, the RMS error plot is displayed
+            If true, the normalized mean squared error (NMSE) plot is displayed
         iterations_grid: Tuple[int,int]
             Grid dimensions to plot reconstruction iterations
         cbar: bool, optional
             If true, displays a colorbar
         plot_probe: bool
             If true, the reconstructed probe intensity is also displayed
-        relative_error: bool
-            Sets the error to be relative to the first iteration.
-            TODO - update to be relative to empty object wave error (RMS of all measurements).
 
         Returns
         --------
@@ -2451,7 +2435,6 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                 plot_convergence=plot_convergence,
                 plot_probe=plot_probe,
                 cbar=cbar,
-                relative_error=relative_error,
                 projection_angle_deg=projection_angle_deg,
                 projection_axes=projection_axes,
                 x_lims=x_lims,
@@ -2464,7 +2447,6 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                 iterations_grid=iterations_grid,
                 plot_probe=plot_probe,
                 cbar=cbar,
-                relative_error=relative_error,
                 projection_angle_deg=projection_angle_deg,
                 projection_axes=projection_axes,
                 x_lims=x_lims,
