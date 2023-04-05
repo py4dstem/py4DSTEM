@@ -603,8 +603,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         fourier_exit_waves = xp.fft.fft2(final_transmitted_probes)
 
         error = (
-            xp.mean(xp.abs(amplitudes - xp.abs(fourier_exit_waves)) ** 2)
-            / self._mean_diffraction_intensity
+            xp.sum(xp.abs(amplitudes - xp.abs(fourier_exit_waves)) ** 2)
         )
 
         modified_exit_wave = xp.fft.ifft2(
@@ -668,8 +667,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
 
         fourier_exit_waves = xp.fft.fft2(final_transmitted_probes)
         error = (
-            xp.mean(xp.abs(amplitudes - xp.abs(fourier_exit_waves)) ** 2)
-            / self._mean_diffraction_intensity
+            xp.sum(xp.abs(amplitudes - xp.abs(fourier_exit_waves)) ** 2)
         )
 
         factor_to_be_projected = (
@@ -1689,6 +1687,9 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
 
                 error += batch_error
 
+            # Normalize Error
+            error /= (self._mean_diffraction_intensity*self._num_diffraction_patterns)
+            
             # constraints
             self._positions_px = positions_px.copy()[unshuffled_indices]
             self._object, self._probe, self._positions_px = self._constraints(
@@ -1732,7 +1733,6 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         convergence_ax,
         cbar: bool,
         padding: int,
-        relative_error: bool,
         **kwargs,
     ):
         """
@@ -1784,12 +1784,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             kwargs.pop("vmax", None)
             errors = self.error_iterations
 
-            if relative_error:
-                convergence_ax.semilogy(
-                    np.arange(errors.shape[0]), errors / errors[0], **kwargs
-                )
-            else:
-                convergence_ax.semilogy(np.arange(errors.shape[0]), errors, **kwargs)
+            convergence_ax.semilogy(np.arange(errors.shape[0]), errors, **kwargs)
 
     def _visualize_last_iteration(
         self,
@@ -1798,7 +1793,6 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         plot_probe: bool,
         object_mode: str,
         padding: int,
-        relative_error: bool,
         **kwargs,
     ):
         """
@@ -1807,7 +1801,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         Parameters
         --------
         plot_convergence: bool, optional
-            If true, the RMS error plot is displayed
+            If true, the normalized mean squared error (NMSE) plot is displayed
         cbar: bool, optional
             If true, displays a colorbar
         plot_probe: bool
@@ -1815,9 +1809,6 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         object_mode: str
             Specifies the attribute of the object to plot.
             One of 'phase', 'amplitude', 'intensity'
-        relative_error: bool
-            Sets the error to be relative to the first iteration.
-            TODO - update to be relative to empty object wave error (RMS of all measurements).
 
         """
         figsize = kwargs.get("figsize", (8, 5))
@@ -1948,16 +1939,12 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
                 ax = fig.add_subplot(spec[1, :])
             else:
                 ax = fig.add_subplot(spec[1])
-            if relative_error:
-                ax.semilogy(np.arange(errors.shape[0]), errors / errors[0], **kwargs)
-                ax.set_ylabel("Log Rel. RMS error")
-            else:
-                ax.semilogy(np.arange(errors.shape[0]), errors, **kwargs)
-                ax.set_ylabel("Log RMS error")
+            ax.semilogy(np.arange(errors.shape[0]), errors, **kwargs)
+            ax.set_ylabel("NMSE")
             ax.set_xlabel("Iteration Number")
             ax.yaxis.tick_right()
 
-        fig.suptitle(f"RMS error: {self.error:.3e}")
+        fig.suptitle(f"Normalized Mean Squared Error: {self.error:.3e}")
         spec.tight_layout(fig)
 
     def _visualize_all_iterations(
@@ -1968,7 +1955,6 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         iterations_grid: Tuple[int, int],
         object_mode: str,
         padding: int,
-        relative_error: bool,
         **kwargs,
     ):
         """
@@ -1977,7 +1963,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         Parameters
         --------
         plot_convergence: bool, optional
-            If true, the RMS error plot is displayed
+            If true, the normalized mean squared error (NMSE) plot is displayed
         iterations_grid: Tuple[int,int]
             Grid dimensions to plot reconstruction iterations
         cbar: bool, optional
@@ -1987,9 +1973,6 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         object_mode: str
             Specifies the attribute of the object to plot.
             One of 'phase', 'amplitude', 'intensity'
-        relative_error: bool
-            Sets the error to be relative to the first iteration.
-            TODO - update to be relative to empty object wave error (RMS of all measurements).
 
         """
         if iterations_grid == "auto":
@@ -2104,12 +2087,8 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
                 ax2 = fig.add_subplot(spec[2])
             else:
                 ax2 = fig.add_subplot(spec[1])
-            if relative_error:
-                ax2.semilogy(np.arange(errors.shape[0]), errors / errors[0], **kwargs)
-                ax2.set_ylabel("Log Rel. RMS error")
-            else:
-                ax2.semilogy(np.arange(errors.shape[0]), errors, **kwargs)
-                ax2.set_ylabel("Log RMS error")
+            ax2.semilogy(np.arange(errors.shape[0]), errors, **kwargs)
+            ax2.set_ylabel("NMSE")
             ax2.set_xlabel("Iteration Number")
             ax2.yaxis.tick_right()
 
@@ -2123,7 +2102,6 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         object_mode: str = "phase",
         cbar: bool = True,
         padding: int = 0,
-        relative_error: bool = True,
         **kwargs,
     ):
         """
@@ -2132,7 +2110,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         Parameters
         --------
         plot_convergence: bool, optional
-            If true, the RMS error plot is displayed
+            If true, the normalized mean squared error (NMSE) plot is displayed
         iterations_grid: Tuple[int,int]
             Grid dimensions to plot reconstruction iterations
         cbar: bool, optional
@@ -2142,9 +2120,6 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         object_mode: str
             Specifies the attribute of the object to plot.
             One of 'phase', 'amplitude', 'intensity'
-        relative_error: bool
-            Sets the error to be relative to the first iteration.
-            TODO - update to be relative to empty object wave error (RMS of all measurements).
 
         Returns
         --------
@@ -2171,7 +2146,6 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
                 object_mode=object_mode,
                 cbar=cbar,
                 padding=padding,
-                relative_error=relative_error,
                 **kwargs,
             )
         else:
@@ -2182,7 +2156,6 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
                 object_mode=object_mode,
                 cbar=cbar,
                 padding=padding,
-                relative_error=relative_error,
                 **kwargs,
             )
 
