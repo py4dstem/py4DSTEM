@@ -1061,6 +1061,11 @@ class PhaseReconstruction(metaclass=ABCMeta):
         amplitudes = xp.zeros_like(diffraction_intensities)
         region_of_interest_shape = diffraction_intensities.shape[-2:]
 
+        com_fitted_x = self._asnumpy(com_fitted_x)
+        com_fitted_y = self._asnumpy(com_fitted_y)
+        diffraction_intensities = self._asnumpy(diffraction_intensities)
+        amplitudes = self._asnumpy(amplitudes)
+
         for rx in range(diffraction_intensities.shape[0]):
             for ry in range(diffraction_intensities.shape[1]):
                 intensities = get_shifted_ar(
@@ -1068,11 +1073,13 @@ class PhaseReconstruction(metaclass=ABCMeta):
                     -com_fitted_x[rx, ry],
                     -com_fitted_y[rx, ry],
                     bilinear=True,
-                    device="cpu" if xp is np else "gpu",
+                    device="cpu",
                 )
 
-                mean_intensity += xp.sum(intensities)
-                amplitudes[rx, ry] = xp.sqrt(xp.maximum(intensities, 0))
+                mean_intensity += np.sum(intensities)
+                amplitudes[rx, ry] = np.sqrt(np.maximum(intensities, 0))
+
+        amplitudes = xp.asarray(amplitudes)
 
         amplitudes = xp.reshape(amplitudes, (-1,) + region_of_interest_shape)
         mean_intensity /= amplitudes.shape[0]
