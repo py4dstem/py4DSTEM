@@ -799,13 +799,11 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             probe = transmitted_probes[s]
             obj = object_patches[s]
 
-            # back-transmit
-            exit_waves *= xp.conj(obj)
-
             # object-update
             probe_normalization = self._sum_overlapping_patches_bincounts(
                 xp.abs(probe) ** 2
             )
+
             probe_normalization = 1 / xp.sqrt(
                 1e-16
                 + ((1 - normalization_min) * probe_normalization) ** 2
@@ -816,6 +814,9 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
                 self._sum_overlapping_patches_bincounts(xp.conj(probe) * exit_waves)
                 * probe_normalization
             )
+
+            # back-transmit
+            exit_waves *= xp.conj(obj)
 
             if s > 0:
                 # back-propagate
@@ -891,9 +892,6 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             probe = transmitted_probes[s]
             obj = object_patches[s]
 
-            # back-transmit
-            exit_waves_copy *= xp.conj(obj)
-
             # object-update
             probe_normalization = self._sum_overlapping_patches_bincounts(
                 xp.abs(probe) ** 2
@@ -910,6 +908,9 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
                 )
                 * probe_normalization
             )
+
+            # back-transmit
+            exit_waves_copy *= xp.conj(obj)
 
             if s > 0:
                 # back-propagate

@@ -951,9 +951,6 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
             probe = transmitted_probes[s]
             obj = object_patches[s]
 
-            # back-transmit
-            exit_waves *= xp.conj(obj)
-
             # object-update
             probe_normalization = self._sum_overlapping_patches_bincounts(
                 xp.abs(probe) ** 2
@@ -970,6 +967,9 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                 )
                 * probe_normalization
             )
+
+            # back-transmit
+            exit_waves *= xp.conj(obj)
 
             if s > 0:
                 # back-propagate
@@ -1045,9 +1045,6 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
             probe = transmitted_probes[s]
             obj = object_patches[s]
 
-            # back-transmit
-            exit_waves_copy *= xp.conj(obj)
-
             # object-update
             probe_normalization = self._sum_overlapping_patches_bincounts(
                 xp.abs(probe) ** 2
@@ -1064,6 +1061,9 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                 )
                 * probe_normalization
             )
+
+            # back-transmit
+            exit_waves_copy *= xp.conj(obj)
 
             if s > 0:
                 # back-propagate
@@ -1913,11 +1913,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
             if collective_tilt_updates:
                 self._object += collective_object / self._num_tilts
 
-                (
-                    self._object,
-                    self._probe,
-                    _,
-                ) = self._constraints(
+                (self._object, self._probe, _,) = self._constraints(
                     self._object,
                     self._probe,
                     None,
