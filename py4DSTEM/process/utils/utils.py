@@ -19,6 +19,12 @@ except ImportError:
     def clear_output(wait=True):
         pass
 
+try:
+    import cupy as cp
+except ImportError:
+    cp = None
+
+
 def radial_reduction(
     ar,
     x0,
@@ -84,6 +90,14 @@ def electron_wavelength_angstrom(E_eV):
     lam = h / ma.sqrt(2 * m * e * E_eV) / ma.sqrt(1 + e * E_eV / 2 / m / c ** 2) * 10 ** 10
     return lam
 
+def electron_interaction_parameter(E_eV):
+    m = 9.109383 * 10 ** -31
+    e = 1.602177 * 10 ** -19
+    c = 299792458
+    h = 6.62607 * 10 ** -34
+    lam = h / ma.sqrt(2 * m * e * E_eV) / ma.sqrt(1 + e * E_eV / 2 / m / c ** 2) * 10 ** 10
+    sigma = (2*np.pi/lam/E_eV) *(m*c ** 2+ e* E_eV)/(2*m*c**2+e*E_eV)
+    return sigma
 
 def sector_mask(shape, centre, radius, angle_range=(0, 360)):
     """
@@ -160,15 +174,9 @@ def make_Fourier_coords2D(Nx, Ny, pixelSize=1):
     return qx, qy
 
 
-def get_shifted_ar(
-    ar,
-    xshift,
-    yshift,
-    periodic=True,
-    bilinear=False,
-    ):
+def get_shifted_ar(ar, xshift, yshift, periodic=True, bilinear=False, device="cpu"):
     """
-	Shifts array ar by the shift vector (xshift,yshift), using the either
+        Shifts array ar by the shift vector (xshift,yshift), using the either
     the Fourier shift theorem (i.e. with sinc interpolation), or bilinear
     resampling. Boundary conditions can be periodic or not.
 
@@ -178,68 +186,76 @@ def get_shifted_ar(
             yshift (float): shift along axis 1 (y) in pixels
             periodic (bool): flag for periodic boundary conditions
             bilinear (bool): flag for bilinear image shifts
-
+            device(str): calculation device will be perfomed on. Must be 'cpu' or 'gpu'
         Returns:
             (array) the shifted array
     """
+    if device == "cpu":
+        xp = np
 
+    elif device == "gpu":
+        xp = cp
+
+    ar = xp.asarray(ar)
+    
     # Apply image shift
     if bilinear is False:
-        nx, ny = np.shape(ar)
+        nx, ny = xp.shape(ar)
         qx, qy = make_Fourier_coords2D(nx, ny, 1)
-        nx, ny = float(nx), float(ny)
+        qx = xp.asarray(qx)
+        qy = xp.asarray(qy)
 
-        w = np.exp(-(2j * np.pi) * ((yshift * qy) + (xshift * qx)))
-        shifted_ar = np.real(np.fft.ifft2((np.fft.fft2(ar)) * w))
+        w = xp.exp(-(2j * xp.pi) * ((yshift * qy) + (xshift * qx)))
+        shifted_ar = xp.real(xp.fft.ifft2((xp.fft.fft2(ar)) * w))
 
     else:
-        xF = (np.floor(xshift)).astype(int)
-        yF = (np.floor(yshift)).astype(int)
+        xF = xp.floor(xshift).astype(int).item()
+        yF = xp.floor(yshift).astype(int).item()
         wx = xshift - xF
         wy = yshift - yF
 
-        shifted_ar = \
-            np.roll(ar,(xF  ,yF  ),axis=(0,1)) * ((1-wx)*(1-wy)) + \
-            np.roll(ar,(xF+1,yF  ),axis=(0,1)) * ((  wx)*(1-wy)) + \
-            np.roll(ar,(xF  ,yF+1),axis=(0,1)) * ((1-wx)*(  wy)) + \
-            np.roll(ar,(xF+1,yF+1),axis=(0,1)) * ((  wx)*(  wy))
+        shifted_ar = (
+            xp.roll(ar, (xF, yF), axis=(0, 1)) * ((1 - wx) * (1 - wy))
+            + xp.roll(ar, (xF + 1, yF), axis=(0, 1)) * ((wx) * (1 - wy))
+            + xp.roll(ar, (xF, yF + 1), axis=(0, 1)) * ((1 - wx) * (wy))
+            + xp.roll(ar, (xF + 1, yF + 1), axis=(0, 1)) * ((wx) * (wy))
+        )
 
     if periodic is False:
         # Rounded coordinates for boundaries
-        xR = (np.round(xshift)).astype(int)
-        yR = (np.round(yshift)).astype(int)
+        xR = (xp.round(xshift)).astype(int)
+        yR = (xp.round(yshift)).astype(int)
 
         if xR > 0:
-            shifted_ar[0:xR,:] = 0
+            shifted_ar[0:xR, :] = 0
         elif xR < 0:
-            shifted_ar[xR:,:] = 0
+            shifted_ar[xR:, :] = 0
         if yR > 0:
-            shifted_ar[:,0:yR] = 0
+            shifted_ar[:, 0:yR] = 0
         elif yR < 0:
-            shifted_ar[:,yR:] = 0
+            shifted_ar[:, yR:] = 0
 
     return shifted_ar
 
 
-
-
-
-
-
-
-def get_CoM(ar):
+def get_CoM(ar, device = "cpu"):
     """
     Finds and returns the center of mass of array ar.
     """
-    nx, ny = np.shape(ar)
-    ry, rx = np.meshgrid(np.arange(ny), np.arange(nx))
-    tot_intens = np.sum(ar)
-    xCoM = np.sum(rx * ar) / tot_intens
-    yCoM = np.sum(ry * ar) / tot_intens
+    if device == "cpu":
+        xp = np
+
+    elif device == "gpu":
+        xp = cp
+
+    ar = xp.asarray(ar)
+    
+    nx, ny = ar.shape
+    ry, rx = xp.meshgrid(xp.arange(ny), xp.arange(nx))
+    tot_intens = xp.sum(ar)
+    xCoM = xp.sum(rx * ar) / tot_intens
+    yCoM = xp.sum(ry * ar) / tot_intens
     return xCoM, yCoM
-
-
-
 
 def get_maxima_1D(ar, sigma=0, minSpacing=0, minRelativeIntensity=0, relativeToPeak=0):
     """

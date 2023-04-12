@@ -14,11 +14,6 @@ try:
 except:
     cp = None
 
-try:
-    from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
-    from pymatgen.core.structure import Structure
-except ImportError:
-    pass
 
 def orientation_plan(
     self,
@@ -114,21 +109,18 @@ def orientation_plan(
         self.orientation_refine_ratio = 1.0
         self.orientation_refine = False
 
-    # Handle the "auto" case first, since it works by overriding zone_axis_range,
-    #   fiber_axis, and fiber_angles then using the regular parser:
-    if isinstance(zone_axis_range, str) and zone_axis_range == "auto":
-        # from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
-        # from pymatgen.core.structure import Structure
-
-        # initialize structure
+    if self.pymatgen_available:
+        from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
+        from pymatgen.core.structure import Structure
         structure = Structure(
             self.lat_real, self.numbers, self.positions, coords_are_cartesian=False
         )
-
-        # pointgroup = SpacegroupAnalyzer(structure).get_point_group_symbol()
-        # self.pointgroup = pointgroup
         self.pointgroup = SpacegroupAnalyzer(structure)
 
+
+    # Handle the "auto" case first, since it works by overriding zone_axis_range,
+    #   fiber_axis, and fiber_angles then using the regular parser:
+    if isinstance(zone_axis_range, str) and zone_axis_range == "auto":
         assert (
             self.pointgroup.get_point_group_symbol() in orientation_ranges
         ), "Unrecognized pointgroup returned by pymatgen!"
@@ -145,9 +137,6 @@ def orientation_plan(
             f"Automatically detected point group {self.pointgroup.get_point_group_symbol()},\n"
             f" using arguments: zone_axis_range = \n{zone_axis_range}, \n fiber_axis={fiber_axis}, fiber_angles={fiber_angles}."
         )
-
-        # Set a flag so we know pymatgen is available
-        self.pymatgen_available = True
 
 
     if isinstance(zone_axis_range, str):
@@ -294,7 +283,7 @@ def orientation_plan(
     )
     self.orientation_zone_axis_steps = (np.round(
         step / self.orientation_refine_ratio
-        ) * self.orientation_refine_ratio).astype(np.int)
+        ) * self.orientation_refine_ratio).astype(np.integer)
 
     if self.orientation_fiber and self.orientation_fiber_angles[0] == 0:
         self.orientation_num_zones = int(1)
@@ -329,7 +318,7 @@ def orientation_plan(
             (self.orientation_zone_axis_steps + 1)
             * (self.orientation_zone_axis_steps + 2)
             / 2
-        ).astype(np.int)
+        ).astype(np.integer)
         self.orientation_vecs = np.zeros((self.orientation_num_zones, 3))
         self.orientation_vecs[0, :] = self.orientation_zone_axis_range[0, :]
         self.orientation_inds = np.zeros((self.orientation_num_zones, 3), dtype="int")
@@ -338,7 +327,7 @@ def orientation_plan(
         # or circular arc SLERP for fiber texture
         for a0 in np.arange(1, self.orientation_zone_axis_steps + 1):
             inds = np.arange(a0 * (a0 + 1) / 2, a0 * (a0 + 1) / 2 + a0 + 1).astype(
-                np.int
+                np.integer
             )
 
             p0 = pv[a0, :]
@@ -576,7 +565,7 @@ def orientation_plan(
     )
 
     # Solve for number of angular steps along in-plane rotation direction
-    self.orientation_in_plane_steps = np.round(360 / angle_step_in_plane).astype(np.int)
+    self.orientation_in_plane_steps = np.round(360 / angle_step_in_plane).astype(np.integer)
 
     # Calculate -z angles (Euler angle 3)
     self.orientation_gamma = np.linspace(
@@ -1572,85 +1561,6 @@ def match_single_pattern(
         return orientation
 
 
-def orientation_map_to_orix_CrystalMap(
-    self,
-    orientation_map,
-    ind_orientation=0,
-    pixel_size=1.0,
-    pixel_units='px',
-    return_color_key=False
-    ):
-    try:
-        from orix.quaternion import Rotation, Orientation
-        from orix.crystal_map import CrystalMap, Phase, PhaseList, create_coordinate_arrays
-        from orix.plot import IPFColorKeyTSL
-    except ImportError:
-        raise Exception("orix failed to import; try pip installing separately")
-
-    from diffpy.structure import Atom, Lattice, Structure
-
-    from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
-    from pymatgen.core.structure import Structure as pgStructure
-
-    from scipy.spatial.transform import Rotation as R
-
-    from py4DSTEM.process.diffraction.utils import element_symbols
-
-    # Convert the orientation matrices into Euler angles
-    angles = np.vstack(
-        [
-        R.from_matrix(matrix.T).as_euler('zxz')
-        for matrix in  orientation_map.matrix[:,:,ind_orientation].reshape(-1,3,3)
-        ]
-    )
-
-    # generate a list of Rotation objects from the Euler angles
-    rotations = Rotation.from_euler(angles, direction='crystal2lab')
-
-    # Generate x,y coordinates since orix uses flat data internally
-    coords, _ = create_coordinate_arrays((orientation_map.num_x,orientation_map.num_y),(pixel_size,)*2)
-
-    # Generate an orix structure from the Crystal
-    atoms = [ Atom( element_symbols[Z-1], pos) for Z, pos in zip(self.numbers, self.positions)]
-
-    structure = Structure(
-        atoms=atoms,
-        lattice=Lattice(*self.cell),
-    )
-    
-    # Use pymatgen to get the symmetry
-    pg_structure = pgStructure(self.lat_real, self.numbers, self.positions, coords_are_cartesian=False)
-    pointgroup = SpacegroupAnalyzer(pg_structure).get_point_group_symbol()
-    
-    # If the structure has only one element, name the phase based on the element
-    if np.unique(self.numbers).size == 1:
-        name = element_symbols[self.numbers[0]-1]
-    else:
-        name = pg_structure.formula    
-    
-    # Generate an orix Phase to store symmetry
-    phase = Phase(
-        name=name,
-        point_group=pointgroup,
-        structure=structure,
-    )
-
-    xmap = CrystalMap(
-        rotations=rotations,
-        x=coords["x"],
-        y=coords["y"],
-        phase_list=PhaseList(phase),
-        prop={
-            "iq": orientation_map.corr[:, :, ind_orientation].ravel(),
-            "ci": orientation_map.corr[:, :, ind_orientation].ravel(),
-        },
-        scan_unit=pixel_units,
-    )
-
-    ckey = IPFColorKeyTSL(phase.point_group)
-
-    return (xmap, ckey) if return_color_key else xmap
-
 
 
 def calculate_strain(
@@ -1664,6 +1574,9 @@ def calculate_strain(
     k_max: Optional[float] = None,
     min_num_peaks = 5,
     rotation_range = None,
+    mask_from_corr = True,
+    corr_range = (0, 2),
+    corr_normalize = True,
     progress_bar = True,
     ):
     '''
@@ -1685,6 +1598,10 @@ def calculate_strain(
         k_max (float):                   Maximum scattering vector
         min_num_peaks (int):             Minimum number of peaks required.
         rotation_range (float):          Maximum rotation range in radians (for symmetry reduction).
+        progress_bar (bool):             Show progress bar
+        mask_from_corr (bool):           Use ACOM correlation signal for mask
+        corr_range (np.ndarray):         Range of correlation signals for mask
+        corr_normalize (bool):           Normalize correlation signal before masking
 
     Returns:
         strain_map (RealSlice):  strain tensor
@@ -1699,7 +1616,17 @@ def calculate_strain(
             5)),
         slicelabels=('e_xx','e_yy','e_xy','theta','mask'),
         name='strain_map')
-    strain_map.get_slice('mask').data[:] = 1.0
+    if mask_from_corr:
+        corr_range = np.array(corr_range)
+        corr_mask = orientation_map.corr[:,:,0]
+        if corr_normalize:
+            corr_mask /= np.mean(corr_mask)
+        corr_mask = np.clip((corr_mask - corr_range[0]) \
+            / (corr_range[1]-corr_range[0]),0,1)
+        strain_map.get_slice('mask').data[:] = corr_mask
+
+    else:
+        strain_map.get_slice('mask').data[:] = 1.0
 
     # init values
     if corr_kernel_size is None:
@@ -1791,6 +1718,8 @@ def save_ang_file(
     ind_orientation=0,
     pixel_size=1.0,
     pixel_units="px",
+    transpose_xy = True,
+    flip_x = False,
 ):
     """
     This function outputs an ascii text file in the .ang format, containing
@@ -1803,6 +1732,8 @@ def save_ang_file(
         ind_orientation (int):              Which orientation match to plot if num_matches > 1
         pixel_size (float):                 Pixel size, if known.
         pixel_units (str):                  Units of the pixel size
+        transpose_xy (bool):                Transpose x and y pixel coordinates.
+        flip_x (bool):                      Swap x direction pixels (after transpose).
 
     Returns:
         nothing
@@ -1817,9 +1748,108 @@ def save_ang_file(
         pixel_size=pixel_size,
         pixel_units=pixel_units,
         return_color_key=False,
+        transpose_xy = transpose_xy,
+        flip_x = flip_x,
     )
 
     file_writer(file_name, xmap)
+
+
+def orientation_map_to_orix_CrystalMap(
+    self,
+    orientation_map,
+    ind_orientation=0,
+    pixel_size=1.0,
+    pixel_units='px',
+    transpose_xy = True,
+    flip_x = False,
+    return_color_key=False
+    ):
+    try:
+        from orix.quaternion import Rotation, Orientation
+        from orix.crystal_map import CrystalMap, Phase, PhaseList, create_coordinate_arrays
+        from orix.plot import IPFColorKeyTSL
+    except ImportError:
+        raise Exception("orix failed to import; try pip installing separately")
+
+    from diffpy.structure import Atom, Lattice, Structure
+
+    from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
+    from pymatgen.core.structure import Structure as pgStructure
+
+    from scipy.spatial.transform import Rotation as R
+
+    from py4DSTEM.process.diffraction.utils import element_symbols
+
+    import warnings
+
+    # Get orientation matrices
+    orientation_matrices = orientation_map.matrix[:,:,ind_orientation].copy()
+    if transpose_xy:
+        orientation_matrices = np.transpose(orientation_matrices, (1,0,2,3))
+    if flip_x:
+        orientation_matrices = np.flip(orientation_matrices, axis=0)
+
+    # Convert the orientation matrices into Euler angles
+    # suppress Gimbal lock warnings
+    def fxn():
+        warnings.warn("deprecated", DeprecationWarning)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        angles = np.vstack(
+            [
+            R.from_matrix(matrix.T).as_euler('zxz')
+            for matrix in orientation_matrices.reshape(-1,3,3)
+            ]
+        )
+
+    # generate a list of Rotation objects from the Euler angles
+    rotations = Rotation.from_euler(angles, direction='crystal2lab')
+
+    # Generate x,y coordinates since orix uses flat data internally
+    # coords, _ = create_coordinate_arrays((orientation_map.num_x,orientation_map.num_y),(pixel_size,)*2)
+    coords, _ = create_coordinate_arrays((orientation_matrices.shape[0],orientation_matrices.shape[1]),(pixel_size,)*2)
+
+    # Generate an orix structure from the Crystal
+    atoms = [ Atom( element_symbols[Z-1], pos) for Z, pos in zip(self.numbers, self.positions)]
+
+    structure = Structure(
+        atoms=atoms,
+        lattice=Lattice(*self.cell),
+    )
+    
+    # Use pymatgen to get the symmetry
+    pg_structure = pgStructure(self.lat_real, self.numbers, self.positions, coords_are_cartesian=False)
+    pointgroup = SpacegroupAnalyzer(pg_structure).get_point_group_symbol()
+    
+    # If the structure has only one element, name the phase based on the element
+    if np.unique(self.numbers).size == 1:
+        name = element_symbols[self.numbers[0]-1]
+    else:
+        name = pg_structure.formula    
+    
+    # Generate an orix Phase to store symmetry
+    phase = Phase(
+        name=name,
+        point_group=pointgroup,
+        structure=structure,
+    )
+
+    xmap = CrystalMap(
+        rotations=rotations,
+        x=coords["x"],
+        y=coords["y"],
+        phase_list=PhaseList(phase),
+        prop={
+            "iq": orientation_map.corr[:, :, ind_orientation].ravel(),
+            "ci": orientation_map.corr[:, :, ind_orientation].ravel(),
+        },
+        scan_unit=pixel_units,
+    )
+
+    ckey = IPFColorKeyTSL(phase.point_group)
+
+    return (xmap, ckey) if return_color_key else xmap
 
 
 def symmetry_reduce_directions(

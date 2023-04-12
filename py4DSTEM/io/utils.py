@@ -34,5 +34,7 @@ def parse_filetype(fp):
        return "gatan_K2_bin"
     elif fext in [".kitware_counted"]:
        return "kitware_counted"
+    elif fext in [".mib", ".MIB"]:
+        return "mib"
     else:
         raise Exception(f"Unrecognized file extension {fext}.")

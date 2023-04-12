@@ -26,6 +26,7 @@ def calculate_dynamical_structure_factors(
     thermal_sigma: Optional[Union[float, dict]] = None,
     tol_structure_factor: float = 0.0,
     recompute_kinematic_structure_factors=True,
+    g_vec_precision=None,
     verbose=True,
 ):
     """
@@ -67,6 +68,10 @@ def calculate_dynamical_structure_factors(
                                         of half ensures that every beam in a simulation can couple to
                                         every other beam (no high-angle couplings in the Bloch matrix
                                         are set to zero.)
+        g_vec_precision (optional int): If specified, rounds |g| to this many decimal places so that
+                                        automatic caching of the atomic form factors is not slowed
+                                        down due to floating point errors. Setting this to 3 can give
+                                        substantial speedup at the cost of some reduced accuracy
 
         See WK_scattering_factors.py for details on the Weickenmeier-Kohl form factors.
     """
@@ -134,114 +139,92 @@ def calculate_dynamical_structure_factors(
     g_vec_all = g_vec_all[:, keep]
     g_vec_leng = np.linalg.norm(g_vec_all, axis=0)
 
-    # We do not precompute form factors here, instead we rely on using
-    # automatic caching of the form factors.
-
     lobato_lookup = single_atom_scatter()
 
     m0c2 = 5.109989461e5  # electron rest mass, in eV
     relativistic_factor = (m0c2 + accelerating_voltage) / m0c2
 
-    from functools import lru_cache
-
-    # get_f_e returns f^e in units of VÅ^3, with relativistic correction
-    # but not yet converted to
-    @lru_cache(maxsize=2 ** 12)
     def get_f_e(q, Z, thermal_sigma, method):
         if method == "Lobato":
             # Real lobato factors
-            lobato_lookup.get_scattering_factor([Z], [1.0], [q], units="A")
+            lobato_lookup.get_scattering_factor([Z], [1.0], q, units="A")
             return np.complex128(relativistic_factor / np.pi * lobato_lookup.fe)
         elif method == "Lobato-absorptive":
             # Fake absorptive Lobato factors
-            lobato_lookup.get_scattering_factor([Z], [1.0], [q], units="A")
+            lobato_lookup.get_scattering_factor([Z], [1.0], q, units="A")
             return np.complex128(
                 relativistic_factor / np.pi * lobato_lookup.fe * (1.0 + 0.1j)
             )
         elif method == "WK":
             # Real WK factor
             return compute_WK_factor(
-                float(q),
-                int(Z),
-                float(accelerating_voltage),
-                float(thermal_sigma),
+                q,
+                Z,
+                accelerating_voltage,
+                thermal_sigma,
                 include_core=False,
                 include_phonon=False,
             )
         elif method == "WK-C":
             # WK, core only
             return compute_WK_factor(
-                float(q),
-                int(Z),
-                float(accelerating_voltage),
-                float(thermal_sigma),
+                q,
+                Z,
+                accelerating_voltage,
+                thermal_sigma,
                 include_core=True,
                 include_phonon=False,
             )
         elif method == "WK-P":
             # WK, phonon only
             return compute_WK_factor(
-                float(q),
-                int(Z),
-                float(accelerating_voltage),
-                float(thermal_sigma),
+                q,
+                Z,
+                accelerating_voltage,
+                thermal_sigma,
                 include_core=False,
                 include_phonon=True,
             )
         elif method == "WK-CP":
             # WK, core + phonon
             return compute_WK_factor(
-                float(q),
-                int(Z),
-                float(accelerating_voltage),
-                float(thermal_sigma),
+                q,
+                Z,
+                accelerating_voltage,
+                thermal_sigma,
                 include_core=True,
                 include_phonon=True,
             )
 
-    display_names = {
-        "Lobato": "Lobato-Van Dyck",
-        "Lobato-absorptive": "Lobato-Van Dyck-Hashimoto",
-        "WK": "Weickenmeier-Kohl",
-        "WK-C": "Weickenmeier-Kohl + Core",
-        "WK-P": "Weickenmeier-Kohl + Phonon",
-        "WK-CP": "Weickenmeier-Kohl + Core + Phonon",
-    }
+    # find unique values of Z and |g| for computing atomic form factors
+    Z_unique, Z_inverse = np.unique(self.numbers, return_inverse=True)
+    g_unique, g_inverse = np.unique(
+        np.round(g_vec_leng, g_vec_precision) if g_vec_precision else g_vec_leng,
+        return_inverse=True,
+    )
+
+    f_e_uniq = np.zeros((Z_unique.size, g_unique.size), dtype=np.complex128)
+
+    for idx, Z in enumerate(Z_unique):
+        # get element-specific thermal displacements, if given
+        sigma = thermal_sigma[Z] if isinstance(thermal_sigma, dict) else thermal_sigma
+        f_e_uniq[idx, :] = get_f_e(g_unique, Z, sigma, method)
+
+    # flesh out the dense array of atomic scattering factors
+    f_e = f_e_uniq[np.ix_(Z_inverse, g_inverse)]
 
     # Calculate structure factors
-    struct_factors = np.zeros(np.size(g_vec_leng, 0), dtype="complex128")
-    for i_hkl in tqdm(
-        range(hkl.shape[1]),
-        desc=f"Computing {display_names[method]} lookup table",
-        disable=not verbose,
-    ):
-        Fscatt = 0.0 + 0.0j
-        for i_pos in range(self.positions.shape[0]):
-            # Get the appropriate atomic form factor:
-            sigma = (
-                thermal_sigma[self.numbers[i_pos]]
-                if isinstance(thermal_sigma, dict)
-                else thermal_sigma
-            )
-            fe = get_f_e(
-                q=g_vec_leng[i_hkl],
-                Z=self.numbers[i_pos],
-                thermal_sigma=sigma,
-                method=method,
-            )
-
-            Fscatt += fe * np.exp(
-                (2.0j * np.pi) * (hkl[:, i_hkl] @ self.positions[i_pos])
-            )
-
-        struct_factors[i_hkl] = Fscatt
+    struct_factors = np.sum(
+        f_e * np.exp(2.0j * np.pi * np.squeeze(self.positions[:, None, :] @ hkl)),
+        axis=0,
+    )
 
     # Divide by unit cell volume
     unit_cell_volume = np.abs(np.linalg.det(self.lat_real))
     struct_factors /= unit_cell_volume
 
     # Remove structure factors below tolerance level
-    keep = np.abs(struct_factors) > tol_structure_factor
+    keep = np.abs(struct_factors) >= tol_structure_factor
     hkl = hkl[:, keep]
 
     g_vec_all = g_vec_all[:, keep]
@@ -257,9 +240,6 @@ def calculate_dynamical_structure_factors(
         (hkl[0, i], hkl[1, i], hkl[2, i]): struct_factors[i]
         for i in range(hkl.shape[1])
     }
-
-    # Clear cached scattering factors to free up RAM
-    get_f_e.cache_clear()
 
 
 def generate_dynamical_diffraction_pattern(

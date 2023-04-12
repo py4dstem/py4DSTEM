@@ -177,28 +177,17 @@ class Array:
         self.dim_names = dim_names
         self.dim_units = dim_units
 
-        self.shape = self.data.shape
-        self.rank = self.data.ndim
-
         self.tree = Tree()
         if not hasattr(self, "_metadata"):
             self._metadata = {}
-
-        # flag to help assign dim names and units
-        dim_in_pixels = np.zeros(self.rank, dtype=bool)
 
 
         ## Handle array stacks
 
         if slicelabels is None:
-            self.depth = 0
             self.is_stack = False
 
         else:
-            self.depth = self.shape[-1]
-            self.shape = self.shape[:-1]
-            dim_in_pixels = dim_in_pixels[:-1]
-            self.rank -= 1
             self.is_stack = True
 
             # Populate labels
@@ -216,6 +205,7 @@ class Array:
 
         ## Set dim vectors
 
+        dim_in_pixels = np.zeros(self.rank, dtype=bool) # flag to help assign dim names and units
         # if none were passed
         if self.dims is None:
             self.dims = [self._unpack_dim(1,self.shape[n]) for n in range(self.rank)]
@@ -288,9 +278,28 @@ class Array:
             raise Exception(f"too many dim units were passed - expected {self.rank}, received {len(self.dim_units)}")
 
 
+    # Shape properties
 
+    @property
+    def shape(self):
+        if not self.is_stack:
+            return self.data.shape
+        else:
+            return self.data.shape[:-1]
 
-    #### Methods
+    @property
+    def depth(self):
+        if not self.is_stack:
+            return 0
+        else:
+            return self.data.shape[-1]
+
+    @property
+    def rank(self):
+        if not self.is_stack:
+            return self.data.ndim
+        else:
+            return self.data.ndim - 1
 
 
     ## Slicing
@@ -420,8 +429,12 @@ class Array:
             string += "\n"+space+"with dimensions:"
             string += "\n"
             for n in range(self.rank):
-                string += "\n"+space+f"{self.dim_names[n]} = [{self.dims[n][0]},{self.dims[n][1]},...] {self.dim_units[n]}"
-            string += "\n)"
+                # need to handle the edge case of only single value in dims i.e.line scans, 1,512,256,256
+                # check there is more than a single probe poistion
+                if self.dims[n].size < 2: 
+                    string += "\n"+space+f"    {self.dim_names[n]} = [{self.dims[n][0]}] {self.dim_units[n]}"
+                else:
+                    string += "\n"+space+f"    {self.dim_names[n]} = [{self.dims[n][0]},{self.dims[n][1]},...] {self.dim_units[n]}"
 
         else:
             space = ' '*len(self.__class__.__name__)+'  '
@@ -434,7 +447,12 @@ class Array:
             string += "\n"
             string += "\n" + space + "The Array dimensions are:"
             for n in range(self.rank):
-                string += "\n"+space+f"    {self.dim_names[n]} = [{self.dims[n][0]},{self.dims[n][1]},...] {self.dim_units[n]}"
+                # need to handle the edge case of only single value in dims i.e.line scans, 1,512,256,256
+                # check there is more than a single probe poistion
+                if self.dims[n].size < 2: 
+                    string += "\n"+space+f"    {self.dim_names[n]} = [{self.dims[n][0]}] {self.dim_units[n]}"
+                else:
+                    string += "\n"+space+f"    {self.dim_names[n]} = [{self.dims[n][0]},{self.dims[n][1]},...] {self.dim_units[n]}"
                 if not self._dim_is_linear(self.dims[n],self.shape[n]):
                     string += "  (*non-linear*)"
             string += "\n)"

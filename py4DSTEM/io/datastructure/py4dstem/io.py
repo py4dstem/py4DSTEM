@@ -33,7 +33,7 @@ def Calibration_from_h5(group:h5py.Group):
 
 def Calibration_from_Metadata(metadata):
     """
-    Converts a Metadata instance to a Calibration instance.
+    Constructs a Calibration object with the dict entries of a Metadata object
 
     Accepts:
         metadata (Metadata)
@@ -42,14 +42,11 @@ def Calibration_from_Metadata(metadata):
         (Calibration)
     """
     from py4DSTEM.io.datastructure.py4dstem.calibration import Calibration
-    p = metadata._params
-    metadata.__class__ = Calibration
-    metadata.__init__(
-        name = metadata.name
-    )
-    metadata._params.update(p)
+    
+    cal = Calibration(name = metadata.name)
+    cal._params.update(metadata._params)
 
-    return metadata
+    return cal
 
 
 
@@ -90,12 +87,20 @@ def DataCube_from_Array(array):
     from py4DSTEM.io.datastructure.py4dstem.datacube import DataCube
     assert(array.rank == 4), "Array must have 4 dimensions"
     array.__class__ = DataCube
+    try:
+        R_pixel_size = array.dims[0][1]-array.dims[0][0]
+    except IndexError:
+        R_pixel_size = 1
+    try:
+        Q_pixel_size = array.dims[2][1]-array.dims[2][0]
+    except IndexError:
+        Q_pixel_size = 1
     array.__init__(
         data = array.data,
         name = array.name,
-        R_pixel_size = array.dims[0][1]-array.dims[0][0],
+        R_pixel_size = R_pixel_size,
         R_pixel_units = array.dim_units[0],
-        Q_pixel_size = array.dims[2][1]-array.dims[2][0],
+        Q_pixel_size = Q_pixel_size,
         Q_pixel_units = array.dim_units[2],
         slicelabels = array.slicelabels
     )
@@ -149,61 +154,110 @@ def DiffractionSlice_from_Array(array):
 
 
 
-
-
-# DiffractionImage
+# RealSlice
 
 # read
 
-def DiffractionImage_from_h5(group:h5py.Group):
+def RealSlice_from_h5(group:h5py.Group):
     """
     Takes a valid HDF5 group for an HDF5 file object which is open in
     read mode. Determines if it's a valid Array, and if so loads and
-    returns it as a DiffractionImage. Otherwise, raises an exception.
+    returns it as a RealSlice. Otherwise, raises an exception.
 
     Accepts:
         group (HDF5 group)
 
     Returns:
-        A DiffractionImage instance
+        A RealSlice instance
     """
-    diffractionimage = Array_from_h5(group)
-    diffractionimage = DiffractionImage_from_Array(diffractionimage)
-    return diffractionimage
+    realslice = Array_from_h5(group)
+    realslice = RealSlice_from_Array(realslice)
+    return realslice
 
 
-def DiffractionImage_from_Array(array):
+def RealSlice_from_Array(array):
     """
-    Converts an Array to a DiffractionImage.
+    Converts an Array to a RealSlice.
 
     Accepts:
         array (Array)
 
     Returns:
-        (DiffractionImage)
+        (RealSlice)
     """
-    from py4DSTEM.io.datastructure.py4dstem.diffractionimage import DiffractionImage
+    from py4DSTEM.io.datastructure.py4dstem.realslice import RealSlice
+    assert(array.rank == 2), "Array must have 2 dimensions"
+    array.__class__ = RealSlice
+    array.__init__(
+        data = array.data,
+        name = array.name,
+        slicelabels = array.slicelabels
+    )
+    return array
+
+
+
+
+
+
+# VirtualDiffraction
+
+# read
+
+def VirtualDiffraction_from_h5(group:h5py.Group):
+    """
+    Takes a valid HDF5 group for an HDF5 file object which is open in
+    read mode. Determines if it's a valid Array, and if so loads and
+    returns it as a VirtualDiffraction. Otherwise, raises an exception.
+
+    Accepts:
+        group (HDF5 group)
+
+    Returns:
+        A VirtualDiffraction instance
+    """
+    virtualdiffraction = Array_from_h5(group)
+    virtualdiffraction = VirtualDiffraction_from_Array(virtualdiffraction)
+    return virtualdiffraction
+
+
+def VirtualDiffraction_from_Array(array):
+    """
+    Converts an Array to a VirtualDiffraction.
+
+    Accepts:
+        array (Array)
+
+    Returns:
+        (VirtualDiffraction)
+    """
+    from py4DSTEM.io.datastructure.py4dstem.virtualdiffraction import VirtualDiffraction
     assert(array.rank == 2), "Array must have 2 dimensions"
 
     # get diffraction image metadata
     try:
-        md = array.metadata['diffractionimage']
+        md = array.metadata['virtualdiffraction']
+        method =  md['method']
         mode = md['mode']
-        geo = md['geometry']
-        shift_corr = md['shift_corr']
+        geometry = md['geometry']
+        shift_center = md['shift_center']
     except KeyError:
-        er = "DiffractionImage metadata could not be found"
-        raise Exception(er)
+        print("Warning: VirtualDiffraction metadata could not be found")
+        method = ''
+        mode = ''
+        geometry = ''
+        shift_center = ''
 
 
     # instantiate as a DiffractionImage
-    array.__class__ = DiffractionImage
+    array.__class__ = VirtualDiffraction
     array.__init__(
         data = array.data,
         name = array.name,
+        method = method,
         mode = mode,
-        geometry = geo,
-        shift_corr = shift_corr
+        geometry = geometry,
+        shift_center = shift_center,
     )
     return array
 
@@ -307,7 +361,6 @@ def Probe_from_Array(array):
     """
     from py4DSTEM.io.datastructure.py4dstem.probe import Probe
     assert(array.rank == 2), "Array must have 2 dimensions"
-
     # get diffraction image metadata
     try:
         md = array.metadata['probe']

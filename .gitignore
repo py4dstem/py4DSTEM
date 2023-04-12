@@ -3,6 +3,7 @@
 .pydevproject
 *.swp
 *.ipynb_checkpoints*
+.vscode/
 
 # Folders #
 .idea/
@@ -86,4 +87,3 @@ py4DSTEM/test/unit_test_data/
 .Trashes
 ehthumbs.db
 Thumbs.db
-Untitled.ipynb

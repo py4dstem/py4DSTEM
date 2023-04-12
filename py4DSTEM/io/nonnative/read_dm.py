@@ -9,20 +9,28 @@ from py4DSTEM.io.datastructure import DataCube, Array, Metadata
 from py4DSTEM.process.utils import bin2D
 
 
-def read_dm(filepath, name="dm_dataset", mem="RAM", binfactor=1, **kwargs):
+def read_dm(
+    filepath,
+    name="dm_dataset",
+    mem="RAM",
+    binfactor=1,
+    **kwargs
+    ):
     """
     Read a digital micrograph 4D-STEM file.
 
     Args:
         filepath: str or Path Path to the file
-        mem (str, optional): Specifies how the data should be stored; must be "RAM",
-            or "MEMMAP". See docstring for py4DSTEM.file.io.read. Default is "RAM".
-        binfactor (int, optional): Bin the data, in diffraction space, as it's loaded.
-            See docstring for py4DSTEM.file.io.read.  Default is 1.
-        metadata (bool, optional): if True, returns the file metadata as a Metadata
-            instance.
+        mem (str, optional): Specifies how the data is stored. Must be
+            "RAM", or "MEMMAP". See docstring for py4DSTEM.file.io.read. Default
+            is "RAM".
+        binfactor (int, optional): Bin the data, in diffraction space, as it's
+            loaded. See docstring for py4DSTEM.file.io.read.  Default is 1.
+        metadata (bool, optional): if True, returns the file metadata as a
+            Metadata instance.
         kwargs:
-            "dtype": a numpy dtype specifier to use for data binned on load, defaults to np.float32
+            "dtype": a numpy dtype specifier to use for data binned on load,
+                defaults to np.float32
 
     Returns:
        DataCube, if a 4D dataset is found, else Array if a 2D dataset is found
@@ -36,18 +44,20 @@ def read_dm(filepath, name="dm_dataset", mem="RAM", binfactor=1, **kwargs):
         thumbanil_count = 1 if dmFile.thumbnail else 0
         dataset_index = 0
         for i in range(dmFile.numObjects - thumbanil_count):
-            temp_data = dmFile.getMemmap(dataset_index)
+            temp_data = dmFile.getMemmap(i)
             if len(np.squeeze(temp_data).shape) > 2:
                 dataset_index = i
                 break
 
         # We will only try to read pixel sizes for 4D data for now
         pixel_size_found = False
-        if dmFile.dataShape[dataset_index] > 2:
+        if dmFile.dataShape[dataset_index + thumbanil_count] > 2:
             # The pixel sizes of all datasets are chained together, so
             # we have to figure out the right offset
             try:
-                scale_offset = sum(dmFile.dataShape[:dataset_index]) + 2 * thumbanil_count
+                scale_offset = (
+                    sum(dmFile.dataShape[:dataset_index]) + 2 * thumbanil_count
+                )
                 pixelsize = dmFile.scale[scale_offset:]
                 pixelunits = dmFile.scaleUnit[scale_offset:]
 
@@ -68,12 +78,19 @@ def read_dm(filepath, name="dm_dataset", mem="RAM", binfactor=1, **kwargs):
 
                 # Convert mrad to Å^-1 if possible
                 if Q_pixel_units == "mrad":
-                    voltage = [v for t,v in dmFile.allTags.items() if "Microscope Info.Voltage" in t]
-                    if len(voltage) == 1:
+                    voltage = [
+                        v
+                        for t, v in dmFile.allTags.items()
+                        if "Microscope Info.Voltage" in t
+                    ]
+                    if len(voltage) >= 1:
                         from py4DSTEM.process.utils import electron_wavelength_angstrom
+
                         lamda = electron_wavelength_angstrom(voltage[0])
                         Q_pixel_units = "A^-1"
-                        Q_pixel_size = Q_pixel_size / lamda / 1000. # convert mrad to 1/Å
+                        Q_pixel_size = (
+                            Q_pixel_size / lamda / 1000.0
+                        )  # convert mrad to 1/Å
                 pixel_size_found = True
             except Exception as err:
                 pass
@@ -123,7 +140,9 @@ def read_dm(filepath, name="dm_dataset", mem="RAM", binfactor=1, **kwargs):
                     data.calibration.set_R_pixel_size(R_pixel_size)
                     data.calibration.set_R_pixel_units(R_pixel_units)
                 except Exception as err:
-                    print(f"Setting pixel sizes of the datacube failed with error {err}")
+                    print(
+                        f"Setting pixel sizes of the datacube failed with error {err}"
+                    )
         else:
             data = Array(_data, name=name)
 
@@ -139,7 +158,7 @@ def _process_NCEM_TitanX_Tags(dmFile, dc=None):
     """
     scanx = [v for k, v in dmFile.allTags.items() if "4D STEM Tags.Scan shape X" in k]
     scany = [v for k, v in dmFile.allTags.items() if "4D STEM Tags.Scan shape Y" in k]
-    if len(scanx) == 1 and len(scany) == 1:
+    if len(scanx) >= 1 and len(scany) >= 1:
         # TitanX tags found!
         R_Nx = int(scany[0])  # need to flip x/y
         R_Ny = int(scanx[0])
