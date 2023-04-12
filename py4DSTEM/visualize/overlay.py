@@ -41,20 +41,20 @@ def add_rectangles(ax,d):
         assert(all([isinstance(f,bool) for f in fill]))
     # alpha
     alpha = d['alpha'] if 'alpha' in d.keys() else 1
-    if isinstance(alpha,(float,int,np.float)):
+    if isinstance(alpha,(float,int,np.float64)):
         alpha = [alpha for i in range(N)]
     else:
         assert(isinstance(alpha,list))
         assert(len(alpha)==N)
-        assert(all([isinstance(a,(float,int,np.float)) for a in alpha]))
+        assert(all([isinstance(a,(float,int,np.float64)) for a in alpha]))
     # linewidth
     linewidth = d['linewidth'] if 'linewidth' in d.keys() else 2
-    if isinstance(linewidth,(float,int,np.float)):
+    if isinstance(linewidth,(float,int,np.float64)):
         linewidth = [linewidth for i in range(N)]
     else:
         assert(isinstance(linewidth,list))
         assert(len(linewidth)==N)
-        assert(all([isinstance(lw,(float,int,np.float)) for lw in linewidth]))
+        assert(all([isinstance(lw,(float,int,np.float64)) for lw in linewidth]))
     # additional parameters
     kws = [k for k in d.keys() if k not in ('lims','color','fill','alpha','linewidth')]
     kwargs = dict()
@@ -112,20 +112,20 @@ def add_circles(ax,d):
         assert(all([isinstance(f,bool) for f in fill]))
     # alpha
     alpha = d['alpha'] if 'alpha' in d.keys() else 1
-    if isinstance(alpha,(float,int,np.float)):
+    if isinstance(alpha,(float,int,np.float64)):
         alpha = [alpha for i in range(N)]
     else:
         assert(isinstance(alpha,list))
         assert(len(alpha)==N)
-        assert(all([isinstance(a,(float,int,np.float)) for a in alpha]))
+        assert(all([isinstance(a,(float,int,np.float64)) for a in alpha]))
     # linewidth
     linewidth = d['linewidth'] if 'linewidth' in d.keys() else 2
-    if isinstance(linewidth,(float,int,np.float)):
+    if isinstance(linewidth,(float,int,np.float64)):
         linewidth = [linewidth for i in range(N)]
     else:
         assert(isinstance(linewidth,list))
         assert(len(linewidth)==N)
-        assert(all([isinstance(lw,(float,int,np.float)) for lw in linewidth]))
+        assert(all([isinstance(lw,(float,int,np.float64)) for lw in linewidth]))
     # additional parameters
     kws = [k for k in d.keys() if k not in ('center','R','color','fill','alpha','linewidth')]
     kwargs = dict()
@@ -189,20 +189,20 @@ def add_annuli(ax,d):
         assert(all([isinstance(f,bool) for f in fill]))
     # alpha
     alpha = d['alpha'] if 'alpha' in d.keys() else 1
-    if isinstance(alpha,(float,int,np.float)):
+    if isinstance(alpha,(float,int,np.float64)):
         alpha = [alpha for i in range(N)]
     else:
         assert(isinstance(alpha,list))
         assert(len(alpha)==N)
-        assert(all([isinstance(a,(float,int,np.float)) for a in alpha]))
+        assert(all([isinstance(a,(float,int,np.float64)) for a in alpha]))
     # linewidth
     linewidth = d['linewidth'] if 'linewidth' in d.keys() else 2
-    if isinstance(linewidth,(float,int,np.float)):
+    if isinstance(linewidth,(float,int,np.float64)):
         linewidth = [linewidth for i in range(N)]
     else:
         assert(isinstance(linewidth,list))
         assert(len(linewidth)==N)
-        assert(all([isinstance(lw,(float,int,np.float)) for lw in linewidth]))
+        assert(all([isinstance(lw,(float,int,np.float64)) for lw in linewidth]))
     # additional parameters
     kws = [k for k in d.keys() if k not in ('center','radii','color','fill','alpha','linewidth')]
     kwargs = dict()
@@ -287,20 +287,20 @@ def add_ellipses(ax,d):
         assert(all([isinstance(f,bool) for f in fill]))
     # alpha
     alpha = d['alpha'] if 'alpha' in d.keys() else 1
-    if isinstance(alpha,(float,int,np.float)):
+    if isinstance(alpha,(float,int,np.float64)):
         alpha = [alpha for i in range(N)]
     else:
         assert(isinstance(alpha,list))
         assert(len(alpha)==N)
-        assert(all([isinstance(alp,(float,int,np.float)) for alp in alpha]))
+        assert(all([isinstance(alp,(float,int,np.float64)) for alp in alpha]))
     # linewidth
     linewidth = d['linewidth'] if 'linewidth' in d.keys() else 2
-    if isinstance(linewidth,(float,int,np.float)):
+    if isinstance(linewidth,(float,int,np.float64)):
         linewidth = [linewidth for i in range(N)]
     else:
         assert(isinstance(linewidth,list))
         assert(len(linewidth)==N)
-        assert(all([isinstance(lw,(float,int,np.float)) for lw in linewidth]))
+        assert(all([isinstance(lw,(float,int,np.float64)) for lw in linewidth]))
     # linestyle
     linestyle = d['linestyle'] if 'linestyle' in d.keys() else '-'
     if isinstance(linestyle,(str)):
@@ -1029,7 +1029,7 @@ def get_nice_spacing(Nx,Ny,pixelsize):
         _spacing=0.5
     elif base>=2.1 and base<4.6:
         _spacing=1
-    elif base>=4.6 and base<10:
+    elif base>=4.6 and base<=10:
         _spacing=2
     # if base>=1 and base<1.25:
     #     _spacing=0.4
