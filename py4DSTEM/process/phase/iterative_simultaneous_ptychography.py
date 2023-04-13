@@ -1953,13 +1953,11 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
 
         if pure_phase_object:
             amplitude_e = 1.0
-            amplitude_m = 1.0
         else:
             amplitude_e = xp.minimum(xp.abs(electrostatic_obj), 1.0)
-            amplitude_m = xp.minimum(xp.abs(magnetic_obj), 1.0)
 
         electrostatic_obj = amplitude_e * phase_e
-        magnetic_obj = amplitude_m * phase_m
+        magnetic_obj = phase_m
 
         current_object = (electrostatic_obj, magnetic_obj)
 
@@ -2005,7 +2003,7 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         return current_object
 
     def _object_gaussian_constraint(
-        self, current_object, gaussian_filter_sigma, pure_phase_object
+        self, current_object, gaussian_filter_sigma_e, gaussian_filter_sigma_m, pure_phase_object
     ):
         """
         Ptychographic smoothness constraint.
@@ -2030,20 +2028,20 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
 
         electrostatic_obj, magnetic_obj = current_object
 
-        if pure_phase_object:
-            phase_e = xp.angle(electrostatic_obj)
+        if gaussian_filter_sigma_m:
             phase_m = xp.angle(magnetic_obj)
-
-            phase_e = gaussian_filter(phase_e, gaussian_filter_sigma)
-            phase_m = gaussian_filter(phase_m, gaussian_filter_sigma)
-
-            electrostatic_obj = xp.exp(1.0j * phase_e)
+            phase_m = gaussian_filter(phase_m, gaussian_filter_sigma_m)
             magnetic_obj = xp.exp(1.0j * phase_m)
-        else:
-            electrostatic_obj = gaussian_filter(
-                electrostatic_obj, gaussian_filter_sigma
-            )
-            magnetic_obj = gaussian_filter(magnetic_obj, gaussian_filter_sigma)
+
+        if gaussian_filter_sigma_e:
+            if pure_phase_object:
+                phase_e = xp.angle(electrostatic_obj)
+                phase_e = gaussian_filter(phase_e, gaussian_filter_sigma_e)
+                electrostatic_obj = xp.exp(1.0j * phase_e)
+            else:
+                electrostatic_obj = gaussian_filter(
+                    electrostatic_obj, gaussian_filter_sigma_e
+                )
 
         current_object = (electrostatic_obj, magnetic_obj)
 
@@ -2095,8 +2093,10 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
     def _object_butterworth_constraint(
         self,
         current_object,
-        q_lowpass,
-        q_highpass,
+        q_lowpass_e,
+        q_lowpass_m,
+        q_highpass_e,
+        q_highpass_m,
     ):
         """
         High pass butterworth filter
@@ -2124,14 +2124,20 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         qya, qxa = xp.meshgrid(qy, qx)
         qra = xp.sqrt(qxa**2 + qya**2)
 
-        env = xp.ones_like(qra)
-        if q_highpass:
-            env *= 1 - 1 / (1 + (qra / q_highpass) ** 4)
-        if q_lowpass:
-            env *= 1 / (1 + (qra / q_lowpass) ** 4)
-
-        electrostatic_obj = xp.fft.ifft2(xp.fft.fft2(electrostatic_obj) * env)
-        magnetic_obj = xp.fft.ifft2(xp.fft.fft2(magnetic_obj) * env)
+        env_e = xp.ones_like(qra)
+        if q_highpass_e:
+            env_e *= 1 - 1 / (1 + (qra / q_highpass_e) ** 4)
+        if q_lowpass_e:
+            env_e *= 1 / (1 + (qra / q_lowpass_e) ** 4)
+        
+        env_m = xp.ones_like(qra)
+        if q_highpass_m:
+            env_e *= 1 - 1 / (1 + (qra / q_highpass_m) ** 4)
+        if q_lowpass_m:
+            env_m *= 1 / (1 + (qra / q_lowpass_m) ** 4)
+        
+        electrostatic_obj = xp.fft.ifft2(xp.fft.fft2(electrostatic_obj) * env_e)
+        magnetic_obj = xp.fft.ifft2(xp.fft.fft2(magnetic_obj) * env_m)
 
         current_object = (electrostatic_obj, magnetic_obj)
 
@@ -2176,10 +2182,13 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         fix_positions,
         global_affine_transformation,
         gaussian_filter,
-        gaussian_filter_sigma,
+        gaussian_filter_sigma_e,
+        gaussian_filter_sigma_m,
         butterworth_filter,
-        q_lowpass,
-        q_highpass,
+        q_lowpass_e,
+        q_lowpass_m,
+        q_highpass_e,
+        q_highpass_m,
         warmup_iteration,
     ):
         """
@@ -2226,11 +2235,11 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         if gaussian_filter:
             if warmup_iteration:
                 current_object = self._warmup_object_gaussian_constraint(
-                    current_object, gaussian_filter_sigma, pure_phase_object
+                    current_object, gaussian_filter_sigma_e, pure_phase_object
                 )
             else:
                 current_object = self._object_gaussian_constraint(
-                    current_object, gaussian_filter_sigma, pure_phase_object
+                    current_object, gaussian_filter_sigma_e, gaussian_filter_sigma_m, pure_phase_object
                 )
 
         if butterworth_filter:
@@ -2243,8 +2252,10 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
             else:
                 current_object = self._object_butterworth_constraint(
                     current_object,
-                    q_lowpass,
-                    q_highpass,
+                    q_lowpass_e,
+                    q_lowpass_m,
+                    q_highpass_e,
+                    q_highpass_m,
                 )
 
         if warmup_iteration:
@@ -2296,11 +2307,14 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         global_affine_transformation: bool = True,
         probe_support_relative_radius: float = 1.0,
         probe_support_supergaussian_degree: float = 10.0,
-        gaussian_filter_sigma: float = None,
+        gaussian_filter_sigma_e: float = None,
+        gaussian_filter_sigma_m: float = None,
         gaussian_filter_iter: int = np.inf,
         butterworth_filter_iter: int = np.inf,
-        q_lowpass: float = None,
-        q_highpass: float = None,
+        q_lowpass_e: float = None,
+        q_lowpass_m: float = None,
+        q_highpass_e: float = None,
+        q_highpass_m: float = None,
         store_iterations: bool = False,
         progress_bar: bool = True,
         reset: bool = None,
@@ -2560,6 +2574,12 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
             )
         )
 
+        if gaussian_filter_sigma_m is None:
+            gaussian_gilter_sigma_m = gaussian_filter_sigma_e
+        
+        if q_lowpass_m is None:
+            q_lowpass_m = q_lowpass_e
+
         # main loop
         for a0 in tqdmnd(
             max_iter,
@@ -2660,12 +2680,15 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                 global_affine_transformation=global_affine_transformation,
                 warmup_iteration=a0 < warmup_iter,
                 gaussian_filter=a0 < gaussian_filter_iter
-                and gaussian_filter_sigma is not None,
-                gaussian_filter_sigma=gaussian_filter_sigma,
+                and gaussian_filter_sigma_m is not None,
+                gaussian_filter_sigma_e=gaussian_filter_sigma_e,
+                gaussian_filter_sigma_m=gaussian_filter_sigma_m,
                 butterworth_filter=a0 < butterworth_filter_iter
-                and (q_lowpass is not None or q_highpass is not None),
-                q_lowpass=q_lowpass,
-                q_highpass=q_highpass,
+                and (q_lowpass_m is not None or q_highpass_m is not None),
+                q_lowpass_e=q_lowpass_e,
+                q_lowpass_m=q_lowpass_m,
+                q_highpass_e=q_highpass_e,
+                q_highpass_m=q_highpass_m,
             )
 
             if store_iterations:
