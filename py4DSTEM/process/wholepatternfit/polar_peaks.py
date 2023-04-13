@@ -215,22 +215,23 @@ class PolarPeaks:
             )
 
             for a0 in range(self.polar_shape[1]):
-                inds = np.squeeze(np.argwhere(sub_peaks[:,a0]))
-                vals = im[inds,a0]
+                inds = np.atleast_1d(np.squeeze(np.argwhere(sub_peaks[:,a0])))
+                if inds.size > 0:
+                    vals = im[inds,a0]
 
-                inds_sort = np.argsort(vals)[::-1]
-                inds_keep = inds_sort[:num_peaks_fit]
+                    inds_sort = np.argsort(vals)[::-1]
+                    inds_keep = inds_sort[:num_peaks_fit]
 
-                peaks_val = np.maximum(vals[inds_keep] - self.radial_median[rx,ry,a0], 0)
-                peaks_ind = inds[inds_keep]
-                peaks_angle = self.annular_bins[peaks_ind]
+                    peaks_val = np.maximum(vals[inds_keep] - self.radial_median[rx,ry,a0], 0)
+                    peaks_ind = inds[inds_keep]
+                    peaks_angle = self.annular_bins[peaks_ind]
 
-                # TODO - add subpixel peak fitting?
+                    # TODO - add subpixel peak fitting?
 
-                # output
-                num_peaks = peaks_val.shape[0]
-                self.radial_peaks[rx,ry,a0,:num_peaks,0] = peaks_angle
-                self.radial_peaks[rx,ry,a0,:num_peaks,1] = peaks_val
+                    # output
+                    num_peaks = peaks_val.shape[0]
+                    self.radial_peaks[rx,ry,a0,:num_peaks,0] = peaks_angle
+                    self.radial_peaks[rx,ry,a0,:num_peaks,1] = peaks_val
 
 
 
