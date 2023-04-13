@@ -5,8 +5,11 @@ This sub-module contains functions for polar transform peak detection of amorpho
 
 from py4DSTEM import tqdmnd
 from scipy.ndimage import gaussian_filter
+from sklearn.decomposition import PCA
 from itertools import product
 from typing import Optional
+from matplotlib.colors import hsv_to_rgb
+
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -225,22 +228,135 @@ class PolarPeaks:
                 # TODO - add subpixel peak fitting?
 
                 # output
-                self.radial_peaks[rx,ry,a0,:,0] = peaks_angle
-                self.radial_peaks[rx,ry,a0,:,1] = peaks_val
+                num_peaks = peaks_val.shape[0]
+                self.radial_peaks[rx,ry,a0,:num_peaks,0] = peaks_angle
+                self.radial_peaks[rx,ry,a0,:num_peaks,1] = peaks_val
 
 
 
 
 
-        # fig, ax = plt.subplots(figsize=(12,8))
-        # ax.imshow(
-        #     np.hstack((
-        #         im,
-        #         sub_peaks * im,
-        #     )),
-        #     vmin = 0,
-        #     vmax = 5,
-        #     )
+    def orientation_map(
+        self,
+        radial_index = 0,
+        peak_index = 0,
+        intensity_range = (0,1),
+        plot_result = True,
+        ):
+        """
+        Create an RGB orientation map from a given peak bin
+
+        Parameters
+        --------
+        progress_bar: bool
+            Turns on the progress bar for the polar transformation
+    
+        Returns
+        --------
+        im_orientation: np.array
+            rgb image array
+
+        """
+
+        # intensity mask
+        val = np.squeeze(self.radial_peaks[:,:,radial_index,peak_index,1]).copy()
+        val -= intensity_range[0]
+        val /= intensity_range[1] - intensity_range[0]
+        val = np.clip(val,0,1)
+
+        # orientation
+        hue = np.squeeze(self.radial_peaks[:,:,radial_index,peak_index,0]).copy()
+        hue = np.mod(2*hue,1)
+
+
+        # generate image
+        im_orientation = np.ones((
+            self.data_polar.shape[0],
+            self.data_polar.shape[1],
+            3))
+        im_orientation[:,:,0] = hue
+        im_orientation[:,:,2] = val
+        im_orientation = hsv_to_rgb(im_orientation)
+
+        if plot_result:
+            fig, ax = plt.subplots(figsize=(8,8))
+            ax.imshow(
+                im_orientation,
+                vmin = 0,
+                vmax = 5,
+            )
         # ax.plot(
         #     im[:,6]
         #     )
+
+        return im_orientation
+
+
+
+    def background_pca(
+        self,
+        pca_index = 0,
+        intensity_range = (0,1),
+        normalize_mean = True,
+        normalize_std = True,
+        plot_result = True,
+        plot_coef = False,
+        ):
+        """
+        Generate PCA decompositions of the background signal
+
+        Parameters
+        --------
+        progress_bar: bool
+            Turns on the progress bar for the polar transformation
+    
+        Returns
+        --------
+        im_pca: np,array
+            rgb image array
+        coef_pca: np.array
+            radial PCA component selected
+
+        """
+
+        # PCA decomposition
+        shape = self.radial_median.shape
+        A = np.reshape(self.radial_median, (shape[0]*shape[1],shape[2]))
+        if normalize_mean:
+            A -= np.mean(A,axis=0)
+        if normalize_std:
+            A /= np.std(A,axis=0)
+        pca = PCA(n_components=np.maximum(pca_index+1,2))
+        pca.fit(A)
+
+        components = pca.components_
+        loadings = pca.transform(A)
+
+        # output image data
+        sig_pca = np.reshape(loadings[:,pca_index], shape[0:2])
+        sig_pca -= intensity_range[0]
+        sig_pca /= intensity_range[1] - intensity_range[0]
+        sig_pca = np.clip(sig_pca,0,1)
+        im_pca = np.tile(sig_pca[:,:,None],(1,1,3))
+
+        # output PCA coefficient
+        coef_pca = np.vstack((
+            self.radial_bins,
+            components[pca_index,:]
+        )).T
+
+        if plot_result:
+            fig, ax = plt.subplots(figsize=(8,8))
+            ax.imshow(
+                im_pca,
+                vmin = 0,
+                vmax = 5,
+            )
+        if plot_coef:
+            fig, ax = plt.subplots(figsize=(8,4))
+            ax.plot(
+                coef_pca[:,0],
+                coef_pca[:,1]
+                )
+
+        return im_pca, coef_pca
