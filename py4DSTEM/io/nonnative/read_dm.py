@@ -91,6 +91,10 @@ def read_dm(
                         Q_pixel_size = (
                             Q_pixel_size / lamda / 1000.0
                         )  # convert mrad to 1/Å
+                elif Q_pixel_units == "1/nm":
+                    Q_pixel_units = "A^-1"
+                    Q_pixel_size /= 10
+                    
                 pixel_size_found = True
             except Exception as err:
                 pass
