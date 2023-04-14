@@ -209,19 +209,12 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         kx = xp.asarray(kx)
         ky = xp.asarray(ky)
 
-        # Antialias masks
-        k = xp.sqrt(kx[:, None] ** 2 + ky[None] ** 2)
-        kcut = 1 / max(sampling) / 2 * 2 / 3.0  # 2/3 cutoff
-        antialias_mask = 0.5 * (
-            1 + xp.cos(np.pi * (k - kcut + 0.1) / 0.1)
-        )  # 0.1 rolloff
-        antialias_mask[k > kcut] = 0.0
-        antialias_mask = xp.where(k > kcut - 0.1, antialias_mask, xp.ones_like(k))
-
         # Propagators
         wavelength = electron_wavelength_angstrom(energy)
         num_slices = slice_thicknesses.shape[0]
-        propagators = xp.empty((num_slices,) + k.shape, dtype=xp.complex64)
+        propagators = xp.empty(
+            (num_slices, kx.shape[0], ky.shape[0]), dtype=xp.complex64
+        )
         for i, dz in enumerate(slice_thicknesses):
             propagators[i] = xp.exp(
                 1.0j * (-(kx**2)[:, None] * np.pi * wavelength * dz)
@@ -230,7 +223,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                 1.0j * (-(ky**2)[None] * np.pi * wavelength * dz)
             )
 
-        return propagators * antialias_mask
+        return propagators
 
     def _propagate_array(self, array: np.ndarray, propagator_array: np.ndarray):
         """
@@ -1913,11 +1906,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
             if collective_tilt_updates:
                 self._object += collective_object / self._num_tilts
 
-                (
-                    self._object,
-                    self._probe,
-                    _,
-                ) = self._constraints(
+                (self._object, self._probe, _,) = self._constraints(
                     self._object,
                     self._probe,
                     None,
