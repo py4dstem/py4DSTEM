@@ -1453,7 +1453,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         max_batch_size: int = None,
         seed_random: int = None,
         step_size: float = 0.9,
-        normalization_min: float = 1e-3,
+        normalization_min: float = 1,
         positions_step_size: float = 0.9,
         fix_com: bool = True,
         fix_probe_iter: int = 0,
