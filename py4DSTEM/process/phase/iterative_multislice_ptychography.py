@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.gridspec import GridSpec
 from mpl_toolkits.axes_grid1 import ImageGrid, make_axes_locatable
+from py4DSTEM.visualize import show_complex
 
 try:
     import cupy as cp
@@ -256,6 +257,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         maximize_divergence: bool = False,
         rotation_angles_deg: np.ndarray = np.arange(-89.0, 90.0, 1.0),
         plot_probe_overlaps: bool = True,
+        plot_propagated_probe: bool = False,
         force_com_rotation: float = None,
         force_com_transpose: float = None,
         force_com_shifts: float = None,
@@ -289,6 +291,8 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             Array of angles in degrees to perform curl minimization over
         plot_probe_overlaps: bool, optional
             If True, initial probe overlaps scanned over the object will be displayed
+        plot_propaged_probe: bool, optional
+            If True, plots initial probe propaged through depth
         force_com_rotation: float (degrees), optional
             Force relative rotation angle between real and reciprocal space
         force_com_transpose: bool, optional
@@ -530,6 +534,31 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             ax2.set_title("Object Field of View")
 
             fig.tight_layout()
+
+        if plot_propagated_probe:
+            pixelsize = self.sampling[1]
+            pixelunits = "A"
+
+            figsize = kwargs.get("figsize", (6, 6))
+            kwargs.pop("figsize", None)
+
+            propagated_probe = self._probe.copy()
+            for a0 in range(self._num_slices - 1):
+                propagated_probe = xp.fft.ifft2(
+                    xp.fft.fft2(propagated_probe) * self._propagator_arrays[a0]
+                )
+
+            fig, ax = plt.subplots(figsize=figsize)
+            show_complex(
+                asnumpy(propagated_probe),
+                figax=(fig, ax),
+                scalebar=True,
+                pixelsize=pixelsize,
+                pixelunits=pixelunits,
+                **kwargs,
+            )
+            ax.set_xticks([])
+            ax.set_yticks([])
 
         self._preprocessed = True
 
@@ -1333,7 +1362,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         max_batch_size: int = None,
         seed_random: int = None,
         step_size: float = 0.9,
-        normalization_min: float = 1e-3,
+        normalization_min: float = 1,
         positions_step_size: float = 0.9,
         pure_phase_object_iter: int = 0,
         fix_com: bool = True,
