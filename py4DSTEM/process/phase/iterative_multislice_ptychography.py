@@ -306,6 +306,15 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         xp = self._xp
         asnumpy = self._asnumpy
 
+        if self._object is not None and len(self._object.shape) == 2:
+            initial_object_phase = np.dstack(
+                [np.angle(self._object) / self._num_slices] * self._num_slices
+            ).transpose(2, 0, 1)
+            initial_object_amp = np.dstack(
+                [1 - (1 - np.abs(self._object)) / self._num_slices] * self._num_slices
+            ).transpose(2, 0, 1)
+            self._object = initial_object_amp * np.exp(1j * initial_object_phase)
+
         (
             self._datacube,
             self._vacuum_probe_intensity,
@@ -1383,7 +1392,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         q_lowpass: float = None,
         q_highpass: float = None,
         kz_regularization_filter_iter: int = np.inf,
-        kz_regularization_gamma: float = None,
+        kz_regularization_gamma: float or np.ndarray = None,
         identical_slices_iter: int = 0,
         store_iterations: bool = False,
         progress_bar: bool = True,
@@ -1744,7 +1753,10 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
                 q_highpass=q_highpass,
                 kz_regularization_filter=a0 < kz_regularization_filter_iter
                 and kz_regularization_gamma is not None,
-                kz_regularization_gamma=kz_regularization_gamma,
+                kz_regularization_gamma=kz_regularization_gamma[a0]
+                if kz_regularization_gamma is not None
+                and type(kz_regularization_gamma) == np.ndarray
+                else kz_regularization_gamma,
                 identical_slices=a0 < identical_slices_iter,
             )
 
@@ -2247,6 +2259,8 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
 
         vmin = np.min(rotated_object)
         vmax = np.max(rotated_object)
+        warnings.filterwarnings("ignore", category=UserWarning)
+
         fig, ax = show_image_grid(
             figsize=figsize,
             get_ar=lambda i: rotated_object[i],
@@ -2258,6 +2272,8 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             intensity_range="absolute",
             extent=extent,
             returnfig=True,
+            title="slices",
+            title_index=True,
         )
 
         for axs in ax.flatten():
