@@ -86,10 +86,10 @@ def read_dm(
                     if len(voltage) >= 1:
                         from py4DSTEM.process.utils import electron_wavelength_angstrom
 
-                        lamda = electron_wavelength_angstrom(voltage[0])
+                        lambda = electron_wavelength_angstrom(voltage[0])
                         Q_pixel_units = "A^-1"
                         Q_pixel_size = (
-                            Q_pixel_size / lamda / 1000.0
+                            Q_pixel_size / lambda / 1000.0
                         )  # convert mrad to 1/Å
                 elif Q_pixel_units == "1/nm":
                     Q_pixel_units = "A^-1"
