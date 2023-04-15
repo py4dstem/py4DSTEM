@@ -10,7 +10,7 @@ from itertools import product
 from typing import Optional
 from matplotlib.colors import hsv_to_rgb
 
-
+import time, sys
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -233,6 +233,79 @@ class PolarPeaks:
                     self.radial_peaks[rx,ry,a0,:num_peaks,0] = peaks_angle
                     self.radial_peaks[rx,ry,a0,:num_peaks,1] = peaks_val
 
+    def plot_peak_signal(
+        self,
+        figsize = (8,4),
+        ):
+        """
+        Plot the mean peak signal from all radial bins.
+
+        """
+
+        sig = np.mean(
+            np.sum(
+                self.radial_peaks[:,:,:,:,1], axis = 3,
+                ), axis = (0,1),
+            )
+
+        # plot
+        fig = plt.figure(figsize = figsize)
+        ax1 = fig.add_subplot(111)
+        ax2 = ax1.twiny()
+
+        ax1.plot(
+            self.radial_bins,
+            sig,
+            )
+        ax1.set_xlabel('Radial Bin [pixels]')
+        ax1.set_ylabel('Mean Peak Signal [counts]')
+
+        def tick_function(x):
+            v = (x - self.radial_bins[0]) / self.radial_step
+            return ["%.0f" % z for z in v]
+        tick_locations = ax1.get_xticks()
+        tick_locations += self.radial_bins[0]
+        ax2.set_xticks(tick_locations)
+        ax2.set_xticklabels(tick_function(tick_locations))
+        ax2.set_xlim(ax1.get_xlim())
+        ax2.set_xlabel('Radial Bin Index')
+        ax2.minorticks_on()
+        ax2.grid()
+
+        plt.show()
+
+
+
+        # fig,ax = plt.subplots(figsize = figsize)
+        # ax.plot(
+        #     self.radial_bins,
+        #     sig,
+        #     )
+
+        
+
+
+        #         fig = plt.figure()
+        # ax1 = fig.add_subplot(111)
+        # ax2 = ax1.twiny()
+
+        # X = np.linspace(0,1,1000)
+        # Y = np.cos(X*20)
+
+        # ax1.plot(X,Y)
+        # ax1.set_xlabel(r"Original x-axis: $X$")
+
+        # new_tick_locations = np.array([.2, .5, .9])
+
+        # def tick_function(X):
+        #     V = 1/(1+X)
+        #     return ["%.3f" % z for z in V]
+
+        # ax2.set_xlim(ax1.get_xlim())
+        # ax2.set_xticks(new_tick_locations)
+        # ax2.set_xticklabels(tick_function(new_tick_locations))
+        # ax2.set_xlabel(r"Modified x-axis: $1/(1+X)$")
+        # plt.show()
 
 
 
@@ -292,6 +365,193 @@ class PolarPeaks:
 
         return im_orientation
 
+
+    def cluster_grains(
+        self,
+        radial_index = 0,
+        threshold_add = 1.0,
+        threshold_grow = 0.0,
+        angle_tolerance_deg = 5.0,
+        progress_bar = False,
+        ):
+        """
+        Cluster grains from a specific radial bin
+
+        Parameters
+        --------
+        radial_index: int
+            Which radial bin to perform the clustering over.
+        threshold_add: float
+            Minimum signal required for a probe position to initialize a cluster.
+        threshold_grow: float
+            Minimum signal required for a probe position to be added to a cluster.
+        angle_tolerance_deg: float
+            Rotation rolerance for clustering grains.
+        progress_bar: bool
+            Turns on the progress bar for the polar transformation
+    
+        Returns
+        --------
+        
+
+        """
+
+        # Get data
+        phi = np.squeeze(self.radial_peaks[:,:,radial_index,:,0]).copy()
+        sig = np.squeeze(self.radial_peaks[:,:,radial_index,:,1]).copy()
+        sig_init = sig.copy()
+        mark = sig >= threshold_grow
+        sig[np.logical_not(mark)] = 0
+        
+        # init
+        self.cluster_sizes = np.array((), dtype='int')
+        self.cluster_sig = np.array(())
+        self.cluster_inds = []
+        inds_all = np.zeros_like(sig, dtype='int')
+        inds_all.ravel()[:] = np.arange(inds_all.size)
+
+        # Tolerance
+        tol = np.deg2rad(angle_tolerance_deg)
+
+        # Main loop
+        search = True
+        while search is True:
+            inds_grain = np.argmax(sig)
+            val = sig.ravel()[inds_grain]
+
+            if val < threshold_add:
+                search = False
+            
+            else:
+                # progressbar
+                comp = 1 - np.mean(np.max(mark,axis = 2))
+                update_progress(comp)
+
+                # Start cluster
+                x,y,z = np.unravel_index(inds_grain, sig.shape)
+                mark[x,y,z] = False
+                sig[x,y,z] = 0
+                phi_cluster = phi[x,y,z]
+
+                # Neighbors to search
+                xr = np.clip(x + np.arange(-1,2,dtype='int'), 0, sig.shape[0] - 1)
+                yr = np.clip(y + np.arange(-1,2,dtype='int'), 0, sig.shape[1] - 1)
+                inds_cand = inds_all[xr,yr,:].ravel()
+                inds_cand = np.delete(inds_cand, mark.ravel()[inds_cand] == False)
+                # [mark[xr,yr,:].ravel()]
+
+                if inds_cand.size == 0:
+                    grow = False
+                else:
+                    grow = True
+
+                # grow the cluster
+                while grow is True:
+                    inds_new = np.array((),dtype='int')
+
+                    keep = np.zeros(inds_cand.size, dtype='bool')
+                    for a0 in range(inds_cand.size):
+                        xc,yc,zc = np.unravel_index(inds_cand[a0], sig.shape)
+
+                        phi_test = phi[xc,yc,zc]
+                        dphi = np.mod(phi_cluster - phi_test + np.pi/2.0, np.pi) - np.pi/2.0
+
+                        if np.abs(dphi) < tol:
+                            keep[a0] = True
+
+                            sig[xc,yc,zc] = 0
+                            mark[xc,yc,zc] = False 
+
+                            xr = np.clip(xc + np.arange(-1,2,dtype='int'), 0, sig.shape[0] - 1)
+                            yr = np.clip(yc + np.arange(-1,2,dtype='int'), 0, sig.shape[1] - 1)
+                            inds_add = inds_all[xr,yr,:].ravel()
+                            inds_new = np.append(inds_new, inds_add)
+
+
+                    inds_grain = np.append(inds_grain, inds_cand[keep])
+                    inds_cand = np.unique(np.delete(inds_new, mark.ravel()[inds_new] == False))
+
+                    if inds_cand.size == 0:
+                        grow = False
+
+            # convert grain to x,y coordinates, add = list
+            xg,yg,zg = np.unravel_index(inds_grain, sig.shape)
+            xyg = np.unique(np.vstack((xg,yg)), axis = 1)
+            sig_mean = np.mean(sig_init.ravel()[inds_grain])
+            self.cluster_sizes = np.append(self.cluster_sizes, xyg.shape[1])
+            self.cluster_sig = np.append(self.cluster_sig, sig_mean)
+            self.cluster_inds.append(xyg)
+
+        # finish progressbar
+        update_progress(1)
+
+    def cluster_plot_size(
+        self,
+        area_max = None,
+        weight_intensity = False,
+        pixel_area = 1.0,
+        pixel_area_units = 'px^2',
+        figsize = (8,6),
+        returnfig = False,
+        ):
+        """
+        Plot the cluster sizes
+
+        Parameters
+        --------
+        area_max: int (optional)
+            Max area bin in pixels
+        weight_intensity: bool
+            Weight histogram by the peak intensity.
+        pixel_area: float
+            Size of pixel area unit square
+        pixel_area_units: string
+            Units of the pixel area 
+        figsize: tuple
+            Size of the figure panel
+        returnfig: bool
+            Setting this to true returns the figure and axis handles
+    
+        Returns
+        --------
+        fig, ax (optional)
+            Figure and axes handles
+
+        """
+
+        if area_max is None:
+            area_max = np.max(self.cluster_sizes)
+        area = np.arange(area_max)
+        sub = self.cluster_sizes.astype('int') < area_max
+        if weight_intensity:
+            hist = np.bincount(
+                self.cluster_sizes[sub],
+                weights = self.cluster_sig[sub],
+                minlength = area_max,
+                )
+        else:
+            hist = np.bincount(
+                self.cluster_sizes[sub],
+                minlength = area_max,
+                )
+
+
+        # plotting
+        fig,ax = plt.subplots(figsize = figsize)
+        ax.bar(
+            area * pixel_area,
+            hist,
+            width = 0.8 * pixel_area,
+            )
+
+        ax.set_xlabel('Grain Area [' + pixel_area_units + ']')
+        if weight_intensity:
+            ax.set_ylabel('Total Signal [arb. units]')
+        else:
+            ax.set_ylabel('Number of Grains')
+
+        if returnfig:
+            return fig,ax
 
 
     def background_pca(
@@ -361,3 +621,27 @@ class PolarPeaks:
                 )
 
         return im_pca, coef_pca
+
+
+# Progressbar taken from stackexchange:
+# https://stackoverflow.com/questions/3160699/python-progress-bar
+def update_progress(progress):
+    barLength = 60 # Modify this to change the length of the progress bar
+    status = ""
+    if isinstance(progress, int):
+        progress = float(progress)
+    if not isinstance(progress, float):
+        progress = 0
+        status = "error: progress var must be float\r\n"
+    if progress < 0:
+        progress = 0
+        status = "Halt...\r\n"
+    if progress >= 1:
+        progress = 1
+        status = "Done...\r\n"
+    block = int(round(barLength*progress))
+    text = "\rPercent: [{0}] {1}% {2}".format( "#"*block + "-"*(barLength-block), 
+        np.round(progress*100,4), 
+        status)
+    sys.stdout.write(text)
+    sys.stdout.flush()
