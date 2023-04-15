@@ -17,6 +17,8 @@ try:
 except ImportError:
     cp = None
 
+from matplotlib.cm import ScalarMappable
+from matplotlib.colors import Normalize
 from py4DSTEM.io import DataCube
 from py4DSTEM.process.phase.iterative_base_class import PhaseReconstruction
 from py4DSTEM.process.phase.utils import (
@@ -29,6 +31,7 @@ from py4DSTEM.process.phase.utils import (
 )
 from py4DSTEM.process.utils import electron_wavelength_angstrom, get_CoM, get_shifted_ar
 from py4DSTEM.utils.tqdmnd import tqdmnd
+from py4DSTEM.visualize import show_image_grid
 
 warnings.simplefilter(action="always", category=UserWarning)
 
@@ -472,6 +475,9 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             self._slice_thicknesses,
         )
 
+        scalebar = kwargs.get("scalebar", True)
+        kwargs.pop("scalebar", None)
+
         if plot_probe_overlaps:
             shifted_probes = fft_shift(self._probe, self._positions_px_fractional, xp)
             probe_intensities = xp.abs(shifted_probes) ** 2
@@ -532,7 +538,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             pixelsize = self.sampling[1]
             pixelunits = "A"
 
-            figsize = kwargs.get("figsize", (6, 6))
+            figsize = kwargs.get("figsize", (8, 4))
             kwargs.pop("figsize", None)
 
             propagated_probe = self._probe.copy()
@@ -541,17 +547,19 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
                     xp.fft.fft2(propagated_probe) * self._propagator_arrays[a0]
                 )
 
-            fig, ax = plt.subplots(figsize=figsize)
+            fig, ax = plt.subplots(1, 2, figsize=figsize)
             show_complex(
-                asnumpy(propagated_probe),
+                [asnumpy(self._probe), asnumpy(propagated_probe)],
                 figax=(fig, ax),
-                scalebar=True,
+                scalebar=scalebar,
                 pixelsize=pixelsize,
                 pixelunits=pixelunits,
+                title=["initial probe", "propagated probe"],
                 **kwargs,
             )
-            ax.set_xticks([])
-            ax.set_yticks([])
+            for axs in ax.flatten():
+                axs.set_xticks([])
+                axs.set_yticks([])
 
         self._preprocessed = True
 
@@ -1203,10 +1211,14 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         constrained_object: np.ndarray
             Constrained object estimate
         """
+        current_object[0] = 1
+
         xp = self._xp
         qx = xp.fft.fftfreq(current_object.shape[1], self.sampling[0])
         qy = xp.fft.fftfreq(current_object.shape[2], self.sampling[1])
         qz = xp.fft.fftfreq(current_object.shape[0], self._slice_thicknesses[0])
+
+        kz_regularization_gamma *= self._slice_thicknesses[0] / self.sampling[0]
 
         qza, qxa, qya = xp.meshgrid(qz, qx, qy, indexing="ij")
         qz2 = qza**2 * kz_regularization_gamma**2
@@ -2142,7 +2154,8 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         object_mode: str
             Specifies the attribute of the object to plot.
             One of 'phase', 'amplitude', 'intensity'
-
+        padding: int, optional
+            Padding to leave uncropped
         Returns
         --------
         self: PtychographicReconstruction
@@ -2180,5 +2193,91 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
                 padding=padding,
                 **kwargs,
             )
-
         return self
+
+    def show_slices(
+        self,
+        object_mode: str = "phase",
+        cbar: bool = True,
+        padding: int = 0,
+        **kwargs,
+    ):
+        """
+        Displays reconstructed slices of object
+
+        Parameters
+        --------
+        object_mode: str, optional
+            Specifies the attribute of the object to plot.
+            One of 'phase', 'amplitude'
+        cbar: bool, optional
+            If True, displays a colorbar
+        padding: int, optional
+            Padding to leave uncropped
+        """
+
+        rotated_object = self._crop_rotate_object_fov(self._object, padding=padding)
+        rotated_shape = rotated_object.shape
+
+        extent = [
+            0,
+            self.sampling[1] * rotated_shape[2],
+            self.sampling[0] * rotated_shape[1],
+            0,
+        ]
+
+        if object_mode == "phase":
+            rotated_object = np.angle(rotated_object)
+        elif object_mode == "amplitude":
+            rotated_object = np.abs(rotated_object)
+        else:
+            raise ValueError(
+                (
+                    "object_mode needs to be one of 'phase', 'amplitude', "
+                    f"or 'intensity', not {object_mode}"
+                )
+            )
+
+        figsize = kwargs.get("figsize", (12, 12))
+        cmap = kwargs.get("cmap", "magma")
+        kwargs.pop("figsize", None)
+        kwargs.pop("cmap", None)
+
+        height = int(np.ceil(self._num_slices / 3))
+
+        vmin = np.min(rotated_object)
+        vmax = np.max(rotated_object)
+        fig, ax = show_image_grid(
+            figsize=figsize,
+            get_ar=lambda i: rotated_object[i],
+            W=3,
+            H=height,
+            cmap=cmap,
+            vmax=vmax,
+            vmin=vmin,
+            intensity_range="absolute",
+            extent=extent,
+            returnfig=True,
+        )
+
+        for axs in ax.flatten():
+            axs.set_ylabel("x [A]")
+            axs.set_xlabel("y [A]")
+
+        if cbar:
+            ax0 = fig.add_axes([0.1, 0, 1.1, 1])
+            norm = Normalize(
+                vmin=vmin,
+                vmax=vmax,
+            )
+            cbar = ax0.figure.colorbar(
+                ScalarMappable(norm=norm, cmap=cmap),
+                ax=ax0,
+                pad=0,
+                shrink=0.5,
+                ticks=[vmin, 0, vmax],
+            )
+            cbar.ax.tick_params(axis="y", which="major", pad=1)
+            ax0.axis("off")
+
+        plt.tight_layout()
