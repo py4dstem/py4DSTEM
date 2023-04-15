@@ -927,10 +927,7 @@ def show_complex(
 
     # add color bar
     if cbar == True:
-        if len(rgb.shape) > 2:
-            ax0 = fig.add_axes([1, 0.35, 0.3, 0.3])
-        else:
-            ax0 = fig.add_axes([1, 0.35, 0.3, 0.3])
+        ax0 = fig.add_axes([1, 0.35, 0.3, 0.3])
 
         # create wheel
         AA = 1000
