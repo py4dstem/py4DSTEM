@@ -1363,7 +1363,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
     ):
         """
         Run reconstructions over a parameters space of angles and
-        defocus values.
+        defocus values. Should be run after preprocess step.
 
         Parameters
         ----------
@@ -1460,6 +1460,8 @@ class PhaseReconstruction(metaclass=ABCMeta):
 
             fig = plt.figure(figsize=figsize)
 
+        progress_bar = kwargs.get("progress_bar", False)
+        kwargs.pop("progress_bar", None)
         # run loop and plot along the way
         self._verbose = False
         for flat_index, (angle, defocus) in enumerate(
@@ -1477,7 +1479,11 @@ class PhaseReconstruction(metaclass=ABCMeta):
             )
 
             self.reconstruct(
-                reset=True, store_iterations=True, max_iter=max_iter, **kwargs
+                reset=True,
+                store_iterations=True,
+                max_iter=max_iter,
+                progress_bar=progress_bar,
+                **kwargs,
             )
 
             if plot_reconstructions:
