@@ -20,7 +20,6 @@ from py4DSTEM.io import DataCube
 from py4DSTEM.process.phase.iterative_base_class import PhaseReconstruction
 from py4DSTEM.process.phase.utils import (
     ComplexProbe,
-    estimate_global_transformation_ransac,
     fft_shift,
     generate_batches,
     polar_aliases,
@@ -215,7 +214,6 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
     def preprocess(
         self,
         fit_function: str = "plane",
-        plot_center_of_mass: str = "default",
         plot_rotation: bool = True,
         maximize_divergence: bool = False,
         rotation_angles_deg: np.ndarray = np.arange(-89.0, 90.0, 1.0),
@@ -242,9 +240,6 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         ----------
         fit_function: str, optional
             2D fitting function for CoM fitting. One of 'plane','parabola','bezier_two'
-        plot_center_of_mass: str, optional
-            If 'default', the corrected CoM arrays will be displayed
-            If 'all', the computed and fitted CoM arrays will be displayed
         plot_rotation: bool, optional
             If True, the CoM curl minimization search result will be displayed
         maximize_divergence: bool, optional
@@ -282,9 +277,6 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                 )
             )
 
-        # Note: a lot of the methods below modify state. The only two property we mind this for are
-        # self._amplitudes and self._mean_diffraction_intensity, so we simply proceed serially.
-
         # 1st measurement sets rotation angle and transposition
         (
             measurement_0,
@@ -301,45 +293,69 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
             com_shifts=force_com_shifts[0],
         )
 
-        self._extract_intensities_and_calibrations_from_datacube(
+        intensities_0 = self._extract_intensities_and_calibrations_from_datacube(
             measurement_0,
             require_calibrations=True,
         )
 
-        self._calculate_intensities_center_of_mass(
-            self._intensities,
+        (
+            com_measured_x_0,
+            com_measured_y_0,
+            com_fitted_x_0,
+            com_fitted_y_0,
+            com_normalized_x_0,
+            com_normalized_y_0,
+        ) = self._calculate_intensities_center_of_mass(
+            intensities_0,
             dp_mask=self._dp_mask,
             fit_function=fit_function,
+            com_shifts=force_com_shifts[0],
         )
 
-        self._solve_for_center_of_mass_relative_rotation(
+        (
+            self._rotation_best_rad,
+            self._rotation_best_transpose,
+            _com_x_0,
+            _com_y_0,
+            com_x_0,
+            com_y_0,
+        ) = self._solve_for_center_of_mass_relative_rotation(
+            com_measured_x_0,
+            com_measured_y_0,
+            com_normalized_x_0,
+            com_normalized_y_0,
             rotation_angles_deg=rotation_angles_deg,
             plot_rotation=plot_rotation,
-            plot_center_of_mass=plot_center_of_mass,
+            plot_center_of_mass=False,
             maximize_divergence=maximize_divergence,
             force_com_rotation=force_com_rotation,
             force_com_transpose=force_com_transpose,
             **kwargs,
         )
 
-        if force_com_shifts[0] is None:
-            (
-                amplitudes_0,
-                mean_diffraction_intensity_0,
-            ) = self._normalize_diffraction_intensities(
-                self._intensities,
-                self._com_fitted_x,
-                self._com_fitted_y,
-            )
-        else:
-            (
-                amplitudes_0,
-                mean_diffraction_intensity_0,
-            ) = self._normalize_diffraction_intensities(
-                self._intensities,
-                xp.asarray(force_com_shifts[0][0]),
-                xp.asarray(force_com_shifts[0][1]),
-            )
+        (
+            amplitudes_0,
+            mean_diffraction_intensity_0,
+        ) = self._normalize_diffraction_intensities(
+            intensities_0,
+            com_fitted_x_0,
+            com_fitted_y_0,
+        )
+
+        # explicitly delete namescapes
+        del (
+            intensities_0,
+            com_measured_x_0,
+            com_measured_y_0,
+            com_fitted_x_0,
+            com_fitted_y_0,
+            com_normalized_x_0,
+            com_normalized_y_0,
+            _com_x_0,
+            _com_y_0,
+            com_x_0,
+            com_y_0,
+        )
 
         # 2nd measurement
         (
@@ -357,45 +373,69 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
             com_shifts=force_com_shifts[1],
         )
 
-        self._extract_intensities_and_calibrations_from_datacube(
+        intensities_1 = self._extract_intensities_and_calibrations_from_datacube(
             measurement_1,
             require_calibrations=True,
         )
 
-        self._calculate_intensities_center_of_mass(
-            self._intensities,
+        (
+            com_measured_x_1,
+            com_measured_y_1,
+            com_fitted_x_1,
+            com_fitted_y_1,
+            com_normalized_x_1,
+            com_normalized_y_1,
+        ) = self._calculate_intensities_center_of_mass(
+            intensities_1,
             dp_mask=self._dp_mask,
             fit_function=fit_function,
+            com_shifts=force_com_shifts[1],
         )
 
-        self._solve_for_center_of_mass_relative_rotation(
+        (
+            _,
+            _,
+            _com_x_1,
+            _com_y_1,
+            com_x_1,
+            com_y_1,
+        ) = self._solve_for_center_of_mass_relative_rotation(
+            com_measured_x_1,
+            com_measured_y_1,
+            com_normalized_x_1,
+            com_normalized_y_1,
             rotation_angles_deg=rotation_angles_deg,
             plot_rotation=plot_rotation,
-            plot_center_of_mass=plot_center_of_mass,
+            plot_center_of_mass=False,
             maximize_divergence=maximize_divergence,
             force_com_rotation=np.rad2deg(self._rotation_best_rad),
             force_com_transpose=self._rotation_best_transpose,
             **kwargs,
         )
 
-        if force_com_shifts[1] is None:
-            (
-                amplitudes_1,
-                mean_diffraction_intensity_1,
-            ) = self._normalize_diffraction_intensities(
-                self._intensities,
-                self._com_fitted_x,
-                self._com_fitted_y,
-            )
-        else:
-            (
-                amplitudes_1,
-                mean_diffraction_intensity_1,
-            ) = self._normalize_diffraction_intensities(
-                self._intensities,
-                xp.asarray(force_com_shifts[1][0]),
-                xp.asarray(force_com_shifts[1][1]),
-            )
+        (
+            amplitudes_1,
+            mean_diffraction_intensity_1,
+        ) = self._normalize_diffraction_intensities(
+            intensities_1,
+            com_fitted_x_1,
+            com_fitted_y_1,
+        )
+
+        # explicitly delete namescapes
+        del (
+            intensities_1,
+            com_measured_x_1,
+            com_measured_y_1,
+            com_fitted_x_1,
+            com_fitted_y_1,
+            com_normalized_x_1,
+            com_normalized_y_1,
+            _com_x_1,
+            _com_y_1,
+            com_x_1,
+            com_y_1,
+        )
 
         # Optionally, 3rd measurement
         if self._num_sim_measurements == 3:
@@ -414,44 +454,69 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                 com_shifts=force_com_shifts[2],
             )
 
-            self._extract_intensities_and_calibrations_from_datacube(
-                measurement_2, require_calibrations=True, dp_mask=self._dp_mask
+            intensities_2 = self._extract_intensities_and_calibrations_from_datacube(
+                measurement_2,
+                require_calibrations=True,
             )
 
-            self._calculate_intensities_center_of_mass(
-                self._intensities,
+            (
+                com_measured_x_2,
+                com_measured_y_2,
+                com_fitted_x_2,
+                com_fitted_y_2,
+                com_normalized_x_2,
+                com_normalized_y_2,
+            ) = self._calculate_intensities_center_of_mass(
+                intensities_2,
                 dp_mask=self._dp_mask,
                 fit_function=fit_function,
+                com_shifts=force_com_shifts[2],
             )
 
-            self._solve_for_center_of_mass_relative_rotation(
+            (
+                _,
+                _,
+                _com_x_2,
+                _com_y_2,
+                com_x_2,
+                com_y_2,
+            ) = self._solve_for_center_of_mass_relative_rotation(
+                com_measured_x_2,
+                com_measured_y_2,
+                com_normalized_x_2,
+                com_normalized_y_2,
                 rotation_angles_deg=rotation_angles_deg,
                 plot_rotation=plot_rotation,
-                plot_center_of_mass=plot_center_of_mass,
+                plot_center_of_mass=False,
                 maximize_divergence=maximize_divergence,
                 force_com_rotation=np.rad2deg(self._rotation_best_rad),
                 force_com_transpose=self._rotation_best_transpose,
                 **kwargs,
             )
 
-            if force_com_shifts[2] is None:
-                (
-                    amplitudes_2,
-                    mean_diffraction_intensity_2,
-                ) = self._normalize_diffraction_intensities(
-                    self._intensities,
-                    self._com_fitted_x,
-                    self._com_fitted_y,
-                )
-            else:
-                (
-                    amplitudes_2,
-                    mean_diffraction_intensity_2,
-                ) = self._normalize_diffraction_intensities(
-                    self._intensities,
-                    xp.asarray(force_com_shifts[2][0]),
-                    xp.asarray(force_com_shifts[2][1]),
-                )
+            (
+                amplitudes_2,
+                mean_diffraction_intensity_2,
+            ) = self._normalize_diffraction_intensities(
+                intensities_2,
+                com_fitted_x_2,
+                com_fitted_y_2,
+            )
+
+            # explicitly delete namescapes
+            del (
+                intensities_2,
+                com_measured_x_2,
+                com_measured_y_2,
+                com_fitted_x_2,
+                com_fitted_y_2,
+                com_normalized_x_2,
+                com_normalized_y_2,
+                _com_x_2,
+                _com_y_2,
+                com_x_2,
+                com_y_2,
+            )
 
             self._amplitudes = (amplitudes_0, amplitudes_1, amplitudes_2)
             self._mean_diffraction_intensity = (
@@ -472,7 +537,7 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
 
         # explicitly delete namespace
         self._num_diffraction_patterns = self._amplitudes[0].shape[0]
-        del self._intensities
+        self._region_of_interest_shape = np.array(self._amplitudes[0].shape[-2:])
 
         self._positions_px = self._calculate_scan_positions_in_pixels(
             self._scan_positions
@@ -510,13 +575,15 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         self._positions_initial[:, 1] *= self.sampling[1]
 
         # Vectorized Patches
-        self._set_vectorized_patch_indices()
+        (
+            self._vectorized_patch_indices_row,
+            self._vectorized_patch_indices_col,
+        ) = self._extract_vectorized_patch_indices()
 
         # Probe Initialization
         if self._probe is None:
             if self._vacuum_probe_intensity is not None:
                 self._semiangle_cutoff = np.inf
-                # self._vacuum_probe_intensity = asnumpy(self._vacuum_probe_intensity)
                 self._vacuum_probe_intensity = xp.asarray(self._vacuum_probe_intensity)
                 probe_x0, probe_y0 = get_CoM(
                     self._vacuum_probe_intensity, device="cpu" if xp is np else "gpu"
@@ -559,7 +626,6 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                 self._probe = xp.asarray(self._probe, dtype=xp.complex64)
 
         # Normalize probe to match mean diffraction intensity
-        # if self._vacuum_probe_intensity is None:
         probe_intensity = xp.sum(xp.abs(xp.fft.fft2(self._probe)) ** 2)
         self._probe *= np.sqrt(self._mean_diffraction_intensity / probe_intensity)
 
@@ -598,8 +664,8 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                 cmap=cmap,
                 **kwargs,
             )
-            ax1.set_xlabel("x [A]")
-            ax1.set_ylabel("y [A]")
+            ax1.set_ylabel("x [A]")
+            ax1.set_xlabel("y [A]")
             ax1.set_title("Initial Probe Intensity")
 
             ax2.imshow(
@@ -614,8 +680,8 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                 s=2.5,
                 color=(1, 0, 0, 1),
             )
-            ax2.set_xlabel("x [A]")
-            ax2.set_ylabel("y [A]")
+            ax2.set_ylabel("x [A]")
+            ax2.set_xlabel("y [A]")
             ax2.set_xlim((extent[0], extent[1]))
             ax2.set_ylim((extent[2], extent[3]))
             ax2.set_title("Object Field of View")
@@ -1260,7 +1326,7 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                 / 3
             )
 
-            magnetic_obj -= step_size * xp.conj(
+            magnetic_obj += step_size * xp.conj(
                 self._sum_overlapping_patches_bincounts(
                     probe_conj * electrostatic_conj * exit_waves_reverse
                 )
@@ -1293,11 +1359,25 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                 / 2
             )
 
+            # Need to subtract electrostatic ?
+
+            # magnetic_obj += step_size * (
+            #   self._sum_overlapping_patches_bincounts(
+            #         (probe_conj * electrostatic_conj * exit_waves_forward) - (probe_conj * exit_waves_neutral)
+            #   )
+            #     * probe_electrostatic_normalization
+            # )
+
             magnetic_obj += step_size * (
                 self._sum_overlapping_patches_bincounts(
-                    probe_conj * electrostatic_conj * exit_waves_forward
+                    (probe_conj * electrostatic_conj * exit_waves_forward)
                 )
                 * probe_electrostatic_normalization
+            )
+
+            magnetic_obj -= step_size * (
+                self._sum_overlapping_patches_bincounts(probe_conj * exit_waves_neutral)
+                * probe_normalization
             )
 
         if not fix_probe:
@@ -1634,28 +1714,7 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
             )
 
         else:
-            exit_waves_neutral, exit_waves_forward = exit_waves
-
-            electrostatic_obj = (
-                self._sum_overlapping_patches_bincounts(probe_conj * exit_waves_neutral)
-                * probe_normalization
-                / 2
-            )
-
-            electrostatic_obj += (
-                self._sum_overlapping_patches_bincounts(
-                    probe_conj * magnetic_conj * exit_waves_forward
-                )
-                * probe_magnetic_normalization
-                / 2
-            )
-
-            magnetic_obj = (
-                self._sum_overlapping_patches_bincounts(
-                    probe_conj * electrostatic_conj * exit_waves_forward
-                )
-                * probe_electrostatic_normalization
-            )
+            raise NotImplementedError()
 
         if not fix_probe:
             electrostatic_magnetic_abs = xp.abs(
@@ -1846,94 +1905,6 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
 
         return current_object, current_probe
 
-    def _position_correction(
-        self,
-        current_object,
-        shifted_probes,
-        overlap,
-        amplitudes,
-        current_positions,
-        positions_step_size,
-    ):
-        """
-        Position correction using estimated intensity gradient.
-
-        Parameters
-        --------
-        current_object: np.ndarray
-            Current object estimate
-        shifted_probes:np.ndarray
-            fractionally-shifted probes
-        overlap: np.ndarray
-            object * probe overlap
-        amplitudes: np.ndarray
-            Measured amplitudes
-        current_positions: np.ndarray
-            Current positions estimate
-        positions_step_size: float
-            Positions step size
-
-        Returns
-        --------
-        updated_positions: np.ndarray
-            Updated positions estimate
-        """
-
-        xp = self._xp
-
-        electrostatic_obj, _ = current_object
-
-        obj_rolled_x_patches = electrostatic_obj[
-            (self._vectorized_patch_indices_row + 1) % self._object_shape[0],
-            self._vectorized_patch_indices_col,
-        ]
-        obj_rolled_y_patches = electrostatic_obj[
-            self._vectorized_patch_indices_row,
-            (self._vectorized_patch_indices_col + 1) % self._object_shape[1],
-        ]
-
-        overlap_fft = xp.fft.fft2(overlap[0])
-
-        exit_waves_dx_fft = overlap_fft - xp.fft.fft2(
-            obj_rolled_x_patches * shifted_probes
-        )
-        exit_waves_dy_fft = overlap_fft - xp.fft.fft2(
-            obj_rolled_y_patches * shifted_probes
-        )
-
-        overlap_fft_conj = xp.conj(overlap_fft)
-        estimated_intensity = xp.abs(overlap_fft) ** 2
-        measured_intensity = amplitudes[0] ** 2
-
-        flat_shape = (overlap[0].shape[0], -1)
-        difference_intensity = (measured_intensity - estimated_intensity).reshape(
-            flat_shape
-        )
-
-        partial_intensity_dx = 2 * xp.real(
-            exit_waves_dx_fft * overlap_fft_conj
-        ).reshape(flat_shape)
-        partial_intensity_dy = 2 * xp.real(
-            exit_waves_dy_fft * overlap_fft_conj
-        ).reshape(flat_shape)
-
-        coefficients_matrix = xp.dstack((partial_intensity_dx, partial_intensity_dy))
-
-        # positions_update = xp.einsum(
-        #    "idk,ik->id", xp.linalg.pinv(coefficients_matrix), difference_intensity
-        # )
-
-        coefficients_matrix_T = coefficients_matrix.conj().swapaxes(-1, -2)
-        positions_update = (
-            xp.linalg.inv(coefficients_matrix_T @ coefficients_matrix)
-            @ coefficients_matrix_T
-            @ difference_intensity[..., None]
-        )
-
-        current_positions -= positions_step_size * positions_update[..., 0]
-
-        return current_positions
-
     def _warmup_object_threshold_constraint(self, current_object, pure_phase_object):
         """
         Ptychographic threshold constraint.
@@ -2006,7 +1977,7 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
 
         return current_object
 
-    def _warmup_object_smoothness_constraint(
+    def _warmup_object_gaussian_constraint(
         self, current_object, gaussian_filter_sigma, pure_phase_object
     ):
         """
@@ -2045,7 +2016,7 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
 
         return current_object
 
-    def _object_smoothness_constraint(
+    def _object_gaussian_constraint(
         self, current_object, gaussian_filter_sigma, pure_phase_object
     ):
         """
@@ -2206,114 +2177,6 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
 
         return shifted_probe
 
-    def _probe_fourier_amplitude_constraint(self, current_probe):
-        """
-        Ptychographic probe Fourier-amplitude constraint.
-        Used for fixing the probe's amplitude in Fourier space.
-
-        Parameters
-        --------
-        current_probe: np.ndarray
-            Current probe estimate
-
-        Returns
-        --------
-        constrained_probe: np.ndarray
-            Fourier-amplitude constrained probe estimate
-        """
-        xp = self._xp
-
-        current_probe_fft = xp.fft.fft2(current_probe)
-        current_probe_fft_phase = xp.angle(current_probe_fft)
-
-        constrained_probe_fft = self._probe_initial_fft_amplitude * xp.exp(
-            1j * current_probe_fft_phase
-        )
-        constrained_probe = xp.fft.ifft2(constrained_probe_fft)
-
-        return constrained_probe
-
-    def _probe_finite_support_constraint(self, current_probe):
-        """
-        Ptychographic probe support constraint.
-        Used for penalizing focused probes to replicate sample periodicity.
-
-        Parameters
-        --------
-        current_probe: np.ndarray
-            Current probe estimate
-
-        Returns
-        --------
-        constrained_probe: np.ndarray
-            Finite-support constrained probe estimate
-        """
-
-        return current_probe * self._probe_support_mask
-
-    def _positions_center_of_mass_constraint(self, current_positions):
-        """
-        Ptychographic position center of mass constraint.
-        Additionally updates vectorized indices used in _overlap_projection.
-
-        Parameters
-        ----------
-        current_positions: np.ndarray
-            Current positions estimate
-
-        Returns
-        --------
-        constrained_positions: np.ndarray
-            CoM constrained positions estimate
-        """
-        xp = self._xp
-
-        current_positions -= xp.mean(current_positions, axis=0) - self._positions_px_com
-        self._positions_px_fractional = current_positions - xp.round(current_positions)
-
-        self._set_vectorized_patch_indices()
-
-        return current_positions
-
-    def _positions_affine_transformation_constraint(
-        self, initial_positions, current_positions
-    ):
-        """
-        Constrains the updated positions to be an affine transformation of the initial scan positions,
-        composing of two scale factors, a shear, and a rotation angle.
-
-        Uses RANSAC to estimate the global transformation robustly.
-        Stores the AffineTransformation in self._tf.
-
-        Parameters
-        ----------
-        initial_positions: np.ndarray
-            Initial scan positions
-        current_positions: np.ndarray
-            Current positions estimate
-
-        Returns
-        -------
-        constrained_positions: np.ndarray
-            Affine-transform constrained positions estimate
-        """
-
-        xp = self._xp
-
-        tf, _ = estimate_global_transformation_ransac(
-            positions0=initial_positions,
-            positions1=current_positions,
-            origin=self._positions_px_com,
-            translation_allowed=True,
-            min_sample=self._num_diffraction_patterns // 10,
-            xp=xp,
-        )
-
-        self._tf = tf
-        current_positions = tf(initial_positions, origin=self._positions_px_com, xp=xp)
-
-        return current_positions
-
     def _constraints(
         self,
         current_object,
@@ -2374,11 +2237,11 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
 
         if gaussian_filter:
             if warmup_iteration:
-                current_object = self._warmup_object_smoothness_constraint(
+                current_object = self._warmup_object_gaussian_constraint(
                     current_object, gaussian_filter_sigma, pure_phase_object
                 )
             else:
-                current_object = self._object_smoothness_constraint(
+                current_object = self._object_gaussian_constraint(
                     current_object, gaussian_filter_sigma, pure_phase_object
                 )
 
@@ -2599,6 +2462,11 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                 )
             )
 
+        if use_projection_scheme and self._sim_recon_mode == 2:
+            raise NotImplementedError(
+                "simultaneous_measurements_mode == '0+' and projection set algorithms are currently incompatible."
+            )
+
         if self._verbose:
             if max_batch_size is not None:
                 if use_projection_scheme:
@@ -2673,7 +2541,10 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
             self._positions_px_fractional = self._positions_px - xp.round(
                 self._positions_px
             )
-            self._set_vectorized_patch_indices()
+            (
+                self._vectorized_patch_indices_row,
+                self._vectorized_patch_indices_col,
+            ) = self._extract_vectorized_patch_indices()
             self._exit_waves = (None,) * self._num_sim_measurements
         elif reset is None:
             if hasattr(self, "error"):
@@ -2729,7 +2600,10 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                 self._positions_px_fractional = self._positions_px - xp.round(
                     self._positions_px
                 )
-                self._set_vectorized_patch_indices()
+                (
+                    self._vectorized_patch_indices_row,
+                    self._vectorized_patch_indices_col,
+                ) = self._extract_vectorized_patch_indices()
 
                 amps = []
                 for amplitudes in self._amplitudes:
@@ -2772,10 +2646,10 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                 # position correction
                 if a0 >= fix_positions_iter:
                     positions_px[start:end] = self._position_correction(
-                        self._object,
+                        self._object[0],
                         shifted_probes,
-                        overlap,
-                        amplitudes,
+                        overlap[0],
+                        amplitudes[0],
                         self._positions_px,
                         positions_step_size,
                     )
@@ -2996,8 +2870,8 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                     cmap=cmap,
                     **kwargs,
                 )
-            ax.set_xlabel("x [A]")
-            ax.set_ylabel("y [A]")
+            ax.set_ylabel("x [A]")
+            ax.set_xlabel("y [A]")
             ax.set_title(f"Electrostatic object {object_mode}")
 
             if cbar:
@@ -3029,8 +2903,8 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                     cmap=cmap,
                     **kwargs,
                 )
-            ax.set_xlabel("x [A]")
-            ax.set_ylabel("y [A]")
+            ax.set_ylabel("x [A]")
+            ax.set_xlabel("y [A]")
             ax.set_title(f"Magnetic object {object_mode}")
 
             if cbar:
@@ -3049,8 +2923,8 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                 cmap="Greys_r",
                 **kwargs,
             )
-            ax.set_xlabel("x [A]")
-            ax.set_ylabel("y [A]")
+            ax.set_ylabel("x [A]")
+            ax.set_xlabel("y [A]")
             ax.set_title("Reconstructed probe intensity")
 
             if cbar:
@@ -3083,8 +2957,8 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                     cmap=cmap,
                     **kwargs,
                 )
-            ax.set_xlabel("x [A]")
-            ax.set_ylabel("y [A]")
+            ax.set_ylabel("x [A]")
+            ax.set_xlabel("y [A]")
             ax.set_title(f"Electrostatic object {object_mode}")
 
             if cbar:
@@ -3116,8 +2990,8 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                     cmap=cmap,
                     **kwargs,
                 )
-            ax.set_xlabel("x [A]")
-            ax.set_ylabel("y [A]")
+            ax.set_ylabel("x [A]")
+            ax.set_xlabel("y [A]")
             ax.set_title(f"Magnetic object {object_mode}")
 
             if cbar:
@@ -3183,7 +3057,7 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         plot_convergence: bool = True,
         plot_probe: bool = True,
         object_mode: str = "phase",
-        cbar: bool = False,
+        cbar: bool = True,
         padding: int = 0,
         relative_error: bool = True,
         **kwargs,
