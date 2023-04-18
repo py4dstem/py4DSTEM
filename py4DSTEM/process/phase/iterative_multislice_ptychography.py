@@ -389,7 +389,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             q = np.max([np.round(q + pad_y), self._region_of_interest_shape[1]]).astype(
                 int
             )
-            self._object = xp.ones((self._num_slices, p, q), dtype=xp.float32)
+            self._object = xp.zeros((self._num_slices, p, q), dtype=xp.float32)
         else:
             self._object = xp.asarray(self._object, dtype=xp.float32)
 
@@ -2237,19 +2237,24 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             0,
         ]
 
-        figsize = kwargs.get("figsize", (12, 12))
+        height = int(np.ceil(self._num_slices / 3))
+
+        if cbar:
+            figsize = kwargs.get("figsize", (12, 12 * height / 3 * 1.1))
+        else:
+            figsize = kwargs.get("figsize", (12, 12 * height / 3 * 1.1))
+
         cmap = kwargs.get("cmap", "magma")
         kwargs.pop("figsize", None)
         kwargs.pop("cmap", None)
-
-        height = int(np.ceil(self._num_slices / 3))
 
         vmin = np.min(rotated_object)
         vmax = np.max(rotated_object)
         warnings.filterwarnings("ignore", category=UserWarning)
 
-        fig, ax = show_image_grid(
-            figsize=figsize,
+        fig, ax = plt.subplots(height, 3, figsize=figsize)
+        show_image_grid(
+            figax=(fig, ax),
             get_ar=lambda i: rotated_object[i],
             W=3,
             H=height,
@@ -2259,7 +2264,6 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             intensity_range="absolute",
             extent=extent,
             returnfig=True,
-            title="slices",
             title_index=True,
         )
 
@@ -2268,7 +2272,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             axs.set_xlabel("y [A]")
 
         if cbar:
-            ax0 = fig.add_axes([0.1, 0, 1.1, 1])
+            ax0 = fig.add_axes([0.1, 1 - 1 / height, 1.1, 1 / height * 0.7])
             norm = Normalize(
                 vmin=vmin,
                 vmax=vmax,
@@ -2277,10 +2281,8 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
                 ScalarMappable(norm=norm, cmap=cmap),
                 ax=ax0,
                 pad=0,
-                shrink=0.5,
                 ticks=[vmin, vmax],
             )
-            cbar.ax.tick_params(axis="y", which="major", pad=1)
             ax0.axis("off")
 
         plt.tight_layout()
