@@ -306,15 +306,6 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         xp = self._xp
         asnumpy = self._asnumpy
 
-        if self._object is not None and len(self._object.shape) == 2:
-            initial_object_phase = np.dstack(
-                [np.angle(self._object) / self._num_slices] * self._num_slices
-            ).transpose(2, 0, 1)
-            initial_object_amp = np.dstack(
-                [1 - (1 - np.abs(self._object)) / self._num_slices] * self._num_slices
-            ).transpose(2, 0, 1)
-            self._object = initial_object_amp * np.exp(1j * initial_object_phase)
-
         (
             self._datacube,
             self._vacuum_probe_intensity,
@@ -398,9 +389,9 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             q = np.max([np.round(q + pad_y), self._region_of_interest_shape[1]]).astype(
                 int
             )
-            self._object = xp.ones((self._num_slices, p, q), dtype=xp.complex64)
+            self._object = xp.ones((self._num_slices, p, q), dtype=xp.float32)
         else:
-            self._object = xp.asarray(self._object, dtype=xp.complex64)
+            self._object = xp.asarray(self._object, dtype=xp.float32)
 
         self._object_initial = self._object.copy()
         self._object_shape = self._object.shape[-2:]
@@ -597,7 +588,8 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
 
         xp = self._xp
 
-        object_patches = current_object[
+        complex_object = xp.exp(1j * current_object)
+        object_patches = complex_object[
             :, self._vectorized_patch_indices_row, self._vectorized_patch_indices_col
         ]
 
@@ -849,7 +841,9 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             )
 
             current_object[s] += step_size * (
-                self._sum_overlapping_patches_bincounts(xp.conj(probe) * exit_waves)
+                self._sum_overlapping_patches_bincounts(
+                    xp.real(-1j * xp.conj(obj) * xp.conj(probe) * exit_waves)
+                )
                 * probe_normalization
             )
 
@@ -942,7 +936,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
 
             current_object[s] = (
                 self._sum_overlapping_patches_bincounts(
-                    xp.conj(probe) * exit_waves_copy
+                    xp.real(-1j * xp.conj(obj) * xp.conj(probe) * exit_waves_copy)
                 )
                 * probe_normalization
             )
@@ -1169,6 +1163,47 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
 
         return current_positions
 
+    def _object_positivity_constraint(self, current_object):
+        """
+        Ptychographic positivity constraint.
+        Used to ensure electrostatic potential is positive.
+
+        Parameters
+        --------
+        current_object: np.ndarray
+            Current object estimate
+
+        Returns
+        --------
+        constrained_object: np.ndarray
+            Constrained object estimate
+        """
+        xp = self._xp
+        return xp.maximum(current_object, 0.0)
+
+    def _object_gaussian_constraint(self, current_object, gaussian_filter_sigma):
+        """
+        Ptychographic smoothness constraint.
+        Used for blurring object.
+
+        Parameters
+        --------
+        current_object: np.ndarray
+            Current object estimate
+        gaussian_filter_sigma: float
+            Standard deviation of gaussian kernel
+
+        Returns
+        --------
+        constrained_object: np.ndarray
+            Constrained object estimate
+        """
+        gaussian_filter = self._gaussian_filter
+
+        current_object = gaussian_filter(current_object, gaussian_filter_sigma)
+
+        return current_object
+
     def _object_butterworth_constraint(self, current_object, q_lowpass, q_highpass):
         """
         Butterworth filter
@@ -1200,7 +1235,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             env *= 1 / (1 + (qra / q_lowpass) ** 4)
 
         current_object = xp.fft.ifft2(xp.fft.fft2(current_object) * env[None])
-        return current_object
+        return xp.real(current_object)
 
     def _object_kz_regularization_constraint(
         self, current_object, kz_regularization_gamma
@@ -1220,9 +1255,12 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         constrained_object: np.ndarray
             Constrained object estimate
         """
-        current_object[0] = 1
-
         xp = self._xp
+
+        current_object = xp.pad(
+            current_object, pad_width=((1, 0), (0, 0), (0, 0)), mode="constant"
+        )
+
         qx = xp.fft.fftfreq(current_object.shape[1], self.sampling[0])
         qy = xp.fft.fftfreq(current_object.shape[2], self.sampling[1])
         qz = xp.fft.fftfreq(current_object.shape[0], self._slice_thicknesses[0])
@@ -1237,7 +1275,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
 
         current_object = xp.fft.ifftn(xp.fft.fftn(current_object) * w)
 
-        return current_object
+        return xp.real(current_object[1:])
 
     def _object_identical_slices_constraint(self, current_object):
         """
@@ -1263,7 +1301,6 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         current_object,
         current_probe,
         current_positions,
-        pure_phase_object,
         fix_com,
         fix_probe_fourier_amplitude,
         fix_positions,
@@ -1276,10 +1313,10 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         kz_regularization_filter,
         kz_regularization_gamma,
         identical_slices,
+        object_positivity,
     ):
         """
         Ptychographic constraints operator.
-        Calls _threshold_object_constraint() and _probe_center_of_mass_constraint()
 
         Parameters
         --------
@@ -1289,8 +1326,6 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             Current probe estimate
         current_positions: np.ndarray
             Current positions estimate
-        pure_phase_object: bool
-            If True, object amplitude is set to unity
         fix_com: bool
             If True, probe CoM is fixed to the center
         fix_probe_fourier_amplitude: bool
@@ -1313,6 +1348,8 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             Slice regularization strength
         identical_slices: bool
             If True, forces all object slices to be identical
+        object_positivity: bool
+            If True, forces object to be positive
 
         Returns
         --------
@@ -1326,7 +1363,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
 
         if gaussian_filter:
             current_object = self._object_gaussian_constraint(
-                current_object, gaussian_filter_sigma, pure_phase_object
+                current_object, gaussian_filter_sigma
             )
 
         if butterworth_filter:
@@ -1344,9 +1381,8 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         if identical_slices:
             current_object = self._object_identical_slices_constraint(current_object)
 
-        current_object = self._object_threshold_constraint(
-            current_object, pure_phase_object
-        )
+        if object_positivity:
+            current_object = self._object_positivity_constraint(current_object)
 
         if fix_probe_fourier_amplitude:
             current_probe = self._probe_fourier_amplitude_constraint(current_probe)
@@ -1378,7 +1414,6 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         step_size: float = 0.9,
         normalization_min: float = 1,
         positions_step_size: float = 0.9,
-        pure_phase_object_iter: int = 0,
         fix_com: bool = True,
         fix_probe_iter: int = 0,
         fix_probe_fourier_amplitude_iter: int = 0,
@@ -1392,8 +1427,9 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         q_lowpass: float = None,
         q_highpass: float = None,
         kz_regularization_filter_iter: int = np.inf,
-        kz_regularization_gamma: float or np.ndarray = None,
+        kz_regularization_gamma: Union[float, np.ndarray] = None,
         identical_slices_iter: int = 0,
+        object_positivity: bool = True,
         store_iterations: bool = False,
         progress_bar: bool = True,
         reset: bool = None,
@@ -1427,8 +1463,6 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             Probe normalization minimum as a fraction of the maximum overlap intensity
         positions_step_size: float, optional
             Positions update step size
-        pure_phase_object: bool, optional
-            If True, object amplitude is set to unity
         fix_com: bool, optional
             If True, fixes center of mass of probe
         fix_probe_iter: int, optional
@@ -1459,6 +1493,8 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             kz regularization strength
         identical_slices_iter: int, optional
             Number of iterations to run using identical slices
+        object_positivity: bool, optional
+            If True, forces object to be positive
         store_iterations: bool, optional
             If True, reconstructed objects and probes are stored at each iteration
         progress_bar: bool, optional
@@ -1739,7 +1775,6 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
                 self._object,
                 self._probe,
                 self._positions_px,
-                pure_phase_object=a0 < pure_phase_object_iter,
                 fix_com=fix_com and a0 >= fix_probe_iter,
                 fix_probe_fourier_amplitude=a0 < fix_probe_fourier_amplitude_iter,
                 fix_positions=a0 < fix_positions_iter,
@@ -1758,6 +1793,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
                 and type(kz_regularization_gamma) == np.ndarray
                 else kz_regularization_gamma,
                 identical_slices=a0 < identical_slices_iter,
+                object_positivity=object_positivity,
             )
 
             if store_iterations:
@@ -1798,10 +1834,8 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         cmap = kwargs.get("cmap", "magma")
         kwargs.pop("cmap", None)
 
-        summed_object_angle = np.sum(np.angle(self.object), axis=0)
-        rotated_object = self._crop_rotate_object_fov(
-            summed_object_angle, padding=padding
-        )
+        summed_object = np.sum(np.angle(self.object), axis=0)
+        rotated_object = self._crop_rotate_object_fov(summed_object, padding=padding)
         rotated_shape = rotated_object.shape
 
         extent = [
@@ -1837,7 +1871,6 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         cbar: bool,
         plot_convergence: bool,
         plot_probe: bool,
-        object_mode: str,
         padding: int,
         **kwargs,
     ):
@@ -1852,9 +1885,6 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             If true, displays a colorbar
         plot_probe: bool
             If true, the reconstructed probe intensity is also displayed
-        object_mode: str
-            Specifies the attribute of the object to plot.
-            One of 'phase', 'amplitude', 'intensity'
 
         """
         figsize = kwargs.get("figsize", (8, 5))
@@ -1862,10 +1892,8 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         kwargs.pop("figsize", None)
         kwargs.pop("cmap", None)
 
-        summed_object_angle = np.sum(np.angle(self.object), axis=0)
-        rotated_object = self._crop_rotate_object_fov(
-            summed_object_angle, padding=padding
-        )
+        summed_object = np.sum(self.object, axis=0)
+        rotated_object = self._crop_rotate_object_fov(summed_object, padding=padding)
         rotated_shape = rotated_object.shape
 
         extent = [
@@ -1916,19 +1944,16 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         if plot_probe:
             # Object
             ax = fig.add_subplot(spec[0, 0])
-            if object_mode == "phase":
-                im = ax.imshow(
-                    rotated_object,
-                    extent=extent,
-                    cmap=cmap,
-                    **kwargs,
-                )
-            else:
-                raise NotImplementedError()
+            im = ax.imshow(
+                rotated_object,
+                extent=extent,
+                cmap=cmap,
+                **kwargs,
+            )
 
             ax.set_ylabel("x [A]")
             ax.set_xlabel("y [A]")
-            ax.set_title(f"Reconstructed object {object_mode}")
+            ax.set_title(f"Reconstructed object potential")
 
             if cbar:
                 divider = make_axes_locatable(ax)
@@ -1958,18 +1983,15 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
 
         else:
             ax = fig.add_subplot(spec[0])
-            if object_mode == "phase":
-                im = ax.imshow(
-                    rotated_object,
-                    extent=extent,
-                    cmap=cmap,
-                    **kwargs,
-                )
-            else:
-                raise NotImplementedError()
+            im = ax.imshow(
+                rotated_object,
+                extent=extent,
+                cmap=cmap,
+                **kwargs,
+            )
             ax.set_ylabel("x [A]")
             ax.set_xlabel("y [A]")
-            ax.set_title(f"Reconstructed object {object_mode}")
+            ax.set_title(f"Reconstructed object potential")
 
             if cbar:
                 divider = make_axes_locatable(ax)
@@ -1999,7 +2021,6 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         plot_convergence: bool,
         plot_probe: bool,
         iterations_grid: Tuple[int, int],
-        object_mode: str,
         padding: int,
         **kwargs,
     ):
@@ -2016,9 +2037,6 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             If true, displays a colorbar
         plot_probe: bool
             If true, the reconstructed probe intensity is also displayed
-        object_mode: str
-            Specifies the attribute of the object to plot.
-            One of 'phase', 'amplitude', 'intensity'
 
         """
         if iterations_grid == "auto":
@@ -2034,7 +2052,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
 
         errors = np.array(self.error_iterations)
         objects = [
-            self._crop_rotate_object_fov(np.sum(np.angle(obj), axis=0), padding=padding)
+            self._crop_rotate_object_fov(np.sum(obj, axis=0), padding=padding)
             for obj in self.object_iterations
         ]
 
@@ -2083,16 +2101,13 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         )
 
         for n, ax in enumerate(grid):
-            if object_mode == "phase":
-                im = ax.imshow(
-                    objects[grid_range[n]],
-                    extent=extent,
-                    cmap=cmap,
-                    **kwargs,
-                )
-                ax.set_title(f"Iter: {grid_range[n]} Phase")
-            else:
-                raise NotImplementedError()
+            im = ax.imshow(
+                objects[grid_range[n]],
+                extent=extent,
+                cmap=cmap,
+                **kwargs,
+            )
+            ax.set_title(f"Iter: {grid_range[n]} potential")
 
             ax.set_ylabel("x [A]")
             ax.set_xlabel("y [A]")
@@ -2145,7 +2160,6 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         iterations_grid: Tuple[int, int] = None,
         plot_convergence: bool = True,
         plot_probe: bool = True,
-        object_mode: str = "phase",
         cbar: bool = True,
         padding: int = 0,
         **kwargs,
@@ -2163,9 +2177,6 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             If true, displays a colorbar
         plot_probe: bool
             If true, the reconstructed probe intensity is also displayed
-        object_mode: str
-            Specifies the attribute of the object to plot.
-            One of 'phase', 'amplitude', 'intensity'
         padding: int, optional
             Padding to leave uncropped
         Returns
@@ -2174,23 +2185,10 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             Self to accommodate chaining
         """
 
-        if (
-            object_mode != "phase"
-            and object_mode != "amplitude"
-            and object_mode != "intensity"
-        ):
-            raise ValueError(
-                (
-                    "object_mode needs to be one of 'phase', 'amplitude', "
-                    f"or 'intensity', not {object_mode}"
-                )
-            )
-
         if iterations_grid is None:
             self._visualize_last_iteration(
                 plot_convergence=plot_convergence,
                 plot_probe=plot_probe,
-                object_mode=object_mode,
                 cbar=cbar,
                 padding=padding,
                 **kwargs,
@@ -2200,7 +2198,6 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
                 plot_convergence=plot_convergence,
                 iterations_grid=iterations_grid,
                 plot_probe=plot_probe,
-                object_mode=object_mode,
                 cbar=cbar,
                 padding=padding,
                 **kwargs,
@@ -2210,7 +2207,6 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
     def show_slices(
         self,
         ms_object=None,
-        object_mode: str = "phase",
         cbar: bool = True,
         padding: int = 0,
         **kwargs,
@@ -2222,9 +2218,6 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         --------
         ms_object: nd.array, optional
             Object to plot slices of. If None, uses current object
-        object_mode: str, optional
-            Specifies the attribute of the object to plot.
-            One of 'phase', 'amplitude'
         cbar: bool, optional
             If True, displays a colorbar
         padding: int, optional
@@ -2243,18 +2236,6 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             self.sampling[0] * rotated_shape[1],
             0,
         ]
-
-        if object_mode == "phase":
-            rotated_object = np.angle(rotated_object)
-        elif object_mode == "amplitude":
-            rotated_object = np.abs(rotated_object)
-        else:
-            raise ValueError(
-                (
-                    "object_mode needs to be one of 'phase', 'amplitude', "
-                    f"or 'intensity', not {object_mode}"
-                )
-            )
 
         figsize = kwargs.get("figsize", (12, 12))
         cmap = kwargs.get("cmap", "magma")
