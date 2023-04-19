@@ -36,6 +36,12 @@ release = '0.12.2'
 extensions = ['sphinx.ext.autodoc',
               'sphinx.ext.napoleon']
 
+# Other useful extensions
+# sphinx_copybutton
+# sphinx_toggleprompt
+# sphinx.ext.mathjax
+
+
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
 
