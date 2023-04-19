@@ -846,11 +846,15 @@ class PhaseReconstruction(metaclass=ABCMeta):
                         rotation_best_deg = rotation_angles_deg[ind_trans_max]
                         _rotation_best_rad = rotation_angles_rad[ind_trans_max]
                         _rotation_best_transpose = True
+
+                    self._rotation_div = rotation_div
+                    self._rotation_div_transpose = rotation_div_transpose
                 else:
                     # Minimize Curl
                     ind_min = xp.argmin(rotation_curl).item()
                     ind_trans_min = xp.argmin(rotation_curl_transpose).item()
-
+                    self._rotation_curl = rotation_curl
+                    self._rotation_curl_transpose = rotation_curl_transpose
                     if rotation_curl[ind_min] <= rotation_curl_transpose[ind_trans_min]:
                         rotation_best_deg = rotation_angles_deg[ind_min]
                         _rotation_best_rad = rotation_angles_rad[ind_min]
@@ -860,6 +864,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
                         _rotation_best_rad = rotation_angles_rad[ind_trans_min]
                         _rotation_best_transpose = True
 
+                self._rotation_angles_deg = rotation_angles_deg
                 # Print summary
                 if self._verbose:
                     print(
@@ -875,6 +880,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
 
                 # Plot Curl/Div rotation
                 if plot_rotation:
+
                     figsize = kwargs.get("figsize", (8, 2))
                     fig, ax = plt.subplots(figsize=figsize)
 
