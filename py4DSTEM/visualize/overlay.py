@@ -1032,7 +1032,7 @@ def get_nice_spacing(Nx,Ny,pixelsize):
         _spacing=0.5
     elif base>=2.1 and base<4.6:
         _spacing=1
-    elif base>=4.6 and base<10:
+    elif base>=4.6 and base<=10:
         _spacing=2
     # if base>=1 and base<1.25:
     #     _spacing=0.4

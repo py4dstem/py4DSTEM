@@ -5,7 +5,7 @@ from dataclasses import dataclass
 import copy
 from scipy.ndimage import gaussian_filter
 
-from py4DSTEM import tqdmnd
+from emdfile import tqdmnd
 
 
 

@@ -10,7 +10,7 @@ import cupyx.scipy.fft as cufft
 from time import time
 import numba
 
-from py4DSTEM import tqdmnd
+from emdfile import tqdmnd
 from py4DSTEM.classes import PointList, PointListArray
 from py4DSTEM.process.diskdetection.kernels import kernels
 

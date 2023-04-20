@@ -298,11 +298,12 @@ def show(
             determining the display value range; False indicates that all pixel values
             will be used to determine the intensity range, True indicates only unmasked
             pixels will be used
-        scalebar (None or dict or False): if None, and a DiffractionSlice or RealSlice
-            with calibrations is passed, adds a scalebar.  If None and anything else is
-            passed or if False, does not add a scalebar.  If a dict is passed, it is
-            propagated to the add_scalebar function which will attempt to use it to
-            overlay a scalebar.
+        scalebar (None or dict or Bool): if None, and a DiffractionSlice or RealSlice
+            with calibrations is passed, adds a scalebar.  If scalebar is not displaying the proper
+            calibration, check .calibration pixel_size and pixel_units. If None and an array is passed, 
+            does not add a scalebar.  If a dict is passed, it is propagated to the add_scalebar function 
+            which will attempt to use it to overlay a scalebar. If True, uses calibraiton or pixelsize/pixelunits 
+            for scalebar. If False, no scalebar is added.
         **kwargs: any keywords accepted by matplotlib's ax.matshow()
 
     Returns:
@@ -382,6 +383,9 @@ def show(
 
             # Output image for plotting
             ar = ar_rgb
+
+    if scalebar == True: 
+        scalebar = {}
 
     # support for native data types
     elif not isinstance(ar,np.ndarray):
@@ -1130,7 +1134,7 @@ def show_annuli(ar,center,radii,color='r',fill=True,alpha=0.3,linewidth=2,return
         return fig,ax
 
 def show_points(ar,x,y,s=1,scale=50,alpha=1,pointcolor='r',open_circles=False,
-                returnfig=False,**kwargs):
+                title = None, returnfig=False,**kwargs):
     """
     Plots a 2D array with one or more points.
     x and y are the point centers and must have the same length, N.
@@ -1143,6 +1147,7 @@ def show_points(ar,x,y,s=1,scale=50,alpha=1,pointcolor='r',open_circles=False,
         x,y         (number or iterable of numbers) the point positions
         s           (number or iterable of numbers) the relative point sizes
         scale       (number) the maximum point size
+        title       (str)  title for plot
         pointcolor
         alpha
 
@@ -1151,7 +1156,7 @@ def show_points(ar,x,y,s=1,scale=50,alpha=1,pointcolor='r',open_circles=False,
         If returnfig==False, the figure and its one axis are returned, and can be
         further edited.
     """
-    fig,ax = show(ar,returnfig=True,**kwargs)
+    fig,ax = show(ar,title = title, returnfig=True,**kwargs)
     d = {'x':x,'y':y,'s':s,'scale':scale,'pointcolor':pointcolor,'alpha':alpha,
          'open_circles':open_circles}
     add_points(ax,d)

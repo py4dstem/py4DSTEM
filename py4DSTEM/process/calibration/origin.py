@@ -483,7 +483,8 @@ def fit_origin(
     Args:
         data (2-tuple of 2d arrays): the measured origin position (qx0,qy0)
         mask (2b boolean array, optional): ignore points where mask=False
-        fitfunction (str, optional): must be 'plane' or 'parabola' or 'bezier_two'
+        fitfunction (str, optional): must be 'plane' or 'parabola' or 'bezier_two' 
+            or 'constant'
         returnfitp (bool, optional): if True, returns the fit parameters
         robust (bool, optional): If set to True, fit will be repeated with outliers
             removed.
@@ -513,54 +514,58 @@ def fit_origin(
     assert isinstance(qx0_meas, np.ndarray) and len(qy0_meas.shape) == 2
     assert qx0_meas.shape == qy0_meas.shape
     assert mask is None or mask.shape == qx0_meas.shape and mask.dtype == bool
-    assert fitfunction in ("plane", "parabola", "bezier_two")
-    if fitfunction == "plane":
-        f = plane
-    elif fitfunction == "parabola":
-        f = parabola
-    elif fitfunction == "bezier_two":
-        f = bezier_two
+    assert fitfunction in ("plane", "parabola", "bezier_two", "constant")
+    if fitfunction == "constant":
+        qx0_fit = np.mean(qx0_meas)*np.ones_like(qx0_meas)
+        qy0_fit = np.mean(qy0_meas)*np.ones_like(qy0_meas)
     else:
-        raise Exception("Invalid fitfunction '{}'".format(fitfunction))
+        if fitfunction == "plane":
+            f = plane
+        elif fitfunction == "parabola":
+            f = parabola
+        elif fitfunction == "bezier_two":
+            f = bezier_two
+        else:
+            raise Exception("Invalid fitfunction '{}'".format(fitfunction))
 
-    # Check if mask for data is stored in (qx0_meax,qy0_meas) as a masked array
-    if isinstance(qx0_meas, np.ma.MaskedArray):
-        mask = np.ma.getmask(qx0_meas)
+        # Check if mask for data is stored in (qx0_meax,qy0_meas) as a masked array
+        if isinstance(qx0_meas, np.ma.MaskedArray):
+            mask = np.ma.getmask(qx0_meas)
 
-    # Fit data
-    if mask is None:
-        popt_x, pcov_x, qx0_fit = fit_2D(
-            f,
-            qx0_meas,
-            robust=robust,
-            robust_steps=robust_steps,
-            robust_thresh=robust_thresh,
-        )
-        popt_y, pcov_y, qy0_fit = fit_2D(
-            f,
-            qy0_meas,
-            robust=robust,
-            robust_steps=robust_steps,
-            robust_thresh=robust_thresh,
-        )
+        # Fit data
+        if mask is None:
+            popt_x, pcov_x, qx0_fit = fit_2D(
+                f,
+                qx0_meas,
+                robust=robust,
+                robust_steps=robust_steps,
+                robust_thresh=robust_thresh,
+            )
+            popt_y, pcov_y, qy0_fit = fit_2D(
+                f,
+                qy0_meas,
+                robust=robust,
+                robust_steps=robust_steps,
+                robust_thresh=robust_thresh,
+            )
 
-    else:
-        popt_x, pcov_x, qx0_fit = fit_2D(
-            f,
-            qx0_meas,
-            robust=robust,
-            robust_steps=robust_steps,
-            robust_thresh=robust_thresh,
-            data_mask=mask == True,
-        )
-        popt_y, pcov_y, qy0_fit = fit_2D(
-            f,
-            qy0_meas,
-            robust=robust,
-            robust_steps=robust_steps,
-            robust_thresh=robust_thresh,
-            data_mask=mask == True,
-        )
+        else:
+            popt_x, pcov_x, qx0_fit = fit_2D(
+                f,
+                qx0_meas,
+                robust=robust,
+                robust_steps=robust_steps,
+                robust_thresh=robust_thresh,
+                data_mask=mask == True,
+            )
+            popt_y, pcov_y, qy0_fit = fit_2D(
+                f,
+                qy0_meas,
+                robust=robust,
+                robust_steps=robust_steps,
+                robust_thresh=robust_thresh,
+                data_mask=mask == True,
+            )
 
     # Compute residuals
     qx0_residuals = qx0_meas - qx0_fit
@@ -569,7 +574,7 @@ def fit_origin(
     # Return
     ans = (qx0_fit, qy0_fit, qx0_residuals, qy0_residuals)
     if returnfitp:
-        return ans,(popt_x,popt_y,pcov_x,pcov_y)
+        return ans,(popt_x, popt_y, pcov_x, pcov_y)
     else:
         return ans
 

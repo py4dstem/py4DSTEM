@@ -21,7 +21,7 @@ setup(
     author_email='ben.savitzky@gmail.com',
     license='GNU GPLv3',
     keywords="STEM 4DSTEM",
-    python_requires='>=3.7',
+    python_requires='>=3.8',
     install_requires=[
         'numpy >= 1.19',
         'scipy >= 1.5.2',
@@ -30,7 +30,6 @@ setup(
         'matplotlib >= 3.2.2',
         'scikit-image >= 0.17.2',
         'scikit-learn >= 0.23.2',
-        'qtconsole >= 4.7.7',
         'ipywidgets >= 7.6.3',
         'tqdm >= 4.46.1',
         'dill >= 0.3.3',

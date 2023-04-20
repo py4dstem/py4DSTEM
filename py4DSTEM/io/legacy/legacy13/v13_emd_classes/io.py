@@ -4,8 +4,7 @@
 import numpy as np
 import h5py
 from numbers import Number
-
-from py4DSTEM import tqdmnd
+from emdfile import tqdmnd
 
 
 

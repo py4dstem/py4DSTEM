@@ -5,7 +5,7 @@ from os.path import exists
 from typing import Optional,Union
 
 import py4DSTEM
-emd = py4DSTEM.emd
+import emdfile as emd
 from py4DSTEM.io.parsefiletype import _parse_filetype
 import py4DSTEM.io.legacy as legacy
 
