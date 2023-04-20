@@ -16,7 +16,7 @@ class DataCube(Array,RootedNode,Data,DataCubeMethods):
         self,
         data: np.ndarray,
         name: Optional[str] = 'datacube',
-        calibration: Optional[Union[Calibration,None,'skip']] = None,
+        calibration: Optional[Union[Calibration,None]] = None,
         slicelabels: Optional[Union[bool,list]] = None,
         ):
         """

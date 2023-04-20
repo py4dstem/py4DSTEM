@@ -61,7 +61,7 @@ def v13_to_14( v13tree ):
 
     # make a root and fine the node to grow from
     if isinstance(v13tree,Root13):
-        node = _v13_to_14_cls(v13_tree)
+        node = _v13_to_14_cls(v13tree)
     else:
         node = _v13_to_14_cls(v13tree)
         root = Root( name=node.name )
