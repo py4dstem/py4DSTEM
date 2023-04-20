@@ -24,6 +24,20 @@ from py4DSTEM.utils.configuration_checker import check_config
 
 # classes
 
+from py4DSTEM.classes import (
+    DataCube,
+    DiffractionSlice,
+    RealSlice,
+    VirtualDiffraction,
+    VirtualImage,
+    Probe,
+    QPoints,
+    BraggVectors,
+    Calibration,
+    Data,
+)
+
+
 from emdfile import (
     Node,
     Metadata,
@@ -32,7 +46,6 @@ from emdfile import (
     PointListArray,
     Custom
 )
-from py4DSTEM.classes import DataCube
 
 
 

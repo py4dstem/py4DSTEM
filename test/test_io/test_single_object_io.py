@@ -169,8 +169,7 @@ class TestSingleDataNodeIO:
         assert(self.datacube.calibration.get_Q_pixel_units() == "A^-1")
         # save and read
         save(path_h5,self.datacube)
-        root = read(path_h5)
-        new_datacube = root.tree('datacube')
+        new_datacube = read(path_h5)
         # check it's the same
         assert(isinstance(new_datacube,DataCube))
         assert(array_equal(self.datacube.data,new_datacube.data))
@@ -188,8 +187,7 @@ class TestSingleDataNodeIO:
         assert(isinstance(self.braggvectors,BraggVectors))
         # save then read
         save(path_h5,self.braggvectors)
-        root = read(path_h5)
-        new_braggvectors = root.tree('braggvectors')
+        new_braggvectors = read(path_h5)
         # check it's the same
         assert(isinstance(new_braggvectors,BraggVectors))
         assert(new_braggvectors is not self.braggvectors)
@@ -208,8 +206,7 @@ class TestSingleDataNodeIO:
         assert(isinstance(self.braggvectors2,BraggVectors))
         # save then read
         save(path_h5,self.braggvectors2)
-        root = read(path_h5)
-        new_braggvectors = root.tree('braggvectors')
+        new_braggvectors = read(path_h5)
         # check it's the same
         assert(isinstance(new_braggvectors,BraggVectors))
         assert(new_braggvectors is not self.braggvectors2)
@@ -234,12 +231,11 @@ class TestSingleDataNodeIO:
         assert(isinstance(self.diffractionslice,DiffractionSlice))
         # save and read
         save(path_h5,self.diffractionslice)
-        root = read(path_h5)
-        new_diffractionslice = root.tree('diffractionslice')
+        diffractionslice = read(path_h5)
         # check it's the same
-        assert(isinstance(new_diffractionslice,DiffractionSlice))
-        assert(array_equal(self.diffractionslice.data,new_diffractionslice.data))
-        assert(new_diffractionslice.slicelabels == self.diffractionslice.slicelabels)
+        assert(isinstance(diffractionslice,DiffractionSlice))
+        assert(array_equal(self.diffractionslice.data,diffractionslice.data))
+        assert(diffractionslice.slicelabels == self.diffractionslice.slicelabels)
 
 
     def test_realslice(self):
@@ -248,12 +244,11 @@ class TestSingleDataNodeIO:
         assert(isinstance(self.realslice,RealSlice))
         # save and read
         save(path_h5,self.realslice)
-        root = read(path_h5)
-        new_realslice = root.tree('realslice')
+        rs = read(path_h5)
         # check it's the same
-        assert(isinstance(new_realslice,RealSlice))
-        assert(array_equal(self.realslice.data,new_realslice.data))
-        assert(new_realslice.slicelabels == self.realslice.slicelabels)
+        assert(isinstance(rs,RealSlice))
+        assert(array_equal(self.realslice.data,rs.data))
+        assert(rs.slicelabels == self.realslice.slicelabels)
 
     def test_virtualdiffraction(self):
         """ test virtualdiffraction io
@@ -261,11 +256,10 @@ class TestSingleDataNodeIO:
         assert(isinstance(self.virtualdiffraction,VirtualDiffraction))
         # save and read
         save(path_h5,self.virtualdiffraction)
-        root = read(path_h5)
-        new_virtualdiffraction = root.tree('virtualdiffraction')
+        virtualdiffraction = read(path_h5)
         # check it's the same
-        assert(isinstance(new_virtualdiffraction,VirtualDiffraction))
-        assert(array_equal(self.virtualdiffraction.data,new_virtualdiffraction.data))
+        assert(isinstance(virtualdiffraction,VirtualDiffraction))
+        assert(array_equal(self.virtualdiffraction.data,virtualdiffraction.data))
         pass
 
     def test_virtualimage(self):
@@ -274,11 +268,10 @@ class TestSingleDataNodeIO:
         assert(isinstance(self.virtualimage,VirtualImage))
         # save and read
         save(path_h5,self.virtualimage)
-        root = read(path_h5)
-        new_virtualimage = root.tree('virtualimage')
+        virtIm = read(path_h5)
         # check it's the same
-        assert(isinstance(new_virtualimage,VirtualImage))
-        assert(array_equal(self.virtualimage.data,new_virtualimage.data))
+        assert(isinstance(virtIm,VirtualImage))
+        assert(array_equal(self.virtualimage.data,virtIm.data))
         pass
 
     def test_probe1(self):
@@ -289,11 +282,10 @@ class TestSingleDataNodeIO:
         assert(array_equal(self.probe1.kernel,np.zeros_like(self.probe1.probe)))
         # save and read
         save(path_h5,self.probe1)
-        root = read(path_h5)
-        new_probe1 = root.tree('probe')
+        probe = read(path_h5)
         # check it's the same
-        assert(isinstance(new_probe1,Probe))
-        assert(array_equal(self.probe1.data,new_probe1.data))
+        assert(isinstance(probe,Probe))
+        assert(array_equal(self.probe1.data,probe.data))
         pass
 
     def test_probe2(self):
@@ -302,11 +294,10 @@ class TestSingleDataNodeIO:
         assert(isinstance(self.probe2,Probe))
         # save and read
         save(path_h5,self.probe2)
-        root = read(path_h5)
-        new_probe2 = root.tree('probe')
+        probe = read(path_h5)
         # check it's the same
-        assert(isinstance(new_probe2,Probe))
-        assert(array_equal(self.probe2.data,new_probe2.data))
+        assert(isinstance(probe,Probe))
+        assert(array_equal(self.probe2.data,probe.data))
         pass
 
 
@@ -316,15 +307,10 @@ class TestSingleDataNodeIO:
         assert(isinstance(self.qpoints,QPoints))
         # save and read
         save(path_h5,self.qpoints)
-        root = read(path_h5)
-        new_qpoints = root.tree('qpoints')
+        qpoints = read(path_h5)
         # check it's the same
-        assert(isinstance(new_qpoints,QPoints))
-        assert(array_equal(self.qpoints.data,new_qpoints.data))
+        assert(isinstance(qpoints,QPoints))
+        assert(array_equal(self.qpoints.data,qpoints.data))
         pass
-
-
-
-
 
 

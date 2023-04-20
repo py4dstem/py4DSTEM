@@ -148,9 +148,9 @@ def _v13_to_14_cls(obj):
             shape = obj.shape
         )
         for idx,jdx in tqdmnd(
-            x.shape,
+            x.shape[0],x.shape[1],
             desc='transferring PointListArray v13->14',
-            units='foolishness'):
+            unit='foolishness'):
             x[idx,jdx] = obj[idx,jdx]
 
     elif isinstance(obj, Calibration13):

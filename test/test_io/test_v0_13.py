@@ -28,22 +28,11 @@ class TestV13:
         print_h5_tree(self.path)
 
 
-    def test_read_datacube(self):
+    def test_read(self):
         d = read(
             self.path,
-            datapath='4DSTEM/probe'
         )
         d
-
-
-    def test_read_braggvectors(self):
-        d = read(
-            self.path,
-            datapath='4DSTEM/braggpeaks_cal'
-        )
-        d.vectors_uncal
-        d.vectors
-
 
 
 

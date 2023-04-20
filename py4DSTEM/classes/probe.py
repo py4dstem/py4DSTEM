@@ -26,7 +26,7 @@ class Probe(DiffractionSlice,ProbeMethods,Data):
         """
         # if only the probe is passed, make space for the kernel
         if data.ndim == 2:
-            data = np.dstack([
+            data = np.stack([
                 data,
                 np.zeros_like(data)
             ])
@@ -53,15 +53,15 @@ class Probe(DiffractionSlice,ProbeMethods,Data):
         return self.get_slice('probe').data
     @probe.setter
     def probe(self,x):
-        assert(x.shape == (self.data.shape[:2]))
-        self.data[:,:,0] = x
+        assert(x.shape == (self.data.shape[1:]))
+        self.data[0,:,:] = x
     @property
     def kernel(self):
         return self.get_slice('kernel').data
     @kernel.setter
     def kernel(self,x):
-        assert(x.shape == (self.data.shape[:2]))
-        self.data[:,:,1] = x
+        assert(x.shape == (self.data.shape[1:]))
+        self.data[1,:,:] = x
 
 
 
