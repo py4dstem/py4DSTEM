@@ -1,7 +1,7 @@
 Welcome to the py4DSTEM documentation
 =====================================
 
-``py4DSTEM`` is an open source set of python tools for processing and analysis of :ref:`four-dimensional scanning transmission electron microscopy (4D-STEM)<4dstem>` data.
+``py4DSTEM`` is an open source set of python tools for processing and analysis of :ref:`four-dimensional scanning transmission electron microscopy (4D-STEM)<4dstem>` data. CHECK PROPOGATION
 
 
 
