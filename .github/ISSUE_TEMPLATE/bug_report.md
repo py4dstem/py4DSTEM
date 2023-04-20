@@ -18,7 +18,7 @@ A clear and concise description of what you expected to happen.
 
 
 **py4DSTEM version** 
-It can be accessed by running `py4DSTEM__version__`
+It can be accessed by running `py4DSTEM.__version__`
 **Python version**
 It can be accessed using `sys.version`
 **Operating system** 
