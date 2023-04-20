@@ -1,7 +1,9 @@
 import py4DSTEM
 from os.path import join,exists
 
-path = join(py4DSTEM._TESTPATH,'test_v14_simple.h5')
+
+
+path = join(py4DSTEM._TESTPATH,'test_v14_sample.h5')
 
 
 
@@ -94,7 +96,7 @@ def _make_v14_test_file():
     py4DSTEM.save(
         path,
         datacube,
-        tree='noroot',
+        tree=None,
         mode = 'o'
     )
 
@@ -126,6 +128,18 @@ class TestV14:
 
 
     def test_meowth(self):
+
+        #py4DSTEM.print_h5_tree(path)
+        data = py4DSTEM.read(path)
+        data.tree()
+
+        assert(isinstance(data.tree('braggvectors'),py4DSTEM.BraggVectors))
+        assert(isinstance(data.tree('bright_field'),py4DSTEM.VirtualImage))
+        assert(isinstance(data.tree('dark_field'),py4DSTEM.VirtualImage))
+        assert(isinstance(data.tree('dp_max'),py4DSTEM.VirtualDiffraction))
+        assert(isinstance(data.tree('dp_mean'),py4DSTEM.VirtualDiffraction))
+        assert(isinstance(data.tree('probe'),py4DSTEM.Probe))
+
         pass
 
 
