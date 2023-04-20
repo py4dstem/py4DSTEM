@@ -8,9 +8,8 @@ from copy import deepcopy
 from scipy.optimize import curve_fit
 import sys
 
-from py4DSTEM.io.datastructure import PointList, PointListArray
+from emdfile import tqdmnd, PointList, PointListArray
 from py4DSTEM.process.utils import single_atom_scatter, electron_wavelength_angstrom
-from py4DSTEM.utils.tqdmnd import tqdmnd
 
 from py4DSTEM.process.diffraction.crystal_viz import plot_diffraction_pattern
 from py4DSTEM.process.diffraction.crystal_viz import plot_ring_pattern
@@ -57,7 +56,7 @@ class Crystal:
         calibrate_pixel_size,
         calibrate_unit_cell
     )
-    
+
     # Dynamical diffraction calculations are implemented in crystal_bloch.py
     from py4DSTEM.process.diffraction.crystal_bloch import (
         generate_dynamical_diffraction_pattern,

@@ -1,7 +1,3 @@
-from py4DSTEM.visualize.overlay import add_rectangles,add_circles,add_annuli,add_ellipses,add_points, add_grid_overlay
-from py4DSTEM.visualize.overlay import add_cartesian_grid,add_polarelliptical_grid,add_rtheta_grid,add_scalebar
-from py4DSTEM.io.datastructure import Calibration, DiffractionSlice, RealSlice
-
 import numpy as np
 import matplotlib.pyplot as plt
 import warnings
@@ -12,6 +8,24 @@ from numpy.ma import MaskedArray
 from numbers import Number
 from math import log
 from copy import copy
+
+from py4DSTEM.classes import (
+    Calibration,
+    DiffractionSlice,
+    RealSlice
+)
+from py4DSTEM.visualize.overlay import (
+    add_rectangles,
+    add_circles,
+    add_annuli,
+    add_ellipses,
+    add_points,
+    add_grid_overlay,
+    add_cartesian_grid,
+    add_polarelliptical_grid,
+    add_rtheta_grid,add_scalebar
+)
+
 
 def show(
     ar,
@@ -527,7 +541,7 @@ def show(
 
 
         # Create colormap with mask_color for bad values
-        cm = copy(plt.cm.get_cmap(cmap))
+        cm = copy(plt.colormaps.get_cmap(cmap))
         if mask_color=='empty':
             cm.set_bad(alpha=0)
         else:
