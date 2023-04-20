@@ -70,3 +70,4 @@ def make_circular_mask(shape, qxy0, radius):
 
     # return circular mask
     return qxa**2 + qya**2 < radius**2
+

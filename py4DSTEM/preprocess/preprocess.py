@@ -9,8 +9,8 @@
 
 import warnings
 import numpy as np
-from py4DSTEM.process.utils import bin2D, get_shifted_ar
-from py4DSTEM import tqdmnd
+from py4DSTEM.preprocess.utils import bin2D, get_shifted_ar
+from emdfile import tqdmnd
 from scipy.ndimage import median_filter
 
 ### Editing datacube shape ###
@@ -21,10 +21,26 @@ def set_scan_shape(datacube, R_Nx, R_Ny):
     Reshape the data given the real space scan shape.
     """
     try:
+        # reshape
         datacube.data = datacube.data.reshape(
             datacube.R_N, datacube.Q_Nx, datacube.Q_Ny
         ).reshape(R_Nx, R_Ny, datacube.Q_Nx, datacube.Q_Ny)
+
+        # set dim vectors
+        Rpixsize = datacube.calibration.get_R_pixel_size()
+        Rpixunits = datacube.calibration.get_R_pixel_units()
+        datacube.set_dim(
+            0,
+            [0,Rpixsize],
+            units = Rpixunits)
+        datacube.set_dim(
+            1,
+            [0,Rpixsize],
+            units = Rpixunits)
+
+        # return
         return datacube
+
     except ValueError:
         print(
             "Can't reshape {} scan positions into a {}x{} array.".format(
@@ -49,7 +65,40 @@ def swap_RQ(datacube):
         >>> swap_RQ(datacube).data.shape
         (Qx,Qy,Rx,Ry)
     """
+    # swap
     datacube.data = np.transpose(datacube.data, axes=(2, 3, 0, 1))
+
+    # set dim vectors
+    Rpixsize = datacube.calibration.get_R_pixel_size()
+    Rpixunits = datacube.calibration.get_R_pixel_units()
+    Qpixsize = datacube.calibration.get_Q_pixel_size()
+    Qpixunits = datacube.calibration.get_Q_pixel_units()
+    datacube.set_dim(
+        0,
+        [0,Rpixsize],
+        units = Rpixunits,
+        name = 'Rx'
+    )
+    datacube.set_dim(
+        1,
+        [0,Rpixsize],
+        units = Rpixunits,
+        name = 'Ry'
+    )
+    datacube.set_dim(
+        2,
+        [0,Qpixsize],
+        units = Qpixunits,
+        name = 'Qx'
+    )
+    datacube.set_dim(
+        3,
+        [0,Qpixsize],
+        units = Qpixunits,
+        name = 'Qy'
+    )
+
+    # return
     return datacube
 
 
@@ -65,7 +114,26 @@ def swap_Rxy(datacube):
         >>> swap_Rxy(datacube).data.shape
         (Rx,Ry,Qx,Qy)
     """
+    # swap
     datacube.data = np.moveaxis(datacube.data, 1, 0)
+
+    # set dim vectors
+    Rpixsize = datacube.calibration.get_R_pixel_size()
+    Rpixunits = datacube.calibration.get_R_pixel_units()
+    datacube.set_dim(
+        0,
+        [0,Rpixsize],
+        units = Rpixunits,
+        name = 'Rx'
+    )
+    datacube.set_dim(
+        1,
+        [0,Rpixsize],
+        units = Rpixunits,
+        name = 'Ry'
+    )
+
+    # return
     return datacube
 
 
@@ -89,16 +157,54 @@ def swap_Qxy(datacube):
 
 
 def crop_data_diffraction(datacube, crop_Qx_min, crop_Qx_max, crop_Qy_min, crop_Qy_max):
+    # crop
     datacube.data = datacube.data[
         :, :, crop_Qx_min:crop_Qx_max, crop_Qy_min:crop_Qy_max
     ]
+
+    # set dim vectors
+    Qpixsize = datacube.calibration.get_Q_pixel_size()
+    Qpixunits = datacube.calibration.get_Q_pixel_units()
+    datacube.set_dim(
+        2,
+        [0,Qpixsize],
+        units = Qpixunits,
+        name = 'Qx'
+    )
+    datacube.set_dim(
+        3,
+        [0,Qpixsize],
+        units = Qpixunits,
+        name = 'Qy'
+    )
+
+    # return
     return datacube
 
 
 def crop_data_real(datacube, crop_Rx_min, crop_Rx_max, crop_Ry_min, crop_Ry_max):
+    # crop
     datacube.data = datacube.data[
         crop_Rx_min:crop_Rx_max, crop_Ry_min:crop_Ry_max, :, :
     ]
+
+    # set dim vectors
+    Rpixsize = datacube.calibration.get_R_pixel_size()
+    Rpixunits = datacube.calibration.get_R_pixel_units()
+    datacube.set_dim(
+        0,
+        [0,Rpixsize],
+        units = Rpixunits,
+        name = 'Rx'
+    )
+    datacube.set_dim(
+        1,
+        [0,Rpixsize],
+        units = Rpixunits,
+        name = 'Ry'
+    )
+
+    # return
     return datacube
 
 
@@ -106,38 +212,73 @@ def bin_data_diffraction(datacube, bin_factor):
     """
     Performs diffraction space binning of data by bin_factor.
     """
-    if bin_factor <= 1:
+    # validate inputs
+    assert(type(bin_factor) is int
+        ), f"Error: binning factor {bin_factor} is not an int."
+    if bin_factor == 1:
         return datacube
+
+    print(0)
+    print(datacube.data.shape)
+    print()
+
+    # get shape
+    R_Nx, R_Ny, Q_Nx, Q_Ny = (
+        datacube.R_Nx,
+        datacube.R_Ny,
+        datacube.Q_Nx,
+        datacube.Q_Ny,
+    )
+    # crop edges if necessary
+    if (Q_Nx % bin_factor == 0) and (Q_Ny % bin_factor == 0):
+        pass
+    elif Q_Nx % bin_factor == 0:
+        datacube.data = datacube.data[:, :, :, : -(Q_Ny % bin_factor)]
+    elif Q_Ny % bin_factor == 0:
+        datacube.data = datacube.data[:, :, : -(Q_Nx % bin_factor), :]
     else:
-        assert (
-            type(bin_factor) is int
-        ), "Error: binning factor {} is not an int.".format(bin_factor)
-        R_Nx, R_Ny, Q_Nx, Q_Ny = (
-            datacube.R_Nx,
-            datacube.R_Ny,
-            datacube.Q_Nx,
-            datacube.Q_Ny,
-        )
-        # Crop to make data binnable if necessary
-        if (Q_Nx % bin_factor == 0) and (Q_Ny % bin_factor == 0):
-            pass
-        elif Q_Nx % bin_factor == 0:
-            datacube.data = datacube.data[:, :, :, : -(Q_Ny % bin_factor)]
-        elif Q_Ny % bin_factor == 0:
-            datacube.data = datacube.data[:, :, : -(Q_Nx % bin_factor), :]
-        else:
-            datacube.data = datacube.data[
-                :, :, : -(Q_Nx % bin_factor), : -(Q_Ny % bin_factor)
-            ]
-        datacube.data = datacube.data.reshape(
-            R_Nx,
-            R_Ny,
-            int(Q_Nx / bin_factor),
-            bin_factor,
-            int(Q_Ny / bin_factor),
-            bin_factor,
-        ).sum(axis=(3, 5))
-        return datacube
+        datacube.data = datacube.data[
+            :, :, : -(Q_Nx % bin_factor), : -(Q_Ny % bin_factor)
+        ]
+
+    print(1)
+    print(datacube.data.shape)
+    print()
+
+    # bin
+    datacube.data = datacube.data.reshape(
+        R_Nx,
+        R_Ny,
+        int(Q_Nx / bin_factor),
+        bin_factor,
+        int(Q_Ny / bin_factor),
+        bin_factor,
+    ).sum(axis=(3, 5))
+
+    print(2)
+    print(datacube.data.shape)
+    print()
+
+
+
+    # set dim vectors
+    Qpixsize = datacube.calibration.get_Q_pixel_size() * bin_factor
+    Qpixunits = datacube.calibration.get_Q_pixel_units()
+    datacube.set_dim(
+        2,
+        [0,Qpixsize],
+        units = Qpixunits,
+        name = 'Qx'
+    )
+    datacube.set_dim(
+        3,
+        [0,Qpixsize],
+        units = Qpixunits,
+        name = 'Qy'
+    )
+
+    # return
+    return datacube
 
 
 def bin_data_mmap(datacube, bin_factor, dtype=np.float32):
@@ -145,11 +286,15 @@ def bin_data_mmap(datacube, bin_factor, dtype=np.float32):
     Performs diffraction space binning of data by bin_factor.
 
     """
-    assert type(bin_factor) is int, "Error: binning factor {} is not an int.".format(
-        bin_factor
-    )
-    R_Nx, R_Ny, Q_Nx, Q_Ny = datacube.R_Nx, datacube.R_Ny, datacube.Q_Nx, datacube.Q_Ny
+    # validate inputs
+    assert type(bin_factor) is int, f"Error: binning factor {bin_factor} is not an int."
+    if bin_factor == 1:
+        return datacube
 
+    # get shape
+    R_Nx, R_Ny, Q_Nx, Q_Ny = (
+        datacube.R_Nx, datacube.R_Ny, datacube.Q_Nx, datacube.Q_Ny)
+    # allocate space
     data = np.zeros(
         (
             datacube.R_Nx,
@@ -159,10 +304,28 @@ def bin_data_mmap(datacube, bin_factor, dtype=np.float32):
         ),
         dtype=dtype,
     )
+    # bin
     for Rx, Ry in tqdmnd(datacube.R_Ny, datacube.R_Ny):
         data[Rx, Ry, :, :] = bin2D(datacube.data[Rx, Ry, :, :], bin_factor, dtype=dtype)
-
     datacube.data = data
+
+    # set dim vectors
+    Qpixsize = datacube.calibration.get_Q_pixel_size() * bin_factor
+    Qpixunits = datacube.calibration.get_Q_pixel_units()
+    datacube.set_dim(
+        2,
+        [0,Qpixsize],
+        units = Qpixunits,
+        name = 'Qx'
+    )
+    datacube.set_dim(
+        3,
+        [0,Qpixsize],
+        units = Qpixunits,
+        name = 'Qy'
+    )
+
+    # return
     return datacube
 
 
@@ -170,44 +333,65 @@ def bin_data_real(datacube, bin_factor):
     """
     Performs diffraction space binning of data by bin_factor.
     """
+    # validate inputs
+    assert(type(bin_factor) is int
+        ), f"Bin factor {bin_factor} is not an int."
     if bin_factor <= 1:
         return datacube
+
+    # set shape
+    R_Nx, R_Ny, Q_Nx, Q_Ny = (
+        datacube.R_Nx,
+        datacube.R_Ny,
+        datacube.Q_Nx,
+        datacube.Q_Ny,
+    )
+    # crop edges if necessary
+    if (R_Nx % bin_factor == 0) and (R_Ny % bin_factor == 0):
+        pass
+    elif R_Nx % bin_factor == 0:
+        datacube.data = datacube.data[:, : -(R_Ny % bin_factor), :, :]
+    elif R_Ny % bin_factor == 0:
+        datacube.data = datacube.data[: -(R_Nx % bin_factor), :, :, :]
     else:
-        assert (
-            type(bin_factor) is int
-        ), "Error: binning factor {} is not an int.".format(bin_factor)
-        R_Nx, R_Ny, Q_Nx, Q_Ny = (
-            datacube.R_Nx,
-            datacube.R_Ny,
-            datacube.Q_Nx,
-            datacube.Q_Ny,
-        )
-        # Crop to make data binnable if necessary
-        if (R_Nx % bin_factor == 0) and (R_Ny % bin_factor == 0):
-            pass
-        elif R_Nx % bin_factor == 0:
-            datacube.data = datacube.data[:, : -(R_Ny % bin_factor), :, :]
-        elif R_Ny % bin_factor == 0:
-            datacube.data = datacube.data[: -(R_Nx % bin_factor), :, :, :]
-        else:
-            datacube.data = datacube.data[
-                : -(R_Nx % bin_factor), : -(R_Ny % bin_factor), :, :
-            ]
-        datacube.data = datacube.data.reshape(
-            int(R_Nx / bin_factor),
-            bin_factor,
-            int(R_Ny / bin_factor),
-            bin_factor,
-            Q_Nx,
-            Q_Ny,
-        ).sum(axis=(1, 3))
-        return datacube
+        datacube.data = datacube.data[
+            : -(R_Nx % bin_factor), : -(R_Ny % bin_factor), :, :
+        ]
+    # bin
+    datacube.data = datacube.data.reshape(
+        int(R_Nx / bin_factor),
+        bin_factor,
+        int(R_Ny / bin_factor),
+        bin_factor,
+        Q_Nx,
+        Q_Ny,
+    ).sum(axis=(1, 3))
+
+    # set dim vectors
+    Rpixsize = datacube.calibration.get_R_pixel_size() * bin_factor
+    Rpixunits = datacube.calibration.get_R_pixel_units()
+    datacube.set_dim(
+        0,
+        [0,Rpixsize],
+        units = Rpixunits,
+        name = 'Rx'
+    )
+    datacube.set_dim(
+        1,
+        [0,Rpixsize],
+        units = Rpixunits,
+        name = 'Ry'
+    )
+
+    # return
+    return datacube
 
 
 def thin_data_real(datacube, thinning_factor):
     """
     Reduces data size by a factor of `thinning_factor`^2 by skipping every `thinning_factor` beam positions in both x and y.
     """
+    # get shapes
     Rshape0 = datacube.Rshape
     Rshapef = tuple([x // thinning_factor for x in Rshape0])
 
@@ -225,6 +409,24 @@ def thin_data_real(datacube, thinning_factor):
         data[rx, ry, :, :] = datacube[rx0, ry0, :, :]
 
     datacube.data = data
+
+    # set dim vectors
+    Rpixsize = datacube.calibration.get_R_pixel_size() * thinning_factor
+    Rpixunits = datacube.calibration.get_R_pixel_units()
+    datacube.set_dim(
+        0,
+        [0,Rpixsize],
+        units = Rpixunits,
+        name = 'Rx'
+    )
+    datacube.set_dim(
+        1,
+        [0,Rpixsize],
+        units = Rpixunits,
+        name = 'Ry'
+    )
+
+    # return
     return datacube
 
 
@@ -465,3 +667,13 @@ def pad_data_diffraction(datacube, pad_factor=None, output_size=None):
     datacube.data = np.pad(datacube.data, pad_width=pad_width, mode="constant")
 
     return datacube
+
+
+
+
+
+
+
+
+
+
