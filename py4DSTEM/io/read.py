@@ -118,7 +118,7 @@ def read(
                     pass
                 rootgroup = datapath[0]
                 if len(datapath)>1:
-                    datapath = '/'.join(rootgroups[1:])
+                    datapath = '/'.join(rootgroup[1:])
                 else:
                     datapath = None
             else:

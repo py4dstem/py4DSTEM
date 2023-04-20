@@ -437,7 +437,7 @@ class Calibration(Metadata):
             A Calibration instance
         """
         # load the group as a Metadata instance
-        cal = Metadata.from_h5(group)
+        metadata = Metadata.from_h5(group)
 
         # convert it to a Calibration instance
         cal = Calibration(name = metadata.name)
