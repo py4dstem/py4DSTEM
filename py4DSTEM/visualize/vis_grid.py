@@ -92,9 +92,22 @@ def _show_grid_overlay(image,x0,y0,xL,yL,color='k',linewidth=1,alpha=1,
     else:
         return fig,ax
 
-def show_image_grid(get_ar,H,W,axsize=(6,6),returnfig=False,titlesize=0,
-                    get_bordercolor=None,get_x=None,get_y=None,get_pointcolors=None,
-                    get_s=None,open_circles=False,**kwargs):
+def show_image_grid(
+    get_ar,
+    H,W,
+    axsize=(6,6),
+    returnfig=False,
+    figax = None, 
+    title = None,
+    title_index = False,
+    suptitle = None,
+    get_bordercolor=None,
+    get_x=None,
+    get_y=None,
+    get_pointcolors=None,
+    get_s=None,
+    open_circles=False,
+    **kwargs):
     """
     Displays a set of images in a grid.
 
@@ -117,8 +130,16 @@ def show_image_grid(get_ar,H,W,axsize=(6,6),returnfig=False,titlesize=0,
                     the integers 0 through HW-1
         H,W         integers, the dimensions of the grid
         axsize      the size of each image
-        titlesize   if >0, prints the index i passed to get_ar over
-                    each image
+        figax       controls which matplotlib Axes object draws the image.
+                    If None, generates a new figure with a single Axes instance. 
+                    Otherwise, ax must be a 2-tuple containing the matplotlib class instances 
+                    (Figure,Axes), with ar then plotted in the specified Axes instance.
+        title       if title is sting, then prints title as suptitle. If a suptitle is also provided, 
+                    the suptitle is printed insead.
+                    if title is a list of strings (ex: ['title 1','title 2']), each array has 
+                    corresponding title in list.
+        title_index if True, prints the index i passed to get_ar over each image 
+        suptitle    string, suptitle on plot
         get_bordercolor
                     if not None, should be a function defined over
                     the same i as get_ar, and which returns a
@@ -145,7 +166,11 @@ def show_image_grid(get_ar,H,W,axsize=(6,6),returnfig=False,titlesize=0,
     _get_points = (get_x is not None) and (get_y is not None)
     _get_colors = get_pointcolors is not None
     _get_s = get_s is not None
-    fig,axs = plt.subplots(H,W,figsize=(W*axsize[0],H*axsize[1]))
+    
+    if figax is None:
+        fig,axs = plt.subplots(H,W,figsize=(W*axsize[0],H*axsize[1]))
+    else:
+        fig,axs = figax
     if H==1:
         axs = axs[np.newaxis,:]
     elif W==1:
@@ -154,6 +179,17 @@ def show_image_grid(get_ar,H,W,axsize=(6,6),returnfig=False,titlesize=0,
         for j in range(W):
             ax = axs[i,j]
             N = i*W+j
+            #make titles
+            if type(title) == list: 
+                print_title = title[N]
+            else:
+                print_title = None
+            if title_index: 
+                if print_title is not None: 
+                    print_title = f"{N}. " + print_title
+                else:
+                    print_title = f"{N}." 
+            #make figures
             try:
                 ar = get_ar(N)
                 if _get_bordercolor and _get_points:
@@ -165,38 +201,53 @@ def show_image_grid(get_ar,H,W,axsize=(6,6),returnfig=False,titlesize=0,
                         pointcolors='r'
                     if _get_s:
                         s = get_s(N)
-                        _,_ = show_points(ar,figax=(fig,ax),returnfig=True,
-                                          bordercolor=bc,x=x,y=y,s=s,
-                                          pointcolor=pointcolors,
-                                          open_circles=open_circles,**kwargs)
+                        _,_ = show_points(
+                            ar,figax=(fig,ax),
+                            returnfig=True,
+                            bordercolor=bc,
+                            x=x,y=y,s=s,
+                            pointcolor=pointcolors,
+                            open_circles=open_circles,
+                            title = print_title,
+                            **kwargs)
                     else:
-                        _,_ = show_points(ar,figax=(fig,ax),returnfig=True,
-                                          bordercolor=bc,x=x,y=y,
-                                          pointcolor=pointcolors,
-                                          open_circles=open_circles,**kwargs)
+                        _,_ = show_points(
+                            ar,figax=(fig,ax),
+                            returnfig=True,
+                            bordercolor=bc,
+                            x=x,y=y,
+                            pointcolor=pointcolors,
+                            open_circles=open_circles,
+                            title = print_title,
+                            **kwargs)
                 elif _get_bordercolor:
                     bc = get_bordercolor(N)
                     _,_ = show(ar,figax=(fig,ax),returnfig=True,
-                               bordercolor=bc,**kwargs)
+                               bordercolor=bc,title = print_title, **kwargs)
                 elif _get_points:
                     x,y = get_x(N),get_y(N)
                     if _get_colors:
                         pointcolors = get_pointcolors(N)
                     else:
                         pointcolors='r'
-                    _,_ = show_points(ar,figax=(fig,ax),x=x,y=y,returnfig=True,
-                                      pointcolor=pointcolors,
-                                      open_circles=open_circles,**kwargs)
+                    _,_ = show_points(
+                        ar,figax=(fig,ax),x=x,y=y,
+                        returnfig=True,
+                        pointcolor=pointcolors,
+                        open_circles=open_circles,
+                        title = print_title,
+                         **kwargs)
                 else:
-                    _,_ = show(ar,figax=(fig,ax),returnfig=True,**kwargs)
-                if titlesize>0:
-                    ax.set_title(N,fontsize=titlesize)
+                    _,_ = show(ar,figax=(fig,ax),returnfig=True,title = print_title,**kwargs)
             except IndexError:
                 ax.axis('off')
+    if type(title) == str:
+        fig.suptitle(title)
+    if suptitle:
+        fig.suptitle(suptitle)
     plt.tight_layout()
-
+    
     if not returnfig:
-        plt.show()
         return
     else:
         return fig,axs

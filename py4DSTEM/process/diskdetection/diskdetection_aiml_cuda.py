@@ -6,7 +6,7 @@ Functions for finding Braggdisks (AI/ML) using cupy and tensorflow-gpu
 import numpy as np
 from time import time
 
-from py4DSTEM import tqdmnd
+from emdfile import tqdmnd
 from py4DSTEM.classes import PointList, PointListArray, QPoints, BraggVectors
 from py4DSTEM.process.diskdetection.kernels import kernels
 from py4DSTEM.process.diskdetection.diskdetection_aiml import _get_latest_model

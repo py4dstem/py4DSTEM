@@ -5,7 +5,7 @@ from numpy import array_equal
 
 import py4DSTEM
 from py4DSTEM import save,read
-emd = py4DSTEM.emd
+import emdfile as emd
 
 from py4DSTEM.classes import (
     DataCube,

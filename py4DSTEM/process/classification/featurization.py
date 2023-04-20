@@ -8,7 +8,7 @@ from skimage.filters import threshold_otsu, threshold_yen
 from skimage.measure import label
 from skimage.morphology import closing, square, remove_small_objects
 
-from py4DSTEM import tqdmnd
+from emdfile import tqdmnd
 
 
 class Featurization(object):

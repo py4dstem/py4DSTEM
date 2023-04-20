@@ -1,7 +1,7 @@
 # Functions for generating virtual images
 import numpy as np
 import dask.array as da
-from py4DSTEM import tqdmnd
+from emdfile import tqdmnd
 from py4DSTEM.classes import Calibration
 
 def get_virtual_image(

@@ -4,7 +4,7 @@ import numpy as np
 from scipy.optimize import leastsq
 from typing import Union, Optional
 
-from py4DSTEM import tqdmnd
+from emdfile import tqdmnd
 from py4DSTEM.process.utils import get_CoM
 
 
