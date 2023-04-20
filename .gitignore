@@ -11,11 +11,9 @@ __pycache__/
 *.egg-info/
 build/
 dist/
-#py4DSTEM/sample_code/
-py4DSTEM/test/testdata/
+test/unit_test_data/
 sample_code/data/*h5
 sample_code/data/*dm3
-py4DSTEM/test/unit_test_data/
 .vscode
 # Data Specific #
 #################
