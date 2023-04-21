@@ -12,4 +12,7 @@ python:
   version: 3.8
   install:
     - method: pip
-        path: .
+      path: .
+    - requirements: docs/requirements.txt
+
+formats: all
