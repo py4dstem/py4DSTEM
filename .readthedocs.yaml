@@ -14,11 +14,11 @@ sphinx:
 #    install:
 #     - requirements: docs/requirements.txt
 
-  python:
-  version: 3.8
-  install:
-    - method: pip
-        path: .
-        # extra_requirements:
-        #    - build-doc
-    - requirements: docs/requirements.txt
+python:
+version: 3.8
+install:
+  - method: pip
+      path: .
+      # extra_requirements:
+      #    - build-doc
+  - requirements: docs/requirements.txt
