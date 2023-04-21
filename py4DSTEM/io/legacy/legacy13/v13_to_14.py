@@ -59,11 +59,13 @@ def v13_to_14( v13tree ):
     if isinstance(v13tree, list):
         return v13tree
 
-    # make a root and fine the node to grow from
+    # make a root and find the node to grow from
     if isinstance(v13tree,Root13):
         node = _v13_to_14_cls(v13tree)
     else:
+        print('moop')
         node = _v13_to_14_cls(v13tree)
+        print('boop')
         root = Root( name=node.name )
         root.tree(node)
 
@@ -108,50 +110,6 @@ def _v13_to_14_cls(obj):
 
     if isinstance(obj, Root13):
         x = Root( name=obj.name )
-
-    elif isinstance(obj, Metadata13):
-        x = Metadata( name=obj.name )
-        x._params.update( obj._params )
-
-    elif isinstance(obj, Array13):
-
-        # prepare arguments
-        args = {
-            'name' : obj.name,
-            'data' : obj.data
-        }
-        if hasattr(obj,'units'): args['units'] = obj.units
-        if hasattr(obj,'dim_names'): args['dim_names'] = obj.dim_names
-        if hasattr(obj,'dim_units'): args['dim_units'] = obj.dim_units
-        if hasattr(obj,'slicelabels'): args['slicelabels'] = obj.slicelabels
-        if hasattr(obj,'dims'):
-            dims = []
-            for dim in obj.dims:
-                dims.append(dim)
-            args['dims'] = dims
-
-        # get the array
-        x = Array(
-            **args
-        )
-
-    elif isinstance(obj, PointList13):
-        x = PointList(
-            name = obj.name,
-            data = obj.data
-        )
-
-    elif isinstance(obj, PointListArray13):
-        x = PointListArray(
-            name = obj.name,
-            dtype = obj.dtype,
-            shape = obj.shape
-        )
-        for idx,jdx in tqdmnd(
-            x.shape[0],x.shape[1],
-            desc='transferring PointListArray v13->14',
-            unit='foolishness'):
-            x[idx,jdx] = obj[idx,jdx]
 
     elif isinstance(obj, Calibration13):
         x = Calibration( name=obj.name )
@@ -215,6 +173,52 @@ def _v13_to_14_cls(obj):
         x._v_uncal = obj._v_uncal
         if hasattr(obj,'_v_cal'):
             x._v_cal = obj._v_cal
+
+    # base EMD classes
+
+    elif isinstance(obj, Metadata13):
+        x = Metadata( name=obj.name )
+        x._params.update( obj._params )
+
+    elif isinstance(obj, Array13):
+
+        # prepare arguments
+        args = {
+            'name' : obj.name,
+            'data' : obj.data
+        }
+        if hasattr(obj,'units'): args['units'] = obj.units
+        if hasattr(obj,'dim_names'): args['dim_names'] = obj.dim_names
+        if hasattr(obj,'dim_units'): args['dim_units'] = obj.dim_units
+        if hasattr(obj,'slicelabels'): args['slicelabels'] = obj.slicelabels
+        if hasattr(obj,'dims'):
+            dims = []
+            for dim in obj.dims:
+                dims.append(dim)
+            args['dims'] = dims
+
+        # get the array
+        x = Array(
+            **args
+        )
+
+    elif isinstance(obj, PointList13):
+        x = PointList(
+            name = obj.name,
+            data = obj.data
+        )
+
+    elif isinstance(obj, PointListArray13):
+        x = PointListArray(
+            name = obj.name,
+            dtype = obj.dtype,
+            shape = obj.shape
+        )
+        for idx,jdx in tqdmnd(
+            x.shape[0],x.shape[1],
+            desc='transferring PointListArray v13->14',
+            unit='foolishness'):
+            x[idx,jdx] = obj[idx,jdx]
 
     else:
         raise Exception(f"Unexpected object type {type(obj)}")
