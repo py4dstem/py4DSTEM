@@ -38,7 +38,7 @@ def Calibration_from_Metadata(metadata):
         (Calibration)
     """
     from py4DSTEM.io.legacy.legacy13.v13_py4dstem_classes.calibration import Calibration
-    
+
     cal = Calibration(name = metadata.name)
     cal._params.update(metadata._params)
 
@@ -173,7 +173,7 @@ def RealSlice_from_Array(array):
     Returns:
         (RealSlice)
     """
-    from py4DSTEM.io.datastructure.py4dstem.realslice import RealSlice
+    from py4DSTEM.io.legacy.legacy13.v13_py4dstem_classes.realslice import RealSlice
     assert(array.rank == 2), "Array must have 2 dimensions"
     array.__class__ = RealSlice
     array.__init__(
