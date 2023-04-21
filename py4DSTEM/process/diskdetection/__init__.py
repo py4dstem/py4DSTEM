@@ -1,3 +1,5 @@
+from py4DSTEM.process.diskdetection.braggvectors import BraggVectors
+
 from py4DSTEM.process.diskdetection.diskdetection import *
 from py4DSTEM.process.diskdetection.braggvectormap import *
 from py4DSTEM.process.diskdetection.threshold import *
