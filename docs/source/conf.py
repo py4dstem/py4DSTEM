@@ -25,7 +25,7 @@ copyright = '2021, Ben Savitzky'
 author = 'Ben Savitzky'
 
 # The full version, including alpha/beta/rc tags
-release = '0.12.2'
+release = '0.14.0'
 
 
 # -- General configuration ---------------------------------------------------
