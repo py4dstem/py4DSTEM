@@ -66,9 +66,9 @@ todo_include_todos = True
 
 # intersphinx options 
 
-intersphinx_mapping = {
-'emdfile': ('https://pypi.org/project/emdfile/0.0.4/', None)
-}
+# intersphinx_mapping = {
+# 'emdfile': ('https://pypi.org/project/emdfile/0.0.4/', None)
+# }
 
 # -- Options for HTML output -------------------------------------------------
 
