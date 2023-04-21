@@ -21,4 +21,4 @@ sphinx:
         path: .
         # extra_requirements:
         #    - build-doc
-      - requirements: docs/requirements.txt
+    - requirements: docs/requirements.txt
