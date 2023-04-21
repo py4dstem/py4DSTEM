@@ -1,6 +1,5 @@
 # Defines the BraggVectors class
 
-
 from typing import Optional,Union
 import numpy as np
 from os.path import basename
@@ -12,35 +11,47 @@ from emdfile import (
 )
 
 from py4DSTEM.classes import Data
-from py4DSTEM.classes.methods import BraggVectorMethods
+from py4DSTEM.process.diskdetection.braggvector_methods import BraggVectorMethods
 
 
 
 
 class BraggVectors(Custom,BraggVectorMethods,Data):
     """
-    Stores bragg scattering information for a 4D datacube.
+    Stores localized bragg scattering positions and intensities
+    for a 4D-STEM datacube.
 
-        >>> braggvectors = BraggVectors( datacube.Rshape, datacube.Qshape )
+    Raw (detector coordinate) vectors are accessible as
 
-    initializes an instance of the appropriate shape for a DataCube `datacube`.
+        >>> braggvectors.raw[ scan_x, scan_y ]
 
-        >>> braggvectors.vectors[rx,ry]
-        >>> braggvectors.vectors_uncal[rx,ry]
+    and calibrated vectors as
 
-    or their aliases
+        >>> braggvectors.cal[ scan_x, scan_y ]
 
-        >>> braggvectors.v[rx,ry]
-        >>> braggvectors.v_uncal[rx,ry]
+    to automatically choose which calibrations to perform based on the contents
+    of the instance's `calibrations` property, or, to manually select the
+    calibrations to perform, using an initial call of
 
-    retrieve the calibrated and uncalibrated bragg vectors at
-    scan position [rx,ry], and
+        >>> braggvectors.cal(
+        >>>     center = bool,
+        >>>     ellipse = bool,
+        >>>     pixel = bool
+        >>> )
 
-        >>> braggvectors.v[rx,ry]['qx']
-        >>> braggvectors.v[rx,ry]['qy']
-        >>> braggvectors.v[rx,ry]['intensity']
+    before subsequently calling `braggvectors.cal[posx,posy]`. The calibrations
+    performed for the last call to `braggvectors.cal` are accessible at
 
-    retrieve the position and intensity of the scattering.
+        >>> braggvectors.vector_calibrations
+
+    or at `braggvectors.vcal`.
+
+    The vectors themselves can be accesses as
+
+        >>> vects = braggvectors.raw[ scan_x,scan_y ]
+        >>> vects.qx,vects.qy,vects.I                  # or
+        >>> vects['qx'],vects['qy'],vects['intensity']
+
     """
 
     def __init__(

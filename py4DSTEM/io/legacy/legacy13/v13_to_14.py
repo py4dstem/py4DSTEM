@@ -45,8 +45,9 @@ from py4DSTEM.classes import (
     VirtualImage,
     Probe,
     QPoints,
-    BraggVectors
 )
+from py4DSTEM.process.diskdetection.braggvectors import BraggVectors
+
 
 
 
