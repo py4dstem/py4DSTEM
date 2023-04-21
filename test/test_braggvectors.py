@@ -76,6 +76,13 @@ class TestDiskDetectionBasic:
         )
 
 
+        print(braggpeaks)
+        print()
+        print(braggpeaks.raw[0,0])
+        print()
+        print(braggpeaks.cal[0,0])
+        print()
+
 
 
 

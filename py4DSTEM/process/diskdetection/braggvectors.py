@@ -6,8 +6,7 @@ from os.path import basename
 
 from py4DSTEM.classes import Data
 from py4DSTEM.process.diskdetection.braggvector_methods import BraggVectorMethods
-from py4DSTEM.process.diskdetection.braggvector_transforms import transform
-from emdfile import Custom,PointListArray,Metadata
+from emdfile import Custom,PointListArray,PointList,Metadata
 
 
 
@@ -29,7 +28,8 @@ class BraggVectors(Custom,BraggVectorMethods,Data):
         >>> braggvectors.setcal(
         >>>     center = bool,
         >>>     ellipse = bool,
-        >>>     pixel = bool
+        >>>     pixel = bool,
+        >>>     rot = bool
         >>> )
 
     If .setcal is not called, calibrations will be automatically selected based
@@ -136,7 +136,8 @@ class BraggVectors(Custom,BraggVectorMethods,Data):
         self,
         center = None,
         ellipse = None,
-        pixel = None
+        pixel = None,
+        rot = None,
     ):
         """
         Calling
@@ -144,7 +145,8 @@ class BraggVectors(Custom,BraggVectorMethods,Data):
             >>> braggvectors.setcal(
             >>>     center = bool,
             >>>     ellipse = bool,
-            >>>     pixel = bool
+            >>>     pixel = bool,
+            >>>     rot = bool,
             >>> )
 
         sets the calibrations that will be applied to vectors subsequently
@@ -164,6 +166,8 @@ class BraggVectors(Custom,BraggVectorMethods,Data):
             ellipse = False if c.get_ellipse() is None else True
         if pixel is None:
             pixel = False if c.get_Q_pixel_size() != 1 else True
+        if rot is None:
+            rot = False if c.get_QR_rotflip() is None else True
 
         # validate requested state
         if center:
@@ -172,18 +176,17 @@ class BraggVectors(Custom,BraggVectorMethods,Data):
             assert(c.get_ellipse() is not None), "Requested calibrations not found"
         if pixel:
             assert(c.get_Q_pixel_size() is not None), "Requested calibrations not found"
+        if rot:
+            assert(c.get_RQ_rotflip() is not None), "Requested calibrations not found"
 
         # make the requested vector getter
-        calstate = {
+        self._calstate = {
             "center" : center,
             "ellipse" : ellipse,
-            "pixel" : pixel
+            "pixel" : pixel,
+            "rot" : rot,
         }
-        self._cal_vector_getter = CaliVectorGetter(
-            braggvects = self,
-            calstate = calstate
-        )
-        self._calstate = calstate
+        self._cal_vector_getter = CalibratedVectorGetter( braggvects = self )
 
         pass
 
@@ -275,60 +278,134 @@ class BVects:
 
     def __init__(
         self,
-        pointlist
+        data
         ):
         """ pointlist must have fields 'qx', 'qy', and 'intensity'
         """
-        assert(isinstance(pointlist,PointList))
-        self._data = poinstlist.data
+        self._data = data
 
     @property
     def qx(self):
         return self._data['qx']
-
     @property
     def qy(self):
         return self._data['qy']
-
     @property
     def I(self):
         return self._data['intensity']
 
 
-class RawVectorGetter(
+class RawVectorGetter:
     def __init__(
         self,
         data
     ):
-        self._data = _data
+        self._data = data
 
     def __getitem__(self,pos):
         x,y = pos
-        ans = self._data[x,y]
+        ans = self._data[x,y].data
         return BVects(ans)
 
 
-class CaliVectorGetter:
+class CalibratedVectorGetter:
+
     def __init__(
         self,
         braggvects,
-        calstate
     ):
+        self._bvects = braggvects
         self._data = braggvects._v_uncal
-        self.calstate = calstate
+        self.calstate = braggvects.calstate
 
     def __getitem__(self,pos):
         x,y = pos
-        ans = self._data[x,y]
-        ans = transform(
-            data = ans.data
-            cal = braggvects.calibration,
+        ans = self._data[x,y].data
+        ans = self._transform(
+            data = ans,
+            cal = self._bvects.calibration,
             scanxy = (x,y),
-            center = calstate['center'],
-            ellipse = calstate['ellipse'],
-            pixel = calstate['pixel'],
+            center = self.calstate['center'],
+            ellipse = self.calstate['ellipse'],
+            pixel = self.calstate['pixel'],
+            rot = self.calstate['rot'],
         )
         return BVects(ans)
+
+    def _transform(
+        self,
+        data,
+        cal,
+        scanxy,
+        center,
+        ellipse,
+        pixel,
+        rot,
+        ):
+        """
+        Return a transformed copy of stractured data `data` with fields
+        with fields 'qx','qy','intensity', applying calibrating transforms
+        according to the values of center, ellipse, pixel, using the
+        measurements found in Calibration instance cal for scan position scanxy.
+        """
+
+        ans = data.copy()
+        x,y = scanxy
+
+        # origin
+
+        if center:
+            origin = cal.get_origin(x,y)
+            ans['qx'] -= origin[0]
+            ans['qy'] -= origin[1]
+
+
+        # ellipse
+        if ellipse:
+            a,b,theta = cal.get_ellipse(x,y)
+            # Get the transformation matrix
+            e = b/a
+            sint, cost = np.sin(theta-np.pi/2.), np.cos(theta-np.pi/2.)
+            T = np.array(
+                    [
+                        [e*sint**2 + cost**2, sint*cost*(1-e)],
+                        [sint*cost*(1-e), sint**2 + e*cost**2]
+                    ]
+                )
+            # apply it
+            xyar_i = np.vstack([ans['qx'],ans['qy']])
+            xyar_f = np.matmul(T, xyar_i)
+            ans['qx'] = xyar_f[0, :]
+            ans['qy'] = xyar_f[1, :]
+
+
+        # pixel size
+        if pixel:
+            qpix = cal.get_Q_pixel_size()
+            ans['qx'] *= qpix
+            ans['qy'] *= qpix
+
+
+        # Q/R rotation
+        if rot:
+            flip = cal.get_QR_flip()
+            theta = cal.get_QR_rotation_degrees()
+            # rotation matrix
+            R = np.array([
+                [np.cos(theta), -np.sin(theta)],
+                [np.sin(theta), np.cos(theta)]])
+            # apply
+            if flip:
+                positions = R @ np.vstack((ans["qy"], ans["qx"]))
+            else:
+                positions = R @ np.vstack((ans["qx"], ans["qy"]))
+            # update
+            ans['qx'] = positions[0,:]
+            ans['qy'] = positions[1,:]
+
+
+        # return
+        return ans
 
 
 
