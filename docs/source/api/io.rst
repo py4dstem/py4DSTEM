@@ -1,24 +1,19 @@
 io
 ==
 
-Reading Files
--------------
--------------
-Native
+
+Reading Native Files 
 ------
-.. autofunction:: py4DSTEM.io.read.read
-
-External Files (e.g. dm4)
+.. autofunction:: py4DSTEM.io.read
+Reading External Files (e.g. dm4)
 -------------------------
-.. autofunction:: py4DSTEM.io.importfile.import_file
-
+.. autofunction:: py4DSTEM.io.import_file
 Saving Files
 ------------
-.. autofunction:: emdfile.write.write
-
+.. autofunction:: py4DSTEM.io.save 
 Downloading Files
 -----------------
-.. autofunction:: py4DSTEM.io.google_drive_downloader.download_file_from_google_drive
+.. autofunction:: py4DSTEM.io.download_file_from_google_drive
 Get Available Files
 -------------------
-.. autofunction:: py4DSTEM.io.google_drive_downloader.get_sample_data_ids
+.. autofunction:: py4DSTEM.io.get_sample_data_ids
