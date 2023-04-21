@@ -483,12 +483,12 @@ def add_bragg_index_labels(ax,d):
         x -= voffset
         y += hoffset
         h,k = braggdirections.data['h'][i],braggdirections.data['k'][i]
-        h = str(h) if h>=0 else '$\overline{{{}}}$'.format(np.abs(h))
-        k = str(k) if k>=0 else '$\overline{{{}}}$'.format(np.abs(k))
+        h = str(h) if h>=0 else r'$\overline{{{}}}$'.format(np.abs(h))
+        k = str(k) if k>=0 else r'$\overline{{{}}}$'.format(np.abs(k))
         s = h+','+k
         if include_l:
             l = braggdirections.data['l'][i]
-            l = str(l) if l>=0 else '$\overline{{{}}}$'.format(np.abs(l))
+            l = str(l) if l>=0 else r'$\overline{{{}}}$'.format(np.abs(l))
             s += l
         ax.text(y,x,s,color=color,size=size,ha='center',va='bottom')
 
