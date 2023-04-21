@@ -9,3 +9,4 @@ API
    api/visualize
    api/io
    api/Classes
+   api/emd
