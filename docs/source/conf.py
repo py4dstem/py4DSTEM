@@ -34,7 +34,8 @@ release = '0.12.2'
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = ['sphinx.ext.autodoc',
-              'sphinx.ext.napoleon']
+              'sphinx.ext.napoleon',
+              'sphinx.ext.intersphinx']
 
 # Other useful extensions
 # sphinx_copybutton
