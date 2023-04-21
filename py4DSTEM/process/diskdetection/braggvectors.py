@@ -6,9 +6,8 @@ from os.path import basename
 
 from py4DSTEM.classes import Data
 from py4DSTEM.process.diskdetection.braggvector_methods import BraggVectorMethods
+from py4DSTEM.process.diskdetection.braggvector_transforms import transform
 from emdfile import Custom,PointListArray,Metadata
-
-
 
 
 
@@ -72,12 +71,10 @@ class BraggVectors(Custom,BraggVectorMethods,Data):
             name = '_v_uncal'
         )
 
-        # calibrated vector getters
-        # nested list of 2**3 vector getters for [center][ellipse][pixel]-like access
-        # where entries 0,1 correspond to False,True values of the params
-        self._cal_vector_getters = [[[
-            None for cen in range(2)] for ell in range(2)] for pix in range(2)]
+        # initial calibration state
         self._calstate = None
+        self._raw_vector_getter = None
+        self._cal_vector_getter = None
 
     @property
     def calstate(self):
@@ -99,7 +96,7 @@ class BraggVectors(Custom,BraggVectorMethods,Data):
 
         # check if a raw vector getter exists
         # if it doesn't, make it
-        if not hasattr(self,'_raw_vector_getter'):
+        if self._raw_vector_getter is None:
             self._raw_vector_getter = RawVectorGetter(
                 data = self._v_uncal
             )
@@ -130,11 +127,7 @@ class BraggVectors(Custom,BraggVectorMethods,Data):
             self.setcal()
 
         # retrieve the getter and return
-        getter = self._cal_vector_getters[
-            self.calstate['center']][
-            self.calstate['ellipse']][
-            self.calstate['pixel']]
-        return getter
+        return self._cal_vector_getter
 
 
     # set calibration state
@@ -164,39 +157,35 @@ class BraggVectors(Custom,BraggVectorMethods,Data):
         """
 
         # autodetect
+        c = self.calibration
         if center is None:
-            # TODO center = ...
-            pass
+            center = False if c.get_origin() is None else True
         if ellipse is None:
-            # TODO
-            pass
+            ellipse = False if c.get_ellipse() is None else True
         if pixel is None:
-            # TODO
-            pass
+            pixel = False if c.get_Q_pixel_size() != 1 else True
+
+        # validate requested state
+        if center:
+            assert(c.get_origin() is not None), "Requested calibrations not found"
+        if ellipse:
+            assert(c.get_ellipse() is not None), "Requested calibrations not found"
+        if pixel:
+            assert(c.get_Q_pixel_size() is not None), "Requested calibrations not found"
 
         # make the requested vector getter
-        # and set the calstate
-        transform = get_transform(  # TODO - write this.....!
-            calibration = self.calibration,
-            center = center,
-            ellipse = ellipse,
-            pixel = pixel
-        )
         calstate = {
             "center" : center,
             "ellipse" : ellipse,
             "pixel" : pixel
         }
-        getter = CaliVectorGetter(
-            data = self._v_uncal,
-            transform = transform,
+        self._cal_vector_getter = CaliVectorGetter(
+            braggvects = self,
             calstate = calstate
         )
-        self._cal_vector_getters[center][ellipse][pixel] = getter
         self._calstate = calstate
 
         pass
-
 
 
 
@@ -216,6 +205,7 @@ class BraggVectors(Custom,BraggVectorMethods,Data):
 
         return braggvector_copy
 
+
     # write
 
     def to_h5(self,group):
@@ -227,6 +217,7 @@ class BraggVectors(Custom,BraggVectorMethods,Data):
         md['Qshape'] = self.Qshape
         self.metadata = md
         grp = Custom.to_h5(self,group)
+
 
     # read
 
@@ -256,6 +247,7 @@ class BraggVectors(Custom,BraggVectorMethods,Data):
         if '_v_cal' in dic.keys():
             self._v_cal = dic['_v_cal']
 
+
     # standard output display
 
     def __repr__(self):
@@ -269,38 +261,7 @@ class BraggVectors(Custom,BraggVectorMethods,Data):
 
 
 
-# Support classes
-
-
-class RawVectorGetter(
-    def __init__(
-        self,
-        data
-    ):
-        self._data = _data
-
-    def __getitem__(self,pos):
-        x,y = pos
-        ans = self._data[x,y]
-        return BVects(ans)
-
-
-class CaliVectorGetter:
-    def __init__(
-        self,
-        data,
-        transform,
-        calstate
-    ):
-        self._data = data
-        self._transform = transform
-        self.calstate = calstate
-
-    def __getitem__(self,pos):
-        x,y = pos
-        ans = self._data[x,y]
-        ans = self._transform(ans)
-        return BVects(ans)
+# Vector access classes
 
 
 class BVects:
@@ -333,6 +294,41 @@ class BVects:
     def I(self):
         return self._data['intensity']
 
+
+class RawVectorGetter(
+    def __init__(
+        self,
+        data
+    ):
+        self._data = _data
+
+    def __getitem__(self,pos):
+        x,y = pos
+        ans = self._data[x,y]
+        return BVects(ans)
+
+
+class CaliVectorGetter:
+    def __init__(
+        self,
+        braggvects,
+        calstate
+    ):
+        self._data = braggvects._v_uncal
+        self.calstate = calstate
+
+    def __getitem__(self,pos):
+        x,y = pos
+        ans = self._data[x,y]
+        ans = transform(
+            data = ans.data
+            cal = braggvects.calibration,
+            scanxy = (x,y),
+            center = calstate['center'],
+            ellipse = calstate['ellipse'],
+            pixel = calstate['pixel'],
+        )
+        return BVects(ans)
 
 
 
