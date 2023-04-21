@@ -2,7 +2,7 @@ API
 ===
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 4
 
    api/py4DSTEM
    api/process
