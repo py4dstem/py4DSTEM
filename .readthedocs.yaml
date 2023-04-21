@@ -7,14 +7,9 @@ build:
 
 sphinx:
    configuration: docs/source/conf.py
-# formats:
-#    - pdf
-
-# python:
-#    install:
-#     - requirements: docs/requirements.txt
 
 python:
+  version: 3.8
   install:
     - method: pip
         path: .
