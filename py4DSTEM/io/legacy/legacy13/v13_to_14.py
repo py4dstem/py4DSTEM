@@ -64,9 +64,7 @@ def v13_to_14( v13tree ):
     if isinstance(v13tree,Root13):
         node = _v13_to_14_cls(v13tree)
     else:
-        print('moop')
         node = _v13_to_14_cls(v13tree)
-        print('boop')
         root = Root( name=node.name )
         root.tree(node)
 
