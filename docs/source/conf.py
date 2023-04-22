@@ -16,16 +16,18 @@
 import os
 import sys
 sys.path.insert(0,os.path.dirname(os.getcwd()))
-
+from py4DSTEM import __version__
+from datetime import datetime
 
 # -- Project information -----------------------------------------------------
 
 project = 'py4dstem'
-copyright = '2021, Ben Savitzky'
+copyright = f'{datetime.today().year}, Ben Savitzky'
 author = 'Ben Savitzky'
 
 # The full version, including alpha/beta/rc tags
-release = '0.14.0'
+# release = '0.14.0'
+release = f"{__version__}"
 
 
 # -- General configuration ---------------------------------------------------
