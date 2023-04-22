@@ -42,6 +42,9 @@ extensions = ['sphinx.ext.autodoc',
 # sphinx_toggleprompt
 # sphinx.ext.mathjax
 
+# Specify a standard user agent, as Sphinx default is blocked on some sites
+user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36 Edg/108.0.1462.54"
+
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -85,11 +88,11 @@ html_static_path = ['_static']
 
 # The name of an image file (relative to this directory) to place at the top
 # of the sidebar.
-html_logo = '_static/py4DSTEM_logo.png'
+html_logo = '../_static/py4DSTEM_logo.png'
 
 # The name of an image file (within the static path) to use as favicon of the
 # docs.  This file should be a Windows icon file (.ico) being 16x16 or 32x32
 # pixels large.
-html_favicon = '_static/py4DSTEM_logo_vsmall.ico'
+html_favicon = '../_static/py4DSTEM_logo_vsmall.ico'
 
 
