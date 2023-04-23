@@ -237,7 +237,7 @@ class DPCReconstruction(PhaseReconstruction):
         obj_dy[mask_inv] = 0
 
         new_error = xp.mean(obj_dx[mask] ** 2 + obj_dy[mask] ** 2) / (
-            xp.mean(self._com_x.ravel()) ** 2 + xp.mean(self._com_y.ravel()) ** 2
+            xp.mean(self._com_x.ravel() ** 2 + self._com_y.ravel() ** 2)
         )
 
         if new_error > error:
