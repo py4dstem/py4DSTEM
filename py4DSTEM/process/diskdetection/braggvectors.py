@@ -304,6 +304,9 @@ class BVects:
     @property
     def I(self):
         return self._data['intensity']
+    @property
+    def data(self):
+        return self._data
 
 
 class RawVectorGetter:
