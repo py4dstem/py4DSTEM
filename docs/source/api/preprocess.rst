@@ -5,13 +5,9 @@ preprocess
 	:members:
 .. automodule:: py4DSTEM.preprocess.electroncount
 	:members:
-.. automodule:: py4DSTEM.preprocess.optimize
-	:members:
 .. automodule:: py4DSTEM.preprocess.preprocess
 	:members:
 .. automodule:: py4DSTEM.preprocess.radialbkgrd
 	:members:
 .. automodule:: py4DSTEM.preprocess.utils
 	:members:
-.. automodule:: py4DSTEM.preprocess.warnings
-    :members:
