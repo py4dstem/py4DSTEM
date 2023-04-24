@@ -17,7 +17,6 @@ class BraggVectorMethods:
         sampling = 1,
         weights = None,
         weights_thresh = 0.005,
-        maxima = False
         ):
         """
         Returns a 2D histogram of Bragg vector intensities in diffraction space.
@@ -35,9 +34,6 @@ class BraggVectorMethods:
             space shaped array representing a weighting factor applied to vector
             intensities from each scan position.  Use a boolean matrix to make a
             histogram from some subset of scan positions.
-        maxima : bool
-            If True, the returned array is populated by the brightest Bragg
-            vector intensity found in each bin, rather than cumulative sum.
 
         Returns
         -------
@@ -56,7 +52,7 @@ class BraggVectorMethods:
         # handling any weight factors
         if weights is None:
             vects = np.concatenate(
-                [v[i,j].data for i in range(v.shape[0]) for j in range(v.shape[1])])
+                [v[i,j].data for i in range(self.Rshape[0]) for j in range(self.Rshape[1])])
         elif weights.dtype == bool:
             x,y = np.nonzero(weights)
             vects = np.concatenate(
@@ -74,31 +70,48 @@ class BraggVectorMethods:
         qy = vects['qy']
         I = vects['intensity']
 
+        # Set up bin grid / dim vectors
+        Q_Nx = np.round(self.Qshape[0]/sampling).astype(int)
+        Q_Ny = np.round(self.Qshape[1]/sampling).astype(int)
+        dimx = np.arange(Q_Nx)
+        dimy = np.arange(Q_Ny)
 
-        # make coordinates
         # transform vects onto bin grid
-        # round and interpolate values
-        # wrap in a class
-        # return
+        if mode == 'cal':
+            # get origin calibration
+            if self.calstate['center']==True:
+                origin = self.calibration.get_origin_mean()
+            # get pixel calibration
+            if self.calstate['pixel']==True:
+                qpix = self.calibration.get_Q_pixel_size()
+            # transform vectors
+            if self.calstate['pixel']==True:
+                qx /= qpix
+                qy /= qpix
+            if self.calstate['center']==True:
+                qx += origin[0]
+                qy += origin[1]
+            # transform dims
+            if self.calstate['center']==True:
+                dimx -= Q_Nx/2
+                dimy -= Q_Ny/2
+            if self.calstate['pixel']==True:
+                dimx *= qpix
+                dimy *= qpix
 
+        # handle sampling
+        qx /= sampling
+        qy /= sampling
 
-
-        qx = bigpl['qx']/Q_pixel_size + (Q_Nx/2.)
-        qy = bigpl['qy']/Q_pixel_size + (Q_Ny/2.)
-        I = bigpl['intensity']
-
-        pass
-
-
-
-        # Precompute rounded coordinates
+        # round to nearest integer
         floorx = np.floor(qx).astype(np.int64)
         ceilx = np.ceil(qx).astype(np.int64)
         floory = np.floor(qy).astype(np.int64)
         ceily = np.ceil(qy).astype(np.int64)
 
-        # Remove any points outside [0, Q_Nx] & [0, Q_Ny]
-        mask = np.logical_and.reduce(((floorx>=0),(floory>=0),(ceilx<Q_Nx),(ceily<Q_Ny)))
+        # Remove any points outside the bin grid
+        mask = np.logical_and.reduce(
+            ((floorx>=0),(floory>=0),(ceilx<Q_Nx),(ceily<Q_Ny)))
         qx = qx[mask]
         qy = qy[mask]
         I = I[mask]
@@ -107,9 +120,9 @@ class BraggVectorMethods:
         ceilx = ceilx[mask]
         ceily = ceily[mask]
 
+        # Interpolate values
         dx = qx - floorx
         dy = qy - floory
-
         # Compute indices of the 4 neighbors to (qx,qy)
         # floor x, floor y
         inds00 = np.ravel_multi_index([floorx,floory],(Q_Nx,Q_Ny))
@@ -125,6 +138,11 @@ class BraggVectorMethods:
                 np.bincount(inds01, I * (1.-dx) * dy, minlength=Q_Nx*Q_Ny) + \
                 np.bincount(inds10, I * dx * (1.-dy), minlength=Q_Nx*Q_Ny) + \
                 np.bincount(inds11, I * dx * dy, minlength=Q_Nx*Q_Ny)).reshape(Q_Nx,Q_Ny)
+
+
+        # wrap in a class
+        # return
+
 
         return bvm
 
