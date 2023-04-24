@@ -4,9 +4,10 @@ API
 .. toctree::
    :maxdepth: 5
 
-   api/py4DSTEM
-   api/process
-   api/visualize
+   api/classes
    api/io
-   api/Classes
-   api/emd
+   api/preprocess
+   api/process
+   api/utils
+   api/version
+   api/visualize
