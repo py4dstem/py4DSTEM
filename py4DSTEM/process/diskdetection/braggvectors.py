@@ -76,8 +76,8 @@ class BraggVectors(Custom,BraggVectorMethods,Data):
             "pixel" : False,
             "rotate" : False,
         }
-        self._raw_vector_getter = self._set_raw_vector_getter()
-        self._cal_vector_getter = self._set_cal_vector_getter()
+        self._set_raw_vector_getter()
+        self._set_cal_vector_getter()
 
     @property
     def calstate(self):
@@ -87,7 +87,7 @@ class BraggVectors(Custom,BraggVectorMethods,Data):
             data = self._v_uncal
         )
     def _set_cal_vector_getter(self):
-        self._raw_vector_getter = CalibratedVectorGetter(
+        self._cal_vector_getter = CalibratedVectorGetter(
             braggvects = self
         )
 
@@ -307,6 +307,14 @@ class BVects:
     @property
     def data(self):
         return self._data
+
+    def __repr__(self):
+        space = ' '*len(self.__class__.__name__)+'  '
+        string = f"{self.__class__.__name__}( "
+        string += f"A set of {len(self.data)} bragg vectors."
+        string += " Access data with .qx, .qy, .I, or .data.)"
+        return string
+
 
 
 class RawVectorGetter:
