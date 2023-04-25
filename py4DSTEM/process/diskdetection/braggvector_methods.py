@@ -1,7 +1,9 @@
 # BraggVectors methods
 
 import numpy as np
-
+from scipy.ndimage import gaussian_filter
+from emdfile import Array
+from py4DSTEM.process.calibration.origin import set_measured_origin, set_fit_origin
 
 
 class BraggVectorMethods:
@@ -64,7 +66,7 @@ class BraggVectorMethods:
                 d = v[i,j].data
                 d['intensity'] *= weights[i,j]
                 l.append(d)
-            vects = np.concatenate(d)
+            vects = np.concatenate(l)
         # get the vectors
         qx = vects['qx']
         qy = vects['qy']
@@ -73,12 +75,12 @@ class BraggVectorMethods:
         # Set up bin grid / dim vectors
         Q_Nx = np.round(self.Qshape[0]/sampling).astype(int)
         Q_Ny = np.round(self.Qshape[1]/sampling).astype(int)
-        dimx = np.arange(Q_Nx)
-        dimy = np.arange(Q_Ny)
+        dimx = np.arange(Q_Nx)*sampling
+        dimy = np.arange(Q_Ny)*sampling
 
         # transform vects onto bin grid
         if mode == 'cal':
-            # get origin calibration
+            ## get origin calibration
             if self.calstate['center']==True:
                 origin = self.calibration.get_origin_mean()
             # get pixel calibration
@@ -134,282 +136,213 @@ class BraggVectorMethods:
         inds11 = np.ravel_multi_index([ceilx,ceily],(Q_Nx,Q_Ny))
 
         # Compute the BVM by accumulating intensity in each neighbor weighted by linear interpolation
-        bvm = (np.bincount(inds00, I * (1.-dx) * (1.-dy), minlength=Q_Nx*Q_Ny) + \
+        hist = (np.bincount(inds00, I * (1.-dx) * (1.-dy), minlength=Q_Nx*Q_Ny) + \
                 np.bincount(inds01, I * (1.-dx) * dy, minlength=Q_Nx*Q_Ny) + \
                 np.bincount(inds10, I * dx * (1.-dy), minlength=Q_Nx*Q_Ny) + \
                 np.bincount(inds11, I * dx * dy, minlength=Q_Nx*Q_Ny)).reshape(Q_Nx,Q_Ny)
-
 
         # wrap in a class
+        units = self.calibration.get_Q_pixel_units()
+        ans = Array(
+            name = f'2Dhist_{self.name}_{mode}_s={sampling}',
+            data = hist,
+            dims = [dimx,dimy],
+            dim_units = [units,units],
+        )
+
         # return
+        return ans
 
-
-        return bvm
-
-    # ...same fn, but for 'raw'
-
-    def get_bragg_vector_map_raw(braggpeaks, Q_Nx, Q_Ny, Q_pixel_size=1):
-        """
-        Calculates the Bragg vector map from a PointListArray of Bragg peak positions, where
-        the peak positions have not been centered.
-
-        Args:
-            braggpeaks (PointListArray): Must have the coords 'qx','qy','intensity',
-                the default coordinates from the bragg peak detection fns
-            Q_Nx,Q_Ny (ints): the size of diffraction space in pixels
-            Q_pixel_size (number): the size of the diffraction space p[ixels
-
-        Returns:
-            (2D ndarray, shape (Q_Nx,Q_Ny)): the bragg vector map
-        """
-        assert np.all([name in braggpeaks.dtype.names for name in ['qx','qy','intensity']]), "braggpeaks coords must include coordinates: 'qx', 'qy', 'intensity'."
-
-        # Concatenate all PointList data together for speeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeed
-        b = braggpeaks
-        bigpl = np.concatenate([b[i,j].data for i in range(b.shape[0]) for j in range(b.shape[1])])
-        qx = bigpl['qx']/Q_pixel_size
-        qy = bigpl['qy']/Q_pixel_size
-        I = bigpl['intensity']
-
-        # Precompute rounded coordinates
-        floorx = np.floor(qx).astype(np.int64)
-        ceilx = np.ceil(qx).astype(np.int64)
-        floory = np.floor(qy).astype(np.int64)
-        ceily = np.ceil(qy).astype(np.int64)
-
-        # Remove any points outside [0, Q_Nx] & [0, Q_Ny]
-        mask = np.logical_and.reduce(((floorx>=0),(floory>=0),(ceilx<Q_Nx),(ceily<Q_Ny)))
-        qx = qx[mask]
-        qy = qy[mask]
-        I = I[mask]
-        floorx = floorx[mask]
-        floory = floory[mask]
-        ceilx = ceilx[mask]
-        ceily = ceily[mask]
-
-        dx = qx - floorx
-        dy = qy - floory
-
-        # Compute indices of the 4 neighbors to (qx,qy)
-        # floor x, floor y
-        inds00 = np.ravel_multi_index([floorx,floory],(Q_Nx,Q_Ny))
-        # floor x, ceil y
-        inds01 = np.ravel_multi_index([floorx,ceily],(Q_Nx,Q_Ny))
-        # ceil x, floor y
-        inds10 = np.ravel_multi_index([ceilx,floory],(Q_Nx,Q_Ny))
-        # ceil x, ceil y
-        inds11 = np.ravel_multi_index([ceilx,ceily],(Q_Nx,Q_Ny))
-
-        # Compute the BVM by accumulating intensity in each neighbor weighted by linear interpolation
-        bvm = (np.bincount(inds00, I * (1.-dx) * (1.-dy), minlength=Q_Nx*Q_Ny) + \
-                np.bincount(inds01, I * (1.-dx) * dy, minlength=Q_Nx*Q_Ny) + \
-                np.bincount(inds10, I * dx * (1.-dy), minlength=Q_Nx*Q_Ny) + \
-                np.bincount(inds11, I * dx * dy, minlength=Q_Nx*Q_Ny)).reshape(Q_Nx,Q_Ny)
-
-        return bvm
-
-
-
-
-        pass
-
-
-
-
-
-
-
-
-    # Bragg vector maps
-
-    def get_bragg_vector_maxima_map(braggpeaks, Q_Nx, Q_Ny):
-        """
-        Calculates the Bragg vector maxima map from a PointListArray of Bragg peak positions,
-        given braggpeak positions which have been centered about the origin. In the returned
-        array braggvectormap, the origin is placed at (Q_Nx/2.,Q_Ny/2.)
-
-        Args:
-            braggpeaks (PointListArray): Must have the coords 'qx','qy','intensity',
-                the default coordinates from the bragg peak detection fns
-            Q_Nx,Q_Ny (ints): the size of diffraction space in pixels
-
-        Returns:
-            (2D ndarray, shape (Q_Nx,Q_Ny)) the bragg vector map
-        """
-        assert np.all([name in braggpeaks.dtype.names for name in ['qx','qy','intensity']]), "braggpeaks coords must include coordinates: 'qx', 'qy', 'intensity'."
-
-        braggvectormap = np.zeros((Q_Nx,Q_Ny))
-        qx0,qy0 = Q_Nx/2.,Q_Ny/2.
-        for (Rx, Ry) in tqdmnd(braggpeaks.shape[0],braggpeaks.shape[1],
-                               desc='Computing Bragg vector map',unit='DP',unit_scale=True):
-            peaks = braggpeaks.get_pointlist(Rx,Ry)
-            for i in range(peaks.length):
-                qx = int(np.round(peaks.data['qx'][i]))+qx0
-                qy = int(np.round(peaks.data['qy'][i]))+qy0
-                I = peaks.data['intensity'][i]
-                braggvectormap[qx,qy] = max(I,braggvectormap[qx,qy])
-        return braggvectormap
-
-    def get_weighted_bragg_vector_map(braggpeaks, Q_Nx, Q_Ny, weights):
-        """
-        Calculates the Bragg vector map from a PointListArray of Bragg peak positions, given
-        bragg peak positions which have been centered about the origin, weighting the peaks
-        at each scan position according to the array weights. In the returned array
-        braggvectormap, the origin is placed at (Q_Nx/2.,Q_Ny/2.)
-
-        Args:
-            braggpeaks (PointListArray): Must have the coords 'qx','qy','intensity',
-                the default coordinates from the bragg peak detection fns
-            Q_Nx,Q_Ny (int): the size of diffraction space in pixels
-            weights (2D array): The shape of weights must be (R_Nx,R_Ny)
-
-        Returns:
-            (2D ndarray, shape (Q_Nx,Q_Ny)): the bragg vector map
-        """
-        assert np.all([name in braggpeaks.dtype.names for name in ['qx','qy','intensity']]), "braggpeaks coords must include coordinates: 'qx', 'qy', 'intensity'."
-        assert weights.shape == braggpeaks.shape, "weights must have shape (R_Nx,R_Ny)"
-
-        braggvectormap = np.zeros((Q_Nx,Q_Ny))
-        qx0,qy0 = Q_Nx/2.,Q_Ny/2.
-        for (Rx, Ry) in tqdmnd(braggpeaks.shape[0],braggpeaks.shape[1],
-                               desc='Computing Bragg vector map',unit='DP',unit_scale=True):
-            if weights[Rx,Ry] != 0:
-                peaks = braggpeaks.get_pointlist(Rx,Ry)
-                qx = peaks.data['qx']+qx0
-                qy = peaks.data['qy']+qy0
-                I = peaks.data['intensity']
-                add_to_2D_array_from_floats(braggvectormap,qx,qy,I*weights[Rx,Ry])
-        return braggvectormap
-
-
-    # Functions for getting bragg vector maps from raw / uncentered braggpeak data
-
-    def get_bragg_vector_maxima_map_raw(braggpeaks, Q_Nx, Q_Ny):
-        """
-        Calculates the Bragg vector maxima map from a PointListArray of Bragg peak positions,
-        where the peak positions have not been centered.
-
-        Args:
-            braggpeaks (PointListArray): Must have the coords 'qx','qy','intensity',
-                the default coordinates from the bragg peak detection fns
-            Q_Nx,Q_Ny (ints): the size of diffraction space in pixels
-
-        Returns:
-            (2D ndarray, shape (Q_Nx,Q_Ny)): the bragg vector map
-        """
-        assert np.all([name in braggpeaks.dtype.names for name in ['qx','qy','intensity']]), "braggpeaks coords must include coordinates: 'qx', 'qy', 'intensity'."
-
-        braggvectormap = np.zeros((Q_Nx,Q_Ny))
-        for (Rx, Ry) in tqdmnd(braggpeaks.shape[0],braggpeaks.shape[1],
-                               desc='Computing Bragg vector map',unit='DP',unit_scale=True):
-            peaks = braggpeaks.get_pointlist(Rx,Ry)
-            for i in range(peaks.length):
-                qx = int(np.round(peaks.data['qx'][i]))
-                qy = int(np.round(peaks.data['qy'][i]))
-                I = peaks.data['intensity'][i]
-                braggvectormap[qx,qy] = max(I,braggvectormap[qx,qy])
-        return braggvectormap
-
-    def get_weighted_bragg_vector_map_raw(braggpeaks, Q_Nx, Q_Ny, weights):
-        """
-        Calculates the Bragg vector map from a PointListArray of Bragg peak positions, where
-        the peak positions have not been centered, and weighting the peaks at each scan
-        position according to the array weights.
-
-        Args:
-            braggpeaks (PointListArray): Must have the coords 'qx','qy','intensity',
-                the default coordinates from the bragg peak detection fns
-            Q_Nx,Q_Ny (ints): the size of diffraction space in pixels
-            weights (2D array): The shape of weights must be (R_Nx,R_Ny)
-
-        Returns:
-            (2D ndarray, shape (Q_Nx,Q_Ny)): the bragg vector map
-        """
-        assert np.all([name in braggpeaks.dtype.names for name in ['qx','qy','intensity']]), "braggpeaks coords must include coordinates: 'qx', 'qy', 'intensity'."
-        assert weights.shape == braggpeaks.shape, "weights must have shape (R_Nx,R_Ny)"
-
-        braggvectormap = np.zeros((Q_Nx,Q_Ny))
-        for (Rx, Ry) in tqdmnd(braggpeaks.shape[0],braggpeaks.shape[1],
-                               desc='Computing Bragg vector map',unit='DP',unit_scale=True):
-            if weights[Rx,Ry] != 0:
-                peaks = braggpeaks.get_pointlist(Rx,Ry)
-                qx = peaks.data['qx']
-                qy = peaks.data['qy']
-                I = peaks.data['intensity']
-                braggvectormap = add_to_2D_array_from_floats(braggvectormap,qx,qy,I*weights[Rx,Ry])
-        return braggvectormap
-
-
-    # Aliases
-    get_bvm_maxima = get_bragg_vector_maxima_map
-    get_bvm_weighted = get_weighted_bragg_vector_map
-
-    get_bvm_raw = get_bragg_vector_map_raw
-    get_bvm_maxima_raw = get_bragg_vector_maxima_map_raw
-    get_bvm_weighted_raw = get_weighted_bragg_vector_map_raw
-
-
-
-
-
-
-
+    # aliases
+    get_bvm = get_bragg_vector_map = histogram
 
 
 
 
     # calibration measurements
 
+    @set_measured_origin
     def measure_origin(
         self,
-        mode,
-        returncalc = True,
-        **kwargs,
+        center_guess = None,
+        score_method = None,
+        findcenter="max",
+    ):
+        """
+        Finds the diffraction shifts of the center beam using the raw Bragg
+        vector measurements.
+
+        If a center guess is not specified, first, a guess at the unscattered
+        beam position is determined, either by taking the CoM of the Bragg vector
+        map, or by taking its maximal pixel.  Once a unscattered beam position is
+        determined, the Bragg peak closest to this position is identified. The
+        shifts in these peaks positions from their average are returned as the
+        diffraction shifts.
+
+        Parameters
+        ----------
+        center_guess : 2-tuple
+            initial guess for the center
+        score_method : str
+            Method used to find center peak
+                - 'intensity': finds the most intense Bragg peak near the center
+                - 'distance': finds the closest Bragg peak to the center
+                - 'intensity weighted distance': determines center through a
+                  combination of weighting distance and intensity
+        findcenter (str): specifies the method for determining the unscattered beam
+            position options: 'CoM', or 'max.' Only used if center_guess is None.
+            CoM finds the center of mass of bragg ector map, 'max' uses its
+            brightest pixel.
+
+        Returns:
+            (3-tuple): A 3-tuple comprised of:
+
+                * **qx0** *((R_Nx,R_Ny)-shaped array)*: the origin x-coord
+                * **qy0** *((R_Nx,R_Ny)-shaped array)*: the origin y-coord
+                * **braggvectormap** *((R_Nx,R_Ny)-shaped array)*: the Bragg vector map of only
+                  the Bragg peaks identified with the unscattered beam. Useful for diagnostic
+                  purposes.
+        """
+        assert(findcenter in ["CoM", "max"]), "center must be either 'CoM' or 'max'"
+        assert score_method in ["distance", "intensity", "intensity weighted distance", None], "center must be either 'distance' or 'intensity weighted distance'"
+
+        R_Nx,R_Ny = self.Rshape
+        Q_Nx,Q_Ny = self.Qshape
+
+        # Default scoring method
+        if score_method is None:
+            if center_guess is None:
+                score_method = "intensity"
+            else:
+                score_method = "distance"
+
+        # Get guess at position of unscattered beam (x0,y0)
+        if center_guess is None:
+            bvm = self.histogram( mode='raw' )
+            if findcenter == "max":
+                x0, y0 = np.unravel_index(
+                    np.argmax(gaussian_filter(bvm, 10)), (Q_Nx, Q_Ny)
+                )
+            else:
+                x0, y0 = get_CoM(bvm)
+        else:
+            x0, y0 = center_guess
+
+        # Get Bragg peak closest to unscattered beam at each scan position
+        qx0 = np.zeros(self.Rshape)
+        qy0 = np.zeros(self.Rshape)
+        mask = np.ones(self.Rshape, dtype=bool)
+        for Rx in range(R_Nx):
+            for Ry in range(R_Ny):
+                vects = self.raw[Rx,Ry].data
+                if len(vects) > 0:
+                    if score_method == "distance":
+                        r2 = (vects["qx"] - x0) ** 2 + (vects["qy"] - y0) ** 2
+                        index = np.argmin(r2)
+                    elif score_method == "intensity":
+                        index = np.argmax(vects["intensity"])
+                    elif score_method == "intensity weighted distance":
+                        r2 = vects["intensity"]/(1+((vects["qx"] - x0) ** 2 + (vects["qy"] - y0) ** 2))
+                        index = np.argmax(r2)
+                    qx0[Rx, Ry] = vects["qx"][index]
+                    qy0[Rx, Ry] = vects["qy"][index]
+                else:
+                    mask = False
+                    qx0[Rx, Ry] = x0
+                    qy0[Rx, Ry] = y0
+
+        # return
+        return qx0, qy0, mask
+
+
+    @set_measured_origin
+    def measure_origin_beamstop(
+        self,
+        center_guess,
+        radii,
+        max_dist=2,
+        max_iter=1,
+        **kwargs
         ):
         """
-        Valid `mode` arguments are "beamstop" and "no_beamstop".
-        Use-cases and input arguments:
+        Find the origin from a set of braggpeaks assuming there is a beamstop, by identifying
+        pairs of conjugate peaks inside an annular region and finding their centers of mass.
 
-        "no_beamstop" - A set of bragg peaks for data with no beamstop, and in which
-            the center beam is brightest throughout. No required kwargs, optional
-            kwargs are any accepted by process.calibration.origin.
-            get_origin_from_braggpeaks.
+        Args:
+            center_guess (2-tuple): qx0,qy0
+            radii (2-tuple): the inner and outer radii of the specified annular region
+            max_dist (number): the maximum allowed distance between the reflection of two
+                peaks to consider them conjugate pairs
+            max_iter (integer): for values >1, repeats the algorithm after updating center_guess
 
-        "beamstop" - A set of bragg peaks for data with a beamstop. Req'd kwargs
-            are `center_guess` (2-tuple) and `radii` (2-tuple) specifying an annular
-            region in which to search for conjugate pairs of Bragg peaks to use
-            for calibrating. Optional kwargs are those accepted by
-            process.calibration.origin.get_origin_beamstop_braggpeaks.
-
-            Args:
-                center_guess (2-tuple)
-                radii   (2-tuple)
-
+        Returns:
+            (2d masked array): the origins
         """
-        from py4DSTEM.process.calibration import measure_origin
-        assert mode in ("beamstop", "no_beamstop")
+        R_Nx,R_Ny = self.Rshape
+        braggpeaks = self._v_uncal
 
-        mode = "bragg_" + mode
-        kwargs["Q_shape"] = self.Qshape
+        # remove peaks outside the annulus
+        braggpeaks_masked = braggpeaks.copy()
+        for rx in range(R_Nx):
+            for ry in range(R_Ny):
+                pl = braggpeaks_masked[rx,ry]
+                qr = np.hypot(pl.data['qx']-center_guess[0],
+                              pl.data['qy']-center_guess[1])
+                rm = np.logical_not(np.logical_and(qr>=radii[0],qr<=radii[1]))
+                pl.remove(rm)
 
-        # perform computation
-        origin = measure_origin(
-            self.vectors_uncal,
-            mode = mode,
-            **kwargs
-        )
+        # Find all matching conjugate pairs of peaks
+        center_curr = center_guess
+        for ii in range(max_iter):
+            centers = np.zeros((R_Nx,R_Ny,2))
+            found_center = np.zeros((R_Nx,R_Ny),dtype=bool)
+            for rx in range(R_Nx):
+                for ry in range(R_Ny):
 
-        # try to add to calibration
-        try:
-            self.calibration.set_origin_meas(origin)
-        except AttributeError:
-            # should a warning be raised?
-            pass
+                    # Get data
+                    pl = braggpeaks_masked[rx,ry]
+                    is_paired = np.zeros(len(pl.data),dtype=bool)
+                    matches = []
 
-        if returncalc:
-            return origin
+                    # Find matching pairs
+                    for i in range(len(pl.data)):
+                        if not is_paired[i]:
+                            x,y = pl.data['qx'][i],pl.data['qy'][i]
+                            x_r = -x+2*center_curr[0]
+                            y_r = -y+2*center_curr[1]
+                            dists = np.hypot(x_r-pl.data['qx'],y_r-pl.data['qy'])
+                            dists[is_paired] = 2*max_dist
+                            matched = dists<=max_dist
+                            if(any(matched)):
+                                match = np.argmin(dists)
+                                matches.append((i,match))
+                                is_paired[i],is_paired[match] = True,True
+
+                    # Find the center
+                    if len(matches)>0:
+                        x0,y0 = [],[]
+                        for i in range(len(matches)):
+                            x0.append(np.mean(pl.data['qx'][list(matches[i])]))
+                            y0.append(np.mean(pl.data['qy'][list(matches[i])]))
+                        x0,y0 = np.mean(x0),np.mean(y0)
+                        centers[rx,ry,:] = x0,y0
+                        found_center[rx,ry] = True
+                    else:
+                        found_center[rx,ry] = False
+
+            # Update current center guess
+            x0_curr = np.mean(centers[found_center,0])
+            y0_curr = np.mean(centers[found_center,1])
+            center_curr = x0_curr,y0_curr
+
+        # return
+        mask = found_center
+        qx0,qy0 = centers[:,:,0],centers[:,:,1]
+
+        return qx0,qy0,mask
 
 
+    @set_fit_origin
     def fit_origin(
         self,
         mask=None,
@@ -507,39 +440,10 @@ class BraggVectorMethods:
         if returncalc:
             return qx0_fit,qy0_fit,qx0_residuals,qy0_residuals
 
-    # Calibrate
-    def calibrate(
-        self,
-        use_fitted_origin = True,
-        returncalc = False,
-        ):
-        """
-        Determines which calibrations are present in set.calibrations (of origin,
-        elliptical, pixel, rotational), and applies any it finds to self.v_uncal,
-        storing the output in self.v.
 
-        Args:
-            use_fitted_origin (bool): determine if using fitted origin or measured origin
-        Returns:
-            (PointListArray)
-        """
-        try:
-            cal = self.calibration
-        except AttributeError:
-            raise Exception('No .calibration attribute found')
 
-        from py4DSTEM.process.calibration.braggvectors import calibrate
 
-        v = self.vectors_uncal.copy( name='_v_cal' )
-        v = calibrate(
-            v,
-            cal,
-            use_fitted_origin,
-        )
-        self._v_cal = v
-
-        if returncalc:
-            return v
+    # Deprecated??
 
     # Lattice vectors
     def choose_lattice_vectors(

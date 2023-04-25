@@ -199,7 +199,7 @@ class Calibration(Metadata):
         return self._get_value('qy0_meas',rx,ry)
 
     def set_origin_meas_mask(self,x):
-        self._['origin_meas_mask'] = x
+        self._params['origin_meas_mask'] = x
     def get_origin_meas_mask(self,rx=None,ry=None):
         return self._get_value('origin_meas_mask',rx,ry)
 

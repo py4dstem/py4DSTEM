@@ -118,7 +118,7 @@ def calibrate_pixel_size(
     if set_calibration:
         bragg_peaks.calibration.set_Q_pixel_size( ans )
         bragg_peaks.calibration.set_Q_pixel_units('A^-1')
-        bragg_peaks.calibrate()
+        bragg_peaks.setcal()
 
     # Output
     if verbose:
