@@ -4,6 +4,7 @@ import numpy as np
 from scipy.ndimage import gaussian_filter
 from emdfile import Array
 from py4DSTEM.process.calibration.origin import set_measured_origin, set_fit_origin
+from py4DSTEM.process.utils import get_CoM
 
 
 class BraggVectorMethods:
