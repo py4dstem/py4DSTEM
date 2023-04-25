@@ -15,10 +15,10 @@ Contents
    installation
    examples
    api
+   gui
    support
    contribute
    license
-   gui
    references
    acknowledgements
 
