@@ -12,3 +12,4 @@ API
    api/utils
    api/version
    api/visualize
+   api/emd
