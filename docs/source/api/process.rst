@@ -1,5 +1,8 @@
 process
 =======
+.. contents:: Table of Contents
+    :depth: 2
+
 .. automodule:: py4DSTEM.process
 	:members:
 calibration
