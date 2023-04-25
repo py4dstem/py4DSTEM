@@ -19,6 +19,7 @@ Contents
    support
    license
    api
+   apiindex
    references
    acknowledgements
 

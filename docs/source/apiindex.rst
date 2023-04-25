@@ -1,8 +1,8 @@
-API
-===
+API-Index
+=========
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 5
 
    api/classes
    api/io
@@ -11,4 +11,3 @@ API
    api/utils
    api/version
    api/visualize
-   apiindex
