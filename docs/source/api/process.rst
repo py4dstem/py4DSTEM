@@ -117,6 +117,14 @@ probe
 	:members:
 .. automodule:: py4DSTEM.process.probe.probe
 	:members:
+
+rdf
+---
+.. automodule:: py4DSTEM.process.rdf.amorph
+	:members:
+.. automodule:: py4DSTEM.process.rdf.rdf
+	:members:
+
 utils
 -----
 .. automodule:: py4DSTEM.process.utils
