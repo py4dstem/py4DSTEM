@@ -3,9 +3,6 @@ preprocess
 
 .. contents:: Table of Contents
     :depth: 2
-
-.. contents:: Table of Contents
-    :depth: 2
 darkreference
 -------------
 .. automodule:: py4DSTEM.preprocess.darkreference
