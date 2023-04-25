@@ -1,5 +1,7 @@
 emd
 =======
+.. contents:: Table of Contents
+    :depth: 2
 
 Classes
 -------
