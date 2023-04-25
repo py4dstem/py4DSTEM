@@ -1,6 +1,9 @@
 io
-==
+===
 
+
+.. contents:: Table of Contents
+    :depth: 2
 
 Reading Native Files 
 ------

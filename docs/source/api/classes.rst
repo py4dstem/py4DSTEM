@@ -1,6 +1,7 @@
 Classes
 =======
-
+.. contents:: Table of Contents
+    :depth: 2
 Array
 -----
 .. autoclass:: py4DSTEM.Array

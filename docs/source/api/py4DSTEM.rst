@@ -2,6 +2,8 @@ py4DSTEM
 ========
 
 There are some shortcuts available for regularly used functions and utilities
+.. contents:: Table of Contents
+    :depth: 2
 
 IO
 ----
