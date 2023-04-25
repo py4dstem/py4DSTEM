@@ -9,7 +9,7 @@ Overview
 There is a GUI for viewing and performing some basic analysis of your 4D-STEM dataset. 
 This feature is currently in development and must be installed separately. For more details you can checkout the git repositoary `here <https://github.com/sezelt/py4D-browser>`_
 
-.. image:: _static/Demo.gif
+.. image:: ../_static/Demo.gif
   :width: 800
   :alt: py4DSTEM-Browser
 
