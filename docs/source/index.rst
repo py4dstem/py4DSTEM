@@ -9,7 +9,7 @@ Contents
 ^^^^^^^^
 
 .. toctree:: 
-   :maxdepth: 2
+   :maxdepth: 3
 
    4dstem
    installation
@@ -19,7 +19,6 @@ Contents
    support
    license
    api
-   apiindex
    references
    acknowledgements
 
