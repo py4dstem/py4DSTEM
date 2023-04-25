@@ -5,7 +5,7 @@ from emdfile import Custom,PointListArray,PointList,Metadata
 from py4DSTEM.process.diskdetection.braggvector_methods import BraggVectorMethods
 from os.path import basename
 import numpy as np
-
+from warnings import warn
 
 
 class BraggVectors(Custom,BraggVectorMethods,Data):
@@ -159,35 +159,6 @@ class BraggVectors(Custom,BraggVectorMethods,Data):
         # check for calibrations
         try:
             c = self.calibration
-
-            # autodetect
-            if center is None:
-                center = False if c.get_origin() is None else True
-            if ellipse is None:
-                ellipse = False if c.get_ellipse() is None else True
-            if pixel is None:
-                pixel = False if c.get_Q_pixel_size() != 1 else True
-            if rotate is None:
-                rotate = False if c.get_QR_rotflip() is None else True
-
-            # validate requested state
-            if center:
-                assert(c.get_origin() is not None), "Requested calibrations not found"
-            if ellipse:
-                assert(c.get_ellipse() is not None), "Requested calibrations not found"
-            if pixel:
-                assert(c.get_Q_pixel_size() is not None), "Requested calibrations not found"
-            if rotate:
-                assert(c.get_RQ_rotflip() is not None), "Requested calibrations not found"
-
-            # set the calibrations
-            self._calstate = {
-                "center" : center,
-                "ellipse" : ellipse,
-                "pixel" : pixel,
-                "rotate" : rotate,
-            }
-
         # if no calibrations are found, print a warning and set all to False
         except Exception:
             warn("No calibrations found at .calibration; setting all cals to False")
@@ -197,7 +168,35 @@ class BraggVectors(Custom,BraggVectorMethods,Data):
                 "pixel" : False,
                 "rotate" : False,
             }
+            return
 
+        # autodetect
+        if center is None:
+            center = False if c.get_origin() is None else True
+        if ellipse is None:
+            ellipse = False if c.get_ellipse() is None else True
+        if pixel is None:
+            pixel = False if c.get_Q_pixel_size() == 1 else True
+        if rotate is None:
+            rotate = False if c.get_QR_rotflip() is None else True
+
+        # validate requested state
+        if center:
+            assert(c.get_origin() is not None), "Requested calibration not found"
+        if ellipse:
+            assert(c.get_ellipse() is not None), "Requested calibration not found"
+        if pixel:
+            assert(c.get_Q_pixel_size() is not None), "Requested calibration not found"
+        if rotate:
+            assert(c.get_RQ_rotflip() is not None), "Requested calibration not found"
+
+        # set the calibrations
+        self._calstate = {
+            "center" : center,
+            "ellipse" : ellipse,
+            "pixel" : pixel,
+            "rotate" : rotate,
+        }
 
         pass
 
@@ -209,14 +208,8 @@ class BraggVectors(Custom,BraggVectorMethods,Data):
         name = name if name is not None else self.name+"_copy"
         braggvector_copy = BraggVectors(self.Rshape, self.Qshape, name=name)
         braggvector_copy._v_uncal = self._v_uncal.copy()
-        try:
-            braggvector_copy._v_cal = self._v_cal.copy()
-        except AttributeError:
-            pass
         for k in self.metadata.keys():
             braggvector_copy.metadata = self.metadata[k].copy()
-        self.root.tree(braggvector_copy)
-
         return braggvector_copy
 
 
@@ -255,11 +248,13 @@ class BraggVectors(Custom,BraggVectorMethods,Data):
     def _populate_instance(self,group):
         """
         """
+        # Get the vectors
         dic = self._get_emd_attr_data(group)
         assert('_v_uncal' in dic.keys()), "Uncalibrated bragg vectors not found!"
         self._v_uncal = dic['_v_uncal']
-        if '_v_cal' in dic.keys():
-            self._v_cal = dic['_v_cal']
+        # Point the vector getters to the vectors
+        self._set_raw_vector_getter()
+        self._set_cal_vector_getter()
 
 
     # standard output display
@@ -329,6 +324,12 @@ class RawVectorGetter:
         ans = self._data[x,y].data
         return BVects(ans)
 
+    def __repr__(self):
+        space = ' '*len(self.__class__.__name__)+'  '
+        string = f"{self.__class__.__name__}( "
+        string += f"Retrieves raw bragg vectors. Get vectors for scan position x,y with [x,y]. )"
+        return string
+
 
 class CalibratedVectorGetter:
 
@@ -338,7 +339,6 @@ class CalibratedVectorGetter:
     ):
         self._bvects = braggvects
         self._data = braggvects._v_uncal
-        self.calstate = braggvects.calstate
 
     def __getitem__(self,pos):
         x,y = pos
@@ -347,12 +347,19 @@ class CalibratedVectorGetter:
             data = ans,
             cal = self._bvects.calibration,
             scanxy = (x,y),
-            center = self.calstate['center'],
-            ellipse = self.calstate['ellipse'],
-            pixel = self.calstate['pixel'],
-            rotate = self.calstate['rotate'],
+            center = self._bvects.calstate['center'],
+            ellipse = self._bvects.calstate['ellipse'],
+            pixel = self._bvects.calstate['pixel'],
+            rotate = self._bvects.calstate['rotate'],
         )
         return BVects(ans)
+
+    def __repr__(self):
+        space = ' '*len(self.__class__.__name__)+'  '
+        string = f"{self.__class__.__name__}( "
+        string += "Retrieves calibrated Bragg vectors. Get vectors for scan position x,y with [x,y]."
+        string += "\n"+space+"Set which calibrations to apply with braggvectors.setcal(...). )"
+        return string
 
     def _transform(
         self,

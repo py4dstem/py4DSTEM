@@ -901,7 +901,7 @@ class Crystal:
         # experimental data histogram
         bigpl = np.concatenate(
             [
-                bragg_peaks.vectors[i, j].data
+                bragg_peaks.cal[i, j].data
                 for i in range(bragg_peaks.shape[0])
                 for j in range(bragg_peaks.shape[1])
             ]
