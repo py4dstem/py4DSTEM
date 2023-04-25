@@ -1,6 +1,9 @@
 API
 ===
 
+.. contents:: Table of Contents
+    :depth: 2
+    
 .. toctree::
    :maxdepth: 5
 
