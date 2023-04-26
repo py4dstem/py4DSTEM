@@ -19,13 +19,16 @@ Once py4DSTEM has been succsesfully installed, you can start using it in Python 
     py4DSTEM.__version__
 
     # download the dataset 
-    py4DSTEM.io.download_file_from_google_drive('1PmbCYosA1eYydWmmZebvf6uon9k_5g_S','simulatedAuNanoplatelet_binned.h5')
+    py4DSTEM.io.download_file_from_google_drive(
+        '1PmbCYosA1eYydWmmZebvf6uon9k_5g_S',
+        'simulatedAuNanoplatelet_binned.h5'
+    )
     file_data = "simulatedAuNanoplatelet_binned.h5"
 
     # Load the data
     datacube = py4DSTEM.io.read(
         file_data,
-        data_id = 'polyAu_4DSTEM'     # The file above has several blocks of data inside - here, we specify the data we want to load
+        data_id = 'polyAu_4DSTEM'     # The file above has several blocks of data inside
     )
 
     # plot a diffraction pattern 
