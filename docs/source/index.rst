@@ -19,7 +19,6 @@ Contents
    gui
    supportAndContributions
    license
-   references
    acknowledgements
 
 
