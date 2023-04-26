@@ -23,7 +23,7 @@ from datetime import datetime
 
 project = 'py4dstem'
 copyright = f'{datetime.today().year}, Ben Savitzky'
-author = 'Ben Savitzky'
+author = 'py4DSTEM Development Team'
 
 # The full version, including alpha/beta/rc tags
 # release = '0.14.0'
