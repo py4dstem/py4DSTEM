@@ -1,9 +1,12 @@
-API-Index
+.. _apiIndex:
+
+API Index
 =========
 
 .. toctree::
    :maxdepth: 5
 
+   api/py4DSTEM
    api/classes
    api/io
    api/preprocess
@@ -11,3 +14,4 @@ API-Index
    api/utils
    api/version
    api/visualize
+   api/emd
