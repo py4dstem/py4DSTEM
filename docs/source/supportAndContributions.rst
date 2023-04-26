@@ -7,7 +7,7 @@ Support & Contributions
 Support
 -------
 
-Think you've found a bug or are facing issues using a feature, ? Please let us know by creating an issue on `github <https://github.com/py4dstem/py4DSTEM/issues>`_
+Think you've found a bug or are facing issues using a feature? Please let us know by creating an issue on `github <https://github.com/py4dstem/py4DSTEM/issues>`_
 
 
 Contributions
@@ -17,7 +17,8 @@ Looking to contirbute? Awesome we love people contributing, and it's a simple pr
 #. Submit feature request on `github <https://github.com/py4dstem/py4DSTEM/issues>`_ 
 #. Follow the developer install instructions 
 #. Make any change alterations and document all functions (All code should be readable, so clarity beats cleverness)
-#. Submit a PR on github. Add examples, tests and ways 
+#. Submit a PR on github. 
+
 
 .. raw:: html
     
@@ -34,7 +35,7 @@ Looking to contirbute? Awesome we love people contributing, and it's a simple pr
             list-style: none;
             color: green;
             float: left;
-            font-size: 74px;
+            font-size: 5vw;
             font-family: VT323, monospace;
             transition: 0.8s;
             text-shadow: #A3A3A3 -5px 3px 3px;
