@@ -15,9 +15,9 @@ Contents
    installation
    examples
    api
+   apiIndex
    gui
-   support
-   contribute
+   supportAndContributions
    license
    references
    acknowledgements
