@@ -6,7 +6,8 @@ Examples
 First Steps
 -----------
 
-Once py4DSTEM has been succsesfully installed, you can start using it in Python in the usual way. 
+Once py4DSTEM has been succsesfully installed, you can start using it in Python the usual way. The most popular way is using Jupyter Notebooks, but py4DSTEM can be run in python scripts, iPython, spyder, etc. 
+
 
 .. code-block:: python
     :linenos:
