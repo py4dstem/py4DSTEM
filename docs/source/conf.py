@@ -22,8 +22,8 @@ from datetime import datetime
 # -- Project information -----------------------------------------------------
 
 project = 'py4dstem'
-copyright = f'{datetime.today().year}, Ben Savitzky'
-author = 'py4DSTEM Development Team'
+copyright = f'{datetime.today().year}, py4DSTEM Development Team'
+author = 'Ben Savitsky & Alex Rakowski'
 
 # The full version, including alpha/beta/rc tags
 # release = '0.14.0'
