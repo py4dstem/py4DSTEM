@@ -461,17 +461,19 @@ Troubleshooting
 If you face any issues, see the common errors below, and if there's no solution please file an issue on the `git repository <https://github.com/py4dstem/py4DSTEM/issues>`_.
 
 Some common errors: 
+
 - make sure you've activated the right environment
 - when installing subsections sometimes the quotation marks can be tricky dpeending on os, terminal etc. 
 - GPU drivers - tricky to explain 
 
 
 
+.. _virtualenvironments:
 
-
+Virtual Environments
+--------------------
 
 .. Attention:: **Virtual environments**
-.. _virtualenvironments:
 
 A Python virtual environment is its own siloed version of Python, with its own set of packages and modules, kept separate from any other Python installations on your system.
 In the instructions above, we created a virtual environment to make sure packages that have different dependencies don't conflict with one another.
