@@ -1,6 +1,8 @@
 API
 ===
 
+For a full index of py4DSTEM functions and classes check out :ref:`apiIndex`
+
 .. toctree::
    :maxdepth: 2
 
@@ -13,5 +15,3 @@ API
    api/version
    api/visualize
    api/emd
-
-For a full index of py4DSTEM functions and classes check out :ref:`apiIndex`
