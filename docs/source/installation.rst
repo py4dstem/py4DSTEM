@@ -475,13 +475,13 @@ Virtual Environments
 
 .. Attention:: **Virtual environments**
 
-A Python virtual environment is its own siloed version of Python, with its own set of packages and modules, kept separate from any other Python installations on your system.
-In the instructions above, we created a virtual environment to make sure packages that have different dependencies don't conflict with one another.
-For instance, as of this writing, some of the scientific Python packages don't work well with Python 3.9 - but you might have some other applications on your computer that *need* Python 3.9.
-Using virtual environments solves this problem.
-In this example, we're creating and navigating virtual environments using Anaconda.
+    A Python virtual environment is its own siloed version of Python, with its own set of packages and modules, kept separate from any other Python installations on your system.
+    In the instructions above, we created a virtual environment to make sure packages that have different dependencies don't conflict with one another.
+    For instance, as of this writing, some of the scientific Python packages don't work well with Python 3.9 - but you might have some other applications on your computer that *need* Python 3.9.
+    Using virtual environments solves this problem.
+    In this example, we're creating and navigating virtual environments using Anaconda.
 
-Because these directions install py4DSTEM to its own virtual environment, each time you want to use py4DSTEM, you'll need to activate this environment.
+    Because these directions install py4DSTEM to its own virtual environment, each time you want to use py4DSTEM, you'll need to activate this environment.
 
-* In the command line, you can do this with ``conda activate py4dstem``.
-* In the Anaconda Navigator, you can do this by clicking on the Environments tab and then clicking on ``py4dstem``.
+    * In the command line, you can do this with ``conda activate py4dstem``.
+    * In the Anaconda Navigator, you can do this by clicking on the Environments tab and then clicking on ``py4dstem``.
