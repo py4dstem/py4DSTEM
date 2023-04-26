@@ -1,4 +1,4 @@
-.. _apiIndex:
+.. _apiindex:
 
 API Index
 =========
