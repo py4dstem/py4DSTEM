@@ -13,3 +13,5 @@ API
    api/version
    api/visualize
    api/emd
+
+For a full index of py4DSTEM functions and classes check out :ref:`apiIndex`
