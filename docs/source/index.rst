@@ -15,7 +15,7 @@ Contents
    installation
    examples
    api
-   apiIndex
+   apiindex
    gui
    supportAndContributions
    license
