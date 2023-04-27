@@ -129,32 +129,45 @@ def _probe_center_of_mass_constraint(self, current_probe):
     return shifted_probe
 
 
-def _probe_fourier_amplitude_constraint(self, current_probe):
+def _probe_fourier_amplitude_constraint(self, current_probe, threshold):
     """
-    Ptychographic probe Fourier-amplitude constraint.
-    Used for fixing the probe's amplitude in Fourier space.
+    Ptychographic probe fourier amplitude constraint
 
     Parameters
-    --------
+    ----------
     current_probe: np.ndarray
-        Current probe estimate
+        Current positions estimate
+    threshold: np.ndarray
+        Threshold for current probe fourier mask starting value. Value should
+        be between 0 and 1 where higher values provide the most masking.
 
     Returns
     --------
     constrained_probe: np.ndarray
-        Fourier-amplitude constrained probe estimate
+        Constrained probe estimate
     """
     xp = self._xp
+    erf = self._erf
 
-    current_probe_fft = xp.fft.fft2(current_probe)
-    current_probe_fft_phase = xp.angle(current_probe_fft)
+    curent_probe_sum = xp.sum(xp.abs(current_probe) ** 2)
+    current_probe_fft_amp = xp.abs(xp.fft.fft2(current_probe))
 
-    constrained_probe_fft = self._probe_initial_fft_amplitude * xp.exp(
-        1j * current_probe_fft_phase
+    threshold_px = xp.argmax(
+        current_probe_fft_amp < xp.max(current_probe_fft_amp) * threshold
     )
-    constrained_probe = xp.fft.ifft2(constrained_probe_fft)
 
-    return constrained_probe
+    qx = xp.abs(xp.fft.fftfreq(current_probe.shape[0], 1))
+    qy = xp.abs(xp.fft.fftfreq(current_probe.shape[1], 1))
+    qya, qxa = xp.meshgrid(qy, qx)
+    qra = xp.sqrt(qxa**2 + qya**2) - threshold_px / current_probe.shape[0]
+
+    width = 5
+    tophat_mask = 0.5 * (1 - erf(width * qra / (1 - qra**2)))
+
+    updated_probe = xp.fft.ifft2(xp.fft.fft2(current_probe) * tophat_mask)
+    updated_probe_sum = xp.sum(xp.abs(updated_probe) ** 2)
+
+    return updated_probe / updated_probe_sum * curent_probe_sum
 
 
 def _probe_finite_support_constraint(self, current_probe):

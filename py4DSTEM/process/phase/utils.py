@@ -1047,97 +1047,118 @@ def return_1D_profile(
 
     return q_bins, I_bins, n
 
-def fourier_rotate_real_volume(array, angle, axes = (0,1), xp = np):
+
+def fourier_rotate_real_volume(array, angle, axes=(0, 1), xp=np):
 
     input_arr = xp.asarray(array)
     array_shape = np.array(input_arr.shape)
     ndim = input_arr.ndim
 
     if ndim != 3:
-        raise ValueError('input array should be 3D')
+        raise ValueError("input array should be 3D")
 
     axes = list(axes)
 
     if len(axes) != 2:
-        raise ValueError('axes should contain exactly two values')
+        raise ValueError("axes should contain exactly two values")
 
     if not all([float(ax).is_integer() for ax in axes]):
-        raise ValueError('axes should contain only integer values')
+        raise ValueError("axes should contain only integer values")
 
     if axes[0] < 0:
         axes[0] += ndim
     if axes[1] < 0:
         axes[1] += ndim
     if axes[0] < 0 or axes[1] < 0 or axes[0] >= ndim or axes[1] >= ndim:
-        raise ValueError('invalid rotation plane specified')
+        raise ValueError("invalid rotation plane specified")
 
     axes.sort()
-    rotation_ax = np.setdiff1d([0,1,2],axes)[0]
+    rotation_ax = np.setdiff1d([0, 1, 2], axes)[0]
     plane_dims = array_shape[axes]
 
-    qx = xp.fft.fftfreq(plane_dims[0],1)
-    qy = xp.fft.fftfreq(plane_dims[1],1)
-    qxa, qya = xp.meshgrid(qx, qy, indexing='ij')
+    qx = xp.fft.fftfreq(plane_dims[0], 1)
+    qy = xp.fft.fftfreq(plane_dims[1], 1)
+    qxa, qya = xp.meshgrid(qx, qy, indexing="ij")
 
-    x = xp.arange(plane_dims[0]) - plane_dims[0]/2
-    y = xp.arange(plane_dims[1]) - plane_dims[1]/2
-    xa, ya = xp.meshgrid(x, y, indexing='ij')
+    x = xp.arange(plane_dims[0]) - plane_dims[0] / 2
+    y = xp.arange(plane_dims[1]) - plane_dims[1] / 2
+    xa, ya = xp.meshgrid(x, y, indexing="ij")
 
-    theta_90   = round(angle / 90)
+    theta_90 = round(angle / 90)
     theta_rest = (angle + 45) % 90 - 45
 
     theta = np.deg2rad(theta_rest)
-    a = np.tan(-theta/2)
+    a = np.tan(-theta / 2)
     b = np.sin(theta)
 
-    xOp = xp.exp(-2j*np.pi*qxa*ya*a)
-    yOp = xp.exp(-2j*np.pi*qya*xa*b)
+    xOp = xp.exp(-2j * np.pi * qxa * ya * a)
+    yOp = xp.exp(-2j * np.pi * qya * xa * b)
 
     output_arr = input_arr.copy()
 
     # 90 degree rotation
     if abs(theta_90) > 0:
         if plane_dims[0] == plane_dims[1]:
-            output_arr = xp.rot90(output_arr,theta_90, axes= axes)
+            output_arr = xp.rot90(output_arr, theta_90, axes=axes)
         else:
             if plane_dims[0] > plane_dims[1]:
-                xx = np.arange(plane_dims[1]) + (plane_dims[0]-plane_dims[1])//2
+                xx = np.arange(plane_dims[1]) + (plane_dims[0] - plane_dims[1]) // 2
                 if rotation_ax == 0:
-                    output_arr[:,xx,:] = xp.rot90(output_arr[:,xx,:],theta_90, axes= axes)
-                    output_arr[:,:xx[0],:] = 0
-                    output_arr[:,xx[-1]:,:] = 0
+                    output_arr[:, xx, :] = xp.rot90(
+                        output_arr[:, xx, :], theta_90, axes=axes
+                    )
+                    output_arr[:, : xx[0], :] = 0
+                    output_arr[:, xx[-1] :, :] = 0
                 else:
-                    output_arr[xx,:,:] = xp.rot90(output_arr[xx,:,:],theta_90, axes= axes)
-                    output_arr[:xx[0],:,:] = 0
-                    output_arr[xx[-1]:,:,:] = 0
+                    output_arr[xx, :, :] = xp.rot90(
+                        output_arr[xx, :, :], theta_90, axes=axes
+                    )
+                    output_arr[: xx[0], :, :] = 0
+                    output_arr[xx[-1] :, :, :] = 0
             else:
-                yy = np.arange(plane_dims[0]) + (plane_dims[1]-plane_dims[0])//2
+                yy = np.arange(plane_dims[0]) + (plane_dims[1] - plane_dims[0]) // 2
                 if rotation_ax == 2:
-                    output_arr[:,yy,:] = xp.rot90(output_arr[:,yy,:],theta_90, axes= axes)
-                    output_arr[:,:yy[0],:] = 0
-                    output_arr[:,yy[-1]:,:] = 0
+                    output_arr[:, yy, :] = xp.rot90(
+                        output_arr[:, yy, :], theta_90, axes=axes
+                    )
+                    output_arr[:, : yy[0], :] = 0
+                    output_arr[:, yy[-1] :, :] = 0
                 else:
-                    output_arr[:,:,yy] = xp.rot90(output_arr[:,:,yy],theta_90, axes= axes)
-                    output_arr[:,:,:yy[0]] = 0
-                    output_arr[:,:,yy[-1]:] = 0
+                    output_arr[:, :, yy] = xp.rot90(
+                        output_arr[:, :, yy], theta_90, axes=axes
+                    )
+                    output_arr[:, :, : yy[0]] = 0
+                    output_arr[:, :, yy[-1] :] = 0
 
     # small rotation
     if rotation_ax == 0:
-        output_arr = xp.fft.ifft(xp.fft.fft(output_arr,axis=1)*xOp[None,:],axis=1)
-        output_arr = xp.fft.ifft(xp.fft.fft(output_arr,axis=2)*yOp[None,:],axis=2)
-        output_arr = xp.fft.ifft(xp.fft.fft(output_arr,axis=1)*xOp[None,:],axis=1)
+        output_arr = xp.fft.ifft(xp.fft.fft(output_arr, axis=1) * xOp[None, :], axis=1)
+        output_arr = xp.fft.ifft(xp.fft.fft(output_arr, axis=2) * yOp[None, :], axis=2)
+        output_arr = xp.fft.ifft(xp.fft.fft(output_arr, axis=1) * xOp[None, :], axis=1)
         output_arr = xp.real(output_arr)
 
     elif rotation_ax == 1:
-        output_arr = xp.fft.ifft(xp.fft.fft(output_arr,axis=0)*xOp[:,None,:],axis=0)
-        output_arr = xp.fft.ifft(xp.fft.fft(output_arr,axis=2)*yOp[:,None,:],axis=2)
-        output_arr = xp.fft.ifft(xp.fft.fft(output_arr,axis=0)*xOp[:,None,:],axis=0)
+        output_arr = xp.fft.ifft(
+            xp.fft.fft(output_arr, axis=0) * xOp[:, None, :], axis=0
+        )
+        output_arr = xp.fft.ifft(
+            xp.fft.fft(output_arr, axis=2) * yOp[:, None, :], axis=2
+        )
+        output_arr = xp.fft.ifft(
+            xp.fft.fft(output_arr, axis=0) * xOp[:, None, :], axis=0
+        )
         output_arr = np.real(output_arr)
 
     else:
-        output_arr = xp.fft.ifft(xp.fft.fft(output_arr,axis=0)*xOp[:,:,None],axis=0)
-        output_arr = xp.fft.ifft(xp.fft.fft(output_arr,axis=1)*yOp[:,:,None],axis=1)
-        output_arr = xp.fft.ifft(xp.fft.fft(output_arr,axis=0)*xOp[:,:,None],axis=0)
+        output_arr = xp.fft.ifft(
+            xp.fft.fft(output_arr, axis=0) * xOp[:, :, None], axis=0
+        )
+        output_arr = xp.fft.ifft(
+            xp.fft.fft(output_arr, axis=1) * yOp[:, :, None], axis=1
+        )
+        output_arr = xp.fft.ifft(
+            xp.fft.fft(output_arr, axis=0) * xOp[:, :, None], axis=0
+        )
         output_arr = xp.real(output_arr)
 
     return output_arr
