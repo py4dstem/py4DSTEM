@@ -129,6 +129,9 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
             self._gaussian_filter = gaussian_filter
             self._zoom = zoom
             self._rotate = rotate
+            from scipy.special import erf
+
+            self._erf = erf
         elif device == "gpu":
             self._xp = cp
             self._asnumpy = cp.asnumpy
@@ -137,6 +140,9 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
             self._gaussian_filter = gaussian_filter
             self._zoom = zoom
             self._rotate = rotate
+            from cupyx.scipy.special import erf
+
+            self._erf = erf
         else:
             raise ValueError(f"device must be either 'cpu' or 'gpu', not {device}")
 
@@ -1357,6 +1363,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         current_positions,
         fix_com,
         fix_probe_fourier_amplitude,
+        fix_probe_fourier_amplitude_threshold,
         fix_positions,
         global_affine_transformation,
         gaussian_filter,
@@ -1379,7 +1386,10 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         fix_com: bool
             If True, probe CoM is fixed to the center
         fix_probe_fourier_amplitude: bool
-            If True, probe fourier amplitude is set to initial probe
+            If True, probe fourier amplitude is constrained by top hat function
+        fix_probe_fourier_amplitude_threshold: float
+            Threshold for current probe fourier mask starting value. Value should
+            be between 0 and 1 where higher values provide the most masking.
         fix_positions: bool
             If True, positions are not updated
         gaussian_filter: bool
@@ -1418,7 +1428,9 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         current_object = self._object_positivity_constraint(current_object)
 
         if fix_probe_fourier_amplitude:
-            current_probe = self._probe_fourier_amplitude_constraint(current_probe)
+            current_probe = self._probe_fourier_amplitude_constraint(
+                current_probe, fix_probe_fourier_amplitude_threshold
+            )
 
         current_probe = self._probe_finite_support_constraint(current_probe)
 
@@ -1449,7 +1461,8 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         positions_step_size: float = 0.9,
         fix_com: bool = True,
         fix_probe_iter: int = 0,
-        fix_probe_fourier_amplitude_iter: int = 0,
+        fix_probe_fourier_amplitude_iter: int = np.inf,
+        fix_probe_fourier_amplitude_threshold: float = None,
         fix_positions_iter: int = np.inf,
         global_affine_transformation: bool = True,
         probe_support_relative_radius: float = 1.0,
@@ -1497,8 +1510,11 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
             If True, fixes center of mass of probe
         fix_probe_iter: int, optional
             Number of iterations to run with a fixed probe before updating probe estimate
-        fix_probe_amplitude: int, optional
-            Number of iterations to run with a fixed probe amplitude
+        fix_probe_fourier_amplitude: bool
+            If True, probe fourier amplitude is constrained by top hat function
+        fix_probe_fourier_amplitude_threshold: float
+            Threshold for current probe fourier mask starting value. Value should
+            be between 0 and 1 where higher values provide the most masking.
         fix_positions_iter: int, optional
             Number of iterations to run with fixed positions before updating positions estimate
         global_affine_transformation: bool, optional
@@ -1887,7 +1903,9 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                         self._positions_px_all[start_tilt:end_tilt],
                         fix_com=fix_com and a0 >= fix_probe_iter,
                         fix_probe_fourier_amplitude=a0
-                        < fix_probe_fourier_amplitude_iter,
+                        < fix_probe_fourier_amplitude_iter
+                        and fix_probe_fourier_amplitude_threshold,
+                        fix_probe_fourier_amplitude_threshold=fix_probe_fourier_amplitude_threshold,
                         fix_positions=a0 < fix_positions_iter,
                         global_affine_transformation=global_affine_transformation,
                         gaussian_filter=a0 < gaussian_filter_iter
@@ -1910,7 +1928,9 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                     self._probe,
                     None,
                     fix_com=fix_com and a0 >= fix_probe_iter,
-                    fix_probe_fourier_amplitude=a0 < fix_probe_fourier_amplitude_iter,
+                    fix_probe_fourier_amplitude=a0 < fix_probe_fourier_amplitude_iter
+                    and fix_probe_fourier_amplitude_threshold,
+                    fix_probe_fourier_amplitude_threshold=fix_probe_fourier_amplitude_threshold,
                     fix_positions=True,
                     global_affine_transformation=global_affine_transformation,
                     gaussian_filter=a0 < gaussian_filter_iter
