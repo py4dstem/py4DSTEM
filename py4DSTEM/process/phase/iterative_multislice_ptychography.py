@@ -2615,3 +2615,16 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
 
         if return_values:
             return objects, convergence
+
+    @property
+    def object_fft(self):
+        """Fourier transform of object"""
+
+        if not hasattr(self, "_object"):
+            return None
+
+        return np.abs(
+            np.fft.fftshift(
+                np.fft.fft2(np.mean(self._crop_rotate_object_fov(self._object), axis=0))
+            )
+        )
