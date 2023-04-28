@@ -965,6 +965,49 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
             current_probe.shape
         )
 
+    def _probe_fourier_amplitude_constraint(self, current_probe, threshold):
+        """
+        Ptychographic probe fourier amplitude constraint
+
+        Parameters
+        ----------
+        current_probe: np.ndarray
+            Current positions estimate
+        threshold: np.ndarray
+            Threshold for current probe fourier mask starting value. Value should
+            be between 0 and 1 where higher values provide the most masking.
+
+        Returns
+        --------
+        constrained_probe: np.ndarray
+            Constrained probe estimate
+        """
+        xp = self._xp
+        erf = self._erf
+
+        curent_probe_sum = xp.sum(xp.abs(current_probe) ** 2, axis=(1, 2))
+        current_probe_fft_amp = xp.abs(xp.fft.fft2(current_probe[0]))
+
+        threshold_px = xp.argmax(
+            current_probe_fft_amp < xp.amax(current_probe_fft_amp) * threshold
+        )
+
+        qx = xp.abs(xp.fft.fftfreq(current_probe.shape[1], 1))
+        qy = xp.abs(xp.fft.fftfreq(current_probe.shape[2], 1))
+        qya, qxa = xp.meshgrid(qy, qx)
+        qra = xp.sqrt(qxa**2 + qya**2) - threshold_px / current_probe.shape[1]
+
+        width = 5
+        tophat_mask = 0.5 * (1 - erf(width * qra / (1 - qra**2)))
+
+        updated_probe = xp.fft.ifft2(xp.fft.fft2(current_probe) * tophat_mask)
+        updated_probe_sum = xp.sum(xp.abs(updated_probe) ** 2, axis=(1, 2))
+
+        return (
+            updated_probe
+            / (updated_probe_sum * curent_probe_sum)[:, xp.newaxis, xp.newaxis]
+        )
+
     def _constraints(
         self,
         current_object,
