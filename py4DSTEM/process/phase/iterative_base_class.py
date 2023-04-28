@@ -1759,6 +1759,35 @@ class PhaseReconstruction(metaclass=ABCMeta):
         ax.set_xticks([])
         ax.set_yticks([])
 
+    def show_object_fft(self, **kwargs):
+        """
+        Plot fourier transform of reconstructed object
+        """
+        object_fft = self.object_fft
+
+        figsize = kwargs.get("figsize", (6, 6))
+        kwargs.pop("figsize", None)
+        cmap = kwargs.get("cmap", "magma")
+        kwargs.pop("cmap", None)
+        vmin = kwargs.get("vmin", 0)
+        kwargs.pop("vmin", None)
+        vmax = kwargs.get("vmax", 1)
+        kwargs.pop("vmax", None)
+
+        from py4DSTEM import show
+
+        show(
+            object_fft,
+            figsize=figsize,
+            cmap=cmap,
+            vmin=vmin,
+            vmax=vmax,
+            scalebar=True,
+            pixelsize=np.fft.fftfreq(object_fft.shape[1], self.sampling[1])[1],
+            pixelunits=r"$\AA^{-1}$",
+            **kwargs,
+        )
+
     @property
     def probe_fourier(self):
         """Current probe estimate in Fourier space"""
@@ -1766,6 +1795,17 @@ class PhaseReconstruction(metaclass=ABCMeta):
             return None
         asnumpy = self._asnumpy
         return asnumpy(self._return_fourier_probe(self._probe))
+
+    @property
+    def object_fft(self):
+        """Fourier transform of object"""
+
+        if not hasattr(self, "_object"):
+            return None
+            
+        return np.abs(
+            np.fft.fftshift(np.fft.fft2(self._crop_rotate_object_fov(self._object)))
+        )
 
     @property
     def angular_sampling(self):
