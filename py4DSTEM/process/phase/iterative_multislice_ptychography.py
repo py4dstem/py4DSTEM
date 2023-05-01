@@ -888,7 +888,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
                 )
 
             # back-transmit
-            exit_waves *= xp.conj(obj)
+            exit_waves *= xp.conj(obj) / xp.abs(obj)**2
 
             if s > 0:
                 # back-propagate
@@ -1448,13 +1448,12 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
                 q_highpass,
             )
 
-        if kz_regularization_filter:
+        if identical_slices:
+            current_object = self._object_identical_slices_constraint(current_object)
+        elif kz_regularization_filter:
             current_object = self._object_kz_regularization_constraint(
                 current_object, kz_regularization_gamma
             )
-
-        if identical_slices:
-            current_object = self._object_identical_slices_constraint(current_object)
 
         if self._object_type == "complex":
             current_object = self._object_threshold_constraint(
