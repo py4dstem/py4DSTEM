@@ -2172,7 +2172,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             obj = self._crop_rotate_object_fov(
                 np.sum(self.object_iterations[a0], axis=0), padding=padding
             )
-            if obj.dtype == "complex":
+            if np.iscomplexobj(obj):
                 obj = np.angle(obj)
                 object_type.append("phase")
             else:
@@ -2349,7 +2349,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             ms_object = self._object
 
         rotated_object = self._crop_rotate_object_fov(ms_object, padding=padding)
-        if rotated_object.dtype == "complex":
+        if np.iscomplexobj(rotated_object):
             rotated_object = np.angle(rotated_object)
         rotated_shape = rotated_object.shape
 
