@@ -236,11 +236,8 @@ class DPCReconstruction(PhaseReconstruction):
         obj_dx[mask_inv] = 0
         obj_dy[mask_inv] = 0
 
-        new_error = xp.sqrt(
-            xp.mean(
-                (obj_dx[mask] - xp.mean(obj_dx[mask])) ** 2
-                + (obj_dy[mask] - xp.mean(obj_dy[mask])) ** 2
-            )
+        new_error = xp.mean(obj_dx[mask] ** 2 + obj_dy[mask] ** 2) / (
+            xp.mean(self._com_x.ravel() ** 2 + self._com_y.ravel() ** 2)
         )
 
         if new_error > error:
@@ -412,11 +409,11 @@ class DPCReconstruction(PhaseReconstruction):
         self.object_phase: np.ndarray
             Reconstructed phase object, as a numpy array
         self.error: float
-            RMS error
+            NMSE error
         self.object_phase_iterations, optional
             Reconstructed phase objects at each iteration as numpy arrays
         self.error_iterations, optional
-            RMS errors at each iteration
+            NMSE errors at each iteration
 
         Returns
         --------
@@ -533,7 +530,7 @@ class DPCReconstruction(PhaseReconstruction):
         cbar: bool, optional
             If true, displays a colorbar
         plot_convergence: bool, optional
-            If true, the RMS error plot is displayed
+            If true, the NMSE error plot is displayed
         """
 
         figsize = kwargs.get("figsize", (8, 8))
@@ -558,7 +555,7 @@ class DPCReconstruction(PhaseReconstruction):
         im = ax1.imshow(self.object_phase, extent=extent, cmap=cmap, **kwargs)
         ax1.set_ylabel(f"x [{self._scan_units[0]}]")
         ax1.set_xlabel(f"y [{self._scan_units[1]}]")
-        ax1.set_title(f"DPC Phase Reconstruction - RMS error: {self.error:.3e}")
+        ax1.set_title(f"DPC Phase Reconstruction - NMSE error: {self.error:.3e}")
 
         if cbar:
 
@@ -573,7 +570,7 @@ class DPCReconstruction(PhaseReconstruction):
             ax2 = fig.add_subplot(spec[1])
             ax2.semilogy(np.arange(len(errors)), errors, **kwargs)
             ax2.set_xlabel("Iteration Number")
-            ax2.set_ylabel("Log RMS error")
+            ax2.set_ylabel("Log NMSE error")
             ax2.yaxis.tick_right()
 
         spec.tight_layout(fig)
@@ -593,7 +590,7 @@ class DPCReconstruction(PhaseReconstruction):
         cbar: bool, optional
             If true, displays a colorbar
         plot_convergence: bool, optional
-            If true, the RMS error plot is displayed
+            If true, the NMSE error plot is displayed
         iterations_grid: Tuple[int,int]
             Grid dimensions to plot reconstruction iterations
         """
@@ -646,7 +643,7 @@ class DPCReconstruction(PhaseReconstruction):
             if cbar:
                 grid.cbar_axes[n].colorbar(im)
             ax.set_title(
-                f"Iteration: {grid_range[n]}\nRMS error: {errors[grid_range[n]]:.3e}"
+                f"Iteration: {grid_range[n]}\nNMSE error: {errors[grid_range[n]]:.3e}"
             )
 
         if plot_convergence:
@@ -654,7 +651,7 @@ class DPCReconstruction(PhaseReconstruction):
             ax2 = fig.add_subplot(spec[1])
             ax2.semilogy(np.arange(len(errors)), errors, **kwargs)
             ax2.set_xlabel("Iteration Number")
-            ax2.set_ylabel("Log RMS error")
+            ax2.set_ylabel("Log NMSE error")
             ax2.yaxis.tick_right()
 
             spec.tight_layout(fig)
@@ -672,7 +669,7 @@ class DPCReconstruction(PhaseReconstruction):
         Parameters
         --------
         plot_convergence: bool, optional
-            If true, the RMS error plot is displayed
+            If true, the NMSE error plot is displayed
         iterations_grid: Tuple[int,int]
             Grid dimensions to plot reconstruction iterations
         cbar: bool, optional
