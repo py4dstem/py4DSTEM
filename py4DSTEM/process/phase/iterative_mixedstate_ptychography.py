@@ -133,12 +133,18 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
             from scipy.ndimage import gaussian_filter
 
             self._gaussian_filter = gaussian_filter
+            from scipy.special import erf
+
+            self._erf = erf
         elif device == "gpu":
             self._xp = cp
             self._asnumpy = cp.asnumpy
             from cupyx.scipy.ndimage import gaussian_filter
 
             self._gaussian_filter = gaussian_filter
+            from cupyx.scipy.special import erf
+
+            self._erf = erf
         else:
             raise ValueError(f"device must be either 'cpu' or 'gpu', not {device}")
 
@@ -959,6 +965,49 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
             current_probe.shape
         )
 
+    def _probe_fourier_amplitude_constraint(self, current_probe, threshold):
+        """
+        Ptychographic probe fourier amplitude constraint
+
+        Parameters
+        ----------
+        current_probe: np.ndarray
+            Current positions estimate
+        threshold: np.ndarray
+            Threshold value for current probe fourier mask. Value should
+            be between 0 and 1, where higher values provide the most masking.
+
+        Returns
+        --------
+        constrained_probe: np.ndarray
+            Constrained probe estimate
+        """
+        xp = self._xp
+        erf = self._erf
+
+        curent_probe_sum = xp.sum(xp.abs(current_probe) ** 2, axis=(1, 2))
+        current_probe_fft_amp = xp.abs(xp.fft.fft2(current_probe[0]))
+
+        threshold_px = xp.argmax(
+            current_probe_fft_amp < xp.amax(current_probe_fft_amp) * threshold
+        )
+
+        qx = xp.abs(xp.fft.fftfreq(current_probe.shape[1], 1))
+        qy = xp.abs(xp.fft.fftfreq(current_probe.shape[2], 1))
+        qya, qxa = xp.meshgrid(qy, qx)
+        qra = xp.sqrt(qxa**2 + qya**2) - threshold_px / current_probe.shape[1]
+
+        width = 5
+        tophat_mask = 0.5 * (1 - erf(width * qra / (1 - qra**2)))
+
+        updated_probe = xp.fft.ifft2(xp.fft.fft2(current_probe) * tophat_mask)
+        updated_probe_sum = xp.sum(xp.abs(updated_probe) ** 2, axis=(1, 2))
+
+        return (
+            updated_probe
+            / (updated_probe_sum * curent_probe_sum)[:, xp.newaxis, xp.newaxis]
+        )
+
     def _constraints(
         self,
         current_object,
@@ -967,6 +1016,7 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
         pure_phase_object,
         fix_com,
         fix_probe_fourier_amplitude,
+        fix_probe_fourier_amplitude_threshold,
         fix_positions,
         global_affine_transformation,
         gaussian_filter,
@@ -978,7 +1028,6 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
     ):
         """
         Ptychographic constraints operator.
-        Calls _threshold_object_constraint() and _probe_center_of_mass_constraint()
 
         Parameters
         --------
@@ -993,7 +1042,10 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
         fix_com: bool
             If True, probe CoM is fixed to the center
         fix_probe_fourier_amplitude: bool
-            If True, probe fourier amplitude is set to initial probe
+            If True, probe fourier amplitude is constrained by top hat function
+        fix_probe_fourier_amplitude_threshold: float
+            Threshold value for current probe fourier mask. Value should
+            be between 0 and 1, where higher values provide the most masking.
         fix_positions: bool
             If True, positions are not updated
         gaussian_filter: bool
@@ -1036,8 +1088,9 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
         )
 
         if fix_probe_fourier_amplitude:
-            current_probe = self._probe_fourier_amplitude_constraint(current_probe)
-
+            current_probe = self._probe_fourier_amplitude_constraint(
+                current_probe, fix_probe_fourier_amplitude_threshold
+            )
         current_probe = self._probe_finite_support_constraint(current_probe)
 
         if fix_com:
@@ -1072,7 +1125,8 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
         fix_com: bool = True,
         orthogonalize_probe: bool = True,
         fix_probe_iter: int = 0,
-        fix_probe_fourier_amplitude_iter: int = 0,
+        fix_probe_fourier_amplitude_iter: int = np.inf,
+        fix_probe_fourier_amplitude_threshold: float = None,
         fix_positions_iter: int = np.inf,
         global_affine_transformation: bool = True,
         probe_support_relative_radius: float = 1.0,
@@ -1113,14 +1167,17 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
             Probe normalization minimum as a fraction of the maximum overlap intensity
         positions_step_size: float, optional
             Positions update step size
-        pure_phase_object: bool, optional
-            If True, object amplitude is set to unity
+        pure_phase_object_iter: int, optional
+            Number of iterations where object amplitude is set to unity
         fix_com: bool, optional
             If True, fixes center of mass of probe
         fix_probe_iter: int, optional
             Number of iterations to run with a fixed probe before updating probe estimate
-        fix_probe_amplitude: int, optional
-            Number of iterations to run with a fixed probe amplitude
+        fix_probe_fourier_amplitude: bool
+            If True, probe fourier amplitude is constrained by top hat function
+        fix_probe_fourier_amplitude_threshold: float
+            Threshold value for current probe fourier mask. Value should
+            be between 0 and 1, where higher values provide the most masking.
         fix_positions_iter: int, optional
             Number of iterations to run with fixed positions before updating positions estimate
         global_affine_transformation: bool, optional
@@ -1421,7 +1478,9 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
                 self._positions_px,
                 pure_phase_object=a0 < pure_phase_object_iter,
                 fix_com=fix_com and a0 >= fix_probe_iter,
-                fix_probe_fourier_amplitude=a0 < fix_probe_fourier_amplitude_iter,
+                fix_probe_fourier_amplitude=a0 < fix_probe_fourier_amplitude_iter
+                and fix_probe_fourier_amplitude_threshold,
+                fix_probe_fourier_amplitude_threshold=fix_probe_fourier_amplitude_threshold,
                 fix_positions=a0 < fix_positions_iter,
                 global_affine_transformation=global_affine_transformation,
                 gaussian_filter=a0 < gaussian_filter_iter

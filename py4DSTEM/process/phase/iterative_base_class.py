@@ -846,11 +846,15 @@ class PhaseReconstruction(metaclass=ABCMeta):
                         rotation_best_deg = rotation_angles_deg[ind_trans_max]
                         _rotation_best_rad = rotation_angles_rad[ind_trans_max]
                         _rotation_best_transpose = True
+
+                    self._rotation_div = rotation_div
+                    self._rotation_div_transpose = rotation_div_transpose
                 else:
                     # Minimize Curl
                     ind_min = xp.argmin(rotation_curl).item()
                     ind_trans_min = xp.argmin(rotation_curl_transpose).item()
-
+                    self._rotation_curl = rotation_curl
+                    self._rotation_curl_transpose = rotation_curl_transpose
                     if rotation_curl[ind_min] <= rotation_curl_transpose[ind_trans_min]:
                         rotation_best_deg = rotation_angles_deg[ind_min]
                         _rotation_best_rad = rotation_angles_rad[ind_min]
@@ -860,6 +864,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
                         _rotation_best_rad = rotation_angles_rad[ind_trans_min]
                         _rotation_best_transpose = True
 
+                self._rotation_angles_deg = rotation_angles_deg
                 # Print summary
                 if self._verbose:
                     print(
@@ -875,6 +880,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
 
                 # Plot Curl/Div rotation
                 if plot_rotation:
+
                     figsize = kwargs.get("figsize", (8, 2))
                     fig, ax = plt.subplots(figsize=figsize)
 
@@ -1753,6 +1759,38 @@ class PhaseReconstruction(metaclass=ABCMeta):
         ax.set_xticks([])
         ax.set_yticks([])
 
+    def show_object_fft(self, **kwargs):
+        """
+        Plot fourier transform of reconstructed object
+        """
+        object_fft = self.object_fft
+
+        figsize = kwargs.get("figsize", (6, 6))
+        kwargs.pop("figsize", None)
+        cmap = kwargs.get("cmap", "magma")
+        kwargs.pop("cmap", None)
+        vmin = kwargs.get("vmin", 0)
+        kwargs.pop("vmin", None)
+        vmax = kwargs.get("vmax", 1)
+        kwargs.pop("vmax", None)
+        power = kwargs.get("power", 0.2)
+        kwargs.pop("power", None)
+
+        from py4DSTEM import show
+
+        show(
+            object_fft,
+            figsize=figsize,
+            cmap=cmap,
+            vmin=vmin,
+            vmax=vmax,
+            scalebar=True,
+            pixelsize=np.fft.fftfreq(object_fft.shape[1], self.sampling[1])[1],
+            pixelunits=r"$\AA^{-1}$",
+            power=power,
+            **kwargs,
+        )
+
     @property
     def probe_fourier(self):
         """Current probe estimate in Fourier space"""
@@ -1760,6 +1798,17 @@ class PhaseReconstruction(metaclass=ABCMeta):
             return None
         asnumpy = self._asnumpy
         return asnumpy(self._return_fourier_probe(self._probe))
+
+    @property
+    def object_fft(self):
+        """Fourier transform of object"""
+
+        if not hasattr(self, "_object"):
+            return None
+
+        return np.abs(
+            np.fft.fftshift(np.fft.fft2(self._crop_rotate_object_fov(self._object)))
+        )
 
     @property
     def angular_sampling(self):

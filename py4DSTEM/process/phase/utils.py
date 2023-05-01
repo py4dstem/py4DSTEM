@@ -1046,8 +1046,26 @@ def return_1D_profile(
 
     return q_bins, I_bins, n
 
-
 def fourier_rotate_real_volume(array, angle, axes=(0, 1), xp=np):
+    """
+    Rotates a 3D array using three Fourier-based shear operators.
+
+    Parameters
+     ----------
+    array: ndarray
+        3D array to rotate
+    angle: float
+        Angle in deg to rotate array by
+    axes: tuple, Optional
+        Axes defining plane in which to rotate about
+    xp: Callable, optional
+        Array computing module
+    
+    Returns
+    --------
+    output_arr: ndarray
+        Fourier-rotated array
+    """
     input_arr = xp.asarray(array)
     array_shape = np.array(input_arr.shape)
     ndim = input_arr.ndim
