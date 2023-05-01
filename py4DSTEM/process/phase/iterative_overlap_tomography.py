@@ -1275,7 +1275,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
 
         return current_positions
 
-    def _object_positivity_constraint(self, current_object):
+    def _object_positivity_constraint(self, current_object, shrinkage_rad):
         """
         Ptychographic positivity constraint.
         Used to ensure electrostatic potential is positive.
@@ -1284,6 +1284,8 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         --------
         current_object: np.ndarray
             Current object estimate
+        shrinkage_rad: float
+            Phase shift in radians to be subtracted from the potential at each iteration
 
         Returns
         --------
@@ -1291,6 +1293,10 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
             Constrained object estimate
         """
         xp = self._xp
+
+        if shrinkage_rad is not None:
+            current_object -= shrinkage_rad
+
         return xp.maximum(current_object, 0.0)
 
     def _object_gaussian_constraint(self, current_object, gaussian_filter_sigma):
@@ -1364,6 +1370,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         butterworth_filter,
         q_lowpass,
         q_highpass,
+        shrinkage_rad,
     ):
         """
         Ptychographic constraints operator.
@@ -1393,6 +1400,8 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
             Cut-off frequency in A^-1 for low-pass butterworth filter
         q_highpass: float
             Cut-off frequency in A^-1 for high-pass butterworth filter
+        shrinkage_rad: float
+            Phase shift in radians to be subtracted from the potential at each iteration
 
         Returns
         --------
@@ -1416,7 +1425,9 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                 q_highpass,
             )
 
-        current_object = self._object_positivity_constraint(current_object)
+        current_object = self._object_positivity_constraint(
+            current_object, shrinkage_rad
+        )
 
         if fix_probe_fourier_amplitude:
             current_probe = self._probe_fourier_amplitude_constraint(current_probe)
@@ -1460,6 +1471,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         butterworth_filter_iter: int = np.inf,
         q_lowpass: float = None,
         q_highpass: float = None,
+        shrinkage_rad: float = None,
         collective_tilt_updates: bool = False,
         store_iterations: bool = False,
         progress_bar: bool = True,
@@ -1518,6 +1530,8 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
             Cut-off frequency in A^-1 for low-pass butterworth filter
         q_highpass: float
             Cut-off frequency in A^-1 for high-pass butterworth filter
+        shrinkage_rad: float
+            Phase shift in radians to be subtracted from the potential at each iteration
         store_iterations: bool, optional
             If True, reconstructed objects and probes are stored at each iteration
         progress_bar: bool, optional
@@ -1898,6 +1912,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                         and (q_lowpass is not None or q_highpass is not None),
                         q_lowpass=q_lowpass,
                         q_highpass=q_highpass,
+                        shrinkage_rad=shrinkage_rad,
                     )
 
             # Normalize Error Over Tilts
@@ -1906,7 +1921,11 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
             if collective_tilt_updates:
                 self._object += collective_object / self._num_tilts
 
-                (self._object, self._probe, _,) = self._constraints(
+                (
+                    self._object,
+                    self._probe,
+                    _,
+                ) = self._constraints(
                     self._object,
                     self._probe,
                     None,
@@ -1921,6 +1940,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                     and (q_lowpass is not None or q_highpass is not None),
                     q_lowpass=q_lowpass,
                     q_highpass=q_highpass,
+                    shrinkage_rad=shrinkage_rad,
                 )
 
             if store_iterations:
