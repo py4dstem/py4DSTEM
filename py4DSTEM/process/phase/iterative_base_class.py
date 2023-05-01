@@ -1773,6 +1773,8 @@ class PhaseReconstruction(metaclass=ABCMeta):
         kwargs.pop("vmin", None)
         vmax = kwargs.get("vmax", 1)
         kwargs.pop("vmax", None)
+        power = kwargs.get("power", 0.2)
+        kwargs.pop("power", None)
 
         from py4DSTEM import show
 
@@ -1785,6 +1787,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
             scalebar=True,
             pixelsize=np.fft.fftfreq(object_fft.shape[1], self.sampling[1])[1],
             pixelunits=r"$\AA^{-1}$",
+            power=power,
             **kwargs,
         )
 
@@ -1802,7 +1805,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
 
         if not hasattr(self, "_object"):
             return None
-            
+
         return np.abs(
             np.fft.fftshift(np.fft.fft2(self._crop_rotate_object_fov(self._object)))
         )

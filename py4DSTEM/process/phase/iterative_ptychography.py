@@ -886,8 +886,8 @@ class PtychographicReconstruction(PhaseReconstruction):
         fix_probe_fourier_amplitude: bool
             If True, probe fourier amplitude is constrained by top hat function
         fix_probe_fourier_amplitude_threshold: float
-            Threshold for current probe fourier mask starting value. Value should
-            be between 0 and 1 where higher values provide the most masking.
+            Threshold value for current probe fourier mask. Value should
+            be between 0 and 1, where higher values provide the most masking.
         fix_positions: bool
             If True, positions are not updated
         gaussian_filter: bool
@@ -1014,8 +1014,8 @@ class PtychographicReconstruction(PhaseReconstruction):
         fix_probe_fourier_amplitude: bool
             If True, probe fourier amplitude is constrained by top hat function
         fix_probe_fourier_amplitude_threshold: float
-            Threshold for current probe fourier mask starting value. Value should
-            be between 0 and 1 where higher values provide the most masking.
+            Threshold value for current probe fourier mask. Value should
+            be between 0 and 1, where higher values provide the most masking.
         fix_positions_iter: int, optional
             Number of iterations to run with fixed positions before updating positions estimate
         global_affine_transformation: bool, optional

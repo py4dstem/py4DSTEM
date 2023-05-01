@@ -138,8 +138,8 @@ def _probe_fourier_amplitude_constraint(self, current_probe, threshold):
     current_probe: np.ndarray
         Current positions estimate
     threshold: np.ndarray
-        Threshold for current probe fourier mask starting value. Value should
-        be between 0 and 1 where higher values provide the most masking.
+        Threshold value for current probe fourier mask. Value should
+        be between 0 and 1, where higher values provide the most masking.
 
     Returns
     --------
