@@ -1215,7 +1215,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
 
         return current_positions
 
-    def _object_positivity_constraint(self, current_object):
+    def _object_positivity_constraint(self, current_object, shrinkage_rad):
         """
         Ptychographic positivity constraint.
         Used to ensure electrostatic potential is positive.
@@ -1224,6 +1224,8 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         --------
         current_object: np.ndarray
             Current object estimate
+        shrinkage_rad: float
+            Phase shift in radians to be subtracted from the potential at each iteration
 
         Returns
         --------
@@ -1231,6 +1233,10 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             Constrained object estimate
         """
         xp = self._xp
+        
+        if shrinkage_rad is not None:
+            current_object -= shrinkage_rad
+        
         return xp.maximum(current_object, 0.0)
 
     def _object_gaussian_constraint(
@@ -1389,6 +1395,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         kz_regularization_gamma,
         identical_slices,
         object_positivity,
+        shrinkage_rad,
         pure_phase_object,
     ):
         """
@@ -1429,6 +1436,8 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             If True, forces all object slices to be identical
         object_positivity: bool
             If True, forces object to be positive
+        shrinkage_rad: float
+            Phase shift in radians to be subtracted from the potential at each iteration
         pure_phase_object: bool
             If True, object amplitude is set to unity
 
@@ -1466,7 +1475,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
                 current_object, pure_phase_object
             )
         if object_positivity and self._object_type == "potential":
-            current_object = self._object_positivity_constraint(current_object)
+            current_object = self._object_positivity_constraint(current_object, shrinkage_rad)
 
         if fix_probe_fourier_amplitude:
             current_probe = self._probe_fourier_amplitude_constraint(
@@ -1516,6 +1525,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         kz_regularization_gamma: Union[float, np.ndarray] = None,
         identical_slices_iter: int = 0,
         object_positivity: bool = True,
+        shrinkage_rad: float = None,
         pure_phase_object_iter: int = 0,
         switch_object_iter: int = np.inf,
         store_iterations: bool = False,
@@ -1586,6 +1596,8 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             Number of iterations to run using identical slices
         object_positivity: bool, optional
             If True, forces object to be positive
+        shrinkage_rad: float
+            Phase shift in radians to be subtracted from the potential at each iteration
         pure_phase_object_iter: int, optional
             Number of iterations where object amplitude is set to unity
         switch_object_iter: int, optional
@@ -1902,6 +1914,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
                 else kz_regularization_gamma,
                 identical_slices=a0 < identical_slices_iter,
                 object_positivity=object_positivity,
+                shrinkage_rad=shrinkage_rad,
                 pure_phase_object=a0 < pure_phase_object_iter,
             )
 
