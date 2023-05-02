@@ -1,4 +1,4 @@
-import matplotlib.pyplot as plt
+from matplotlib import cm, colors as mcolors, pyplot as plt
 import numpy as np
 from matplotlib.colors import hsv_to_rgb
 from matplotlib.patches import Wedge
@@ -851,6 +851,20 @@ def Complex2RGB(complex_array, vmin=None, vmax=None, hue_start=90):
 
     return hsv_to_rgb(hsv)
 
+def add_colorbar_arg(cax, vmin = None, vmax = None, hue_start = 90):
+    z = np.exp(1j * np.linspace(-np.pi, np.pi, 200))
+    rgb_vals = Complex2RGB(z, vmin=vmin, vmax=vmax, hue_start=hue_start)[0]
+    newcmp = mcolors.ListedColormap(rgb_vals)
+    norm = mcolors.Normalize(vmin=-np.pi, vmax=np.pi)
+
+    cb1 = plt.colorbar(cm.ScalarMappable(norm=norm, cmap=newcmp), cax=cax)
+
+    cb1.set_label("arg", rotation=0, ha="center", va="bottom")
+    cb1.ax.yaxis.set_label_coords(0.5, 1.01)
+    cb1.set_ticks(np.array([-np.pi, -np.pi / 2, 0, np.pi / 2, np.pi]))
+    cb1.set_ticklabels(
+        [r"$-\pi$", r"$-\dfrac{\pi}{2}$", "$0$", r"$\dfrac{\pi}{2}$", r"$\pi$"]
+    )
 
 def show_complex(
     ar_complex,
