@@ -2838,7 +2838,7 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         if object_mode == "phase":
             min_e = np.angle(rotated_electrostatic).min()
             max_e = np.angle(rotated_electrostatic).max()
-            max_m = np.angle(rotated_magnetic).max()
+            max_m = np.abs(np.angle(rotated_magnetic)).max()
             min_m = -max_m
         elif object_mode == "amplitude":
             min_e = np.abs(rotated_electrostatic).min()
