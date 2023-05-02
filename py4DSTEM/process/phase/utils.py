@@ -420,8 +420,8 @@ class ComplexProbe:
     def get_spatial_frequencies(self):
         xp = self._xp
         kx, ky = spatial_frequencies(self._gpts, self._sampling)
-        kx = xp.asarray(kx)
-        ky = xp.asarray(ky)
+        kx = xp.asarray(kx, dtype=xp.float32)
+        ky = xp.asarray(ky, dtype=xp.float32)
         return kx, ky
 
     def polar_coordinates(self, x, y):
@@ -522,9 +522,9 @@ def fourier_translation_operator(
     kx, ky = spatial_frequencies(shape, (1.0, 1.0))
     kx = kx.reshape((1, -1, 1))
     ky = ky.reshape((1, 1, -1))
-    kx = xp.asarray(kx)
-    ky = xp.asarray(ky)
-    positions = xp.asarray(positions)
+    kx = xp.asarray(kx, dtype=xp.float32)
+    ky = xp.asarray(ky, dtype=xp.float32)
+    positions = xp.asarray(positions,dtype=xp.float32)
     x = positions[:, 0].reshape((-1,) + (1, 1))
     y = positions[:, 1].reshape((-1,) + (1, 1))
 
@@ -750,9 +750,9 @@ class AffineTransform:
         )
 
     def __call__(self, x: np.ndarray, origin=(0, 0), xp=np):
-        origin = xp.asarray(origin)
+        origin = xp.asarray(origin,dtype=xp.float32)
         tf_matrix = self.asarray()
-        tf_matrix = xp.asarray(tf_matrix)
+        tf_matrix = xp.asarray(tf_matrix,dtype=xp.float32)
         tf_translation = xp.array((self.t0, self.t1)) + origin
         return ((x - origin) @ tf_matrix) + tf_translation
 
@@ -775,7 +775,7 @@ def estimate_global_transformation(
 ):
     """Use least squares to estimate the global affine transformation."""
 
-    origin = xp.asarray(origin)
+    origin = xp.asarray(origin, dtype=xp.float32)
 
     try:
         if translation_allowed:
@@ -1066,7 +1066,7 @@ def fourier_rotate_real_volume(array, angle, axes=(0, 1), xp=np):
     output_arr: ndarray
         Fourier-rotated array
     """
-    input_arr = xp.asarray(array)
+    input_arr = xp.asarray(array, dtype=array.dtype)
     array_shape = np.array(input_arr.shape)
     ndim = input_arr.ndim
 

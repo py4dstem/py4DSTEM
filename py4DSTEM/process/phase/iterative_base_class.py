@@ -445,8 +445,8 @@ class PhaseReconstruction(metaclass=ABCMeta):
                 fitfunction=fit_function,
             )
 
-        com_fitted_x = xp.asarray(com_shifts[0])
-        com_fitted_y = xp.asarray(com_shifts[1])
+        com_fitted_x = xp.asarray(com_shifts[0],dtype=xp.float32)
+        com_fitted_y = xp.asarray(com_shifts[1],dtype=xp.float32)
 
         # fix CoM units
         com_normalized_x = (com_measured_x - com_fitted_x) * self._reciprocal_sampling[
@@ -617,7 +617,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
                         UserWarning,
                     )
 
-                rotation_angles_deg = xp.asarray(rotation_angles_deg)
+                rotation_angles_deg = xp.asarray(rotation_angles_deg, dtype=xp.float32)
                 rotation_angles_rad = xp.deg2rad(rotation_angles_deg)[:, None, None]
 
                 if _rotation_best_transpose:
@@ -764,7 +764,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
 
             else:
                 # Transpose unknown, rotation unknown
-                rotation_angles_deg = xp.asarray(rotation_angles_deg)
+                rotation_angles_deg = xp.asarray(rotation_angles_deg, dtype=xp.float32)
                 rotation_angles_rad = xp.deg2rad(rotation_angles_deg)[:, None, None]
 
                 # Untransposed
@@ -1084,7 +1084,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
                 mean_intensity += np.sum(intensities)
                 amplitudes[rx, ry] = np.sqrt(np.maximum(intensities, 0))
 
-        amplitudes = xp.asarray(amplitudes)
+        amplitudes = xp.asarray(amplitudes,dtype=xp.float32)
 
         amplitudes = xp.reshape(amplitudes, (-1,) + region_of_interest_shape)
         mean_intensity /= amplitudes.shape[0]

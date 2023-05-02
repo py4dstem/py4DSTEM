@@ -208,8 +208,8 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
 
         # Frequencies
         kx, ky = spatial_frequencies(gpts, sampling)
-        kx = xp.asarray(kx)
-        ky = xp.asarray(ky)
+        kx = xp.asarray(kx,dtype=xp.float32)
+        ky = xp.asarray(ky,dtype=xp.float32)
 
         # Propagators
         wavelength = electron_wavelength_angstrom(energy)
@@ -551,7 +551,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         if self._probe is None:
             if self._vacuum_probe_intensity is not None:
                 self._semiangle_cutoff = np.inf
-                self._vacuum_probe_intensity = xp.asarray(self._vacuum_probe_intensity)
+                self._vacuum_probe_intensity = xp.asarray(self._vacuum_probe_intensity,dtype=xp.float32)
                 probe_x0, probe_y0 = get_CoM(
                     self._vacuum_probe_intensity, device="cpu" if xp is np else "gpu"
                 )

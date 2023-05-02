@@ -591,7 +591,7 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         if self._probe is None:
             if self._vacuum_probe_intensity is not None:
                 self._semiangle_cutoff = np.inf
-                self._vacuum_probe_intensity = xp.asarray(self._vacuum_probe_intensity)
+                self._vacuum_probe_intensity = xp.asarray(self._vacuum_probe_intensity, dtype=xp.float32)
                 probe_x0, probe_y0 = get_CoM(
                     self._vacuum_probe_intensity, device="cpu" if xp is np else "gpu"
                 )
