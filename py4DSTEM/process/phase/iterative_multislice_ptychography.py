@@ -10,7 +10,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.gridspec import GridSpec
 from mpl_toolkits.axes_grid1 import ImageGrid, make_axes_locatable
-from py4DSTEM.visualize import show_complex
 from py4DSTEM.visualize.vis_special import Complex2RGB, add_colorbar_arg
 
 try:

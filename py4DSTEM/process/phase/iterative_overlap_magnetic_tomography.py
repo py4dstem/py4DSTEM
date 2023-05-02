@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.gridspec import GridSpec
 from mpl_toolkits.axes_grid1 import make_axes_locatable
+from py4DSTEM.visualize.vis_special import Complex2RGB, add_colorbar_arg
 from scipy.ndimage import rotate as rotate_np
 
 try:
@@ -670,6 +671,31 @@ class OverlapMagneticTomographicReconstruction(PhaseReconstruction):
         )
 
         if plot_probe_overlaps:
+            
+            figsize = kwargs.get("figsize", (13, 4))
+            cmap = kwargs.get("cmap", "Greys_r")
+            vmin = kwargs.get("vmin", None)
+            vmax = kwargs.get("vmax", None)
+            hue_start = kwargs.get("hue_start",90)
+            kwargs.pop("figsize", None)
+            kwargs.pop("cmap", None)
+            kwargs.pop("vmin", None)
+            kwargs.pop("vmax", None)
+            kwargs.pop("hue_start", None)
+
+            # initial probe
+            complex_probe_rgb = Complex2RGB(asnumpy(self._probe), vmin=vmin, vmax=vmax, hue_start=hue_start)
+
+            # propagated
+            propagated_probe = self._probe.copy()
+            
+            for s in range(self._num_slices - 1):
+                propagated_probe = self._propagate_array(
+                    propagated_probe, self._propagator_arrays[s]
+                )
+            complex_propagated_rgb = Complex2RGB(asnumpy(propagated_probe), vmin=vmin, vmax=vmax, hue_start=hue_start)
+
+            # overlaps
             self._positions_px = self._positions_px_all[: self._cum_probes_per_tilt[1]]
             self._positions_px_fractional = self._positions_px - xp.round(
                 self._positions_px
@@ -677,11 +703,6 @@ class OverlapMagneticTomographicReconstruction(PhaseReconstruction):
             shifted_probes = fft_shift(self._probe, self._positions_px_fractional, xp)
             probe_intensities = xp.abs(shifted_probes) ** 2
             probe_overlap = self._sum_overlapping_patches_bincounts(probe_intensities)
-
-            figsize = kwargs.get("figsize", (8, 4))
-            cmap = kwargs.get("cmap", "Greys_r")
-            kwargs.pop("figsize", None)
-            kwargs.pop("cmap", None)
 
             extent = [
                 0,
@@ -697,35 +718,51 @@ class OverlapMagneticTomographicReconstruction(PhaseReconstruction):
                 0,
             ]
 
-            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=figsize)
+            fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=figsize)
 
             ax1.imshow(
-                asnumpy(xp.abs(self._probe) ** 2),
+                complex_probe_rgb,
                 extent=probe_extent,
-                cmap=cmap,
                 **kwargs,
             )
+            
+            divider = make_axes_locatable(ax1)
+            cax1 = divider.append_axes("right", size="5%", pad="2.5%")
+            add_colorbar_arg(cax1,vmin=vmin, vmax=vmax, hue_start=hue_start)
             ax1.set_ylabel("x [A]")
             ax1.set_xlabel("y [A]")
-            ax1.set_title("Initial Probe Intensity")
+            ax1.set_title("Initial Probe")
 
             ax2.imshow(
+                complex_propagated_rgb,
+                extent=probe_extent,
+                **kwargs,
+            )
+            
+            divider = make_axes_locatable(ax2)
+            cax2 = divider.append_axes("right", size="5%", pad="2.5%")
+            add_colorbar_arg(cax2,vmin=vmin, vmax=vmax, hue_start=hue_start)
+            ax2.set_ylabel("x [A]")
+            ax2.set_xlabel("y [A]")
+            ax2.set_title("Propagated Probe")
+            
+            ax3.imshow(
                 asnumpy(probe_overlap),
                 extent=extent,
                 cmap=cmap,
                 **kwargs,
             )
-            ax2.scatter(
+            ax3.scatter(
                 self.positions[:, 1],
                 self.positions[:, 0],
                 s=2.5,
                 color=(1, 0, 0, 1),
             )
-            ax2.set_ylabel("x [A]")
-            ax2.set_xlabel("y [A]")
-            ax2.set_xlim((extent[0], extent[1]))
-            ax2.set_ylim((extent[2], extent[3]))
-            ax2.set_title("Object Field of View")
+            ax3.set_ylabel("x [A]")
+            ax3.set_xlabel("y [A]")
+            ax3.set_xlim((extent[0], extent[1]))
+            ax3.set_ylim((extent[2], extent[3]))
+            ax3.set_title("Object Field of View")
 
             fig.tight_layout()
 
