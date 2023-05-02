@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.gridspec import GridSpec
 from mpl_toolkits.axes_grid1 import make_axes_locatable
+from py4DSTEM.visualize.vis_special import Complex2RGB, add_colorbar_arg
 
 try:
     import cupy as cp
@@ -639,14 +640,25 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         self._probe_initial_fft_amplitude = xp.abs(xp.fft.fft2(self._probe_initial))
 
         if plot_probe_overlaps:
+            
+            figsize = kwargs.get("figsize", (9, 4))
+            cmap = kwargs.get("cmap", "Greys_r")
+            vmin = kwargs.get("vmin", None)
+            vmax = kwargs.get("vmax", None)
+            hue_start = kwargs.get("hue_start",90)
+            kwargs.pop("figsize", None)
+            kwargs.pop("cmap", None)
+            kwargs.pop("vmin", None)
+            kwargs.pop("vmax", None)
+            kwargs.pop("hue_start", None)
+            
+            # initial probe
+            complex_probe_rgb = Complex2RGB(asnumpy(self._probe), vmin=vmin, vmax=vmax, hue_start=hue_start)
+            
+            # overlaps
             shifted_probes = fft_shift(self._probe, self._positions_px_fractional, xp)
             probe_intensities = xp.abs(shifted_probes) ** 2
             probe_overlap = self._sum_overlapping_patches_bincounts(probe_intensities)
-
-            figsize = kwargs.get("figsize", (8, 4))
-            cmap = kwargs.get("cmap", "Greys_r")
-            kwargs.pop("figsize", None)
-            kwargs.pop("cmap", None)
 
             extent = [
                 0,
@@ -665,14 +677,17 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
             fig, (ax1, ax2) = plt.subplots(1, 2, figsize=figsize)
 
             ax1.imshow(
-                asnumpy(xp.abs(self._probe) ** 2),
+                complex_probe_rgb,
                 extent=probe_extent,
-                cmap=cmap,
                 **kwargs,
             )
+            
+            divider = make_axes_locatable(ax1)
+            cax1 = divider.append_axes("right", size="5%", pad="2.5%")
+            add_colorbar_arg(cax1,vmin=vmin, vmax=vmax, hue_start=hue_start)
             ax1.set_ylabel("x [A]")
             ax1.set_xlabel("y [A]")
-            ax1.set_title("Initial Probe Intensity")
+            ax1.set_title("Initial Probe")
 
             ax2.imshow(
                 asnumpy(probe_overlap),
