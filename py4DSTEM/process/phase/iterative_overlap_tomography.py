@@ -734,7 +734,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         --------
         amplitudes: np.ndarray
             Normalized measured amplitudes
-        final_transmitted_probes: np.ndarray
+        transmitted_probes: np.ndarray
             Transmitted probes at last layer
 
         Returns
@@ -786,7 +786,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         --------
         amplitudes: np.ndarray
             Normalized measured amplitudes
-        final_transmitted_probes: np.ndarray
+        transmitted_probes: np.ndarray
             Transmitted probes at last layer
         exit_waves: np.ndarray
             previously estimated exit waves
@@ -2008,14 +2008,13 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
             rotated_array = asnumpy(array)
 
         return rotated_array[..., min_x:max_x, min_y:max_y]
-
+    
     def _visualize_last_iteration_figax(
         self,
         fig,
         object_ax,
         convergence_ax,
         cbar: bool,
-        relative_error: bool,
         projection_angle_deg: float,
         projection_axes: Tuple[int, int],
         x_lims: Tuple[int, int],
@@ -2084,13 +2083,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
             kwargs.pop("vmin", None)
             kwargs.pop("vmax", None)
             errors = self.error_iterations
-
-            if relative_error:
-                convergence_ax.semilogy(
-                    np.arange(errors.shape[0]), errors / errors[0], **kwargs
-                )
-            else:
-                convergence_ax.semilogy(np.arange(errors.shape[0]), errors, **kwargs)
+            convergence_ax.semilogy(np.arange(errors.shape[0]), errors, **kwargs)
 
     def _visualize_last_iteration(
         self,
