@@ -11,6 +11,7 @@ import numpy as np
 from matplotlib.gridspec import GridSpec
 from mpl_toolkits.axes_grid1 import ImageGrid, make_axes_locatable
 from py4DSTEM.visualize import show_complex
+from py4DSTEM.visualize.vis_special import Complex2RGB, add_colorbar_arg
 
 try:
     import cupy as cp
@@ -272,7 +273,6 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         maximize_divergence: bool = False,
         rotation_angles_deg: np.ndarray = np.arange(-89.0, 90.0, 1.0),
         plot_probe_overlaps: bool = True,
-        plot_propagated_probe: bool = False,
         force_com_rotation: float = None,
         force_com_transpose: float = None,
         force_com_shifts: float = None,
@@ -306,8 +306,6 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             Array of angles in degrees to perform curl minimization over
         plot_probe_overlaps: bool, optional
             If True, initial probe overlaps scanned over the object will be displayed
-        plot_propaged_probe: bool, optional
-            If True, plots initial probe propaged through depth
         force_com_rotation: float (degrees), optional
             Force relative rotation angle between real and reciprocal space
         force_com_transpose: bool, optional
@@ -504,14 +502,34 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         kwargs.pop("scalebar", None)
 
         if plot_probe_overlaps:
+            
+            figsize = kwargs.get("figsize", (13, 4))
+            cmap = kwargs.get("cmap", "Greys_r")
+            vmin = kwargs.get("vmin", None)
+            vmax = kwargs.get("vmax", None)
+            hue_start = kwargs.get("hue_start",90)
+            kwargs.pop("figsize", None)
+            kwargs.pop("cmap", None)
+            kwargs.pop("vmin", None)
+            kwargs.pop("vmax", None)
+            kwargs.pop("hue_start", None)
+
+            # initial probe
+            complex_probe_rgb = Complex2RGB(asnumpy(self._probe), vmin=vmin, vmax=vmax, hue_start=hue_start)
+
+            # propagated
+            propagated_probe = self._probe.copy()
+            
+            for s in range(self._num_slices - 1):
+                propagated_probe = self._propagate_array(
+                    propagated_probe, self._propagator_arrays[s]
+                )
+            complex_propagated_rgb = Complex2RGB(asnumpy(propagated_probe), vmin=vmin, vmax=vmax, hue_start=hue_start)
+
+            # overlaps
             shifted_probes = fft_shift(self._probe, self._positions_px_fractional, xp)
             probe_intensities = xp.abs(shifted_probes) ** 2
             probe_overlap = self._sum_overlapping_patches_bincounts(probe_intensities)
-
-            figsize = kwargs.get("figsize", (8, 4))
-            cmap = kwargs.get("cmap", "Greys_r")
-            kwargs.pop("figsize", None)
-            kwargs.pop("cmap", None)
 
             extent = [
                 0,
@@ -527,64 +545,53 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
                 0,
             ]
 
-            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=figsize)
+            fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=figsize)
 
             ax1.imshow(
-                asnumpy(xp.abs(self._probe) ** 2),
+                complex_probe_rgb,
                 extent=probe_extent,
-                cmap=cmap,
                 **kwargs,
             )
+            
+            divider = make_axes_locatable(ax1)
+            cax1 = divider.append_axes("right", size="5%", pad="2.5%")
+            add_colorbar_arg(cax1,vmin=vmin, vmax=vmax, hue_start=hue_start)
             ax1.set_ylabel("x [A]")
             ax1.set_xlabel("y [A]")
-            ax1.set_title("Initial Probe Intensity")
+            ax1.set_title("Initial Probe")
 
             ax2.imshow(
+                complex_propagated_rgb,
+                extent=probe_extent,
+                **kwargs,
+            )
+            
+            divider = make_axes_locatable(ax2)
+            cax2 = divider.append_axes("right", size="5%", pad="2.5%")
+            add_colorbar_arg(cax2,vmin=vmin, vmax=vmax, hue_start=hue_start)
+            ax2.set_ylabel("x [A]")
+            ax2.set_xlabel("y [A]")
+            ax2.set_title("Propagated Probe")
+            
+            ax3.imshow(
                 asnumpy(probe_overlap),
                 extent=extent,
                 cmap=cmap,
                 **kwargs,
             )
-            ax2.scatter(
+            ax3.scatter(
                 self.positions[:, 1],
                 self.positions[:, 0],
                 s=2.5,
                 color=(1, 0, 0, 1),
             )
-            ax2.set_ylabel("x [A]")
-            ax2.set_xlabel("y [A]")
-            ax2.set_xlim((extent[0], extent[1]))
-            ax2.set_ylim((extent[2], extent[3]))
-            ax2.set_title("Object Field of View")
+            ax3.set_ylabel("x [A]")
+            ax3.set_xlabel("y [A]")
+            ax3.set_xlim((extent[0], extent[1]))
+            ax3.set_ylim((extent[2], extent[3]))
+            ax3.set_title("Object Field of View")
 
             fig.tight_layout()
-
-        if plot_propagated_probe:
-            pixelsize = self.sampling[1]
-            pixelunits = "A"
-
-            figsize = kwargs.get("figsize", (8, 4))
-            kwargs.pop("figsize", None)
-
-            propagated_probe = self._probe.copy()
-            for a0 in range(self._num_slices - 1):
-                propagated_probe = xp.fft.ifft2(
-                    xp.fft.fft2(propagated_probe) * self._propagator_arrays[a0]
-                )
-
-            fig, ax = plt.subplots(1, 2, figsize=figsize)
-            show_complex(
-                [asnumpy(self._probe), asnumpy(propagated_probe)],
-                figax=(fig, ax),
-                scalebar=scalebar,
-                pixelsize=pixelsize,
-                pixelunits=pixelunits,
-                title=["initial probe", "propagated probe"],
-                **kwargs,
-            )
-            for axs in ax.flatten():
-                axs.set_xticks([])
-                axs.set_yticks([])
 
         self._preprocessed = True
 
