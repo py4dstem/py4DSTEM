@@ -2465,19 +2465,19 @@ class OverlapMagneticTomographicReconstruction(PhaseReconstruction):
         max_m = np.array(
             [
                 [
-                    rotated_object_Axx.max(),
-                    rotated_object_Ayx.max(),
-                    rotated_object_Azx.max(),
+                    np.abs(rotated_object_Axx).max(),
+                    np.abs(rotated_object_Ayx).max(),
+                    np.abs(rotated_object_Azx).max(),
                 ],
                 [
-                    rotated_object_Axy.max(),
-                    rotated_object_Ayy.max(),
-                    rotated_object_Azy.max(),
+                    np.abs(rotated_object_Axy).max(),
+                    np.abs(rotated_object_Ayy).max(),
+                    np.abs(rotated_object_Azy).max(),
                 ],
                 [
-                    rotated_object_Axz.max(),
-                    rotated_object_Ayz.max(),
-                    rotated_object_Azz.max(),
+                    np.abs(rotated_object_Axz).max(),
+                    np.abs(rotated_object_Ayz).max(),
+                    np.abs(rotated_object_Azz).max(),
                 ],
             ]
         ).max()
