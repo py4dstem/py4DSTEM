@@ -15,7 +15,6 @@ from py4DSTEM.process.utils.cross_correlate import align_images_fourier
 from py4DSTEM.process.utils.utils import electron_wavelength_angstrom
 from py4DSTEM.utils.tqdmnd import tqdmnd
 from scipy.linalg import polar
-from scipy.optimize import curve_fit
 from scipy.special import comb
 
 try:
@@ -1175,7 +1174,6 @@ class ParallaxReconstruction(PhaseReconstruction):
             )
 
             if plot_depth_sections:
-
                 row_index, col_index = np.unravel_index(a0, (nrows, ncols))
                 ax = fig.add_subplot(spec[row_index, col_index])
 

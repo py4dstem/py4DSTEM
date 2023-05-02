@@ -63,7 +63,6 @@ class DPCReconstruction(PhaseReconstruction):
         verbose: bool = True,
         device: str = "cpu",
     ):
-
         if device == "cpu":
             self._xp = np
             self._asnumpy = np.asarray
@@ -468,7 +467,6 @@ class DPCReconstruction(PhaseReconstruction):
             unit=" iter",
             disable=not progress_bar,
         ):
-
             if self._step_size < stopping_criterion:
                 break
 
@@ -558,14 +556,12 @@ class DPCReconstruction(PhaseReconstruction):
         ax1.set_title(f"DPC Phase Reconstruction - NMSE error: {self.error:.3e}")
 
         if cbar:
-
             divider = make_axes_locatable(ax1)
             ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
             fig.add_axes(ax_cb)
             fig.colorbar(im, cax=ax_cb)
 
         if plot_convergence and hasattr(self, "_error_iterations"):
-
             errors = self._error_iterations
             ax2 = fig.add_subplot(spec[1])
             ax2.semilogy(np.arange(len(errors)), errors, **kwargs)
@@ -647,7 +643,6 @@ class DPCReconstruction(PhaseReconstruction):
             )
 
         if plot_convergence:
-
             ax2 = fig.add_subplot(spec[1])
             ax2.semilogy(np.arange(len(errors)), errors, **kwargs)
             ax2.set_xlabel("Iteration Number")
