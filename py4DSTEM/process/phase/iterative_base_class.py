@@ -39,14 +39,14 @@ class PhaseReconstruction(metaclass=ABCMeta):
     """
 
     from py4DSTEM.process.phase.iterative_constraints import (
-        _object_threshold_constraint,
-        _object_gaussian_constraint,
         _object_butterworth_constraint,
-        _probe_center_of_mass_constraint,
-        _probe_fourier_amplitude_constraint,
-        _probe_finite_support_constraint,
-        _positions_center_of_mass_constraint,
+        _object_gaussian_constraint,
+        _object_threshold_constraint,
         _positions_affine_transformation_constraint,
+        _positions_center_of_mass_constraint,
+        _probe_center_of_mass_constraint,
+        _probe_finite_support_constraint,
+        _probe_fourier_amplitude_constraint,
     )
 
     @abstractmethod
@@ -880,7 +880,6 @@ class PhaseReconstruction(metaclass=ABCMeta):
 
                 # Plot Curl/Div rotation
                 if plot_rotation:
-
                     figsize = kwargs.get("figsize", (8, 2))
                     fig, ax = plt.subplots(figsize=figsize)
 

@@ -2262,8 +2262,8 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
             if warmup_iteration:
                 current_object = self._warmup_object_butterworth_constraint(
                     current_object,
-                    q_lowpass,
-                    q_highpass,
+                    q_lowpass_e,
+                    q_highpass_e,
                 )
             else:
                 current_object = self._object_butterworth_constraint(
@@ -2597,7 +2597,7 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         )
 
         if gaussian_filter_sigma_m is None:
-            gaussian_gilter_sigma_m = gaussian_filter_sigma_e
+            gaussian_filter_sigma_m = gaussian_filter_sigma_e
 
         if q_lowpass_m is None:
             q_lowpass_m = q_lowpass_e
@@ -2846,11 +2846,11 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
             max_m = np.abs(rotated_magnetic).max()
             min_m = np.abs(rotated_magnetic).min()
         else:
-            min_e = (np.abs(rotated_electrostatic)**2).min()
-            max_e = (np.abs(rotated_electrostatic)**2).max()
-            max_m = (np.abs(rotated_magnetic)**2).max()
-            min_m = (np.abs(rotated_magnetic)**2).min()
-        
+            min_e = (np.abs(rotated_electrostatic) ** 2).min()
+            max_e = (np.abs(rotated_electrostatic) ** 2).max()
+            max_m = (np.abs(rotated_magnetic) ** 2).max()
+            min_m = (np.abs(rotated_magnetic) ** 2).min()
+
         vmin_e = kwargs.get("vmin_e", min_e)
         vmax_e = kwargs.get("vmax_e", max_e)
         vmin_m = kwargs.get("vmin_m", min_m)
@@ -2916,8 +2916,8 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                     np.angle(rotated_electrostatic),
                     extent=extent,
                     cmap=cmap_e,
-                    vmin = vmin_e,
-                    vmax = vmax_e,
+                    vmin=vmin_e,
+                    vmax=vmax_e,
                     **kwargs,
                 )
             elif object_mode == "amplitude":
@@ -2925,8 +2925,8 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                     np.abs(rotated_electrostatic),
                     extent=extent,
                     cmap=cmap_e,
-                    vmin = vmin_e,
-                    vmax = vmax_e,
+                    vmin=vmin_e,
+                    vmax=vmax_e,
                     **kwargs,
                 )
             else:
@@ -2934,8 +2934,8 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                     np.abs(rotated_electrostatic) ** 2,
                     extent=extent,
                     cmap=cmap_e,
-                    vmin = vmin_e,
-                    vmax = vmax_e,
+                    vmin=vmin_e,
+                    vmax=vmax_e,
                     **kwargs,
                 )
             ax.set_ylabel("x [A]")
@@ -2955,8 +2955,8 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                     np.angle(rotated_magnetic),
                     extent=extent,
                     cmap=cmap_m,
-                    vmin = vmin_m,
-                    vmax = vmax_m,
+                    vmin=vmin_m,
+                    vmax=vmax_m,
                     **kwargs,
                 )
             elif object_mode == "amplitude":
@@ -2964,8 +2964,8 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                     np.abs(rotated_magnetic),
                     extent=extent,
                     cmap=cmap_m,
-                    vmin = vmin_m,
-                    vmax = vmax_m,
+                    vmin=vmin_m,
+                    vmax=vmax_m,
                     **kwargs,
                 )
             else:
@@ -2973,8 +2973,8 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                     np.abs(rotated_magnetic) ** 2,
                     extent=extent,
                     cmap=cmap_m,
-                    vmin = vmin_m,
-                    vmax = vmax_m,
+                    vmin=vmin_m,
+                    vmax=vmax_m,
                     **kwargs,
                 )
             ax.set_ylabel("x [A]")
@@ -3013,8 +3013,8 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                     np.angle(rotated_electrostatic),
                     extent=extent,
                     cmap=cmap_e,
-                    vmin = vmin_e,
-                    vmax = vmax_e,
+                    vmin=vmin_e,
+                    vmax=vmax_e,
                     **kwargs,
                 )
             elif object_mode == "amplitude":
@@ -3022,8 +3022,8 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                     np.abs(rotated_electrostatic),
                     extent=extent,
                     cmap=cmap_e,
-                    vmin = vmin_e,
-                    vmax = vmax_e,
+                    vmin=vmin_e,
+                    vmax=vmax_e,
                     **kwargs,
                 )
             else:
@@ -3031,8 +3031,8 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                     np.abs(rotated_electrostatic) ** 2,
                     extent=extent,
                     cmap=cmap_e,
-                    vmin = vmin_e,
-                    vmax = vmax_e,
+                    vmin=vmin_e,
+                    vmax=vmax_e,
                     **kwargs,
                 )
             ax.set_ylabel("x [A]")
@@ -3052,8 +3052,8 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                     np.angle(rotated_magnetic),
                     extent=extent,
                     cmap=cmap_m,
-                    vmin = vmin_m,
-                    vmax = vmax_m,
+                    vmin=vmin_m,
+                    vmax=vmax_m,
                     **kwargs,
                 )
             elif object_mode == "amplitude":
@@ -3061,8 +3061,8 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                     np.abs(rotated_magnetic),
                     extent=extent,
                     cmap=cmap_m,
-                    vmin = vmin_m,
-                    vmax = vmax_m,
+                    vmin=vmin_m,
+                    vmax=vmax_m,
                     **kwargs,
                 )
             else:
@@ -3070,8 +3070,8 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                     np.abs(rotated_magnetic) ** 2,
                     extent=extent,
                     cmap=cmap_m,
-                    vmin = vmin_m,
-                    vmax = vmax_m,
+                    vmin=vmin_m,
+                    vmax=vmax_m,
                     **kwargs,
                 )
             ax.set_ylabel("x [A]")

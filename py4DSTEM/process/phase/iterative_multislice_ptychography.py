@@ -888,7 +888,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
                 )
 
             # back-transmit
-            exit_waves *= xp.conj(obj) / xp.abs(obj)**2
+            exit_waves *= xp.conj(obj) / xp.abs(obj) ** 2
 
             if s > 0:
                 # back-propagate
@@ -2062,9 +2062,9 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             ax.set_ylabel("x [A]")
             ax.set_xlabel("y [A]")
             if self._object_type == "potential":
-                ax.set_title(f"Reconstructed object potential")
+                ax.set_title("Reconstructed object potential")
             elif self._object_type == "complex":
-                ax.set_title(f"Reconstructed object phase")
+                ax.set_title("Reconstructed object phase")
 
             if cbar:
                 divider = make_axes_locatable(ax)
@@ -2103,9 +2103,9 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             ax.set_ylabel("x [A]")
             ax.set_xlabel("y [A]")
             if self._object_type == "potential":
-                ax.set_title(f"Reconstructed object potential")
+                ax.set_title("Reconstructed object potential")
             elif self._object_type == "complex":
-                ax.set_title(f"Reconstructed object phase")
+                ax.set_title("Reconstructed object phase")
 
             if cbar:
                 divider = make_axes_locatable(ax)
