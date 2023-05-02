@@ -167,15 +167,13 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
                 )
             )
 
-        if object_type == "potential":
-            self._object_type = object_type
-        elif object_type == "complex":
-            self._object_type = object_type
-        else:
+        if object_type != "potential" and object_type != "complex":
             raise ValueError(
                 f"object_type must be either 'potential' or 'complex', not {object_type}"
             )
 
+        self._object_type = object_type
+        self._object_type_initial = object_type
         self._energy = energy
         self._num_slices = num_slices
         self._slice_thicknesses = slice_thicknesses
@@ -225,8 +223,8 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
 
         # Frequencies
         kx, ky = spatial_frequencies(gpts, sampling)
-        kx = xp.asarray(kx)
-        ky = xp.asarray(ky)
+        kx = xp.asarray(kx,dtype=xp.float32)
+        ky = xp.asarray(ky, dtype=xp.float32)
 
         # Propagators
         wavelength = electron_wavelength_angstrom(energy)
@@ -441,7 +439,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         if self._probe is None:
             if self._vacuum_probe_intensity is not None:
                 self._semiangle_cutoff = np.inf
-                self._vacuum_probe_intensity = xp.asarray(self._vacuum_probe_intensity)
+                self._vacuum_probe_intensity = xp.asarray(self._vacuum_probe_intensity, dtype=xp.float32)
                 probe_x0, probe_y0 = get_CoM(
                     self._vacuum_probe_intensity, device="cpu" if xp is np else "gpu"
                 )
@@ -621,17 +619,14 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
 
         if self._object_type == "potential":
             complex_object = xp.exp(1j * current_object)
-            object_patches = complex_object[
-                :,
-                self._vectorized_patch_indices_row,
-                self._vectorized_patch_indices_col,
-            ]
-        elif self._object_type == "complex":
-            object_patches = current_object[
-                :,
-                self._vectorized_patch_indices_row,
-                self._vectorized_patch_indices_col,
-            ]
+        else:
+            complex_object = current_object
+
+        object_patches = complex_object[
+            :,
+            self._vectorized_patch_indices_row,
+            self._vectorized_patch_indices_col,
+        ]
 
         propagated_probes = xp.empty_like(object_patches)
         propagated_probes[0] = fft_shift(
@@ -981,20 +976,20 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             )
 
             if self._object_type == "potential":
-                current_object[s] += (
+                current_object[s] = (
                     self._sum_overlapping_patches_bincounts(
-                        xp.real(-1j * xp.conj(obj) * xp.conj(probe) * exit_waves)
+                        xp.real(-1j * xp.conj(obj) * xp.conj(probe) * exit_waves_copy)
                     )
                     * probe_normalization
                 )
             elif self._object_type == "complex":
-                current_object[s] += (
-                    self._sum_overlapping_patches_bincounts(xp.conj(probe) * exit_waves)
+                current_object[s] = (
+                    self._sum_overlapping_patches_bincounts(xp.conj(probe) * exit_waves_copy)
                     * probe_normalization
                 )
 
             # back-transmit
-            exit_waves_copy *= xp.conj(obj)
+            exit_waves_copy *= xp.conj(obj) / xp.abs(obj) ** 2
 
             if s > 0:
                 # back-propagate
@@ -1239,43 +1234,6 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         
         return xp.maximum(current_object, 0.0)
 
-    def _object_gaussian_constraint(
-        self, current_object, gaussian_filter_sigma, pure_phase_object
-    ):
-        """
-        Ptychographic smoothness constraint.
-        Used for blurring object.
-
-        Parameters
-        --------
-        current_object: np.ndarray
-            Current object estimate
-        gaussian_filter_sigma: float
-            Standard deviation of gaussian kernel
-        pure_phase_object: bool
-            If True, gaussian blur performed on phase only
-
-        Returns
-        --------
-        constrained_object: np.ndarray
-            Constrained object estimate
-        """
-        gaussian_filter = self._gaussian_filter
-
-        if self._object_type == "potential":
-            current_object = gaussian_filter(current_object, gaussian_filter_sigma)
-        elif self._object_type == "complex":
-            xp = self._xp
-
-            if pure_phase_object:
-                phase = xp.angle(current_object)
-                phase = gaussian_filter(phase, gaussian_filter_sigma)
-                current_object = xp.exp(1.0j * phase)
-            else:
-                current_object = gaussian_filter(current_object, gaussian_filter_sigma)
-
-        return current_object
-
     def _object_butterworth_constraint(self, current_object, q_lowpass, q_highpass):
         """
         Butterworth filter
@@ -1474,7 +1432,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             current_object = self._object_threshold_constraint(
                 current_object, pure_phase_object
             )
-        if object_positivity and self._object_type == "potential":
+        elif object_positivity:
             current_object = self._object_positivity_constraint(current_object, shrinkage_rad)
 
         if fix_probe_fourier_amplitude:
@@ -1773,6 +1731,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
                 self._vectorized_patch_indices_col,
             ) = self._extract_vectorized_patch_indices()
             self._exit_waves = None
+            self._object_type = self._object_type_initial
         elif reset is None:
             if hasattr(self, "error"):
                 warnings.warn(
@@ -1809,12 +1768,11 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             error = 0.0
 
             if a0 == switch_object_iter:
-                inital_object_type = self._object_type
-                if inital_object_type == "potential":
+                if self._object_type == "potential":
                     self._object_type = "complex"
                     self._object = xp.exp(1j * self._object)
                     self._object = xp.asarray(self._object, dtype=xp.complex64)
-                elif inital_object_type == "complex":
+                elif self._object_type  == "complex":
                     self._object_type = "potential"
                     self._object = xp.asarray(xp.angle(self._object), dtype=xp.float32)
 
@@ -1915,7 +1873,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
                 identical_slices=a0 < identical_slices_iter,
                 object_positivity=object_positivity,
                 shrinkage_rad=shrinkage_rad,
-                pure_phase_object=a0 < pure_phase_object_iter,
+                pure_phase_object=a0 < pure_phase_object_iter and self._object_type == 'complex',
             )
 
             if store_iterations:
@@ -1956,11 +1914,12 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         cmap = kwargs.get("cmap", "magma")
         kwargs.pop("cmap", None)
 
-        summed_object = np.sum(self.object, axis=0)
         if self._object_type == "complex":
-            summed_object = np.angle(summed_object)
-
-        rotated_object = self._crop_rotate_object_fov(summed_object, padding=padding)
+            obj = np.angle(self.object)
+        else:
+            obj = self.object
+        
+        rotated_object = self._crop_rotate_object_fov(np.sum(obj,axis=0), padding=padding)
         rotated_shape = rotated_object.shape
 
         extent = [
@@ -2017,10 +1976,12 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         kwargs.pop("figsize", None)
         kwargs.pop("cmap", None)
 
-        summed_object = np.sum(self.object, axis=0)
         if self._object_type == "complex":
-            summed_object = np.angle(summed_object)
-        rotated_object = self._crop_rotate_object_fov(summed_object, padding=padding)
+            obj = np.angle(self.object)
+        else:
+            obj = self.object
+        
+        rotated_object = self._crop_rotate_object_fov(np.sum(obj,axis=0), padding=padding)
         rotated_shape = rotated_object.shape
 
         extent = [
@@ -2187,16 +2148,20 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
 
         objects = []
         object_type = []
-        for a0 in range(len(self.object_iterations)):
-            obj = self._crop_rotate_object_fov(
-                np.sum(self.object_iterations[a0], axis=0), padding=padding
-            )
+        
+        for obj in self.object_iterations:
             if np.iscomplexobj(obj):
                 obj = np.angle(obj)
                 object_type.append("phase")
             else:
                 object_type.append("potential")
-            objects.append(obj)
+            objects.append(
+                    self._crop_rotate_object_fov(
+                        np.sum(obj, axis=0),
+                        padding=padding
+                        )
+                    )
+
         if plot_probe:
             total_grids = (np.prod(iterations_grid) / 2).astype("int")
             probes = self.probe_iterations
