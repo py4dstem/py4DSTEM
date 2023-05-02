@@ -2823,15 +2823,43 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
 
         """
         figsize = kwargs.get("figsize", (8, 5))
-        cmap = kwargs.get("cmap", "magma")
+        cmap_e = kwargs.get("cmap_e", "magma")
+        cmap_m = kwargs.get("cmap_m", "PuOr")
         kwargs.pop("figsize", None)
-        kwargs.pop("cmap", None)
+        kwargs.pop("cmap_e", None)
+        kwargs.pop("cmap_m", None)
 
         rotated_electrostatic = self._crop_rotate_object_fov(
             self.object[0], padding=padding
         )
         rotated_magnetic = self._crop_rotate_object_fov(self.object[1], padding=padding)
         rotated_shape = rotated_electrostatic.shape
+
+        if object_mode == "phase":
+            min_e = np.angle(rotated_electrostatic).min()
+            max_e = np.angle(rotated_electrostatic).max()
+            max_m = np.angle(rotated_magnetic).max()
+            min_m = -max_m
+        elif object_mode == "amplitude":
+            min_e = np.abs(rotated_electrostatic).min()
+            max_e = np.abs(rotated_electrostatic).max()
+            max_m = np.abs(rotated_magnetic).max()
+            min_m = np.abs(rotated_magnetic).min()
+        else:
+            min_e = (np.abs(rotated_electrostatic)**2).min()
+            max_e = (np.abs(rotated_electrostatic)**2).max()
+            max_m = (np.abs(rotated_magnetic)**2).max()
+            min_m = (np.abs(rotated_magnetic)**2).min()
+        
+        vmin_e = kwargs.get("vmin_e", min_e)
+        vmax_e = kwargs.get("vmax_e", max_e)
+        vmin_m = kwargs.get("vmin_m", min_m)
+        vmax_m = kwargs.get("vmax_m", max_m)
+
+        kwargs.pop("vmin_e", None)
+        kwargs.pop("vmax_e", None)
+        kwargs.pop("vmin_m", None)
+        kwargs.pop("vmax_m", None)
 
         extent = [
             0,
@@ -2876,7 +2904,7 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                     wspace=0.35,
                 )
             else:
-                spec = GridSpec(ncols=1, nrows=1)
+                spec = GridSpec(ncols=2, nrows=1)
 
         fig = plt.figure(figsize=figsize)
 
@@ -2887,21 +2915,27 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                 im = ax.imshow(
                     np.angle(rotated_electrostatic),
                     extent=extent,
-                    cmap=cmap,
+                    cmap=cmap_e,
+                    vmin = vmin_e,
+                    vmax = vmax_e,
                     **kwargs,
                 )
             elif object_mode == "amplitude":
                 im = ax.imshow(
                     np.abs(rotated_electrostatic),
                     extent=extent,
-                    cmap=cmap,
+                    cmap=cmap_e,
+                    vmin = vmin_e,
+                    vmax = vmax_e,
                     **kwargs,
                 )
             else:
                 im = ax.imshow(
                     np.abs(rotated_electrostatic) ** 2,
                     extent=extent,
-                    cmap=cmap,
+                    cmap=cmap_e,
+                    vmin = vmin_e,
+                    vmax = vmax_e,
                     **kwargs,
                 )
             ax.set_ylabel("x [A]")
@@ -2920,21 +2954,27 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                 im = ax.imshow(
                     np.angle(rotated_magnetic),
                     extent=extent,
-                    cmap=cmap,
+                    cmap=cmap_m,
+                    vmin = vmin_m,
+                    vmax = vmax_m,
                     **kwargs,
                 )
             elif object_mode == "amplitude":
                 im = ax.imshow(
                     np.abs(rotated_magnetic),
                     extent=extent,
-                    cmap=cmap,
+                    cmap=cmap_m,
+                    vmin = vmin_m,
+                    vmax = vmax_m,
                     **kwargs,
                 )
             else:
                 im = ax.imshow(
                     np.abs(rotated_magnetic) ** 2,
                     extent=extent,
-                    cmap=cmap,
+                    cmap=cmap_m,
+                    vmin = vmin_m,
+                    vmax = vmax_m,
                     **kwargs,
                 )
             ax.set_ylabel("x [A]")
@@ -2948,8 +2988,6 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                 fig.colorbar(im, cax=ax_cb)
 
             # Probe
-            kwargs.pop("vmin", None)
-            kwargs.pop("vmax", None)
             ax = fig.add_subplot(spec[0, 2])
             im = ax.imshow(
                 np.abs(self.probe) ** 2,
@@ -2974,21 +3012,27 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                 im = ax.imshow(
                     np.angle(rotated_electrostatic),
                     extent=extent,
-                    cmap=cmap,
+                    cmap=cmap_e,
+                    vmin = vmin_e,
+                    vmax = vmax_e,
                     **kwargs,
                 )
             elif object_mode == "amplitude":
                 im = ax.imshow(
                     np.abs(rotated_electrostatic),
                     extent=extent,
-                    cmap=cmap,
+                    cmap=cmap_e,
+                    vmin = vmin_e,
+                    vmax = vmax_e,
                     **kwargs,
                 )
             else:
                 im = ax.imshow(
                     np.abs(rotated_electrostatic) ** 2,
                     extent=extent,
-                    cmap=cmap,
+                    cmap=cmap_e,
+                    vmin = vmin_e,
+                    vmax = vmax_e,
                     **kwargs,
                 )
             ax.set_ylabel("x [A]")
@@ -3007,21 +3051,27 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                 im = ax.imshow(
                     np.angle(rotated_magnetic),
                     extent=extent,
-                    cmap=cmap,
+                    cmap=cmap_m,
+                    vmin = vmin_m,
+                    vmax = vmax_m,
                     **kwargs,
                 )
             elif object_mode == "amplitude":
                 im = ax.imshow(
                     np.abs(rotated_magnetic),
                     extent=extent,
-                    cmap=cmap,
+                    cmap=cmap_m,
+                    vmin = vmin_m,
+                    vmax = vmax_m,
                     **kwargs,
                 )
             else:
                 im = ax.imshow(
                     np.abs(rotated_magnetic) ** 2,
                     extent=extent,
-                    cmap=cmap,
+                    cmap=cmap_m,
+                    vmin = vmin_m,
+                    vmax = vmax_m,
                     **kwargs,
                 )
             ax.set_ylabel("x [A]")
@@ -3035,13 +3085,8 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                 fig.colorbar(im, cax=ax_cb)
 
         if plot_convergence and hasattr(self, "error_iterations"):
-            kwargs.pop("vmin", None)
-            kwargs.pop("vmax", None)
             errors = np.array(self.error_iterations)
-            if plot_probe:
-                ax = fig.add_subplot(spec[1, :])
-            else:
-                ax = fig.add_subplot(spec[1])
+            ax = fig.add_subplot(spec[1, :])
             ax.semilogy(np.arange(errors.shape[0]), errors, **kwargs)
             ax.set_ylabel("NMSE")
             ax.set_xlabel("Iteration Number")
