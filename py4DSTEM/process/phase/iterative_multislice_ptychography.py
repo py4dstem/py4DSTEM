@@ -2348,7 +2348,9 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         self,
         ms_object=None,
         cbar: bool = True,
+        common_color_scale: bool = True,
         padding: int = 0,
+        num_cols: int = 3,
         **kwargs,
     ):
         """
@@ -2368,9 +2370,10 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             ms_object = self._object
 
         rotated_object = self._crop_rotate_object_fov(ms_object, padding=padding)
+        rotated_shape = rotated_object.shape
+        
         if np.iscomplexobj(rotated_object):
             rotated_object = np.angle(rotated_object)
-        rotated_shape = rotated_object.shape
 
         extent = [
             0,
@@ -2379,55 +2382,65 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             0,
         ]
 
-        height = int(np.ceil(self._num_slices / 3))
-
-        if cbar:
-            figsize = kwargs.get("figsize", (12, 12 * height / 3 * 1.1))
-        else:
-            figsize = kwargs.get("figsize", (12, 12 * height / 3 * 1.1))
-
+        num_rows = np.ceil(self._num_slices / num_cols).astype("int")
+        wspace = 0.35 if cbar else 0.15
+        
+        axsize = kwargs.get("axsize", (3, 3))
         cmap = kwargs.get("cmap", "magma")
-        kwargs.pop("figsize", None)
+        
+        vmin = np.min(rotated_object) if common_color_scale else None
+        vmax = np.max(rotated_object) if common_color_scale else None
+        vmin = kwargs.get("vmin",vmin)
+        vmax = kwargs.get("vmax",vmax)
+        
+        kwargs.pop("axsize", None)
         kwargs.pop("cmap", None)
+        kwargs.pop("vmin", None)
+        kwargs.pop("vmax", None)
 
-        vmin = np.min(rotated_object)
-        vmax = np.max(rotated_object)
-        warnings.filterwarnings("ignore", category=UserWarning)
-
-        fig, ax = plt.subplots(height, 3, figsize=figsize)
-        show_image_grid(
-            figax=(fig, ax),
-            get_ar=lambda i: rotated_object[i],
-            W=3,
-            H=height,
-            cmap=cmap,
-            vmax=vmax,
-            vmin=vmin,
-            intensity_range="absolute",
-            extent=extent,
-            returnfig=True,
-            title_index=True,
+        spec = GridSpec(
+            ncols=num_cols,
+            nrows=num_rows,
+            hspace=0.15,
+            wspace=wspace,
         )
 
-        for axs in ax.flatten():
-            axs.set_ylabel("x [A]")
-            axs.set_xlabel("y [A]")
-
-        if cbar:
-            ax0 = fig.add_axes([0.1, 1 - 1 / height, 1.1, 1 / height * 0.7])
-            norm = Normalize(
+        figsize = (axsize[0]*num_cols, axsize[1]*num_rows)
+        fig = plt.figure(figsize=figsize)
+        
+        for flat_index, obj_slice in enumerate(rotated_object):
+            row_index, col_index = np.unravel_index(
+                flat_index, (num_rows, num_cols)
+            )
+            ax = fig.add_subplot(spec[row_index, col_index])
+            im = ax.imshow(
+                obj_slice,
+                cmap=cmap,
                 vmin=vmin,
                 vmax=vmax,
-            )
-            cbar = ax0.figure.colorbar(
-                ScalarMappable(norm=norm, cmap=cmap),
-                ax=ax0,
-                pad=0,
-                ticks=[vmin, vmax],
-            )
-            ax0.axis("off")
+                extent=extent,
+                **kwargs,
+                )
 
-        plt.tight_layout()
+            ax.set_title(f"Slice index: {flat_index}")
+            
+            if cbar:
+                divider = make_axes_locatable(ax)
+                ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
+                fig.add_axes(ax_cb)
+                fig.colorbar(im, cax=ax_cb)
+            
+            if row_index < num_rows - 1:
+                ax.set_xticks([])
+            else:
+                ax.set_xlabel("y [A]")
+
+            if col_index > 0:
+                ax.set_yticks([])
+            else:
+                ax.set_ylabel("x [A]")
+
+        spec.tight_layout(fig)
 
     def tune_num_slices_and_thicknesses(
         self,
