@@ -10,8 +10,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.gridspec import GridSpec
 from mpl_toolkits.axes_grid1 import ImageGrid, make_axes_locatable
-from py4DSTEM.visualize.vis_special import Complex2RGB, add_colorbar_arg
 from py4DSTEM.visualize import show_complex
+from py4DSTEM.visualize.vis_special import Complex2RGB, add_colorbar_arg
 
 try:
     import cupy as cp
@@ -351,7 +351,7 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
                 if self._vacuum_probe_intensity is not None:
                     self._semiangle_cutoff = np.inf
                     self._vacuum_probe_intensity = xp.asarray(
-                        self._vacuum_probe_intensity,dtype=xp.float32
+                        self._vacuum_probe_intensity, dtype=xp.float32
                     )
                     probe_x0, probe_y0 = get_CoM(
                         self._vacuum_probe_intensity,
@@ -426,23 +426,26 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
         self._probe_initial_fft_amplitude = xp.abs(xp.fft.fft2(self._probe_initial))
 
         if plot_probe_overlaps:
-            
             figsize = kwargs.get("figsize", (9, 4))
             cmap = kwargs.get("cmap", "Greys_r")
             vmin = kwargs.get("vmin", None)
             vmax = kwargs.get("vmax", None)
-            hue_start = kwargs.get("hue_start",90)
+            hue_start = kwargs.get("hue_start", 90)
             kwargs.pop("figsize", None)
             kwargs.pop("cmap", None)
             kwargs.pop("vmin", None)
             kwargs.pop("vmax", None)
             kwargs.pop("hue_start", None)
-            
+
             # initial probe
-            complex_probe_rgb = Complex2RGB(asnumpy(self._probe[0]), vmin=vmin, vmax=vmax, hue_start=hue_start)
-            
+            complex_probe_rgb = Complex2RGB(
+                asnumpy(self._probe[0]), vmin=vmin, vmax=vmax, hue_start=hue_start
+            )
+
             # overlaps
-            shifted_probes = fft_shift(self._probe[0], self._positions_px_fractional, xp)
+            shifted_probes = fft_shift(
+                self._probe[0], self._positions_px_fractional, xp
+            )
             probe_intensities = xp.abs(shifted_probes) ** 2
             probe_overlap = self._sum_overlapping_patches_bincounts(probe_intensities)
 
@@ -467,10 +470,10 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
                 extent=probe_extent,
                 **kwargs,
             )
-            
+
             divider = make_axes_locatable(ax1)
             cax1 = divider.append_axes("right", size="5%", pad="2.5%")
-            add_colorbar_arg(cax1,vmin=vmin, vmax=vmax, hue_start=hue_start)
+            add_colorbar_arg(cax1, vmin=vmin, vmax=vmax, hue_start=hue_start)
             ax1.set_ylabel("x [A]")
             ax1.set_xlabel("y [A]")
             ax1.set_title("Initial Probe")
@@ -1691,14 +1694,14 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
             kwargs.pop("vmin", None)
             kwargs.pop("vmax", None)
             ax = fig.add_subplot(spec[0, 1])
-            
+
             if plot_fourier_probe:
                 probe_array = Complex2RGB(self.probe_fourier[0])
                 ax.set_title("Reconstructed Fourier probe")
             else:
                 probe_array = Complex2RGB(self.probe[0])
                 ax.set_title("Reconstructed probe")
-            
+
             im = ax.imshow(
                 probe_array,
                 extent=probe_extent,
@@ -1711,7 +1714,7 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
                 divider = make_axes_locatable(ax)
                 ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
                 add_colorbar_arg(ax_cb)
-        
+
         else:
             ax = fig.add_subplot(spec[0])
             if object_mode == "phase":
@@ -1790,7 +1793,7 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
             One of 'phase', 'amplitude', 'intensity'
         """
         asnumpy = self._asnumpy
-        
+
         if iterations_grid == "auto":
             iterations_grid = (2, 4)
         else:
@@ -1846,7 +1849,9 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
         grid = ImageGrid(
             fig,
             spec[0],
-            nrows_ncols=(1, iterations_grid[1]) if (plot_probe or plot_fourier_probe) else iterations_grid,
+            nrows_ncols=(1, iterations_grid[1])
+            if (plot_probe or plot_fourier_probe)
+            else iterations_grid,
             axes_pad=(0.75, 0.5) if cbar else 0.5,
             cbar_mode="each" if cbar else None,
             cbar_pad="2.5%" if cbar else None,
@@ -1897,12 +1902,14 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
 
             for n, ax in enumerate(grid):
                 if plot_fourier_probe:
-                    probe_array = Complex2RGB(asnumpy(self._return_fourier_probe(probes[grid_range[n]][0])))
+                    probe_array = Complex2RGB(
+                        asnumpy(self._return_fourier_probe(probes[grid_range[n]][0]))
+                    )
                     ax.set_title(f"Iter: {grid_range[n]} Fourier probe")
                 else:
                     probe_array = Complex2RGB(probes[grid_range[n]][0])
                     ax.set_title(f"Iter: {grid_range[n]} probe")
-                
+
                 im = ax.imshow(
                     probe_array,
                     extent=probe_extent,
@@ -1914,7 +1921,7 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
 
                 if cbar:
                     add_colorbar_arg(grid.cbar_axes[n])
-        
+
         if plot_convergence:
             kwargs.pop("vmin", None)
             kwargs.pop("vmax", None)
@@ -2017,7 +2024,7 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
             default is probe reciprocal sampling
         """
         asnumpy = self._asnumpy
-        
+
         if probe is None:
             probe = self.probe_fourier[0]
         else:
@@ -2026,7 +2033,7 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
         if pixelsize is None:
             pixelsize = self._reciprocal_sampling[1]
         if pixelunits is None:
-            pixelunits=r"$\AA^{-1}$"
+            pixelunits = r"$\AA^{-1}$"
 
         figsize = kwargs.get("figsize", (6, 6))
         kwargs.pop("figsize", None)

@@ -17,8 +17,6 @@ try:
 except ImportError:
     cp = None
 
-from matplotlib.cm import ScalarMappable
-from matplotlib.colors import Normalize
 from py4DSTEM.io import DataCube
 from py4DSTEM.process.phase.iterative_base_class import PhaseReconstruction
 from py4DSTEM.process.phase.utils import (
@@ -31,7 +29,6 @@ from py4DSTEM.process.phase.utils import (
 )
 from py4DSTEM.process.utils import electron_wavelength_angstrom, get_CoM, get_shifted_ar
 from py4DSTEM.utils.tqdmnd import tqdmnd
-from py4DSTEM.visualize import show_image_grid
 
 warnings.simplefilter(action="always", category=UserWarning)
 
@@ -223,7 +220,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
 
         # Frequencies
         kx, ky = spatial_frequencies(gpts, sampling)
-        kx = xp.asarray(kx,dtype=xp.float32)
+        kx = xp.asarray(kx, dtype=xp.float32)
         ky = xp.asarray(ky, dtype=xp.float32)
 
         # Propagators
@@ -439,7 +436,9 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         if self._probe is None:
             if self._vacuum_probe_intensity is not None:
                 self._semiangle_cutoff = np.inf
-                self._vacuum_probe_intensity = xp.asarray(self._vacuum_probe_intensity, dtype=xp.float32)
+                self._vacuum_probe_intensity = xp.asarray(
+                    self._vacuum_probe_intensity, dtype=xp.float32
+                )
                 probe_x0, probe_y0 = get_CoM(
                     self._vacuum_probe_intensity, device="cpu" if xp is np else "gpu"
                 )
@@ -495,16 +494,12 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             self._slice_thicknesses,
         )
 
-        scalebar = kwargs.get("scalebar", True)
-        kwargs.pop("scalebar", None)
-
         if plot_probe_overlaps:
-            
             figsize = kwargs.get("figsize", (13, 4))
             cmap = kwargs.get("cmap", "Greys_r")
             vmin = kwargs.get("vmin", None)
             vmax = kwargs.get("vmax", None)
-            hue_start = kwargs.get("hue_start",90)
+            hue_start = kwargs.get("hue_start", 90)
             kwargs.pop("figsize", None)
             kwargs.pop("cmap", None)
             kwargs.pop("vmin", None)
@@ -512,16 +507,20 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             kwargs.pop("hue_start", None)
 
             # initial probe
-            complex_probe_rgb = Complex2RGB(asnumpy(self._probe), vmin=vmin, vmax=vmax, hue_start=hue_start)
+            complex_probe_rgb = Complex2RGB(
+                asnumpy(self._probe), vmin=vmin, vmax=vmax, hue_start=hue_start
+            )
 
             # propagated
             propagated_probe = self._probe.copy()
-            
+
             for s in range(self._num_slices - 1):
                 propagated_probe = self._propagate_array(
                     propagated_probe, self._propagator_arrays[s]
                 )
-            complex_propagated_rgb = Complex2RGB(asnumpy(propagated_probe), vmin=vmin, vmax=vmax, hue_start=hue_start)
+            complex_propagated_rgb = Complex2RGB(
+                asnumpy(propagated_probe), vmin=vmin, vmax=vmax, hue_start=hue_start
+            )
 
             # overlaps
             shifted_probes = fft_shift(self._probe, self._positions_px_fractional, xp)
@@ -549,10 +548,10 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
                 extent=probe_extent,
                 **kwargs,
             )
-            
+
             divider = make_axes_locatable(ax1)
             cax1 = divider.append_axes("right", size="5%", pad="2.5%")
-            add_colorbar_arg(cax1,vmin=vmin, vmax=vmax, hue_start=hue_start)
+            add_colorbar_arg(cax1, vmin=vmin, vmax=vmax, hue_start=hue_start)
             ax1.set_ylabel("x [A]")
             ax1.set_xlabel("y [A]")
             ax1.set_title("Initial Probe")
@@ -562,14 +561,14 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
                 extent=probe_extent,
                 **kwargs,
             )
-            
+
             divider = make_axes_locatable(ax2)
             cax2 = divider.append_axes("right", size="5%", pad="2.5%")
-            add_colorbar_arg(cax2,vmin=vmin, vmax=vmax, hue_start=hue_start)
+            add_colorbar_arg(cax2, vmin=vmin, vmax=vmax, hue_start=hue_start)
             ax2.set_ylabel("x [A]")
             ax2.set_xlabel("y [A]")
             ax2.set_title("Propagated Probe")
-            
+
             ax3.imshow(
                 asnumpy(probe_overlap),
                 extent=extent,
@@ -984,7 +983,9 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
                 )
             elif self._object_type == "complex":
                 current_object[s] = (
-                    self._sum_overlapping_patches_bincounts(xp.conj(probe) * exit_waves_copy)
+                    self._sum_overlapping_patches_bincounts(
+                        xp.conj(probe) * exit_waves_copy
+                    )
                     * probe_normalization
                 )
 
@@ -1228,10 +1229,10 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             Constrained object estimate
         """
         xp = self._xp
-        
+
         if shrinkage_rad is not None:
             current_object -= shrinkage_rad
-        
+
         return xp.maximum(current_object, 0.0)
 
     def _object_butterworth_constraint(self, current_object, q_lowpass, q_highpass):
@@ -1433,7 +1434,9 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
                 current_object, pure_phase_object
             )
         elif object_positivity:
-            current_object = self._object_positivity_constraint(current_object, shrinkage_rad)
+            current_object = self._object_positivity_constraint(
+                current_object, shrinkage_rad
+            )
 
         if fix_probe_fourier_amplitude:
             current_probe = self._probe_fourier_amplitude_constraint(
@@ -1772,7 +1775,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
                     self._object_type = "complex"
                     self._object = xp.exp(1j * self._object)
                     self._object = xp.asarray(self._object, dtype=xp.complex64)
-                elif self._object_type  == "complex":
+                elif self._object_type == "complex":
                     self._object_type = "potential"
                     self._object = xp.asarray(xp.angle(self._object), dtype=xp.float32)
 
@@ -1873,7 +1876,8 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
                 identical_slices=a0 < identical_slices_iter,
                 object_positivity=object_positivity,
                 shrinkage_rad=shrinkage_rad,
-                pure_phase_object=a0 < pure_phase_object_iter and self._object_type == 'complex',
+                pure_phase_object=a0 < pure_phase_object_iter
+                and self._object_type == "complex",
             )
 
             if store_iterations:
@@ -1918,8 +1922,10 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             obj = np.angle(self.object)
         else:
             obj = self.object
-        
-        rotated_object = self._crop_rotate_object_fov(np.sum(obj,axis=0), padding=padding)
+
+        rotated_object = self._crop_rotate_object_fov(
+            np.sum(obj, axis=0), padding=padding
+        )
         rotated_shape = rotated_object.shape
 
         extent = [
@@ -1981,8 +1987,10 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             obj = np.angle(self.object)
         else:
             obj = self.object
-        
-        rotated_object = self._crop_rotate_object_fov(np.sum(obj,axis=0), padding=padding)
+
+        rotated_object = self._crop_rotate_object_fov(
+            np.sum(obj, axis=0), padding=padding
+        )
         rotated_shape = rotated_object.shape
 
         extent = [
@@ -2157,7 +2165,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
 
         objects = []
         object_type = []
-        
+
         for obj in self.object_iterations:
             if np.iscomplexobj(obj):
                 obj = np.angle(obj)
@@ -2165,11 +2173,8 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             else:
                 object_type.append("potential")
             objects.append(
-                    self._crop_rotate_object_fov(
-                        np.sum(obj, axis=0),
-                        padding=padding
-                        )
-                    )
+                self._crop_rotate_object_fov(np.sum(obj, axis=0), padding=padding)
+            )
 
         if plot_probe or plot_fourier_probe:
             total_grids = (np.prod(iterations_grid) / 2).astype("int")
@@ -2209,7 +2214,9 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         grid = ImageGrid(
             fig,
             spec[0],
-            nrows_ncols=(1, iterations_grid[1]) if (plot_probe or plot_fourier_probe) else iterations_grid,
+            nrows_ncols=(1, iterations_grid[1])
+            if (plot_probe or plot_fourier_probe)
+            else iterations_grid,
             axes_pad=(0.75, 0.5) if cbar else 0.5,
             cbar_mode="each" if cbar else None,
             cbar_pad="2.5%" if cbar else None,
@@ -2241,14 +2248,15 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             )
 
             for n, ax in enumerate(grid):
-                
                 if plot_fourier_probe:
-                    probe_array = Complex2RGB(asnumpy(self._return_fourier_probe(probes[grid_range[n]])))
+                    probe_array = Complex2RGB(
+                        asnumpy(self._return_fourier_probe(probes[grid_range[n]]))
+                    )
                     ax.set_title(f"Iter: {grid_range[n]} Fourier probe")
                 else:
                     probe_array = Complex2RGB(probes[grid_range[n]])
                     ax.set_title(f"Iter: {grid_range[n]} probe")
-                
+
                 im = ax.imshow(
                     probe_array,
                     extent=probe_extent,
@@ -2354,7 +2362,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
 
         rotated_object = self._crop_rotate_object_fov(ms_object, padding=padding)
         rotated_shape = rotated_object.shape
-        
+
         if np.iscomplexobj(rotated_object):
             rotated_object = np.angle(rotated_object)
 
@@ -2367,15 +2375,15 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
 
         num_rows = np.ceil(self._num_slices / num_cols).astype("int")
         wspace = 0.35 if cbar else 0.15
-        
+
         axsize = kwargs.get("axsize", (3, 3))
         cmap = kwargs.get("cmap", "magma")
-        
+
         vmin = np.min(rotated_object) if common_color_scale else None
         vmax = np.max(rotated_object) if common_color_scale else None
-        vmin = kwargs.get("vmin",vmin)
-        vmax = kwargs.get("vmax",vmax)
-        
+        vmin = kwargs.get("vmin", vmin)
+        vmax = kwargs.get("vmax", vmax)
+
         kwargs.pop("axsize", None)
         kwargs.pop("cmap", None)
         kwargs.pop("vmin", None)
@@ -2388,13 +2396,11 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             wspace=wspace,
         )
 
-        figsize = (axsize[0]*num_cols, axsize[1]*num_rows)
+        figsize = (axsize[0] * num_cols, axsize[1] * num_rows)
         fig = plt.figure(figsize=figsize)
-        
+
         for flat_index, obj_slice in enumerate(rotated_object):
-            row_index, col_index = np.unravel_index(
-                flat_index, (num_rows, num_cols)
-            )
+            row_index, col_index = np.unravel_index(flat_index, (num_rows, num_cols))
             ax = fig.add_subplot(spec[row_index, col_index])
             im = ax.imshow(
                 obj_slice,
@@ -2403,16 +2409,16 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
                 vmax=vmax,
                 extent=extent,
                 **kwargs,
-                )
+            )
 
             ax.set_title(f"Slice index: {flat_index}")
-            
+
             if cbar:
                 divider = make_axes_locatable(ax)
                 ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
                 fig.add_axes(ax_cb)
                 fig.colorbar(im, cax=ax_cb)
-            
+
             if row_index < num_rows - 1:
                 ax.set_xticks([])
             else:
@@ -2629,13 +2635,13 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
 
         if return_values:
             return objects, convergence
-    
+
     def _return_object_fft(
         self,
         obj=None,
     ):
         """
-        Returns obj fft shifted to center of array 
+        Returns obj fft shifted to center of array
 
         Parameters
         ----------
@@ -2651,6 +2657,5 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         if np.iscomplexobj(obj):
             obj = np.angle(obj)
 
-        obj = self._crop_rotate_object_fov(np.sum(obj,axis=0))
+        obj = self._crop_rotate_object_fov(np.sum(obj, axis=0))
         return np.abs(np.fft.fftshift(np.fft.fft2(obj)))
-
