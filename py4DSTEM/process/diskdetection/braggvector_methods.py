@@ -2,7 +2,8 @@
 
 import numpy as np
 from scipy.ndimage import gaussian_filter
-from emdfile import Array
+from emdfile import Array,Metadata
+from emdfile import _read_metadata
 from py4DSTEM.process.calibration.origin import set_measured_origin, set_fit_origin
 from py4DSTEM.process.utils import get_CoM
 
@@ -27,16 +28,20 @@ class BraggVectorMethods:
         Parameters
         ----------
         mode : str
-            Must be 'cal' or 'raw'. Use calibrated or raw vector positions.
+            Must be 'cal' or 'raw'. Use the calibrated or raw vector positions.
         sampling : number
-            The sampling rate of the histogram, in units of Q_pixel_size. For
-            sampling = 1, each pixel in the histogram is the size of a single
-            detector pixel.
+            The sampling rate of the histogram, in units of the camera's sampling.
+            `sampling = 2` upsamples and `sampling = 0.5` downsamples, each by a
+            factor of 2.
         weights : None or array
             If None, use all real space scan positions.  Otherwise must be a real
             space shaped array representing a weighting factor applied to vector
-            intensities from each scan position.  Use a boolean matrix to make a
-            histogram from some subset of scan positions.
+            intensities from each scan position. If weights is boolean uses beam
+            positions where weights is True. If weights is number-like, scales
+            by the values, and skips positions where wieghts<weights_thresh.
+        weights_thresh : number
+            If weights is an array of numbers, pixels where weights>weight_thresh
+            are skipped.
 
         Returns
         -------
@@ -73,38 +78,31 @@ class BraggVectorMethods:
         qy = vects['qy']
         I = vects['intensity']
 
-        # Set up bin grid / dim vectors
-        Q_Nx = np.round(self.Qshape[0]/sampling).astype(int)
-        Q_Ny = np.round(self.Qshape[1]/sampling).astype(int)
-        dimx = np.arange(Q_Nx)*sampling
-        dimy = np.arange(Q_Ny)*sampling
+        # Set up bin grid
+        Q_Nx = np.round(self.Qshape[0]*sampling).astype(int)
+        Q_Ny = np.round(self.Qshape[1]*sampling).astype(int)
 
         # transform vects onto bin grid
-        if mode == 'cal':
-            ## get origin calibration
-            if self.calstate['center']==True:
-                origin = self.calibration.get_origin_mean()
+        if mode == 'raw':
+            qx *= sampling
+            qy *= sampling
+        # calibrated vects
+        # to tranform to the bingrid we ~undo the calibrations,
+        # then scale by the sampling factor
+        else:
             # get pixel calibration
             if self.calstate['pixel']==True:
                 qpix = self.calibration.get_Q_pixel_size()
-            # transform vectors
-            if self.calstate['pixel']==True:
                 qx /= qpix
                 qy /= qpix
+            # origin calibration
             if self.calstate['center']==True:
+                origin = self.calibration.get_origin_mean()
                 qx += origin[0]
                 qy += origin[1]
-            # transform dims
-            if self.calstate['center']==True:
-                dimx -= Q_Nx/2
-                dimy -= Q_Ny/2
-            if self.calstate['pixel']==True:
-                dimx *= qpix
-                dimy *= qpix
-
-        # handle sampling
-        qx /= sampling
-        qy /= sampling
+            # resample
+            qx *= sampling
+            qy *= sampling
 
         # round to nearest integer
         floorx = np.floor(qx).astype(np.int64)
@@ -136,19 +134,39 @@ class BraggVectorMethods:
         # ceil x, ceil y
         inds11 = np.ravel_multi_index([ceilx,ceily],(Q_Nx,Q_Ny))
 
-        # Compute the BVM by accumulating intensity in each neighbor weighted by linear interpolation
-        hist = (np.bincount(inds00, I * (1.-dx) * (1.-dy), minlength=Q_Nx*Q_Ny) + \
-                np.bincount(inds01, I * (1.-dx) * dy, minlength=Q_Nx*Q_Ny) + \
-                np.bincount(inds10, I * dx * (1.-dy), minlength=Q_Nx*Q_Ny) + \
-                np.bincount(inds11, I * dx * dy, minlength=Q_Nx*Q_Ny)).reshape(Q_Nx,Q_Ny)
+        # Compute the histogram by accumulating intensity in each
+        # neighbor weighted by linear interpolation
+        hist = (
+            np.bincount(inds00, I * (1.-dx) * (1.-dy), minlength=Q_Nx*Q_Ny) \
+            + np.bincount(inds01, I * (1.-dx) * dy, minlength=Q_Nx*Q_Ny) \
+            + np.bincount(inds10, I * dx * (1.-dy), minlength=Q_Nx*Q_Ny) \
+            + np.bincount(inds11, I * dx * dy, minlength=Q_Nx*Q_Ny)
+        ).reshape(Q_Nx,Q_Ny)
+
+        # determine the resampled grid center and pixel size
+        if mode == 'cal' and self.calstate['center']==True:
+            x0 = sampling*origin[0]
+            y0 = sampling*origin[1]
+        else:
+            x0,y0 = 0,0
+        if mode == 'cal' and self.calstate['pixel']==True:
+            pixelsize = qpix/sampling
+        else:
+            pixelsize = 1/sampling
+        # find the dim vectors
+        dimx = (np.arange(Q_Nx)-x0)*pixelsize
+        dimy = (np.arange(Q_Ny)-y0)*pixelsize
+        dim_units = self.calibration.get_Q_pixel_units()
 
         # wrap in a class
-        units = self.calibration.get_Q_pixel_units()
-        ans = Array(
+        ans = BraggVectorMap(
             name = f'2Dhist_{self.name}_{mode}_s={sampling}',
             data = hist,
+            weights = weights,
             dims = [dimx,dimy],
-            dim_units = [units,units],
+            dim_units = dim_units,
+            origin = (x0,y0),
+            pixelsize = pixelsize
         )
 
         # return
@@ -156,7 +174,6 @@ class BraggVectorMethods:
 
     # aliases
     get_bvm = get_bragg_vector_map = histogram
-
 
 
 
@@ -761,4 +778,72 @@ class BraggVectorMethods:
             return ans
         else:
             return
+
+
+######### END BraggVectorMethods CLASS ########
+
+
+
+class BraggVectorMap(Array):
+
+    def __init__(
+        self,
+        name,
+        data,
+        weights,
+        dims,
+        dim_units,
+        origin,
+        pixelsize
+    ):
+        Array.__init__(
+            self,
+            name = name,
+            data = data,
+            dims = dims,
+            dim_units = [dim_units,dim_units],
+        )
+        self.metadata = Metadata(
+            name = 'grid',
+            data = {
+                'origin' : origin,
+                'pixelsize' : pixelsize,
+                'weights' : weights
+            }
+        )
+
+    @property
+    def origin(self):
+        return self.metadata['grid']['origin']
+    @property
+    def pixelsize(self):
+        return self.metadata['grid']['pixelsize']
+    @property
+    def pixelunits(self):
+        return self.dim_units[0]
+    @property
+    def weights(self):
+        return self.metadata['grid']['weights']
+
+
+    # read
+    @classmethod
+    def _get_constructor_args(cls,group):
+        """
+        Returns a dictionary of args/values to pass to the class constructor
+        """
+        constr_args = Array._get_constructor_args(group)
+        metadata = _read_metadata(group,'grid')
+        args = {
+            'name' : constr_args['name'],
+            'data' : constr_args['data'],
+            'weights' : metadata['weights'],
+            'dims' : constr_args['dims'],
+            'dim_units' : constr_args['dim_units'],
+            'origin' : metadata['origin'],
+            'pixelsize' : metadata['pixelsize']
+        }
+        return args
+
+
 
