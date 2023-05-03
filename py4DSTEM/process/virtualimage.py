@@ -1,8 +1,8 @@
 # Functions for generating virtual images
 import numpy as np
 import dask.array as da
-from py4DSTEM.utils.tqdmnd import tqdmnd
-from py4DSTEM.io.datastructure.py4dstem import Calibration
+from emdfile import tqdmnd
+from py4DSTEM.classes import Calibration
 
 def get_virtual_image(
     datacube,
@@ -219,7 +219,7 @@ def get_calibrated_geometry(
 
     # Get calibration metadata
     if centered:
-        assert cal.get_qx0_mean(), "origin needs to be calibrated" 
+        assert cal.get_qx0_mean(), "origin needs to be calibrated"
         x0_mean, y0_mean = cal.get_origin_mean()
 
     if calibrated:
@@ -343,7 +343,7 @@ def make_detector(
         assert (g.shape == shape), 'mask and diffraction pattern shapes do not match'
         mask = g
     return mask
-    
+
 def make_bragg_mask(
     Qshape,
     g1,
@@ -523,13 +523,13 @@ def get_virtual_image_braggvectors(
                 - 'annular' or 'annulus': nested 2-tuple, ((qx,qy),(radius_i,radius_o)),
                    qx, qy, radius_i, and radius_o are each single float or integer
                 - Note that (qx,qy) can be skipped, which assumes peaks centered at (0,0)
-                
+
     Returns:
         im_virtual (2D numpy array): the calculated virtual image
     '''
 
     virtual_image = get_virtual_image_pointlistarray(
-        bragg_peaks.vectors,    
+        bragg_peaks.vectors,
         mode = mode,
         geometry = geometry,
         )

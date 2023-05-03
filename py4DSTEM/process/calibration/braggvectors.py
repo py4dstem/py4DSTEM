@@ -3,8 +3,8 @@ import numpy as np
 from typing import Optional, Union
 from numbers import Number
 
-from py4DSTEM.io.datastructure.emd import PointListArray
-from py4DSTEM.io.datastructure.py4dstem import Calibration
+from emdfile import PointListArray
+from py4DSTEM.classes import Calibration
 
 
 def calibrate(

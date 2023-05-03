@@ -18,7 +18,7 @@ try:
 except ImportError:
     cp = None
 
-from py4DSTEM.io import DataCube
+from py4DSTEM import DataCube
 from py4DSTEM.process.phase.iterative_base_class import PhaseReconstruction
 from py4DSTEM.process.phase.utils import (
     ComplexProbe,
@@ -29,7 +29,7 @@ from py4DSTEM.process.phase.utils import (
     polar_symbols,
 )
 from py4DSTEM.process.utils import get_CoM, get_shifted_ar
-from py4DSTEM.utils.tqdmnd import tqdmnd
+from emdfile import tqdmnd
 
 warnings.simplefilter(action="always", category=UserWarning)
 
