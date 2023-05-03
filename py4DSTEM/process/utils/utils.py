@@ -175,7 +175,6 @@ def make_Fourier_coords2D(Nx, Ny, pixelSize=1):
     return qx, qy
 
 
-
 def get_CoM(ar, device = "cpu"):
     """
     Finds and returns the center of mass of array ar.
