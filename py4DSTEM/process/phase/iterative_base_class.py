@@ -1704,6 +1704,8 @@ class PhaseReconstruction(metaclass=ABCMeta):
 
         if probe is None:
             probe = self._probe
+        else:
+            probe = xp.asarray(probe,dtype=xp.complex64)
 
         return xp.fft.fftshift(
             xp.fft.fft2(xp.fft.ifftshift(probe, axes=(-2, -1))), axes=(-2, -1)

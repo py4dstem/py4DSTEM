@@ -2817,6 +2817,7 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         cbar: bool,
         plot_convergence: bool,
         plot_probe: bool,
+        plot_fourier_probe: bool,
         object_mode: str,
         padding: int,
         **kwargs,
@@ -2837,7 +2838,7 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
             One of 'phase', 'amplitude', 'intensity'
 
         """
-        figsize = kwargs.get("figsize", (8, 5))
+        figsize = kwargs.get("figsize", (12, 5))
         cmap_e = kwargs.get("cmap_e", "magma")
         cmap_m = kwargs.get("cmap_m", "PuOr")
         kwargs.pop("figsize", None)
@@ -2891,7 +2892,7 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         ]
 
         if plot_convergence:
-            if plot_probe:
+            if plot_probe or plot_fourier_probe:
                 spec = GridSpec(
                     ncols=3,
                     nrows=2,
@@ -2907,7 +2908,7 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
             else:
                 spec = GridSpec(ncols=2, nrows=2, height_ratios=[4, 1], hspace=0.15)
         else:
-            if plot_probe:
+            if plot_probe or plot_fourier_probe:
                 spec = GridSpec(
                     ncols=3,
                     nrows=1,
@@ -2923,7 +2924,7 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
 
         fig = plt.figure(figsize=figsize)
 
-        if plot_probe:
+        if plot_probe or plot_fourier_probe:
             # Electrostatic Object
             ax = fig.add_subplot(spec[0, 0])
             if object_mode == "phase":
@@ -3004,22 +3005,26 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
 
             # Probe
             ax = fig.add_subplot(spec[0, 2])
+            if plot_fourier_probe:
+                probe_array = Complex2RGB(self.probe_fourier)
+                ax.set_title("Reconstructed Fourier probe")
+            else:
+                probe_array = Complex2RGB(self.probe)
+                ax.set_title("Reconstructed probe")
+
             im = ax.imshow(
-                np.abs(self.probe) ** 2,
+                probe_array,
                 extent=probe_extent,
-                cmap="Greys_r",
                 **kwargs,
             )
             ax.set_ylabel("x [A]")
             ax.set_xlabel("y [A]")
-            ax.set_title("Reconstructed probe intensity")
 
             if cbar:
                 divider = make_axes_locatable(ax)
                 ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
-                fig.add_axes(ax_cb)
-                fig.colorbar(im, cax=ax_cb)
-
+                add_colorbar_arg(ax_cb)
+            
         else:
             # Electrostatic Object
             ax = fig.add_subplot(spec[0, 0])
@@ -3115,6 +3120,7 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         cbar: bool,
         plot_convergence: bool,
         plot_probe: bool,
+        plot_fourier_probe: bool,
         iterations_grid: Tuple[int, int],
         object_mode: str,
         padding: int,
@@ -3145,6 +3151,7 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         iterations_grid: Tuple[int, int] = None,
         plot_convergence: bool = True,
         plot_probe: bool = True,
+        plot_fourier_probe: bool = False,
         object_mode: str = "phase",
         cbar: bool = True,
         padding: int = 0,
@@ -3189,6 +3196,7 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
             self._visualize_last_iteration(
                 plot_convergence=plot_convergence,
                 plot_probe=plot_probe,
+                plot_fourier_probe=plot_fourier_probe,
                 object_mode=object_mode,
                 cbar=cbar,
                 padding=padding,
@@ -3199,6 +3207,7 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                 plot_convergence=plot_convergence,
                 iterations_grid=iterations_grid,
                 plot_probe=plot_probe,
+                plot_fourier_probe=plot_fourier_probe,
                 object_mode=object_mode,
                 cbar=cbar,
                 padding=padding,
