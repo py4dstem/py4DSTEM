@@ -1,22 +1,25 @@
-import py4DSTEM
 import numpy as np
 import matplotlib.pyplot as plt
 import h5py
-import dask.array as da
-from dask.distributed import Client, LocalCluster
-from dask import delayed
-import dask
-#import dask.bag as db
-from py4DSTEM.io.datastructure import PointListArray, PointList
-from py4DSTEM.process.diskdetection.diskdetection import _find_Bragg_disks_single_DP_FK
-from py4DSTEM.io import PointListArray, PointList, datastructure
 import time
-from dask.diagnostics import ProgressBar
 import dill
-#import distributed
+
+import dask
+import dask.array as da
 import dask.config
+from dask import delayed
+from dask.distributed import Client, LocalCluster
+from dask.diagnostics import ProgressBar
+#import dask.bag as db
+
+#import distributed
 from distributed.protocol.serialize import register_serialization_family
 import distributed
+
+import py4DSTEM
+from py4DSTEM.classes import PointListArray, PointList
+from py4DSTEM.process.diskdetection.diskdetection import _find_Bragg_disks_single_DP_FK
+
 
 
 #### SERIALISERS ####
@@ -33,7 +36,7 @@ def dill_loads(header, frames):
         frame = ''.join(frames)
     else:
         frame = frames[0]
-        
+
     return dill.loads(frame)
 # register the serialization method 
 #register_serialization_family('dill', dill_dumps, dill_loads)

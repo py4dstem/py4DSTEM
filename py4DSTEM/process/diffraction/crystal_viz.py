@@ -10,9 +10,8 @@ import warnings
 import numpy as np
 from typing import Union, Optional
 
+from emdfile import tqdmnd, PointList, PointListArray
 from py4DSTEM.process.diffraction.utils import calc_1D_profile
-from py4DSTEM.io.datastructure import PointList, PointListArray
-from py4DSTEM.utils.tqdmnd import tqdmnd
 
 
 def plot_structure(
@@ -342,8 +341,8 @@ def plot_scattering_intensity(
 
     # If Bragg peaks are passed in, compute 1D integral
     if bragg_peaks is not None:
-        # bigpl = np.concatenate([
-        #     bragg_peaks[i,j].data for i in range(bragg_peaks.shape[0]) for j in range(bragg_peaks.shape[1])])
+
+        # concatenate all peaks
         bigpl = np.concatenate(
             [
                 bragg_peaks.vectors[i, j].data
@@ -351,6 +350,8 @@ def plot_scattering_intensity(
                 for j in range(bragg_peaks.shape[1])
             ]
         )
+
+        # get radial positions and intensity
         qr = np.sqrt(bigpl["qx"] ** 2 + bigpl["qy"] ** 2)
         int_meas = bigpl["intensity"]
 
