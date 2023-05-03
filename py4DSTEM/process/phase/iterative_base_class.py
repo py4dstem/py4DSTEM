@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.gridspec import GridSpec
 from mpl_toolkits.axes_grid1 import ImageGrid
-from py4DSTEM.visualize import show_complex
+from py4DSTEM.visualize import show, show_complex
 from scipy.ndimage import rotate
 
 try:
@@ -1337,6 +1337,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
         rotated_points = tf(
             asnumpy(self._positions_px), origin=asnumpy(self._positions_px_com), xp=np
         )
+        
         min_x, min_y = np.floor(np.amin(rotated_points, axis=0) - padding).astype("int")
         min_x = min_x if min_x > 0 else 0
         min_y = min_y if min_y > 0 else 0
@@ -1697,7 +1698,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
         Parameters
         ----------
         probe: complex array, optional
-            if None is specified, uses the `probe_fourier` property
+            if None is specified, uses self._probe
         """
         xp = self._xp
 
@@ -1708,7 +1709,27 @@ class PhaseReconstruction(metaclass=ABCMeta):
             xp.fft.fft2(xp.fft.ifftshift(probe, axes=(-2, -1))), axes=(-2, -1)
         )
 
-    def plot_fourier_probe(
+    def _return_object_fft(
+        self,
+        obj=None,
+    ):
+        """
+        Returns obj fft shifted to center of array 
+
+        Parameters
+        ----------
+        obj: array, optional
+            if None is specified, uses self._object
+        """
+        asnumpy = self._asnumpy
+
+        if obj is None:
+            obj = self._object
+
+        obj = self._crop_rotate_object_fov(asnumpy(obj))
+        return np.abs(np.fft.fftshift(np.fft.fft2(obj)))
+
+    def show_fourier_probe(
         self,
         probe=None,
         cbar=True,
@@ -1740,7 +1761,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
         if pixelsize is None:
             pixelsize = self._reciprocal_sampling[1]
         if pixelunits is None:
-            pixelunits = "A^-1"
+            pixelunits=r"$\AA^{-1}$",
 
         figsize = kwargs.get("figsize", (6, 6))
         kwargs.pop("figsize", None)
@@ -1753,16 +1774,18 @@ class PhaseReconstruction(metaclass=ABCMeta):
             scalebar=scalebar,
             pixelsize=pixelsize,
             pixelunits=pixelunits,
+            ticks=False,
             **kwargs,
         )
-        ax.set_xticks([])
-        ax.set_yticks([])
 
-    def show_object_fft(self, **kwargs):
+    def show_object_fft(self,obj=None,**kwargs):
         """
-        Plot fourier transform of reconstructed object
+        Plot FFT of reconstructed object
         """
-        object_fft = self.object_fft
+        if obj is None:
+            object_fft = self.object_fft
+        else:
+            object_fft = self._return_object_fft(obj)
 
         figsize = kwargs.get("figsize", (6, 6))
         kwargs.pop("figsize", None)
@@ -1775,8 +1798,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
         power = kwargs.get("power", 0.2)
         kwargs.pop("power", None)
 
-        from py4DSTEM import show
-
+        pixelsize = 1/(object_fft.shape[0]*self.sampling[0])
         show(
             object_fft,
             figsize=figsize,
@@ -1784,7 +1806,8 @@ class PhaseReconstruction(metaclass=ABCMeta):
             vmin=vmin,
             vmax=vmax,
             scalebar=True,
-            pixelsize=np.fft.fftfreq(object_fft.shape[1], self.sampling[1])[1],
+            pixelsize=pixelsize,
+            ticks=False,
             pixelunits=r"$\AA^{-1}$",
             power=power,
             **kwargs,
@@ -1793,8 +1816,10 @@ class PhaseReconstruction(metaclass=ABCMeta):
     @property
     def probe_fourier(self):
         """Current probe estimate in Fourier space"""
+        
         if not hasattr(self, "_probe"):
             return None
+
         asnumpy = self._asnumpy
         return asnumpy(self._return_fourier_probe(self._probe))
 
@@ -1805,9 +1830,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
         if not hasattr(self, "_object"):
             return None
 
-        return np.abs(
-            np.fft.fftshift(np.fft.fft2(self._crop_rotate_object_fov(self._object)))
-        )
+        return self._return_object_fft(self._object)
 
     @property
     def angular_sampling(self):

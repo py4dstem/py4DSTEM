@@ -2611,16 +2611,28 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
 
         if return_values:
             return objects, convergence
+    
+    def _return_object_fft(
+        self,
+        obj=None,
+    ):
+        """
+        Returns obj fft shifted to center of array 
 
-    @property
-    def object_fft(self):
-        """Fourier transform of object"""
+        Parameters
+        ----------
+        obj: array, optional
+            if None is specified, uses self._object
+        """
+        asnumpy = self._asnumpy
 
-        if not hasattr(self, "_object"):
-            return None
+        if obj is None:
+            obj = self._object
 
-        return np.abs(
-            np.fft.fftshift(
-                np.fft.fft2(np.mean(self._crop_rotate_object_fov(self._object), axis=0))
-            )
-        )
+        obj = asnumpy(obj)
+        if np.iscomplexobj(obj):
+            obj = np.angle(obj)
+
+        obj = self._crop_rotate_object_fov(np.sum(obj,axis=0))
+        return np.abs(np.fft.fftshift(np.fft.fft2(obj)))
+

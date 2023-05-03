@@ -1982,7 +1982,7 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
 
         return self
 
-    def plot_fourier_probe(
+    def show_fourier_probe(
         self, probe=None, scalebar=True, pixelsize=None, pixelunits=None, **kwargs
     ):
         """
@@ -2006,7 +2006,7 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
         if pixelsize is None:
             pixelsize = self._reciprocal_sampling[1]
         if pixelunits is None:
-            pixelunits = "A^-1"
+            pixelunits=r"$\AA^{-1}$",
 
         figsize = kwargs.get("figsize", (6, 6))
         kwargs.pop("figsize", None)
@@ -2018,7 +2018,6 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
             scalebar=scalebar,
             pixelsize=pixelsize,
             pixelunits=pixelunits,
+            ticks=False,
             **kwargs,
         )
-        ax.set_xticks([])
-        ax.set_yticks([])
