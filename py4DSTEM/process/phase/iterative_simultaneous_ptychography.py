@@ -3154,7 +3154,7 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
 
     def visualize(
         self,
-        fig,
+        fig=None,
         iterations_grid: Tuple[int, int] = None,
         plot_convergence: bool = True,
         plot_probe: bool = True,
