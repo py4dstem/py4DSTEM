@@ -108,11 +108,12 @@ def get_virtual_image(
 
             # set up a generalized universal function for dask distribution
             def _apply_mask_dask(datacube,mask):
-                virtual_image = np.sum(np.multiply(datacube.data,mask), dtype=np.float64)
-            apply_mask_dask = da.as_gufunc(
+                return np.sum(np.multiply(datacube.data,mask), dtype=np.float64)
+            apply_mask_dask = da.gufunc(
                 _apply_mask_dask,signature='(i,j),(i,j)->()',
                 output_dtypes=np.float64,
                 axes=[(2,3),(0,1),()],
+                allow_rechunk=True,
                 vectorize=True
             )
 
