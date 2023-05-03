@@ -1419,6 +1419,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         cbar: bool,
         plot_convergence: bool,
         plot_probe: bool,
+        plot_fourier_probe: bool,
         object_mode: str,
         padding: int,
         **kwargs,
@@ -1461,7 +1462,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         ]
 
         if plot_convergence:
-            if plot_probe:
+            if plot_probe or plot_fourier_probe:
                 spec = GridSpec(
                     ncols=2,
                     nrows=2,
@@ -1476,7 +1477,7 @@ class PtychographicReconstruction(PhaseReconstruction):
             else:
                 spec = GridSpec(ncols=1, nrows=2, height_ratios=[4, 1], hspace=0.15)
         else:
-            if plot_probe:
+            if plot_probe or plot_fourier_probe:
                 spec = GridSpec(
                     ncols=2,
                     nrows=1,
@@ -1491,7 +1492,7 @@ class PtychographicReconstruction(PhaseReconstruction):
 
         fig = plt.figure(figsize=figsize)
 
-        if plot_probe:
+        if plot_probe or plot_fourier_probe:
             # Object
             ax = fig.add_subplot(spec[0, 0])
             if object_mode == "phase":
@@ -1528,22 +1529,27 @@ class PtychographicReconstruction(PhaseReconstruction):
             # Probe
             kwargs.pop("vmin", None)
             kwargs.pop("vmax", None)
+
             ax = fig.add_subplot(spec[0, 1])
+            if plot_fourier_probe:
+                probe_array = Complex2RGB(self.probe_fourier)
+                ax.set_title("Reconstructed Fourier probe")
+            else:
+                probe_array = Complex2RGB(self.probe)
+                ax.set_title("Reconstructed probe")
+
             im = ax.imshow(
-                np.abs(self.probe) ** 2,
+                probe_array,
                 extent=probe_extent,
-                cmap="Greys_r",
                 **kwargs,
             )
             ax.set_ylabel("x [A]")
             ax.set_xlabel("y [A]")
-            ax.set_title("Reconstructed probe intensity")
 
             if cbar:
                 divider = make_axes_locatable(ax)
                 ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
-                fig.add_axes(ax_cb)
-                fig.colorbar(im, cax=ax_cb)
+                add_colorbar_arg(ax_cb)
 
         else:
             ax = fig.add_subplot(spec[0])
@@ -1599,6 +1605,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         cbar: bool,
         plot_convergence: bool,
         plot_probe: bool,
+        plot_fourier_probe: bool,
         iterations_grid: Tuple[int, int],
         object_mode: str,
         padding: int,
@@ -1622,10 +1629,12 @@ class PtychographicReconstruction(PhaseReconstruction):
             One of 'phase', 'amplitude', 'intensity'
 
         """
+        asnumpy = self._asnumpy
+
         if iterations_grid == "auto":
             iterations_grid = (2, 4)
         else:
-            if plot_probe and iterations_grid[0] != 2:
+            if (plot_probe or plot_fourier_probe) and iterations_grid[0] != 2:
                 raise ValueError()
 
         figsize = kwargs.get("figsize", (12, 7))
@@ -1639,7 +1648,7 @@ class PtychographicReconstruction(PhaseReconstruction):
             for obj in self.object_iterations
         ]
 
-        if plot_probe:
+        if plot_probe or plot_fourier_probe:
             total_grids = (np.prod(iterations_grid) / 2).astype("int")
             probes = self.probe_iterations
         else:
@@ -1662,12 +1671,12 @@ class PtychographicReconstruction(PhaseReconstruction):
         ]
 
         if plot_convergence:
-            if plot_probe:
+            if plot_probe or plot_fourier_probe:
                 spec = GridSpec(ncols=1, nrows=3, height_ratios=[4, 4, 1], hspace=0)
             else:
                 spec = GridSpec(ncols=1, nrows=2, height_ratios=[4, 1], hspace=0)
         else:
-            if plot_probe:
+            if plot_probe or plot_fourier_probe:
                 spec = GridSpec(ncols=1, nrows=2)
             else:
                 spec = GridSpec(ncols=1, nrows=1)
@@ -1677,7 +1686,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         grid = ImageGrid(
             fig,
             spec[0],
-            nrows_ncols=(1, iterations_grid[1]) if plot_probe else iterations_grid,
+            nrows_ncols=(1, iterations_grid[1]) if (plot_probe or plot_fourier_probe) else iterations_grid,
             axes_pad=(0.75, 0.5) if cbar else 0.5,
             cbar_mode="each" if cbar else None,
             cbar_pad="2.5%" if cbar else None,
@@ -1714,9 +1723,10 @@ class PtychographicReconstruction(PhaseReconstruction):
             if cbar:
                 grid.cbar_axes[n].colorbar(im)
 
-        if plot_probe:
+        if plot_probe or plot_fourier_probe:
             kwargs.pop("vmin", None)
             kwargs.pop("vmax", None)
+            
             grid = ImageGrid(
                 fig,
                 spec[1],
@@ -1727,19 +1737,25 @@ class PtychographicReconstruction(PhaseReconstruction):
             )
 
             for n, ax in enumerate(grid):
+                
+                if plot_fourier_probe:
+                    probe_array = Complex2RGB(asnumpy(self._return_fourier_probe(probes[grid_range[n]])))
+                    ax.set_title(f"Iter: {grid_range[n]} Fourier probe")
+                else:
+                    probe_array = Complex2RGB(probes[grid_range[n]])
+                    ax.set_title(f"Iter: {grid_range[n]} probe")
+                
                 im = ax.imshow(
-                    np.abs(probes[grid_range[n]]) ** 2,
+                    probe_array,
                     extent=probe_extent,
-                    cmap="Greys_r",
                     **kwargs,
                 )
-                ax.set_title(f"Iter: {grid_range[n]} Probe")
 
                 ax.set_ylabel("x [A]")
                 ax.set_xlabel("y [A]")
 
                 if cbar:
-                    grid.cbar_axes[n].colorbar(im)
+                    add_colorbar_arg(grid.cbar_axes[n])
 
         if plot_convergence:
             kwargs.pop("vmin", None)
@@ -1760,6 +1776,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         iterations_grid: Tuple[int, int] = None,
         plot_convergence: bool = True,
         plot_probe: bool = True,
+        plot_fourier_probe: bool = False,
         object_mode: str = "phase",
         cbar: bool = True,
         padding: int = 0,
@@ -1804,6 +1821,7 @@ class PtychographicReconstruction(PhaseReconstruction):
             self._visualize_last_iteration(
                 plot_convergence=plot_convergence,
                 plot_probe=plot_probe,
+                plot_fourier_probe=plot_fourier_probe,
                 object_mode=object_mode,
                 cbar=cbar,
                 padding=padding,
@@ -1814,6 +1832,7 @@ class PtychographicReconstruction(PhaseReconstruction):
                 plot_convergence=plot_convergence,
                 iterations_grid=iterations_grid,
                 plot_probe=plot_probe,
+                plot_fourier_probe=plot_fourier_probe,
                 object_mode=object_mode,
                 cbar=cbar,
                 padding=padding,
