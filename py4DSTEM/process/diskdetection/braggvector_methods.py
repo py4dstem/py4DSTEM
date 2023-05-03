@@ -371,7 +371,6 @@ class BraggVectorMethods:
         mask_check_data = True,
         plot = True,
         plot_range = None,
-        fit_vis_params = None,
         returncalc = True,
         **kwargs
         ):
@@ -439,26 +438,72 @@ class BraggVectorMethods:
             if plot_range is None:
                 plot_range = 2*np.max(qx0_fit - qx0_mean)
 
-            if fit_vis_params is None:
-                fit_vis_params = {
-                    'H':2,
-                    'W':3,
-                    'cmap':'RdBu',
-                    'intensity_range':'absolute',
-                    'vmin':-1*plot_range,
-                    'vmax':1*plot_range,
-                    'axsize':(6,2),
-                }
+            cmap = kwargs.get("cmap", "RdBu_r")
+            kwargs.pop("cmap", None)
+            axsize = kwargs.get("axsize", (6,2))
+            kwargs.pop("axsize", None)
+
             show_image_grid(
                 lambda i:[qx0_meas-qx0_mean,qx0_fit-qx0_mean,qx0_res_plot,
                           qy0_meas-qy0_mean,qy0_fit-qy0_mean,qy0_res_plot][i],
-                **fit_vis_params
+                H = 2,
+                W = 3,
+                cmap = cmap,
+                axsize = axsize,
+                vmin = -1*plot_range,
+                vmax = 1*plot_range,
+                intensity_range = "absolute",
+                **kwargs,
             )
+
+        self.setcal()
 
         if returncalc:
             return qx0_fit,qy0_fit,qx0_residuals,qy0_residuals
 
+    def fit_p_ellipse(
+        self,
+        bvm,
+        center,
+        fitradii,
+        mask=None,
+        returncalc = False,
+        **kwargs
+        ):
+        """
+        Args:
+            bvm (BraggVectorMap): a 2D array used for ellipse fitting 
+            center (2-tuple of floats): the center (x0,y0) of the annular fitting region
+            fitradii (2-tuple of floats): inner and outer radii (ri,ro) of the fit region
+            mask (ar-shaped ndarray of bools): ignore data wherever mask==True
+        
+        Returns:
+            p_ellipse if returncal is True
+        """
+        from py4DSTEM.process.calibration import fit_ellipse_1D
+        p_ellipse = fit_ellipse_1D(
+            bvm,
+            center,
+            fitradii,
+            mask
+        )
 
+        scaling = kwargs.get("scaling", "log")
+        kwargs.pop("scaling", None)
+        from py4DSTEM.visualize import show_elliptical_fit
+        show_elliptical_fit(
+            bvm,
+            fitradii,
+            p_ellipse,
+            scaling = scaling,
+            **kwargs
+        )
+
+        self.calibration.set_p_ellipse(p_ellipse)
+        self.setcal()
+
+        if returncalc:
+            return p_ellipse
 
 
     # Deprecated??
