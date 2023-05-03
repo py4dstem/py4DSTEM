@@ -44,7 +44,7 @@ sample_code/data/*dm3
 *.db
 *.eps
 *.asv
-*.svg
+#*.svg
 *.emf
 
 # Compiled source #

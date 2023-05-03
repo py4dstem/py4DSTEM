@@ -2,6 +2,10 @@
 
 import numpy as np
 from scipy.ndimage import gaussian_filter
+try:
+    import cupy as cp
+except ImportError:
+    cp = None
 
 try:
     import cupy as cp
@@ -54,7 +58,6 @@ def make_Fourier_coords2D(Nx, Ny, pixelSize=1):
     qy = np.fft.fftfreq(Ny, pixelSize_y)
     qy, qx = np.meshgrid(qy, qx)
     return qx, qy
-
 
 
 
@@ -121,7 +124,6 @@ def get_shifted_ar(ar, xshift, yshift, periodic=True, bilinear=False, device="cp
             shifted_ar[:, yR:] = 0
 
     return shifted_ar
-
 
 
 
