@@ -445,8 +445,8 @@ class PhaseReconstruction(metaclass=ABCMeta):
                 fitfunction=fit_function,
             )
 
-        com_fitted_x = xp.asarray(com_shifts[0],dtype=xp.float32)
-        com_fitted_y = xp.asarray(com_shifts[1],dtype=xp.float32)
+        com_fitted_x = xp.asarray(com_shifts[0], dtype=xp.float32)
+        com_fitted_y = xp.asarray(com_shifts[1], dtype=xp.float32)
 
         # fix CoM units
         com_normalized_x = (com_measured_x - com_fitted_x) * self._reciprocal_sampling[
@@ -1084,7 +1084,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
                 mean_intensity += np.sum(intensities)
                 amplitudes[rx, ry] = np.sqrt(np.maximum(intensities, 0))
 
-        amplitudes = xp.asarray(amplitudes,dtype=xp.float32)
+        amplitudes = xp.asarray(amplitudes, dtype=xp.float32)
 
         amplitudes = xp.reshape(amplitudes, (-1,) + region_of_interest_shape)
         mean_intensity /= amplitudes.shape[0]
@@ -1337,7 +1337,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
         rotated_points = tf(
             asnumpy(self._positions_px), origin=asnumpy(self._positions_px_com), xp=np
         )
-        
+
         min_x, min_y = np.floor(np.amin(rotated_points, axis=0) - padding).astype("int")
         min_x = min_x if min_x > 0 else 0
         min_y = min_y if min_y > 0 else 0
@@ -1705,7 +1705,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
         if probe is None:
             probe = self._probe
         else:
-            probe = xp.asarray(probe,dtype=xp.complex64)
+            probe = xp.asarray(probe, dtype=xp.complex64)
 
         return xp.fft.fftshift(
             xp.fft.fft2(xp.fft.ifftshift(probe, axes=(-2, -1))), axes=(-2, -1)
@@ -1716,7 +1716,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
         obj=None,
     ):
         """
-        Returns obj fft shifted to center of array 
+        Returns obj fft shifted to center of array
 
         Parameters
         ----------
@@ -1757,7 +1757,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
             default is probe reciprocal sampling
         """
         asnumpy = self._asnumpy
-        
+
         if probe is None:
             probe = self.probe_fourier
         else:
@@ -1766,7 +1766,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
         if pixelsize is None:
             pixelsize = self._reciprocal_sampling[1]
         if pixelunits is None:
-            pixelunits=r"$\AA^{-1}$"
+            pixelunits = r"$\AA^{-1}$"
 
         figsize = kwargs.get("figsize", (6, 6))
         kwargs.pop("figsize", None)
@@ -1783,7 +1783,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
             **kwargs,
         )
 
-    def show_object_fft(self,obj=None,**kwargs):
+    def show_object_fft(self, obj=None, **kwargs):
         """
         Plot FFT of reconstructed object
         """
@@ -1803,7 +1803,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
         power = kwargs.get("power", 0.2)
         kwargs.pop("power", None)
 
-        pixelsize = 1/(object_fft.shape[0]*self.sampling[0])
+        pixelsize = 1 / (object_fft.shape[0] * self.sampling[0])
         show(
             object_fft,
             figsize=figsize,
@@ -1821,7 +1821,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
     @property
     def probe_fourier(self):
         """Current probe estimate in Fourier space"""
-        
+
         if not hasattr(self, "_probe"):
             return None
 

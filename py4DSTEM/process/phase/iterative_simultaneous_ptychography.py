@@ -591,7 +591,9 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         if self._probe is None:
             if self._vacuum_probe_intensity is not None:
                 self._semiangle_cutoff = np.inf
-                self._vacuum_probe_intensity = xp.asarray(self._vacuum_probe_intensity, dtype=xp.float32)
+                self._vacuum_probe_intensity = xp.asarray(
+                    self._vacuum_probe_intensity, dtype=xp.float32
+                )
                 probe_x0, probe_y0 = get_CoM(
                     self._vacuum_probe_intensity, device="cpu" if xp is np else "gpu"
                 )
@@ -640,21 +642,22 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         self._probe_initial_fft_amplitude = xp.abs(xp.fft.fft2(self._probe_initial))
 
         if plot_probe_overlaps:
-            
             figsize = kwargs.get("figsize", (9, 4))
             cmap = kwargs.get("cmap", "Greys_r")
             vmin = kwargs.get("vmin", None)
             vmax = kwargs.get("vmax", None)
-            hue_start = kwargs.get("hue_start",90)
+            hue_start = kwargs.get("hue_start", 90)
             kwargs.pop("figsize", None)
             kwargs.pop("cmap", None)
             kwargs.pop("vmin", None)
             kwargs.pop("vmax", None)
             kwargs.pop("hue_start", None)
-            
+
             # initial probe
-            complex_probe_rgb = Complex2RGB(asnumpy(self._probe), vmin=vmin, vmax=vmax, hue_start=hue_start)
-            
+            complex_probe_rgb = Complex2RGB(
+                asnumpy(self._probe), vmin=vmin, vmax=vmax, hue_start=hue_start
+            )
+
             # overlaps
             shifted_probes = fft_shift(self._probe, self._positions_px_fractional, xp)
             probe_intensities = xp.abs(shifted_probes) ** 2
@@ -681,10 +684,10 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                 extent=probe_extent,
                 **kwargs,
             )
-            
+
             divider = make_axes_locatable(ax1)
             cax1 = divider.append_axes("right", size="5%", pad="2.5%")
-            add_colorbar_arg(cax1,vmin=vmin, vmax=vmax, hue_start=hue_start)
+            add_colorbar_arg(cax1, vmin=vmin, vmax=vmax, hue_start=hue_start)
             ax1.set_ylabel("x [A]")
             ax1.set_xlabel("y [A]")
             ax1.set_title("Initial Probe")
@@ -3024,7 +3027,7 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                 divider = make_axes_locatable(ax)
                 ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
                 add_colorbar_arg(ax_cb)
-            
+
         else:
             # Electrostatic Object
             ax = fig.add_subplot(spec[0, 0])

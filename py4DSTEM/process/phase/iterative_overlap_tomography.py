@@ -10,8 +10,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.gridspec import GridSpec
 from mpl_toolkits.axes_grid1 import ImageGrid, make_axes_locatable
-from py4DSTEM.visualize.vis_special import Complex2RGB, add_colorbar_arg
 from py4DSTEM.visualize import show
+from py4DSTEM.visualize.vis_special import Complex2RGB, add_colorbar_arg
 from scipy.ndimage import rotate as rotate_np
 
 try:
@@ -209,8 +209,8 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
 
         # Frequencies
         kx, ky = spatial_frequencies(gpts, sampling)
-        kx = xp.asarray(kx,dtype=xp.float32)
-        ky = xp.asarray(ky,dtype=xp.float32)
+        kx = xp.asarray(kx, dtype=xp.float32)
+        ky = xp.asarray(ky, dtype=xp.float32)
 
         # Propagators
         wavelength = electron_wavelength_angstrom(energy)
@@ -552,7 +552,9 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         if self._probe is None:
             if self._vacuum_probe_intensity is not None:
                 self._semiangle_cutoff = np.inf
-                self._vacuum_probe_intensity = xp.asarray(self._vacuum_probe_intensity,dtype=xp.float32)
+                self._vacuum_probe_intensity = xp.asarray(
+                    self._vacuum_probe_intensity, dtype=xp.float32
+                )
                 probe_x0, probe_y0 = get_CoM(
                     self._vacuum_probe_intensity, device="cpu" if xp is np else "gpu"
                 )
@@ -615,12 +617,11 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         )
 
         if plot_probe_overlaps:
-            
             figsize = kwargs.get("figsize", (13, 4))
             cmap = kwargs.get("cmap", "Greys_r")
             vmin = kwargs.get("vmin", None)
             vmax = kwargs.get("vmax", None)
-            hue_start = kwargs.get("hue_start",90)
+            hue_start = kwargs.get("hue_start", 90)
             kwargs.pop("figsize", None)
             kwargs.pop("cmap", None)
             kwargs.pop("vmin", None)
@@ -628,16 +629,20 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
             kwargs.pop("hue_start", None)
 
             # initial probe
-            complex_probe_rgb = Complex2RGB(asnumpy(self._probe), vmin=vmin, vmax=vmax, hue_start=hue_start)
+            complex_probe_rgb = Complex2RGB(
+                asnumpy(self._probe), vmin=vmin, vmax=vmax, hue_start=hue_start
+            )
 
             # propagated
             propagated_probe = self._probe.copy()
-            
+
             for s in range(self._num_slices - 1):
                 propagated_probe = self._propagate_array(
                     propagated_probe, self._propagator_arrays[s]
                 )
-            complex_propagated_rgb = Complex2RGB(asnumpy(propagated_probe), vmin=vmin, vmax=vmax, hue_start=hue_start)
+            complex_propagated_rgb = Complex2RGB(
+                asnumpy(propagated_probe), vmin=vmin, vmax=vmax, hue_start=hue_start
+            )
 
             # overlaps
             self._positions_px = self._positions_px_all[: self._cum_probes_per_tilt[1]]
@@ -669,10 +674,10 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                 extent=probe_extent,
                 **kwargs,
             )
-            
+
             divider = make_axes_locatable(ax1)
             cax1 = divider.append_axes("right", size="5%", pad="2.5%")
-            add_colorbar_arg(cax1,vmin=vmin, vmax=vmax, hue_start=hue_start)
+            add_colorbar_arg(cax1, vmin=vmin, vmax=vmax, hue_start=hue_start)
             ax1.set_ylabel("x [A]")
             ax1.set_xlabel("y [A]")
             ax1.set_title("Initial Probe")
@@ -682,14 +687,14 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                 extent=probe_extent,
                 **kwargs,
             )
-            
+
             divider = make_axes_locatable(ax2)
             cax2 = divider.append_axes("right", size="5%", pad="2.5%")
-            add_colorbar_arg(cax2,vmin=vmin, vmax=vmax, hue_start=hue_start)
+            add_colorbar_arg(cax2, vmin=vmin, vmax=vmax, hue_start=hue_start)
             ax2.set_ylabel("x [A]")
             ax2.set_xlabel("y [A]")
             ax2.set_title("Propagated Probe")
-            
+
             ax3.imshow(
                 asnumpy(probe_overlap),
                 extent=extent,
@@ -2238,7 +2243,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
             # Probe
             kwargs.pop("vmin", None)
             kwargs.pop("vmax", None)
-            
+
             ax = fig.add_subplot(spec[0, 1])
             if plot_fourier_probe:
                 probe_array = Complex2RGB(self.probe_fourier)
@@ -2325,7 +2330,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
 
         """
         asnumpy = self._asnumpy
-        
+
         if iterations_grid == "auto":
             iterations_grid = (2, 4)
         else:
@@ -2435,12 +2440,14 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
 
             for n, ax in enumerate(grid):
                 if plot_fourier_probe:
-                    probe_array = Complex2RGB(asnumpy(self._return_fourier_probe(probes[grid_range[n]])))
+                    probe_array = Complex2RGB(
+                        asnumpy(self._return_fourier_probe(probes[grid_range[n]]))
+                    )
                     ax.set_title(f"Iter: {grid_range[n]} Fourier probe")
                 else:
                     probe_array = Complex2RGB(probes[grid_range[n]])
                     ax.set_title(f"Iter: {grid_range[n]} probe")
-                
+
                 im = ax.imshow(
                     probe_array,
                     extent=probe_extent,
@@ -2532,26 +2539,26 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         self,
         obj=None,
         projection_angle_deg: float = None,
-        projection_axes: Tuple[int, int] = (0,2),
-        x_lims: Tuple[int, int] = (None,None),
-        y_lims: Tuple[int, int] = (None,None),
+        projection_axes: Tuple[int, int] = (0, 2),
+        x_lims: Tuple[int, int] = (None, None),
+        y_lims: Tuple[int, int] = (None, None),
     ):
         """
-        Returns obj fft shifted to center of array 
+        Returns obj fft shifted to center of array
 
         Parameters
         ----------
         obj: array, optional
             if None is specified, uses self._object
         """
-        
+
         xp = self._xp
         asnumpy = self._asnumpy
 
         if obj is None:
             obj = self._object
         else:
-            obj = xp.asarray(obj,dtype=xp.float32)
+            obj = xp.asarray(obj, dtype=xp.float32)
 
         if projection_angle_deg is not None:
             rotated_3d_obj = self._rotate(
@@ -2571,31 +2578,33 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
 
         return np.abs(np.fft.fftshift(np.fft.fft2(rotated_object)))
 
-    def show_object_fft(self,
-            obj=None,
-            projection_angle_deg: float = None,
-            projection_axes: Tuple[int, int] = (0,2),
-            x_lims: Tuple[int, int] = (None,None),
-            y_lims: Tuple[int, int] = (None,None),
-            **kwargs):
+    def show_object_fft(
+        self,
+        obj=None,
+        projection_angle_deg: float = None,
+        projection_axes: Tuple[int, int] = (0, 2),
+        x_lims: Tuple[int, int] = (None, None),
+        y_lims: Tuple[int, int] = (None, None),
+        **kwargs,
+    ):
         """
         Plot FFT of reconstructed object
         """
         if obj is None:
             object_fft = self._return_object_fft(
-                    projection_angle_deg = projection_angle_deg,
-                    projection_axes = projection_axes,
-                    x_lims = x_lims,
-                    y_lims = y_lims,
-                    )
+                projection_angle_deg=projection_angle_deg,
+                projection_axes=projection_axes,
+                x_lims=x_lims,
+                y_lims=y_lims,
+            )
         else:
             object_fft = self._return_object_fft(
-                    obj,
-                    projection_angle_deg = projection_angle_deg,
-                    projection_axes = projection_axes,
-                    x_lims = x_lims,
-                    y_lims = y_lims,
-                    )
+                obj,
+                projection_angle_deg=projection_angle_deg,
+                projection_axes=projection_axes,
+                x_lims=x_lims,
+                y_lims=y_lims,
+            )
 
         figsize = kwargs.get("figsize", (6, 6))
         kwargs.pop("figsize", None)
@@ -2608,7 +2617,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         power = kwargs.get("power", 0.2)
         kwargs.pop("power", None)
 
-        pixelsize = 1/(object_fft.shape[0]*self.sampling[0])
+        pixelsize = 1 / (object_fft.shape[0] * self.sampling[0])
         show(
             object_fft,
             figsize=figsize,
