@@ -11,6 +11,7 @@ import numpy as np
 from matplotlib.gridspec import GridSpec
 from mpl_toolkits.axes_grid1 import ImageGrid, make_axes_locatable
 from py4DSTEM.visualize.vis_special import Complex2RGB, add_colorbar_arg
+from py4DSTEM.visualize import show
 from scipy.ndimage import rotate as rotate_np
 
 try:
@@ -2526,3 +2527,98 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
             )
 
         return self
+
+    def _return_object_fft(
+        self,
+        obj=None,
+        projection_angle_deg: float = None,
+        projection_axes: Tuple[int, int] = (0,2),
+        x_lims: Tuple[int, int] = (None,None),
+        y_lims: Tuple[int, int] = (None,None),
+    ):
+        """
+        Returns obj fft shifted to center of array 
+
+        Parameters
+        ----------
+        obj: array, optional
+            if None is specified, uses self._object
+        """
+        
+        xp = self._xp
+        asnumpy = self._asnumpy
+
+        if obj is None:
+            obj = self._object
+        else:
+            obj = xp.asarray(obj,dtype=xp.float32)
+
+        if projection_angle_deg is not None:
+            rotated_3d_obj = self._rotate(
+                obj,
+                projection_angle_deg,
+                axes=projection_axes,
+                reshape=False,
+                order=2,
+            )
+            rotated_3d_obj = asnumpy(rotated_3d_obj)
+        else:
+            rotated_3d_obj = asnumpy(obj)
+
+        rotated_object = self._crop_rotate_object_manually(
+            rotated_3d_obj.sum(0), angle=None, x_lims=x_lims, y_lims=y_lims
+        )
+
+        return np.abs(np.fft.fftshift(np.fft.fft2(rotated_object)))
+
+    def show_object_fft(self,
+            obj=None,
+            projection_angle_deg: float = None,
+            projection_axes: Tuple[int, int] = (0,2),
+            x_lims: Tuple[int, int] = (None,None),
+            y_lims: Tuple[int, int] = (None,None),
+            **kwargs):
+        """
+        Plot FFT of reconstructed object
+        """
+        if obj is None:
+            object_fft = self._return_object_fft(
+                    projection_angle_deg = projection_angle_deg,
+                    projection_axes = projection_axes,
+                    x_lims = x_lims,
+                    y_lims = y_lims,
+                    )
+        else:
+            object_fft = self._return_object_fft(
+                    obj,
+                    projection_angle_deg = projection_angle_deg,
+                    projection_axes = projection_axes,
+                    x_lims = x_lims,
+                    y_lims = y_lims,
+                    )
+
+        figsize = kwargs.get("figsize", (6, 6))
+        kwargs.pop("figsize", None)
+        cmap = kwargs.get("cmap", "magma")
+        kwargs.pop("cmap", None)
+        vmin = kwargs.get("vmin", 0)
+        kwargs.pop("vmin", None)
+        vmax = kwargs.get("vmax", 1)
+        kwargs.pop("vmax", None)
+        power = kwargs.get("power", 0.2)
+        kwargs.pop("power", None)
+
+        pixelsize = 1/(object_fft.shape[0]*self.sampling[0])
+        show(
+            object_fft,
+            figsize=figsize,
+            cmap=cmap,
+            vmin=vmin,
+            vmax=vmax,
+            scalebar=True,
+            pixelsize=pixelsize,
+            ticks=False,
+            pixelunits=r"$\AA^{-1}$",
+            power=power,
+            **kwargs,
+        )
