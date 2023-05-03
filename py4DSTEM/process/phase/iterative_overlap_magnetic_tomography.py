@@ -2333,6 +2333,7 @@ class OverlapMagneticTomographicReconstruction(PhaseReconstruction):
 
     def _visualize_last_iteration(
         self,
+        fig,
         cbar: bool,
         plot_convergence: bool,
         projection_angle_deg: float,
@@ -2542,7 +2543,8 @@ class OverlapMagneticTomographicReconstruction(PhaseReconstruction):
         else:
             spec = GridSpec(ncols=4, nrows=3, hspace=0.15, wspace=0.35)
 
-        fig = plt.figure(figsize=figsize)
+        if fig is None:
+            fig = plt.figure(figsize=figsize)
 
         for sp in spec:
             row, col = np.unravel_index(sp.num1, (4, 4))
@@ -2598,6 +2600,7 @@ class OverlapMagneticTomographicReconstruction(PhaseReconstruction):
 
     def _visualize_all_iterations(
         self,
+        fig,
         plot_convergence: bool,
         iterations_grid: Tuple[int, int],
         projection_angle_deg: float,
@@ -2628,6 +2631,7 @@ class OverlapMagneticTomographicReconstruction(PhaseReconstruction):
 
     def visualize(
         self,
+        fig = None,
         cbar: bool = True,
         iterations_grid: Tuple[int, int] = None,
         plot_convergence: bool = True,
@@ -2655,6 +2659,7 @@ class OverlapMagneticTomographicReconstruction(PhaseReconstruction):
 
         if iterations_grid is None:
             self._visualize_last_iteration(
+                fig = fig,
                 plot_convergence=plot_convergence,
                 projection_angle_deg=projection_angle_deg,
                 projection_axes=projection_axes,
@@ -2665,6 +2670,7 @@ class OverlapMagneticTomographicReconstruction(PhaseReconstruction):
             )
         else:
             self._visualize_all_iterations(
+                fig = fig,
                 plot_convergence=plot_convergence,
                 iterations_grid=iterations_grid,
                 projection_angle_deg=projection_angle_deg,
