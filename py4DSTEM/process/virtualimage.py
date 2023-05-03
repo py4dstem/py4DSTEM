@@ -124,16 +124,7 @@ def get_virtual_image(
         else:
 
             # compute
-            if mask.dtype == 'complex':
-                virtual_image = np.zeros(datacube.Rshape, dtype = 'complex')
-            else:
-                virtual_image = np.zeros(datacube.Rshape)
-            for rx,ry in tqdmnd(
-                datacube.R_Nx,
-                datacube.R_Ny,
-                disable = not verbose,
-            ):
-                virtual_image[rx,ry] = np.sum(datacube.data[rx,ry]*mask)
+            virtual_image = np.sum(datacube.data[:,:,mask], axis=-1)
 
     # with center shifting
     else:
@@ -291,7 +282,7 @@ def make_detector(
                     or diffraction image respectively
 
     Returns:
-        virtual detector in the form of a 2D mask (array)
+        virtual detector in the form of a 2D mask (bool array)
     '''
     g = geometry
 
@@ -342,6 +333,9 @@ def make_detector(
     if mode == 'mask':
         assert type(g) == np.ndarray, '`geometry` type should be `np.ndarray`'
         assert (g.shape == shape), 'mask and diffraction pattern shapes do not match'
+        if g.dtype != bool:
+            print('Mask is not a bool and will be cast to one!')
+            g = g.astype(bool)
         mask = g
     return mask
 
