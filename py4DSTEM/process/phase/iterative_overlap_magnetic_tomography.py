@@ -19,7 +19,7 @@ try:
 except ImportError:
     cp = None
 
-from py4DSTEM.io import DataCube
+from py4DSTEM import DataCube
 from py4DSTEM.process.phase.iterative_base_class import PhaseReconstruction
 from py4DSTEM.process.phase.utils import (
     ComplexProbe,
