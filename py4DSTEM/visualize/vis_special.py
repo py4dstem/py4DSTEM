@@ -819,8 +819,7 @@ def Complex2RGB(complex_array, vmin=None, vmax=None, hue_start=90):
         rgb array for plotting
     """
     amp = np.abs(complex_array)
-
-    if np.max(amp) == np.min(amp):
+    if np.isclose(np.max(amp),np.min(amp)):
         if vmin is None:
             vmin = 0
         if vmax is None:
@@ -837,7 +836,7 @@ def Complex2RGB(complex_array, vmin=None, vmax=None, hue_start=90):
         ind_vmax = np.min([len(vals) - 1, ind_vmax])
         vmin = vals[ind_vmin]
         vmax = vals[ind_vmax]
-
+    
     amp = np.where(amp < vmin, vmin, amp)
     amp = np.where(amp > vmax, vmax, amp)
 
