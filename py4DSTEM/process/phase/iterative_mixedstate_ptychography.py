@@ -2016,14 +2016,17 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
         pixelsize: float, optional
             default is probe reciprocal sampling
         """
-
+        asnumpy = self._asnumpy
+        
         if probe is None:
             probe = self.probe_fourier[0]
+        else:
+            probe = asnumpy(self._return_fourier_probe(probe[0]))
 
         if pixelsize is None:
             pixelsize = self._reciprocal_sampling[1]
         if pixelunits is None:
-            pixelunits=r"$\AA^{-1}$",
+            pixelunits=r"$\AA^{-1}$"
 
         figsize = kwargs.get("figsize", (6, 6))
         kwargs.pop("figsize", None)
