@@ -122,11 +122,16 @@ class ParallaxReconstruction(PhaseReconstruction):
         self._object_padding_px = object_padding_px
 
         # get mean diffraction pattern
+        try:
+            self._datacube.tree('dp_mean')
+            dp_exists = True
+        except: 
+            dp_exists = False
         if self._dp_mean is not None:
             self._dp_mean = xp.asarray(self._dp_mean, dtype=xp.float32)
-        elif "dp_mean" in self._datacube.tree.keys():
+        elif dp_exists is True:
             self._dp_mean = xp.asarray(
-                self._datacube.tree["dp_mean"].data, dtype=xp.float32
+                self._datacube.tree("dp_mean").data, dtype=xp.float32
             )
         else:
             self._dp_mean = xp.asarray(
