@@ -218,10 +218,6 @@ def bin_data_diffraction(datacube, bin_factor):
     if bin_factor == 1:
         return datacube
 
-    print(0)
-    print(datacube.data.shape)
-    print()
-
     # get shape
     R_Nx, R_Ny, Q_Nx, Q_Ny = (
         datacube.R_Nx,
@@ -241,10 +237,6 @@ def bin_data_diffraction(datacube, bin_factor):
             :, :, : -(Q_Nx % bin_factor), : -(Q_Ny % bin_factor)
         ]
 
-    print(1)
-    print(datacube.data.shape)
-    print()
-
     # bin
     datacube.data = datacube.data.reshape(
         R_Nx,
@@ -254,11 +246,6 @@ def bin_data_diffraction(datacube, bin_factor):
         int(Q_Ny / bin_factor),
         bin_factor,
     ).sum(axis=(3, 5))
-
-    print(2)
-    print(datacube.data.shape)
-    print()
-
 
 
     # set dim vectors
