@@ -1958,6 +1958,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
 
     def _visualize_last_iteration(
         self,
+        fig,
         cbar: bool,
         plot_convergence: bool,
         plot_probe: bool,
@@ -2036,7 +2037,8 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             else:
                 spec = GridSpec(ncols=1, nrows=1)
 
-        fig = plt.figure(figsize=figsize)
+        if fig is None:
+            fig = plt.figure(figsize=figsize)
 
         if plot_probe or plot_fourier_probe:
             # Object
@@ -2125,6 +2127,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
 
     def _visualize_all_iterations(
         self,
+        fig,
         cbar: bool,
         plot_convergence: bool,
         plot_probe: bool,
@@ -2209,7 +2212,8 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             else:
                 spec = GridSpec(ncols=1, nrows=1)
 
-        fig = plt.figure(figsize=figsize)
+        if fig is None:
+            fig = plt.figure(figsize=figsize)
 
         grid = ImageGrid(
             fig,
@@ -2285,6 +2289,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
 
     def visualize(
         self,
+        fig=None,
         iterations_grid: Tuple[int, int] = None,
         plot_convergence: bool = True,
         plot_probe: bool = True,
@@ -2316,6 +2321,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
 
         if iterations_grid is None:
             self._visualize_last_iteration(
+                fig=fig,
                 plot_convergence=plot_convergence,
                 plot_probe=plot_probe,
                 plot_fourier_probe=plot_fourier_probe,
@@ -2325,6 +2331,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             )
         else:
             self._visualize_all_iterations(
+                fig=fig,
                 plot_convergence=plot_convergence,
                 iterations_grid=iterations_grid,
                 plot_probe=plot_probe,
