@@ -8,12 +8,12 @@ from typing import Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
+from emdfile import tqdmnd
 from matplotlib.gridspec import GridSpec
 from py4DSTEM import DataCube
 from py4DSTEM.process.phase.iterative_base_class import PhaseReconstruction
 from py4DSTEM.process.utils.cross_correlate import align_images_fourier
 from py4DSTEM.process.utils.utils import electron_wavelength_angstrom
-from emdfile import tqdmnd
 from scipy.linalg import polar
 from scipy.special import comb
 
@@ -123,9 +123,9 @@ class ParallaxReconstruction(PhaseReconstruction):
 
         # get mean diffraction pattern
         try:
-            self._datacube.tree('dp_mean')
+            self._datacube.tree("dp_mean")
             dp_exists = True
-        except: 
+        except:
             dp_exists = False
         if self._dp_mean is not None:
             self._dp_mean = xp.asarray(self._dp_mean, dtype=xp.float32)

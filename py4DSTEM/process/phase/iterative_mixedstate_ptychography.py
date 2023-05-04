@@ -18,6 +18,7 @@ try:
 except ImportError:
     cp = None
 
+from emdfile import tqdmnd
 from py4DSTEM import DataCube
 from py4DSTEM.process.phase.iterative_base_class import PhaseReconstruction
 from py4DSTEM.process.phase.utils import (
@@ -29,7 +30,6 @@ from py4DSTEM.process.phase.utils import (
     polar_symbols,
 )
 from py4DSTEM.process.utils import get_CoM, get_shifted_ar
-from emdfile import tqdmnd
 
 warnings.simplefilter(action="always", category=UserWarning)
 
@@ -441,7 +441,11 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
 
             # initial probe
             complex_probe_rgb = Complex2RGB(
-                asnumpy(self._probe[0]), vmin=vmin, vmax=vmax, hue_start=hue_start, invert= invert
+                asnumpy(self._probe[0]),
+                vmin=vmin,
+                vmax=vmax,
+                hue_start=hue_start,
+                invert=invert,
             )
 
             # overlaps
@@ -475,7 +479,9 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
 
             divider = make_axes_locatable(ax1)
             cax1 = divider.append_axes("right", size="5%", pad="2.5%")
-            add_colorbar_arg(cax1, vmin=vmin, vmax=vmax, hue_start=hue_start, invert= invert)
+            add_colorbar_arg(
+                cax1, vmin=vmin, vmax=vmax, hue_start=hue_start, invert=invert
+            )
             ax1.set_ylabel("x [A]")
             ax1.set_xlabel("y [A]")
             ax1.set_title("Initial Probe")
@@ -1704,10 +1710,14 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
             ax = fig.add_subplot(spec[0, 1])
 
             if plot_fourier_probe:
-                probe_array = Complex2RGB(self.probe_fourier[0], hue_start= hue_start, invert=invert)
+                probe_array = Complex2RGB(
+                    self.probe_fourier[0], hue_start=hue_start, invert=invert
+                )
                 ax.set_title("Reconstructed Fourier probe")
             else:
-                probe_array = Complex2RGB(self.probe[0], hue_start = hue_start, invert=invert)
+                probe_array = Complex2RGB(
+                    self.probe[0], hue_start=hue_start, invert=invert
+                )
                 ax.set_title("Reconstructed probe")
 
             im = ax.imshow(
@@ -1721,7 +1731,7 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
             if cbar:
                 divider = make_axes_locatable(ax)
                 ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
-                add_colorbar_arg(ax_cb,hue_start = hue_start, invert = invert)
+                add_colorbar_arg(ax_cb, hue_start=hue_start, invert=invert)
 
         else:
             ax = fig.add_subplot(spec[0])
@@ -1918,12 +1928,14 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
                 if plot_fourier_probe:
                     probe_array = Complex2RGB(
                         asnumpy(self._return_fourier_probe(probes[grid_range[n]][0])),
-                        hue_start = hue_start,
-                        invert = invert,
+                        hue_start=hue_start,
+                        invert=invert,
                     )
                     ax.set_title(f"Iter: {grid_range[n]} Fourier probe")
                 else:
-                    probe_array = Complex2RGB(probes[grid_range[n]][0], hue_start = hue_start, invert = invert)
+                    probe_array = Complex2RGB(
+                        probes[grid_range[n]][0], hue_start=hue_start, invert=invert
+                    )
                     ax.set_title(f"Iter: {grid_range[n]} probe")
 
                 im = ax.imshow(
@@ -1936,7 +1948,9 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
                 ax.set_xlabel("y [A]")
 
                 if cbar:
-                    add_colorbar_arg(grid.cbar_axes[n], hue_start = hue_start, invert = invert)
+                    add_colorbar_arg(
+                        grid.cbar_axes[n], hue_start=hue_start, invert=invert
+                    )
 
         if plot_convergence:
             kwargs.pop("vmin", None)
@@ -1954,7 +1968,7 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
 
     def visualize(
         self,
-        fig = None,
+        fig=None,
         iterations_grid: Tuple[int, int] = None,
         plot_convergence: bool = True,
         plot_probe: bool = True,
@@ -2001,7 +2015,7 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
 
         if iterations_grid is None:
             self._visualize_last_iteration(
-                fig = fig,
+                fig=fig,
                 plot_convergence=plot_convergence,
                 plot_probe=plot_probe,
                 plot_fourier_probe=plot_fourier_probe,
@@ -2012,7 +2026,7 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
             )
         else:
             self._visualize_all_iterations(
-                fig = fig,
+                fig=fig,
                 plot_convergence=plot_convergence,
                 iterations_grid=iterations_grid,
                 plot_probe=plot_probe,
