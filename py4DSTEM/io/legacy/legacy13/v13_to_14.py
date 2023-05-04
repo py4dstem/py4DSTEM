@@ -54,31 +54,41 @@ def v13_to_14( v13tree ):
     """
     Converts a v13 data tree to a v14 data tree
     """
-
     # if a list of root names was returned, pass it through
     if isinstance(v13tree, list):
         return v13tree
 
-    # make a root and fine the node to grow from
-    if isinstance(v13tree,Root13):
-        node = _v13_to_14_cls(v13tree)
-    else:
-        node = _v13_to_14_cls(v13tree)
+    # convert the selected node
+    node = _v13_to_14_cls(v13tree)
+
+    # handle the root
+    if isinstance(node,Root):
+        root = node
+    elif node.root is None:
         root = Root( name=node.name )
         root.tree(node)
+    else:
+        root = node.root
 
     # populate tree
-    _populate_tree(v13tree,node)
+    _populate_tree(v13tree,node,root)
     return node
 
 
 
-def _populate_tree(node13,node14):
+def _populate_tree(node13,node14,root14):
     for key in node13.tree.keys():
         newnode13 = node13.tree[key]
         newnode14 = _v13_to_14_cls(newnode13)
-        node14.tree(newnode14)
-        _populate_tree(newnode13,newnode14)
+        # handle calibrations and metadata
+        if isinstance(newnode14,Calibration):
+            root14.metadata = newnode14
+        # handle metadata
+        elif isinstance(newnode14,Calibration):
+            root14.metadata = newnode14
+        else:
+            node14.tree(newnode14)
+        _populate_tree(newnode13,newnode14,root14)
 
 
 
@@ -106,56 +116,13 @@ def _v13_to_14_cls(obj):
         BraggVectors13
     ))), f"obj must be a v13 class instance, not type {type(obj)}"
 
+
     if isinstance(obj, Root13):
         x = Root( name=obj.name )
 
-    elif isinstance(obj, Metadata13):
-        x = Metadata( name=obj.name )
-        x._params.update( obj._params )
-
-    elif isinstance(obj, Array13):
-
-        # prepare arguments
-        args = {
-            'name' : obj.name,
-            'data' : obj.data
-        }
-        if hasattr(obj,'units'): args['units'] = obj.units
-        if hasattr(obj,'dim_names'): args['dim_names'] = obj.dim_names
-        if hasattr(obj,'dim_units'): args['dim_units'] = obj.dim_units
-        if hasattr(obj,'slicelabels'): args['slicelabels'] = obj.slicelabels
-        if hasattr(obj,'dims'):
-            dims = []
-            for dim in obj.dims:
-                dims.append(dim)
-            args['dims'] = dims
-
-        # get the array
-        x = Array(
-            **args
-        )
-
-    elif isinstance(obj, PointList13):
-        x = PointList(
-            name = obj.name,
-            data = obj.data
-        )
-
-    elif isinstance(obj, PointListArray13):
-        x = PointListArray(
-            name = obj.name,
-            dtype = obj.dtype,
-            shape = obj.shape
-        )
-        for idx,jdx in tqdmnd(
-            x.shape[0],x.shape[1],
-            desc='transferring PointListArray v13->14',
-            unit='foolishness'):
-            x[idx,jdx] = obj[idx,jdx]
-
     elif isinstance(obj, Calibration13):
         x = Calibration( name=obj.name )
-        x._params.update( obj.params )
+        x._params.update( obj._params )
 
     elif isinstance(obj, DataCube13):
         x = DataCube(
@@ -215,6 +182,50 @@ def _v13_to_14_cls(obj):
         x._v_uncal = obj._v_uncal
         if hasattr(obj,'_v_cal'):
             x._v_cal = obj._v_cal
+
+    elif isinstance(obj, Metadata13):
+        x = Metadata( name=obj.name )
+        x._params.update( obj._params )
+
+    elif isinstance(obj, Array13):
+
+        # prepare arguments
+        args = {
+            'name' : obj.name,
+            'data' : obj.data
+        }
+        if hasattr(obj,'units'): args['units'] = obj.units
+        if hasattr(obj,'dim_names'): args['dim_names'] = obj.dim_names
+        if hasattr(obj,'dim_units'): args['dim_units'] = obj.dim_units
+        if hasattr(obj,'slicelabels'): args['slicelabels'] = obj.slicelabels
+        if hasattr(obj,'dims'):
+            dims = []
+            for dim in obj.dims:
+                dims.append(dim)
+            args['dims'] = dims
+
+        # get the array
+        x = Array(
+            **args
+        )
+
+    elif isinstance(obj, PointList13):
+        x = PointList(
+            name = obj.name,
+            data = obj.data
+        )
+
+    elif isinstance(obj, PointListArray13):
+        x = PointListArray(
+            name = obj.name,
+            dtype = obj.dtype,
+            shape = obj.shape
+        )
+        for idx,jdx in tqdmnd(
+            x.shape[0],x.shape[1],
+            desc='transferring PointListArray v13->14',
+            unit='foolishness'):
+            x[idx,jdx] = obj[idx,jdx]
 
     else:
         raise Exception(f"Unexpected object type {type(obj)}")
