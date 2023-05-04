@@ -104,6 +104,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         initial_object_guess: np.ndarray = None,
         initial_probe_guess: np.ndarray = None,
         initial_scan_positions: np.ndarray = None,
+        object_type: str = "complex",
         verbose: bool = True,
         device: str = "cpu",
         **kwargs,
@@ -141,6 +142,13 @@ class PtychographicReconstruction(PhaseReconstruction):
         polar_parameters.update(kwargs)
         self._set_polar_parameters(polar_parameters)
 
+        if object_type != "potential" and object_type != "complex":
+            raise ValueError(
+                f"object_type must be either 'potential' or 'complex', not {object_type}"
+            )
+
+        self._object_type = object_type
+        self._object_type_initial = object_type
         self._energy = energy
         self._semiangle_cutoff = semiangle_cutoff
         self._rolloff = rolloff
@@ -298,9 +306,15 @@ class PtychographicReconstruction(PhaseReconstruction):
             q = np.max([np.round(q + pad_y), self._region_of_interest_shape[1]]).astype(
                 int
             )
-            self._object = xp.ones((p, q), dtype=xp.complex64)
+            if self._object_type == "potential":
+                self._object = xp.zeros((p, q), dtype=xp.float32)
+            elif self._object_type == "complex":
+                self._object = xp.ones((p, q), dtype=xp.complex64)
         else:
-            self._object = xp.asarray(self._object, dtype=xp.complex64)
+            if self._object_type == "potential":
+                self._object = xp.asarray(self._object, dtype=xp.float32)
+            elif self._object_type == "complex":
+                self._object = xp.asarray(self._object, dtype=xp.complex64)
 
         self._object_initial = self._object.copy()
         self._object_shape = self._object.shape
@@ -486,7 +500,12 @@ class PtychographicReconstruction(PhaseReconstruction):
 
         shifted_probes = fft_shift(current_probe, self._positions_px_fractional, xp)
 
-        object_patches = current_object[
+        if self._object_type == "potential":
+            complex_object = xp.exp(1j * current_object)
+        else:
+            complex_object = current_object
+
+        object_patches = complex_object[
             self._vectorized_patch_indices_row, self._vectorized_patch_indices_col
         ]
 
@@ -705,12 +724,25 @@ class PtychographicReconstruction(PhaseReconstruction):
             + (normalization_min * xp.max(probe_normalization)) ** 2
         )
 
-        current_object += step_size * (
-            self._sum_overlapping_patches_bincounts(
-                xp.conj(shifted_probes) * exit_waves
+        if self._object_type == "potential":
+            current_object += step_size * (
+                self._sum_overlapping_patches_bincounts(
+                    xp.real(
+                        -1j
+                        * xp.conj(object_patches)
+                        * xp.conj(shifted_probes)
+                        * exit_waves
+                    )
+                )
+                * probe_normalization
             )
-            * probe_normalization
-        )
+        elif self._object_type == "complex":
+            current_object += step_size * (
+                self._sum_overlapping_patches_bincounts(
+                    xp.conj(shifted_probes) * exit_waves
+                )
+                * probe_normalization
+            )
 
         if not fix_probe:
             object_normalization = xp.sum(
@@ -782,12 +814,25 @@ class PtychographicReconstruction(PhaseReconstruction):
             + (normalization_min * xp.max(probe_normalization)) ** 2
         )
 
-        current_object = (
-            self._sum_overlapping_patches_bincounts(
-                xp.conj(shifted_probes) * exit_waves
+        if self._object_type == "potential":
+            current_object = (
+                self._sum_overlapping_patches_bincounts(
+                    xp.real(
+                        -1j
+                        * xp.conj(object_patches)
+                        * xp.conj(shifted_probes)
+                        * exit_waves
+                    )
+                )
+                * probe_normalization
             )
-            * probe_normalization
-        )
+        elif self._object_type == "complex":
+            current_object = (
+                self._sum_overlapping_patches_bincounts(
+                    xp.conj(shifted_probes) * exit_waves
+                )
+                * probe_normalization
+            )
 
         if not fix_probe:
             object_normalization = xp.sum(
@@ -893,6 +938,8 @@ class PtychographicReconstruction(PhaseReconstruction):
         butterworth_filter,
         q_lowpass,
         q_highpass,
+        object_positivity,
+        shrinkage_rad,
     ):
         """
         Ptychographic constraints operator.
@@ -950,9 +997,14 @@ class PtychographicReconstruction(PhaseReconstruction):
                 q_highpass,
             )
 
-        current_object = self._object_threshold_constraint(
-            current_object, pure_phase_object
-        )
+        if self._object_type == "complex":
+            current_object = self._object_threshold_constraint(
+                current_object, pure_phase_object
+            )
+        elif object_positivity:
+            current_object = self._object_positivity_constraint(
+                current_object, shrinkage_rad
+            )
 
         if fix_probe_fourier_amplitude:
             current_probe = self._probe_fourier_amplitude_constraint(
@@ -1000,6 +1052,9 @@ class PtychographicReconstruction(PhaseReconstruction):
         butterworth_filter_iter: int = np.inf,
         q_lowpass: float = None,
         q_highpass: float = None,
+        object_positivity: bool = True,
+        shrinkage_rad: float = None,
+        switch_object_iter: int = np.inf,
         store_iterations: bool = False,
         progress_bar: bool = True,
         reset: bool = None,
@@ -1060,6 +1115,13 @@ class PtychographicReconstruction(PhaseReconstruction):
             Cut-off frequency in A^-1 for low-pass butterworth filter
         q_highpass: float
             Cut-off frequency in A^-1 for high-pass butterworth filter
+        object_positivity: bool, optional
+            If True, forces object to be positive
+        shrinkage_rad: float
+            Phase shift in radians to be subtracted from the potential at each iteration
+        switch_object_iter: int, optional
+            Iteration to switch object type between 'complex' and 'potential' or between
+            'potential' and 'complex'
         store_iterations: bool, optional
             If True, reconstructed objects and probes are stored at each iteration
         progress_bar: bool, optional
@@ -1155,6 +1217,16 @@ class PtychographicReconstruction(PhaseReconstruction):
             )
 
         if self._verbose:
+            if switch_object_iter > max_iter:
+                first_line = f"Performing {max_iter} iterations using a {self._object_type} object type, "
+            else:
+                switch_object_type = (
+                    "complex" if self._object_type == "potential" else "potential"
+                )
+                first_line = (
+                    f"Performing {switch_object_iter} iterations using a {self._object_type} object type and "
+                    f"{max_iter - switch_object_iter} iterations using a {switch_object_type} object type, "
+                )
             if max_batch_size is not None:
                 if use_projection_scheme:
                     raise ValueError(
@@ -1166,24 +1238,27 @@ class PtychographicReconstruction(PhaseReconstruction):
                 else:
                     print(
                         (
-                            f"Performing {max_iter} iterations using the {reconstruction_method} algorithm, "
+                            first_line + f"with the {reconstruction_method} algorithm, "
                             f"with normalization_min: {normalization_min} and step _size: {step_size}, "
                             f"in batches of max {max_batch_size} measurements."
                         )
                     )
+
             else:
                 if reconstruction_parameter is not None:
                     if np.array(reconstruction_parameter).shape == (3,):
                         print(
                             (
-                                f"Performing {max_iter} iterations using the {reconstruction_method} algorithm, "
+                                first_line
+                                + f"with the {reconstruction_method} algorithm, "
                                 f"with normalization_min: {normalization_min} and (a,b,c): {reconstruction_parameter}."
                             )
                         )
                     else:
                         print(
                             (
-                                f"Performing {max_iter} iterations using the {reconstruction_method} algorithm, "
+                                first_line
+                                + f"with the {reconstruction_method} algorithm, "
                                 f"with normalization_min: {normalization_min} and α: {reconstruction_parameter}."
                             )
                         )
@@ -1191,14 +1266,16 @@ class PtychographicReconstruction(PhaseReconstruction):
                     if step_size is not None:
                         print(
                             (
-                                f"Performing {max_iter} iterations using the {reconstruction_method} algorithm, "
+                                first_line
+                                + f"with the {reconstruction_method} algorithm, "
                                 f"with normalization_min: {normalization_min}."
                             )
                         )
                     else:
                         print(
                             (
-                                f"Performing {max_iter} iterations using the {reconstruction_method} algorithm, "
+                                first_line
+                                + f"with the {reconstruction_method} algorithm, "
                                 f"with normalization_min: {normalization_min} and step _size: {step_size}."
                             )
                         )
@@ -1230,6 +1307,7 @@ class PtychographicReconstruction(PhaseReconstruction):
                 self._vectorized_patch_indices_col,
             ) = self._extract_vectorized_patch_indices()
             self._exit_waves = None
+            self._object_type = self._object_type_initial
         elif reset is None:
             if hasattr(self, "error"):
                 warnings.warn(
@@ -1264,6 +1342,14 @@ class PtychographicReconstruction(PhaseReconstruction):
             disable=not progress_bar,
         ):
             error = 0.0
+
+            if a0 == switch_object_iter:
+                if self._object_type == "potential":
+                    self._object_type = "complex"
+                    self._object = xp.exp(1j * self._object)
+                elif self._object_type == "complex":
+                    self._object_type = "potential"
+                    self._object = xp.angle(self._object)
 
             # randomize
             if not use_projection_scheme:
@@ -1340,7 +1426,6 @@ class PtychographicReconstruction(PhaseReconstruction):
                 self._object,
                 self._probe,
                 self._positions_px,
-                pure_phase_object=a0 < pure_phase_object_iter,
                 fix_com=fix_com and a0 >= fix_probe_iter,
                 fix_probe_fourier_amplitude=a0 < fix_probe_fourier_amplitude_iter
                 and fix_probe_fourier_amplitude_threshold,
@@ -1354,6 +1439,10 @@ class PtychographicReconstruction(PhaseReconstruction):
                 and (q_lowpass is not None or q_highpass is not None),
                 q_lowpass=q_lowpass,
                 q_highpass=q_highpass,
+                object_positivity=object_positivity,
+                shrinkage_rad=shrinkage_rad,
+                pure_phase_object=a0 < pure_phase_object_iter
+                and self._object_type == "complex",
             )
 
             if store_iterations:
@@ -1394,9 +1483,12 @@ class PtychographicReconstruction(PhaseReconstruction):
         cmap = kwargs.get("cmap", "magma")
         kwargs.pop("cmap", None)
 
-        rotated_object = self._crop_rotate_object_fov(
-            np.angle(self.object), padding=padding
-        )
+        if self._object_type == "complex":
+            obj = np.angle(self.object)
+        else:
+            obj = self.object
+
+        rotated_object = self._crop_rotate_object_fov(obj, padding=padding)
         rotated_shape = rotated_object.shape
 
         extent = [
@@ -1432,7 +1524,6 @@ class PtychographicReconstruction(PhaseReconstruction):
         plot_convergence: bool,
         plot_probe: bool,
         plot_fourier_probe: bool,
-        object_mode: str,
         padding: int,
         **kwargs,
     ):
@@ -1447,9 +1538,6 @@ class PtychographicReconstruction(PhaseReconstruction):
             If true, displays a colorbar
         plot_probe: bool
             If true, the reconstructed probe intensity is also displayed
-        object_mode: str
-            Specifies the attribute of the object to plot.
-            One of 'phase', 'amplitude', 'intensity'
         """
         figsize = kwargs.get("figsize", (8, 5))
         cmap = kwargs.get("cmap", "magma")
@@ -1460,7 +1548,12 @@ class PtychographicReconstruction(PhaseReconstruction):
         kwargs.pop("invert", None)
         kwargs.pop("hue_start", None)
 
-        rotated_object = self._crop_rotate_object_fov(self.object, padding=padding)
+        if self._object_type == "complex":
+            obj = np.angle(self.object)
+        else:
+            obj = self.object
+
+        rotated_object = self._crop_rotate_object_fov(obj, padding=padding)
         rotated_shape = rotated_object.shape
 
         extent = [
@@ -1512,30 +1605,18 @@ class PtychographicReconstruction(PhaseReconstruction):
         if plot_probe or plot_fourier_probe:
             # Object
             ax = fig.add_subplot(spec[0, 0])
-            if object_mode == "phase":
-                im = ax.imshow(
-                    np.angle(rotated_object),
-                    extent=extent,
-                    cmap=cmap,
-                    **kwargs,
-                )
-            elif object_mode == "amplitude":
-                im = ax.imshow(
-                    np.abs(rotated_object),
-                    extent=extent,
-                    cmap=cmap,
-                    **kwargs,
-                )
-            else:
-                im = ax.imshow(
-                    np.abs(rotated_object) ** 2,
-                    extent=extent,
-                    cmap=cmap,
-                    **kwargs,
-                )
+            im = ax.imshow(
+                rotated_object,
+                extent=extent,
+                cmap=cmap,
+                **kwargs,
+            )
             ax.set_ylabel("x [A]")
             ax.set_xlabel("y [A]")
-            ax.set_title(f"Reconstructed object {object_mode}")
+            if self._object_type == "potential":
+                ax.set_title("Reconstructed object potential")
+            elif self._object_type == "complex":
+                ax.set_title("Reconstructed object phase")
 
             if cbar:
                 divider = make_axes_locatable(ax)
@@ -1574,30 +1655,18 @@ class PtychographicReconstruction(PhaseReconstruction):
 
         else:
             ax = fig.add_subplot(spec[0])
-            if object_mode == "phase":
-                im = ax.imshow(
-                    np.angle(rotated_object),
-                    extent=extent,
-                    cmap=cmap,
-                    **kwargs,
-                )
-            elif object_mode == "amplitude":
-                im = ax.imshow(
-                    np.abs(rotated_object),
-                    extent=extent,
-                    cmap=cmap,
-                    **kwargs,
-                )
-            else:
-                im = ax.imshow(
-                    np.abs(rotated_object) ** 2,
-                    extent=extent,
-                    cmap=cmap,
-                    **kwargs,
-                )
+            im = ax.imshow(
+                rotated_object,
+                extent=extent,
+                cmap=cmap,
+                **kwargs,
+            )
             ax.set_ylabel("x [A]")
             ax.set_xlabel("y [A]")
-            ax.set_title(f"Reconstructed object {object_mode}")
+            if self._object_type == "potential":
+                ax.set_title("Reconstructed object potential")
+            elif self._object_type == "complex":
+                ax.set_title("Reconstructed object phase")
 
             if cbar:
                 divider = make_axes_locatable(ax)
@@ -1629,7 +1698,6 @@ class PtychographicReconstruction(PhaseReconstruction):
         plot_probe: bool,
         plot_fourier_probe: bool,
         iterations_grid: Tuple[int, int],
-        object_mode: str,
         padding: int,
         **kwargs,
     ):
@@ -1646,10 +1714,6 @@ class PtychographicReconstruction(PhaseReconstruction):
             If true, displays a colorbar
         plot_probe: bool
             If true, the reconstructed probe intensity is also displayed
-        object_mode: str
-            Specifies the attribute of the object to plot.
-            One of 'phase', 'amplitude', 'intensity'
-
         """
         asnumpy = self._asnumpy
 
@@ -1669,10 +1733,17 @@ class PtychographicReconstruction(PhaseReconstruction):
         kwargs.pop("hue_start", None)
 
         errors = np.array(self.error_iterations)
-        objects = [
-            self._crop_rotate_object_fov(obj, padding=padding)
-            for obj in self.object_iterations
-        ]
+
+        objects = []
+        object_type = []
+
+        for obj in self.object_iterations:
+            if np.iscomplexobj(obj):
+                obj = np.angle(obj)
+                object_type.append("phase")
+            else:
+                object_type.append("potential")
+            objects.append(self._crop_rotate_object_fov(obj, padding=padding))
 
         if plot_probe or plot_fourier_probe:
             total_grids = (np.prod(iterations_grid) / 2).astype("int")
@@ -1722,31 +1793,13 @@ class PtychographicReconstruction(PhaseReconstruction):
         )
 
         for n, ax in enumerate(grid):
-            if object_mode == "phase":
-                im = ax.imshow(
-                    np.angle(objects[grid_range[n]]),
-                    extent=extent,
-                    cmap=cmap,
-                    **kwargs,
-                )
-                ax.set_title(f"Iter: {grid_range[n]} Phase")
-            elif object_mode == "amplitude":
-                im = ax.imshow(
-                    np.abs(objects[grid_range[n]]),
-                    extent=extent,
-                    cmap=cmap,
-                    **kwargs,
-                )
-                ax.set_title(f"Iter: {grid_range[n]} Amplitude")
-            else:
-                im = ax.imshow(
-                    np.abs(objects[grid_range[n]]) ** 2,
-                    extent=extent,
-                    cmap=cmap,
-                    **kwargs,
-                )
-                ax.set_title(f"Iter: {grid_range[n]} Intensity")
-
+            im = ax.imshow(
+                objects[grid_range[n]],
+                extent=extent,
+                cmap=cmap,
+                **kwargs,
+            )
+            ax.set_title(f"Iter: {grid_range[n]} {object_type[grid_range[n]]}")
             ax.set_ylabel("x [A]")
             ax.set_xlabel("y [A]")
             if cbar:
@@ -1814,7 +1867,6 @@ class PtychographicReconstruction(PhaseReconstruction):
         plot_convergence: bool = True,
         plot_probe: bool = True,
         plot_fourier_probe: bool = False,
-        object_mode: str = "phase",
         cbar: bool = True,
         padding: int = 0,
         **kwargs,
@@ -1832,9 +1884,6 @@ class PtychographicReconstruction(PhaseReconstruction):
             If true, displays a colorbar
         plot_probe: bool
             If true, the reconstructed probe intensity is also displayed
-        object_mode: str
-            Specifies the attribute of the object to plot.
-            One of 'phase', 'amplitude', 'intensity'
 
         Returns
         --------
@@ -1842,25 +1891,12 @@ class PtychographicReconstruction(PhaseReconstruction):
             Self to accommodate chaining
         """
 
-        if (
-            object_mode != "phase"
-            and object_mode != "amplitude"
-            and object_mode != "intensity"
-        ):
-            raise ValueError(
-                (
-                    "object_mode needs to be one of 'phase', 'amplitude', "
-                    f"or 'intensity', not {object_mode}"
-                )
-            )
-
         if iterations_grid is None:
             self._visualize_last_iteration(
                 fig=fig,
                 plot_convergence=plot_convergence,
                 plot_probe=plot_probe,
                 plot_fourier_probe=plot_fourier_probe,
-                object_mode=object_mode,
                 cbar=cbar,
                 padding=padding,
                 **kwargs,
@@ -1872,7 +1908,6 @@ class PtychographicReconstruction(PhaseReconstruction):
                 iterations_grid=iterations_grid,
                 plot_probe=plot_probe,
                 plot_fourier_probe=plot_fourier_probe,
-                object_mode=object_mode,
                 cbar=cbar,
                 padding=padding,
                 **kwargs,

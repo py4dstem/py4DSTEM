@@ -41,6 +41,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
     from py4DSTEM.process.phase.iterative_constraints import (
         _object_butterworth_constraint,
         _object_gaussian_constraint,
+        _object_positivity_constraint,
         _object_threshold_constraint,
         _positions_affine_transformation_constraint,
         _positions_center_of_mass_constraint,

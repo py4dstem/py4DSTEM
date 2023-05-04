@@ -1225,30 +1225,6 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
 
         return current_positions
 
-    def _object_positivity_constraint(self, current_object, shrinkage_rad):
-        """
-        Ptychographic positivity constraint.
-        Used to ensure electrostatic potential is positive.
-
-        Parameters
-        --------
-        current_object: np.ndarray
-            Current object estimate
-        shrinkage_rad: float
-            Phase shift in radians to be subtracted from the potential at each iteration
-
-        Returns
-        --------
-        constrained_object: np.ndarray
-            Constrained object estimate
-        """
-        xp = self._xp
-
-        if shrinkage_rad is not None:
-            current_object -= shrinkage_rad
-
-        return xp.maximum(current_object, 0.0)
-
     def _object_butterworth_constraint(self, current_object, q_lowpass, q_highpass):
         """
         Butterworth filter
@@ -1673,6 +1649,16 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             )
 
         if self._verbose:
+            if switch_object_iter > max_iter:
+                first_line = f"Performing {max_iter} iterations using a {self._object_type} object type, "
+            else:
+                switch_object_type = (
+                    "complex" if self._object_type == "potential" else "potential"
+                )
+                first_line = (
+                    f"Performing {switch_object_iter} iterations using a {self._object_type} object type and "
+                    f"{max_iter - switch_object_iter} iterations using a {switch_object_type} object type, "
+                )
             if max_batch_size is not None:
                 if use_projection_scheme:
                     raise ValueError(
@@ -1684,24 +1670,27 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
                 else:
                     print(
                         (
-                            f"Performing {max_iter} iterations using the {reconstruction_method} algorithm, "
+                            first_line + f"with the {reconstruction_method} algorithm, "
                             f"with normalization_min: {normalization_min} and step _size: {step_size}, "
                             f"in batches of max {max_batch_size} measurements."
                         )
                     )
+
             else:
                 if reconstruction_parameter is not None:
                     if np.array(reconstruction_parameter).shape == (3,):
                         print(
                             (
-                                f"Performing {max_iter} iterations using the {reconstruction_method} algorithm, "
+                                first_line
+                                + f"with the {reconstruction_method} algorithm, "
                                 f"with normalization_min: {normalization_min} and (a,b,c): {reconstruction_parameter}."
                             )
                         )
                     else:
                         print(
                             (
-                                f"Performing {max_iter} iterations using the {reconstruction_method} algorithm, "
+                                first_line
+                                + f"with the {reconstruction_method} algorithm, "
                                 f"with normalization_min: {normalization_min} and α: {reconstruction_parameter}."
                             )
                         )
@@ -1709,14 +1698,16 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
                     if step_size is not None:
                         print(
                             (
-                                f"Performing {max_iter} iterations using the {reconstruction_method} algorithm, "
+                                first_line
+                                + f"with the {reconstruction_method} algorithm, "
                                 f"with normalization_min: {normalization_min}."
                             )
                         )
                     else:
                         print(
                             (
-                                f"Performing {max_iter} iterations using the {reconstruction_method} algorithm, "
+                                first_line
+                                + f"with the {reconstruction_method} algorithm, "
                                 f"with normalization_min: {normalization_min} and step _size: {step_size}."
                             )
                         )
@@ -1788,10 +1779,9 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
                 if self._object_type == "potential":
                     self._object_type = "complex"
                     self._object = xp.exp(1j * self._object)
-                    self._object = xp.asarray(self._object, dtype=xp.complex64)
                 elif self._object_type == "complex":
                     self._object_type = "potential"
-                    self._object = xp.asarray(xp.angle(self._object), dtype=xp.float32)
+                    self._object = xp.angle(self._object)
 
             # randomize
             if not use_projection_scheme:
