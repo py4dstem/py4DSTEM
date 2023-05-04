@@ -38,7 +38,7 @@ def Calibration_from_Metadata(metadata):
         (Calibration)
     """
     from py4DSTEM.io.legacy.legacy13.v13_py4dstem_classes.calibration import Calibration
-    
+
     cal = Calibration(name = metadata.name)
     cal._params.update(metadata._params)
 
