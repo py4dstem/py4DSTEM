@@ -689,7 +689,11 @@ class OverlapMagneticTomographicReconstruction(PhaseReconstruction):
 
             # initial probe
             complex_probe_rgb = Complex2RGB(
-                asnumpy(self._probe), vmin=vmin, vmax=vmax, hue_start=hue_start, invert = invert
+                asnumpy(self._probe),
+                vmin=vmin,
+                vmax=vmax,
+                hue_start=hue_start,
+                invert=invert,
             )
 
             # propagated
@@ -700,7 +704,11 @@ class OverlapMagneticTomographicReconstruction(PhaseReconstruction):
                     propagated_probe, self._propagator_arrays[s]
                 )
             complex_propagated_rgb = Complex2RGB(
-                asnumpy(propagated_probe), vmin=vmin, vmax=vmax, hue_start=hue_start, invert = invert
+                asnumpy(propagated_probe),
+                vmin=vmin,
+                vmax=vmax,
+                hue_start=hue_start,
+                invert=invert,
             )
 
             # overlaps
@@ -736,7 +744,9 @@ class OverlapMagneticTomographicReconstruction(PhaseReconstruction):
 
             divider = make_axes_locatable(ax1)
             cax1 = divider.append_axes("right", size="5%", pad="2.5%")
-            add_colorbar_arg(cax1, vmin=vmin, vmax=vmax, hue_start=hue_start, invert = invert)
+            add_colorbar_arg(
+                cax1, vmin=vmin, vmax=vmax, hue_start=hue_start, invert=invert
+            )
             ax1.set_ylabel("x [A]")
             ax1.set_xlabel("y [A]")
             ax1.set_title("Initial Probe")
@@ -749,7 +759,9 @@ class OverlapMagneticTomographicReconstruction(PhaseReconstruction):
 
             divider = make_axes_locatable(ax2)
             cax2 = divider.append_axes("right", size="5%", pad="2.5%")
-            add_colorbar_arg(cax2, vmin=vmin, vmax=vmax, hue_start=hue_start, invert = invert)
+            add_colorbar_arg(
+                cax2, vmin=vmin, vmax=vmax, hue_start=hue_start, invert=invert
+            )
             ax2.set_ylabel("x [A]")
             ax2.set_xlabel("y [A]")
             ax2.set_title("Propagated Probe")
@@ -2633,7 +2645,7 @@ class OverlapMagneticTomographicReconstruction(PhaseReconstruction):
 
     def visualize(
         self,
-        fig = None,
+        fig=None,
         cbar: bool = True,
         iterations_grid: Tuple[int, int] = None,
         plot_convergence: bool = True,
@@ -2661,7 +2673,7 @@ class OverlapMagneticTomographicReconstruction(PhaseReconstruction):
 
         if iterations_grid is None:
             self._visualize_last_iteration(
-                fig = fig,
+                fig=fig,
                 plot_convergence=plot_convergence,
                 projection_angle_deg=projection_angle_deg,
                 projection_axes=projection_axes,
@@ -2672,7 +2684,7 @@ class OverlapMagneticTomographicReconstruction(PhaseReconstruction):
             )
         else:
             self._visualize_all_iterations(
-                fig = fig,
+                fig=fig,
                 plot_convergence=plot_convergence,
                 iterations_grid=iterations_grid,
                 projection_angle_deg=projection_angle_deg,

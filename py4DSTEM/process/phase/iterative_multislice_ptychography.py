@@ -17,6 +17,7 @@ try:
 except ImportError:
     cp = None
 
+from emdfile import tqdmnd
 from py4DSTEM import DataCube
 from py4DSTEM.process.phase.iterative_base_class import PhaseReconstruction
 from py4DSTEM.process.phase.utils import (
@@ -28,7 +29,6 @@ from py4DSTEM.process.phase.utils import (
     spatial_frequencies,
 )
 from py4DSTEM.process.utils import electron_wavelength_angstrom, get_CoM, get_shifted_ar
-from emdfile import tqdmnd
 
 warnings.simplefilter(action="always", category=UserWarning)
 
@@ -510,7 +510,11 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
 
             # initial probe
             complex_probe_rgb = Complex2RGB(
-                asnumpy(self._probe), vmin=vmin, vmax=vmax, hue_start=hue_start, invert = invert
+                asnumpy(self._probe),
+                vmin=vmin,
+                vmax=vmax,
+                hue_start=hue_start,
+                invert=invert,
             )
 
             # propagated
@@ -521,7 +525,11 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
                     propagated_probe, self._propagator_arrays[s]
                 )
             complex_propagated_rgb = Complex2RGB(
-                asnumpy(propagated_probe), vmin=vmin, vmax=vmax, hue_start=hue_start, invert = invert
+                asnumpy(propagated_probe),
+                vmin=vmin,
+                vmax=vmax,
+                hue_start=hue_start,
+                invert=invert,
             )
 
             # overlaps
@@ -553,7 +561,9 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
 
             divider = make_axes_locatable(ax1)
             cax1 = divider.append_axes("right", size="5%", pad="2.5%")
-            add_colorbar_arg(cax1, vmin=vmin, vmax=vmax, hue_start=hue_start, invert = invert)
+            add_colorbar_arg(
+                cax1, vmin=vmin, vmax=vmax, hue_start=hue_start, invert=invert
+            )
             ax1.set_ylabel("x [A]")
             ax1.set_xlabel("y [A]")
             ax1.set_title("Initial Probe")
@@ -566,7 +576,9 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
 
             divider = make_axes_locatable(ax2)
             cax2 = divider.append_axes("right", size="5%", pad="2.5%")
-            add_colorbar_arg(cax2, vmin=vmin, vmax=vmax, hue_start=hue_start, invert = invert)
+            add_colorbar_arg(
+                cax2, vmin=vmin, vmax=vmax, hue_start=hue_start, invert=invert
+            )
             ax2.set_ylabel("x [A]")
             ax2.set_xlabel("y [A]")
             ax2.set_title("Propagated Probe")
@@ -2075,10 +2087,14 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
 
             ax = fig.add_subplot(spec[0, 1])
             if plot_fourier_probe:
-                probe_array = Complex2RGB(self.probe_fourier, hue_start = hue_start, invert= invert)
+                probe_array = Complex2RGB(
+                    self.probe_fourier, hue_start=hue_start, invert=invert
+                )
                 ax.set_title("Reconstructed Fourier probe")
             else:
-                probe_array = Complex2RGB(self.probe, hue_start = hue_start, invert = invert)
+                probe_array = Complex2RGB(
+                    self.probe, hue_start=hue_start, invert=invert
+                )
                 ax.set_title("Reconstructed probe")
 
             im = ax.imshow(
@@ -2092,7 +2108,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             if cbar:
                 divider = make_axes_locatable(ax)
                 ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
-                add_colorbar_arg(ax_cb, hue_start = hue_start, invert= invert)
+                add_colorbar_arg(ax_cb, hue_start=hue_start, invert=invert)
 
         else:
             ax = fig.add_subplot(spec[0])
@@ -2265,12 +2281,14 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
                 if plot_fourier_probe:
                     probe_array = Complex2RGB(
                         asnumpy(self._return_fourier_probe(probes[grid_range[n]])),
-                        hue_start = hue_start,
-                        invert = invert,
+                        hue_start=hue_start,
+                        invert=invert,
                     )
                     ax.set_title(f"Iter: {grid_range[n]} Fourier probe")
                 else:
-                    probe_array = Complex2RGB(probes[grid_range[n]], hue_start = hue_start, invert = invert)
+                    probe_array = Complex2RGB(
+                        probes[grid_range[n]], hue_start=hue_start, invert=invert
+                    )
                     ax.set_title(f"Iter: {grid_range[n]} probe")
 
                 im = ax.imshow(
@@ -2283,7 +2301,9 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
                 ax.set_xlabel("y [A]")
 
                 if cbar:
-                    add_colorbar_arg(grid.cbar_axes[n], hue_start = hue_start, invert = invert )
+                    add_colorbar_arg(
+                        grid.cbar_axes[n], hue_start=hue_start, invert=invert
+                    )
 
         if plot_convergence:
             kwargs.pop("vmin", None)

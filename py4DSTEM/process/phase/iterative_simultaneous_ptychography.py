@@ -17,6 +17,7 @@ try:
 except ImportError:
     cp = None
 
+from emdfile import tqdmnd
 from py4DSTEM import DataCube
 from py4DSTEM.process.phase.iterative_base_class import PhaseReconstruction
 from py4DSTEM.process.phase.utils import (
@@ -27,7 +28,6 @@ from py4DSTEM.process.phase.utils import (
     polar_symbols,
 )
 from py4DSTEM.process.utils import get_CoM, get_shifted_ar
-from emdfile import tqdmnd
 
 warnings.simplefilter(action="always", category=UserWarning)
 
@@ -657,7 +657,11 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
 
             # initial probe
             complex_probe_rgb = Complex2RGB(
-                asnumpy(self._probe), vmin=vmin, vmax=vmax, hue_start=hue_start, invert = invert,
+                asnumpy(self._probe),
+                vmin=vmin,
+                vmax=vmax,
+                hue_start=hue_start,
+                invert=invert,
             )
 
             # overlaps
@@ -689,7 +693,9 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
 
             divider = make_axes_locatable(ax1)
             cax1 = divider.append_axes("right", size="5%", pad="2.5%")
-            add_colorbar_arg(cax1, vmin=vmin, vmax=vmax, hue_start=hue_start, invert = invert)
+            add_colorbar_arg(
+                cax1, vmin=vmin, vmax=vmax, hue_start=hue_start, invert=invert
+            )
             ax1.set_ylabel("x [A]")
             ax1.set_xlabel("y [A]")
             ax1.set_title("Initial Probe")
@@ -3017,10 +3023,14 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
             # Probe
             ax = fig.add_subplot(spec[0, 2])
             if plot_fourier_probe:
-                probe_array = Complex2RGB(self.probe_fourier, hue_start = hue_start, invert = invert)
+                probe_array = Complex2RGB(
+                    self.probe_fourier, hue_start=hue_start, invert=invert
+                )
                 ax.set_title("Reconstructed Fourier probe")
             else:
-                probe_array = Complex2RGB(self.probe, hue_start = hue_start, invert = invert)
+                probe_array = Complex2RGB(
+                    self.probe, hue_start=hue_start, invert=invert
+                )
                 ax.set_title("Reconstructed probe")
 
             im = ax.imshow(
@@ -3034,7 +3044,7 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
             if cbar:
                 divider = make_axes_locatable(ax)
                 ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
-                add_colorbar_arg(ax_cb, hue_start = hue_start, invert = invert)
+                add_colorbar_arg(ax_cb, hue_start=hue_start, invert=invert)
 
         else:
             # Electrostatic Object
