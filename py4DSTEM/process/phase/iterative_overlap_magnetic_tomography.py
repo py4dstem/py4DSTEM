@@ -678,16 +678,18 @@ class OverlapMagneticTomographicReconstruction(PhaseReconstruction):
             cmap = kwargs.get("cmap", "Greys_r")
             vmin = kwargs.get("vmin", None)
             vmax = kwargs.get("vmax", None)
-            hue_start = kwargs.get("hue_start", 90)
+            hue_start = kwargs.get("hue_start", 0)
+            invert = kwargs.get("invert", False)
             kwargs.pop("figsize", None)
             kwargs.pop("cmap", None)
             kwargs.pop("vmin", None)
             kwargs.pop("vmax", None)
             kwargs.pop("hue_start", None)
+            kwargs.pop("invert", None)
 
             # initial probe
             complex_probe_rgb = Complex2RGB(
-                asnumpy(self._probe), vmin=vmin, vmax=vmax, hue_start=hue_start
+                asnumpy(self._probe), vmin=vmin, vmax=vmax, hue_start=hue_start, invert = invert
             )
 
             # propagated
@@ -698,7 +700,7 @@ class OverlapMagneticTomographicReconstruction(PhaseReconstruction):
                     propagated_probe, self._propagator_arrays[s]
                 )
             complex_propagated_rgb = Complex2RGB(
-                asnumpy(propagated_probe), vmin=vmin, vmax=vmax, hue_start=hue_start
+                asnumpy(propagated_probe), vmin=vmin, vmax=vmax, hue_start=hue_start, invert = invert
             )
 
             # overlaps
@@ -734,7 +736,7 @@ class OverlapMagneticTomographicReconstruction(PhaseReconstruction):
 
             divider = make_axes_locatable(ax1)
             cax1 = divider.append_axes("right", size="5%", pad="2.5%")
-            add_colorbar_arg(cax1, vmin=vmin, vmax=vmax, hue_start=hue_start)
+            add_colorbar_arg(cax1, vmin=vmin, vmax=vmax, hue_start=hue_start, invert = invert)
             ax1.set_ylabel("x [A]")
             ax1.set_xlabel("y [A]")
             ax1.set_title("Initial Probe")
@@ -747,7 +749,7 @@ class OverlapMagneticTomographicReconstruction(PhaseReconstruction):
 
             divider = make_axes_locatable(ax2)
             cax2 = divider.append_axes("right", size="5%", pad="2.5%")
-            add_colorbar_arg(cax2, vmin=vmin, vmax=vmax, hue_start=hue_start)
+            add_colorbar_arg(cax2, vmin=vmin, vmax=vmax, hue_start=hue_start, invert = invert)
             ax2.set_ylabel("x [A]")
             ax2.set_xlabel("y [A]")
             ax2.set_title("Propagated Probe")

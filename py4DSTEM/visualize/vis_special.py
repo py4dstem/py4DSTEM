@@ -805,7 +805,40 @@ def show_selected_dps(datacube,positions,im,bragg_pos=None,
                     get_pointcolors=lambda i:colors[i],
                     **kwargs)
 
-def Complex2RGB(complex_array, vmin=None, vmax=None, hue_start=90):
+def Complex2RGB(complex_data, vmin=None, vmax = None, hue_start = 0, invert=False):
+    
+    amp = np.abs(complex_data)
+    if np.isclose(np.max(amp),np.min(amp)):
+        if vmin is None:
+            vmin = 0
+        if vmax is None:
+            vmax = np.max(amp)
+    else:
+        if vmin is None:
+            vmin = 0.02
+        if vmax is None:
+            vmax = 0.98
+        vals = np.sort(amp[~np.isnan(amp)])
+        ind_vmin = np.round((vals.shape[0] - 1) * vmin).astype("int")
+        ind_vmax = np.round((vals.shape[0] - 1) * vmax).astype("int")
+        ind_vmin = np.max([0, ind_vmin])
+        ind_vmax = np.min([len(vals) - 1, ind_vmax])
+        vmin = vals[ind_vmin]
+        vmax = vals[ind_vmax]
+
+    amp = np.where(amp < vmin, vmin, amp)
+    amp = np.where(amp > vmax, vmax, amp)
+
+    phase = np.angle(complex_data) + np.deg2rad(hue_start)
+    amp /= np.max(amp)
+    rgb = np.zeros(complex_data.shape +(3,))
+    rgb[...,0] = 0.5*(np.sin(phase)+1)*amp
+    rgb[...,1] = 0.5*(np.sin(phase+np.pi/2)+1)*amp
+    rgb[...,2] = 0.5*(-np.sin(phase)+1)*amp
+    
+    return 1-rgb if invert else rgb
+
+def Complex2RGB_legacy(complex_array, vmin=None, vmax=None, hue_start=90):
     """
     Function to turn a complex array into rgb for plotting
     Args:
@@ -853,9 +886,9 @@ def Complex2RGB(complex_array, vmin=None, vmax=None, hue_start=90):
 
     return hsv_to_rgb(hsv)
 
-def add_colorbar_arg(cax, vmin = None, vmax = None, hue_start = 90):
+def add_colorbar_arg(cax, vmin = None, vmax = None, hue_start = 0, invert = False):
     z = np.exp(1j * np.linspace(-np.pi, np.pi, 200))
-    rgb_vals = Complex2RGB(z, vmin=vmin, vmax=vmax, hue_start=hue_start)[0]
+    rgb_vals = Complex2RGB(z, vmin=vmin, vmax=vmax, hue_start=hue_start, invert=invert)
     newcmp = mcolors.ListedColormap(rgb_vals)
     norm = mcolors.Normalize(vmin=-np.pi, vmax=np.pi)
 
@@ -877,6 +910,8 @@ def show_complex(
     pixelunits="pixels",
     pixelsize=1,
     returnfig=False,
+    hue_start = 0,
+    invert=False,
     **kwargs
 ):
     """
@@ -900,7 +935,7 @@ def show_complex(
         if returnfig==True, return the figure and the axis.
     """
     # convert to complex colors
-    rgb = Complex2RGB(ar_complex, vmin, vmax)
+    rgb = Complex2RGB(ar_complex, vmin, vmax, hue_start=hue_start, invert=invert)
 
     # plot
 
@@ -955,7 +990,7 @@ def show_complex(
         ktheta = kra * np.exp(1j * ktheta)
 
         # convert to hsv
-        rgb = Complex2RGB(ktheta, 0, 0.4)
+        rgb = Complex2RGB(ktheta, 0, 0.4, hue_start = hue_start, invert=invert)
         ind = kra > 0.4
         rgb[ind] = [1, 1, 1]
 

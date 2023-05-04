@@ -384,16 +384,18 @@ class PtychographicReconstruction(PhaseReconstruction):
             cmap = kwargs.get("cmap", "Greys_r")
             vmin = kwargs.get("vmin", None)
             vmax = kwargs.get("vmax", None)
-            hue_start = kwargs.get("hue_start", 90)
+            hue_start = kwargs.get("hue_start", 0)
+            invert = kwargs.get("invert", False)
             kwargs.pop("figsize", None)
             kwargs.pop("cmap", None)
             kwargs.pop("vmin", None)
             kwargs.pop("vmax", None)
             kwargs.pop("hue_start", None)
+            kwargs.pop("invert", None)
 
             # initial probe
             complex_probe_rgb = Complex2RGB(
-                asnumpy(self._probe), vmin=vmin, vmax=vmax, hue_start=hue_start
+                asnumpy(self._probe), vmin=vmin, vmax=vmax, hue_start=hue_start, invert=invert
             )
 
             # overlaps
@@ -425,7 +427,7 @@ class PtychographicReconstruction(PhaseReconstruction):
 
             divider = make_axes_locatable(ax1)
             cax1 = divider.append_axes("right", size="5%", pad="2.5%")
-            add_colorbar_arg(cax1, vmin=vmin, vmax=vmax, hue_start=hue_start)
+            add_colorbar_arg(cax1, vmin=vmin, vmax=vmax, hue_start=hue_start, invert=invert)
             ax1.set_ylabel("x [A]")
             ax1.set_xlabel("y [A]")
             ax1.set_title("Initial Probe")
@@ -1446,8 +1448,12 @@ class PtychographicReconstruction(PhaseReconstruction):
         """
         figsize = kwargs.get("figsize", (8, 5))
         cmap = kwargs.get("cmap", "magma")
+        invert = kwargs.get("invert", False)
+        hue_start = kwargs.get("hue_start", 0)
         kwargs.pop("figsize", None)
         kwargs.pop("cmap", None)
+        kwargs.pop("invert", None)
+        kwargs.pop("hue_start", None)
 
         rotated_object = self._crop_rotate_object_fov(self.object, padding=padding)
         rotated_shape = rotated_object.shape
@@ -1538,10 +1544,10 @@ class PtychographicReconstruction(PhaseReconstruction):
 
             ax = fig.add_subplot(spec[0, 1])
             if plot_fourier_probe:
-                probe_array = Complex2RGB(self.probe_fourier)
+                probe_array = Complex2RGB(self.probe_fourier, hue_start=hue_start,invert=invert)
                 ax.set_title("Reconstructed Fourier probe")
             else:
-                probe_array = Complex2RGB(self.probe)
+                probe_array = Complex2RGB(self.probe, hue_start=hue_start, invert=invert)
                 ax.set_title("Reconstructed probe")
 
             im = ax.imshow(
@@ -1555,7 +1561,7 @@ class PtychographicReconstruction(PhaseReconstruction):
             if cbar:
                 divider = make_axes_locatable(ax)
                 ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
-                add_colorbar_arg(ax_cb)
+                add_colorbar_arg(ax_cb, hue_start= hue_start, invert=invert)
 
         else:
             ax = fig.add_subplot(spec[0])
@@ -1646,8 +1652,12 @@ class PtychographicReconstruction(PhaseReconstruction):
 
         figsize = kwargs.get("figsize", (12, 7))
         cmap = kwargs.get("cmap", "inferno")
+        invert = kwargs.get("invert", False)
+        hue_start = kwargs.get("hue_start", 0)
         kwargs.pop("figsize", None)
         kwargs.pop("cmap", None)
+        kwargs.pop("invert", None)
+        kwargs.pop("hue_start", None)
 
         errors = np.array(self.error_iterations)
         objects = [
@@ -1749,11 +1759,13 @@ class PtychographicReconstruction(PhaseReconstruction):
             for n, ax in enumerate(grid):
                 if plot_fourier_probe:
                     probe_array = Complex2RGB(
-                        asnumpy(self._return_fourier_probe(probes[grid_range[n]]))
+                        asnumpy(self._return_fourier_probe(probes[grid_range[n]])),
+                        hue_start=hue_start,
+                        invert=invert,
                     )
                     ax.set_title(f"Iter: {grid_range[n]} Fourier probe")
                 else:
-                    probe_array = Complex2RGB(probes[grid_range[n]])
+                    probe_array = Complex2RGB(probes[grid_range[n]],hue_start=hue_start,invert=invert)
                     ax.set_title(f"Iter: {grid_range[n]} probe")
 
                 im = ax.imshow(
@@ -1766,7 +1778,7 @@ class PtychographicReconstruction(PhaseReconstruction):
                 ax.set_xlabel("y [A]")
 
                 if cbar:
-                    add_colorbar_arg(grid.cbar_axes[n])
+                    add_colorbar_arg(grid.cbar_axes[n],hue_start=hue_start,invert=invert)
 
         if plot_convergence:
             kwargs.pop("vmin", None)
