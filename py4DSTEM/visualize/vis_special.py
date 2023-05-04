@@ -831,7 +831,7 @@ def Complex2RGB(complex_data, vmin=None, vmax = None, hue_start = 0, invert=Fals
 
     phase = np.angle(complex_data) + np.deg2rad(hue_start)
     amp /= np.max(amp)
-    rgb = np.zeros(complex_data.shape +(3,))
+    rgb = np.zeros(phase.shape +(3,))
     rgb[...,0] = 0.5*(np.sin(phase)+1)*amp
     rgb[...,1] = 0.5*(np.sin(phase+np.pi/2)+1)*amp
     rgb[...,2] = 0.5*(-np.sin(phase)+1)*amp
