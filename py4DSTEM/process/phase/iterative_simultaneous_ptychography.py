@@ -646,16 +646,18 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
             cmap = kwargs.get("cmap", "Greys_r")
             vmin = kwargs.get("vmin", None)
             vmax = kwargs.get("vmax", None)
-            hue_start = kwargs.get("hue_start", 90)
+            hue_start = kwargs.get("hue_start", 0)
+            invert = kwargs.get("invert", False)
             kwargs.pop("figsize", None)
             kwargs.pop("cmap", None)
             kwargs.pop("vmin", None)
             kwargs.pop("vmax", None)
             kwargs.pop("hue_start", None)
+            kwargs.pop("invert", None)
 
             # initial probe
             complex_probe_rgb = Complex2RGB(
-                asnumpy(self._probe), vmin=vmin, vmax=vmax, hue_start=hue_start
+                asnumpy(self._probe), vmin=vmin, vmax=vmax, hue_start=hue_start, invert = invert,
             )
 
             # overlaps
@@ -687,7 +689,7 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
 
             divider = make_axes_locatable(ax1)
             cax1 = divider.append_axes("right", size="5%", pad="2.5%")
-            add_colorbar_arg(cax1, vmin=vmin, vmax=vmax, hue_start=hue_start)
+            add_colorbar_arg(cax1, vmin=vmin, vmax=vmax, hue_start=hue_start, invert = invert)
             ax1.set_ylabel("x [A]")
             ax1.set_xlabel("y [A]")
             ax1.set_title("Initial Probe")
@@ -2845,9 +2847,13 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         figsize = kwargs.get("figsize", (12, 5))
         cmap_e = kwargs.get("cmap_e", "magma")
         cmap_m = kwargs.get("cmap_m", "PuOr")
+        invert = kwargs.get("invert", False)
+        hue_start = kwargs.get("hue_start", 0)
         kwargs.pop("figsize", None)
         kwargs.pop("cmap_e", None)
         kwargs.pop("cmap_m", None)
+        kwargs.pop("invert", None)
+        kwargs.pop("hue_start", None)
 
         rotated_electrostatic = self._crop_rotate_object_fov(
             self.object[0], padding=padding
@@ -3011,10 +3017,10 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
             # Probe
             ax = fig.add_subplot(spec[0, 2])
             if plot_fourier_probe:
-                probe_array = Complex2RGB(self.probe_fourier)
+                probe_array = Complex2RGB(self.probe_fourier, hue_start = hue_start, invert = invert)
                 ax.set_title("Reconstructed Fourier probe")
             else:
-                probe_array = Complex2RGB(self.probe)
+                probe_array = Complex2RGB(self.probe, hue_start = hue_start, invert = invert)
                 ax.set_title("Reconstructed probe")
 
             im = ax.imshow(
@@ -3028,7 +3034,7 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
             if cbar:
                 divider = make_axes_locatable(ax)
                 ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
-                add_colorbar_arg(ax_cb)
+                add_colorbar_arg(ax_cb, hue_start = hue_start, invert = invert)
 
         else:
             # Electrostatic Object
