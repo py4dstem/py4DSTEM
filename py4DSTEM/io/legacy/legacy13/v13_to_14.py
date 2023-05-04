@@ -50,7 +50,7 @@ from py4DSTEM.classes import (
 
 
 
-def v13_to_14( v13tree ):
+def v13_to_14( v13tree, v13cal ):
     """
     Converts a v13 data tree to a v14 data tree
     """
@@ -72,6 +72,13 @@ def v13_to_14( v13tree ):
 
     # populate tree
     _populate_tree(v13tree,node,root)
+
+    # add calibration
+    if v13cal is not None:
+        cal = _v13_to_14_cls(v13cal)
+        root.metadata = cal
+
+    # return
     return node
 
 
@@ -80,12 +87,9 @@ def _populate_tree(node13,node14,root14):
     for key in node13.tree.keys():
         newnode13 = node13.tree[key]
         newnode14 = _v13_to_14_cls(newnode13)
-        # handle calibrations and metadata
-        if isinstance(newnode14,Calibration):
-            root14.metadata = newnode14
-        # handle metadata
-        elif isinstance(newnode14,Calibration):
-            root14.metadata = newnode14
+        # skip calibrations and metadata
+        if isinstance(newnode14,Metadata):
+            pass
         else:
             node14.tree(newnode14)
         _populate_tree(newnode13,newnode14,root14)
@@ -239,7 +243,6 @@ def _v13_to_14_cls(obj):
             dm = Metadata( name=md.name )
             dm._params.update( md._params )
             x.metadata = dm
-
 
 
     # Return
