@@ -1414,30 +1414,6 @@ class OverlapMagneticTomographicReconstruction(PhaseReconstruction):
 
         return current_positions
 
-    def _object_positivity_constraint(self, current_object, shrinkage_rad):
-        """
-        Ptychographic positivity constraint.
-        Used to ensure electrostatic potential is positive.
-
-        Parameters
-        --------
-        current_object: np.ndarray
-            Current object estimate
-        shrinkage_rad: float
-            Phase shift in radians to be subtracted from the potential at each iteration
-
-        Returns
-        --------
-        constrained_object: np.ndarray
-            Constrained object estimate
-        """
-        xp = self._xp
-
-        if shrinkage_rad is not None:
-            current_object -= shrinkage_rad
-
-        return xp.maximum(current_object, 0.0)
-
     def _object_gaussian_constraint(self, current_object, gaussian_filter_sigma):
         """
         Ptychographic smoothness constraint.
