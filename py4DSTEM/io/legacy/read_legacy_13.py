@@ -130,12 +130,12 @@ def _read_without_tree(grp):
         data = Root(
             name = basename(grp.name),
         )
-        cal = _add_calibration(
-            data.tree,
-            grp
-        )
-        if cal is not None:
-            data.calibration = cal
+        #cal = _add_calibration(
+        #    data.tree,
+        #    grp
+        #)
+        #if cal is not None:
+        #    data.calibration = cal
         return data
 
     # read data as v13 objects
@@ -238,7 +238,6 @@ def print_v13h5pyFile_tree(f, tablevel=0, linelevels=[], show_metadata=False):
         for idx in range(tablevel):
             l = '|' if idx+1 in linelevels else ''
             string += '\t'+l
-        #print(string)
         print(string+'--'+k)
         if i == N-1:
             linelevels.remove(tablevel)
