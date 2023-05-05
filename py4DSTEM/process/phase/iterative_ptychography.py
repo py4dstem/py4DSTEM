@@ -11,13 +11,15 @@ import numpy as np
 from matplotlib.gridspec import GridSpec
 from mpl_toolkits.axes_grid1 import ImageGrid, make_axes_locatable
 from py4DSTEM.visualize.vis_special import Complex2RGB, add_colorbar_arg
+from py4DSTEM.process.phase.utils import AffineTransform
+from emdfile import _read_metadata
 
 try:
     import cupy as cp
 except ImportError:
     cp = None
 
-from emdfile import tqdmnd, Custom
+from emdfile import tqdmnd, Custom, Array, Metadata
 from py4DSTEM.classes import DataCube
 from py4DSTEM.process.phase.iterative_base_class import PhaseReconstruction
 from py4DSTEM.process.phase.utils import (
@@ -165,26 +167,73 @@ class PtychographicReconstruction(PhaseReconstruction,Custom):
         self._dp_mask = dp_mask
         self._verbose = verbose
         self._object_padding_px = object_padding_px
+        self._device = device
         self._preprocessed = False
 
     ## Begin read-write methods
 
     # write
-    #def to_h5(self,group):
-    #    """ This function is not required.  Without it, all class attributes
-    #        which are emdfile classes will be saved, along with any Metadata
-    #        dictionaries which have been placed in inst.metadata (a property
-    #        the class aquires when inheriting from Custom).
-    #        This function can be useful to e.g. place metadata living in
-    #        class attributes into inst.metadata, where it will get saved,
-    #        as in the example below
-    #    """
-    #    md = Metadata( name = '_attr_metadata' )
-    #    md['Rshape'] = self.Rshape
-    #    md['Qshape'] = self.Qshape
-    #    self.metadata = md
-    #    grp = Custom.to_h5(self,group)
+    def to_h5(self,group):
+        """ This function is not required.  Without it, all class attributes
+            which are emdfile classes will be saved, along with any Metadata
+            dictionaries which have been placed in inst.metadata (a property
+            the class aquires when inheriting from Custom).
+            This function can be useful to e.g. place metadata living in
+            class attributes into inst.metadata, where it will get saved,
+            as in the example below
+        """
 
+        # wrap attributes we want in emd classes
+
+        # object
+        self._object_emd = Array(
+            name = 'reconstructed_object',
+            data = self._asnumpy(self._object)
+        )
+
+        # probe
+        self._probe_emd = Array(
+            name = 'reconstructed_probe',
+            data = self._asnumpy(self._probe)
+        )
+
+        # metadata
+        scan_positions = AffineTransform(
+            angle=-self._rotation_best_rad)(self.positions,np.mean(self.positions))
+        self.metadata = Metadata(
+            name = 'recon_metadata',
+            data = {
+                'energy' : self._energy,
+                'object_type' : self._object_type,
+                'semiangle_cutoff' : self._semiangle_cutoff,
+                'rolloff' : self._rolloff,
+                'vacuum_probe_intensity' : self._vacuum_probe_intensity,
+                'diffraction_intensities_shape' : self._diffraction_intensities_shape,
+                'reshaping_method' : self._reshaping_method,
+                'probe_roi_shape' : self._probe_roi_shape,
+                'scan_positions' : scan_positions,
+                'dp_mask' : self._dp_mask,
+                'verbose' : self._verbose,
+                'sampling' : self.sampling,
+                'object_padding_px' : self._object_padding_px,
+                'name' : self.name,
+                'device' : self._device,
+            }
+        )
+        self.metadata = Metadata(
+            name = 'polar_parameters',
+            data = self._polar_parameters
+        )
+
+        # hide the datacube
+        #d = self._datacube
+        #self._datacube = None
+
+        # run the save code
+        grp = Custom.to_h5(self,group)
+
+        # add the datacube back
+        #self._datacube = d
 
     # read
 
@@ -196,31 +245,32 @@ class PtychographicReconstruction(PhaseReconstruction,Custom):
         # Retrieve data
 
         # Get the emd class instances which were class attributes
-        #dic_data = self._get_emd_attr_data(group)
+        dict_data = cls._get_emd_attr_data(cls,group)
 
         # Get metadata dictionaries
-        #some_metadata = emdfile._read_metadata(group,'name')
+        md = _read_metadata(group,'recon_metadata')
+        polar_params = _read_metadata(group,'polar_parameters')._params
 
         # Populate args and return
         kwargs = {
-#            'datacube' : ,
-#            'energy' : ,
-#            'semiangle_cutoff' : ,
-#            'rolloff' : ,
-#            'vacuum_probe_intensity' : ,
-#            'polar_parameters' : ,
-#            'diffraction_intensities_shape' : ,
-#            'reshaping_method' : ,
-#            'probe_roi_shape' : ,
-#            'object_padding_px' : ,
-#            'dp_mask' : ,
-#            'initial_object_guess' : ,
-#            'initial_probe_guess' : ,
-#            'initial_scan_positions' : ,
-#            'object_type' : ,
-#            'verbose' : ,
-#            'device' : ,
-#            'name' : ,
+            'datacube' : dict_data['_datacube'],
+            'initial_object_guess' : dict_data['_object_emd'],
+            'initial_probe_guess' : dict_data['_probe_emd'],
+            'energy' : md['energy'],
+            'object_type' : md['object_type'],
+            'semiangle_cutoff' : md['semiangle_cutoff'],
+            'rolloff' : md['rolloff'],
+            'vacuum_probe_intensity' : md['vacuum_probe_intensity'],
+            'diffraction_intensities_shape' : md['diffraction_intensities_shape'],
+            'reshaping_method' : md['reshaping_method'],
+            'probe_roi_shape' : md['probe_roi_shape'],
+            'initial_scan_positions' : md['scan_positions'],
+            'dp_mask' : md['dp_mask'],
+            'verbose' : md['verbose'],
+            'object_padding_px' : md['object_padding_px'],
+            'name' : md['name'],
+            'device' : md['device'],
+            'polar_parameters' : polar_params,
         }
         return kwargs
 
