@@ -17,7 +17,7 @@ try:
 except ImportError:
     cp = None
 
-from emdfile import tqdmnd
+from emdfile import tqdmnd, Custom
 from py4DSTEM.classes import DataCube
 from py4DSTEM.process.phase.iterative_base_class import PhaseReconstruction
 from py4DSTEM.process.phase.utils import (
@@ -32,7 +32,7 @@ from py4DSTEM.process.utils import get_CoM, get_shifted_ar
 warnings.simplefilter(action="always", category=UserWarning)
 
 
-class PtychographicReconstruction(PhaseReconstruction):
+class PtychographicReconstruction(PhaseReconstruction,Custom):
     """
     Iterative Ptychographic Reconstruction Class.
 
@@ -107,8 +107,10 @@ class PtychographicReconstruction(PhaseReconstruction):
         object_type: str = "complex",
         verbose: bool = True,
         device: str = "cpu",
+        name = 'ptychographic_reconstruction',
         **kwargs,
     ):
+        Custom.__init__(self,name=name)
         if device == "cpu":
             self._xp = np
             self._asnumpy = np.asarray
@@ -164,6 +166,70 @@ class PtychographicReconstruction(PhaseReconstruction):
         self._verbose = verbose
         self._object_padding_px = object_padding_px
         self._preprocessed = False
+
+    ## Begin read-write methods
+
+    # write
+    #def to_h5(self,group):
+    #    """ This function is not required.  Without it, all class attributes
+    #        which are emdfile classes will be saved, along with any Metadata
+    #        dictionaries which have been placed in inst.metadata (a property
+    #        the class aquires when inheriting from Custom).
+    #        This function can be useful to e.g. place metadata living in
+    #        class attributes into inst.metadata, where it will get saved,
+    #        as in the example below
+    #    """
+    #    md = Metadata( name = '_attr_metadata' )
+    #    md['Rshape'] = self.Rshape
+    #    md['Qshape'] = self.Qshape
+    #    self.metadata = md
+    #    grp = Custom.to_h5(self,group)
+
+
+    # read
+
+    @classmethod
+    def _get_constructor_args(cls,group):
+        """ Should return a dictionary of arguments/values to pass
+            to the class' __init__ function
+        """
+        # Retrieve data
+
+        # Get the emd class instances which were class attributes
+        #dic_data = self._get_emd_attr_data(group)
+
+        # Get metadata dictionaries
+        #some_metadata = emdfile._read_metadata(group,'name')
+
+        # Populate args and return
+        kwargs = {
+#            'datacube' : ,
+#            'energy' : ,
+#            'semiangle_cutoff' : ,
+#            'rolloff' : ,
+#            'vacuum_probe_intensity' : ,
+#            'polar_parameters' : ,
+#            'diffraction_intensities_shape' : ,
+#            'reshaping_method' : ,
+#            'probe_roi_shape' : ,
+#            'object_padding_px' : ,
+#            'dp_mask' : ,
+#            'initial_object_guess' : ,
+#            'initial_probe_guess' : ,
+#            'initial_scan_positions' : ,
+#            'object_type' : ,
+#            'verbose' : ,
+#            'device' : ,
+#            'name' : ,
+        }
+        return kwargs
+
+    #def _populate_instance(self,group):
+    #    """ optional; during read, this method is run after object instantiation.
+    #    """
+    #    pass
+
+    ## End read-write methods
 
     def preprocess(
         self,
