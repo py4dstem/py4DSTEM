@@ -51,13 +51,15 @@ class BraggVectors(Custom,BraggVectorMethods,Data):
         self,
         Rshape,
         Qshape,
-        name = 'braggvectors'
+        name = 'braggvectors',
+        verbose = True,
         ):
         Custom.__init__(self,name=name)
 
         self.Rshape = Rshape
         self.shape = self.Rshape
         self.Qshape = Qshape
+        self.verbose = verbose 
 
         self._v_uncal = PointListArray(
             dtype = [
@@ -197,7 +199,8 @@ class BraggVectors(Custom,BraggVectorMethods,Data):
             "pixel" : pixel,
             "rotate" : rotate,
         }
-
+        if self.verbose: 
+            print('current calstate: ', self.calstate)
         pass
 
 
