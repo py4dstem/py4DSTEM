@@ -102,13 +102,13 @@ class Crystal:
             self.cell = cell
         else:
             raise Exception("Cell cannot contain " + np.size(cell) + " elements")
-        
+
         # pymatgen flag
         self.pymatgen_available = False
-        
+
         # Calculate lattice parameters
         self.calculate_lattice()
-        
+
     def calculate_lattice(self):
         # calculate unit cell lattice vectors
         a = self.cell[0]
@@ -136,10 +136,10 @@ class Crystal:
 
         # pymatgen flag
         if 'pymatgen' in sys.modules:
-            self.pymatgen_available = True            
+            self.pymatgen_available = True
         else:
             self.pymatgen_available = False
-        
+
 
     def from_CIF(CIF, conventional_standard_structure=True):
         """
@@ -499,10 +499,10 @@ class Crystal:
         Generate a single diffraction pattern, return all peaks as a pointlist.
 
         Args:
-            orientation (Orientation):       an Orientation class object 
+            orientation (Orientation):       an Orientation class object
             ind_orientation                  If input is an Orientation class object with multiple orientations,
                                              this input can be used to select a specific orientation.
-            
+
             orientation_matrix (array):      (3,3) orientation matrix, where columns represent projection directions.
             zone_axis_lattice (array):        (3,) projection direction in lattice indices
             proj_x_lattice (array):           (3,) x-axis direction in lattice indices
@@ -646,7 +646,7 @@ class Crystal:
             return bragg_peaks
 
     def generate_ring_pattern(
-        self, 
+        self,
         k_max = 2.0,
         use_bloch = False,
         thickness = None,
@@ -660,51 +660,51 @@ class Crystal:
     ):
         """
         Calculate polycrystalline diffraction pattern from structure
-        
-        Args: 
+
+        Args:
             k_max (float):                  Maximum scattering vector
             use_bloch (bool):               if true, use dynamic instead of kinematic approach
-            thickness (float):              thickness in Ångström to evaluate diffraction patterns, 
+            thickness (float):              thickness in Ångström to evaluate diffraction patterns,
                                             only needed for dynamical calculations
-            bloch_params (dict):            optional, parameters to calculate dynamical structure factor, 
+            bloch_params (dict):            optional, parameters to calculate dynamical structure factor,
                                             see calculate_dynamical_structure_factors doc strings
-            orientation_plan_params (dict): optional, parameters to calculate orientation plan, 
+            orientation_plan_params (dict): optional, parameters to calculate orientation plan,
                                             see orientation_plan doc strings
-            sigma_excitation_error (float): sigma value for envelope applied to s_g (excitation errors) 
+            sigma_excitation_error (float): sigma value for envelope applied to s_g (excitation errors)
                                             in units of inverse Angstroms
             tol_intensity (np float):       tolerance in intensity units for inclusion of diffraction spots
             plot_rings(bool):               if true, plot diffraction rings with plot_ring_pattern
-            return_calc (bool):             return radii and intensities 
+            return_calc (bool):             return radii and intensities
 
-        Returns: 
+        Returns:
             radii_unique (np array):        radii of ring pattern in units of scattering vector k
             intensity_unique (np array):    intensity of rings weighted by frequency of diffraciton spots
-        """ 
-       
-        if use_bloch: 
+        """
+
+        if use_bloch:
             assert (thickness is not None), "provide thickness for dynamical diffraction calculation"
             assert hasattr(self, "Ug_dict"), "run calculate_dynamical_structure_factors first"
-            
+
         if not hasattr(self, "struct_factors"):
             self.calculate_structure_factors(
-                k_max = k_max, 
+                k_max = k_max,
             )
-    
+
         #check accelerating voltage 
-        if hasattr(self, "accel_voltage"): 
+        if hasattr(self, "accel_voltage"):
             accelerating_voltage = self.accel_voltage
-        else: 
+        else:
             self.accel_voltage = 300e3
             print("Accelerating voltage not set. Assuming 300 keV!")
-        
+
         #check orientation plan
         if not hasattr(self, "orientation_vecs"):
-            if orientation_plan_params is None: 
+            if orientation_plan_params is None:
                 orientation_plan_params = {
                     'zone_axis_range': 'auto',
-                    'angle_step_zone_axis': 4, 
+                    'angle_step_zone_axis': 4,
                     'angle_step_in_plane': 4,
-                }    
+                }
             self.orientation_plan(
                 **orientation_plan_params,
             )
@@ -930,4 +930,58 @@ class Crystal:
         int_exp = (int_exp ** bragg_intensity_power) * (k ** bragg_k_power)
         int_exp /= np.max(int_exp)
         return k, int_exp
-    
+
+
+
+"""
+Stuff to save with a Crystal instance
+
+__init__:
+position
+numbers
+cell
+
+
+# elsewhere...
+self.accel_voltage = accelerating_voltage
+self.wavelength = electron_wavelength_angstrom(self.accel_voltage)
+
+self.hkl = self.hkl[:, keep]
+
+self.g_vec_all = self.g_vec_all[:, keep]
+self.g_vec_leng = self.g_vec_leng[keep]
+self.struct_factors = self.struct_factors[keep]
+
+self.k_max = np.asarray(k_max)
+self.struct_factors_int = np.abs(self.struct_factors) ** 2
+
+
+And from Bloch code:
+
+We want to save this in some reasonable way:
+
+   self.Ug_dict = {
+        (hkl[0, i], hkl[1, i], hkl[2, i]): struct_factors[i]
+        for i in range(hkl.shape[1])
+    }
+
+plan is to save hkl and struct_factors and then re-run this line
+
+
+
+
+
+
+
+(Later, after Crystal)
+Stuff to save with Diffraction Pattern (child of PointList)
+
+- zone axis....etc
+- class methods for vis.
+
+
+
+
+"""
+
+

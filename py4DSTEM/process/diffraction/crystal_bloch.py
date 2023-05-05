@@ -694,3 +694,33 @@ def generate_CBED(
             return (DP[0], probe, mask) if len(thickness) == 1 else (DP, probe, mask)
         else:
             return (DP[0], probe) if len(thickness) == 1 else (DP, probe)
+
+
+
+"""
+Notes for saving....
+
+
+We want to save this in some reasonable way:
+
+   self.Ug_dict = {
+        (hkl[0, i], hkl[1, i], hkl[2, i]): struct_factors[i]
+        for i in range(hkl.shape[1])
+    }
+
+plan is to save hkl and struct_factors and then re-run this line
+
+
+
+Dynamical diffraction patterns - separate class or same class as kinematical patterns?
+CBED - Array subclass
+LACBED - ???
+
+
+"""
+
+
+
+
+
+
