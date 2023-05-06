@@ -92,20 +92,16 @@ class PtychographicReconstruction(PhaseReconstruction, Custom):
 
     def __init__(
         self,
-        datacube: DataCube,
         energy: float,
+        datacube: DataCube = None,
         semiangle_cutoff: float = None,
         rolloff: float = 2.0,
         vacuum_probe_intensity: np.ndarray = None,
         polar_parameters: Mapping[str, float] = None,
-        diffraction_intensities_shape: Tuple[int, int] = None,
-        reshaping_method: str = "fourier",
-        probe_roi_shape: Tuple[int, int] = None,
-        object_padding_px: Tuple[int, int] = None,
-        dp_mask: np.ndarray = None,
         initial_object_guess: np.ndarray = None,
         initial_probe_guess: np.ndarray = None,
         initial_scan_positions: np.ndarray = None,
+        object_padding_px: Tuple[int, int] = None,
         object_type: str = "complex",
         verbose: bool = True,
         device: str = "cpu",
@@ -151,22 +147,22 @@ class PtychographicReconstruction(PhaseReconstruction, Custom):
                 f"object_type must be either 'potential' or 'complex', not {object_type}"
             )
 
-        self._object_type = object_type
-        self._object_type_initial = object_type
+        self.set_save_defaults()
+
+        # Data
+        self._datacube = datacube
+        self._object = initial_object_guess
+        self._probe = initial_probe_guess
+
+        # Metadata
+        self._vacuum_probe_intensity = vacuum_probe_intensity
+        self._scan_positions = initial_scan_positions
         self._energy = energy
         self._semiangle_cutoff = semiangle_cutoff
         self._rolloff = rolloff
-        self._vacuum_probe_intensity = vacuum_probe_intensity
-        self._diffraction_intensities_shape = diffraction_intensities_shape
-        self._reshaping_method = reshaping_method
-        self._probe_roi_shape = probe_roi_shape
-        self._object = initial_object_guess
-        self._probe = initial_probe_guess
-        self._scan_positions = initial_scan_positions
-        self._datacube = datacube
-        self._dp_mask = dp_mask
-        self._verbose = verbose
+        self._object_type = object_type
         self._object_padding_px = object_padding_px
+        self._verbose = verbose
         self._device = device
         self._preprocessed = False
 
@@ -175,103 +171,202 @@ class PtychographicReconstruction(PhaseReconstruction, Custom):
         Wraps datasets and metadata to write in emdfile classes,
         notably: the object and probe arrays.
         """
-
-        # object
-        self._object_emd = Array(
-            name="reconstructed_object", data=self._asnumpy(self._object)
-        )
-
-        # probe
-        self._probe_emd = Array(
-            name="reconstructed_probe", data=self._asnumpy(self._probe)
-        )
-
-        # metadata
+        # instantiation metadata
         tf = AffineTransform(angle=-self._rotation_best_rad)
         scan_positions = tf(self.positions, np.mean(self.positions))
 
         self.metadata = Metadata(
-            name="recon_metadata",
+            name="instantiation_metadata",
             data={
                 "energy": self._energy,
-                "object_type": self._object_type,
                 "semiangle_cutoff": self._semiangle_cutoff,
                 "rolloff": self._rolloff,
-                "vacuum_probe_intensity": self._vacuum_probe_intensity,
-                "diffraction_intensities_shape": self._diffraction_intensities_shape,
-                "reshaping_method": self._reshaping_method,
-                "probe_roi_shape": self._probe_roi_shape,
-                "scan_positions": scan_positions,
-                "dp_mask": self._dp_mask,
-                "verbose": self._verbose,
-                "sampling": self.sampling,
                 "object_padding_px": self._object_padding_px,
-                "name": self.name,
+                "object_type": self._object_type,
+                "verbose": self._verbose,
                 "device": self._device,
+                "name": self.name,
+                "vacuum_probe_intensity": self._vacuum_probe_intensity,
+                "positions": scan_positions,
             },
         )
 
-        # polar parameters (aberrations)
-        self.metadata = Metadata(name="polar_parameters", data=self._polar_parameters)
+        # preprocessing metadata
+        self.metadata = Metadata(
+            name="preprocess_metadata",
+            data={
+                "rotation_angle_rad": self._rotation_best_rad,
+                "data_transpose": self._rotation_best_transpose,
+                "region_of_interest_shape": self._region_of_interest_shape,
+                "num_diffraction_patterns": self._num_diffraction_patterns,
+                "sampling": self.sampling,
+            },
+        )
 
-        # calibrations
-        self.metadata = self._datacube.calibration
+        # reconstruction metadata
+        is_stack = self._save_iterations and hasattr(self, "object_iterations")
+        if is_stack:
+            num_iterations = len(self.object_iterations)
+            iterations = list(range(0, num_iterations, self._save_iterations_frequency))
+            if num_iterations - 1 not in iterations:
+                iterations.append(num_iterations - 1)
 
-        # run the save code
-        Custom.to_h5(self, group)
+            error = [self.error_iterations[i] for i in iterations]
+        else:
+            error = self.error
+
+        self.metadata = Metadata(
+            name="reconstruction_metadata",
+            data={
+                "reconstruction_error": error,
+            },
+        )
+
+        # aberrations metadata
+        self.metadata = Metadata(
+            name="aberrations_metadata",
+            data=self._polar_parameters,
+        )
+
+        if is_stack:
+            iterations_labels = [f"iteration_{i:03}" for i in iterations]
+
+            # object
+            object_iterations = [self.object_iterations[i] for i in iterations]
+            self._object_emd = Array(
+                name="reconstruction_object",
+                data=np.stack(object_iterations, axis=0),
+                slicelabels=iterations_labels,
+            )
+
+            # probe
+            probe_iterations = [self.probe_iterations[i] for i in iterations]
+            self._probe_emd = Array(
+                name="reconstruction_probe",
+                data=np.stack(probe_iterations, axis=0),
+                slicelabels=iterations_labels,
+            )
+
+        else:
+            # object
+            self._object_emd = Array(
+                name="reconstruction_object", data=self._asnumpy(self._object)
+            )
+
+            # probe
+            self._probe_emd = Array(
+                name="reconstruction_probe", data=self._asnumpy(self._probe)
+            )
+
+        # exit_waves
+        if self._save_exit_waves:
+            self._exit_waves_emd = Array(
+                name="reconstruction_exit_waves", data=self._asnumpy(self._exit_waves)
+            )
+
+        # datacube
+        if self._save_datacube:
+            self.metadata = self._datacube.calibration
+            Custom.to_h5(self, group)
+        else:
+            dc = self._datacube
+            self._datacube = None
+            Custom.to_h5(self, group)
+            self._datacube = dc
 
     @classmethod
     def _get_constructor_args(cls, group):
         """
-        Should return a dictionary of arguments/values to pass
+        Returns a dictionary of arguments/values to pass
         to the class' __init__ function
         """
-
         # Get data
         dict_data = cls._get_emd_attr_data(cls, group)
 
         # Get metadata dictionaries
-        md = _read_metadata(group, "recon_metadata")
-        polar_params = _read_metadata(group, "polar_parameters")._params
+        instance_md = _read_metadata(group, "instantiation_metadata")
+        polar_params = _read_metadata(group, "aberrations_metadata")._params
 
         # Fix calibrations bug
-        calibrations_dict = _read_metadata(group, "calibration")._params
-        cal = Calibration()
-        cal._params.update(calibrations_dict)
-        dc = dict_data["_datacube"]
-        dc.calibration = cal
+        if "_datacube" in dict_data:
+            calibrations_dict = _read_metadata(group, "calibration")._params
+            cal = Calibration()
+            cal._params.update(calibrations_dict)
+            dc = dict_data["_datacube"]
+            dc.calibration = cal
+        else:
+            dc = None
+
+        # Check if stack
+        if dict_data["_object_emd"].is_stack:
+            obj = dict_data["_object_emd"][-1].data
+            probe = dict_data["_probe_emd"][-1].data
+        else:
+            obj = dict_data["_object_emd"].data
+            probe = dict_data["_probe_emd"].data
 
         # Populate args and return
         kwargs = {
             "datacube": dc,
-            "initial_object_guess": dict_data["_object_emd"].data,
-            "initial_probe_guess": dict_data["_probe_emd"].data,
-            "energy": md["energy"],
-            "object_type": md["object_type"],
-            "semiangle_cutoff": md["semiangle_cutoff"],
-            "rolloff": md["rolloff"],
-            "vacuum_probe_intensity": md["vacuum_probe_intensity"],
-            "diffraction_intensities_shape": md["diffraction_intensities_shape"],
-            "reshaping_method": md["reshaping_method"],
-            "probe_roi_shape": md["probe_roi_shape"],
-            "initial_scan_positions": md["scan_positions"],
-            "dp_mask": md["dp_mask"],
-            "verbose": md["verbose"],
-            "object_padding_px": md["object_padding_px"],
-            "name": md["name"],
-            "device": md["device"],
+            "initial_object_guess": obj,
+            "initial_probe_guess": probe,
+            "vacuum_probe_intensity": instance_md["vacuum_probe_intensity"],
+            "initial_scan_positions": instance_md["positions"],
+            "energy": instance_md["energy"],
+            "object_padding_px": instance_md["object_padding_px"],
+            "object_type": instance_md["object_type"],
+            "semiangle_cutoff": instance_md["semiangle_cutoff"],
+            "rolloff": instance_md["rolloff"],
+            "verbose": instance_md["verbose"],
+            "name": instance_md["name"],
+            "device": instance_md["device"],
             "polar_parameters": polar_params,
         }
 
         return kwargs
 
-    # def _populate_instance(self,group):
-    #    """ optional; during read, this method is run after object instantiation.
-    #    """
-    #    pass
+    def _populate_instance(self, group):
+        """
+        Sets post-initialization properties, notably some preprocessing meta
+        optional; during read, this method is run after object instantiation.
+        """
+        xp = self._xp
+
+        # Preprocess metadata
+        preprocess_md = _read_metadata(group, "preprocess_metadata")
+        self._rotation_best_rad = preprocess_md["rotation_angle_rad"]
+        self._rotation_best_transpose = preprocess_md["data_transpose"]
+        self._region_of_interest_shape = preprocess_md["region_of_interest_shape"]
+        self._num_diffraction_patterns = preprocess_md["num_diffraction_patterns"]
+        self._preprocessed = False
+
+        # Reconstruction metadata
+        reconstruction_md = _read_metadata(group, "reconstruction_metadata")
+        error = reconstruction_md["reconstruction_error"]
+
+        # Data
+        dict_data = Custom._get_emd_attr_data(Custom, group)
+        if "_exit_waves_emd" in dict_data:
+            self._exit_waves = dict_data["_exit_waves_emd"].data
+            self._exit_waves = xp.asarray(self._exit_waves, dtype=xp.complex64)
+        else:
+            self._exit_waves = None
+
+        # Check if stack
+        if hasattr(error, "__len__"):
+            self.object_iterations = list(dict_data["_object_emd"].data)
+            self.probe_iterations = list(dict_data["_probe_emd"].data)
+            self.error_iterations = error
+            self.error = error[-1]
+        else:
+            self.error = error
 
     def preprocess(
         self,
+        diffraction_intensities_shape: Tuple[int, int] = None,
+        reshaping_method: str = "fourier",
+        probe_roi_shape: Tuple[int, int] = None,
+        dp_mask: np.ndarray = None,
         fit_function: str = "plane",
         plot_center_of_mass: str = "default",
         plot_rotation: bool = True,
@@ -327,6 +422,20 @@ class PtychographicReconstruction(PhaseReconstruction, Custom):
         """
         xp = self._xp
         asnumpy = self._asnumpy
+
+        # set additional metadata
+        self._diffraction_intensities_shape = diffraction_intensities_shape
+        self._reshaping_method = reshaping_method
+        self._probe_roi_shape = probe_roi_shape
+        self._dp_mask = dp_mask
+
+        if self._datacube is None:
+            raise ValueError(
+                (
+                    "The preprocess() method requires a DataCube. "
+                    "Please run ptycho.attach_datacube(DataCube) first."
+                )
+            )
 
         (
             self._datacube,
@@ -422,6 +531,7 @@ class PtychographicReconstruction(PhaseReconstruction, Custom):
                 self._object = xp.asarray(self._object, dtype=xp.complex64)
 
         self._object_initial = self._object.copy()
+        self._object_type_initial = self._object_type
         self._object_shape = self._object.shape
 
         self._positions_px = xp.asarray(self._positions_px, dtype=xp.float32)
@@ -478,6 +588,10 @@ class PtychographicReconstruction(PhaseReconstruction, Custom):
                 ._array
             )
 
+            # Normalize probe to match mean diffraction intensity
+            probe_intensity = xp.sum(xp.abs(xp.fft.fft2(self._probe)) ** 2)
+            self._probe *= np.sqrt(self._mean_diffraction_intensity / probe_intensity)
+
         else:
             if isinstance(self._probe, ComplexProbe):
                 if self._probe._gpts != self._region_of_interest_shape:
@@ -487,12 +601,14 @@ class PtychographicReconstruction(PhaseReconstruction, Custom):
                 else:
                     self._probe._xp = xp
                     self._probe = self._probe.build()._array
+
+                # Normalize probe to match mean diffraction intensity
+                probe_intensity = xp.sum(xp.abs(xp.fft.fft2(self._probe)) ** 2)
+                self._probe *= np.sqrt(
+                    self._mean_diffraction_intensity / probe_intensity
+                )
             else:
                 self._probe = xp.asarray(self._probe, dtype=xp.complex64)
-
-        # Normalize probe to match mean diffraction intensity
-        probe_intensity = xp.sum(xp.abs(xp.fft.fft2(self._probe)) ** 2)
-        self._probe *= np.sqrt(self._mean_diffraction_intensity / probe_intensity)
 
         self._probe_initial = self._probe.copy()
         self._probe_initial_fft_amplitude = xp.abs(xp.fft.fft2(self._probe_initial))
