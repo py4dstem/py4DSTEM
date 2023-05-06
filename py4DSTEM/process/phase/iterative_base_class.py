@@ -1819,6 +1819,25 @@ class PhaseReconstruction(metaclass=ABCMeta):
             **kwargs,
         )
 
+    def attach_datacube(self, dc: DataCube):
+        """Attaches a datacube to a class initialized without one."""
+        self._datacube = dc
+        return self
+
+    def set_save_defaults(
+            self,
+            save_datacube = False,
+            save_exit_waves = False,
+            save_iterations = True,
+            save_iterations_frequency = 1,
+            ):
+        """ Sets the class defaults for saving to file."""
+        self._save_datacube = save_datacube
+        self._save_exit_waves = save_exit_waves
+        self._save_iterations = save_iterations
+        self._save_iterations_frequency = save_iterations_frequency
+        return self
+
     @property
     def probe_fourier(self):
         """Current probe estimate in Fourier space"""
