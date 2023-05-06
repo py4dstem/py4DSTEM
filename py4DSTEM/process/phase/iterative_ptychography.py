@@ -8,19 +8,19 @@ from typing import Mapping, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
+from emdfile import _read_metadata
 from matplotlib.gridspec import GridSpec
 from mpl_toolkits.axes_grid1 import ImageGrid, make_axes_locatable
-from py4DSTEM.visualize.vis_special import Complex2RGB, add_colorbar_arg
 from py4DSTEM.process.phase.utils import AffineTransform
-from emdfile import _read_metadata
+from py4DSTEM.visualize.vis_special import Complex2RGB, add_colorbar_arg
 
 try:
     import cupy as cp
 except ImportError:
     cp = None
 
-from emdfile import tqdmnd, Custom, Array, Metadata
-from py4DSTEM.classes import DataCube
+from emdfile import Array, Custom, Metadata, tqdmnd
+from py4DSTEM.classes import Calibration, DataCube
 from py4DSTEM.process.phase.iterative_base_class import PhaseReconstruction
 from py4DSTEM.process.phase.utils import (
     ComplexProbe,
@@ -34,7 +34,7 @@ from py4DSTEM.process.utils import get_CoM, get_shifted_ar
 warnings.simplefilter(action="always", category=UserWarning)
 
 
-class PtychographicReconstruction(PhaseReconstruction,Custom):
+class PtychographicReconstruction(PhaseReconstruction, Custom):
     """
     Iterative Ptychographic Reconstruction Class.
 
@@ -109,10 +109,10 @@ class PtychographicReconstruction(PhaseReconstruction,Custom):
         object_type: str = "complex",
         verbose: bool = True,
         device: str = "cpu",
-        name = 'ptychographic_reconstruction',
+        name="ptychographic_reconstruction",
         **kwargs,
     ):
-        Custom.__init__(self,name=name)
+        Custom.__init__(self, name=name)
         if device == "cpu":
             self._xp = np
             self._asnumpy = np.asarray
@@ -170,116 +170,105 @@ class PtychographicReconstruction(PhaseReconstruction,Custom):
         self._device = device
         self._preprocessed = False
 
-    ## Begin read-write methods
-
-    # write
-    def to_h5(self,group):
-        """ This function is not required.  Without it, all class attributes
-            which are emdfile classes will be saved, along with any Metadata
-            dictionaries which have been placed in inst.metadata (a property
-            the class aquires when inheriting from Custom).
-            This function can be useful to e.g. place metadata living in
-            class attributes into inst.metadata, where it will get saved,
-            as in the example below
+    def to_h5(self, group):
         """
-
-        # wrap attributes we want in emd classes
+        Wraps datasets and metadata to write in emdfile classes,
+        notably: the object and probe arrays.
+        """
 
         # object
         self._object_emd = Array(
-            name = 'reconstructed_object',
-            data = self._asnumpy(self._object)
+            name="reconstructed_object", data=self._asnumpy(self._object)
         )
 
         # probe
         self._probe_emd = Array(
-            name = 'reconstructed_probe',
-            data = self._asnumpy(self._probe)
+            name="reconstructed_probe", data=self._asnumpy(self._probe)
         )
 
         # metadata
-        scan_positions = AffineTransform(
-            angle=-self._rotation_best_rad)(self.positions,np.mean(self.positions))
+        tf = AffineTransform(angle=-self._rotation_best_rad)
+        scan_positions = tf(self.positions, np.mean(self.positions))
+
         self.metadata = Metadata(
-            name = 'recon_metadata',
-            data = {
-                'energy' : self._energy,
-                'object_type' : self._object_type,
-                'semiangle_cutoff' : self._semiangle_cutoff,
-                'rolloff' : self._rolloff,
-                'vacuum_probe_intensity' : self._vacuum_probe_intensity,
-                'diffraction_intensities_shape' : self._diffraction_intensities_shape,
-                'reshaping_method' : self._reshaping_method,
-                'probe_roi_shape' : self._probe_roi_shape,
-                'scan_positions' : scan_positions,
-                'dp_mask' : self._dp_mask,
-                'verbose' : self._verbose,
-                'sampling' : self.sampling,
-                'object_padding_px' : self._object_padding_px,
-                'name' : self.name,
-                'device' : self._device,
-            }
-        )
-        self.metadata = Metadata(
-            name = 'polar_parameters',
-            data = self._polar_parameters
+            name="recon_metadata",
+            data={
+                "energy": self._energy,
+                "object_type": self._object_type,
+                "semiangle_cutoff": self._semiangle_cutoff,
+                "rolloff": self._rolloff,
+                "vacuum_probe_intensity": self._vacuum_probe_intensity,
+                "diffraction_intensities_shape": self._diffraction_intensities_shape,
+                "reshaping_method": self._reshaping_method,
+                "probe_roi_shape": self._probe_roi_shape,
+                "scan_positions": scan_positions,
+                "dp_mask": self._dp_mask,
+                "verbose": self._verbose,
+                "sampling": self.sampling,
+                "object_padding_px": self._object_padding_px,
+                "name": self.name,
+                "device": self._device,
+            },
         )
 
-        # hide the datacube
-        #d = self._datacube
-        #self._datacube = None
+        # polar parameters (aberrations)
+        self.metadata = Metadata(name="polar_parameters", data=self._polar_parameters)
+
+        # calibrations
+        self.metadata = self._datacube.calibration
 
         # run the save code
-        grp = Custom.to_h5(self,group)
-
-        # add the datacube back
-        #self._datacube = d
-
-    # read
+        Custom.to_h5(self, group)
 
     @classmethod
-    def _get_constructor_args(cls,group):
-        """ Should return a dictionary of arguments/values to pass
-            to the class' __init__ function
+    def _get_constructor_args(cls, group):
         """
-        # Retrieve data
+        Should return a dictionary of arguments/values to pass
+        to the class' __init__ function
+        """
 
-        # Get the emd class instances which were class attributes
-        dict_data = cls._get_emd_attr_data(cls,group)
+        # Get data
+        dict_data = cls._get_emd_attr_data(cls, group)
 
         # Get metadata dictionaries
-        md = _read_metadata(group,'recon_metadata')
-        polar_params = _read_metadata(group,'polar_parameters')._params
+        md = _read_metadata(group, "recon_metadata")
+        polar_params = _read_metadata(group, "polar_parameters")._params
+
+        # Fix calibrations bug
+        calibrations_dict = _read_metadata(group, "calibration")._params
+        cal = Calibration()
+        cal._params.update(calibrations_dict)
+        dc = dict_data["_datacube"]
+        dc.calibration = cal
 
         # Populate args and return
         kwargs = {
-            'datacube' : dict_data['_datacube'],
-            'initial_object_guess' : dict_data['_object_emd'],
-            'initial_probe_guess' : dict_data['_probe_emd'],
-            'energy' : md['energy'],
-            'object_type' : md['object_type'],
-            'semiangle_cutoff' : md['semiangle_cutoff'],
-            'rolloff' : md['rolloff'],
-            'vacuum_probe_intensity' : md['vacuum_probe_intensity'],
-            'diffraction_intensities_shape' : md['diffraction_intensities_shape'],
-            'reshaping_method' : md['reshaping_method'],
-            'probe_roi_shape' : md['probe_roi_shape'],
-            'initial_scan_positions' : md['scan_positions'],
-            'dp_mask' : md['dp_mask'],
-            'verbose' : md['verbose'],
-            'object_padding_px' : md['object_padding_px'],
-            'name' : md['name'],
-            'device' : md['device'],
-            'polar_parameters' : polar_params,
+            "datacube": dc,
+            "initial_object_guess": dict_data["_object_emd"].data,
+            "initial_probe_guess": dict_data["_probe_emd"].data,
+            "energy": md["energy"],
+            "object_type": md["object_type"],
+            "semiangle_cutoff": md["semiangle_cutoff"],
+            "rolloff": md["rolloff"],
+            "vacuum_probe_intensity": md["vacuum_probe_intensity"],
+            "diffraction_intensities_shape": md["diffraction_intensities_shape"],
+            "reshaping_method": md["reshaping_method"],
+            "probe_roi_shape": md["probe_roi_shape"],
+            "initial_scan_positions": md["scan_positions"],
+            "dp_mask": md["dp_mask"],
+            "verbose": md["verbose"],
+            "object_padding_px": md["object_padding_px"],
+            "name": md["name"],
+            "device": md["device"],
+            "polar_parameters": polar_params,
         }
+
         return kwargs
 
-    #def _populate_instance(self,group):
+    # def _populate_instance(self,group):
     #    """ optional; during read, this method is run after object instantiation.
     #    """
     #    pass
-
-    ## End read-write methods
 
     def preprocess(
         self,
