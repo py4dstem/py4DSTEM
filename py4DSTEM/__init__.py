@@ -11,10 +11,11 @@ from py4DSTEM.classes import (
     VirtualImage,
     Probe,
     QPoints,
-    BraggVectors,
     Calibration,
     Data,
 )
+
+from py4DSTEM.process.diskdetection import BraggVectors, BraggVectorMap
 
 from emdfile import (
     Node,
