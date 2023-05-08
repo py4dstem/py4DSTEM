@@ -1581,11 +1581,16 @@ class PhaseReconstruction(metaclass=ABCMeta):
 
         xp = self._xp
 
-        obj_rolled_x_patches = relevant_object[
+        if self._object_type == "potential":
+            complex_object = xp.exp(1j * relevant_object)
+        else:
+            complex_object = current_object
+        
+        obj_rolled_x_patches = complex_object[
             (self._vectorized_patch_indices_row + 1) % self._object_shape[0],
             self._vectorized_patch_indices_col,
         ]
-        obj_rolled_y_patches = relevant_object[
+        obj_rolled_y_patches = complex_object[
             self._vectorized_patch_indices_row,
             (self._vectorized_patch_indices_col + 1) % self._object_shape[1],
         ]

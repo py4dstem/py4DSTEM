@@ -1149,8 +1149,13 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
 
         # Computing perturbed exit waves one at a time to save on memory
 
+        if self._object_type == "potential":
+            complex_object = xp.exp(1j * current_object)
+        else:
+            complex_object = current_object
+        
         # dx
-        obj_rolled_patches = current_object[
+        obj_rolled_patches = complex_object[
             :,
             (self._vectorized_patch_indices_row + 1) % self._object_shape[0],
             self._vectorized_patch_indices_col,
@@ -1176,7 +1181,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         exit_waves_dx_fft = exit_waves_fft - xp.fft.fft2(transmitted_probes_perturbed)
 
         # dy
-        obj_rolled_patches = current_object[
+        obj_rolled_patches = complex_object[
             :,
             self._vectorized_patch_indices_row,
             (self._vectorized_patch_indices_col + 1) % self._object_shape[1],
