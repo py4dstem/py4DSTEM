@@ -1585,7 +1585,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
             complex_object = xp.exp(1j * relevant_object)
         else:
             complex_object = current_object
-        
+
         obj_rolled_x_patches = complex_object[
             (self._vectorized_patch_indices_row + 1) % self._object_shape[0],
             self._vectorized_patch_indices_col,
@@ -1830,13 +1830,13 @@ class PhaseReconstruction(metaclass=ABCMeta):
         return self
 
     def set_save_defaults(
-            self,
-            save_datacube = False,
-            save_exit_waves = False,
-            save_iterations = True,
-            save_iterations_frequency = 1,
-            ):
-        """ Sets the class defaults for saving to file."""
+        self,
+        save_datacube=False,
+        save_exit_waves=False,
+        save_iterations=True,
+        save_iterations_frequency=1,
+    ):
+        """Sets the class defaults for saving to file."""
         self._save_datacube = save_datacube
         self._save_exit_waves = save_exit_waves
         self._save_iterations = save_iterations
