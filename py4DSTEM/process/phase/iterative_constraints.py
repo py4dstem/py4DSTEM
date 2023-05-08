@@ -31,6 +31,137 @@ def _object_threshold_constraint(self, current_object, pure_phase_object):
     return amplitude * phase
 
 
+def _object_denoise_tv_chambolle(
+    self,
+    current_object,
+    weight,
+    axis,
+    pad_object,
+    eps=2.0e-4,
+    max_num_iter=200,
+    scaling=None,
+):
+    """
+    Perform total-variation denoising on n-dimensional images.
+
+    Parameters
+    ----------
+    current_object: np.ndarray
+        Current object estimate
+    weight : float, optional
+        Denoising weight. The greater `weight`, the more denoising (at
+        the expense of fidelity to `input`).
+    axis: int or tuple
+        Axis for denoising, if None uses all axes
+    pad_object: bool
+        if True, pads object with zeros along axes of blurring
+    eps : float, optional
+        Relative difference of the value of the cost function that determines
+        the stop criterion. The algorithm stops when:
+
+            (E_(n-1) - E_n) < eps * E_0
+
+    max_num_iter : int, optional
+        Maximal number of iterations used for the optimization.
+    scaling : tuple, optional
+        Scale weight of tv denoise on different axes
+
+    Returns
+    -------
+    constrained_object: np.ndarray
+        Constrained object estimate
+
+    Notes
+    -----
+    Rudin, Osher and Fatemi algorithm.
+    Adapted skimage.restoration.denoise_tv_chambolle.
+    """
+    xp = self._xp
+
+    if axis is None:
+        ndim = xp.arange(current_object.ndim).tolist()
+    elif type(axis) == tuple:
+        ndim = list(axis)
+    else:
+        ndim = [axis]
+
+    if pad_object:
+        pad_width = ((0, 0),) * current_object.ndim
+        pad_width = list(pad_width)
+        for ax in range(len(ndim)):
+            pad_width[ndim[ax]] = (1, 1)
+        current_object = xp.pad(current_object, pad_width=pad_width, mode="constant")
+
+    p = xp.zeros(
+        (current_object.ndim,) + current_object.shape, dtype=current_object.dtype
+    )
+    g = xp.zeros_like(p)
+    d = xp.zeros_like(current_object)
+
+    i = 0
+    while i < max_num_iter:
+        if i > 0:
+            # d will be the (negative) divergence of p
+            d = -p.sum(0)
+            slices_d = [
+                slice(None),
+            ] * current_object.ndim
+            slices_p = [
+                slice(None),
+            ] * (current_object.ndim + 1)
+            for ax in range(len(ndim)):
+                slices_d[ndim[ax]] = slice(1, None)
+                slices_p[ndim[ax] + 1] = slice(0, -1)
+                slices_p[0] = ndim[ax]
+                d[tuple(slices_d)] += p[tuple(slices_p)]
+                slices_d[ndim[ax]] = slice(None)
+                slices_p[ndim[ax] + 1] = slice(None)
+            updated_object = current_object + d
+        else:
+            updated_object = current_object
+        E = (d**2).sum()
+
+        # g stores the gradients of updated_object along each axis
+        # e.g. g[0] is the first order finite difference along axis 0
+        slices_g = [
+            slice(None),
+        ] * (current_object.ndim + 1)
+        for ax in range(len(ndim)):
+            slices_g[ndim[ax] + 1] = slice(0, -1)
+            slices_g[0] = ndim[ax]
+            g[tuple(slices_g)] = xp.diff(updated_object, axis=ndim[ax])
+            slices_g[ndim[ax] + 1] = slice(None)
+        if scaling is not None:
+            scaling /= xp.max(scaling)
+            g *= xp.array(scaling)[:, xp.newaxis, xp.newaxis]
+        norm = xp.sqrt((g**2).sum(axis=0))[xp.newaxis, ...]
+        E += weight * norm.sum()
+        tau = 1.0 / (2.0 * len(ndim))
+        norm *= tau / weight
+        norm += 1.0
+        p -= tau * g
+        p /= norm
+        E /= float(current_object.size)
+        if i == 0:
+            E_init = E
+            E_previous = E
+        else:
+            if xp.abs(E_previous - E) < eps * E_init:
+                break
+            else:
+                E_previous = E
+        i += 1
+
+    from py4DSTEM.process.phase.utils import array_slice
+
+    if pad_object:
+        for ax in range(len(ndim)):
+            slices = array_slice(ndim[ax], current_object.ndim, 1, -1)
+            updated_object = updated_object[slices]
+
+    return updated_object / xp.sum(updated_object) * xp.sum(current_object)
+
+
 def _object_positivity_constraint(self, current_object, shrinkage_rad):
     """
     Ptychographic positivity constraint.
