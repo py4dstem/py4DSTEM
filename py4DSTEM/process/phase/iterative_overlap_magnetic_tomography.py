@@ -1327,8 +1327,6 @@ class OverlapMagneticTomographicReconstruction(PhaseReconstruction):
 
         xp = self._xp
 
-        complex_object = xp.exp(1j * current_object)
-
         # Intensity gradient
         exit_waves_fft = xp.fft.fft2(transmitted_probes[-1])
         exit_waves_fft_conj = xp.conj(exit_waves_fft)
@@ -1342,6 +1340,8 @@ class OverlapMagneticTomographicReconstruction(PhaseReconstruction):
 
         # Computing perturbed exit waves one at a time to save on memory
 
+        complex_object = xp.exp(1j * current_object)
+        
         # dx
         propagated_probes = fft_shift(current_probe, self._positions_px_fractional, xp)
         obj_rolled_patches = complex_object[

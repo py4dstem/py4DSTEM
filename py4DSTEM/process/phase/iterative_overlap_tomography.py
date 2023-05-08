@@ -1257,8 +1257,10 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
 
         # Computing perturbed exit waves one at a time to save on memory
 
+        complex_object = xp.exp(1j * current_object)
+        
         # dx
-        obj_rolled_patches = current_object[
+        obj_rolled_patches = complex_object[
             :,
             (self._vectorized_patch_indices_row + 1) % self._object_shape[0],
             self._vectorized_patch_indices_col,
@@ -1284,7 +1286,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         exit_waves_dx_fft = exit_waves_fft - xp.fft.fft2(transmitted_probes_perturbed)
 
         # dy
-        obj_rolled_patches = current_object[
+        obj_rolled_patches = complex_object[
             :,
             self._vectorized_patch_indices_row,
             (self._vectorized_patch_indices_col + 1) % self._object_shape[1],
@@ -1801,7 +1803,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                     self._tilt_angles_deg[self._active_tilt_index],
                     axes=(0, 2),
                     reshape=False,
-                    order=2,
+                    order=3,
                 )
 
                 object_sliced = self._project_sliced_object(
@@ -1909,7 +1911,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                         -self._tilt_angles_deg[self._active_tilt_index],
                         axes=(0, 2),
                         reshape=False,
-                        order=2,
+                        order=3,
                     )
                 else:
                     self._object += object_update
@@ -1919,7 +1921,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                     -self._tilt_angles_deg[self._active_tilt_index],
                     axes=(0, 2),
                     reshape=False,
-                    order=2,
+                    order=3,
                 )
 
                 # Normalize Error
