@@ -21,9 +21,10 @@ class Data:
         try:
             return self.root.metadata['calibration']
         except KeyError:
-            raise Exception("This Data instance points to a root with no 'calibration' metadata. Check the data's tree and root.")
+            return None
         except AttributeError:
-            raise Exception("This Data instance points to a root with no metadata. Check the data's tree and root.")
+            return None
+
     @calibration.setter
     def calibration(self, x):
         assert( isinstance( x, Calibration) )

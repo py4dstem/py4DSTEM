@@ -100,7 +100,7 @@ def read_legacy13(
         except KeyError:
             raise Exception(f"the provided root {root} is not a valid path to a recognized data group")
 
-        # Read
+        # Read data
         if tree is True:
             data = _read_with_tree(group_data)
 
@@ -113,9 +113,12 @@ def read_legacy13(
         else:
             raise Exception(f"Unexpected value {tree} for `tree`")
 
+        # Read calibration
+        cal = _read_calibration(group_data)
+
 
     # convert version 13 -> 14
-    data = v13_to_14(data)
+    data = v13_to_14(data,cal)
     return data
 
 
@@ -130,26 +133,12 @@ def _read_without_tree(grp):
         data = Root(
             name = basename(grp.name),
         )
-        cal = _add_calibration(
-            data.tree,
-            grp
-        )
-        if cal is not None:
-            data.calibration = cal
         return data
 
     # read data as v13 objects
     __class__ = _get_v13_class(grp)
     data = __class__.from_h5(grp)
 
-    # handle calibration
-    #if not isinstance(data, Calibration):
-    #    cal = _add_calibration(
-    #        data.tree,
-    #        grp
-    #    )
-    #    if cal is not None:
-    #        data.calibration = cal
     return data
 
 
@@ -164,12 +153,6 @@ def _read_with_tree(grp):
 
 def _read_without_root(grp):
     root = Root()
-    cal = _add_calibration(
-        root,
-        grp
-    )
-    if cal is not None:
-        root.calibration = cal
     _populate_tree(
         root.tree,
         grp
@@ -177,18 +160,18 @@ def _read_without_root(grp):
     return root
 
 
-def _add_calibration(tree,grp):
+def _read_calibration(grp):
     keys = [k for k in grp.keys() if isinstance(grp[k],h5py.Group)]
     keys = [k for k in keys if (_get_v13_class(grp[k]) == Calibration)]
     if len(keys)>0:
         k = keys[0]
-        tree[k] = _read_without_tree(grp[k])
-        return tree[k]
+        cal = Calibration.from_h5(grp[k])
+        return cal
     else:
         name = dirname(grp.name)
         if name != '/':
             grp_upstream = grp.file[dirname(grp.name)]
-            return _add_calibration(tree, grp_upstream)
+            return _read_calibration(grp_upstream)
         else:
             return None
 
@@ -238,7 +221,6 @@ def print_v13h5pyFile_tree(f, tablevel=0, linelevels=[], show_metadata=False):
         for idx in range(tablevel):
             l = '|' if idx+1 in linelevels else ''
             string += '\t'+l
-        #print(string)
         print(string+'--'+k)
         if i == N-1:
             linelevels.remove(tablevel)

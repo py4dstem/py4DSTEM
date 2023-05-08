@@ -14,12 +14,11 @@ Contents
    4dstem
    installation
    examples
-   gui
-   contribute
-   support
-   license
    api
-   references
+   apiindex
+   gui
+   supportAndContributions
+   license
    acknowledgements
 
 
