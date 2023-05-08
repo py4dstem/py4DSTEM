@@ -1938,13 +1938,41 @@ class PtychographicReconstruction(PhaseReconstruction, Custom):
         """
         asnumpy = self._asnumpy
 
+        if not hasattr(self, "object_iterations"):
+            raise ValueError(
+                (
+                    "Object and probe iterations were not saved during reconstruction. "
+                    "Please re-run using store_iterations=True."
+                )
+            )
+
         if iterations_grid == "auto":
-            iterations_grid = (2, 4)
+            num_iter = len(self.error_iterations)
+
+            if num_iter == 1:
+                return self._visualize_last_iteration(
+                    fig=fig,
+                    plot_convergence=plot_convergence,
+                    plot_probe=plot_probe,
+                    plot_fourier_probe=plot_fourier_probe,
+                    cbar=cbar,
+                    padding=padding,
+                    **kwargs,
+                )
+            elif plot_probe or plot_fourier_probe:
+                iterations_grid = (2, 4) if num_iter > 4 else (2, num_iter)
+            else:
+                iterations_grid = (2, 4) if num_iter > 8 else (2, num_iter // 2)
         else:
             if (plot_probe or plot_fourier_probe) and iterations_grid[0] != 2:
                 raise ValueError()
 
-        figsize = kwargs.get("figsize", (12, 7))
+        auto_figsize = (
+            (3 * iterations_grid[1], 3 * iterations_grid[0] + 1)
+            if plot_convergence
+            else (3 * iterations_grid[1], 3 * iterations_grid[0])
+        )
+        figsize = kwargs.get("figsize", auto_figsize)
         cmap = kwargs.get("cmap", "inferno")
         invert = kwargs.get("invert", False)
         hue_start = kwargs.get("hue_start", 0)
