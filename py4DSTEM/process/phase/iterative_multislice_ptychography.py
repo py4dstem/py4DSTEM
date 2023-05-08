@@ -1153,7 +1153,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             complex_object = xp.exp(1j * current_object)
         else:
             complex_object = current_object
-        
+
         # dx
         obj_rolled_patches = complex_object[
             :,
@@ -1351,6 +1351,9 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         object_positivity,
         shrinkage_rad,
         pure_phase_object,
+        tv_denoise,
+        tv_denoise_weight,
+        tv_denoise_pad,
     ):
         """
         Ptychographic constraints operator.
@@ -1394,6 +1397,12 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             Phase shift in radians to be subtracted from the potential at each iteration
         pure_phase_object: bool
             If True, object amplitude is set to unity
+        tv_denoise: bool
+            If True, performs TV denoising along z
+        tv_denoise_weight: float
+            weight of tv denoising constraint
+        tv_denoise_pad: bool
+            if True, pads object at top and bottom with zeros before applying denoising
 
         Returns
         --------
@@ -1423,6 +1432,16 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             current_object = self._object_kz_regularization_constraint(
                 current_object, kz_regularization_gamma
             )
+        elif tv_denoise:
+            if self._object_type == "potential":
+                current_object = self._object_denoise_tv_chambolle(
+                    current_object,
+                    tv_denoise_weight,
+                    axis=0,
+                    pad_object=tv_denoise_pad,
+                )
+            else:
+                print("TV denoising supported for potential not complex object")
 
         if self._object_type == "complex":
             current_object = self._object_threshold_constraint(
@@ -1483,6 +1502,9 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         object_positivity: bool = True,
         shrinkage_rad: float = None,
         pure_phase_object_iter: int = 0,
+        tv_denoise_iter=np.inf,
+        tv_denoise_weight=None,
+        tv_denoise_pad=True,
         switch_object_iter: int = np.inf,
         store_iterations: bool = False,
         progress_bar: bool = True,
@@ -1556,6 +1578,12 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
             Phase shift in radians to be subtracted from the potential at each iteration
         pure_phase_object_iter: int, optional
             Number of iterations where object amplitude is set to unity
+        tv_denoise_iter: bool
+            Number of iterations with TV denoisining
+        tv_denoise_weight: float
+            weight of tv denoising constraint
+        tv_denoise_pad: bool
+            if True, pads object at top and bottom with zeros before applying denoising
         switch_object_iter: int, optional
             Iteration to switch object type between 'complex' and 'potential' or between
             'potential' and 'complex'
@@ -1887,6 +1915,9 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
                 shrinkage_rad=shrinkage_rad,
                 pure_phase_object=a0 < pure_phase_object_iter
                 and self._object_type == "complex",
+                tv_denoise=a0 < tv_denoise_iter and tv_denoise_weight is not None,
+                tv_denoise_weight=tv_denoise_weight,
+                tv_denoise_pad=tv_denoise_pad,
             )
 
             if store_iterations:

@@ -48,6 +48,7 @@ class PhaseReconstruction(metaclass=ABCMeta):
         _probe_center_of_mass_constraint,
         _probe_finite_support_constraint,
         _probe_fourier_amplitude_constraint,
+        _object_denoise_tv_chambolle
     )
 
     @abstractmethod
