@@ -18,7 +18,7 @@ try:
 except ImportError:
     cp = None
 
-from emdfile import tqdmnd
+from emdfile import Custom, tqdmnd
 from py4DSTEM import DataCube
 from py4DSTEM.process.phase.iterative_base_class import PhaseReconstruction
 from py4DSTEM.process.phase.utils import (
@@ -92,28 +92,30 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
         Provide the aberration coefficients as keyword arguments.
     """
 
+    _class_specific_metadata = ("_num_probes",)
+    
     def __init__(
         self,
-        datacube: DataCube,
         energy: float,
+        datacube: DataCube = None,
         num_probes: int = None,
         semiangle_cutoff: float = None,
         rolloff: float = 2.0,
         vacuum_probe_intensity: np.ndarray = None,
         polar_parameters: Mapping[str, float] = None,
-        diffraction_intensities_shape: Tuple[int, int] = None,
-        reshaping_method: str = "fourier",
-        probe_roi_shape: Tuple[int, int] = None,
         object_padding_px: Tuple[int, int] = None,
-        dp_mask: np.ndarray = None,
         initial_object_guess: np.ndarray = None,
         initial_probe_guess: np.ndarray = None,
         initial_scan_positions: np.ndarray = None,
         object_type: str = "complex",
         verbose: bool = True,
         device: str = "cpu",
+        name="mixed-state_ptychographic_reconstruction",
         **kwargs,
     ):
+        
+        Custom.__init__(self, name=name)
+
         if initial_probe_guess is None or isinstance(initial_probe_guess, ComplexProbe):
             if num_probes is None:
                 raise ValueError(
@@ -167,27 +169,34 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
                 f"object_type must be either 'potential' or 'complex', not {object_type}"
             )
 
-        self._object_type = object_type
-        self._object_type_initial = object_type
-        self._energy = energy
-        self._num_probes = num_probes
-        self._semiangle_cutoff = semiangle_cutoff
-        self._rolloff = rolloff
-        self._vacuum_probe_intensity = vacuum_probe_intensity
-        self._diffraction_intensities_shape = diffraction_intensities_shape
-        self._reshaping_method = reshaping_method
-        self._probe_roi_shape = probe_roi_shape
+        self.set_save_defaults()
+        
+        # Data
+        self._datacube = datacube
         self._object = initial_object_guess
         self._probe = initial_probe_guess
+    
+        # Common Metadata
+        self._vacuum_probe_intensity = vacuum_probe_intensity
         self._scan_positions = initial_scan_positions
-        self._datacube = datacube
-        self._dp_mask = dp_mask
-        self._verbose = verbose
+        self._energy = energy
+        self._semiangle_cutoff = semiangle_cutoff
+        self._rolloff = rolloff
+        self._object_type = object_type
         self._object_padding_px = object_padding_px
+        self._verbose = verbose
+        self._device = device
         self._preprocessed = False
-
+        
+        # Class-specific Metadata
+        self._num_probes = num_probes
+        
     def preprocess(
         self,
+        diffraction_intensities_shape: Tuple[int, int] = None,
+        reshaping_method: str = "fourier",
+        probe_roi_shape: Tuple[int, int] = None,
+        dp_mask: np.ndarray = None,
         fit_function: str = "plane",
         plot_center_of_mass: str = "default",
         plot_rotation: bool = True,
@@ -244,6 +253,12 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
         xp = self._xp
         asnumpy = self._asnumpy
 
+        # set additional metadata
+        self._diffraction_intensities_shape = diffraction_intensities_shape
+        self._reshaping_method = reshaping_method
+        self._probe_roi_shape = probe_roi_shape
+        self._dp_mask = dp_mask
+        
         (
             self._datacube,
             self._vacuum_probe_intensity,
@@ -338,6 +353,7 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
                 self._object = xp.asarray(self._object, dtype=xp.complex64)
 
         self._object_initial = self._object.copy()
+        self._object_type_initial = self._object_type
         self._object_shape = self._object.shape
 
         self._positions_px = xp.asarray(self._positions_px, dtype=xp.float32)
@@ -395,7 +411,7 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
                     .build()
                     ._array
                 )
-
+                
             else:
                 if self._probe._gpts != self._region_of_interest_shape:
                     raise ValueError()
@@ -429,12 +445,13 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
                 self._probe[i_probe] = (
                     self._probe[i_probe - 1] * shift_x[:, None] * shift_y[None]
                 )
+                
+            # Normalize probe to match mean diffraction intensity
+            probe_intensity = xp.sum(xp.abs(xp.fft.fft2(self._probe[0])) ** 2)
+            self._probe *= np.sqrt(self._mean_diffraction_intensity / probe_intensity)
+
         else:
             self._probe = xp.asarray(self._probe, dtype=xp.complex64)
-
-        # Normalize probe to match mean diffraction intensity
-        probe_intensity = xp.sum(xp.abs(xp.fft.fft2(self._probe[0])) ** 2)
-        self._probe *= np.sqrt(self._mean_diffraction_intensity / probe_intensity)
 
         self._probe_initial = self._probe.copy()
         self._probe_initial_fft_amplitude = xp.abs(xp.fft.fft2(self._probe_initial))

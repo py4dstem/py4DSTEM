@@ -8,7 +8,6 @@ from typing import Mapping, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
-from emdfile import _read_metadata
 from matplotlib.gridspec import GridSpec
 from mpl_toolkits.axes_grid1 import ImageGrid, make_axes_locatable
 from py4DSTEM.process.phase.utils import AffineTransform
@@ -19,7 +18,7 @@ try:
 except ImportError:
     cp = None
 
-from emdfile import Array, Custom, Metadata, tqdmnd
+from emdfile import Custom, tqdmnd
 from py4DSTEM.classes import Calibration, DataCube
 from py4DSTEM.process.phase.iterative_base_class import PhaseReconstruction
 from py4DSTEM.process.phase.utils import (
@@ -34,7 +33,7 @@ from py4DSTEM.process.utils import get_CoM, get_shifted_ar
 warnings.simplefilter(action="always", category=UserWarning)
 
 
-class PtychographicReconstruction(PhaseReconstruction, Custom):
+class PtychographicReconstruction(PhaseReconstruction):
     """
     Iterative Ptychographic Reconstruction Class.
 
@@ -90,6 +89,9 @@ class PtychographicReconstruction(PhaseReconstruction, Custom):
         Provide the aberration coefficients as keyword arguments.
     """
 
+    # Class-specific Metadata
+    _class_specific_metadata = ()
+
     def __init__(
         self,
         energy: float,
@@ -108,7 +110,9 @@ class PtychographicReconstruction(PhaseReconstruction, Custom):
         name="ptychographic_reconstruction",
         **kwargs,
     ):
+
         Custom.__init__(self, name=name)
+        
         if device == "cpu":
             self._xp = np
             self._asnumpy = np.asarray
@@ -154,7 +158,7 @@ class PtychographicReconstruction(PhaseReconstruction, Custom):
         self._object = initial_object_guess
         self._probe = initial_probe_guess
 
-        # Metadata
+        # Common Metadata
         self._vacuum_probe_intensity = vacuum_probe_intensity
         self._scan_positions = initial_scan_positions
         self._energy = energy
@@ -165,201 +169,8 @@ class PtychographicReconstruction(PhaseReconstruction, Custom):
         self._verbose = verbose
         self._device = device
         self._preprocessed = False
-
-    def to_h5(self, group):
-        """
-        Wraps datasets and metadata to write in emdfile classes,
-        notably: the object and probe arrays.
-        """
-        # instantiation metadata
-        tf = AffineTransform(angle=-self._rotation_best_rad)
-        scan_positions = tf(self.positions, np.mean(self.positions))
-
-        self.metadata = Metadata(
-            name="instantiation_metadata",
-            data={
-                "energy": self._energy,
-                "semiangle_cutoff": self._semiangle_cutoff,
-                "rolloff": self._rolloff,
-                "object_padding_px": self._object_padding_px,
-                "object_type": self._object_type,
-                "verbose": self._verbose,
-                "device": self._device,
-                "name": self.name,
-                "vacuum_probe_intensity": self._vacuum_probe_intensity,
-                "positions": scan_positions,
-            },
-        )
-
-        # preprocessing metadata
-        self.metadata = Metadata(
-            name="preprocess_metadata",
-            data={
-                "rotation_angle_rad": self._rotation_best_rad,
-                "data_transpose": self._rotation_best_transpose,
-                "region_of_interest_shape": self._region_of_interest_shape,
-                "num_diffraction_patterns": self._num_diffraction_patterns,
-                "sampling": self.sampling,
-            },
-        )
-
-        # reconstruction metadata
-        is_stack = self._save_iterations and hasattr(self, "object_iterations")
-        if is_stack:
-            num_iterations = len(self.object_iterations)
-            iterations = list(range(0, num_iterations, self._save_iterations_frequency))
-            if num_iterations - 1 not in iterations:
-                iterations.append(num_iterations - 1)
-
-            error = [self.error_iterations[i] for i in iterations]
-        else:
-            error = self.error
-
-        self.metadata = Metadata(
-            name="reconstruction_metadata",
-            data={
-                "reconstruction_error": error,
-            },
-        )
-
-        # aberrations metadata
-        self.metadata = Metadata(
-            name="aberrations_metadata",
-            data=self._polar_parameters,
-        )
-
-        if is_stack:
-            iterations_labels = [f"iteration_{i:03}" for i in iterations]
-
-            # object
-            object_iterations = [self.object_iterations[i] for i in iterations]
-            self._object_emd = Array(
-                name="reconstruction_object",
-                data=np.stack(object_iterations, axis=0),
-                slicelabels=iterations_labels,
-            )
-
-            # probe
-            probe_iterations = [self.probe_iterations[i] for i in iterations]
-            self._probe_emd = Array(
-                name="reconstruction_probe",
-                data=np.stack(probe_iterations, axis=0),
-                slicelabels=iterations_labels,
-            )
-
-        else:
-            # object
-            self._object_emd = Array(
-                name="reconstruction_object", data=self._asnumpy(self._object)
-            )
-
-            # probe
-            self._probe_emd = Array(
-                name="reconstruction_probe", data=self._asnumpy(self._probe)
-            )
-
-        # exit_waves
-        if self._save_exit_waves:
-            self._exit_waves_emd = Array(
-                name="reconstruction_exit_waves", data=self._asnumpy(self._exit_waves)
-            )
-
-        # datacube
-        if self._save_datacube:
-            self.metadata = self._datacube.calibration
-            Custom.to_h5(self, group)
-        else:
-            dc = self._datacube
-            self._datacube = None
-            Custom.to_h5(self, group)
-            self._datacube = dc
-
-    @classmethod
-    def _get_constructor_args(cls, group):
-        """
-        Returns a dictionary of arguments/values to pass
-        to the class' __init__ function
-        """
-        # Get data
-        dict_data = cls._get_emd_attr_data(cls, group)
-
-        # Get metadata dictionaries
-        instance_md = _read_metadata(group, "instantiation_metadata")
-        polar_params = _read_metadata(group, "aberrations_metadata")._params
-
-        # Fix calibrations bug
-        if "_datacube" in dict_data:
-            calibrations_dict = _read_metadata(group, "calibration")._params
-            cal = Calibration()
-            cal._params.update(calibrations_dict)
-            dc = dict_data["_datacube"]
-            dc.calibration = cal
-        else:
-            dc = None
-
-        # Check if stack
-        if dict_data["_object_emd"].is_stack:
-            obj = dict_data["_object_emd"][-1].data
-            probe = dict_data["_probe_emd"][-1].data
-        else:
-            obj = dict_data["_object_emd"].data
-            probe = dict_data["_probe_emd"].data
-
-        # Populate args and return
-        kwargs = {
-            "datacube": dc,
-            "initial_object_guess": obj,
-            "initial_probe_guess": probe,
-            "vacuum_probe_intensity": instance_md["vacuum_probe_intensity"],
-            "initial_scan_positions": instance_md["positions"],
-            "energy": instance_md["energy"],
-            "object_padding_px": instance_md["object_padding_px"],
-            "object_type": instance_md["object_type"],
-            "semiangle_cutoff": instance_md["semiangle_cutoff"],
-            "rolloff": instance_md["rolloff"],
-            "verbose": instance_md["verbose"],
-            "name": instance_md["name"],
-            "device": instance_md["device"],
-            "polar_parameters": polar_params,
-        }
-
-        return kwargs
-
-    def _populate_instance(self, group):
-        """
-        Sets post-initialization properties, notably some preprocessing meta
-        optional; during read, this method is run after object instantiation.
-        """
-        xp = self._xp
-
-        # Preprocess metadata
-        preprocess_md = _read_metadata(group, "preprocess_metadata")
-        self._rotation_best_rad = preprocess_md["rotation_angle_rad"]
-        self._rotation_best_transpose = preprocess_md["data_transpose"]
-        self._region_of_interest_shape = preprocess_md["region_of_interest_shape"]
-        self._num_diffraction_patterns = preprocess_md["num_diffraction_patterns"]
-        self._preprocessed = False
-
-        # Reconstruction metadata
-        reconstruction_md = _read_metadata(group, "reconstruction_metadata")
-        error = reconstruction_md["reconstruction_error"]
-
-        # Data
-        dict_data = Custom._get_emd_attr_data(Custom, group)
-        if "_exit_waves_emd" in dict_data:
-            self._exit_waves = dict_data["_exit_waves_emd"].data
-            self._exit_waves = xp.asarray(self._exit_waves, dtype=xp.complex64)
-        else:
-            self._exit_waves = None
-
-        # Check if stack
-        if hasattr(error, "__len__"):
-            self.object_iterations = list(dict_data["_object_emd"].data)
-            self.probe_iterations = list(dict_data["_probe_emd"].data)
-            self.error_iterations = error
-            self.error = error[-1]
-        else:
-            self.error = error
+        
+        # Class-specific Metadata
 
     def preprocess(
         self,

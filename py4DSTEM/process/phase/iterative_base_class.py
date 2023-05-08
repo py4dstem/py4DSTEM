@@ -3,7 +3,6 @@ Module for reconstructing phase objects from 4DSTEM datasets using iterative met
 """
 
 import warnings
-from abc import ABCMeta, abstractmethod
 from typing import Sequence
 
 import matplotlib.pyplot as plt
@@ -26,18 +25,18 @@ from py4DSTEM.process.utils import (
     fourier_resample,
     get_shifted_ar,
 )
-from py4DSTEM.utils.tqdmnd import tqdmnd
+from emdfile import Array, Custom, Metadata, tqdmnd, _read_metadata
 
 warnings.simplefilter(action="always", category=UserWarning)
 
 
-class PhaseReconstruction(metaclass=ABCMeta):
+class PhaseReconstruction(Custom):
     """
     Base phase reconstruction class.
     Defines various common functions and properties for all subclasses to inherit,
     as well as sets up various abstract methods each subclass must define.
     """
-
+    
     from py4DSTEM.process.phase.iterative_constraints import (
         _object_butterworth_constraint,
         _object_gaussian_constraint,
@@ -49,38 +48,217 @@ class PhaseReconstruction(metaclass=ABCMeta):
         _probe_finite_support_constraint,
         _probe_fourier_amplitude_constraint,
     )
+    
+    def to_h5(self, group):
+        """
+        Wraps datasets and metadata to write in emdfile classes,
+        notably: the object and probe arrays.
+        """
+        # instantiation metadata
+        tf = AffineTransform(angle=-self._rotation_best_rad)
+        scan_positions = tf(self.positions, np.mean(self.positions))
 
-    @abstractmethod
-    def preprocess(self):
-        """
-        Abstract method subclasses must define which prepares measured intensities.
+        metadata = {
+                "energy": self._energy,
+                "semiangle_cutoff": self._semiangle_cutoff,
+                "rolloff": self._rolloff,
+                "object_padding_px": self._object_padding_px,
+                "object_type": self._object_type,
+                "verbose": self._verbose,
+                "device": self._device,
+                "name": self.name,
+                "vacuum_probe_intensity": self._vacuum_probe_intensity,
+                "positions": scan_positions,
+            }
 
-        For DPC, this includes:
-        - Fitting diffraction intensitie's CoM and rotation
-        - Preparing Fourier-coordinates and operators
+        cls = self.__class__
+        class_specific_metadata = {}
+        for key in cls._class_specific_metadata:
+            class_specific_metadata[key[1:]] = getattr(self,key,None)
 
-        For Ptychography, this includes:
-        - Centering diffraction intensities using fitted CoM
-        - Padding diffraction intensities to region of interest dimensions
-        - Preparing initial guess for scanning positions
-        - Preparing initial guesses for the objects and probes arrays
-        """
-        pass
+        metadata |= class_specific_metadata
 
-    @abstractmethod
-    def reconstruct(self):
-        """
-        Abstract method subclasses must define which performs the reconstruction
-        by calling the subclass _forward(), _adjoint(), and _update() methods.
-        """
-        pass
+        self.metadata = Metadata(
+            name="instantiation_metadata",
+            data = metadata,
+        )
 
-    @abstractmethod
-    def visualize(self):
+        # preprocessing metadata
+        self.metadata = Metadata(
+            name="preprocess_metadata",
+            data={
+                "rotation_angle_rad": self._rotation_best_rad,
+                "data_transpose": self._rotation_best_transpose,
+                "region_of_interest_shape": self._region_of_interest_shape,
+                "num_diffraction_patterns": self._num_diffraction_patterns,
+                "sampling": self.sampling,
+            },
+        )
+
+        # reconstruction metadata
+        is_stack = self._save_iterations and hasattr(self, "object_iterations")
+        if is_stack:
+            num_iterations = len(self.object_iterations)
+            iterations = list(range(0, num_iterations, self._save_iterations_frequency))
+            if num_iterations - 1 not in iterations:
+                iterations.append(num_iterations - 1)
+
+            error = [self.error_iterations[i] for i in iterations]
+        else:
+            error = self.error
+
+        self.metadata = Metadata(
+            name="reconstruction_metadata",
+            data={
+                "reconstruction_error": error,
+            },
+        )
+
+        # aberrations metadata
+        self.metadata = Metadata(
+            name="aberrations_metadata",
+            data=self._polar_parameters,
+        )
+
+        if is_stack:
+            iterations_labels = [f"iteration_{i:03}" for i in iterations]
+
+            # object
+            object_iterations = [self.object_iterations[i] for i in iterations]
+            self._object_emd = Array(
+                name="reconstruction_object",
+                data=np.stack(object_iterations, axis=0),
+                slicelabels=iterations_labels,
+            )
+
+            # probe
+            probe_iterations = [self.probe_iterations[i] for i in iterations]
+            self._probe_emd = Array(
+                name="reconstruction_probe",
+                data=np.stack(probe_iterations, axis=0),
+                slicelabels=iterations_labels,
+            )
+
+        else:
+            # object
+            self._object_emd = Array(
+                name="reconstruction_object", data=self._asnumpy(self._object)
+            )
+
+            # probe
+            self._probe_emd = Array(
+                name="reconstruction_probe", data=self._asnumpy(self._probe)
+            )
+
+        # exit_waves
+        if self._save_exit_waves:
+            self._exit_waves_emd = Array(
+                name="reconstruction_exit_waves", data=self._asnumpy(self._exit_waves)
+            )
+
+        # datacube
+        if self._save_datacube:
+            self.metadata = self._datacube.calibration
+            Custom.to_h5(self, group)
+        else:
+            dc = self._datacube
+            self._datacube = None
+            Custom.to_h5(self, group)
+            self._datacube = dc
+
+    @classmethod
+    def _get_constructor_args(cls, group):
         """
-        Abstract method subclasses must define to postprocess and display results.
+        Returns a dictionary of arguments/values to pass
+        to the class' __init__ function
         """
-        pass
+        # Get data
+        dict_data = cls._get_emd_attr_data(cls, group)
+
+        # Get metadata dictionaries
+        instance_md = _read_metadata(group, "instantiation_metadata")
+        polar_params = _read_metadata(group, "aberrations_metadata")._params
+
+        # Fix calibrations bug
+        if "_datacube" in dict_data:
+            calibrations_dict = _read_metadata(group, "calibration")._params
+            cal = Calibration()
+            cal._params.update(calibrations_dict)
+            dc = dict_data["_datacube"]
+            dc.calibration = cal
+        else:
+            dc = None
+
+        # Check if stack
+        if dict_data["_object_emd"].is_stack:
+            obj = dict_data["_object_emd"][-1].data
+            probe = dict_data["_probe_emd"][-1].data
+        else:
+            obj = dict_data["_object_emd"].data
+            probe = dict_data["_probe_emd"].data
+
+        # Populate args and return
+        kwargs = {
+            "datacube": dc,
+            "initial_object_guess": obj,
+            "initial_probe_guess": probe,
+            "vacuum_probe_intensity": instance_md["vacuum_probe_intensity"],
+            "initial_scan_positions": instance_md["positions"],
+            "energy": instance_md["energy"],
+            "object_padding_px": instance_md["object_padding_px"],
+            "object_type": instance_md["object_type"],
+            "semiangle_cutoff": instance_md["semiangle_cutoff"],
+            "rolloff": instance_md["rolloff"],
+            "verbose": instance_md["verbose"],
+            "name": instance_md["name"],
+            "device": instance_md["device"],
+            "polar_parameters": polar_params,
+        }
+
+        class_specific_kwargs = {}
+        for key in cls._class_specific_metadata:
+            class_specific_kwargs[key[1:]] = instance_md[key[1:]]
+
+        kwargs |= class_specific_kwargs
+
+        return kwargs
+
+    def _populate_instance(self, group):
+        """
+        Sets post-initialization properties, notably some preprocessing meta
+        optional; during read, this method is run after object instantiation.
+        """
+        xp = self._xp
+
+        # Preprocess metadata
+        preprocess_md = _read_metadata(group, "preprocess_metadata")
+        self._rotation_best_rad = preprocess_md["rotation_angle_rad"]
+        self._rotation_best_transpose = preprocess_md["data_transpose"]
+        self._region_of_interest_shape = preprocess_md["region_of_interest_shape"]
+        self._num_diffraction_patterns = preprocess_md["num_diffraction_patterns"]
+        self._preprocessed = False
+
+        # Reconstruction metadata
+        reconstruction_md = _read_metadata(group, "reconstruction_metadata")
+        error = reconstruction_md["reconstruction_error"]
+
+        # Data
+        dict_data = Custom._get_emd_attr_data(Custom, group)
+        if "_exit_waves_emd" in dict_data:
+            self._exit_waves = dict_data["_exit_waves_emd"].data
+            self._exit_waves = xp.asarray(self._exit_waves, dtype=xp.complex64)
+        else:
+            self._exit_waves = None
+
+        # Check if stack
+        if hasattr(error, "__len__"):
+            self.object_iterations = list(dict_data["_object_emd"].data)
+            self.probe_iterations = list(dict_data["_probe_emd"].data)
+            self.error_iterations = error
+            self.error = error[-1]
+        else:
+            self.error = error
+
 
     def _set_polar_parameters(self, parameters: dict):
         """
