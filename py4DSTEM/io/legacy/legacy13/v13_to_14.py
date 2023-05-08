@@ -51,35 +51,49 @@ from py4DSTEM.process.diskdetection.braggvectors import BraggVectors
 
 
 
-def v13_to_14( v13tree ):
+def v13_to_14( v13tree, v13cal ):
     """
     Converts a v13 data tree to a v14 data tree
     """
-
     # if a list of root names was returned, pass it through
     if isinstance(v13tree, list):
         return v13tree
 
-    # make a root and find the node to grow from
-    if isinstance(v13tree,Root13):
-        node = _v13_to_14_cls(v13tree)
-    else:
-        node = _v13_to_14_cls(v13tree)
+    # convert the selected node
+    node = _v13_to_14_cls(v13tree)
+
+    # handle the root
+    if isinstance(node,Root):
+        root = node
+    elif node.root is None:
         root = Root( name=node.name )
         root.tree(node)
+    else:
+        root = node.root
 
     # populate tree
-    _populate_tree(v13tree,node)
+    _populate_tree(v13tree,node,root)
+
+    # add calibration
+    if v13cal is not None:
+        cal = _v13_to_14_cls(v13cal)
+        root.metadata = cal
+
+    # return
     return node
 
 
 
-def _populate_tree(node13,node14):
+def _populate_tree(node13,node14,root14):
     for key in node13.tree.keys():
         newnode13 = node13.tree[key]
         newnode14 = _v13_to_14_cls(newnode13)
-        node14.tree(newnode14)
-        _populate_tree(newnode13,newnode14)
+        # skip calibrations and metadata
+        if isinstance(newnode14,Metadata):
+            pass
+        else:
+            node14.tree(newnode14)
+        _populate_tree(newnode13,newnode14,root14)
 
 
 
@@ -107,12 +121,13 @@ def _v13_to_14_cls(obj):
         BraggVectors13
     ))), f"obj must be a v13 class instance, not type {type(obj)}"
 
+
     if isinstance(obj, Root13):
         x = Root( name=obj.name )
 
     elif isinstance(obj, Calibration13):
         x = Calibration( name=obj.name )
-        x._params.update( obj.params )
+        x._params.update( obj._params )
 
     elif isinstance(obj, DataCube13):
         x = DataCube(
@@ -173,8 +188,6 @@ def _v13_to_14_cls(obj):
         if hasattr(obj,'_v_cal'):
             x._v_cal = obj._v_cal
 
-    # base EMD classes
-
     elif isinstance(obj, Metadata13):
         x = Metadata( name=obj.name )
         x._params.update( obj._params )
@@ -231,7 +244,6 @@ def _v13_to_14_cls(obj):
             dm = Metadata( name=md.name )
             dm._params.update( md._params )
             x.metadata = dm
-
 
 
     # Return

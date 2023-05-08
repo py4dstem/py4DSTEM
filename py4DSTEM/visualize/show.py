@@ -390,7 +390,8 @@ def show(
     # support for native data types
     elif not isinstance(ar,np.ndarray):
         # support for calibration/auto-scalebars
-        if hasattr(ar, 'calibration') and scalebar != False:
+        if hasattr(ar, 'calibration') and (ar.calibration is not None) \
+            and (scalebar != False):
             cal = ar.calibration
             er = ".calibration attribute must be a Calibration instance"
             assert isinstance(cal, Calibration), er
