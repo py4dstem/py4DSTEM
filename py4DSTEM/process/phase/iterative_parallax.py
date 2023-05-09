@@ -8,7 +8,7 @@ from typing import Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
-from emdfile import tqdmnd
+from emdfile import Custom, tqdmnd
 from matplotlib.gridspec import GridSpec
 from py4DSTEM import DataCube
 from py4DSTEM.process.phase.iterative_base_class import PhaseReconstruction
@@ -51,7 +51,10 @@ class ParallaxReconstruction(PhaseReconstruction):
         dp_mean: np.ndarray = None,
         verbose: bool = False,
         device: str = "cpu",
+        name: str = "paralalx_reconstruction",
     ):
+        Custom.__init__(self, name=name)
+
         if device == "cpu":
             self._xp = np
             self._asnumpy = np.asarray

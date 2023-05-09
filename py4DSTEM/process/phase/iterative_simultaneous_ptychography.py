@@ -17,7 +17,7 @@ try:
 except ImportError:
     cp = None
 
-from emdfile import tqdmnd
+from emdfile import Custom, tqdmnd
 from py4DSTEM import DataCube
 from py4DSTEM.process.phase.iterative_base_class import PhaseReconstruction
 from py4DSTEM.process.phase.utils import (
@@ -91,28 +91,30 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         Provide the aberration coefficients as keyword arguments.
     """
 
+    # Class-specific Metadata
+    _class_specific_metadata = ("_simultaneous_measurements_mode",)
+
     def __init__(
         self,
-        datacube: Sequence[DataCube],
         energy: float,
+        datacube: Sequence[DataCube] = None,
         simultaneous_measurements_mode: str = "-+",
         semiangle_cutoff: float = None,
         rolloff: float = 2.0,
         vacuum_probe_intensity: np.ndarray = None,
         polar_parameters: Mapping[str, float] = None,
-        diffraction_intensities_shape: Tuple[int, int] = None,
-        reshaping_method: str = "fourier",
-        probe_roi_shape: Tuple[int, int] = None,
         object_padding_px: Tuple[int, int] = None,
-        dp_mask: np.ndarray = None,
         initial_object_guess: np.ndarray = None,
         initial_probe_guess: np.ndarray = None,
         initial_scan_positions: np.ndarray = None,
         object_type: str = "complex",
         verbose: bool = True,
         device: str = "cpu",
+        name: str = "simultaneous_ptychographic_reconstruction",
         **kwargs,
     ):
+        Custom.__init__(self, name=name)
+
         if device == "cpu":
             self._xp = np
             self._asnumpy = np.asarray
@@ -151,83 +153,34 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                 f"object_type must be either 'potential' or 'complex', not {object_type}"
             )
 
-        self._object_type = object_type
-        self._object_type_initial = object_type
+        self.set_save_defaults()
+
+        # Data
+        self._datacube = datacube
+        self._object = initial_object_guess
+        self._probe = initial_probe_guess
+
+        # Common Metadata
+        self._vacuum_probe_intensity = vacuum_probe_intensity
+        self._scan_positions = initial_scan_positions
         self._energy = energy
         self._semiangle_cutoff = semiangle_cutoff
         self._rolloff = rolloff
-        self._vacuum_probe_intensity = vacuum_probe_intensity
-        self._diffraction_intensities_shape = diffraction_intensities_shape
-        self._reshaping_method = reshaping_method
-        self._probe_roi_shape = probe_roi_shape
-        self._object = initial_object_guess
-        self._probe = initial_probe_guess
-        self._scan_positions = initial_scan_positions
-        self._datacube = datacube
-        self._dp_mask = dp_mask
-        self._verbose = verbose
+        self._object_type = object_type
         self._object_padding_px = object_padding_px
+        self._verbose = verbose
+        self._device = device
         self._preprocessed = False
 
-        if simultaneous_measurements_mode == "-+":
-            self._sim_recon_mode = 0
-            self._num_sim_measurements = 2
-            if self._verbose:
-                print(
-                    (
-                        "Magnetic vector potential sign in first meaurement assumed to be negative.\n"
-                        "Magnetic vector potential sign in second meaurement assumed to be positive."
-                    )
-                )
-            if len(self._datacube) != 2:
-                raise ValueError(
-                    f"datacube must be a set of two measurements, not length {len(self._datacube)}."
-                )
-            if self._datacube[0].shape != self._datacube[1].shape:
-                raise ValueError("datacube intensities must be the same size.")
-        elif simultaneous_measurements_mode == "-0+":
-            self._sim_recon_mode = 1
-            self._num_sim_measurements = 3
-            if self._verbose:
-                print(
-                    (
-                        "Magnetic vector potential sign in first meaurement assumed to be negative.\n"
-                        "Magnetic vector potential assumed to be zero in second meaurement.\n"
-                        "Magnetic vector potential sign in third meaurement assumed to be positive."
-                    )
-                )
-            if len(self._datacube) != 3:
-                raise ValueError(
-                    f"datacube must be a set of three measurements, not length {len(self._datacube)}."
-                )
-            if (
-                self._datacube[0].shape != self._datacube[1].shape
-                or self._datacube[0].shape != self._datacube[2].shape
-            ):
-                raise ValueError("datacube intensities must be the same size.")
-        elif simultaneous_measurements_mode == "0+":
-            self._sim_recon_mode = 2
-            self._num_sim_measurements = 2
-            if self._verbose:
-                print(
-                    (
-                        "Magnetic vector potential assumed to be zero in first meaurement.\n"
-                        "Magnetic vector potential sign in second meaurement assumed to be positive."
-                    )
-                )
-            if len(self._datacube) != 2:
-                raise ValueError(
-                    f"datacube must be a set of two measurements, not length {len(self._datacube)}."
-                )
-            if self._datacube[0].shape != self._datacube[1].shape:
-                raise ValueError("datacube intensities must be the same size.")
-        else:
-            raise ValueError(
-                f"simultaneous_measurements_mode must be either '-+', '-0+', or '0+', not {simultaneous_measurements_mode}"
-            )
+        # Class-specific Metadata
+        self._simultaneous_measurements_mode = simultaneous_measurements_mode
 
     def preprocess(
         self,
+        diffraction_intensities_shape: Tuple[int, int] = None,
+        reshaping_method: str = "fourier",
+        probe_roi_shape: Tuple[int, int] = None,
+        dp_mask: np.ndarray = None,
         fit_function: str = "plane",
         plot_rotation: bool = True,
         maximize_divergence: bool = False,
@@ -279,6 +232,77 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
         """
         xp = self._xp
         asnumpy = self._asnumpy
+
+        # set additional metadata
+        self._diffraction_intensities_shape = diffraction_intensities_shape
+        self._reshaping_method = reshaping_method
+        self._probe_roi_shape = probe_roi_shape
+        self._dp_mask = dp_mask
+
+        if self._datacube is None:
+            raise ValueError(
+                (
+                    "The preprocess() method requires a DataCube. "
+                    "Please run ptycho.attach_datacube(DataCube) first."
+                )
+            )
+
+        if self._simultaneous_measurements_mode == "-+":
+            self._sim_recon_mode = 0
+            self._num_sim_measurements = 2
+            if self._verbose:
+                print(
+                    (
+                        "Magnetic vector potential sign in first meaurement assumed to be negative.\n"
+                        "Magnetic vector potential sign in second meaurement assumed to be positive."
+                    )
+                )
+            if len(self._datacube) != 2:
+                raise ValueError(
+                    f"datacube must be a set of two measurements, not length {len(self._datacube)}."
+                )
+            if self._datacube[0].shape != self._datacube[1].shape:
+                raise ValueError("datacube intensities must be the same size.")
+        elif self._simultaneous_measurements_mode == "-0+":
+            self._sim_recon_mode = 1
+            self._num_sim_measurements = 3
+            if self._verbose:
+                print(
+                    (
+                        "Magnetic vector potential sign in first meaurement assumed to be negative.\n"
+                        "Magnetic vector potential assumed to be zero in second meaurement.\n"
+                        "Magnetic vector potential sign in third meaurement assumed to be positive."
+                    )
+                )
+            if len(self._datacube) != 3:
+                raise ValueError(
+                    f"datacube must be a set of three measurements, not length {len(self._datacube)}."
+                )
+            if (
+                self._datacube[0].shape != self._datacube[1].shape
+                or self._datacube[0].shape != self._datacube[2].shape
+            ):
+                raise ValueError("datacube intensities must be the same size.")
+        elif self._simultaneous_measurements_mode == "0+":
+            self._sim_recon_mode = 2
+            self._num_sim_measurements = 2
+            if self._verbose:
+                print(
+                    (
+                        "Magnetic vector potential assumed to be zero in first meaurement.\n"
+                        "Magnetic vector potential sign in second meaurement assumed to be positive."
+                    )
+                )
+            if len(self._datacube) != 2:
+                raise ValueError(
+                    f"datacube must be a set of two measurements, not length {len(self._datacube)}."
+                )
+            if self._datacube[0].shape != self._datacube[1].shape:
+                raise ValueError("datacube intensities must be the same size.")
+        else:
+            raise ValueError(
+                f"simultaneous_measurements_mode must be either '-+', '-0+', or '0+', not {self._simultaneous_measurements_mode}"
+            )
 
         if force_com_shifts is None:
             force_com_shifts = [None, None, None]
@@ -582,6 +606,7 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
 
         self._object = (object_e, object_m)
         self._object_initial = (object_e.copy(), object_m.copy())
+        self._object_type_initial = self._object_type
         self._object_shape = self._object[0].shape
 
         self._positions_px = xp.asarray(self._positions_px, dtype=xp.float32)
@@ -638,6 +663,10 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                 ._array
             )
 
+            # Normalize probe to match mean diffraction intensity
+            probe_intensity = xp.sum(xp.abs(xp.fft.fft2(self._probe)) ** 2)
+            self._probe *= xp.sqrt(self._mean_diffraction_intensity / probe_intensity)
+
         else:
             if isinstance(self._probe, ComplexProbe):
                 if self._probe._gpts != self._region_of_interest_shape:
@@ -647,12 +676,14 @@ class SimultaneousPtychographicReconstruction(PhaseReconstruction):
                 else:
                     self._probe._xp = xp
                     self._probe = self._probe.build()._array
+
+                # Normalize probe to match mean diffraction intensity
+                probe_intensity = xp.sum(xp.abs(xp.fft.fft2(self._probe)) ** 2)
+                self._probe *= xp.sqrt(
+                    self._mean_diffraction_intensity / probe_intensity
+                )
             else:
                 self._probe = xp.asarray(self._probe, dtype=xp.complex64)
-
-        # Normalize probe to match mean diffraction intensity
-        probe_intensity = xp.sum(xp.abs(xp.fft.fft2(self._probe)) ** 2)
-        self._probe *= np.sqrt(self._mean_diffraction_intensity / probe_intensity)
 
         self._probe_initial = self._probe.copy()
         self._probe_initial_fft_amplitude = xp.abs(xp.fft.fft2(self._probe_initial))
