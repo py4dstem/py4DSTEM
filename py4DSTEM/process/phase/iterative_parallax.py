@@ -42,16 +42,19 @@ class ParallaxReconstruction(PhaseReconstruction):
         If True, class methods will inherit this and print additional information
     device: str, optional
         Calculation device will be perfomed on. Must be 'cpu' or 'gpu'
+    object_padding_px: Tuple[int,int], optional
+        Pixel dimensions to pad object with
+        If None, the padding is set to half the probe ROI dimensions
     """
 
     def __init__(
         self,
-        datacube: DataCube,
         energy: float,
-        dp_mean: np.ndarray = None,
+        datacube: DataCube = None,
         verbose: bool = False,
+        object_padding_px: Tuple[int, int] = (32, 32),
         device: str = "cpu",
-        name: str = "paralalx_reconstruction",
+        name: str = "parallax_reconstruction",
     ):
         Custom.__init__(self, name=name)
 
@@ -70,15 +73,39 @@ class ParallaxReconstruction(PhaseReconstruction):
         else:
             raise ValueError(f"device must be either 'cpu' or 'gpu', not {device}")
 
-        self._energy = energy
+        # Data
         self._datacube = datacube
-        self._dp_mean = dp_mean
+
+        # Metadata
+        self._energy = energy
         self._verbose = verbose
+        self._object_padding_px = object_padding_px
         self._preprocessed = False
+
+    def to_h5(self, group):
+        """
+        Wraps datasets and metadata to write in emdfile classes,
+        notably ...
+        """
+        raise NotImplementedError()
+
+    @classmethod
+    def _get_constructor_args(cls, group):
+        """
+        Returns a dictionary of arguments/values to pass
+        to the class' __init__ function
+        """
+        raise NotImplementedError()
+
+    def _populate_instance(self, group):
+        """
+        Sets post-initialization properties, notably some preprocessing meta
+        optional; during read, this method is run after object instantiation.
+        """
+        raise NotImplementedError()
 
     def preprocess(
         self,
-        object_padding_px: Tuple[int, int] = (32, 32),
         edge_blend: int = 16,
         threshold_intensity: float = 0.8,
         normalize_images: bool = True,
@@ -93,9 +120,6 @@ class ParallaxReconstruction(PhaseReconstruction):
 
         Parameters
         ----------
-        object_padding_px: Tuple[int,int], optional
-            Pixel dimensions to pad object with
-            If None, the padding is set to half the probe ROI dimensions
         edge_blend: int, optional
             Pixels to blend image at the border
         threshold: float, optional
@@ -122,21 +146,21 @@ class ParallaxReconstruction(PhaseReconstruction):
 
         xp = self._xp
         asnumpy = self._asnumpy
-        self._object_padding_px = object_padding_px
+
+        if self._datacube is None:
+            raise ValueError(
+                (
+                    "The preprocess() method requires a DataCube. "
+                    "Please run parallax.attach_datacube(DataCube) first."
+                )
+            )
 
         # get mean diffraction pattern
         try:
-            self._datacube.tree("dp_mean")
-            dp_exists = True
-        except:
-            dp_exists = False
-        if self._dp_mean is not None:
-            self._dp_mean = xp.asarray(self._dp_mean, dtype=xp.float32)
-        elif dp_exists is True:
             self._dp_mean = xp.asarray(
                 self._datacube.tree("dp_mean").data, dtype=xp.float32
             )
-        else:
+        except AssertionError:
             self._dp_mean = xp.asarray(
                 self._datacube.get_dp_mean().data, dtype=xp.float32
             )
@@ -195,15 +219,15 @@ class ParallaxReconstruction(PhaseReconstruction):
         self._window_inv = 1 - self._window_edge
         self._window_pad = xp.zeros(
             (
-                self._grid_scan_shape[0] + object_padding_px[0],
-                self._grid_scan_shape[1] + object_padding_px[1],
+                self._grid_scan_shape[0] + self._object_padding_px[0],
+                self._grid_scan_shape[1] + self._object_padding_px[1],
             )
         )
         self._window_pad[
-            object_padding_px[0] // 2 : self._grid_scan_shape[0]
-            + object_padding_px[0] // 2,
-            object_padding_px[1] // 2 : self._grid_scan_shape[1]
-            + object_padding_px[1] // 2,
+            self._object_padding_px[0] // 2 : self._grid_scan_shape[0]
+            + self._object_padding_px[0] // 2,
+            self._object_padding_px[1] // 2 : self._grid_scan_shape[1]
+            + self._object_padding_px[1] // 2,
         ] = self._window_edge
 
         # Collect BF images
@@ -212,17 +236,12 @@ class ParallaxReconstruction(PhaseReconstruction):
             (0, 1, 2),
             (1, 2, 0),
         )
-        # if normalize_images:
-        #     all_bfs /= xp.mean(all_bfs, axis=(0, 1))
-        #     all_means = xp.ones(self._num_bf_images)
-        # else:
-        #     all_means = xp.mean(all_bfs, axis=(0, 1))
 
         # initalize
         stack_shape = (
             self._num_bf_images,
-            self._grid_scan_shape[0] + object_padding_px[0],
-            self._grid_scan_shape[1] + object_padding_px[1],
+            self._grid_scan_shape[0] + self._object_padding_px[0],
+            self._grid_scan_shape[1] + self._object_padding_px[1],
         )
         if normalize_images:
             self._stack_BF = xp.ones(stack_shape)
@@ -231,10 +250,10 @@ class ParallaxReconstruction(PhaseReconstruction):
                 all_bfs /= xp.mean(all_bfs, axis=(1, 2))[:, None, None]
                 self._stack_BF[
                     :,
-                    object_padding_px[0] // 2 : self._grid_scan_shape[0]
-                    + object_padding_px[0] // 2,
-                    object_padding_px[1] // 2 : self._grid_scan_shape[1]
-                    + object_padding_px[1] // 2,
+                    self._object_padding_px[0] // 2 : self._grid_scan_shape[0]
+                    + self._object_padding_px[0] // 2,
+                    self._object_padding_px[1] // 2 : self._grid_scan_shape[1]
+                    + self._object_padding_px[1] // 2,
                 ] = (
                     self._window_inv[None] + self._window_edge[None] * all_bfs
                 )
@@ -255,10 +274,10 @@ class ParallaxReconstruction(PhaseReconstruction):
 
                     self._stack_BF[
                         a0,
-                        object_padding_px[0] // 2 : self._grid_scan_shape[0]
-                        + object_padding_px[0] // 2,
-                        object_padding_px[1] // 2 : self._grid_scan_shape[1]
-                        + object_padding_px[1] // 2,
+                        self._object_padding_px[0] // 2 : self._grid_scan_shape[0]
+                        + self._object_padding_px[0] // 2,
+                        self._object_padding_px[1] // 2 : self._grid_scan_shape[1]
+                        + self._object_padding_px[1] // 2,
                     ] = self._window_inv[None] + self._window_edge[None] * all_bfs[
                         a0
                     ] / xp.reshape(
@@ -270,15 +289,14 @@ class ParallaxReconstruction(PhaseReconstruction):
             self._stack_BF = xp.full(stack_shape, all_means[:, None, None])
             self._stack_BF[
                 :,
-                object_padding_px[0] // 2 : self._grid_scan_shape[0]
-                + object_padding_px[0] // 2,
-                object_padding_px[1] // 2 : self._grid_scan_shape[1]
-                + object_padding_px[1] // 2,
+                self._object_padding_px[0] // 2 : self._grid_scan_shape[0]
+                + self._object_padding_px[0] // 2,
+                self._object_padding_px[1] // 2 : self._grid_scan_shape[1]
+                + self._object_padding_px[1] // 2,
             ] = (
                 self._window_inv[None] * all_means[:, None, None]
                 + self._window_edge[None] * all_bfs
             )
-        # self._stack_BF = xp.moveaxis(self._stack_BF, [0, 1, 2], [1, 2, 0])
 
         # Fourier space operators for image shifts
         qx = xp.fft.fftfreq(self._stack_BF.shape[1], d=1)
@@ -1167,7 +1185,6 @@ class ParallaxReconstruction(PhaseReconstruction):
                 )
 
             # CTF correction
-            # TODO - check sign of Fresnel prop
             sin_chi = xp.sin(
                 (xp.pi * self._wavelength * (self.aberration_C1 + dz)) * kra2
             )
