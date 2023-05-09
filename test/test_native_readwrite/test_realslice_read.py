@@ -9,7 +9,7 @@ from os.path import join
 filepath = join(py4DSTEM._TESTPATH, "YanAiming_bilayer_v01.h5")
 
 def test_read_realslice():
-    realslice = py4DSTEM.read(filepath, root='4DSTEM/Fit Data')
+    realslice = py4DSTEM.read(filepath, datapath='4DSTEM/Fit Data')
 
 
 
