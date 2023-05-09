@@ -17,7 +17,7 @@ try:
 except ImportError:
     cp = None
 
-from emdfile import tqdmnd
+from emdfile import Custom, tqdmnd
 from py4DSTEM import DataCube
 from py4DSTEM.process.phase.iterative_base_class import PhaseReconstruction
 from py4DSTEM.process.phase.utils import (
@@ -97,29 +97,31 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         Provide the aberration coefficients as keyword arguments.
     """
 
+    # Class-specific Metadata
+    _class_specific_metadata = ("_num_slices", "_slice_thicknesses")
+
     def __init__(
         self,
-        datacube: DataCube,
         energy: float,
         num_slices: int,
         slice_thicknesses: Union[float, Sequence[float]],
+        datacube: DataCube = None,
         semiangle_cutoff: float = None,
         rolloff: float = 2.0,
         vacuum_probe_intensity: np.ndarray = None,
         polar_parameters: Mapping[str, float] = None,
-        diffraction_intensities_shape: Tuple[int, int] = None,
-        reshaping_method: str = "fourier",
-        probe_roi_shape: Tuple[int, int] = None,
         object_padding_px: Tuple[int, int] = None,
-        dp_mask: np.ndarray = None,
         initial_object_guess: np.ndarray = None,
         initial_probe_guess: np.ndarray = None,
         initial_scan_positions: np.ndarray = None,
         object_type: str = "potential",
         verbose: bool = True,
         device: str = "cpu",
+        name: str = "multi-slice_ptychographic_reconstruction",
         **kwargs,
     ):
+        Custom.__init__(self, name=name)
+
         if device == "cpu":
             self._xp = np
             self._asnumpy = np.asarray
@@ -169,25 +171,28 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
                 f"object_type must be either 'potential' or 'complex', not {object_type}"
             )
 
-        self._object_type = object_type
-        self._object_type_initial = object_type
-        self._energy = energy
-        self._num_slices = num_slices
-        self._slice_thicknesses = slice_thicknesses
-        self._semiangle_cutoff = semiangle_cutoff
-        self._rolloff = rolloff
-        self._vacuum_probe_intensity = vacuum_probe_intensity
-        self._diffraction_intensities_shape = diffraction_intensities_shape
-        self._reshaping_method = reshaping_method
-        self._probe_roi_shape = probe_roi_shape
+        self.set_save_defaults()
+
+        # Data
+        self._datacube = datacube
         self._object = initial_object_guess
         self._probe = initial_probe_guess
+
+        # Common Metadata
+        self._vacuum_probe_intensity = vacuum_probe_intensity
         self._scan_positions = initial_scan_positions
-        self._datacube = datacube
-        self._dp_mask = dp_mask
-        self._verbose = verbose
+        self._energy = energy
+        self._semiangle_cutoff = semiangle_cutoff
+        self._rolloff = rolloff
+        self._object_type = object_type
         self._object_padding_px = object_padding_px
+        self._verbose = verbose
+        self._device = device
         self._preprocessed = False
+
+        # Class-specific Metadata
+        self._num_slices = num_slices
+        self._slice_thicknesses = slice_thicknesses
 
     def _precompute_propagator_arrays(
         self,
@@ -261,6 +266,10 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
 
     def preprocess(
         self,
+        diffraction_intensities_shape: Tuple[int, int] = None,
+        reshaping_method: str = "fourier",
+        probe_roi_shape: Tuple[int, int] = None,
+        dp_mask: np.ndarray = None,
         fit_function: str = "plane",
         plot_center_of_mass: str = "default",
         plot_rotation: bool = True,
@@ -316,6 +325,20 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
         """
         xp = self._xp
         asnumpy = self._asnumpy
+
+        # set additional metadata
+        self._diffraction_intensities_shape = diffraction_intensities_shape
+        self._reshaping_method = reshaping_method
+        self._probe_roi_shape = probe_roi_shape
+        self._dp_mask = dp_mask
+
+        if self._datacube is None:
+            raise ValueError(
+                (
+                    "The preprocess() method requires a DataCube. "
+                    "Please run ptycho.attach_datacube(DataCube) first."
+                )
+            )
 
         (
             self._datacube,
@@ -411,6 +434,7 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
                 self._object = xp.asarray(self._object, dtype=xp.complex64)
 
         self._object_initial = self._object.copy()
+        self._object_type_initial = self._object_type
         self._object_shape = self._object.shape[-2:]
 
         self._positions_px = xp.asarray(self._positions_px, dtype=xp.float32)
@@ -467,6 +491,10 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
                 ._array
             )
 
+            # Normalize probe to match mean diffraction intensity
+            probe_intensity = xp.sum(xp.abs(xp.fft.fft2(self._probe)) ** 2)
+            self._probe *= xp.sqrt(self._mean_diffraction_intensity / probe_intensity)
+
         else:
             if isinstance(self._probe, ComplexProbe):
                 if self._probe._gpts != self._region_of_interest_shape:
@@ -476,12 +504,15 @@ class MultislicePtychographicReconstruction(PhaseReconstruction):
                 else:
                     self._probe._xp = xp
                     self._probe = self._probe.build()._array
+
+                # Normalize probe to match mean diffraction intensity
+                probe_intensity = xp.sum(xp.abs(xp.fft.fft2(self._probe)) ** 2)
+                self._probe *= xp.sqrt(
+                    self._mean_diffraction_intensity / probe_intensity
+                )
+
             else:
                 self._probe = xp.asarray(self._probe, dtype=xp.complex64)
-
-        # Normalize probe to match mean diffraction intensity
-        probe_intensity = xp.sum(xp.abs(xp.fft.fft2(self._probe)) ** 2)
-        self._probe *= np.sqrt(self._mean_diffraction_intensity / probe_intensity)
 
         self._probe_initial = self._probe.copy()
         self._probe_initial_fft_amplitude = xp.abs(xp.fft.fft2(self._probe_initial))

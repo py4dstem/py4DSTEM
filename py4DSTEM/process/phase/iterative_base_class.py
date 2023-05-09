@@ -17,7 +17,8 @@ try:
 except ImportError:
     cp = None
 
-from py4DSTEM.classes import DataCube
+from emdfile import Array, Custom, Metadata, _read_metadata, tqdmnd
+from py4DSTEM.classes import DataCube, Calibration
 from py4DSTEM.process.calibration import fit_origin
 from py4DSTEM.process.phase.utils import AffineTransform, polar_aliases
 from py4DSTEM.process.utils import (
@@ -25,7 +26,6 @@ from py4DSTEM.process.utils import (
     fourier_resample,
     get_shifted_ar,
 )
-from emdfile import Array, Custom, Metadata, tqdmnd, _read_metadata
 
 warnings.simplefilter(action="always", category=UserWarning)
 
@@ -36,7 +36,7 @@ class PhaseReconstruction(Custom):
     Defines various common functions and properties for all subclasses to inherit,
     as well as sets up various abstract methods each subclass must define.
     """
-    
+
     from py4DSTEM.process.phase.iterative_constraints import (
         _object_butterworth_constraint,
         _object_gaussian_constraint,
@@ -48,7 +48,7 @@ class PhaseReconstruction(Custom):
         _probe_finite_support_constraint,
         _probe_fourier_amplitude_constraint,
     )
-    
+
     def to_h5(self, group):
         """
         Wraps datasets and metadata to write in emdfile classes,
@@ -56,31 +56,41 @@ class PhaseReconstruction(Custom):
         """
         # instantiation metadata
         tf = AffineTransform(angle=-self._rotation_best_rad)
-        scan_positions = tf(self.positions, np.mean(self.positions))
+        pos = self.positions
+        if pos.ndim == 2:
+            origin = np.mean(pos, axis=0)
+        else:
+            origin = np.mean(pos, axis=(0, 1))
+        scan_positions = tf(pos, origin)
 
+        vacuum_probe_intensity = (
+            self._asnumpy(self._vacuum_probe_intensity)
+            if self._vacuum_probe_intensity is not None
+            else None
+        )
         metadata = {
-                "energy": self._energy,
-                "semiangle_cutoff": self._semiangle_cutoff,
-                "rolloff": self._rolloff,
-                "object_padding_px": self._object_padding_px,
-                "object_type": self._object_type,
-                "verbose": self._verbose,
-                "device": self._device,
-                "name": self.name,
-                "vacuum_probe_intensity": self._vacuum_probe_intensity,
-                "positions": scan_positions,
-            }
+            "energy": self._energy,
+            "semiangle_cutoff": self._semiangle_cutoff,
+            "rolloff": self._rolloff,
+            "object_padding_px": self._object_padding_px,
+            "object_type": self._object_type,
+            "verbose": self._verbose,
+            "device": self._device,
+            "name": self.name,
+            "vacuum_probe_intensity": vacuum_probe_intensity,
+            "positions": scan_positions,
+        }
 
         cls = self.__class__
         class_specific_metadata = {}
         for key in cls._class_specific_metadata:
-            class_specific_metadata[key[1:]] = getattr(self,key,None)
+            class_specific_metadata[key[1:]] = getattr(self, key, None)
 
         metadata |= class_specific_metadata
 
         self.metadata = Metadata(
             name="instantiation_metadata",
-            data = metadata,
+            data=metadata,
         )
 
         # preprocessing metadata
@@ -124,7 +134,9 @@ class PhaseReconstruction(Custom):
             iterations_labels = [f"iteration_{i:03}" for i in iterations]
 
             # object
-            object_iterations = [self.object_iterations[i] for i in iterations]
+            object_iterations = [
+                np.asarray(self.object_iterations[i]) for i in iterations
+            ]
             self._object_emd = Array(
                 name="reconstruction_object",
                 data=np.stack(object_iterations, axis=0),
@@ -142,7 +154,8 @@ class PhaseReconstruction(Custom):
         else:
             # object
             self._object_emd = Array(
-                name="reconstruction_object", data=self._asnumpy(self._object)
+                name="reconstruction_object",
+                data=self._asnumpy(self._xp.asarray(self._object)),
             )
 
             # probe
@@ -153,7 +166,8 @@ class PhaseReconstruction(Custom):
         # exit_waves
         if self._save_exit_waves:
             self._exit_waves_emd = Array(
-                name="reconstruction_exit_waves", data=self._asnumpy(self._exit_waves)
+                name="reconstruction_exit_waves",
+                data=self._asnumpy(self._xp.asarray(self._exit_waves)),
             )
 
         # datacube
@@ -200,8 +214,8 @@ class PhaseReconstruction(Custom):
         # Populate args and return
         kwargs = {
             "datacube": dc,
-            "initial_object_guess": obj,
-            "initial_probe_guess": probe,
+            "initial_object_guess": np.asarray(obj),
+            "initial_probe_guess": np.asarray(probe),
             "vacuum_probe_intensity": instance_md["vacuum_probe_intensity"],
             "initial_scan_positions": instance_md["positions"],
             "energy": instance_md["energy"],
@@ -258,7 +272,6 @@ class PhaseReconstruction(Custom):
             self.error = error[-1]
         else:
             self.error = error
-
 
     def _set_polar_parameters(self, parameters: dict):
         """
@@ -1762,7 +1775,7 @@ class PhaseReconstruction(Custom):
         if self._object_type == "potential":
             complex_object = xp.exp(1j * relevant_object)
         else:
-            complex_object = current_object
+            complex_object = relevant_object
 
         obj_rolled_x_patches = complex_object[
             (self._vectorized_patch_indices_row + 1) % self._object_shape[0],

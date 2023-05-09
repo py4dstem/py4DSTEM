@@ -92,8 +92,9 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
         Provide the aberration coefficients as keyword arguments.
     """
 
+    # Class-specific Metadata
     _class_specific_metadata = ("_num_probes",)
-    
+
     def __init__(
         self,
         energy: float,
@@ -110,10 +111,9 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
         object_type: str = "complex",
         verbose: bool = True,
         device: str = "cpu",
-        name="mixed-state_ptychographic_reconstruction",
+        name: str = "mixed-state_ptychographic_reconstruction",
         **kwargs,
     ):
-        
         Custom.__init__(self, name=name)
 
         if initial_probe_guess is None or isinstance(initial_probe_guess, ComplexProbe):
@@ -170,12 +170,12 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
             )
 
         self.set_save_defaults()
-        
+
         # Data
         self._datacube = datacube
         self._object = initial_object_guess
         self._probe = initial_probe_guess
-    
+
         # Common Metadata
         self._vacuum_probe_intensity = vacuum_probe_intensity
         self._scan_positions = initial_scan_positions
@@ -187,10 +187,10 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
         self._verbose = verbose
         self._device = device
         self._preprocessed = False
-        
+
         # Class-specific Metadata
         self._num_probes = num_probes
-        
+
     def preprocess(
         self,
         diffraction_intensities_shape: Tuple[int, int] = None,
@@ -258,7 +258,15 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
         self._reshaping_method = reshaping_method
         self._probe_roi_shape = probe_roi_shape
         self._dp_mask = dp_mask
-        
+
+        if self._datacube is None:
+            raise ValueError(
+                (
+                    "The preprocess() method requires a DataCube. "
+                    "Please run ptycho.attach_datacube(DataCube) first."
+                )
+            )
+
         (
             self._datacube,
             self._vacuum_probe_intensity,
@@ -411,7 +419,7 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
                     .build()
                     ._array
                 )
-                
+
             else:
                 if self._probe._gpts != self._region_of_interest_shape:
                     raise ValueError()
@@ -445,10 +453,10 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
                 self._probe[i_probe] = (
                     self._probe[i_probe - 1] * shift_x[:, None] * shift_y[None]
                 )
-                
+
             # Normalize probe to match mean diffraction intensity
             probe_intensity = xp.sum(xp.abs(xp.fft.fft2(self._probe[0])) ** 2)
-            self._probe *= np.sqrt(self._mean_diffraction_intensity / probe_intensity)
+            self._probe *= xp.sqrt(self._mean_diffraction_intensity / probe_intensity)
 
         else:
             self._probe = xp.asarray(self._probe, dtype=xp.complex64)
@@ -1719,6 +1727,7 @@ class MixedStatePtychographicReconstruction(PhaseReconstruction):
             obj = self.object
 
         rotated_object = self._crop_rotate_object_fov(obj, padding=padding)
+        rotated_shape = rotated_object.shape
 
         extent = [
             0,
