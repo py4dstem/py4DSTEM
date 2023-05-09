@@ -19,7 +19,7 @@ try:
 except ImportError:
     cp = None
 
-from emdfile import tqdmnd
+from emdfile import Custom, tqdmnd
 from py4DSTEM import DataCube
 from py4DSTEM.process.phase.iterative_base_class import PhaseReconstruction
 from py4DSTEM.process.phase.utils import (  # fourier_rotate_real_volume,
@@ -96,28 +96,31 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         Provide the aberration coefficients as keyword arguments.
     """
 
+    # Class-specific Metadata
+    _class_specific_metadata = ("_num_slices", "_tilt_angles_deg")
+
     def __init__(
         self,
-        datacube: Sequence[DataCube],
         energy: float,
         num_slices: int,
-        tilt_angles_degrees: Sequence[float],
+        tilt_angles_deg: Sequence[float],
+        datacube: Sequence[DataCube] = None,
         semiangle_cutoff: float = None,
         rolloff: float = 2.0,
         vacuum_probe_intensity: np.ndarray = None,
         polar_parameters: Mapping[str, float] = None,
-        diffraction_intensities_shape: Tuple[int, int] = None,
-        reshaping_method: str = "fourier",
-        probe_roi_shape: Tuple[int, int] = None,
         object_padding_px: Tuple[int, int] = None,
-        dp_mask: np.ndarray = None,
+        object_type: str = "potential",
         initial_object_guess: np.ndarray = None,
         initial_probe_guess: np.ndarray = None,
         initial_scan_positions: Sequence[np.ndarray] = None,
         verbose: bool = True,
         device: str = "cpu",
+        name: str = "overlap-tomographic_reconstruction",
         **kwargs,
     ):
+        Custom.__init__(self, name=name)
+
         if device == "cpu":
             self._xp = np
             self._asnumpy = np.asarray
@@ -155,28 +158,36 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         polar_parameters.update(kwargs)
         self._set_polar_parameters(polar_parameters)
 
-        num_tilts = len(tilt_angles_degrees)
+        num_tilts = len(tilt_angles_deg)
         if initial_scan_positions is None:
             initial_scan_positions = [None] * num_tilts
 
-        self._energy = energy
-        self._num_slices = num_slices
-        self._tilt_angles_deg = tilt_angles_degrees
-        self._num_tilts = num_tilts
-        self._semiangle_cutoff = semiangle_cutoff
-        self._rolloff = rolloff
-        self._vacuum_probe_intensity = vacuum_probe_intensity
-        self._diffraction_intensities_shape = diffraction_intensities_shape
-        self._reshaping_method = reshaping_method
-        self._probe_roi_shape = probe_roi_shape
+        if object_type != "potential":
+            raise NotImplementedError()
+
+        self.set_save_defaults()
+
+        # Data
+        self._datacube = datacube
         self._object = initial_object_guess
         self._probe = initial_probe_guess
+
+        # Common Metadata
+        self._vacuum_probe_intensity = vacuum_probe_intensity
         self._scan_positions = initial_scan_positions
-        self._datacube = datacube
-        self._dp_mask = dp_mask
-        self._verbose = verbose
+        self._energy = energy
+        self._semiangle_cutoff = semiangle_cutoff
+        self._rolloff = rolloff
+        self._object_type = object_type
         self._object_padding_px = object_padding_px
+        self._verbose = verbose
+        self._device = device
         self._preprocessed = False
+
+        # Class-specific Metadata
+        self._num_slices = num_slices
+        self._tilt_angles_deg = tuple(tilt_angles_deg)
+        self._num_tilts = num_tilts
 
     def _precompute_propagator_arrays(
         self,
@@ -349,6 +360,10 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
 
     def preprocess(
         self,
+        diffraction_intensities_shape: Tuple[int, int] = None,
+        reshaping_method: str = "fourier",
+        probe_roi_shape: Tuple[int, int] = None,
+        dp_mask: np.ndarray = None,
         fit_function: str = "plane",
         plot_probe_overlaps: bool = True,
         rotation_real_space_degrees: float = None,
@@ -389,6 +404,20 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         """
         xp = self._xp
         asnumpy = self._asnumpy
+
+        # set additional metadata
+        self._diffraction_intensities_shape = diffraction_intensities_shape
+        self._reshaping_method = reshaping_method
+        self._probe_roi_shape = probe_roi_shape
+        self._dp_mask = dp_mask
+
+        if self._datacube is None:
+            raise ValueError(
+                (
+                    "The preprocess() method requires a DataCube. "
+                    "Please run ptycho.attach_datacube(DataCube) first."
+                )
+            )
 
         # Prepopulate various arrays
         num_probes_per_tilt = [0]
@@ -520,6 +549,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
             self._object = xp.asarray(self._object, dtype=xp.float32)
 
         self._object_initial = self._object.copy()
+        self._object_type_initial = self._object_type
         self._object_shape = self._object.shape[-2:]
         self._num_voxels = self._object.shape[0]
 
@@ -583,6 +613,14 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                 ._array
             )
 
+            # Normalize probe to match mean diffraction intensity
+            probe_intensity = xp.sum(xp.abs(xp.fft.fft2(self._probe)) ** 2)
+            self._probe *= xp.sqrt(
+                sum(self._mean_diffraction_intensity)
+                / self._num_tilts
+                / probe_intensity
+            )
+
         else:
             if isinstance(self._probe, ComplexProbe):
                 if self._probe._gpts != self._region_of_interest_shape:
@@ -592,14 +630,16 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                 else:
                     self._probe._xp = xp
                     self._probe = self._probe.build()._array
+
+                # Normalize probe to match mean diffraction intensity
+                probe_intensity = xp.sum(xp.abs(xp.fft.fft2(self._probe)) ** 2)
+                self._probe *= xp.sqrt(
+                    sum(self._mean_diffraction_intensity)
+                    / self._num_tilts
+                    / probe_intensity
+                )
             else:
                 self._probe = xp.asarray(self._probe, dtype=xp.complex64)
-
-        # Normalize probe to match mean diffraction intensity
-        probe_intensity = xp.sum(xp.abs(xp.fft.fft2(self._probe)) ** 2)
-        self._probe *= np.sqrt(
-            sum(self._mean_diffraction_intensity) / self._num_tilts / probe_intensity
-        )
 
         self._probe_initial = self._probe.copy()
         self._probe_initial_fft_amplitude = xp.abs(xp.fft.fft2(self._probe_initial))
@@ -716,8 +756,8 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                 **kwargs,
             )
             ax3.scatter(
-                self.positions[:, 1],
-                self.positions[:, 0],
+                self.positions[0, :, 1],
+                self.positions[0, :, 0],
                 s=2.5,
                 color=(1, 0, 0, 1),
             )
@@ -2352,7 +2392,10 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                     plot_probe=plot_probe,
                     plot_fourier_probe=plot_fourier_probe,
                     cbar=cbar,
-                    padding=padding,
+                    projection_angle_deg=projection_angle_deg,
+                    projection_axes=projection_axes,
+                    x_lims=x_lims,
+                    y_lims=y_lims,
                     **kwargs,
                 )
             elif plot_probe or plot_fourier_probe:
@@ -2676,3 +2719,24 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
             power=power,
             **kwargs,
         )
+
+    @property
+    def positions(self):
+        """Probe positions [A]"""
+
+        if self.angular_sampling is None:
+            return None
+
+        asnumpy = self._asnumpy
+        positions_all = []
+        for tilt_index in range(self._num_tilts):
+            positions = self._positions_px_all[
+                self._cum_probes_per_tilt[tilt_index] : self._cum_probes_per_tilt[
+                    tilt_index + 1
+                ]
+            ].copy()
+            positions[:, 0] *= self.sampling[0]
+            positions[:, 1] *= self.sampling[1]
+            positions_all.append(asnumpy(positions))
+
+        return np.asarray(positions_all)

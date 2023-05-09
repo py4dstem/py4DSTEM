@@ -10,7 +10,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.gridspec import GridSpec
 from mpl_toolkits.axes_grid1 import ImageGrid, make_axes_locatable
-from py4DSTEM.process.phase.utils import AffineTransform
 from py4DSTEM.visualize.vis_special import Complex2RGB, add_colorbar_arg
 
 try:
@@ -19,7 +18,7 @@ except ImportError:
     cp = None
 
 from emdfile import Custom, tqdmnd
-from py4DSTEM.classes import Calibration, DataCube
+from py4DSTEM.classes import DataCube
 from py4DSTEM.process.phase.iterative_base_class import PhaseReconstruction
 from py4DSTEM.process.phase.utils import (
     ComplexProbe,
@@ -107,12 +106,11 @@ class PtychographicReconstruction(PhaseReconstruction):
         object_type: str = "complex",
         verbose: bool = True,
         device: str = "cpu",
-        name="ptychographic_reconstruction",
+        name: str = "ptychographic_reconstruction",
         **kwargs,
     ):
-
         Custom.__init__(self, name=name)
-        
+
         if device == "cpu":
             self._xp = np
             self._asnumpy = np.asarray
@@ -169,7 +167,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         self._verbose = verbose
         self._device = device
         self._preprocessed = False
-        
+
         # Class-specific Metadata
 
     def preprocess(
@@ -401,7 +399,7 @@ class PtychographicReconstruction(PhaseReconstruction):
 
             # Normalize probe to match mean diffraction intensity
             probe_intensity = xp.sum(xp.abs(xp.fft.fft2(self._probe)) ** 2)
-            self._probe *= np.sqrt(self._mean_diffraction_intensity / probe_intensity)
+            self._probe *= xp.sqrt(self._mean_diffraction_intensity / probe_intensity)
 
         else:
             if isinstance(self._probe, ComplexProbe):
@@ -415,7 +413,7 @@ class PtychographicReconstruction(PhaseReconstruction):
 
                 # Normalize probe to match mean diffraction intensity
                 probe_intensity = xp.sum(xp.abs(xp.fft.fft2(self._probe)) ** 2)
-                self._probe *= np.sqrt(
+                self._probe *= xp.sqrt(
                     self._mean_diffraction_intensity / probe_intensity
                 )
             else:
