@@ -263,6 +263,8 @@ def bin_data_diffraction(datacube, bin_factor):
         units = Qpixunits,
         name = 'Qy'
     )
+    # set calibration pixel size
+    datacube.calibration.set_Q_pixel_size(Qpixsize)
 
     # return
     return datacube
@@ -311,6 +313,8 @@ def bin_data_mmap(datacube, bin_factor, dtype=np.float32):
         units = Qpixunits,
         name = 'Qy'
     )
+    # set calibration pixel size
+    datacube.calibration.set_Q_pixel_size(Qpixsize)
 
     # return
     return datacube
@@ -369,6 +373,8 @@ def bin_data_real(datacube, bin_factor):
         units = Rpixunits,
         name = 'Ry'
     )
+    # set calibration pixel size
+    datacube.calibration.set_R_pixel_size(Rpixsize)
 
     # return
     return datacube
@@ -412,6 +418,8 @@ def thin_data_real(datacube, thinning_factor):
         units = Rpixunits,
         name = 'Ry'
     )
+    # set calibration pixel size
+    datacube.calibration.set_R_pixel_size(Rpixsize)
 
     # return
     return datacube

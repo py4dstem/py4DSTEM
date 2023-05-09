@@ -7,7 +7,8 @@ import numpy as np
 from time import time
 
 from emdfile import tqdmnd
-from py4DSTEM.classes import PointList, PointListArray, QPoints, BraggVectors
+from py4DSTEM.process.diskdetection.braggvectors import BraggVectors
+from py4DSTEM.classes import PointList, PointListArray, QPoints
 from py4DSTEM.process.diskdetection.kernels import kernels
 from py4DSTEM.process.diskdetection.diskdetection_aiml import _get_latest_model
 # from py4DSTEM.process.diskdetection.diskdetection import universal_threshold
