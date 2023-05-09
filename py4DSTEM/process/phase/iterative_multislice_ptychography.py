@@ -19,7 +19,7 @@ except ImportError:
 
 from emdfile import Custom, tqdmnd
 from py4DSTEM import DataCube
-from py4DSTEM.process.phase.iterative_base_class import PhaseReconstruction
+from py4DSTEM.process.phase.iterative_base_class import PtychographicReconstruction
 from py4DSTEM.process.phase.utils import (
     ComplexProbe,
     fft_shift,
@@ -33,7 +33,7 @@ from py4DSTEM.process.utils import electron_wavelength_angstrom, get_CoM, get_sh
 warnings.simplefilter(action="always", category=UserWarning)
 
 
-class MultislicePtychographicReconstruction(PhaseReconstruction):
+class MultislicePtychographicReconstruction(PtychographicReconstruction):
     """
     Multislice Ptychographic Reconstruction Class.
 

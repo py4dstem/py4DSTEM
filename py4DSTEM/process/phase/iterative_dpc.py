@@ -16,8 +16,8 @@ try:
 except ImportError:
     cp = None
 
-from emdfile import Custom, tqdmnd
-from py4DSTEM.classes import DataCube
+from emdfile import Array, Custom, Metadata, _read_metadata, tqdmnd
+from py4DSTEM.classes import Calibration, DataCube
 from py4DSTEM.process.phase.iterative_base_class import PhaseReconstruction
 
 warnings.simplefilter(action="always", category=UserWarning)
@@ -57,8 +57,8 @@ class DPCReconstruction(PhaseReconstruction):
 
     def __init__(
         self,
-        datacube: DataCube,
-        dp_mask: np.ndarray = None,
+        datacube: DataCube = None,
+        initial_object_guess: np.ndarray = None,
         energy: float = None,
         verbose: bool = True,
         device: str = "cpu",
@@ -81,14 +81,167 @@ class DPCReconstruction(PhaseReconstruction):
         else:
             raise ValueError(f"device must be either 'cpu' or 'gpu', not {device}")
 
-        self._energy = energy
+        self.set_save_defaults()
+
+        # Data
         self._datacube = datacube
+        self._object_phase = initial_object_guess
+
+        # Metadata
+        self._energy = energy
         self._verbose = verbose
+        self._device = device
         self._preprocessed = False
-        self._dp_mask = dp_mask
+
+    def to_h5(self, group):
+        """
+        Wraps datasets and metadata to write in emdfile classes,
+        notably: the object phase array.
+        """
+
+        # instantiation metadata
+        self.metadata = Metadata(
+            name="instantiation_metadata",
+            data={
+                "energy": self._energy,
+                "verbose": self._verbose,
+                "device": self._device,
+                "name": self.name,
+            },
+        )
+
+        # preprocessing metadata
+        self.metadata = Metadata(
+            name="preprocess_metadata",
+            data={
+                "rotation_angle_rad": self._rotation_best_rad,
+                "data_transpose": self._rotation_best_transpose,
+                "sampling": self.sampling,
+            },
+        )
+
+        # reconstruction metadata
+        is_stack = self._save_iterations and hasattr(self, "object_phase_iterations")
+        if is_stack:
+            num_iterations = len(self.object_phase_iterations)
+            iterations = list(range(0, num_iterations, self._save_iterations_frequency))
+            if num_iterations - 1 not in iterations:
+                iterations.append(num_iterations - 1)
+
+            error = [self.error_iterations[i] for i in iterations]
+        else:
+            error = self.error
+
+        self.metadata = Metadata(
+            name="reconstruction_metadata",
+            data={
+                "reconstruction_error": error,
+                "final_step_size": self._step_size,
+            },
+        )
+
+        if is_stack:
+            iterations_labels = [f"iteration_{i:03}" for i in iterations]
+
+            # object
+            object_iterations = [
+                np.asarray(self.object_phase_iterations[i]) for i in iterations
+            ]
+            self._object_emd = Array(
+                name="reconstruction_object",
+                data=np.stack(object_iterations, axis=0),
+                slicelabels=iterations_labels,
+            )
+
+        else:
+            # object
+            self._object_emd = Array(
+                name="reconstruction_object",
+                data=self._asnumpy(self._object_phase),
+            )
+
+        # datacube
+        if self._save_datacube:
+            self.metadata = self._datacube.calibration
+            Custom.to_h5(self, group)
+        else:
+            dc = self._datacube
+            self._datacube = None
+            Custom.to_h5(self, group)
+            self._datacube = dc
+
+    @classmethod
+    def _get_constructor_args(cls, group):
+        """
+        Returns a dictionary of arguments/values to pass
+        to the class' __init__ function
+        """
+        # Get data
+        dict_data = cls._get_emd_attr_data(cls, group)
+
+        # Get metadata dictionaries
+        instance_md = _read_metadata(group, "instantiation_metadata")
+
+        # Fix calibrations bug
+        if "_datacube" in dict_data:
+            calibrations_dict = _read_metadata(group, "calibration")._params
+            cal = Calibration()
+            cal._params.update(calibrations_dict)
+            dc = dict_data["_datacube"]
+            dc.calibration = cal
+        else:
+            dc = None
+
+        # Check if stack
+        if dict_data["_object_emd"].is_stack:
+            obj = dict_data["_object_emd"][-1].data
+        else:
+            obj = dict_data["_object_emd"].data
+
+        # Populate args and return
+        kwargs = {
+            "datacube": dc,
+            "initial_object_guess": np.asarray(obj),
+            "energy": instance_md["energy"],
+            "verbose": instance_md["verbose"],
+            "name": instance_md["name"],
+            "device": instance_md["device"],
+        }
+
+        return kwargs
+
+    def _populate_instance(self, group):
+        """
+        Sets post-initialization properties, notably some preprocessing meta
+        optional; during read, this method is run after object instantiation.
+        """
+        # Preprocess metadata
+        preprocess_md = _read_metadata(group, "preprocess_metadata")
+        self._rotation_best_rad = preprocess_md["rotation_angle_rad"]
+        self._rotation_best_transpose = preprocess_md["data_transpose"]
+        self._preprocessed = False
+
+        # Reconstruction metadata
+        reconstruction_md = _read_metadata(group, "reconstruction_metadata")
+        error = reconstruction_md["reconstruction_error"]
+
+        # Data
+        dict_data = Custom._get_emd_attr_data(Custom, group)
+
+        # Check if stack
+        if hasattr(error, "__len__"):
+            self.object_phase_iterations = list(dict_data["_object_emd"].data)
+            self.error_iterations = error
+            self.error = error[-1]
+        else:
+            self.error = error
+
+        self._step_size = reconstruction_md["final_step_size"]
 
     def preprocess(
         self,
+        dp_mask: np.ndarray = None,
+        padding_factor: float = 2,
         rotation_angles_deg: np.ndarray = np.arange(-89.0, 90.0, 1.0),
         maximize_divergence: bool = False,
         fit_function: str = "plane",
@@ -137,6 +290,18 @@ class DPCReconstruction(PhaseReconstruction):
         self: DPCReconstruction
             Self to accommodate chaining
         """
+        xp = self._xp
+
+        # set additional metadata
+        self._dp_mask = dp_mask
+
+        if self._datacube is None:
+            raise ValueError(
+                (
+                    "The preprocess() method requires a DataCube. "
+                    "Please run dpc.attach_datacube(DataCube) first."
+                )
+            )
 
         self._intensities = self._extract_intensities_and_calibrations_from_datacube(
             self._datacube,
@@ -177,6 +342,29 @@ class DPCReconstruction(PhaseReconstruction):
             force_com_transpose=force_com_transpose,
             **kwargs,
         )
+
+        # Object Initialization
+        padded_object_shape = np.round(
+            np.array(self._grid_scan_shape) * padding_factor
+        ).astype("int")
+        self._padded_phase_object = xp.zeros(padded_object_shape, dtype=xp.float32)
+        if self._object_phase is not None:
+            self._padded_phase_object[
+                : self._grid_scan_shape[0], : self._grid_scan_shape[1]
+            ] = xp.asarray(self._object_phase, dtype=xp.float32)
+
+        self._padded_phase_object_initial = self._padded_phase_object.copy()
+
+        # Fourier coordinates and operators
+        kx = xp.fft.fftfreq(padded_object_shape[0], d=self._scan_sampling[0])
+        ky = xp.fft.fftfreq(padded_object_shape[1], d=self._scan_sampling[1])
+        kya, kxa = xp.meshgrid(ky, kx)
+        k_den = kxa**2 + kya**2
+        k_den[0, 0] = np.inf
+        k_den = 1 / k_den
+        self._kx_op = -1j * 0.25 * kxa * k_den
+        self._ky_op = -1j * 0.25 * kya * k_den
+
         self._preprocessed = True
 
         return self
@@ -310,6 +498,63 @@ class DPCReconstruction(PhaseReconstruction):
         padded_phase_object += step_size * phase_update
         return padded_phase_object
 
+    def _object_gaussian_constraint(self, current_object, gaussian_filter_sigma):
+        """
+        Smoothness constrain used for blurring object.
+
+        Parameters
+        --------
+        current_object: np.ndarray
+            Current object estimate
+        gaussian_filter_sigma: float
+            Standard deviation of gaussian kernel
+
+        Returns
+        --------
+        constrained_object: np.ndarray
+            Constrained object estimate
+        """
+        gaussian_filter = self._gaussian_filter
+
+        current_object = gaussian_filter(current_object, gaussian_filter_sigma)
+
+        return current_object
+
+    def _object_butterworth_constraint(self, current_object, q_lowpass, q_highpass):
+        """
+        Butterworth filter
+
+        Parameters
+        --------
+        current_object: np.ndarray
+            Current object estimate
+        q_lowpass: float
+            Cut-off frequency in A^-1 for low-pass butterworth filter
+        q_highpass: float
+            Cut-off frequency in A^-1 for high-pass butterworth filter
+
+        Returns
+        --------
+        constrained_object: np.ndarray
+            Constrained object estimate
+        """
+        xp = self._xp
+        qx = xp.fft.fftfreq(current_object.shape[0], self.sampling[0])
+        qy = xp.fft.fftfreq(current_object.shape[1], self.sampling[1])
+
+        qya, qxa = xp.meshgrid(qy, qx)
+        qra = xp.sqrt(qxa**2 + qya**2)
+
+        env = xp.ones_like(qra)
+        if q_highpass:
+            env *= 1 - 1 / (1 + (qra / q_highpass) ** 4)
+        if q_lowpass:
+            env *= 1 / (1 + (qra / q_lowpass) ** 4)
+
+        current_object = xp.fft.ifft2(xp.fft.fft2(current_object) * env)
+
+        return xp.real(current_object)
+
     def _constraints(
         self,
         current_object,
@@ -343,10 +588,9 @@ class DPCReconstruction(PhaseReconstruction):
         constrained_object: np.ndarray
             Constrained object estimate
         """
-        xp = self._xp
         if gaussian_filter:
             current_object = self._object_gaussian_constraint(
-                current_object, gaussian_filter_sigma, False
+                current_object, gaussian_filter_sigma
             )
 
         if butterworth_filter:
@@ -355,16 +599,14 @@ class DPCReconstruction(PhaseReconstruction):
                 q_lowpass,
                 q_highpass,
             )
-            current_object = xp.real(current_object)
 
         return current_object
 
     def reconstruct(
         self,
         reset: bool = None,
-        padding_factor: float = 2,
         max_iter: int = 64,
-        step_size: float = 1.0,
+        step_size: float = None,
         stopping_criterion: float = 1e-6,
         progress_bar: bool = True,
         gaussian_filter_sigma: float = None,
@@ -426,24 +668,6 @@ class DPCReconstruction(PhaseReconstruction):
         xp = self._xp
         asnumpy = self._asnumpy
 
-        # Initialization
-        padded_object_shape = np.round(
-            np.array(self._grid_scan_shape) * padding_factor
-        ).astype("int")
-        mask = xp.zeros(padded_object_shape, dtype="bool")
-        mask[: self._grid_scan_shape[0], : self._grid_scan_shape[1]] = True
-        mask_inv = xp.logical_not(mask)
-
-        # Fourier coordinates and operators
-        kx = xp.fft.fftfreq(padded_object_shape[0], d=self._scan_sampling[0])
-        ky = xp.fft.fftfreq(padded_object_shape[1], d=self._scan_sampling[1])
-        kya, kxa = xp.meshgrid(ky, kx)
-        k_den = kxa**2 + kya**2
-        k_den[0, 0] = np.inf
-        k_den = 1 / k_den
-        kx_op = -1j * 0.25 * kxa * k_den
-        ky_op = -1j * 0.25 * kya * k_den
-
         if reset is None and hasattr(self, "error"):
             warnings.warn(
                 (
@@ -454,14 +678,25 @@ class DPCReconstruction(PhaseReconstruction):
             )
 
         # Restart
-        if not hasattr(self, "_padded_phase_object") or reset:
-            self.error = np.inf
-            self._step_size = step_size
-            self._padded_phase_object = xp.zeros(padded_object_shape)
-
         if store_iterations and (not hasattr(self, "object_phase_iterations") or reset):
             self.object_phase_iterations = []
             self.error_iterations = []
+
+        if reset:
+            self.error = np.inf
+            self._step_size = step_size if step_size is not None else 0.5
+            self._padded_phase_object = self._padded_phase_object_initial.copy()
+
+        self.error = getattr(self, "error", np.inf)
+
+        if step_size is None:
+            self._step_size = getattr(self, "_step_size", 0.5)
+        else:
+            self._step_size = step_size
+
+        mask = xp.zeros(self._padded_phase_object.shape, dtype="bool")
+        mask[: self._grid_scan_shape[0], : self._grid_scan_shape[1]] = True
+        mask_inv = xp.logical_not(mask)
 
         # main loop
         for a0 in tqdmnd(
@@ -479,7 +714,7 @@ class DPCReconstruction(PhaseReconstruction):
             )
 
             # adjoint operator
-            phase_update = self._adjoint(com_dx, com_dy, kx_op, ky_op)
+            phase_update = self._adjoint(com_dx, com_dy, self._kx_op, self._ky_op)
 
             # update
             self._padded_phase_object = self._update(
@@ -487,7 +722,7 @@ class DPCReconstruction(PhaseReconstruction):
             )
 
             # constraints
-            (self._padded_phase_object) = self._constraints(
+            self._padded_phase_object = self._constraints(
                 self._padded_phase_object,
                 gaussian_filter=a0 < gaussian_filter_iter
                 and gaussian_filter_sigma is not None,
@@ -652,7 +887,7 @@ class DPCReconstruction(PhaseReconstruction):
             ax2.set_ylabel("Log NMSE error")
             ax2.yaxis.tick_right()
 
-            spec.tight_layout(fig)
+        spec.tight_layout(fig)
 
     def visualize(
         self,

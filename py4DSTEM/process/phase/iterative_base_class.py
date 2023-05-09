@@ -18,8 +18,11 @@ except ImportError:
     cp = None
 
 from emdfile import Array, Custom, Metadata, _read_metadata, tqdmnd
-from py4DSTEM.classes import DataCube, Calibration
+from py4DSTEM.classes import Calibration, DataCube
 from py4DSTEM.process.calibration import fit_origin
+from py4DSTEM.process.phase.iterative_ptychographic_constraints import (
+    PtychographicConstraints,
+)
 from py4DSTEM.process.phase.utils import AffineTransform, polar_aliases
 from py4DSTEM.process.utils import (
     electron_wavelength_angstrom,
@@ -33,274 +36,27 @@ warnings.simplefilter(action="always", category=UserWarning)
 class PhaseReconstruction(Custom):
     """
     Base phase reconstruction class.
-    Defines various common functions and properties for all subclasses to inherit,
-    as well as sets up various abstract methods each subclass must define.
+    Defines various common functions and properties for subclasses to inherit.
     """
 
-    from py4DSTEM.process.phase.iterative_constraints import (
-        _object_butterworth_constraint,
-        _object_gaussian_constraint,
-        _object_positivity_constraint,
-        _object_threshold_constraint,
-        _positions_affine_transformation_constraint,
-        _positions_center_of_mass_constraint,
-        _probe_center_of_mass_constraint,
-        _probe_finite_support_constraint,
-        _probe_fourier_amplitude_constraint,
-        _object_denoise_tv_chambolle
-    )
+    def attach_datacube(self, dc: DataCube):
+        """Attaches a datacube to a class initialized without one."""
+        self._datacube = dc
+        return self
 
-    def to_h5(self, group):
-        """
-        Wraps datasets and metadata to write in emdfile classes,
-        notably: the object and probe arrays.
-        """
-        # instantiation metadata
-        tf = AffineTransform(angle=-self._rotation_best_rad)
-        pos = self.positions
-        if pos.ndim == 2:
-            origin = np.mean(pos, axis=0)
-        else:
-            origin = np.mean(pos, axis=(0, 1))
-        scan_positions = tf(pos, origin)
-
-        vacuum_probe_intensity = (
-            self._asnumpy(self._vacuum_probe_intensity)
-            if self._vacuum_probe_intensity is not None
-            else None
-        )
-        metadata = {
-            "energy": self._energy,
-            "semiangle_cutoff": self._semiangle_cutoff,
-            "rolloff": self._rolloff,
-            "object_padding_px": self._object_padding_px,
-            "object_type": self._object_type,
-            "verbose": self._verbose,
-            "device": self._device,
-            "name": self.name,
-            "vacuum_probe_intensity": vacuum_probe_intensity,
-            "positions": scan_positions,
-        }
-
-        cls = self.__class__
-        class_specific_metadata = {}
-        for key in cls._class_specific_metadata:
-            class_specific_metadata[key[1:]] = getattr(self, key, None)
-
-        metadata |= class_specific_metadata
-
-        self.metadata = Metadata(
-            name="instantiation_metadata",
-            data=metadata,
-        )
-
-        # preprocessing metadata
-        self.metadata = Metadata(
-            name="preprocess_metadata",
-            data={
-                "rotation_angle_rad": self._rotation_best_rad,
-                "data_transpose": self._rotation_best_transpose,
-                "region_of_interest_shape": self._region_of_interest_shape,
-                "num_diffraction_patterns": self._num_diffraction_patterns,
-                "sampling": self.sampling,
-            },
-        )
-
-        # reconstruction metadata
-        is_stack = self._save_iterations and hasattr(self, "object_iterations")
-        if is_stack:
-            num_iterations = len(self.object_iterations)
-            iterations = list(range(0, num_iterations, self._save_iterations_frequency))
-            if num_iterations - 1 not in iterations:
-                iterations.append(num_iterations - 1)
-
-            error = [self.error_iterations[i] for i in iterations]
-        else:
-            error = self.error
-
-        self.metadata = Metadata(
-            name="reconstruction_metadata",
-            data={
-                "reconstruction_error": error,
-            },
-        )
-
-        # aberrations metadata
-        self.metadata = Metadata(
-            name="aberrations_metadata",
-            data=self._polar_parameters,
-        )
-
-        if is_stack:
-            iterations_labels = [f"iteration_{i:03}" for i in iterations]
-
-            # object
-            object_iterations = [
-                np.asarray(self.object_iterations[i]) for i in iterations
-            ]
-            self._object_emd = Array(
-                name="reconstruction_object",
-                data=np.stack(object_iterations, axis=0),
-                slicelabels=iterations_labels,
-            )
-
-            # probe
-            probe_iterations = [self.probe_iterations[i] for i in iterations]
-            self._probe_emd = Array(
-                name="reconstruction_probe",
-                data=np.stack(probe_iterations, axis=0),
-                slicelabels=iterations_labels,
-            )
-
-        else:
-            # object
-            self._object_emd = Array(
-                name="reconstruction_object",
-                data=self._asnumpy(self._xp.asarray(self._object)),
-            )
-
-            # probe
-            self._probe_emd = Array(
-                name="reconstruction_probe", data=self._asnumpy(self._probe)
-            )
-
-        # exit_waves
-        if self._save_exit_waves:
-            self._exit_waves_emd = Array(
-                name="reconstruction_exit_waves",
-                data=self._asnumpy(self._xp.asarray(self._exit_waves)),
-            )
-
-        # datacube
-        if self._save_datacube:
-            self.metadata = self._datacube.calibration
-            Custom.to_h5(self, group)
-        else:
-            dc = self._datacube
-            self._datacube = None
-            Custom.to_h5(self, group)
-            self._datacube = dc
-
-    @classmethod
-    def _get_constructor_args(cls, group):
-        """
-        Returns a dictionary of arguments/values to pass
-        to the class' __init__ function
-        """
-        # Get data
-        dict_data = cls._get_emd_attr_data(cls, group)
-
-        # Get metadata dictionaries
-        instance_md = _read_metadata(group, "instantiation_metadata")
-        polar_params = _read_metadata(group, "aberrations_metadata")._params
-
-        # Fix calibrations bug
-        if "_datacube" in dict_data:
-            calibrations_dict = _read_metadata(group, "calibration")._params
-            cal = Calibration()
-            cal._params.update(calibrations_dict)
-            dc = dict_data["_datacube"]
-            dc.calibration = cal
-        else:
-            dc = None
-
-        # Check if stack
-        if dict_data["_object_emd"].is_stack:
-            obj = dict_data["_object_emd"][-1].data
-            probe = dict_data["_probe_emd"][-1].data
-        else:
-            obj = dict_data["_object_emd"].data
-            probe = dict_data["_probe_emd"].data
-
-        # Populate args and return
-        kwargs = {
-            "datacube": dc,
-            "initial_object_guess": np.asarray(obj),
-            "initial_probe_guess": np.asarray(probe),
-            "vacuum_probe_intensity": instance_md["vacuum_probe_intensity"],
-            "initial_scan_positions": instance_md["positions"],
-            "energy": instance_md["energy"],
-            "object_padding_px": instance_md["object_padding_px"],
-            "object_type": instance_md["object_type"],
-            "semiangle_cutoff": instance_md["semiangle_cutoff"],
-            "rolloff": instance_md["rolloff"],
-            "verbose": instance_md["verbose"],
-            "name": instance_md["name"],
-            "device": instance_md["device"],
-            "polar_parameters": polar_params,
-        }
-
-        class_specific_kwargs = {}
-        for key in cls._class_specific_metadata:
-            class_specific_kwargs[key[1:]] = instance_md[key[1:]]
-
-        kwargs |= class_specific_kwargs
-
-        return kwargs
-
-    def _populate_instance(self, group):
-        """
-        Sets post-initialization properties, notably some preprocessing meta
-        optional; during read, this method is run after object instantiation.
-        """
-        xp = self._xp
-
-        # Preprocess metadata
-        preprocess_md = _read_metadata(group, "preprocess_metadata")
-        self._rotation_best_rad = preprocess_md["rotation_angle_rad"]
-        self._rotation_best_transpose = preprocess_md["data_transpose"]
-        self._region_of_interest_shape = preprocess_md["region_of_interest_shape"]
-        self._num_diffraction_patterns = preprocess_md["num_diffraction_patterns"]
-        self._preprocessed = False
-
-        # Reconstruction metadata
-        reconstruction_md = _read_metadata(group, "reconstruction_metadata")
-        error = reconstruction_md["reconstruction_error"]
-
-        # Data
-        dict_data = Custom._get_emd_attr_data(Custom, group)
-        if "_exit_waves_emd" in dict_data:
-            self._exit_waves = dict_data["_exit_waves_emd"].data
-            self._exit_waves = xp.asarray(self._exit_waves, dtype=xp.complex64)
-        else:
-            self._exit_waves = None
-
-        # Check if stack
-        if hasattr(error, "__len__"):
-            self.object_iterations = list(dict_data["_object_emd"].data)
-            self.probe_iterations = list(dict_data["_probe_emd"].data)
-            self.error_iterations = error
-            self.error = error[-1]
-        else:
-            self.error = error
-
-    def _set_polar_parameters(self, parameters: dict):
-        """
-        Set the phase of the phase aberration.
-
-        Parameters
-        ----------
-        parameters: dict
-            Mapping from aberration symbols to their corresponding values.
-
-        Mutates
-        -------
-        self._polar_parameters: dict
-            Updated polar aberrations dictionary
-        """
-
-        for symbol, value in parameters.items():
-            if symbol in self._polar_parameters.keys():
-                self._polar_parameters[symbol] = value
-
-            elif symbol == "defocus":
-                self._polar_parameters[polar_aliases[symbol]] = -value
-
-            elif symbol in polar_aliases.keys():
-                self._polar_parameters[polar_aliases[symbol]] = value
-
-            else:
-                raise ValueError("{} not a recognized parameter".format(symbol))
+    def set_save_defaults(
+        self,
+        save_datacube=False,
+        save_exit_waves=False,
+        save_iterations=True,
+        save_iterations_frequency=1,
+    ):
+        """Sets the class defaults for saving to file."""
+        self._save_datacube = save_datacube
+        self._save_exit_waves = save_exit_waves
+        self._save_iterations = save_iterations
+        self._save_iterations_frequency = save_iterations_frequency
+        return self
 
     def _preprocess_datacube_and_vacuum_probe(
         self,
@@ -1284,6 +1040,266 @@ class PhaseReconstruction(Custom):
 
         return amplitudes, mean_intensity
 
+
+class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints):
+    """
+    Base ptychographic reconstruction class.
+    Inherits from PhaseReconstruction and PtychographicConstraints.
+    Defines various common functions and properties for subclasses to inherit.
+    """
+
+    def to_h5(self, group):
+        """
+        Wraps datasets and metadata to write in emdfile classes,
+        notably: the object and probe arrays.
+        """
+        # instantiation metadata
+        tf = AffineTransform(angle=-self._rotation_best_rad)
+        pos = self.positions
+        if pos.ndim == 2:
+            origin = np.mean(pos, axis=0)
+        else:
+            origin = np.mean(pos, axis=(0, 1))
+        scan_positions = tf(pos, origin)
+
+        vacuum_probe_intensity = (
+            self._asnumpy(self._vacuum_probe_intensity)
+            if self._vacuum_probe_intensity is not None
+            else None
+        )
+        metadata = {
+            "energy": self._energy,
+            "semiangle_cutoff": self._semiangle_cutoff,
+            "rolloff": self._rolloff,
+            "object_padding_px": self._object_padding_px,
+            "object_type": self._object_type,
+            "verbose": self._verbose,
+            "device": self._device,
+            "name": self.name,
+            "vacuum_probe_intensity": vacuum_probe_intensity,
+            "positions": scan_positions,
+        }
+
+        cls = self.__class__
+        class_specific_metadata = {}
+        for key in cls._class_specific_metadata:
+            class_specific_metadata[key[1:]] = getattr(self, key, None)
+
+        metadata |= class_specific_metadata
+
+        self.metadata = Metadata(
+            name="instantiation_metadata",
+            data=metadata,
+        )
+
+        # preprocessing metadata
+        self.metadata = Metadata(
+            name="preprocess_metadata",
+            data={
+                "rotation_angle_rad": self._rotation_best_rad,
+                "data_transpose": self._rotation_best_transpose,
+                "region_of_interest_shape": self._region_of_interest_shape,
+                "num_diffraction_patterns": self._num_diffraction_patterns,
+                "sampling": self.sampling,
+            },
+        )
+
+        # reconstruction metadata
+        is_stack = self._save_iterations and hasattr(self, "object_iterations")
+        if is_stack:
+            num_iterations = len(self.object_iterations)
+            iterations = list(range(0, num_iterations, self._save_iterations_frequency))
+            if num_iterations - 1 not in iterations:
+                iterations.append(num_iterations - 1)
+
+            error = [self.error_iterations[i] for i in iterations]
+        else:
+            error = self.error
+
+        self.metadata = Metadata(
+            name="reconstruction_metadata",
+            data={
+                "reconstruction_error": error,
+            },
+        )
+
+        # aberrations metadata
+        self.metadata = Metadata(
+            name="aberrations_metadata",
+            data=self._polar_parameters,
+        )
+
+        if is_stack:
+            iterations_labels = [f"iteration_{i:03}" for i in iterations]
+
+            # object
+            object_iterations = [
+                np.asarray(self.object_iterations[i]) for i in iterations
+            ]
+            self._object_emd = Array(
+                name="reconstruction_object",
+                data=np.stack(object_iterations, axis=0),
+                slicelabels=iterations_labels,
+            )
+
+            # probe
+            probe_iterations = [self.probe_iterations[i] for i in iterations]
+            self._probe_emd = Array(
+                name="reconstruction_probe",
+                data=np.stack(probe_iterations, axis=0),
+                slicelabels=iterations_labels,
+            )
+
+        else:
+            # object
+            self._object_emd = Array(
+                name="reconstruction_object",
+                data=self._asnumpy(self._xp.asarray(self._object)),
+            )
+
+            # probe
+            self._probe_emd = Array(
+                name="reconstruction_probe", data=self._asnumpy(self._probe)
+            )
+
+        # exit_waves
+        if self._save_exit_waves:
+            self._exit_waves_emd = Array(
+                name="reconstruction_exit_waves",
+                data=self._asnumpy(self._xp.asarray(self._exit_waves)),
+            )
+
+        # datacube
+        if self._save_datacube:
+            self.metadata = self._datacube.calibration
+            Custom.to_h5(self, group)
+        else:
+            dc = self._datacube
+            self._datacube = None
+            Custom.to_h5(self, group)
+            self._datacube = dc
+
+    @classmethod
+    def _get_constructor_args(cls, group):
+        """
+        Returns a dictionary of arguments/values to pass
+        to the class' __init__ function
+        """
+        # Get data
+        dict_data = cls._get_emd_attr_data(cls, group)
+
+        # Get metadata dictionaries
+        instance_md = _read_metadata(group, "instantiation_metadata")
+        polar_params = _read_metadata(group, "aberrations_metadata")._params
+
+        # Fix calibrations bug
+        if "_datacube" in dict_data:
+            calibrations_dict = _read_metadata(group, "calibration")._params
+            cal = Calibration()
+            cal._params.update(calibrations_dict)
+            dc = dict_data["_datacube"]
+            dc.calibration = cal
+        else:
+            dc = None
+
+        # Check if stack
+        if dict_data["_object_emd"].is_stack:
+            obj = dict_data["_object_emd"][-1].data
+            probe = dict_data["_probe_emd"][-1].data
+        else:
+            obj = dict_data["_object_emd"].data
+            probe = dict_data["_probe_emd"].data
+
+        # Populate args and return
+        kwargs = {
+            "datacube": dc,
+            "initial_object_guess": np.asarray(obj),
+            "initial_probe_guess": np.asarray(probe),
+            "vacuum_probe_intensity": instance_md["vacuum_probe_intensity"],
+            "initial_scan_positions": instance_md["positions"],
+            "energy": instance_md["energy"],
+            "object_padding_px": instance_md["object_padding_px"],
+            "object_type": instance_md["object_type"],
+            "semiangle_cutoff": instance_md["semiangle_cutoff"],
+            "rolloff": instance_md["rolloff"],
+            "verbose": instance_md["verbose"],
+            "name": instance_md["name"],
+            "device": instance_md["device"],
+            "polar_parameters": polar_params,
+        }
+
+        class_specific_kwargs = {}
+        for key in cls._class_specific_metadata:
+            class_specific_kwargs[key[1:]] = instance_md[key[1:]]
+
+        kwargs |= class_specific_kwargs
+
+        return kwargs
+
+    def _populate_instance(self, group):
+        """
+        Sets post-initialization properties, notably some preprocessing meta
+        optional; during read, this method is run after object instantiation.
+        """
+        xp = self._xp
+
+        # Preprocess metadata
+        preprocess_md = _read_metadata(group, "preprocess_metadata")
+        self._rotation_best_rad = preprocess_md["rotation_angle_rad"]
+        self._rotation_best_transpose = preprocess_md["data_transpose"]
+        self._region_of_interest_shape = preprocess_md["region_of_interest_shape"]
+        self._num_diffraction_patterns = preprocess_md["num_diffraction_patterns"]
+        self._preprocessed = False
+
+        # Reconstruction metadata
+        reconstruction_md = _read_metadata(group, "reconstruction_metadata")
+        error = reconstruction_md["reconstruction_error"]
+
+        # Data
+        dict_data = Custom._get_emd_attr_data(Custom, group)
+        if "_exit_waves_emd" in dict_data:
+            self._exit_waves = dict_data["_exit_waves_emd"].data
+            self._exit_waves = xp.asarray(self._exit_waves, dtype=xp.complex64)
+        else:
+            self._exit_waves = None
+
+        # Check if stack
+        if hasattr(error, "__len__"):
+            self.object_iterations = list(dict_data["_object_emd"].data)
+            self.probe_iterations = list(dict_data["_probe_emd"].data)
+            self.error_iterations = error
+            self.error = error[-1]
+        else:
+            self.error = error
+
+    def _set_polar_parameters(self, parameters: dict):
+        """
+        Set the phase of the phase aberration.
+
+        Parameters
+        ----------
+        parameters: dict
+            Mapping from aberration symbols to their corresponding values.
+
+        Mutates
+        -------
+        self._polar_parameters: dict
+            Updated polar aberrations dictionary
+        """
+
+        for symbol, value in parameters.items():
+            if symbol in self._polar_parameters.keys():
+                self._polar_parameters[symbol] = value
+
+            elif symbol == "defocus":
+                self._polar_parameters[polar_aliases[symbol]] = -value
+
+            elif symbol in polar_aliases.keys():
+                self._polar_parameters[polar_aliases[symbol]] = value
+
+            else:
+                raise ValueError("{} not a recognized parameter".format(symbol))
+
     def _calculate_scan_positions_in_pixels(self, positions: np.ndarray):
         """
         Common static method to compute the initial guess of scan positions in pixels.
@@ -2015,25 +2031,6 @@ class PhaseReconstruction(Custom):
             power=power,
             **kwargs,
         )
-
-    def attach_datacube(self, dc: DataCube):
-        """Attaches a datacube to a class initialized without one."""
-        self._datacube = dc
-        return self
-
-    def set_save_defaults(
-        self,
-        save_datacube=False,
-        save_exit_waves=False,
-        save_iterations=True,
-        save_iterations_frequency=1,
-    ):
-        """Sets the class defaults for saving to file."""
-        self._save_datacube = save_datacube
-        self._save_exit_waves = save_exit_waves
-        self._save_iterations = save_iterations
-        self._save_iterations_frequency = save_iterations_frequency
-        return self
 
     @property
     def probe_fourier(self):
