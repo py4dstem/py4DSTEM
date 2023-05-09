@@ -34,8 +34,8 @@ class DPCReconstruction(PhaseReconstruction):
     ----------
     datacube: DataCube
         Input 4D diffraction pattern intensities
-    dp_mask: ndarray, optional
-        Mask for datacube intensities (Qx,Qy)
+    initial_object_guess: np.ndarray, optional
+        Cropped initial guess of dpc phase
     energy: float, optional
         The electron energy of the wave functions in eV
     verbose: bool, optional
@@ -43,16 +43,6 @@ class DPCReconstruction(PhaseReconstruction):
     device: str, optional
         Calculation device will be perfomed on. Must be 'cpu' or 'gpu'
 
-    Assigns
-    --------
-    self._xp: Callable
-        Array computing module
-    self._asnumpy: Callable
-        Array conversion module to numpy
-    self._region_of_interest_shape
-       None, i.e. same as diffraction intensities (Qx,Qy)
-    self._preprocessed: bool
-        Flag to signal object has not yet been preprocessed
     """
 
     def __init__(
@@ -262,6 +252,10 @@ class DPCReconstruction(PhaseReconstruction):
 
         Parameters
         ----------
+        dp_mask: ndarray, optional
+            Mask for datacube intensities (Qx,Qy)
+        padding_factor: float, optional
+            Factor to pad object by to reduce periodic artifacts
         rotation_angles_deg: np.darray, optional
             Array of angles in degrees to perform curl minimization over
         maximize_divergence: bool, optional
@@ -279,11 +273,6 @@ class DPCReconstruction(PhaseReconstruction):
             If 'all', the computed and fitted CoM arrays will be displayed
         plot_rotation: bool, optional
             If True, the CoM curl minimization search result will be displayed
-
-        Mutates
-        --------
-        self._preprocessed: bool
-            Flag to signal object has been preprocessed
 
         Returns
         --------
@@ -522,7 +511,7 @@ class DPCReconstruction(PhaseReconstruction):
 
     def _object_butterworth_constraint(self, current_object, q_lowpass, q_highpass):
         """
-        Butterworth filter
+        Butterworth filter used for low/high-pass filtering.
 
         Parameters
         --------
@@ -582,7 +571,6 @@ class DPCReconstruction(PhaseReconstruction):
         q_highpass: float
             Cut-off frequency in A^-1 for high-pass butterworth filter
 
-
         Returns
         --------
         constrained_object: np.ndarray
@@ -623,8 +611,6 @@ class DPCReconstruction(PhaseReconstruction):
         ----------
         reset: bool, optional
             If True, previous reconstructions are ignored
-        padding_factor: float, optional
-            Factor to pad object by to reduce periodic artifacts
         max_iter: int, optional
             Maximum number of iterations
         step_size: float, optional
@@ -645,19 +631,6 @@ class DPCReconstruction(PhaseReconstruction):
             Cut-off frequency in A^-1 for high-pass butterworth filter
         store_iterations: bool, optional
             If True, all reconstruction iterations will be stored
-
-        Assigns
-        --------
-        self._object_phase: xp.ndarray
-            Reconstructed phase object, on calculation device
-        self.object_phase: np.ndarray
-            Reconstructed phase object, as a numpy array
-        self.error: float
-            NMSE error
-        self.object_phase_iterations, optional
-            Reconstructed phase objects at each iteration as numpy arrays
-        self.error_iterations, optional
-            NMSE errors at each iteration
 
         Returns
         --------
@@ -757,12 +730,16 @@ class DPCReconstruction(PhaseReconstruction):
 
         return self
 
-    def _visualize_last_iteration(self, cbar: bool, plot_convergence: bool, **kwargs):
+    def _visualize_last_iteration(
+        self, fig, cbar: bool, plot_convergence: bool, **kwargs
+    ):
         """
         Displays last iteration of reconstructed phase object.
 
         Parameters
         --------
+        fig, optional
+            Matplotlib figure to draw Gridspec on
         cbar: bool, optional
             If true, displays a colorbar
         plot_convergence: bool, optional
@@ -778,7 +755,9 @@ class DPCReconstruction(PhaseReconstruction):
             spec = GridSpec(ncols=1, nrows=2, height_ratios=[4, 1], hspace=0.15)
         else:
             spec = GridSpec(ncols=1, nrows=1)
-        fig = plt.figure(figsize=figsize)
+
+        if fig is None:
+            fig = plt.figure(figsize=figsize)
 
         extent = [
             0,
@@ -811,6 +790,7 @@ class DPCReconstruction(PhaseReconstruction):
 
     def _visualize_all_iterations(
         self,
+        fig,
         cbar: bool,
         plot_convergence: bool,
         iterations_grid: Tuple[int, int],
@@ -821,6 +801,8 @@ class DPCReconstruction(PhaseReconstruction):
 
         Parameters
         --------
+        fig, optional
+            Matplotlib figure to draw Gridspec on
         cbar: bool, optional
             If true, displays a colorbar
         plot_convergence: bool, optional
@@ -829,10 +811,32 @@ class DPCReconstruction(PhaseReconstruction):
             Grid dimensions to plot reconstruction iterations
         """
 
-        if iterations_grid == "auto":
-            iterations_grid = (2, 4)
+        if not hasattr(self, "object_phase_iterations"):
+            raise ValueError(
+                (
+                    "Object iterations were not saved during reconstruction. "
+                    "Please re-run using store_iterations=True."
+                )
+            )
 
-        figsize = kwargs.get("figsize", (12, 7))
+        if iterations_grid == "auto":
+            num_iter = len(self.error_iterations)
+
+            if num_iter == 1:
+                return self._visualize_last_iteration(
+                    plot_convergence=plot_convergence,
+                    cbar=cbar,
+                    **kwargs,
+                )
+            else:
+                iterations_grid = (2, 4) if num_iter > 8 else (2, num_iter // 2)
+
+        auto_figsize = (
+            (3 * iterations_grid[1], 3 * iterations_grid[0] + 1)
+            if plot_convergence
+            else (3 * iterations_grid[1], 3 * iterations_grid[0])
+        )
+        figsize = kwargs.get("figsize", auto_figsize)
         cmap = kwargs.get("cmap", "magma")
         kwargs.pop("figsize", None)
         kwargs.pop("cmap", None)
@@ -854,7 +858,9 @@ class DPCReconstruction(PhaseReconstruction):
             spec = GridSpec(ncols=1, nrows=2, height_ratios=[4, 1], hspace=0.15)
         else:
             spec = GridSpec(ncols=1, nrows=1)
-        fig = plt.figure(figsize=figsize)
+
+        if fig is None:
+            fig = plt.figure(figsize=figsize)
 
         grid = ImageGrid(
             fig,
@@ -891,6 +897,7 @@ class DPCReconstruction(PhaseReconstruction):
 
     def visualize(
         self,
+        fig=None,
         iterations_grid: Tuple[int, int] = None,
         plot_convergence: bool = True,
         cbar: bool = False,
@@ -900,7 +907,9 @@ class DPCReconstruction(PhaseReconstruction):
         Displays reconstructed phase object.
 
         Parameters
-        --------
+        ----------
+        fig, optional
+            Matplotlib figure to draw Gridspec on
         plot_convergence: bool, optional
             If true, the NMSE error plot is displayed
         iterations_grid: Tuple[int,int]
@@ -916,10 +925,11 @@ class DPCReconstruction(PhaseReconstruction):
 
         if iterations_grid is None:
             self._visualize_last_iteration(
-                plot_convergence=plot_convergence, cbar=cbar, **kwargs
+                fig=fig, plot_convergence=plot_convergence, cbar=cbar, **kwargs
             )
         else:
             self._visualize_all_iterations(
+                fig=fig,
                 plot_convergence=plot_convergence,
                 iterations_grid=iterations_grid,
                 cbar=cbar,
