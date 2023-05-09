@@ -32,7 +32,6 @@ from py4DSTEM.process.utils import (
 
 warnings.simplefilter(action="always", category=UserWarning)
 
-
 class PhaseReconstruction(Custom):
     """
     Base phase reconstruction class.
@@ -40,18 +39,48 @@ class PhaseReconstruction(Custom):
     """
 
     def attach_datacube(self, dc: DataCube):
-        """Attaches a datacube to a class initialized without one."""
+        """
+        Attaches a datacube to a class initialized without one.
+
+        Parameters
+        ----------
+        datacube: Datacube
+            Input 4D diffraction pattern intensities
+
+        Returns
+        --------
+        self: PhaseReconstruction
+            Self to enable chaining
+        """
         self._datacube = dc
         return self
 
     def set_save_defaults(
         self,
-        save_datacube=False,
-        save_exit_waves=False,
-        save_iterations=True,
-        save_iterations_frequency=1,
+        save_datacube:bool=False,
+        save_exit_waves:bool=False,
+        save_iterations:bool=True,
+        save_iterations_frequency:int=1,
     ):
-        """Sets the class defaults for saving to file."""
+        """
+        Sets the class defaults for saving reconstructions to file.
+
+        Parameters
+        ----------
+        save_datacube: bool, optional
+            If True, self._datacube saved to file
+        save_exit_waves: bool, optional
+            If True, self._exit_waves saved to file
+        save_iterations: bool, optional
+            If True, self.probe_iterations and self.object_iterations saved to file
+        save_iterations: int, optional
+            If save_iterations is True, controls the frequency of saved iterations
+
+        Returns
+        --------
+        self: PhaseReconstruction
+            Self to enable chaining
+        """
         self._save_datacube = save_datacube
         self._save_exit_waves = save_exit_waves
         self._save_iterations = save_iterations
@@ -69,7 +98,7 @@ class PhaseReconstruction(Custom):
         com_shifts=None,
     ):
         """
-        Datacube preprocssing step, to set the reciprocal- and real-space sampling.
+        Datacube preprocessing step, to set the reciprocal- and real-space sampling.
         Let the measured diffraction intensities have size (Rx,Ry,Qx,Qy), with reciprocal-space
         samping (dkx,dky). This sets a real-space sampling which is inversely proportional to
         the maximum scattering wavevector (Qx*dkx,Qy*dky).
@@ -164,6 +193,7 @@ class PhaseReconstruction(Custom):
                         force_nonnegative=True,
                     )
             datacube.calibration.set_Q_pixel_size(Q_pixel_size / resampling_factor_x)
+        
         if probe_roi_shape is not None:
             Qx, Qy = datacube.shape[-2:]
             Sx, Sy = probe_roi_shape
@@ -192,11 +222,11 @@ class PhaseReconstruction(Custom):
         require_calibrations: bool = False,
     ):
         """
-        Common method to extract intensities and calibrations from datacube.
+        Method to extract intensities and calibrations from datacube.
 
         Parameters
         ----------
-        datacube: Datacube
+        datacube: DataCube
             Input 4D diffraction pattern intensities
         require_calibrations: bool
             If False, warning is issued instead of raising an error
@@ -340,6 +370,8 @@ class PhaseReconstruction(Custom):
             If not None, apply mask to datacube amplitude
         fit_function: str, optional
             2D fitting function for CoM fitting. One of 'plane','parabola','bezier_two'
+        com_shifts, np.ndarray, optional
+            If not None, com_shifts are fitted on the measured CoM values.
 
         Returns
         -------
@@ -435,6 +467,14 @@ class PhaseReconstruction(Custom):
 
         Parameters
         ----------
+        _com_measured_x: (Rx,Ry) xp.ndarray
+            Measured horizontal center of mass gradient
+        _com_measured_y: (Rx,Ry) xp.ndarray
+            Measured vertical center of mass gradient
+        _com_normalized_x: (Rx,Ry) xp.ndarray
+            Normalized horizontal center of mass gradient
+        _com_normalized_y: (Rx,Ry) xp.ndarray
+            Normalized vertical center of mass gradient
         rotation_angles_deg: ndarray, optional
             Array of angles in degrees to perform curl minimization over
         plot_rotation: bool, optional
@@ -1239,7 +1279,6 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
     def _populate_instance(self, group):
         """
         Sets post-initialization properties, notably some preprocessing meta
-        optional; during read, this method is run after object instantiation.
         """
         xp = self._xp
 
@@ -1274,7 +1313,7 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
 
     def _set_polar_parameters(self, parameters: dict):
         """
-        Set the phase of the phase aberration.
+        Set the probe aberrations dictionary.
 
         Parameters
         ----------
@@ -1302,12 +1341,12 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
 
     def _calculate_scan_positions_in_pixels(self, positions: np.ndarray):
         """
-        Common static method to compute the initial guess of scan positions in pixels.
+        Method to compute the initial guess of scan positions in pixels.
 
         Parameters
         ----------
         positions: (J,2) np.ndarray or None
-            Input experimental positions [Å].
+            Input probe positions in Å.
             If None, a raster scan using experimental parameters is constructed.
 
         Mutates
@@ -1386,6 +1425,7 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
             The pixel dimensions of the window
         array_shape: (2,) Sequence[int]
             The pixel dimensions of the array the window will be embedded in
+        
         Returns
         -------
         window_indices: length-2 tuple of
@@ -1856,8 +1896,8 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
 
         Parameters
         ----------
-        scale: float, optional
-            scaling of quiver arrows
+        scale_arrows: float, optional
+            scaling factor to be applied on vectors prior to plt.quiver call
         verbose: bool, optional
             if True, prints AffineTransformation if positions have been updated
         """
@@ -1913,6 +1953,11 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
         ----------
         probe: complex array, optional
             if None is specified, uses self._probe
+
+        Returns
+        -------
+        fourier_probe: np.ndarray
+            Fourier-transformed and center-shifted probe.
         """
         xp = self._xp
 
@@ -1936,6 +1981,11 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
         ----------
         obj: array, optional
             if None is specified, uses self._object
+        
+        Returns
+        -------
+        object_fft_amplitude: np.ndarray
+            Amplitude of Fourier-transformed and center-shifted obj.
         """
         asnumpy = self._asnumpy
 
@@ -2000,6 +2050,11 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
     def show_object_fft(self, obj=None, **kwargs):
         """
         Plot FFT of reconstructed object
+        
+        Parameters
+        ----------
+        obj: complex array, optional
+            if None is specified, uses the `object_fft` property
         """
         if obj is None:
             object_fft = self.object_fft
@@ -2044,7 +2099,7 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
 
     @property
     def object_fft(self):
-        """Fourier transform of object"""
+        """Fourier transform of current object estimate"""
 
         if not hasattr(self, "_object"):
             return None

@@ -1,4 +1,5 @@
 from py4DSTEM.process.phase.utils import (
+    array_slice,
     estimate_global_transformation_ransac,
     fft_shift,
 )
@@ -7,7 +8,7 @@ from py4DSTEM.process.utils import get_CoM
 
 class PtychographicConstraints:
     """
-    Container class for BasePtychographicReconstruction methods/
+    Container class for PtychographicReconstruction methods.
     """
 
     def _object_threshold_constraint(self, current_object, pure_phase_object):
@@ -84,7 +85,7 @@ class PtychographicConstraints:
 
         if axis is None:
             ndim = xp.arange(current_object.ndim).tolist()
-        elif type(axis) == tuple:
+        elif isinstance(axis, tuple):
             ndim = list(axis)
         else:
             ndim = [axis]
@@ -158,8 +159,6 @@ class PtychographicConstraints:
                     E_previous = E
             i += 1
 
-        from py4DSTEM.process.phase.utils import array_slice
-
         if pad_object:
             for ax in range(len(ndim)):
                 slices = array_slice(ndim[ax], current_object.ndim, 1, -1)
@@ -226,7 +225,8 @@ class PtychographicConstraints:
 
     def _object_butterworth_constraint(self, current_object, q_lowpass, q_highpass):
         """
-        Butterworth filter
+        Ptychographic butterworth filter.
+        Used for low/high-pass filtering object.
 
         Parameters
         --------
@@ -264,8 +264,8 @@ class PtychographicConstraints:
 
     def _probe_center_of_mass_constraint(self, current_probe):
         """
-        Ptychographic threshold constraint.
-        Used for avoiding the scaling ambiguity between probe and object.
+        Ptychographic center of mass constraint.
+        Used for centering probe intensity.
 
         Parameters
         --------
@@ -292,7 +292,7 @@ class PtychographicConstraints:
 
     def _probe_fourier_amplitude_constraint(self, current_probe, threshold):
         """
-        Ptychographic probe fourier amplitude constraint
+        Ptychographic top-hat filtering of Fourier probe.
 
         Parameters
         ----------
@@ -333,7 +333,7 @@ class PtychographicConstraints:
     def _probe_finite_support_constraint(self, current_probe):
         """
         Ptychographic probe support constraint.
-        Used for penalizing focused probes to replicate sample periodicity.
+        Used for penalizing focused probes replicating sample periodicity.
 
         Parameters
         --------
