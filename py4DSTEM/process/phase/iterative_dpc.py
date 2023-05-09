@@ -16,7 +16,7 @@ try:
 except ImportError:
     cp = None
 
-from emdfile import tqdmnd
+from emdfile import Custom, tqdmnd
 from py4DSTEM.classes import DataCube
 from py4DSTEM.process.phase.iterative_base_class import PhaseReconstruction
 
@@ -62,7 +62,10 @@ class DPCReconstruction(PhaseReconstruction):
         energy: float = None,
         verbose: bool = True,
         device: str = "cpu",
+        name: str = "dpc_reconstruction",
     ):
+        Custom.__init__(self, name=name)
+
         if device == "cpu":
             self._xp = np
             self._asnumpy = np.asarray
