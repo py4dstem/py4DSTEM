@@ -66,19 +66,9 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
     polar_parameters: dict, optional
         Mapping from aberration symbols to their corresponding values. All aberration
         magnitudes should be given in Å and angles should be given in radians.
-    diffraction_intensities_shape: Tuple[int,int], optional
-        Pixel dimensions (Qx',Qy') of the resampled diffraction intensities
-        If None, no resampling of diffraction intenstities is performed
-    reshaping_method: str, optional
-        Method to use for reshaping, either 'bin, 'bilinear', or 'fourier' (default)
-    probe_roi_shape, (int,int), optional
-            Padded diffraction intensities shape.
-            If None, no padding is performed
     object_padding_px: Tuple[int,int], optional
         Pixel dimensions to pad object with
         If None, the padding is set to half the probe ROI dimensions
-    dp_mask: ndarray, optional
-        Mask for datacube intensities (Qx,Qy)
     initial_object_guess: np.ndarray, optional
         Initial guess for complex-valued object of dimensions (Px,Py,Py)
         If None, initialized to 1.0
@@ -92,6 +82,11 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
         If True, class methods will inherit this and print additional information
     device: str, optional
         Calculation device will be perfomed on. Must be 'cpu' or 'gpu'
+    object_type: str, optional
+        The object can be reconstructed as a real potential ('potential') or a complex
+        object ('complex')
+    name: str, optional
+        Class name
     kwargs:
         Provide the aberration coefficients as keyword arguments.
     """
@@ -381,6 +376,16 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
 
         Parameters
         ----------
+        diffraction_intensities_shape: Tuple[int,int], optional
+            Pixel dimensions (Qx',Qy') of the resampled diffraction intensities
+            If None, no resampling of diffraction intenstities is performed
+        reshaping_method: str, optional
+            Method to use for reshaping, either 'bin, 'bilinear', or 'fourier' (default)
+        probe_roi_shape, (int,int), optional
+            Padded diffraction intensities shape.
+            If None, no padding is performed
+        dp_mask: ndarray, optional
+            Mask for datacube intensities (Qx,Qy)
         fit_function: str, optional
             2D fitting function for CoM fitting. One of 'plane','parabola','bezier_two'
         plot_probe_overlaps: bool, optional
@@ -787,11 +792,11 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
         Returns
         --------
         propagated_probes: np.ndarray
-            Final shifted probes following N-1 propagations
+            Shifted probes at each layer
         object_patches: np.ndarray
             Patched object view
         transmitted_probes: np.ndarray
-            Transmitted probes at each layer
+            Transmitted probes after N-1 propagations and N transmissions
         """
 
         xp = self._xp
@@ -827,7 +832,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
         amplitudes: np.ndarray
             Normalized measured amplitudes
         transmitted_probes: np.ndarray
-            Transmitted probes at last layer
+            Transmitted probes after N-1 propagations and N transmissions
 
         Returns
         --------
@@ -879,7 +884,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
         amplitudes: np.ndarray
             Normalized measured amplitudes
         transmitted_probes: np.ndarray
-            Transmitted probes at last layer
+            Transmitted probes after N-1 propagations and N transmissions
         exit_waves: np.ndarray
             previously estimated exit waves
         projection_a: float
@@ -1016,8 +1021,8 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
             Current probe estimate
         object_patches: np.ndarray
             Patched object view
-        transmitted_probes: np.ndarray
-            Transmitted probes at each layer
+        propagated_probes: np.ndarray
+            Shifted probes at each layer
         exit_waves:np.ndarray
             Updated exit_waves
         step_size: float, optional
@@ -1110,8 +1115,8 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
             Current probe estimate
         object_patches: np.ndarray
             Patched object view
-        transmitted_probes: np.ndarray
-            Transmitted probes at each layer
+        propagated_probes: np.ndarray
+            Shifted probes at each layer
         exit_waves:np.ndarray
             Updated exit_waves
         normalization_min: float, optional
@@ -1210,6 +1215,8 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
             Transmitted probes at each layer
         exit_waves:np.ndarray
             Updated exit_waves
+        use_projection_scheme: bool,
+            If True, use generalized projection update
         step_size: float, optional
             Update step size
         normalization_min: float, optional
@@ -1268,7 +1275,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
         current_probe:np.ndarray
             fractionally-shifted probes
         transmitted_probes: np.ndarray
-            Transmitted probes at each layer
+            Transmitted probes after N-1 propagations and N transmissions
         amplitudes: np.ndarray
             Measured amplitudes
         current_positions: np.ndarray
@@ -1447,6 +1454,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
         butterworth_filter,
         q_lowpass,
         q_highpass,
+        object_positivity,
         shrinkage_rad,
     ):
         """
@@ -1479,6 +1487,8 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
             Cut-off frequency in A^-1 for low-pass butterworth filter
         q_highpass: float
             Cut-off frequency in A^-1 for high-pass butterworth filter
+        object_positivity: bool
+            If True, forces object to be positive
         shrinkage_rad: float
             Phase shift in radians to be subtracted from the potential at each iteration
 
@@ -1504,9 +1514,10 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                 q_highpass,
             )
 
-        current_object = self._object_positivity_constraint(
-            current_object, shrinkage_rad
-        )
+        if object_positivity:
+            current_object = self._object_positivity_constraint(
+                current_object, shrinkage_rad
+            )
 
         if fix_probe_fourier_amplitude:
             current_probe = self._probe_fourier_amplitude_constraint(
@@ -1553,6 +1564,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
         butterworth_filter_iter: int = np.inf,
         q_lowpass: float = None,
         q_highpass: float = None,
+        object_positivity: bool = True,
         shrinkage_rad: float = None,
         collective_tilt_updates: bool = False,
         store_iterations: bool = False,
@@ -1615,6 +1627,8 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
             Cut-off frequency in A^-1 for low-pass butterworth filter
         q_highpass: float
             Cut-off frequency in A^-1 for high-pass butterworth filter
+        object_positivity: bool, optional
+            If True, forces object to be positive
         shrinkage_rad: float
             Phase shift in radians to be subtracted from the potential at each iteration
         store_iterations: bool, optional
@@ -1626,7 +1640,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
 
         Returns
         --------
-        self: MultislicePtychographicReconstruction
+        self: OverlapTomographicReconstruction
             Self to accommodate chaining
         """
         asnumpy = self._asnumpy
@@ -1988,7 +2002,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                         fix_com=fix_com and a0 >= fix_probe_iter,
                         fix_probe_fourier_amplitude=a0
                         < fix_probe_fourier_amplitude_iter
-                        and fix_probe_fourier_amplitude_threshold,
+                        and fix_probe_fourier_amplitude_threshold is not None,
                         fix_probe_fourier_amplitude_threshold=fix_probe_fourier_amplitude_threshold,
                         fix_positions=a0 < fix_positions_iter,
                         global_affine_transformation=global_affine_transformation,
@@ -1999,6 +2013,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                         and (q_lowpass is not None or q_highpass is not None),
                         q_lowpass=q_lowpass,
                         q_highpass=q_highpass,
+                        object_positivity=object_positivity,
                         shrinkage_rad=shrinkage_rad,
                     )
 
@@ -2018,7 +2033,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                     None,
                     fix_com=fix_com and a0 >= fix_probe_iter,
                     fix_probe_fourier_amplitude=a0 < fix_probe_fourier_amplitude_iter
-                    and fix_probe_fourier_amplitude_threshold,
+                    and fix_probe_fourier_amplitude_threshold is not None,
                     fix_probe_fourier_amplitude_threshold=fix_probe_fourier_amplitude_threshold,
                     fix_positions=True,
                     global_affine_transformation=global_affine_transformation,
@@ -2029,6 +2044,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                     and (q_lowpass is not None or q_highpass is not None),
                     q_lowpass=q_lowpass,
                     q_highpass=q_highpass,
+                    object_positivity=object_positivity,
                     shrinkage_rad=shrinkage_rad,
                 )
 
@@ -2052,16 +2068,21 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
         y_lims,
     ):
         """
-        Crops and rotated object to FOV bounded by current pixel positions.
+        Crops and rotates rotates object manually.
 
         Parameters
         ----------
         array: np.ndarray
             Object array to crop and rotate. Only operates on numpy arrays for comptatibility.
-        padding: int, optional
-            Optional padding outside pixel positions
+        angle: float
+            In-plane angle in degrees to rotate by
+        x_lims: tuple(float,float)
+            min/max x indices
+        y_lims: tuple(float,float)
+            min/max y indices
 
         Returns
+        -------
         cropped_rotated_array: np.ndarray
             Cropped and rotated object array
         """
@@ -2072,7 +2093,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
 
         if angle is not None:
             rotated_array = rotate_np(
-                asnumpy(array), np.rad2deg(angle), reshape=False, axes=(-2, -1)
+                asnumpy(array), angle, reshape=False, axes=(-2, -1)
             )
         else:
             rotated_array = asnumpy(array)
@@ -2104,6 +2125,14 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
             Matplotlib axes to plot convergence plot in
         cbar: bool, optional
             If true, displays a colorbar
+        projection_angle_deg: float
+            Angle in degrees to rotate 3D array around prior to projection
+        projection_axes: tuple(int,int)
+            Axes defining projection plane
+        x_lims: tuple(float,float)
+            min/max x indices
+        y_lims: tuple(float,float)
+            min/max y indices
         """
 
         cmap = kwargs.get("cmap", "magma")
@@ -2173,16 +2202,24 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
 
         Parameters
         --------
+        fig: Figure
+            Matplotlib figure to place Gridspec in
         plot_convergence: bool, optional
             If true, the normalized mean squared error (NMSE) plot is displayed
         cbar: bool, optional
             If true, displays a colorbar
         plot_probe: bool
             If true, the reconstructed probe intensity is also displayed
-        object_mode: str
-            Specifies the attribute of the object to plot.
-            One of 'phase', 'amplitude', 'intensity'
-
+        plot_fourier_probe: bool, optional
+            If true, the reconstructed complex Fourier probe is displayed
+        projection_angle_deg: float
+            Angle in degrees to rotate 3D array around prior to projection
+        projection_axes: tuple(int,int)
+            Axes defining projection plane
+        x_lims: tuple(float,float)
+            min/max x indices
+        y_lims: tuple(float,float)
+            min/max y indices
         """
         figsize = kwargs.get("figsize", (8, 5))
         cmap = kwargs.get("cmap", "magma")
@@ -2359,18 +2396,26 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
 
         Parameters
         --------
+        fig: Figure
+            Matplotlib figure to place Gridspec in
         plot_convergence: bool, optional
             If true, the normalized mean squared error (NMSE) plot is displayed
-        iterations_grid: Tuple[int,int]
-            Grid dimensions to plot reconstruction iterations
         cbar: bool, optional
             If true, displays a colorbar
         plot_probe: bool
             If true, the reconstructed probe intensity is also displayed
-        object_mode: str
-            Specifies the attribute of the object to plot.
-            One of 'phase', 'amplitude', 'intensity'
-
+        plot_fourier_probe: bool, optional
+            If true, the reconstructed complex Fourier probe is displayed
+        iterations_grid: Tuple[int,int]
+            Grid dimensions to plot reconstruction iterations
+        projection_angle_deg: float
+            Angle in degrees to rotate 3D array around prior to projection
+        projection_axes: tuple(int,int)
+            Axes defining projection plane
+        x_lims: tuple(float,float)
+            min/max x indices
+        y_lims: tuple(float,float)
+            min/max y indices
         """
         asnumpy = self._asnumpy
 
@@ -2578,18 +2623,30 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
 
         Parameters
         --------
+        fig: Figure
+            Matplotlib figure to place Gridspec in
         plot_convergence: bool, optional
             If true, the normalized mean squared error (NMSE) plot is displayed
-        iterations_grid: Tuple[int,int]
-            Grid dimensions to plot reconstruction iterations
         cbar: bool, optional
             If true, displays a colorbar
         plot_probe: bool
             If true, the reconstructed probe intensity is also displayed
+        plot_fourier_probe: bool, optional
+            If true, the reconstructed complex Fourier probe is displayed
+        iterations_grid: Tuple[int,int]
+            Grid dimensions to plot reconstruction iterations
+        projection_angle_deg: float
+            Angle in degrees to rotate 3D array around prior to projection
+        projection_axes: tuple(int,int)
+            Axes defining projection plane
+        x_lims: tuple(float,float)
+            min/max x indices
+        y_lims: tuple(float,float)
+            min/max y indices
 
         Returns
         --------
-        self: PtychographicReconstruction
+        self: OverlapTomographicReconstruction
             Self to accommodate chaining
         """
 
@@ -2638,6 +2695,14 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
         ----------
         obj: array, optional
             if None is specified, uses self._object
+        projection_angle_deg: float
+            Angle in degrees to rotate 3D array around prior to projection
+        projection_axes: tuple(int,int)
+            Axes defining projection plane
+        x_lims: tuple(float,float)
+            min/max x indices
+        y_lims: tuple(float,float)
+            min/max y indices
         """
 
         xp = self._xp
@@ -2677,6 +2742,19 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
     ):
         """
         Plot FFT of reconstructed object
+
+        Parameters
+        ----------
+        obj: array, optional
+            if None is specified, uses self._object
+        projection_angle_deg: float
+            Angle in degrees to rotate 3D array around prior to projection
+        projection_axes: tuple(int,int)
+            Axes defining projection plane
+        x_lims: tuple(float,float)
+            min/max x indices
+        y_lims: tuple(float,float)
+            min/max y indices
         """
         if obj is None:
             object_fft = self._return_object_fft(
