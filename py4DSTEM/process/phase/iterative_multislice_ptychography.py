@@ -47,14 +47,14 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
 
     Parameters
     ----------
-    datacube: DataCube
-        Input 4D diffraction pattern intensities
     energy: float
         The electron energy of the wave functions in eV
     num_slices: int
         Number of slices to use in the forward model
     slice_thicknesses: float or Sequence[float]
         Slice thicknesses. If float, all slices are assigned the same thickness
+    datacube: DataCube, optional
+        Input 4D diffraction pattern intensities
     semiangle_cutoff: float, optional
         Semiangle cutoff for the initial probe guess
     rolloff: float, optional
@@ -64,19 +64,9 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
     polar_parameters: dict, optional
         Mapping from aberration symbols to their corresponding values. All aberration
         magnitudes should be given in Å and angles should be given in radians.
-    diffraction_intensities_shape: Tuple[int,int], optional
-        Pixel dimensions (Qx',Qy') of the resampled diffraction intensities
-        If None, no resampling of diffraction intenstities is performed
-    reshaping_method: str, optional
-        Method to use for reshaping, either 'bin, 'bilinear', or 'fourier' (default)
-    probe_roi_shape, (int,int), optional
-            Padded diffraction intensities shape.
-            If None, no padding is performed
     object_padding_px: Tuple[int,int], optional
         Pixel dimensions to pad object with
         If None, the padding is set to half the probe ROI dimensions
-    dp_mask: ndarray, optional
-        Mask for datacube intensities (Qx,Qy)
     initial_object_guess: np.ndarray, optional
         Initial guess for complex-valued object of dimensions (Px,Py)
         If None, initialized to 1.0j
@@ -93,6 +83,8 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
         If True, class methods will inherit this and print additional information
     device: str, optional
         Calculation device will be perfomed on. Must be 'cpu' or 'gpu'
+    name: str, optional
+        Class name
     kwargs:
         Provide the aberration coefficients as keyword arguments.
     """
@@ -296,6 +288,16 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
 
         Parameters
         ----------
+        diffraction_intensities_shape: Tuple[int,int], optional
+            Pixel dimensions (Qx',Qy') of the resampled diffraction intensities
+            If None, no resampling of diffraction intenstities is performed
+        reshaping_method: str, optional
+            Method to use for reshaping, either 'bin, 'bilinear', or 'fourier' (default)
+        probe_roi_shape, (int,int), optional
+            Padded diffraction intensities shape.
+            If None, no padding is performed
+        dp_mask: ndarray, optional
+            Mask for datacube intensities (Qx,Qy)
         fit_function: str, optional
             2D fitting function for CoM fitting. One of 'plane','parabola','bezier_two'
         plot_center_of_mass: str, optional
@@ -652,11 +654,11 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
         Returns
         --------
         propagated_probes: np.ndarray
-            Final shifted probes following N-1 propagations
+            Shifted probes at each layer
         object_patches: np.ndarray
             Patched object view
         transmitted_probes: np.ndarray
-            Transmitted probes at each layer
+            Transmitted probes after N-1 propagations and N transmissions
         """
 
         xp = self._xp
@@ -698,7 +700,7 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
         amplitudes: np.ndarray
             Normalized measured amplitudes
         transmitted_probes: np.ndarray
-            Transmitted probes at last layer
+            Transmitted probes after N-1 propagations and N transmissions
 
         Returns
         --------
@@ -750,7 +752,7 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
         amplitudes: np.ndarray
             Normalized measured amplitudes
         transmitted_probes: np.ndarray
-            Transmitted probes at last layer
+            Transmitted probes after N-1 propagations and N transmissions
         exit_waves: np.ndarray
             previously estimated exit waves
         projection_a: float
@@ -826,12 +828,12 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
 
         Returns
         --------
-        propagated_probes:np.ndarray
-            Prop[object^n*probe^n]
+        propagated_probes: np.ndarray
+            Shifted probes at each layer
         object_patches: np.ndarray
             Patched object view
         transmitted_probes: np.ndarray
-            Transmitted probes at each layer
+            Transmitted probes after N-1 propagations and N transmissions
         exit_waves:np.ndarray
             Updated exit_waves
         error: float
@@ -884,8 +886,8 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
             Current probe estimate
         object_patches: np.ndarray
             Patched object view
-        transmitted_probes: np.ndarray
-            Transmitted probes at each layer
+        propagated_probes: np.ndarray
+            Shifted probes at each layer
         exit_waves:np.ndarray
             Updated exit_waves
         step_size: float, optional
@@ -985,8 +987,8 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
             Current probe estimate
         object_patches: np.ndarray
             Patched object view
-        transmitted_probes: np.ndarray
-            Transmitted probes at each layer
+        propagated_probes: np.ndarray
+            Shifted probes at each layer
         exit_waves:np.ndarray
             Updated exit_waves
         normalization_min: float, optional
@@ -1089,10 +1091,12 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
             Current probe estimate
         object_patches: np.ndarray
             Patched object view
-        transmitted_probes: np.ndarray
-            Transmitted probes at each layer
+        propagated_probes: np.ndarray
+            Shifted probes at each layer
         exit_waves:np.ndarray
             Updated exit_waves
+        use_projection_scheme: bool,
+            If True, use generalized projection update
         step_size: float, optional
             Update step size
         normalization_min: float, optional
@@ -1151,7 +1155,7 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
         current_probe:np.ndarray
             fractionally-shifted probes
         transmitted_probes: np.ndarray
-            Transmitted probes at each layer
+            Transmitted probes after N-1 propagations and N transmissions
         amplitudes: np.ndarray
             Measured amplitudes
         current_positions: np.ndarray
@@ -1985,6 +1989,8 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
             Matplotlib axes to plot convergence plot in
         cbar: bool, optional
             If true, displays a colorbar
+        padding : int, optional
+            Pixels to pad by post rotating-cropping object
         """
         cmap = kwargs.get("cmap", "magma")
         kwargs.pop("cmap", None)
@@ -2042,12 +2048,18 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
 
         Parameters
         --------
+        fig: Figure
+            Matplotlib figure to place Gridspec in
         plot_convergence: bool, optional
             If true, the normalized mean squared error (NMSE) plot is displayed
         cbar: bool, optional
             If true, displays a colorbar
         plot_probe: bool
             If true, the reconstructed probe intensity is also displayed
+        plot_fourier_probe: bool, optional
+            If true, the reconstructed complex Fourier probe is displayed
+        padding : int, optional
+            Pixels to pad by post rotating-cropping object
 
         """
         figsize = kwargs.get("figsize", (8, 5))
@@ -2220,6 +2232,8 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
 
         Parameters
         --------
+        fig: Figure
+            Matplotlib figure to place Gridspec in
         plot_convergence: bool, optional
             If true, the normalized mean squared error (NMSE) plot is displayed
         iterations_grid: Tuple[int,int]
@@ -2228,7 +2242,10 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
             If true, displays a colorbar
         plot_probe: bool
             If true, the reconstructed probe intensity is also displayed
-
+        plot_fourier_probe: bool, optional
+            If true, the reconstructed complex Fourier probe is displayed
+        padding : int, optional
+            Pixels to pad by post rotating-cropping object
         """
         asnumpy = self._asnumpy
 
@@ -2420,6 +2437,8 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
 
         Parameters
         --------
+        fig: Figure
+            Matplotlib figure to place Gridspec in
         plot_convergence: bool, optional
             If true, the normalized mean squared error (NMSE) plot is displayed
         iterations_grid: Tuple[int,int]
@@ -2428,8 +2447,11 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
             If true, displays a colorbar
         plot_probe: bool
             If true, the reconstructed probe intensity is also displayed
-        padding: int, optional
-            Padding to leave uncropped
+        plot_fourier_probe: bool, optional
+            If true, the reconstructed complex Fourier probe is displayed
+        padding : int, optional
+            Pixels to pad by post rotating-cropping object
+        
         Returns
         --------
         self: PtychographicReconstruction
@@ -2479,6 +2501,8 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
             If True, displays a colorbar
         padding: int, optional
             Padding to leave uncropped
+        num_cols: int, optional
+            Number of GridSpec columns
         """
 
         if ms_object is None:

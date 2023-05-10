@@ -47,10 +47,10 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
 
     Parameters
     ----------
-    datacube: DataCube
-        Input 4D diffraction pattern intensities
     energy: float
         The electron energy of the wave functions in eV
+    datacube: DataCube
+        Input 4D diffraction pattern intensities
     num_probes: int, optional
         Number of mixed-state probes
     semiangle_cutoff: float, optional
@@ -62,19 +62,9 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
     polar_parameters: dict, optional
         Mapping from aberration symbols to their corresponding values. All aberration
         magnitudes should be given in Å and angles should be given in radians.
-    diffraction_intensities_shape: Tuple[int,int], optional
-        Pixel dimensions (Qx',Qy') of the resampled diffraction intensities
-        If None, no resampling of diffraction intenstities is performed
-    reshaping_method: str, optional
-        Method to use for reshaping, either 'bin, 'bilinear', or 'fourier' (default)
-    probe_roi_shape, (int,int), optional
-            Padded diffraction intensities shape.
-            If None, no padding is performed
     object_padding_px: Tuple[int,int], optional
         Pixel dimensions to pad object with
         If None, the padding is set to half the probe ROI dimensions
-    dp_mask: ndarray, optional
-        Mask for datacube intensities (Qx,Qy)
     initial_object_guess: np.ndarray, optional
         Initial guess for complex-valued object of dimensions (Px,Py)
         If None, initialized to 1.0j
@@ -88,6 +78,8 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
         If True, class methods will inherit this and print additional information
     device: str, optional
         Calculation device will be perfomed on. Must be 'cpu' or 'gpu'
+    name: str, optional
+        Class name
     kwargs:
         Provide the aberration coefficients as keyword arguments.
     """
@@ -223,6 +215,16 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
 
         Parameters
         ----------
+        diffraction_intensities_shape: Tuple[int,int], optional
+            Pixel dimensions (Qx',Qy') of the resampled diffraction intensities
+            If None, no resampling of diffraction intenstities is performed
+        reshaping_method: str, optional
+            Method to use for reshaping, either 'bin, 'bilinear', or 'fourier' (default)
+        probe_roi_shape, (int,int), optional
+            Padded diffraction intensities shape.
+            If None, no padding is performed
+        dp_mask: ndarray, optional
+            Mask for datacube intensities (Qx,Qy)
         fit_function: str, optional
             2D fitting function for CoM fitting. One of 'plane','parabola','bezier_two'
         plot_center_of_mass: str, optional
@@ -965,6 +967,8 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
             fractionally-shifted probes
         exit_waves:np.ndarray
             Updated exit_waves
+        use_projection_scheme: bool,
+            If True, use generalized projection update
         step_size: float, optional
             Update step size
         normalization_min: float, optional
@@ -1150,6 +1154,10 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
             Cut-off frequency in A^-1 for high-pass butterworth filter
         orthogonalize_probe: bool
             If True, probe will be orthogonalized
+        object_positivity: bool
+            If True, clips negative potential values
+        shrinkage_rad: float
+            Phase shift in radians to be subtracted from the potential at each iteration
 
         Returns
         --------
@@ -1294,6 +1302,13 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
             Cut-off frequency in A^-1 for low-pass butterworth filter
         q_highpass: float
             Cut-off frequency in A^-1 for high-pass butterworth filter
+        object_positivity: bool, optional
+            If True, forces object to be positive
+        shrinkage_rad: float
+            Phase shift in radians to be subtracted from the potential at each iteration
+        switch_object_iter: int, optional
+            Iteration to switch object type between 'complex' and 'potential' or between
+            'potential' and 'complex'
         store_iterations: bool, optional
             If True, reconstructed objects and probes are stored at each iteration
         progress_bar: bool, optional
@@ -1652,6 +1667,8 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
             Matplotlib axes to plot convergence plot in
         cbar: bool, optional
             If true, displays a colorbar
+        padding : int, optional
+            Pixels to pad by post rotating-cropping object
         """
         cmap = kwargs.get("cmap", "magma")
         kwargs.pop("cmap", None)
@@ -1709,8 +1726,12 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
             If true, the normalized mean squared error (NMSE) plot is displayed
         cbar: bool, optional
             If true, displays a colorbar
-        plot_probe: bool
-            If true, the reconstructed probe intensity is also displayed
+        plot_probe: bool, optional
+            If true, the reconstructed complex probe is displayed
+        plot_fourier_probe: bool, optional
+            If true, the reconstructed complex Fourier probe is displayed
+        padding : int, optional
+            Pixels to pad by post rotating-cropping object
         """
         figsize = kwargs.get("figsize", (8, 5))
         cmap = kwargs.get("cmap", "magma")
@@ -1879,14 +1900,20 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
 
         Parameters
         --------
+        fig: Figure
+            Matplotlib figure to place Gridspec in
         plot_convergence: bool, optional
             If true, the normalized mean squared error (NMSE) plot is displayed
         iterations_grid: Tuple[int,int]
             Grid dimensions to plot reconstruction iterations
         cbar: bool, optional
             If true, displays a colorbar
-        plot_probe: bool
-            If true, the reconstructed probe intensity is also displayed
+        plot_probe: bool, optional
+            If true, the reconstructed complex probe is displayed
+        plot_fourier_probe: bool, optional
+            If true, the reconstructed complex Fourier probe is displayed
+        padding : int, optional
+            Pixels to pad by post rotating-cropping object
         """
         asnumpy = self._asnumpy
 
@@ -2076,17 +2103,20 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
 
         Parameters
         --------
+        fig: Figure
+            Matplotlib figure to place Gridspec in
         plot_convergence: bool, optional
             If true, the normalized mean squared error (NMSE) plot is displayed
         iterations_grid: Tuple[int,int]
             Grid dimensions to plot reconstruction iterations
         cbar: bool, optional
             If true, displays a colorbar
-        plot_probe: bool
-            If true, the reconstructed probe intensity is also displayed
-        object_mode: str
-            Specifies the attribute of the object to plot.
-            One of 'phase', 'amplitude', 'intensity'
+        plot_probe: bool, optional
+            If true, the reconstructed complex probe is displayed
+        plot_fourier_probe: bool, optional
+            If true, the reconstructed complex Fourier probe is displayed
+        padding : int, optional
+            Pixels to pad by post rotating-cropping object
 
         Returns
         --------

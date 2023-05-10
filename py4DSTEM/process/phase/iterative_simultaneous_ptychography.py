@@ -61,19 +61,9 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
     polar_parameters: dict, optional
         Mapping from aberration symbols to their corresponding values. All aberration
         magnitudes should be given in Å and angles should be given in radians.
-    diffraction_intensities_shape: Tuple[int,int], optional
-        Pixel dimensions (Qx',Qy') of the resampled diffraction intensities
-        If None, no resampling of diffraction intenstities is performed
-    reshaping_method: str, optional
-        Method to use for reshaping, either 'bin', 'bilinear', or 'fourier' (default)
-    probe_roi_shape, (int,int), optional
-            Padded diffraction intensities shape.
-            If None, no padding is performed
     object_padding_px: Tuple[int,int], optional
         Pixel dimensions to pad objects with
         If None, the padding is set to half the probe ROI dimensions
-    dp_mask: ndarray, optional
-        Mask for datacube intensities (Qx,Qy)
     initial_object_guess: np.ndarray, optional
         Initial guess for complex-valued object of dimensions (Px,Py)
         If None, initialized to 1.0j
@@ -87,6 +77,11 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
         If True, class methods will inherit this and print additional information
     device: str, optional
         Calculation device will be perfomed on. Must be 'cpu' or 'gpu'
+    object_type: str, optional
+        The object can be reconstructed as a real potential ('potential') or a complex
+        object ('complex')
+    name: str, optional
+        Class name
     kwargs:
         Provide the aberration coefficients as keyword arguments.
     """
@@ -206,6 +201,16 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
 
         Parameters
         ----------
+        diffraction_intensities_shape: Tuple[int,int], optional
+            Pixel dimensions (Qx',Qy') of the resampled diffraction intensities
+            If None, no resampling of diffraction intenstities is performed
+        reshaping_method: str, optional
+            Method to use for reshaping, either 'bin', 'bilinear', or 'fourier' (default)
+        probe_roi_shape, (int,int), optional
+            Padded diffraction intensities shape.
+            If None, no padding is performed
+        dp_mask: ndarray, optional
+            Mask for datacube intensities (Qx,Qy)
         fit_function: str, optional
             2D fitting function for CoM fitting. One of 'plane','parabola','bezier_two'
         plot_rotation: bool, optional
@@ -2089,6 +2094,8 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
             fractionally-shifted probes
         exit_waves:np.ndarray
             Updated exit_waves
+        use_projection_scheme: bool,
+            If True, use generalized projection update
         step_size: float, optional
             Update step size
         normalization_min: float, optional
@@ -2273,8 +2280,10 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
         --------
         current_object: np.ndarray
             Current object estimate
-        gaussian_filter_sigma: float
-            Standard deviation of gaussian kernel
+        gaussian_filter_sigma_e: float
+            Standard deviation of gaussian kernel for electrostatic object
+        gaussian_filter_sigma_m: float
+            Standard deviation of gaussian kernel for magnetic object
         pure_phase_object: bool
             If True, gaussian blur performed on phase only
 
@@ -2366,11 +2375,14 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
         --------
         current_object: np.ndarray
             Current object estimate
-        q_lowpass: float
-            Cut-off frequency in A^-1 for low-pass butterworth filter
-        q_highpass: float
-            Cut-off frequency in A^-1 for high-pass butterworth filter
-
+        q_lowpass_e: float
+            Cut-off frequency in A^-1 for low-pass filtering electrostatic object
+        q_lowpass_m: float
+            Cut-off frequency in A^-1 for low-pass filtering magnetic object
+        q_highpass_e: float
+            Cut-off frequency in A^-1 for high-pass filtering electrostatic object
+        q_highpass_m: float
+            Cut-off frequency in A^-1 for high-pass filtering magnetic object
 
         Returns
         --------
@@ -2512,14 +2524,26 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
             If True, positions are not updated
         gaussian_filter: bool
             If True, applies real-space gaussian filter
-        gaussian_filter_sigma: float
-            Standard deviation of gaussian kernel
+        gaussian_filter_sigma_e: float
+            Standard deviation of gaussian kernel for electrostatic object
+        gaussian_filter_sigma_m: float
+            Standard deviation of gaussian kernel for magnetic object
         butterworth_filter: bool
             If True, applies high-pass butteworth filter
-        q_lowpass: float
-            Cut-off frequency in A^-1 for low-pass butterworth filter
-        q_highpass: float
-            Cut-off frequency in A^-1 for high-pass butterworth filter
+        q_lowpass_e: float
+            Cut-off frequency in A^-1 for low-pass filtering electrostatic object
+        q_lowpass_m: float
+            Cut-off frequency in A^-1 for low-pass filtering magnetic object
+        q_highpass_e: float
+            Cut-off frequency in A^-1 for high-pass filtering electrostatic object
+        q_highpass_m: float
+            Cut-off frequency in A^-1 for high-pass filtering magnetic object
+        warmup_iteration: bool
+            If True, constraints electrostatic object only
+        object_positivity: bool
+            If True, clips negative potential values
+        shrinkage_rad: float
+            Phase shift in radians to be subtracted from the potential at each iteration
 
         Returns
         --------
@@ -2686,14 +2710,22 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
             Radius of probe supergaussian support in scaled pixel units, between (0,1]
         probe_support_supergaussian_degree: float, optional
             Degree supergaussian support is raised to, higher is sharper cutoff
-        gaussian_filter_sigma: float, optional
-            Standard deviation of gaussian kernel
+        gaussian_filter_sigma_e: float
+            Standard deviation of gaussian kernel for electrostatic object
+        gaussian_filter_sigma_m: float
+            Standard deviation of gaussian kernel for magnetic object
         gaussian_filter_iter: int, optional
             Number of iterations to run using object smoothness constraint
         butterworth_filter_iter: int, optional
             Number of iterations to run using high-pass butteworth filter
-        q_highpass: float
-            Cut-off frequency for high-pass filter
+        q_lowpass_e: float
+            Cut-off frequency in A^-1 for low-pass filtering electrostatic object
+        q_lowpass_m: float
+            Cut-off frequency in A^-1 for low-pass filtering magnetic object
+        q_highpass_e: float
+            Cut-off frequency in A^-1 for high-pass filtering electrostatic object
+        q_highpass_m: float
+            Cut-off frequency in A^-1 for high-pass filtering magnetic object
         object_positivity: bool, optional
             If True, forces object to be positive
         shrinkage_rad: float
@@ -3098,6 +3130,8 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
             Matplotlib axes to plot convergence plot in
         cbar: bool, optional
             If true, displays a colorbar
+        padding : int, optional
+            Pixels to pad by post rotating-cropping object
         """
         cmap = kwargs.get("cmap", "magma")
         kwargs.pop("cmap", None)
@@ -3151,12 +3185,18 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
 
         Parameters
         --------
+        fig: Figure
+            Matplotlib figure to place Gridspec in
         plot_convergence: bool, optional
             If true, the normalized mean squared error (NMSE) plot is displayed
         cbar: bool, optional
             If true, displays a colorbar
-        plot_probe: bool
-            If true, the reconstructed probe intensity is also displayed
+        plot_probe: bool, optional
+            If true, the reconstructed complex probe is displayed
+        plot_fourier_probe: bool, optional
+            If true, the reconstructed complex Fourier probe is displayed
+        padding : int, optional
+            Pixels to pad by post rotating-cropping object
         """
         figsize = kwargs.get("figsize", (12, 5))
         cmap_e = kwargs.get("cmap_e", "magma")
@@ -3383,15 +3423,20 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
 
         Parameters
         --------
+        fig: Figure
+            Matplotlib figure to place Gridspec in
         plot_convergence: bool, optional
             If true, the normalized mean squared error (NMSE) plot is displayed
         iterations_grid: Tuple[int,int]
             Grid dimensions to plot reconstruction iterations
         cbar: bool, optional
             If true, displays a colorbar
-        plot_probe: bool
-            If true, the reconstructed probe intensity is also displayed
-
+        plot_probe: bool, optional
+            If true, the reconstructed complex probe is displayed
+        plot_fourier_probe: bool, optional
+            If true, the reconstructed complex Fourier probe is displayed
+        padding : int, optional
+            Pixels to pad by post rotating-cropping object
         """
         raise NotImplementedError()
 
@@ -3411,14 +3456,20 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
 
         Parameters
         --------
+        fig: Figure
+            Matplotlib figure to place Gridspec in
         plot_convergence: bool, optional
             If true, the normalized mean squared error (NMSE) plot is displayed
         iterations_grid: Tuple[int,int]
             Grid dimensions to plot reconstruction iterations
         cbar: bool, optional
             If true, displays a colorbar
-        plot_probe: bool
-            If true, the reconstructed probe intensity is also displayed
+        plot_probe: bool, optional
+            If true, the reconstructed complex probe is displayed
+        plot_fourier_probe: bool, optional
+            If true, the reconstructed complex Fourier probe is displayed
+        padding : int, optional
+            Pixels to pad by post rotating-cropping object
 
         Returns
         --------
