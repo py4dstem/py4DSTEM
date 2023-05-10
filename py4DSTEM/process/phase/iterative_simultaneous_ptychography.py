@@ -2515,7 +2515,7 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
             If True, object amplitude is set to unity
         fix_com: bool
             If True, probe CoM is fixed to the center
-        ffix_probe_fourier_amplitude: bool
+        fix_probe_fourier_amplitude: bool
             If True, probe fourier amplitude is constrained by top hat function
         fix_probe_fourier_amplitude_threshold: float
             Threshold value for current probe fourier mask. Value should
@@ -3062,7 +3062,7 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
                 self._positions_px,
                 fix_com=fix_com and a0 >= fix_probe_iter,
                 fix_probe_fourier_amplitude=a0 < fix_probe_fourier_amplitude_iter
-                and fix_probe_fourier_amplitude_threshold,
+                and fix_probe_fourier_amplitude_threshold is not None,
                 fix_probe_fourier_amplitude_threshold=fix_probe_fourier_amplitude_threshold,
                 fix_positions=a0 < fix_positions_iter,
                 global_affine_transformation=global_affine_transformation,

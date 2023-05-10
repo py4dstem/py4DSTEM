@@ -11,6 +11,7 @@ except ImportError:
     from scipy.fft import dstn, idstn
 
 from py4DSTEM.process.utils.utils import electron_wavelength_angstrom
+from py4DSTEM.process.utils.cross_correlate import align_and_shift_images
 from scipy.ndimage import gaussian_filter
 
 #: Symbols for the polar representation of all optical aberrations up to the fifth order.
@@ -110,8 +111,6 @@ class ComplexProbe:
         parameters: Mapping[str, float] = None,
         **kwargs,
     ):
-        # Should probably be abstracted away in a device.py similar to:
-        # https://github.com/abTEM/abTEM/blob/master/abtem/device.py
         if device == "cpu":
             self._xp = np
             self._asnumpy = np.asarray
@@ -435,13 +434,12 @@ class ComplexProbe:
         """Builds complex probe in the center of the region of interest."""
         xp = self._xp
         array = xp.fft.fftshift(xp.fft.ifft2(self._evaluate_ctf()))
-        # if self._vacuum_probe_intensity is not None:
         array = array / xp.sqrt((xp.abs(array) ** 2).sum())
         self._array = array
         return self
 
     def visualize(self, **kwargs):
-        """Plots the probe amplitude."""
+        """Plots the probe intensity."""
         xp = self._xp
         asnumpy = self._asnumpy
 
@@ -524,7 +522,7 @@ def fourier_translation_operator(
     ky = ky.reshape((1, 1, -1))
     kx = xp.asarray(kx, dtype=xp.float32)
     ky = xp.asarray(ky, dtype=xp.float32)
-    positions = xp.asarray(positions,dtype=xp.float32)
+    positions = xp.asarray(positions, dtype=xp.float32)
     x = positions[:, 0].reshape((-1,) + (1, 1))
     y = positions[:, 1].reshape((-1,) + (1, 1))
 
@@ -621,7 +619,6 @@ def generate_batches(
 
 
 #### Affine transformation functions
-# Adapted from https://github.com/AdvancedPhotonSource/tike/blob/f9004a32fda5e49fa63b987e9ffe3c8447d59950/src/tike/ptycho/position.py
 
 
 class AffineTransform:
@@ -667,7 +664,8 @@ class AffineTransform:
 
     @classmethod
     def fromarray(self, T: np.ndarray):
-        """Return an Affine Transfrom from a 2x2 matrix.
+        """
+        Return an Affine Transfrom from a 2x2 matrix.
         Use decomposition method from Graphics Gems 2 Section 7.1
         """
         R = T[:2, :2].copy()
@@ -699,7 +697,8 @@ class AffineTransform:
         )
 
     def asarray(self):
-        """Return an 2x2 matrix of scale, shear, rotation.
+        """
+        Return an 2x2 matrix of scale, shear, rotation.
         This matrix is scale @ shear @ rotate from left to right.
         """
         cosx = np.cos(self.angle)
@@ -729,9 +728,10 @@ class AffineTransform:
         )
 
     def asarray3(self):
-        """Return an 3x2 matrix of scale, shear, rotation, translation.
-        This matrix is scale @ shear @ rotate from left to right. Expects a
-        homogenous (z) coordinate of 1.
+        """
+        Return an 3x2 matrix of scale, shear, rotation, translation.
+        This matrix is scale @ shear @ rotate from left to right.
+        Expects a homogenous (z) coordinate of 1.
         """
         T = np.empty((3, 2), dtype="float32")
         T[2] = (self.t0, self.t1)
@@ -750,9 +750,9 @@ class AffineTransform:
         )
 
     def __call__(self, x: np.ndarray, origin=(0, 0), xp=np):
-        origin = xp.asarray(origin,dtype=xp.float32)
+        origin = xp.asarray(origin, dtype=xp.float32)
         tf_matrix = self.asarray()
-        tf_matrix = xp.asarray(tf_matrix,dtype=xp.float32)
+        tf_matrix = xp.asarray(tf_matrix, dtype=xp.float32)
         tf_translation = xp.array((self.t0, self.t1)) + origin
         return ((x - origin) @ tf_matrix) + tf_translation
 
@@ -774,7 +774,6 @@ def estimate_global_transformation(
     xp=np,
 ):
     """Use least squares to estimate the global affine transformation."""
-
     origin = xp.asarray(origin, dtype=xp.float32)
 
     try:
@@ -903,22 +902,18 @@ def fourier_ring_correlation(
     half_bit: ndarray
         half-bit criteria
     """
+    if device == "cpu":
+        xp = np
+    elif device == "gpu":
+        xp = cp
 
     if align_images:
-        from py4DSTEM.process.utils.cross_correlate import align_and_shift_images
-
         image_2 = align_and_shift_images(
             image_1,
             image_2,
             upsample_factor=upsample_factor,
             device=device,
         )
-
-    if device == "cpu":
-        xp = np
-
-    elif device == "gpu":
-        xp = cp
 
     fft_image_1 = xp.fft.fft2(image_1)
     fft_image_2 = xp.fft.fft2(image_2)
@@ -1004,14 +999,13 @@ def return_1D_profile(
     n: ndarray
         Number of pixels in each bin
     """
-    if pixel_size is None:
-        pixel_size = (1, 1)
-
     if device == "cpu":
         xp = np
-
     elif device == "gpu":
         xp = cp
+
+    if pixel_size is None:
+        pixel_size = (1, 1)
 
     x = xp.fft.fftfreq(intensity.shape[0], pixel_size[0])
     y = xp.fft.fftfreq(intensity.shape[1], pixel_size[1])
@@ -1046,6 +1040,7 @@ def return_1D_profile(
 
     return q_bins, I_bins, n
 
+
 def fourier_rotate_real_volume(array, angle, axes=(0, 1), xp=np):
     """
     Rotates a 3D array using three Fourier-based shear operators.
@@ -1060,7 +1055,7 @@ def fourier_rotate_real_volume(array, angle, axes=(0, 1), xp=np):
         Axes defining plane in which to rotate about
     xp: Callable, optional
         Array computing module
-    
+
     Returns
     --------
     output_arr: ndarray

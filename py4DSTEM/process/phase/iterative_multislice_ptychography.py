@@ -1476,7 +1476,7 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
                     pad_object=tv_denoise_pad,
                 )
             else:
-                print("TV denoising supported for potential not complex object")
+                raise NotImplementedError()
 
         if self._object_type == "complex":
             current_object = self._object_threshold_constraint(
@@ -1928,7 +1928,7 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
                 self._positions_px,
                 fix_com=fix_com and a0 >= fix_probe_iter,
                 fix_probe_fourier_amplitude=a0 < fix_probe_fourier_amplitude_iter
-                and fix_probe_fourier_amplitude_threshold,
+                and fix_probe_fourier_amplitude_threshold is not None,
                 fix_probe_fourier_amplitude_threshold=fix_probe_fourier_amplitude_threshold,
                 fix_positions=a0 < fix_positions_iter,
                 global_affine_transformation=global_affine_transformation,
@@ -2451,7 +2451,7 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
             If true, the reconstructed complex Fourier probe is displayed
         padding : int, optional
             Pixels to pad by post rotating-cropping object
-        
+
         Returns
         --------
         self: PtychographicReconstruction
