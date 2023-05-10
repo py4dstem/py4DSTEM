@@ -45,10 +45,10 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
 
     Parameters
     ----------
-    datacube: DataCube
-        Input 4D diffraction pattern intensities
     energy: float
         The electron energy of the wave functions in eV
+    datacube: DataCube
+        Input 4D diffraction pattern intensities
     semiangle_cutoff: float, optional
         Semiangle cutoff for the initial probe guess
     rolloff: float, optional
@@ -58,19 +58,9 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
     polar_parameters: dict, optional
         Mapping from aberration symbols to their corresponding values. All aberration
         magnitudes should be given in Å and angles should be given in radians.
-    diffraction_intensities_shape: Tuple[int,int], optional
-        Pixel dimensions (Qx',Qy') of the resampled diffraction intensities
-        If None, no resampling of diffraction intenstities is performed
-    reshaping_method: str, optional
-        Method to use for reshaping, either 'bin, 'bilinear', or 'fourier' (default)
-    probe_roi_shape, (int,int), optional
-            Padded diffraction intensities shape.
-            If None, no padding is performed
     object_padding_px: Tuple[int,int], optional
         Pixel dimensions to pad object with
         If None, the padding is set to half the probe ROI dimensions
-    dp_mask: ndarray, optional
-        Mask for datacube intensities (Qx,Qy)
     initial_object_guess: np.ndarray, optional
         Initial guess for complex-valued object of dimensions (Px,Py)
         If None, initialized to 1.0j
@@ -84,6 +74,11 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
         If True, class methods will inherit this and print additional information
     device: str, optional
         Calculation device will be perfomed on. Must be 'cpu' or 'gpu'
+    object_type: str, optional
+        The object can be reconstructed as a real potential ('potential') or a complex
+        object ('complex')
+    name: str, optional
+        Class name
     kwargs:
         Provide the aberration coefficients as keyword arguments.
     """
@@ -202,6 +197,16 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
 
         Parameters
         ----------
+        diffraction_intensities_shape: Tuple[int,int], optional
+            Pixel dimensions (Qx',Qy') of the resampled diffraction intensities
+            If None, no resampling of diffraction intenstities is performed
+        reshaping_method: str, optional
+            Method to use for reshaping, either 'bin, 'bilinear', or 'fourier' (default)
+        probe_roi_shape, (int,int), optional
+            Padded diffraction intensities shape.
+            If None, no padding is performed
+        dp_mask: ndarray, optional
+            Mask for datacube intensities (Qx,Qy)
         fit_function: str, optional
             2D fitting function for CoM fitting. One of 'plane','parabola','bezier_two'
         plot_center_of_mass: str, optional
@@ -898,7 +903,7 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
         fix_probe: bool,
     ):
         """
-        Ptychographic adjoint operator for GD method.
+        Ptychographic adjoint operator.
         Computes object and probe update steps.
 
         Parameters
@@ -913,6 +918,8 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
             fractionally-shifted probes
         exit_waves:np.ndarray
             Updated exit_waves
+        use_projection_scheme: bool,
+            If True, use generalized projection update
         step_size: float, optional
             Update step size
         normalization_min: float, optional
@@ -1003,7 +1010,10 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
             Cut-off frequency in A^-1 for low-pass butterworth filter
         q_highpass: float
             Cut-off frequency in A^-1 for high-pass butterworth filter
-
+        object_positivity: bool
+            If True, clips negative potential values
+        shrinkage_rad: float
+            Phase shift in radians to be subtracted from the potential at each iteration
 
         Returns
         --------
@@ -1509,6 +1519,8 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
             Matplotlib axes to plot convergence plot in
         cbar: bool, optional
             If true, displays a colorbar
+        padding : int, optional
+            Pixels to pad by post rotating-cropping object
         """
         cmap = kwargs.get("cmap", "magma")
         kwargs.pop("cmap", None)
@@ -1562,12 +1574,18 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
 
         Parameters
         --------
+        fig: Figure
+            Matplotlib figure to place Gridspec in
         plot_convergence: bool, optional
             If true, the normalized mean squared error (NMSE) plot is displayed
         cbar: bool, optional
             If true, displays a colorbar
-        plot_probe: bool
-            If true, the reconstructed probe intensity is also displayed
+        plot_probe: bool, optional
+            If true, the reconstructed complex probe is displayed
+        plot_fourier_probe: bool, optional
+            If true, the reconstructed complex Fourier probe is displayed
+        padding : int, optional
+            Pixels to pad by post rotating-cropping object
         """
         figsize = kwargs.get("figsize", (8, 5))
         cmap = kwargs.get("cmap", "magma")
@@ -1736,6 +1754,8 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
 
         Parameters
         --------
+        fig: Figure
+            Matplotlib figure to place Gridspec in
         plot_convergence: bool, optional
             If true, the normalized mean squared error (NMSE) plot is displayed
         iterations_grid: Tuple[int,int]
@@ -1743,7 +1763,11 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
         cbar: bool, optional
             If true, displays a colorbar
         plot_probe: bool
-            If true, the reconstructed probe intensity is also displayed
+            If true, the reconstructed complex probe is displayed
+        plot_fourier_probe: bool
+            If true, the reconstructed complex Fourier probe is displayed
+        padding : int, optional
+            Pixels to pad by post rotating-cropping object
         """
         asnumpy = self._asnumpy
 
@@ -1934,6 +1958,8 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
 
         Parameters
         --------
+        fig: Figure
+            Matplotlib figure to place Gridspec in
         plot_convergence: bool, optional
             If true, the normalized mean squared error (NMSE) plot is displayed
         iterations_grid: Tuple[int,int]
@@ -1942,6 +1968,10 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
             If true, displays a colorbar
         plot_probe: bool
             If true, the reconstructed probe intensity is also displayed
+        plot_fourier_probe: bool, optional
+            If true, the reconstructed complex Fourier probe is displayed
+        padding : int, optional
+            Pixels to pad by post rotating-cropping object
 
         Returns
         --------

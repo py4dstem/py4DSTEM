@@ -42,7 +42,8 @@ class DPCReconstruction(PhaseReconstruction):
         If True, class methods will inherit this and print additional information
     device: str, optional
         Calculation device will be perfomed on. Must be 'cpu' or 'gpu'
-
+    name: str, optional
+        Class name
     """
 
     def __init__(
