@@ -4,10 +4,11 @@
 import numpy as np
 from scipy.ndimage import gaussian_filter
 
-from py4DSTEM.io.datastructure.py4dstem import DataCube, QPoints, BraggVectors
-from py4DSTEM.process.utils.get_maxima_2D import get_maxima_2D
+from emdfile import tqdmnd
+from py4DSTEM.process.diskdetection.braggvectors import BraggVectors
+from py4DSTEM.classes import DataCube, QPoints
+from py4DSTEM.preprocess.utils import get_maxima_2D
 from py4DSTEM.process.utils.cross_correlate import get_cross_correlation_FT
-from py4DSTEM.utils.tqdmnd import tqdmnd
 from py4DSTEM.process.diskdetection.diskdetection_aiml import find_Bragg_disks_aiml
 
 
@@ -35,13 +36,11 @@ def find_Bragg_disks(
     CUDA = False,
     CUDA_batched = True,
     distributed = None,
-    
+
     ML = False,
-    ml_model_path = None, 
-    ml_num_attempts = 1, 
-    ml_batch_size = 8, 
-    
-    _qt_progress_bar = None,
+    ml_model_path = None,
+    ml_num_attempts = 1,
+    ml_batch_size = 8,
     ):
     """
     Finds the Bragg disks in the diffraction patterns represented by `data` by
@@ -147,8 +146,6 @@ def find_Bragg_disks(
                     processing
             if distributed is None, which is the default, processing will be in
             serial
-        _qt_progress_bar (QProgressBar instance): used only by the GUI for serial
-            execution
 
     Returns:
         (variable): the Bragg peak positions and correlation intensities. If
@@ -197,7 +194,7 @@ def find_Bragg_disks(
 
     if ML:
         mode = 'dc_ml'
-    
+
     elif mode == 'datacube':
         if distributed is None and CUDA == False:
             mode = 'dc_CPU'
@@ -225,8 +222,6 @@ def find_Bragg_disks(
 
     # prepare kwargs
     kws = {}
-    if _qt_progress_bar is not None:
-        kws['_qt_progress_bar'] = _qt_progress_bar
     # distributed kwargs
     if distributed is not None:
         kws['connect'] = connect
@@ -236,7 +231,7 @@ def find_Bragg_disks(
     if ML == True:
         kws['CUDA'] = CUDA
         kws['model_path'] = ml_model_path
-        kws['num_attempts'] = ml_num_attempts 
+        kws['num_attempts'] = ml_num_attempts
         kws['batch_size'] = ml_batch_size
 
     # run and return
@@ -446,12 +441,7 @@ def _find_Bragg_disks_CPU(
     minPeakSpacing = 60,
     edgeBoundary = 20,
     maxNumPeaks = 70,
-    _qt_progress_bar = None,
     ):
-
-    if _qt_progress_bar is not None:
-        from PyQt5.QtWidgets import QApplication
-
 
     # Make the BraggVectors instance
     braggvectors = BraggVectors( datacube.Rshape, datacube.Qshape )
@@ -470,9 +460,6 @@ def _find_Bragg_disks_CPU(
         unit='DP',
         unit_scale=True
         ):
-        if _qt_progress_bar is not None:
-            _qt_progress_bar.setValue(rx*datacube.R_Ny+ry+1)
-            QApplication.processEvents()
 
         # Get a diffraction pattern
         dp = datacube.data[rx,ry,:,:]
@@ -524,7 +511,6 @@ def _find_Bragg_disks_CUDA_unbatched(
     minPeakSpacing = 60,
     edgeBoundary = 20,
     maxNumPeaks = 70,
-    _qt_progress_bar = None,
     ):
 
     # compute
@@ -543,7 +529,6 @@ def _find_Bragg_disks_CUDA_unbatched(
         minPeakSpacing=minPeakSpacing,
         edgeBoundary=edgeBoundary,
         maxNumPeaks=maxNumPeaks,
-        _qt_progress_bar=_qt_progress_bar,
         batching=False)
 
     # Populate a BraggVectors instance and return
@@ -571,7 +556,6 @@ def _find_Bragg_disks_CUDA_batched(
     minPeakSpacing = 60,
     edgeBoundary = 20,
     maxNumPeaks = 70,
-    _qt_progress_bar = None,
     ):
 
     # compute
@@ -590,7 +574,6 @@ def _find_Bragg_disks_CUDA_batched(
         minPeakSpacing=minPeakSpacing,
         edgeBoundary=edgeBoundary,
         maxNumPeaks=maxNumPeaks,
-        _qt_progress_bar=_qt_progress_bar,
         batching=True)
 
     # Populate a BraggVectors instance and return
@@ -622,7 +605,6 @@ def _find_Bragg_disks_ipp(
     minPeakSpacing = 60,
     edgeBoundary = 20,
     maxNumPeaks = 70,
-    _qt_progress_bar = None,
     ):
 
     # compute
@@ -674,7 +656,6 @@ def _find_Bragg_disks_dask(
     minPeakSpacing = 60,
     edgeBoundary = 20,
     maxNumPeaks = 70,
-    _qt_progress_bar = None,
     ):
 
     # compute

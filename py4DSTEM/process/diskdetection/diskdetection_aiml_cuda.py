@@ -1,13 +1,17 @@
 # Functions for finding Bragg disks using AI/ML pipeline (CUDA version)
 '''
-
 Functions for finding Braggdisks (AI/ML) using cupy and tensorflow-gpu
-
 '''
 
 import numpy as np
 from time import time
-from py4DSTEM.io.datastructure.py4dstem import QPoints, BraggVectors
+
+from emdfile import tqdmnd
+from py4DSTEM.process.diskdetection.braggvectors import BraggVectors
+from py4DSTEM.classes import PointList, PointListArray, QPoints
+from py4DSTEM.process.diskdetection.kernels import kernels
+from py4DSTEM.process.diskdetection.diskdetection_aiml import _get_latest_model
+# from py4DSTEM.process.diskdetection.diskdetection import universal_threshold
 
 try:
     import cupy as cp
@@ -21,12 +25,8 @@ except:
 
 from cupyx.scipy.ndimage import gaussian_filter
 
-from py4DSTEM.process.diskdetection.diskdetection_aiml import _get_latest_model
 
-from py4DSTEM.io import PointList, PointListArray
-from py4DSTEM.utils.tqdmnd import tqdmnd
-from py4DSTEM.process.diskdetection.kernels import kernels
-# from py4DSTEM.process.diskdetection.diskdetection import universal_threshold
+
 
 def find_Bragg_disks_aiml_CUDA(datacube, probe,
                           num_attempts = 5,
@@ -47,7 +47,6 @@ def find_Bragg_disks_aiml_CUDA(datacube, probe,
                           metric = 'mean',
                           filter_function = None,
                           name = 'braggpeaks_raw',
-                          _qt_progress_bar = None,
                           model_path=None):
     """
     Finds the Bragg disks in all diffraction patterns of datacube by AI/ML method (CUDA version)
@@ -108,7 +107,6 @@ def find_Bragg_disks_aiml_CUDA(datacube, probe,
             not need to match the shape of the input diffraction pattern, e.g. the filter
             can be used to bin the diffraction pattern). If using distributed disk
             detection, the function must be able to be pickled with by dill.
-        _qt_progress_bar (QProgressBar instance): used only by the GUI.
         model_path (str): filepath for the model weights (Tensorflow model) to load from.
             By default, if the model_path is not provided, py4DSTEM will search for the
             latest model stored on cloud using metadata json file. It is not recommended to

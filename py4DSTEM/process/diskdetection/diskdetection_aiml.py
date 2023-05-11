@@ -8,16 +8,16 @@ import glob
 import json
 import shutil
 import numpy as np
-from py4DSTEM.io.datastructure.py4dstem import QPoints, BraggVectors
 
-from scipy.ndimage.filters import gaussian_filter
+from scipy.ndimage import gaussian_filter
 from time import time
 from numbers import Number
 
+from emdfile import tqdmnd, PointList, PointListArray
+from py4DSTEM.process.diskdetection.braggvectors import BraggVectors
+from py4DSTEM.classes import QPoints
 from py4DSTEM.process.utils import get_maxima_2D
 # from py4DSTEM.process.diskdetection import universal_threshold
-from py4DSTEM.utils.tqdmnd import tqdmnd
-from py4DSTEM.io import PointList, PointListArray
 
 def find_Bragg_disks_aiml_single_DP(DP, probe,
                                      num_attempts = 5,
@@ -298,7 +298,6 @@ def find_Bragg_disks_aiml_serial(datacube, probe,
                                  metric = 'mean',
                                  filter_function = None,
                                  name = 'braggpeaks_raw',
-                                 _qt_progress_bar = None,
                                  model_path = None,):
     """
     Finds the Bragg disks in all diffraction patterns of datacube from AI/ML method.
@@ -359,7 +358,6 @@ def find_Bragg_disks_aiml_serial(datacube, probe,
             not need to match the shape of the input diffraction pattern, e.g. the filter
             can be used to bin the diffraction pattern). If using distributed disk
             detection, the function must be able to be pickled with by dill.
-        _qt_progress_bar (QProgressBar instance): used only by the GUI.
         model_path (str): filepath for the model weights (Tensorflow model) to load from.
             By default, if the model_path is not provided, py4DSTEM will search for the
             latest model stored on cloud using metadata json file. It is not recommended to
@@ -455,7 +453,6 @@ def find_Bragg_disks_aiml(datacube, probe,
                           upsample_factor = 16,
                           name = 'braggpeaks_raw',
                           filter_function = None,
-                          _qt_progress_bar = None,
                           model_path = None,
                           distributed = None,
                           CUDA = True,
@@ -518,7 +515,6 @@ def find_Bragg_disks_aiml(datacube, probe,
             not need to match the shape of the input diffraction pattern, e.g. the filter
             can be used to bin the diffraction pattern). If using distributed disk
             detection, the function must be able to be pickled with by dill.
-        _qt_progress_bar (QProgressBar instance): used only by the GUI.
         model_path (str): filepath for the model weights (Tensorflow model) to load from.
             By default, if the model_path is not provided, py4DSTEM will search for the
             latest model stored on cloud using metadata json file. It is not recommended to

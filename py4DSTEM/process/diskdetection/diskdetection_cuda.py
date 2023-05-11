@@ -10,9 +10,9 @@ import cupyx.scipy.fft as cufft
 from time import time
 import numba
 
+from emdfile import tqdmnd
+from py4DSTEM.classes import PointList, PointListArray
 from py4DSTEM.process.diskdetection.kernels import kernels
-from py4DSTEM.io import PointList, PointListArray
-from py4DSTEM.utils.tqdmnd import tqdmnd
 
 
 def find_Bragg_disks_CUDA(
@@ -30,7 +30,6 @@ def find_Bragg_disks_CUDA(
     upsample_factor=16,
     filter_function=None,
     name="braggpeaks_raw",
-    _qt_progress_bar=None,
     batching=True,
 ):
     """
@@ -82,8 +81,7 @@ def find_Bragg_disks_CUDA(
             not need to match the shape of the input diffraction pattern, e.g. the filter
             can be used to bin the diffraction pattern). If using distributed disk
             detection, the function must be able to be pickled with by dill.
-        _qt_progress_bar (QProgressBar instance): used only by the GUI.
-        batching (bool): Whether to batch the FFT cross correlation steps. 
+        batching (bool): Whether to batch the FFT cross correlation steps.
 
     Returns:
         (PointListArray): the Bragg peak positions and correlation intensities
@@ -125,9 +123,6 @@ def find_Bragg_disks_CUDA(
     else:
         blocks = (DP.shape[0],)
         threads = (DP.shape[1],)
-
-    if _qt_progress_bar is not None:
-        from PyQt5.QtWidgets import QApplication
 
     t0 = time()
     if batching:
@@ -212,9 +207,6 @@ def find_Bragg_disks_CUDA(
             unit="DP",
             unit_scale=True,
         ):
-            if _qt_progress_bar is not None:
-                _qt_progress_bar.setValue(Rx * datacube.R_Ny + Ry + 1)
-                QApplication.processEvents()
             DP = datacube.data[Rx, Ry, :, :]
             _find_Bragg_disks_single_DP_FK_CUDA(
                 DP,

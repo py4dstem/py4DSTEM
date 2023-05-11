@@ -1,9 +1,8 @@
-# Bragg peaks hresholding fns
+# Bragg peaks thresholding fns
 
 import numpy as np
 
-from py4DSTEM.utils.tqdmnd import tqdmnd
-from py4DSTEM.io.datastructure import PointListArray
+from emdfile import tqdmnd, PointListArray
 
 
 
@@ -135,7 +134,7 @@ def universal_threshold(
 
             # Remove peaks below minRelativeIntensity threshold
             deletemask = pointlist.data['intensity'] < _thresh
-            pointlist.remove_points(deletemask)
+            pointlist.remove(deletemask)
 
             # Remove peaks that are too close together
             if maxNumPeaks is not False:

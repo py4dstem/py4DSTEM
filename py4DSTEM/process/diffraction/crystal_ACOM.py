@@ -3,10 +3,10 @@ import matplotlib.pyplot as plt
 import os
 from typing import Union, Optional
 
+from emdfile import tqdmnd, PointList, PointListArray
+from py4DSTEM.classes import RealSlice
 from py4DSTEM.process.diffraction.utils import Orientation, OrientationMap, axisEqual3D
 from py4DSTEM.process.utils import electron_wavelength_angstrom
-from py4DSTEM.utils.tqdmnd import tqdmnd
-from py4DSTEM.io.datastructure import PointList, PointListArray, RealSlice
 
 from numpy.linalg import lstsq
 try:
@@ -757,6 +757,7 @@ def match_orientations(
     inversion_symmetry = True,
     multiple_corr_reset = True,
     progress_bar: bool = True,
+    return_orientation: bool = True,
 ):
     '''
     This function computes the orientation of any number of PointLists stored in a PointListArray, and returns an OrienationMap.
@@ -785,8 +786,12 @@ def match_orientations(
             )
 
         orientation_map.set_orientation(orientation,rx,ry)
-
-    return orientation_map
+    self.orientation_map = orientation_map
+    
+    if return_orientation:
+        return orientation_map
+    else:
+        return
 
 def match_single_pattern(
     self,

@@ -1,7 +1,7 @@
 # Functions for generating diffraction images
 
 import numpy as np
-from py4DSTEM.utils.tqdmnd import tqdmnd
+from emdfile import tqdmnd
 
 def get_virtual_diffraction(
     datacube,

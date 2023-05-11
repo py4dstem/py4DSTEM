@@ -1,17 +1,28 @@
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.colors import hsv_to_rgb
 from matplotlib.patches import Wedge
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.spatial import Voronoi
-from py4DSTEM.visualize import show
-from py4DSTEM.visualize.overlay import add_pointlabels,add_vector,add_bragg_index_labels,add_ellipses
-from py4DSTEM.visualize.overlay import add_points
-from py4DSTEM.visualize.vis_grid import show_image_grid
-from py4DSTEM.visualize.vis_RQ import ax_addaxes,ax_addaxes_QtoR
-from py4DSTEM.io.datastructure import DataCube,Calibration,PointList
+
+from emdfile import PointList
+from py4DSTEM.classes import DataCube,Calibration
 from py4DSTEM.process.utils import get_voronoi_vertices,convert_ellipse_params
 from py4DSTEM.process.calibration import double_sided_gaussian
 from py4DSTEM.process.latticevectors import get_selected_lattice_vectors
+from py4DSTEM.visualize import show
+from py4DSTEM.visualize.overlay import (
+    add_pointlabels,
+    add_vector,
+    add_bragg_index_labels,
+    add_ellipses,
+    add_points,
+    add_scalebar,
+)
+from py4DSTEM.visualize.vis_grid import show_image_grid
+from py4DSTEM.visualize.vis_RQ import ax_addaxes,ax_addaxes_QtoR
+
+
 
 def show_elliptical_fit(ar,fitradii,p_ellipse,fill=True,
                         color_ann='y',color_ell='r',alpha_ann=0.2,alpha_ell=0.7,
@@ -794,111 +805,164 @@ def show_selected_dps(datacube,positions,im,bragg_pos=None,
                     get_pointcolors=lambda i:colors[i],
                     **kwargs)
 
-def show_complex(
-    ar_complex,
-    vmin = None,
-    vmax = None,
-    cbar = True,
-    returnfig = False,
-    **kwargs
-    ):
-    '''
-    Function to plot complex arrays
-    
-    Args: 
-        ar_complex (2d array)   : complex array to be plotted
-        vmin (float, optional)  : minimum absolute value 
-        vmax (float, optional)  : maximum absolute value 
-        vmin/vmax are set to fractions of the distribution of pixel values in the array, e.g. 
-        vmin=0.02 will set the minumum display value to saturate the lower 2% of pixels
-        cbar (bool)             : if True, include color wheel
-        returnfig (bool)        : if True, the function returns the tuple (figure,axis)
-        
+def Complex2RGB(complex_array, vmin=None, vmax=None, hue_start=90):
+    """
+    Function to turn a complex array into rgb for plotting
+    Args:
+        complex_array (2D array)      : complex array
+        vmin (float, optional)        : minimum absolute value
+        vmax (float, optional)        : maximum absolute value
+            if None, vmin/vmax are set to fractions of the distribution of pixel values in the array, 
+            e.g. vmin=0.02 will set the minumum display value to saturate the lower 2% of pixels
+        hue_start(float, optional)    : phase offset (degrees)
     Returns:
-        if returnfig==False (default), the figure is plotted and nothing is returned.
-        if returnfig==True, return the figure and the axis.
-    '''
+        rgb array for plotting
+    """
+    amp = np.abs(complex_array)
 
-    #define min and max
-    amp = np.abs(ar_complex)  
     if np.max(amp) == np.min(amp):
-        if vmin is None: vmin = 0 
-        if vmax is None: vmax = np.max(amp)
+        if vmin is None:
+            vmin = 0
+        if vmax is None:
+            vmax = np.max(amp)
     else:
-        if vmin is None: vmin = 0.02
-        if vmax is None: vmax = 0.98
+        if vmin is None:
+            vmin = 0.02
+        if vmax is None:
+            vmax = 0.98
         vals = np.sort(amp[~np.isnan(amp)])
-        ind_vmin = np.round((vals.shape[0]-1)*vmin).astype('int')
-        ind_vmax = np.round((vals.shape[0]-1)*vmax).astype('int')
-        ind_vmin = np.max([0,ind_vmin])
-        ind_vmax = np.min([len(vals)-1,ind_vmax])
+        ind_vmin = np.round((vals.shape[0] - 1) * vmin).astype("int")
+        ind_vmax = np.round((vals.shape[0] - 1) * vmax).astype("int")
+        ind_vmin = np.max([0, ind_vmin])
+        ind_vmax = np.min([len(vals) - 1, ind_vmax])
         vmin = vals[ind_vmin]
         vmax = vals[ind_vmax]
 
-    from matplotlib.colors import hsv_to_rgb
+    amp = np.where(amp < vmin, vmin, amp)
+    amp = np.where(amp > vmax, vmax, amp)
 
-    #function for converting to complex colors
-    def Complex2HSV(z, vmin, vmax, hue_start=90):
-        #based on stack overflow 17044052
-        amp = np.abs(z)
-        amp = np.where(amp < vmin, vmin, amp)
-        amp = np.where(amp > vmax, vmax, amp)
-        
-        ph = np.angle(z, deg=1) + hue_start
-        
-        h = (ph % 360) / 360
-        s = 0.85 * np.ones_like(h)
-        v = (amp -vmin) / (vmax - vmin)
-        
-        return hsv_to_rgb(np.dstack((h,s,v)))
+    ph = np.angle(complex_array, deg=1) + hue_start
 
-    #convert to complex colors
-    rgb = Complex2HSV(ar_complex, vmin, vmax)
-    
-    #plot
-    fig, ax = show(
-        rgb,
-        vmin = 0, 
-        vmax = 1,
-        intensity_range= 'absolute',
-        returnfig = True,
-        **kwargs
-    )
+    h = (ph % 360) / 360
+    s = 0.85 * np.ones_like(h)
+    v = (amp - vmin) / (vmax - vmin)
 
-    #add color bar
+    hsv = np.dstack((h, s, v))
+    if hsv.shape[-1] != 3:
+        hsv = hsv.reshape(hsv.shape[0], hsv.shape[1], 3, hsv.shape[2] // 3)
+        hsv = hsv.swapaxes(-1, -2)
+
+    return hsv_to_rgb(hsv)
+
+
+def show_complex(
+    ar_complex,
+    vmin=None,
+    vmax=None,
+    cbar=True,
+    scalebar=False,
+    pixelunits="pixels",
+    pixelsize=1,
+    returnfig=False,
+    **kwargs
+):
+    """
+    Function to plot complex arrays
+
+    Args:
+        ar_complex (2D array)       : complex array to be plotted. If ar_complex is list of complex arrarys
+            such as [array1, array2], then arrays are horizonally plotted in one figure
+        vmin (float, optional)      : minimum absolute value
+        vmax (float, optional)      : maximum absolute value
+            if None, vmin/vmax are set to fractions of the distribution of pixel values in the array, 
+            e.g. vmin=0.02 will set the minumum display value to saturate the lower 2% of pixels
+        cbar (bool, optional)       : if True, include color wheel
+        scalebar (bool, optional)   : if True, adds scale bar
+        pixelunits (str, optional)  : units for scalebar
+        pixelsize (float, optional) : size of one pixel in pixelunits for scalebar
+        returnfig (bool, optional)  : if True, the function returns the tuple (figure,axis)
+
+    Returns:
+        if returnfig==False (default), the figure is plotted and nothing is returned.
+        if returnfig==True, return the figure and the axis.
+    """
+    # convert to complex colors
+    rgb = Complex2RGB(ar_complex, vmin, vmax)
+
+    # plot
+
+    if len(rgb.shape) > 3:
+        from py4DSTEM.visualize import show_image_grid
+
+        fig, ax = show_image_grid(
+            get_ar=lambda i: rgb[i],
+            H=1,
+            W=rgb.shape[0],
+            vmin=0,
+            vmax=1,
+            intensity_range="absolute",
+            returnfig=True,
+            **kwargs,
+        )
+        if scalebar is True:
+            scalebar = {
+                "Nx": ar_complex[0].shape[0],
+                "Ny": ar_complex[0].shape[1],
+                "pixelsize": pixelsize,
+                "pixelunits": pixelunits,
+            }
+
+            add_scalebar(ax[0, 0], scalebar)
+    else:
+        fig, ax = show(
+            rgb, vmin=0, vmax=1, intensity_range="absolute", returnfig=True, **kwargs
+        )
+
+        if scalebar is True:
+            scalebar = {
+                "Nx": ar_complex.shape[0],
+                "Ny": ar_complex.shape[1],
+                "pixelsize": pixelsize,
+                "pixelunits": pixelunits,
+            }
+
+            add_scalebar(ax, scalebar)
+
+    # add color bar
     if cbar == True:
-        ax0 = fig.add_axes([1, 0.35, 0.3, 0.3])
-        
-        #create wheel
+        if len(rgb.shape) > 2:
+            ax0 = fig.add_axes([1, 0.35, 0.3, 0.3])
+        else:
+            ax0 = fig.add_axes([1, 0.35, 0.3, 0.3])
+
+        # create wheel
         AA = 1000
         kx = np.fft.fftshift(np.fft.fftfreq(AA))
         ky = np.fft.fftshift(np.fft.fftfreq(AA))
-        kya,kxa = np.meshgrid(ky,kx)
-        kra = (kya**2+kxa**2)**0.5
-        ktheta = np.arctan2(-kxa,kya)
-        ktheta = kra*np.exp(1j*ktheta)
-        
-        #convert to hsv
-        rgb = Complex2HSV(ktheta, 0, 0.4)
-        ind = kra > 0.4
-        rgb[ind] = [1,1,1]
-        
-        #plot
-        ax0.imshow(
-            rgb
-        )
+        kya, kxa = np.meshgrid(ky, kx)
+        kra = (kya**2 + kxa**2) ** 0.5
+        ktheta = np.arctan2(-kxa, kya)
+        ktheta = kra * np.exp(1j * ktheta)
 
-        #add axes
-        ax0.axhline(AA/2, 0, AA, color = 'k')
-        ax0.axvline(AA/2, 0, AA, color = 'k')
-        ax0.axis('off')
+        # convert to hsv
+        rgb = Complex2RGB(ktheta, 0, 0.4)
+        ind = kra > 0.4
+        rgb[ind] = [1, 1, 1]
+
+        # plot
+        ax0.imshow(rgb)
+
+        # add axes
+        ax0.axhline(AA / 2, 0, AA, color="k")
+        ax0.axvline(AA / 2, 0, AA, color="k")
+        ax0.axis("off")
 
         label_size = 16
 
-        ax0.text(AA, AA/2, 1, fontsize = label_size)
-        ax0.text(AA/2, 0, 'i', fontsize = label_size)
-        ax0.text(AA/2, AA, '-i', fontsize = label_size)
-        ax0.text(0, AA/2, -1, fontsize = label_size)
+        ax0.text(AA, AA / 2, 1, fontsize=label_size)
+        ax0.text(AA / 2, 0, "i", fontsize=label_size)
+        ax0.text(AA / 2, AA, "-i", fontsize=label_size)
+        ax0.text(0, AA / 2, -1, fontsize=label_size)
 
-    if returnfig == True: 
+    if returnfig == True:
         return fig, ax
