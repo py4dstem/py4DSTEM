@@ -5,7 +5,8 @@ import numpy as np
 from scipy.ndimage import gaussian_filter
 
 from emdfile import tqdmnd
-from py4DSTEM.classes import DataCube, QPoints, BraggVectors
+from py4DSTEM.process.diskdetection.braggvectors import BraggVectors
+from py4DSTEM.classes import DataCube, QPoints
 from py4DSTEM.preprocess.utils import get_maxima_2D
 from py4DSTEM.process.utils.cross_correlate import get_cross_correlation_FT
 from py4DSTEM.process.diskdetection.diskdetection_aiml import find_Bragg_disks_aiml
