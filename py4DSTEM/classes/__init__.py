@@ -9,6 +9,5 @@ from py4DSTEM.classes.probe import Probe
 from py4DSTEM.classes.virtualdiffraction import VirtualDiffraction
 from py4DSTEM.classes.virtualimage import VirtualImage
 from py4DSTEM.classes.qpoints import QPoints
-from py4DSTEM.classes.braggvectors import BraggVectors
 
 
