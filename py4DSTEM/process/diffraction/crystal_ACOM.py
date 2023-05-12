@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 from typing import Union, Optional
+import time, sys
 
 from py4DSTEM.process.diffraction.utils import Orientation, OrientationMap, axisEqual3D
 from py4DSTEM.process.utils import electron_wavelength_angstrom
@@ -753,9 +754,10 @@ def match_orientations(
     self,
     bragg_peaks_array: PointListArray,
     num_matches_return: int = 1,
-    min_number_peaks = 3,
-    inversion_symmetry = True,
-    multiple_corr_reset = True,
+    min_number_peaks: int = 3,
+    inversion_symmetry: bool = True,
+    multiple_corr_reset: bool = True,
+    return_orientation: bool = True,
     progress_bar: bool = True,
 ):
     '''
@@ -786,7 +788,13 @@ def match_orientations(
 
         orientation_map.set_orientation(orientation,rx,ry)
 
-    return orientation_map
+    # assign and return
+    self.orientation_map = orientation_map
+
+    if return_orientation:
+        return orientation_map
+    else:
+        return
 
 def match_single_pattern(
     self,
@@ -1563,6 +1571,207 @@ def match_single_pattern(
 
 
 
+
+
+def cluster_grains(
+    self,
+    threshold_add = 1.0,
+    threshold_grow = 0.0,
+    angle_tolerance_deg = 5.0,
+    progress_bar = True,
+    ):
+    """
+    Cluster grains from a specific radial bin
+
+    Parameters
+    --------
+    corr_threshold_add: float
+        Minimum signal required for a probe position to initialize a cluster.
+    corr_threshold_grow: float
+        Minimum signal required for a probe position to be added to a cluster.
+    angle_tolerance_deg: float
+        Rotation rolerance for clustering grains.
+    progress_bar: bool
+        Turns on the progress bar for the polar transformation
+
+    Returns
+    --------
+    
+
+    """
+
+    # symmetry operators
+    sym = self.symmetry_operators
+
+    # Get data
+    matrix = self.orientation_map.matrix.copy()
+    corr = self.orientation_map.corr.copy()
+    corr_init = corr.copy()
+    mark = corr >= threshold_grow
+    corr[np.logical_not(mark)] = 0
+
+    # phi = np.squeeze(self.radial_peaks[:,:,radial_index,:,0]).copy()
+    # sig = np.squeeze(self.radial_peaks[:,:,radial_index,:,1]).copy()
+    # sig_init = sig.copy()
+    # mark = sig >= threshold_grow
+    # sig[np.logical_not(mark)] = 0
+    
+    # init
+    self.cluster_sizes = np.array((), dtype='int')
+    self.cluster_sig = np.array(())
+    self.cluster_inds = []
+    inds_all = np.zeros_like(corr, dtype='int')
+    inds_all.ravel()[:] = np.arange(inds_all.size)
+
+    # Tolerance
+    tol = np.deg2rad(angle_tolerance_deg)
+
+    # Main loop
+    search = True
+    while search is True:
+        inds_grain = np.argmax(corr)
+        val = corr.ravel()[inds_grain]
+
+        if val < threshold_add:
+            search = False
+        
+        else:
+            # progressbar
+            if progress_bar:
+                comp = 1 - np.mean(np.max(mark,axis = 2))
+                update_progress(comp)
+
+        #         # Start cluster
+        #         x,y,z = np.unravel_index(inds_grain, sig.shape)
+        #         mark[x,y,z] = False
+        #         sig[x,y,z] = 0
+        #         phi_cluster = phi[x,y,z]
+
+        #         # Neighbors to search
+        #         xr = np.clip(x + np.arange(-1,2,dtype='int'), 0, sig.shape[0] - 1)
+        #         yr = np.clip(y + np.arange(-1,2,dtype='int'), 0, sig.shape[1] - 1)
+        #         inds_cand = inds_all[xr,yr,:].ravel()
+        #         inds_cand = np.delete(inds_cand, mark.ravel()[inds_cand] == False)
+        #         # [mark[xr,yr,:].ravel()]
+
+        #         if inds_cand.size == 0:
+        #             grow = False
+        #         else:
+        #             grow = True
+
+        #         # grow the cluster
+        #         while grow is True:
+        #             inds_new = np.array((),dtype='int')
+
+        #             keep = np.zeros(inds_cand.size, dtype='bool')
+        #             for a0 in range(inds_cand.size):
+        #                 xc,yc,zc = np.unravel_index(inds_cand[a0], sig.shape)
+
+        #                 phi_test = phi[xc,yc,zc]
+        #                 dphi = np.mod(phi_cluster - phi_test + np.pi/2.0, np.pi) - np.pi/2.0
+
+        #                 if np.abs(dphi) < tol:
+        #                     keep[a0] = True
+
+        #                     sig[xc,yc,zc] = 0
+        #                     mark[xc,yc,zc] = False 
+
+        #                     xr = np.clip(xc + np.arange(-1,2,dtype='int'), 0, sig.shape[0] - 1)
+        #                     yr = np.clip(yc + np.arange(-1,2,dtype='int'), 0, sig.shape[1] - 1)
+        #                     inds_add = inds_all[xr,yr,:].ravel()
+        #                     inds_new = np.append(inds_new, inds_add)
+
+
+        #             inds_grain = np.append(inds_grain, inds_cand[keep])
+        #             inds_cand = np.unique(np.delete(inds_new, mark.ravel()[inds_new] == False))
+
+        #             if inds_cand.size == 0:
+        #                 grow = False
+
+        #     # convert grain to x,y coordinates, add = list
+        #     xg,yg,zg = np.unravel_index(inds_grain, sig.shape)
+        #     xyg = np.unique(np.vstack((xg,yg)), axis = 1)
+        #     sig_mean = np.mean(sig_init.ravel()[inds_grain])
+        #     self.cluster_sizes = np.append(self.cluster_sizes, xyg.shape[1])
+        #     self.cluster_sig = np.append(self.cluster_sig, sig_mean)
+        #     self.cluster_inds.append(xyg)
+        search = False
+
+    # finish progressbar
+    if progress_bar:
+        update_progress(1)
+
+# def cluster_plot_size(
+#     self,
+#     area_max = None,
+#     weight_intensity = False,
+#     pixel_area = 1.0,
+#     pixel_area_units = 'px^2',
+#     figsize = (8,6),
+#     returnfig = False,
+#     ):
+#     """
+#     Plot the cluster sizes
+
+#     Parameters
+#     --------
+#     area_max: int (optional)
+#         Max area bin in pixels
+#     weight_intensity: bool
+#         Weight histogram by the peak intensity.
+#     pixel_area: float
+#         Size of pixel area unit square
+#     pixel_area_units: string
+#         Units of the pixel area 
+#     figsize: tuple
+#         Size of the figure panel
+#     returnfig: bool
+#         Setting this to true returns the figure and axis handles
+
+#     Returns
+#     --------
+#     fig, ax (optional)
+#         Figure and axes handles
+
+#     """
+
+#     if area_max is None:
+#         area_max = np.max(self.cluster_sizes)
+#     area = np.arange(area_max)
+#     sub = self.cluster_sizes.astype('int') < area_max
+#     if weight_intensity:
+#         hist = np.bincount(
+#             self.cluster_sizes[sub],
+#             weights = self.cluster_sig[sub],
+#             minlength = area_max,
+#             )
+#     else:
+#         hist = np.bincount(
+#             self.cluster_sizes[sub],
+#             minlength = area_max,
+#             )
+
+
+#     # plotting
+#     fig,ax = plt.subplots(figsize = figsize)
+#     ax.bar(
+#         area * pixel_area,
+#         hist,
+#         width = 0.8 * pixel_area,
+#         )
+
+#     ax.set_xlabel('Grain Area [' + pixel_area_units + ']')
+#     if weight_intensity:
+#         ax.set_ylabel('Total Signal [arb. units]')
+#     else:
+#         ax.set_ylabel('Number of Grains')
+
+#     if returnfig:
+#         return fig,ax
+
+
+
+
 def calculate_strain(
     self,
     bragg_peaks_array: PointListArray,
@@ -2066,3 +2275,27 @@ orientation_ranges = {
     # "-3m": ["fiber", [0, 0, 1], [90.0, 60.0]],
     # "-3m": ["fiber", [0, 0, 1], [180.0, 30.0]],
 
+
+
+# Progressbar taken from stackexchange:
+# https://stackoverflow.com/questions/3160699/python-progress-bar
+def update_progress(progress):
+    barLength = 60 # Modify this to change the length of the progress bar
+    status = ""
+    if isinstance(progress, int):
+        progress = float(progress)
+    if not isinstance(progress, float):
+        progress = 0
+        status = "error: progress var must be float\r\n"
+    if progress < 0:
+        progress = 0
+        status = "Halt...\r\n"
+    if progress >= 1:
+        progress = 1
+        status = "Done...\r\n"
+    block = int(round(barLength*progress))
+    text = "\rPercent: [{0}] {1}% {2}".format( "#"*block + "-"*(barLength-block), 
+        np.round(progress*100,4), 
+        status)
+    sys.stdout.write(text)
+    sys.stdout.flush()

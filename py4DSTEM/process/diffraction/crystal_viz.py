@@ -955,7 +955,7 @@ def plot_diffraction_pattern(
 
 def plot_orientation_maps(
     self,
-    orientation_map,
+    orientation_map = None,
     orientation_ind: int = 0,
     dir_in_plane_degrees: float = 0.0,
     corr_range: np.ndarray = np.array([0, 5]),
@@ -976,6 +976,7 @@ def plot_orientation_maps(
 
     Args:
         orientation_map (OrientationMap):   Class containing orientation matrices, correlation values, etc.
+                                            Optional - can reference internally stored OrientationMap.
         orientation_ind (int):              Which orientation match to plot if num_matches > 1
         dir_in_plane_degrees (float):       In-plane angle to plot in degrees.  Default is 0 / x-axis / vertical down.
         corr_range (np.ndarray):            Correlation intensity range for the plot
@@ -1003,6 +1004,9 @@ def plot_orientation_maps(
     """
 
     # Inputs
+    if orientation_map is None:
+        orientation_map = self.orientation_map
+
     # Legend size
     leg_size = np.array([300, 300], dtype="int")
 
