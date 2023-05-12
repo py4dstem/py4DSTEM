@@ -2906,7 +2906,6 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
             max_batch_size = self._num_diffraction_patterns
 
         # initialization
-        self.error_iterations = []
         if store_iterations and (not hasattr(self, "object_iterations") or reset):
             self.object_iterations = []
             self.probe_iterations = []
@@ -2917,6 +2916,7 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
                 self._object_initial[1].copy(),
             )
             self._probe = self._probe_initial.copy()
+            self.error_iterations = []
             self._positions_px = self._positions_px_initial.copy()
             self._positions_px_fractional = self._positions_px - xp.round(
                 self._positions_px
@@ -2937,6 +2937,7 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
                     UserWarning,
                 )
             else:
+                self.error_iterations = []
                 self._exit_waves = (None,) * self._num_sim_measurements
 
         # Probe support mask initialization
