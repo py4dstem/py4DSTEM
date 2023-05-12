@@ -77,8 +77,19 @@ class DataCube(Array,RootedNode,Data,DataCubeMethods):
             cal._datacube = self
 
 
+    def copy(self):
+        """
+        Copys datacube
+        """
+        from py4DSTEM import DataCube
+        new_datacube = DataCube(
+            data = self.data.copy(),
+            name = self.name,
+            calibration = self.calibration.copy(),
+            slicelabels = self.slicelabels,
+        )
 
-
+        return new_datacube
 
 
     # properties
