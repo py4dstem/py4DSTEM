@@ -2906,13 +2906,13 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
             max_batch_size = self._num_diffraction_patterns
 
         # initialization
+        self.error_iterations = []
         if store_iterations and (not hasattr(self, "object_iterations") or reset):
             self.object_iterations = []
             self.probe_iterations = []
 
         if reset:
             self._object = (
-            self.error_iterations = []
                 self._object_initial[0].copy(),
                 self._object_initial[1].copy(),
             )

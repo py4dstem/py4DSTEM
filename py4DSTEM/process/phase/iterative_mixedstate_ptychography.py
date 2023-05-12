@@ -1477,13 +1477,13 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
             max_batch_size = self._num_diffraction_patterns
 
         # initialization
+        self.error_iterations = []
         if store_iterations and (not hasattr(self, "object_iterations") or reset):
             self.object_iterations = []
             self.probe_iterations = []
 
         if reset:
             self._object = self._object_initial.copy()
-            self.error_iterations = []
             self._probe = self._probe_initial.copy()
             self._positions_px = self._positions_px_initial.copy()
             self._positions_px_fractional = self._positions_px - xp.round(
@@ -2182,7 +2182,7 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
 
         fig, ax = plt.subplots(figsize=figsize)
         show_complex(
-            probe,
+            probe,#[np.squeeze(probe[i,:,:]) for i in range(probe.shape[0])],#
             figax=(fig, ax),
             scalebar=scalebar,
             pixelsize=pixelsize,
