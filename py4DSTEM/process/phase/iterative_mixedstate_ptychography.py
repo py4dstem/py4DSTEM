@@ -2170,7 +2170,7 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
         if probe is None:
             probe = self.probe_fourier[0]
         else:
-            probe = asnumpy(self._return_fourier_probe(probe[0]))
+            probe = [asnumpy(self._return_fourier_probe(pr)) for pr in probe]
 
         if pixelsize is None:
             pixelsize = self._reciprocal_sampling[1]
@@ -2180,10 +2180,10 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
         figsize = kwargs.get("figsize", (6, 6))
         kwargs.pop("figsize", None)
 
-        fig, ax = plt.subplots(figsize=figsize)
+        #fig, ax = plt.subplots(figsize=figsize)
         show_complex(
-            probe,#[np.squeeze(probe[i,:,:]) for i in range(probe.shape[0])],#
-            figax=(fig, ax),
+            probe,
+            figsize=figsize,
             scalebar=scalebar,
             pixelsize=pixelsize,
             pixelunits=pixelunits,
