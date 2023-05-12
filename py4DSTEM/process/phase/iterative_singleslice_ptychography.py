@@ -1333,9 +1333,9 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
         if store_iterations and (not hasattr(self, "object_iterations") or reset):
             self.object_iterations = []
             self.probe_iterations = []
-            self.error_iterations = []
 
         if reset:
+            self.error_iterations = []
             self._object = self._object_initial.copy()
             self._probe = self._probe_initial.copy()
             self._positions_px = self._positions_px_initial.copy()
@@ -1485,10 +1485,10 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
                 and self._object_type == "complex",
             )
 
+            self.error_iterations.append(error.item())
             if store_iterations:
                 self.object_iterations.append(asnumpy(self._object.copy()))
                 self.probe_iterations.append(asnumpy(self._probe.copy()))
-                self.error_iterations.append(error.item())
 
         # store result
         self.object = asnumpy(self._object)
