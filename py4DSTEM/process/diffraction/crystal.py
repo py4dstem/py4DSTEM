@@ -52,6 +52,8 @@ class Crystal:
         plot_orientation_plan,
         plot_orientation_maps,
         plot_fiber_orientation_maps,
+        plot_clusters,
+        plot_cluster_size,
     )
 
     from py4DSTEM.process.diffraction.crystal_calibrate import (

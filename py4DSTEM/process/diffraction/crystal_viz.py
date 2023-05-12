@@ -1623,6 +1623,96 @@ def plot_fiber_orientation_maps(
     else:
         return images_orientation
 
+def plot_clusters(
+    self,
+    returnfig = False,
+    ):
+    1+1
+
+
+def plot_cluster_size(
+    self,
+    area_min = None,
+    area_max = None,
+    weight_intensity = False,
+    pixel_area = 1.0,
+    pixel_area_units = 'px^2',
+    figsize = (8,6),
+    returnfig = False,
+    ):
+    """
+    Plot the cluster sizes
+
+    Parameters
+    --------
+    area_min: int (optional)
+        Min area to include
+    area_max: int (optional)
+        Max area bin in pixels
+    weight_intensity: bool
+        Weight histogram by the peak intensity.
+    pixel_area: float
+        Size of pixel area unit square
+    pixel_area_units: string
+        Units of the pixel area 
+    figsize: tuple
+        Size of the figure panel
+    returnfig: bool
+        Setting this to true returns the figure and axis handles
+
+    Returns
+    --------
+    fig, ax (optional)
+        Figure and axes handles
+
+    """
+
+    if area_max is None:
+        area_max = np.max(self.cluster_sizes)
+    area = np.arange(area_max)
+    if area_min is None:
+        sub = self.cluster_sizes.astype('int') < area_max
+    else:
+        sub = np.logical_and(
+            self.cluster_sizes.astype('int') < area_max,
+            self.cluster_sizes.astype('int') >= area_min,
+            )
+
+
+    if weight_intensity:
+        hist = np.bincount(
+            self.cluster_sizes[sub],
+            weights = self.cluster_sig[sub],
+            minlength = area_max,
+            )
+    else:
+        hist = np.bincount(
+            self.cluster_sizes[sub],
+            minlength = area_max,
+            )
+
+
+    # plotting
+    fig,ax = plt.subplots(figsize = figsize)
+    ax.bar(
+        area * pixel_area,
+        hist,
+        width = 0.8 * pixel_area,
+        )
+
+    ax.set_xlabel('Grain Area [' + pixel_area_units + ']')
+    if weight_intensity:
+        ax.set_ylabel('Total Signal [arb. units]')
+    else:
+        ax.set_ylabel('Number of Grains')
+
+    if returnfig:
+        return fig,ax
+
+
+
+
+
 
 def axisEqual3D(ax):
     extents = np.array([getattr(ax, "get_{}lim".format(dim))() for dim in "xyz"])
