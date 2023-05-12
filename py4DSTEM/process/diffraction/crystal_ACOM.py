@@ -1576,7 +1576,7 @@ def match_single_pattern(
 def cluster_grains(
     self,
     threshold_add = 1.0,
-    threshold_grow = 0.0,
+    threshold_grow = 0.1,
     angle_tolerance_deg = 5.0,
     progress_bar = True,
     ):
@@ -1604,23 +1604,19 @@ def cluster_grains(
     sym = self.symmetry_operators
 
     # Get data
+    # Correlation data = signal to cluster with
+    sig = self.orientation_map.corr.copy()
+    sig_init = sig.copy()
+    mark = sig >= threshold_grow
+    sig[np.logical_not(mark)] = 0
+    # orientation matrix used for angle tolerance
     matrix = self.orientation_map.matrix.copy()
-    corr = self.orientation_map.corr.copy()
-    corr_init = corr.copy()
-    mark = corr >= threshold_grow
-    corr[np.logical_not(mark)] = 0
 
-    # phi = np.squeeze(self.radial_peaks[:,:,radial_index,:,0]).copy()
-    # sig = np.squeeze(self.radial_peaks[:,:,radial_index,:,1]).copy()
-    # sig_init = sig.copy()
-    # mark = sig >= threshold_grow
-    # sig[np.logical_not(mark)] = 0
-    
     # init
     self.cluster_sizes = np.array((), dtype='int')
     self.cluster_sig = np.array(())
     self.cluster_inds = []
-    inds_all = np.zeros_like(corr, dtype='int')
+    inds_all = np.zeros_like(sig, dtype='int')
     inds_all.ravel()[:] = np.arange(inds_all.size)
 
     # Tolerance
@@ -1629,8 +1625,9 @@ def cluster_grains(
     # Main loop
     search = True
     while search is True:
-        inds_grain = np.argmax(corr)
-        val = corr.ravel()[inds_grain]
+        inds_grain = np.argmax(sig)
+
+        val = sig.ravel()[inds_grain]
 
         if val < threshold_add:
             search = False
@@ -1641,135 +1638,72 @@ def cluster_grains(
                 comp = 1 - np.mean(np.max(mark,axis = 2))
                 update_progress(comp)
 
-        #         # Start cluster
-        #         x,y,z = np.unravel_index(inds_grain, sig.shape)
-        #         mark[x,y,z] = False
-        #         sig[x,y,z] = 0
-        #         phi_cluster = phi[x,y,z]
+            # Start cluster
+            x,y,z = np.unravel_index(inds_grain, sig.shape)
+            mark[x,y,z] = False
+            sig[x,y,z] = 0
+            matrix_cluster = matrix[x,y,z]
 
-        #         # Neighbors to search
-        #         xr = np.clip(x + np.arange(-1,2,dtype='int'), 0, sig.shape[0] - 1)
-        #         yr = np.clip(y + np.arange(-1,2,dtype='int'), 0, sig.shape[1] - 1)
-        #         inds_cand = inds_all[xr,yr,:].ravel()
-        #         inds_cand = np.delete(inds_cand, mark.ravel()[inds_cand] == False)
-        #         # [mark[xr,yr,:].ravel()]
+            # Neighbors to search
+            xr = np.clip(x + np.arange(-1,2,dtype='int'), 0, sig.shape[0] - 1)
+            yr = np.clip(y + np.arange(-1,2,dtype='int'), 0, sig.shape[1] - 1)
+            inds_cand = inds_all[xr[:,None],yr[None],:].ravel()
+            inds_cand = np.delete(inds_cand, mark.ravel()[inds_cand] == False)
 
-        #         if inds_cand.size == 0:
-        #             grow = False
-        #         else:
-        #             grow = True
+            if inds_cand.size == 0:
+                grow = False
+            else:
+                grow = True
 
-        #         # grow the cluster
-        #         while grow is True:
-        #             inds_new = np.array((),dtype='int')
+            # grow the cluster
+            while grow is True:
+                inds_new = np.array((),dtype='int')
 
-        #             keep = np.zeros(inds_cand.size, dtype='bool')
-        #             for a0 in range(inds_cand.size):
-        #                 xc,yc,zc = np.unravel_index(inds_cand[a0], sig.shape)
+                keep = np.zeros(inds_cand.size, dtype='bool')
+                for a0 in range(inds_cand.size):
+                    xc,yc,zc = np.unravel_index(inds_cand[a0], sig.shape)
 
-        #                 phi_test = phi[xc,yc,zc]
-        #                 dphi = np.mod(phi_cluster - phi_test + np.pi/2.0, np.pi) - np.pi/2.0
+                    # Angle test between orientation matrices
+                    dphi = np.min(np.arccos(np.clip((np.trace(
+                        self.symmetry_operators @ matrix[xc,yc,zc] \
+                        @ np.transpose(matrix_cluster),
+                        axis1=1, 
+                        axis2=2)-1)/2,-1,1)))
+                    # dphi = np.min(np.arccos(np.clip((np.trace(
+                    #     matrix_cluster @ \
+                    #     np.transpose(self.symmetry_operators @ matrix[xc,yc,zc],(0,2,1)),
+                    #     axis1=1, 
+                    #     axis2=2)-1)/2,-1,1)))
 
-        #                 if np.abs(dphi) < tol:
-        #                     keep[a0] = True
+                    if np.abs(dphi) < tol:
+                        keep[a0] = True
 
-        #                     sig[xc,yc,zc] = 0
-        #                     mark[xc,yc,zc] = False 
+                        sig[xc,yc,zc] = 0
+                        mark[xc,yc,zc] = False 
 
-        #                     xr = np.clip(xc + np.arange(-1,2,dtype='int'), 0, sig.shape[0] - 1)
-        #                     yr = np.clip(yc + np.arange(-1,2,dtype='int'), 0, sig.shape[1] - 1)
-        #                     inds_add = inds_all[xr,yr,:].ravel()
-        #                     inds_new = np.append(inds_new, inds_add)
+                        xr = np.clip(xc + np.arange(-1,2,dtype='int'), 0, sig.shape[0] - 1)
+                        yr = np.clip(yc + np.arange(-1,2,dtype='int'), 0, sig.shape[1] - 1)
+                        inds_add = inds_all[xr[:,None],yr[None],:].ravel()
+                        inds_new = np.append(inds_new, inds_add)
 
+                inds_grain = np.append(inds_grain, inds_cand[keep])
+                inds_cand = np.unique(np.delete(inds_new, mark.ravel()[inds_new] == False))
+                # print(inds_cand)
 
-        #             inds_grain = np.append(inds_grain, inds_cand[keep])
-        #             inds_cand = np.unique(np.delete(inds_new, mark.ravel()[inds_new] == False))
+                if inds_cand.size == 0:
+                    grow = False
 
-        #             if inds_cand.size == 0:
-        #                 grow = False
-
-        #     # convert grain to x,y coordinates, add = list
-        #     xg,yg,zg = np.unravel_index(inds_grain, sig.shape)
-        #     xyg = np.unique(np.vstack((xg,yg)), axis = 1)
-        #     sig_mean = np.mean(sig_init.ravel()[inds_grain])
-        #     self.cluster_sizes = np.append(self.cluster_sizes, xyg.shape[1])
-        #     self.cluster_sig = np.append(self.cluster_sig, sig_mean)
-        #     self.cluster_inds.append(xyg)
-        search = False
+            # convert grain to x,y coordinates, add = list
+            xg,yg,zg = np.unravel_index(inds_grain, sig.shape)
+            xyg = np.unique(np.vstack((xg,yg)), axis = 1)
+            sig_mean = np.mean(sig_init.ravel()[inds_grain])
+            self.cluster_sizes = np.append(self.cluster_sizes, xyg.shape[1])
+            self.cluster_sig = np.append(self.cluster_sig, sig_mean)
+            self.cluster_inds.append(xyg)
 
     # finish progressbar
     if progress_bar:
         update_progress(1)
-
-# def cluster_plot_size(
-#     self,
-#     area_max = None,
-#     weight_intensity = False,
-#     pixel_area = 1.0,
-#     pixel_area_units = 'px^2',
-#     figsize = (8,6),
-#     returnfig = False,
-#     ):
-#     """
-#     Plot the cluster sizes
-
-#     Parameters
-#     --------
-#     area_max: int (optional)
-#         Max area bin in pixels
-#     weight_intensity: bool
-#         Weight histogram by the peak intensity.
-#     pixel_area: float
-#         Size of pixel area unit square
-#     pixel_area_units: string
-#         Units of the pixel area 
-#     figsize: tuple
-#         Size of the figure panel
-#     returnfig: bool
-#         Setting this to true returns the figure and axis handles
-
-#     Returns
-#     --------
-#     fig, ax (optional)
-#         Figure and axes handles
-
-#     """
-
-#     if area_max is None:
-#         area_max = np.max(self.cluster_sizes)
-#     area = np.arange(area_max)
-#     sub = self.cluster_sizes.astype('int') < area_max
-#     if weight_intensity:
-#         hist = np.bincount(
-#             self.cluster_sizes[sub],
-#             weights = self.cluster_sig[sub],
-#             minlength = area_max,
-#             )
-#     else:
-#         hist = np.bincount(
-#             self.cluster_sizes[sub],
-#             minlength = area_max,
-#             )
-
-
-#     # plotting
-#     fig,ax = plt.subplots(figsize = figsize)
-#     ax.bar(
-#         area * pixel_area,
-#         hist,
-#         width = 0.8 * pixel_area,
-#         )
-
-#     ax.set_xlabel('Grain Area [' + pixel_area_units + ']')
-#     if weight_intensity:
-#         ax.set_ylabel('Total Signal [arb. units]')
-#     else:
-#         ax.set_ylabel('Number of Grains')
-
-#     if returnfig:
-#         return fig,ax
-
-
 
 
 def calculate_strain(
@@ -2292,10 +2226,10 @@ def update_progress(progress):
         status = "Halt...\r\n"
     if progress >= 1:
         progress = 1
-        status = "Done...\r\n"
+        status = "Done\r\n"
     block = int(round(barLength*progress))
     text = "\rPercent: [{0}] {1}% {2}".format( "#"*block + "-"*(barLength-block), 
-        np.round(progress*100,4), 
+        np.round(progress*100,2), 
         status)
     sys.stdout.write(text)
     sys.stdout.flush()
