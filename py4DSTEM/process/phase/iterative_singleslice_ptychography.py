@@ -1330,12 +1330,12 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
             max_batch_size = self._num_diffraction_patterns
 
         # initialization
+        self.error_iterations = []
         if store_iterations and (not hasattr(self, "object_iterations") or reset):
             self.object_iterations = []
             self.probe_iterations = []
 
         if reset:
-            self.error_iterations = []
             self._object = self._object_initial.copy()
             self._probe = self._probe_initial.copy()
             self._positions_px = self._positions_px_initial.copy()
