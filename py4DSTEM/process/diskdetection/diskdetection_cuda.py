@@ -11,7 +11,7 @@ from time import time
 import numba
 
 from emdfile import tqdmnd
-from py4DSTEM.classes import PointList, PointListArray
+from py4DSTEM import PointList, PointListArray
 from py4DSTEM.process.diskdetection.kernels import kernels
 
 
@@ -197,6 +197,11 @@ def find_Bragg_disks_CUDA(
                     blocks=blocks,
                     threads=threads,
                 )
+
+            # clean up
+            del batched_subcube, batched_crosscorr, subFFT, cc, ccc
+            cp.get_default_memory_pool().free_all_blocks()
+
 
     else:
         # Loop over all diffraction patterns
