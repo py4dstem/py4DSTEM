@@ -1944,10 +1944,10 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
         if store_iterations and (not hasattr(self, "object_iterations") or reset):
             self.object_iterations = []
             self.probe_iterations = []
-            self.error_iterations = []
 
         if reset:
             self._object = self._object_initial.copy()
+            self.error_iterations = []
             self._probe = self._probe_initial.copy()
             self._positions_px_all = self._positions_px_initial_all.copy()
 
@@ -1966,6 +1966,7 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
                     UserWarning,
                 )
             else:
+                self.error_iterations = []
                 if use_projection_scheme:
                     self._exit_waves = [None] * self._num_tilts
                 else:
@@ -2290,10 +2291,10 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
                     shrinkage_rad=shrinkage_rad,
                 )
 
+            self.error_iterations.append(error.item())
             if store_iterations:
                 self.object_iterations.append(asnumpy(self._object.copy()))
                 self.probe_iterations.append(asnumpy(self._probe.copy()))
-                self.error_iterations.append(error.item())
 
         # store result
         self.object = asnumpy(self._object)
