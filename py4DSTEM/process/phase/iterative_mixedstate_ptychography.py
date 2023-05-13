@@ -198,6 +198,7 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
         force_com_rotation: float = None,
         force_com_transpose: float = None,
         force_com_shifts: float = None,
+        object_fov_mask: np.ndarray = None,
         **kwargs,
     ):
         """
@@ -246,6 +247,9 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
             Amplitudes come from diffraction patterns shifted with
             the CoM in the upper left corner for each probe unless
             shift is overwritten.
+        object_fov_mask: np.ndarray (boolean)
+            Boolean mask of FOV. Used to calculate additional shrinkage of object
+            If None, probe_overlap intensity is thresholded
 
         Returns
         --------
@@ -466,6 +470,18 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
         self._probe_initial = self._probe.copy()
         self._probe_initial_fft_amplitude = xp.abs(xp.fft.fft2(self._probe_initial))
 
+        # overlaps
+        shifted_probes = fft_shift(self._probe[0], self._positions_px_fractional, xp)
+        probe_intensities = xp.abs(shifted_probes) ** 2
+        probe_overlap = self._sum_overlapping_patches_bincounts(probe_intensities)
+        probe_overlap = self._gaussian_filter(probe_overlap,1.0)
+
+        if object_fov_mask is None:
+            self._object_fov_mask = asnumpy(probe_overlap > 0.25 * probe_overlap.max())
+        else:
+            self._object_fov_mask = np.asarray(object_fov_mask)
+        self._object_fov_mask_inverse = np.invert(self._object_fov_mask)
+        
         if plot_probe_overlaps:
             figsize = kwargs.get("figsize", (9, 4))
             cmap = kwargs.get("cmap", "Greys_r")
@@ -488,13 +504,6 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
                 hue_start=hue_start,
                 invert=invert,
             )
-
-            # overlaps
-            shifted_probes = fft_shift(
-                self._probe[0], self._positions_px_fractional, xp
-            )
-            probe_intensities = xp.abs(shifted_probes) ** 2
-            probe_overlap = self._sum_overlapping_patches_bincounts(probe_intensities)
 
             extent = [
                 0,
@@ -1116,9 +1125,11 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
         butterworth_filter,
         q_lowpass,
         q_highpass,
+        butterworth_order,
         orthogonalize_probe,
         object_positivity,
         shrinkage_rad,
+        object_mask,
     ):
         """
         Ptychographic constraints operator.
@@ -1152,12 +1163,16 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
             Cut-off frequency in A^-1 for low-pass butterworth filter
         q_highpass: float
             Cut-off frequency in A^-1 for high-pass butterworth filter
+        butterworth_order: float
+            Butterworth filter order. Smaller gives a smoother filter
         orthogonalize_probe: bool
             If True, probe will be orthogonalized
         object_positivity: bool
             If True, clips negative potential values
         shrinkage_rad: float
             Phase shift in radians to be subtracted from the potential at each iteration
+        object_mask: np.ndarray (boolean)
+            If not None, used to calculate additional shrinkage using masked-mean of object
 
         Returns
         --------
@@ -1179,15 +1194,23 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
                 current_object,
                 q_lowpass,
                 q_highpass,
+                butterworth_order,
             )
 
+        if shrinkage_rad > 0.0 or object_mask is not None:
+            current_object = self._object_shrinkage_constraint(
+                current_object,
+                shrinkage_rad,
+                object_mask,
+                )
+        
         if self._object_type == "complex":
             current_object = self._object_threshold_constraint(
                 current_object, pure_phase_object
             )
         elif object_positivity:
             current_object = self._object_positivity_constraint(
-                current_object, shrinkage_rad
+                current_object
             )
 
         if fix_probe_fourier_amplitude:
@@ -1236,8 +1259,10 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
         butterworth_filter_iter: int = np.inf,
         q_lowpass: float = None,
         q_highpass: float = None,
+        butterworth_order: float = 2,
         object_positivity: bool = True,
-        shrinkage_rad: float = None,
+        shrinkage_rad: float = 0.0,
+        fix_potential_baseline: bool = True,
         switch_object_iter: int = np.inf,
         store_iterations: bool = False,
         progress_bar: bool = True,
@@ -1295,10 +1320,14 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
             Cut-off frequency in A^-1 for low-pass butterworth filter
         q_highpass: float
             Cut-off frequency in A^-1 for high-pass butterworth filter
+        butterworth_order: float
+            Butterworth filter order. Smaller gives a smoother filter
         object_positivity: bool, optional
             If True, forces object to be positive
         shrinkage_rad: float
             Phase shift in radians to be subtracted from the potential at each iteration
+        fix_potential_baseline: boool
+            If true, the potential mean outside the FOV is forced to zero at each iteration
         switch_object_iter: int, optional
             Iteration to switch object type between 'complex' and 'potential' or between
             'potential' and 'complex'
@@ -1606,9 +1635,11 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
                 and (q_lowpass is not None or q_highpass is not None),
                 q_lowpass=q_lowpass,
                 q_highpass=q_highpass,
+                butterworth_order = butterworth_order,
                 orthogonalize_probe=orthogonalize_probe,
                 object_positivity=object_positivity,
                 shrinkage_rad=shrinkage_rad,
+                object_mask = self._object_fov_mask_inverse if fix_potential_baseline else None,
                 pure_phase_object=a0 < pure_phase_object_iter
                 and self._object_type == "complex",
             )

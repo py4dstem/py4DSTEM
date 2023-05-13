@@ -29,12 +29,146 @@ class PtychographicConstraints:
             Constrained object estimate
         """
         xp = self._xp
-        phase = xp.exp(1.0j * xp.angle(current_object))
+        phase = xp.angle(current_object)
+
         if pure_phase_object:
             amplitude = 1.0
         else:
             amplitude = xp.minimum(xp.abs(current_object), 1.0)
-        return amplitude * phase
+
+        return amplitude * xp.exp(1.0j*phase)
+
+    def _object_shrinkage_constraint(self, current_object, shrinkage_rad, object_mask):
+        """
+        Ptychographic shrinkage constraint.
+        Used to ensure electrostatic potential is positive.
+
+        Parameters
+        --------
+        current_object: np.ndarray
+            Current object estimate
+        shrinkage_rad: float
+            Phase shift in radians to be subtracted from the potential at each iteration
+        object_mask: np.ndarray (boolean)
+            If not None, used to calculate additional shrinkage using masked-mean of object
+
+        Returns
+        --------
+        constrained_object: np.ndarray
+            Constrained object estimate
+        """
+        xp = self._xp 
+
+        if self._object_type == "complex":
+            phase = xp.angle(current_object)
+            amp = xp.abs(current_object)
+        
+            if object_mask is not None:
+                shrinkage_rad += phase[...,object_mask].mean()
+
+            phase -= shrinkage_rad
+            
+            current_object = amp * xp.exp(1.0j * phase)
+        else:
+            if object_mask is not None:
+                shrinkage_rad += current_object[...,object_mask].mean()
+
+            current_object -= shrinkage_rad
+
+        return current_object
+
+    def _object_positivity_constraint(self, current_object):
+        """
+        Ptychographic positivity constraint.
+        Used to ensure potential is positive.
+
+        Parameters
+        --------
+        current_object: np.ndarray
+            Current object estimate
+        
+        Returns
+        --------
+        constrained_object: np.ndarray
+            Constrained object estimate
+        """
+        xp = self._xp
+        
+        return xp.maximum(current_object, 0.0)
+
+    def _object_gaussian_constraint(
+        self, current_object, gaussian_filter_sigma, pure_phase_object
+    ):
+        """
+        Ptychographic smoothness constraint.
+        Used for blurring object.
+
+        Parameters
+        --------
+        current_object: np.ndarray
+            Current object estimate
+        gaussian_filter_sigma: float
+            Standard deviation of gaussian kernel
+        pure_phase_object: bool
+            If True, gaussian blur performed on phase only
+
+        Returns
+        --------
+        constrained_object: np.ndarray
+            Constrained object estimate
+        """
+        xp = self._xp
+        gaussian_filter = self._gaussian_filter
+
+        if pure_phase_object:
+            phase = xp.angle(current_object)
+            phase = gaussian_filter(phase, gaussian_filter_sigma)
+            current_object = xp.exp(1.0j * phase)
+        else:
+            current_object = gaussian_filter(current_object, gaussian_filter_sigma)
+
+        return current_object
+
+    def _object_butterworth_constraint(self, current_object, q_lowpass, q_highpass, butterworth_order):
+        """
+        Ptychographic butterworth filter.
+        Used for low/high-pass filtering object.
+
+        Parameters
+        --------
+        current_object: np.ndarray
+            Current object estimate
+        q_lowpass: float
+            Cut-off frequency in A^-1 for low-pass butterworth filter
+        q_highpass: float
+            Cut-off frequency in A^-1 for high-pass butterworth filter
+        butterworth_order: float
+            Butterworth filter order. Smaller gives a smoother filter
+
+        Returns
+        --------
+        constrained_object: np.ndarray
+            Constrained object estimate
+        """
+        xp = self._xp
+        qx = xp.fft.fftfreq(current_object.shape[0], self.sampling[0])
+        qy = xp.fft.fftfreq(current_object.shape[1], self.sampling[1])
+
+        qya, qxa = xp.meshgrid(qy, qx)
+        qra = xp.sqrt(qxa**2 + qya**2)
+
+        env = xp.ones_like(qra)
+        if q_highpass:
+            env *= 1 - 1 / (1 + (qra / q_highpass) ** (2*butterworth_order))
+        if q_lowpass:
+            env *= 1 / (1 + (qra / q_lowpass) ** (2*butterworth_order))
+
+        current_object = xp.fft.ifft2(xp.fft.fft2(current_object) * env)
+
+        if self._object_type == "potential":
+            current_object = xp.real(current_object)
+
+        return current_object
 
     def _object_denoise_tv_chambolle(
         self,
@@ -83,6 +217,7 @@ class PtychographicConstraints:
         """
         xp = self._xp
 
+        current_object_sum = xp.sum(current_object)
         if axis is None:
             ndim = xp.arange(current_object.ndim).tolist()
         elif isinstance(axis, tuple):
@@ -164,103 +299,7 @@ class PtychographicConstraints:
                 slices = array_slice(ndim[ax], current_object.ndim, 1, -1)
                 updated_object = updated_object[slices]
 
-        return updated_object / xp.sum(updated_object) * xp.sum(current_object)
-
-    def _object_positivity_constraint(self, current_object, shrinkage_rad):
-        """
-        Ptychographic positivity constraint.
-        Used to ensure electrostatic potential is positive.
-
-        Parameters
-        --------
-        current_object: np.ndarray
-            Current object estimate
-        shrinkage_rad: float
-            Phase shift in radians to be subtracted from the potential at each iteration
-
-        Returns
-        --------
-        constrained_object: np.ndarray
-            Constrained object estimate
-        """
-        xp = self._xp
-
-        if shrinkage_rad is not None:
-            current_object -= shrinkage_rad
-
-        return xp.maximum(current_object, 0.0)
-
-    def _object_gaussian_constraint(
-        self, current_object, gaussian_filter_sigma, pure_phase_object
-    ):
-        """
-        Ptychographic smoothness constraint.
-        Used for blurring object.
-
-        Parameters
-        --------
-        current_object: np.ndarray
-            Current object estimate
-        gaussian_filter_sigma: float
-            Standard deviation of gaussian kernel
-        pure_phase_object: bool
-            If True, gaussian blur performed on phase only
-
-        Returns
-        --------
-        constrained_object: np.ndarray
-            Constrained object estimate
-        """
-        xp = self._xp
-        gaussian_filter = self._gaussian_filter
-
-        if pure_phase_object:
-            phase = xp.angle(current_object)
-            phase = gaussian_filter(phase, gaussian_filter_sigma)
-            current_object = xp.exp(1.0j * phase)
-        else:
-            current_object = gaussian_filter(current_object, gaussian_filter_sigma)
-
-        return current_object
-
-    def _object_butterworth_constraint(self, current_object, q_lowpass, q_highpass):
-        """
-        Ptychographic butterworth filter.
-        Used for low/high-pass filtering object.
-
-        Parameters
-        --------
-        current_object: np.ndarray
-            Current object estimate
-        q_lowpass: float
-            Cut-off frequency in A^-1 for low-pass butterworth filter
-        q_highpass: float
-            Cut-off frequency in A^-1 for high-pass butterworth filter
-
-        Returns
-        --------
-        constrained_object: np.ndarray
-            Constrained object estimate
-        """
-        xp = self._xp
-        qx = xp.fft.fftfreq(current_object.shape[0], self.sampling[0])
-        qy = xp.fft.fftfreq(current_object.shape[1], self.sampling[1])
-
-        qya, qxa = xp.meshgrid(qy, qx)
-        qra = xp.sqrt(qxa**2 + qya**2)
-
-        env = xp.ones_like(qra)
-        if q_highpass:
-            env *= 1 - 1 / (1 + (qra / q_highpass) ** 4)
-        if q_lowpass:
-            env *= 1 / (1 + (qra / q_lowpass) ** 4)
-
-        current_object = xp.fft.ifft2(xp.fft.fft2(current_object) * env)
-
-        if self._object_type == "potential":
-            current_object = xp.real(current_object)
-
-        return current_object
+        return updated_object / xp.sum(updated_object) * current_object_sum
 
     def _probe_center_of_mass_constraint(self, current_probe):
         """

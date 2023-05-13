@@ -184,6 +184,7 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
         force_com_rotation: float = None,
         force_com_transpose: float = None,
         force_com_shifts: float = None,
+        object_fov_mask: np.ndarray = None,
         **kwargs,
     ):
         """
@@ -229,6 +230,9 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
             Amplitudes come from diffraction patterns shifted with
             the CoM in the upper left corner for each probe unless
             shift is overwritten.
+        object_fov_mask: np.ndarray (boolean)
+            Boolean mask of FOV. Used to calculate additional shrinkage of object
+            If None, probe_overlap intensity is thresholded
 
         Returns
         --------
@@ -693,6 +697,18 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
         self._probe_initial = self._probe.copy()
         self._probe_initial_fft_amplitude = xp.abs(xp.fft.fft2(self._probe_initial))
 
+        # overlaps
+        shifted_probes = fft_shift(self._probe, self._positions_px_fractional, xp)
+        probe_intensities = xp.abs(shifted_probes) ** 2
+        probe_overlap = self._sum_overlapping_patches_bincounts(probe_intensities)
+        probe_overlap = self._gaussian_filter(probe_overlap,1.0)
+
+        if object_fov_mask is None:
+            self._object_fov_mask = asnumpy(probe_overlap > 0.25 * probe_overlap.max())
+        else:
+            self._object_fov_mask = np.asarray(object_fov_mask)
+        self._object_fov_mask_inverse = np.invert(self._object_fov_mask)
+        
         if plot_probe_overlaps:
             figsize = kwargs.get("figsize", (9, 4))
             cmap = kwargs.get("cmap", "Greys_r")
@@ -715,11 +731,6 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
                 hue_start=hue_start,
                 invert=invert,
             )
-
-            # overlaps
-            shifted_probes = fft_shift(self._probe, self._positions_px_fractional, xp)
-            probe_intensities = xp.abs(shifted_probes) ** 2
-            probe_overlap = self._sum_overlapping_patches_bincounts(probe_intensities)
 
             extent = [
                 0,
@@ -2159,296 +2170,6 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
 
         return current_object, current_probe
 
-    def _warmup_object_threshold_constraint(self, current_object, pure_phase_object):
-        """
-        Ptychographic threshold constraint.
-        Used for avoiding the scaling ambiguity between probe and object.
-
-        Parameters
-        --------
-        current_object: np.ndarray
-            Current object estimate
-        pure_phase_object: bool
-            If True, object amplitude is set to unity
-
-        Returns
-        --------
-        constrained_object: np.ndarray
-            Constrained object estimate
-        """
-        xp = self._xp
-
-        electrostatic_obj, _ = current_object
-
-        phase_e = xp.exp(1.0j * xp.angle(electrostatic_obj))
-
-        if pure_phase_object:
-            amplitude_e = 1.0
-        else:
-            amplitude_e = xp.minimum(xp.abs(electrostatic_obj), 1.0)
-
-        electrostatic_obj = amplitude_e * phase_e
-
-        current_object = (electrostatic_obj, None)
-
-        return current_object
-
-    def _object_threshold_constraint(self, current_object, pure_phase_object):
-        """
-        Ptychographic threshold constraint.
-        Used for avoiding the scaling ambiguity between probe and object.
-
-        Parameters
-        --------
-        current_object: np.ndarray
-            Current object estimate
-        pure_phase_object: bool
-            If True, object amplitude is set to unity
-
-        Returns
-        --------
-        constrained_object: np.ndarray
-            Constrained object estimate
-        """
-        xp = self._xp
-
-        electrostatic_obj, magnetic_obj = current_object
-
-        phase_e = xp.exp(1.0j * xp.angle(electrostatic_obj))
-
-        if pure_phase_object:
-            amplitude_e = 1.0
-        else:
-            amplitude_e = xp.minimum(xp.abs(electrostatic_obj), 1.0)
-
-        electrostatic_obj = amplitude_e * phase_e
-        current_object = (electrostatic_obj, magnetic_obj)
-
-        return current_object
-
-    def _warmup_object_gaussian_constraint(
-        self, current_object, gaussian_filter_sigma, pure_phase_object
-    ):
-        """
-        Ptychographic smoothness constraint.
-        Used for blurring object.
-
-        Parameters
-        --------
-        current_object: np.ndarray
-            Current object estimate
-        gaussian_filter_sigma: float
-            Standard deviation of gaussian kernel
-        pure_phase_object: bool
-            If True, gaussian blur performed on phase only
-
-        Returns
-        --------
-        constrained_object: np.ndarray
-            Constrained object estimate
-        """
-        xp = self._xp
-        gaussian_filter = self._gaussian_filter
-
-        electrostatic_obj, _ = current_object
-
-        if pure_phase_object:
-            phase_e = xp.angle(electrostatic_obj)
-            phase_e = gaussian_filter(phase_e, gaussian_filter_sigma)
-            electrostatic_obj = xp.exp(1.0j * phase_e)
-        else:
-            electrostatic_obj = gaussian_filter(
-                electrostatic_obj, gaussian_filter_sigma
-            )
-
-        current_object = (electrostatic_obj, None)
-
-        return current_object
-
-    def _object_gaussian_constraint(
-        self,
-        current_object,
-        gaussian_filter_sigma_e,
-        gaussian_filter_sigma_m,
-        pure_phase_object,
-    ):
-        """
-        Ptychographic smoothness constraint.
-        Used for blurring object.
-
-        Parameters
-        --------
-        current_object: np.ndarray
-            Current object estimate
-        gaussian_filter_sigma_e: float
-            Standard deviation of gaussian kernel for electrostatic object
-        gaussian_filter_sigma_m: float
-            Standard deviation of gaussian kernel for magnetic object
-        pure_phase_object: bool
-            If True, gaussian blur performed on phase only
-
-        Returns
-        --------
-        constrained_object: np.ndarray
-            Constrained object estimate
-        """
-        xp = self._xp
-        gaussian_filter = self._gaussian_filter
-
-        electrostatic_obj, magnetic_obj = current_object
-
-        if gaussian_filter_sigma_m:
-            magnetic_obj = gaussian_filter(magnetic_obj, gaussian_filter_sigma_m)
-
-        if gaussian_filter_sigma_e:
-            if pure_phase_object:
-                phase_e = xp.angle(electrostatic_obj)
-                phase_e = gaussian_filter(phase_e, gaussian_filter_sigma_e)
-                electrostatic_obj = xp.exp(1.0j * phase_e)
-            else:
-                electrostatic_obj = gaussian_filter(
-                    electrostatic_obj, gaussian_filter_sigma_e
-                )
-
-        current_object = (electrostatic_obj, magnetic_obj)
-
-        return current_object
-
-    def _warmup_object_butterworth_constraint(
-        self,
-        current_object,
-        q_lowpass,
-        q_highpass,
-    ):
-        """
-        High pass butterworth filter
-
-        Parameters
-        --------
-        current_object: np.ndarray
-            Current object estimate
-        q_lowpass: float
-            Cut-off frequency in A^-1 for low-pass butterworth filter
-        q_highpass: float
-            Cut-off frequency in A^-1 for high-pass butterworth filter
-
-        Returns
-        --------
-        constrained_object: np.ndarray
-            Constrained object estimate
-        """
-        xp = self._xp
-
-        electrostatic_obj, _ = current_object
-
-        qx = xp.fft.fftfreq(electrostatic_obj.shape[0], self.sampling[0])
-        qy = xp.fft.fftfreq(electrostatic_obj.shape[1], self.sampling[1])
-        qya, qxa = xp.meshgrid(qy, qx)
-        qra = xp.sqrt(qxa**2 + qya**2)
-
-        env = xp.ones_like(qra)
-        if q_highpass:
-            env *= 1 - 1 / (1 + (qra / q_highpass) ** 4)
-        if q_lowpass:
-            env *= 1 / (1 + (qra / q_lowpass) ** 4)
-
-        electrostatic_obj = xp.fft.ifft2(xp.fft.fft2(electrostatic_obj) * env)
-        if self._object_type == "potential":
-            electrostatic_obj = xp.real(electrostatic_obj)
-
-        current_object = (electrostatic_obj, None)
-
-        return current_object
-
-    def _object_butterworth_constraint(
-        self,
-        current_object,
-        q_lowpass_e,
-        q_lowpass_m,
-        q_highpass_e,
-        q_highpass_m,
-    ):
-        """
-        High pass butterworth filter
-
-        Parameters
-        --------
-        current_object: np.ndarray
-            Current object estimate
-        q_lowpass_e: float
-            Cut-off frequency in A^-1 for low-pass filtering electrostatic object
-        q_lowpass_m: float
-            Cut-off frequency in A^-1 for low-pass filtering magnetic object
-        q_highpass_e: float
-            Cut-off frequency in A^-1 for high-pass filtering electrostatic object
-        q_highpass_m: float
-            Cut-off frequency in A^-1 for high-pass filtering magnetic object
-
-        Returns
-        --------
-        constrained_object: np.ndarray
-            Constrained object estimate
-        """
-        xp = self._xp
-        electrostatic_obj, magnetic_obj = current_object
-
-        qx = xp.fft.fftfreq(electrostatic_obj.shape[0], self.sampling[0])
-        qy = xp.fft.fftfreq(electrostatic_obj.shape[1], self.sampling[1])
-        qya, qxa = xp.meshgrid(qy, qx)
-        qra = xp.sqrt(qxa**2 + qya**2)
-
-        env_e = xp.ones_like(qra)
-        if q_highpass_e:
-            env_e *= 1 - 1 / (1 + (qra / q_highpass_e) ** 4)
-        if q_lowpass_e:
-            env_e *= 1 / (1 + (qra / q_lowpass_e) ** 4)
-
-        electrostatic_obj = xp.fft.ifft2(xp.fft.fft2(electrostatic_obj) * env_e)
-
-        if self._object_type == "potential":
-            electrostatic_obj = xp.real(electrostatic_obj)
-
-        env_m = xp.ones_like(qra)
-        if q_highpass_m:
-            env_e *= 1 - 1 / (1 + (qra / q_highpass_m) ** 4)
-        if q_lowpass_m:
-            env_m *= 1 / (1 + (qra / q_lowpass_m) ** 4)
-
-        magnetic_obj = xp.real(xp.fft.ifft2(xp.fft.fft2(magnetic_obj) * env_m))
-
-        current_object = (electrostatic_obj, magnetic_obj)
-
-        return current_object
-
-    def _object_positivity_constraint(self, current_object, shrinkage_rad):
-        """
-        Ptychographic positivity constraint.
-        Used to ensure electrostatic potential is positive.
-
-        Parameters
-        --------
-        current_object: np.ndarray
-            Current object estimate
-        shrinkage_rad: float
-            Phase shift in radians to be subtracted from the potential at each iteration
-
-        Returns
-        --------
-        constrained_object: np.ndarray
-            Constrained object estimate
-        """
-        xp = self._xp
-
-        electrostatic_obj, magnetic_obj = current_object
-
-        if shrinkage_rad is not None:
-            electrostatic_obj -= shrinkage_rad
-
-        electrostatic_obj = xp.maximum(electrostatic_obj, 0.0)
-        current_object = (electrostatic_obj, magnetic_obj)
-
-        return current_object
-
     def _probe_center_of_mass_constraint(self, current_probe):
         """
         Ptychographic threshold constraint.
@@ -2496,9 +2217,11 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
         q_lowpass_m,
         q_highpass_e,
         q_highpass_m,
+        butterworth_order,
         warmup_iteration,
         object_positivity,
         shrinkage_rad,
+        object_mask,
     ):
         """
         Ptychographic constraints operator.
@@ -2538,12 +2261,16 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
             Cut-off frequency in A^-1 for high-pass filtering electrostatic object
         q_highpass_m: float
             Cut-off frequency in A^-1 for high-pass filtering magnetic object
+        butterworth_order: float
+            Butterworth filter order. Smaller gives a smoother filter
         warmup_iteration: bool
             If True, constraints electrostatic object only
         object_positivity: bool
             If True, clips negative potential values
         shrinkage_rad: float
             Phase shift in radians to be subtracted from the potential at each iteration
+        object_mask: np.ndarray (boolean)
+            If not None, used to calculate additional shrinkage using masked-mean of object
 
         Returns
         --------
@@ -2554,58 +2281,57 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
         constrained_positions: np.ndarray
             Constrained positions estimate
         """
+        
+        electrostatic_obj, magnetic_obj = current_object
 
         if gaussian_filter:
-            if warmup_iteration:
-                current_object = self._warmup_object_gaussian_constraint(
-                    current_object, gaussian_filter_sigma_e, pure_phase_object
-                )
-            else:
-                current_object = self._object_gaussian_constraint(
-                    current_object,
-                    gaussian_filter_sigma_e,
+            electrostatic_obj = self._object_gaussian_constraint(
+                electrostatic_obj,
+                gaussian_filter_sigma_e,
+                pure_phase_object
+            )
+            if not warmup_iteration: 
+                magnetic_obj = self._object_gaussian_constraint(
+                    magnetic_obj,
                     gaussian_filter_sigma_m,
                     pure_phase_object,
                 )
 
         if butterworth_filter:
-            if warmup_iteration:
-                current_object = self._warmup_object_butterworth_constraint(
-                    current_object,
-                    q_lowpass_e,
-                    q_highpass_e,
-                )
-            else:
-                current_object = self._object_butterworth_constraint(
-                    current_object,
-                    q_lowpass_e,
+            electrostatic_obj = self._object_butterworth_constraint(
+                electrostatic_obj,
+                q_lowpass_e,
+                q_highpass_e,
+                butterworth_order,
+            )
+            if not warmup_iteration:
+                magnetic_obj = self._object_butterworth_constraint(
+                    magnetic_obj,
                     q_lowpass_m,
-                    q_highpass_e,
                     q_highpass_m,
+                    butterworth_order,
                 )
 
-        if warmup_iteration:
-            if self._object_type == "complex":
-                current_object = self._warmup_object_threshold_constraint(
-                    current_object, pure_phase_object
+                if self._object_type == "complex":
+                    magnetic_obj = magnetic_obj.real
+
+        if shrinkage_rad > 0.0 or object_mask is not None:
+            electrostatic_obj = self._object_shrinkage_constraint(
+                electrostatic_obj,
+                shrinkage_rad,
+                object_mask,
                 )
-            elif object_positivity:
-                current_object = self._object_positivity_constraint(
-                    current_object, shrinkage_rad
-                )
-            current_object = self._warmup_object_threshold_constraint(
-                current_object, pure_phase_object
+        
+        if self._object_type == "complex":
+            electrostatic_obj = self._object_threshold_constraint(
+                electrostatic_obj, pure_phase_object
+            )
+        elif object_positivity:
+            electrostatic_obj = self._object_positivity_constraint(
+                electrostatic_obj
             )
 
-        else:
-            if self._object_type == "complex":
-                current_object = self._object_threshold_constraint(
-                    current_object, pure_phase_object
-                )
-            elif object_positivity:
-                current_object = self._object_positivity_constraint(
-                    current_object, shrinkage_rad
-                )
+        current_object = (electrostatic_obj, magnetic_obj)
 
         if fix_probe_fourier_amplitude:
             current_probe = self._probe_fourier_amplitude_constraint(
@@ -2653,8 +2379,10 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
         q_lowpass_m: float = None,
         q_highpass_e: float = None,
         q_highpass_m: float = None,
+        butterworth_order: float = 2,
         object_positivity: bool = True,
-        shrinkage_rad: float = None,
+        shrinkage_rad: float = 0.0,
+        fix_potential_baseline: bool = True,
         switch_object_iter: int = np.inf,
         store_iterations: bool = False,
         progress_bar: bool = True,
@@ -2718,10 +2446,14 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
             Cut-off frequency in A^-1 for high-pass filtering electrostatic object
         q_highpass_m: float
             Cut-off frequency in A^-1 for high-pass filtering magnetic object
+        butterworth_order: float
+            Butterworth filter order. Smaller gives a smoother filter
         object_positivity: bool, optional
             If True, forces object to be positive
         shrinkage_rad: float
             Phase shift in radians to be subtracted from the potential at each iteration
+        fix_potential_baseline: boool
+            If true, the potential mean outside the FOV is forced to zero at each iteration
         switch_object_iter: int, optional
             Iteration to switch object type between 'complex' and 'potential' or between
             'potential' and 'complex'
@@ -3056,8 +2788,10 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
                 q_lowpass_m=q_lowpass_m,
                 q_highpass_e=q_highpass_e,
                 q_highpass_m=q_highpass_m,
+                butterworth_order = butterworth_order,
                 object_positivity=object_positivity,
                 shrinkage_rad=shrinkage_rad,
+                object_mask = self._object_fov_mask_inverse if fix_potential_baseline else None,
                 pure_phase_object=a0 < pure_phase_object_iter
                 and self._object_type == "complex",
             )
