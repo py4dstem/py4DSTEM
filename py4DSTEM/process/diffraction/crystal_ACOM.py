@@ -1707,7 +1707,7 @@ def cluster_grains(
 
 def cluster_orientation_map(
     self,
-    stripe_width = 1,
+    stripe_width = (2,2),
     area_min = 2,
     ):
     """
@@ -1741,11 +1741,11 @@ def cluster_orientation_map(
         self.orientation_map.num_x,
         self.orientation_map.num_y))
 
-    # coordinates
-    xa,ya = np.meshgrid(
-        range(self.orientation_map.num_x),
-        range(self.orientation_map.num_y),
-        indexing = 'ij')
+    # # coordinates
+    # xa,ya = np.meshgrid(
+    #     range(self.orientation_map.num_x),
+    #     range(self.orientation_map.num_y),
+    #     indexing = 'ij')
 
     # Loop over grains to determine number in each pixel
     for a0 in range(self.cluster_sizes.shape[0]):
@@ -1759,8 +1759,19 @@ def cluster_orientation_map(
     im_stripe = im_count >= 2
     im_single = np.logical_not(im_stripe)
 
+    # prefactor for stripes
+    if stripe_width[0] == 0:
+        dx = 0
+    else:
+        dx = 1/stripe_width[0]
+    if stripe_width[1] == 0:
+        dy = 0
+    else:
+        dy = 1/stripe_width[1]
+
+
     # loop over grains
-    for a0 in range(1):
+    for a0 in range(self.cluster_sizes.shape[0]):
         if self.cluster_sizes[a0] >= area_min:
             im_grain[:] = False
             im_grain[
@@ -1768,21 +1779,44 @@ def cluster_orientation_map(
                 self.cluster_inds[a0][1,:],
             ] = True
 
+            # non-overlapping grains
             sub = np.logical_and(
                 im_grain,
                 im_single)
-            print(np.sum(sub))
-
+            x,y = np.squeeze(np.unravel_index(np.where(sub.ravel()), im_grain.shape))
+            for a1 in range(x.size):
+                orientation_map.set_orientation(
+                    self.cluster_orientation[a0],
+                    x[a1],
+                    y[a1])
+                    
+            # overlapping grains
             sub = np.logical_and(
                 im_grain,
                 im_stripe)
-            print(np.sum(sub))
-
-
-
-
-    fig,ax = plt.subplots(figsize=(8,8))
-    ax.imshow(im_stripe)
+            x,y = np.squeeze(np.unravel_index(np.where(sub.ravel()), im_grain.shape))
+            for a1 in range(x.size):
+                d = np.mod(
+                    x[a1]*dx + \
+                    y[a1]*dy + \
+                    im_mark[x[a1],y[a1]] + \
+                    + 0.5,
+                    im_count[x[a1],y[a1]])
+                if d < 1.0:
+                    orientation_map.set_orientation(
+                        self.cluster_orientation[a0],
+                        x[a1],
+                        y[a1])
+                im_mark[x[a1],y[a1]] += 1
+                    
+            # print(np.sum(sub))
+    # fig,ax = plt.subplots(figsize=(12,12))
+    # ax.imshow(im_stripe)
+    # ax.scatter(
+    #     y,
+    #     x,
+    #     s = 1,
+    #     c = 'r')
 
 
 
