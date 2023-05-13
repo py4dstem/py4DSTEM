@@ -1716,13 +1716,17 @@ def cluster_orientation_map(
 
     Parameters
     --------
-    stripe_width: int
+    stripe_width: (int,ind)
         Width of strips in the overlapping regions.
+        Kind of janky but it mostly works!
+    area_min: (int)
+        Minimum size of grains to include
 
     Returns
     --------
     
     orientation_map
+        The clustered orientation map
 
     """
 
@@ -1783,7 +1787,9 @@ def cluster_orientation_map(
             sub = np.logical_and(
                 im_grain,
                 im_single)
-            x,y = np.squeeze(np.unravel_index(np.where(sub.ravel()), im_grain.shape))
+            x,y = np.unravel_index(np.where(sub.ravel()), im_grain.shape)
+            x = np.atleast_1d(np.squeeze(x))
+            y = np.atleast_1d(np.squeeze(y))
             for a1 in range(x.size):
                 orientation_map.set_orientation(
                     self.cluster_orientation[a0],
@@ -1794,7 +1800,9 @@ def cluster_orientation_map(
             sub = np.logical_and(
                 im_grain,
                 im_stripe)
-            x,y = np.squeeze(np.unravel_index(np.where(sub.ravel()), im_grain.shape))
+            x,y = np.unravel_index(np.where(sub.ravel()), im_grain.shape)
+            x = np.atleast_1d(np.squeeze(x))
+            y = np.atleast_1d(np.squeeze(y))
             for a1 in range(x.size):
                 d = np.mod(
                     x[a1]*dx + \
@@ -1802,24 +1810,13 @@ def cluster_orientation_map(
                     im_mark[x[a1],y[a1]] + \
                     + 0.5,
                     im_count[x[a1],y[a1]])
+
                 if d < 1.0:
                     orientation_map.set_orientation(
                         self.cluster_orientation[a0],
                         x[a1],
                         y[a1])
                 im_mark[x[a1],y[a1]] += 1
-                    
-            # print(np.sum(sub))
-    # fig,ax = plt.subplots(figsize=(12,12))
-    # ax.imshow(im_stripe)
-    # ax.scatter(
-    #     y,
-    #     x,
-    #     s = 1,
-    #     c = 'r')
-
-
-
 
     return orientation_map
 
