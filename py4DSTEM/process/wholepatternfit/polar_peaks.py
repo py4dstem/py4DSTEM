@@ -436,9 +436,8 @@ class PolarPeaks:
                 # Neighbors to search
                 xr = np.clip(x + np.arange(-1,2,dtype='int'), 0, sig.shape[0] - 1)
                 yr = np.clip(y + np.arange(-1,2,dtype='int'), 0, sig.shape[1] - 1)
-                inds_cand = inds_all[xr,yr,:].ravel()
+                inds_cand = inds_all[xr[:,None],yr[None],:].ravel()
                 inds_cand = np.delete(inds_cand, mark.ravel()[inds_cand] == False)
-                # [mark[xr,yr,:].ravel()]
 
                 if inds_cand.size == 0:
                     grow = False
@@ -464,7 +463,7 @@ class PolarPeaks:
 
                             xr = np.clip(xc + np.arange(-1,2,dtype='int'), 0, sig.shape[0] - 1)
                             yr = np.clip(yc + np.arange(-1,2,dtype='int'), 0, sig.shape[1] - 1)
-                            inds_add = inds_all[xr,yr,:].ravel()
+                            inds_add = inds_all[xr[:,None],yr[None],:].ravel()
                             inds_new = np.append(inds_new, inds_add)
 
 
