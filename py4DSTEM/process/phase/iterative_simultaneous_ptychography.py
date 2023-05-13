@@ -2909,7 +2909,6 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
         if store_iterations and (not hasattr(self, "object_iterations") or reset):
             self.object_iterations = []
             self.probe_iterations = []
-            self.error_iterations = []
 
         if reset:
             self._object = (
@@ -2917,6 +2916,7 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
                 self._object_initial[1].copy(),
             )
             self._probe = self._probe_initial.copy()
+            self.error_iterations = []
             self._positions_px = self._positions_px_initial.copy()
             self._positions_px_fractional = self._positions_px - xp.round(
                 self._positions_px
@@ -2937,6 +2937,7 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
                     UserWarning,
                 )
             else:
+                self.error_iterations = []
                 self._exit_waves = (None,) * self._num_sim_measurements
 
         # Probe support mask initialization
@@ -3083,6 +3084,7 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
                 and self._object_type == "complex",
             )
 
+            self.error_iterations.append(error.item())
             if store_iterations:
                 if a0 < warmup_iter:
                     self.object_iterations.append(
@@ -3096,7 +3098,6 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
                         )
                     )
                 self.probe_iterations.append(asnumpy(self._probe.copy()))
-                self.error_iterations.append(error.item())
 
         # store result
         if a0 < warmup_iter:
