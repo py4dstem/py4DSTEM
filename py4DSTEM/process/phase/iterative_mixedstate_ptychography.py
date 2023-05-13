@@ -2169,8 +2169,10 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
         asnumpy = self._asnumpy
 
         if probe is None:
-            probe = self.probe_fourier[0]
+            probe = list(self.probe_fourier)
         else:
+            if isinstance(probe,np.ndarray) and probe.ndim ==2:
+                probe = [probe]
             probe = [asnumpy(self._return_fourier_probe(pr)) for pr in probe]
 
         if pixelsize is None:
@@ -2178,13 +2180,8 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
         if pixelunits is None:
             pixelunits = r"$\AA^{-1}$"
 
-        figsize = kwargs.get("figsize", (6, 6))
-        kwargs.pop("figsize", None)
-
-        #fig, ax = plt.subplots(figsize=figsize)
         show_complex(
-            probe,
-            figsize=figsize,
+            probe if len(probe) > 1 else probe[0],
             scalebar=scalebar,
             pixelsize=pixelsize,
             pixelunits=pixelunits,
