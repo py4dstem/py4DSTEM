@@ -89,6 +89,37 @@ class DataCube(Array,RootedNode,Data,DataCubeMethods):
             slicelabels = self.slicelabels,
         )
 
+        Qpixsize  = new_datacube.calibration.get_Q_pixel_size()
+        Qpixunits = new_datacube.calibration.get_Q_pixel_units()
+        Rpixsize  = new_datacube.calibration.get_R_pixel_size()
+        Rpixunits = new_datacube.calibration.get_R_pixel_units()
+        
+        new_datacube.set_dim(
+            0,
+            [0,Rpixsize],
+            units = Rpixunits,
+            name = 'Rx'
+        )
+        new_datacube.set_dim(
+            1,
+            [0,Rpixsize],
+            units = Rpixunits,
+            name = 'Ry'
+        )
+
+        new_datacube.set_dim(
+            2,
+            [0,Qpixsize],
+            units = Qpixunits,
+            name = 'Qx'
+        )
+        new_datacube.set_dim(
+            3,
+            [0,Qpixsize],
+            units = Qpixunits,
+            name = 'Qy'
+        )
+
         return new_datacube
 
 
