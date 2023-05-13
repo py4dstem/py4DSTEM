@@ -1524,8 +1524,6 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                 current_probe, fix_probe_fourier_amplitude_threshold
             )
 
-        current_probe = self._probe_finite_support_constraint(current_probe)
-
         if fix_com:
             current_probe = self._probe_center_of_mass_constraint(current_probe)
 
@@ -1557,8 +1555,6 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
         fix_probe_fourier_amplitude_threshold: float = None,
         fix_positions_iter: int = np.inf,
         global_affine_transformation: bool = True,
-        probe_support_relative_radius: float = 1.0,
-        probe_support_supergaussian_degree: float = 10.0,
         gaussian_filter_sigma: float = None,
         gaussian_filter_iter: int = np.inf,
         butterworth_filter_iter: int = np.inf,
@@ -1613,10 +1609,6 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
             Number of iterations to run with fixed positions before updating positions estimate
         global_affine_transformation: bool, optional
             If True, positions are assumed to be a global affine transform from initial scan
-        probe_support_relative_radius: float, optional
-            Radius of probe supergaussian support in scaled pixel units, between (0,1]
-        probe_support_supergaussian_degree: float, optional
-            Degree supergaussian support is raised to, higher is sharper cutoff
         gaussian_filter_sigma: float, optional
             Standard deviation of gaussian kernel
         gaussian_filter_iter: int, optional
@@ -1818,20 +1810,6 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                     self._exit_waves = [None] * self._num_tilts
                 else:
                     self._exit_waves = None
-
-        # Probe support mask initialization
-        x = xp.linspace(-1, 1, self._region_of_interest_shape[0], endpoint=False)
-        y = xp.linspace(-1, 1, self._region_of_interest_shape[1], endpoint=False)
-        xx, yy = xp.meshgrid(x, y, indexing="ij")
-        self._probe_support_mask = xp.exp(
-            -(
-                (
-                    (xx / probe_support_relative_radius) ** 2
-                    + (yy / probe_support_relative_radius) ** 2
-                )
-                ** probe_support_supergaussian_degree
-            )
-        )
 
         # main loop
         for a0 in tqdmnd(

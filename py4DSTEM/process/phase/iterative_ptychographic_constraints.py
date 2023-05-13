@@ -330,24 +330,6 @@ class PtychographicConstraints:
 
         return updated_probe / updated_probe_sum * curent_probe_sum
 
-    def _probe_finite_support_constraint(self, current_probe):
-        """
-        Ptychographic probe support constraint.
-        Used for penalizing focused probes replicating sample periodicity.
-
-        Parameters
-        --------
-        current_probe: np.ndarray
-            Current probe estimate
-
-        Returns
-        --------
-        constrained_probe: np.ndarray
-            Finite-support constrained probe estimate
-        """
-
-        return current_probe * self._probe_support_mask
-
     def _positions_center_of_mass_constraint(self, current_positions):
         """
         Ptychographic position center of mass constraint.
