@@ -25,6 +25,7 @@ class Orientation:
         self.angles = np.zeros((self.num_matches, 3))
 
 
+
 @dataclass
 class OrientationMap:
     """
@@ -64,6 +65,16 @@ class OrientationMap:
         orientation.inds = self.inds[ind_x, ind_y]
         orientation.mirror = self.mirror[ind_x, ind_y]
         orientation.angles = self.angles[ind_x, ind_y]
+        return orientation
+
+    def get_orientation_single(self, ind_x, ind_y, ind_match):
+        orientation = Orientation(num_matches=1)
+        orientation.matrix = self.matrix[ind_x, ind_y, ind_match]
+        orientation.family = self.family[ind_x, ind_y, ind_match]
+        orientation.corr = self.corr[ind_x, ind_y, ind_match]
+        orientation.inds = self.inds[ind_x, ind_y, ind_match]
+        orientation.mirror = self.mirror[ind_x, ind_y, ind_match]
+        orientation.angles = self.angles[ind_x, ind_y, ind_match]
         return orientation
 
     # def __copy__(self):

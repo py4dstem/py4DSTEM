@@ -5,6 +5,8 @@ import matplotlib.tri as mtri
 from mpl_toolkits.mplot3d import Axes3D, art3d
 from scipy.signal import medfilt
 from scipy.ndimage import gaussian_filter
+from scipy.ndimage.morphology import distance_transform_edt
+from skimage.morphology import dilation, erosion
 
 import warnings
 import numpy as np
@@ -1625,9 +1627,125 @@ def plot_fiber_orientation_maps(
 
 def plot_clusters(
     self,
+    area_min = 2,
+    outline_grains = True,
+    outline_thickness = 1,
+    fill_grains = 0.25,
+    smooth_grains = 1.0,
+    cmap = 'viridis',
+    figsize = (8,8),
     returnfig = False,
     ):
-    1+1
+    """
+    Plot the clusters as an image.
+
+    Parameters
+    --------
+    area_min: int (optional)
+        Min cluster size to include, in units of probe positions.
+    outline_grains: bool (optional)
+        Set to True to draw grains with outlines
+    outline_thickness: int (optional)
+        Thickenss of the grain outline
+    fill_grains: float (optional)
+        Outlined grains are filled with this value in pixels.
+    smooth_grains: float (optional)
+        Grain boundaries are smoothed by this value in pixels.
+    figsize: tuple
+        Size of the figure panel
+    returnfig: bool
+        Setting this to true returns the figure and axis handles
+
+    Returns
+    --------
+    fig, ax (optional)
+        Figure and axes handles
+
+    """    
+    
+    # init
+    im_plot = np.zeros((
+        self.orientation_map.num_x,
+        self.orientation_map.num_y,
+        ))
+    im_grain = np.zeros((
+        self.orientation_map.num_x,
+        self.orientation_map.num_y,
+    ), dtype='bool')
+
+    # make plotting image
+
+    for a0 in range(self.cluster_sizes.shape[0]):
+        if self.cluster_sizes[a0] >= area_min:
+            if outline_grains:
+                im_grain[:] = False
+                im_grain[
+                    self.cluster_inds[a0][0,:],
+                    self.cluster_inds[a0][1,:],
+                ] = True
+
+                im_dist = \
+                distance_transform_edt(
+                    erosion(np.invert(im_grain),footprint=np.ones((3,3),dtype='bool'))
+                ) \
+                - \
+                distance_transform_edt(
+                        im_grain
+                )
+                im_dist = gaussian_filter(
+                    im_dist,
+                    sigma = smooth_grains,
+                    mode = 'nearest')
+                im_add = np.exp(im_dist**2 / (-0.5*outline_thickness**2))
+                
+                if fill_grains > 0:
+                    im_dist = \
+                    distance_transform_edt(
+                        erosion(np.invert(im_grain),footprint=np.ones((3,3),dtype='bool'))
+                    )
+                    im_dist = gaussian_filter(
+                        im_dist,
+                        sigma = smooth_grains,
+                        mode = 'nearest')
+                    im_add += fill_grains*np.exp(im_dist**2 / (-0.5*outline_thickness**2))
+
+
+                # im_add = 1 - np.exp(
+                #     distance_transform_edt(im_grain)**2 \
+                #     / (-2*outline_thickness**2))
+                im_plot += im_add
+                # im_plot = np.minimum(im_plot, im_add)
+            else:
+                # xg,yg = np.unravel_index(self.cluster_inds[a0], im_plot.shape)
+                im_grain[:] = False
+                im_grain[
+                    self.cluster_inds[a0][0,:],
+                    self.cluster_inds[a0][1,:],
+                ] = True
+                im_plot += gaussian_filter(
+                    im_grain.astype('float'),
+                    sigma = smooth_grains,
+                    mode = 'nearest')
+
+                # im_plot[
+                #     self.cluster_inds[a0][0,:],
+                #     self.cluster_inds[a0][1,:],
+                # ] += 1
+
+    if outline_grains:
+        im_plot = np.clip(im_plot,0,2)
+
+
+    # plotting
+    fig,ax = plt.subplots(figsize=figsize)
+    ax.imshow(
+        im_plot,
+        # vmin = -3,
+        # vmax = 3,
+        cmap = cmap,
+        )
+
+
 
 
 def plot_cluster_size(
