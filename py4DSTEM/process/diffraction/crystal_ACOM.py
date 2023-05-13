@@ -1581,7 +1581,7 @@ def cluster_grains(
     progress_bar = True,
     ):
     """
-    Cluster grains from a specific radial bin
+    Cluster grains using rotation criterion, and correlation values.
 
     Parameters
     --------
@@ -1616,6 +1616,7 @@ def cluster_grains(
     self.cluster_sizes = np.array((), dtype='int')
     self.cluster_sig = np.array(())
     self.cluster_inds = []
+    self.cluster_orientation = []
     inds_all = np.zeros_like(sig, dtype='int')
     inds_all.ravel()[:] = np.arange(inds_all.size)
 
@@ -1643,6 +1644,7 @@ def cluster_grains(
             mark[x,y,z] = False
             sig[x,y,z] = 0
             matrix_cluster = matrix[x,y,z]
+            orientation_cluster = self.orientation_map.get_orientation_single(x,y,z)
 
             # Neighbors to search
             xr = np.clip(x + np.arange(-1,2,dtype='int'), 0, sig.shape[0] - 1)
@@ -1669,11 +1671,6 @@ def cluster_grains(
                         @ np.transpose(matrix_cluster),
                         axis1=1, 
                         axis2=2)-1)/2,-1,1)))
-                    # dphi = np.min(np.arccos(np.clip((np.trace(
-                    #     matrix_cluster @ \
-                    #     np.transpose(self.symmetry_operators @ matrix[xc,yc,zc],(0,2,1)),
-                    #     axis1=1, 
-                    #     axis2=2)-1)/2,-1,1)))
 
                     if np.abs(dphi) < tol:
                         keep[a0] = True
@@ -1688,7 +1685,6 @@ def cluster_grains(
 
                 inds_grain = np.append(inds_grain, inds_cand[keep])
                 inds_cand = np.unique(np.delete(inds_new, mark.ravel()[inds_new] == False))
-                # print(inds_cand)
 
                 if inds_cand.size == 0:
                     grow = False
@@ -1699,11 +1695,99 @@ def cluster_grains(
             sig_mean = np.mean(sig_init.ravel()[inds_grain])
             self.cluster_sizes = np.append(self.cluster_sizes, xyg.shape[1])
             self.cluster_sig = np.append(self.cluster_sig, sig_mean)
+            self.cluster_orientation.append(orientation_cluster)
             self.cluster_inds.append(xyg)
 
     # finish progressbar
     if progress_bar:
         update_progress(1)
+
+
+
+
+def cluster_orientation_map(
+    self,
+    stripe_width = 1,
+    area_min = 2,
+    ):
+    """
+    Produce a new orientation map from the clustered grains.
+    Use a stripe pattern for the overlapping grains.
+
+    Parameters
+    --------
+    stripe_width: int
+        Width of strips in the overlapping regions.
+
+    Returns
+    --------
+    
+    orientation_map
+
+    """
+
+    # init
+    orientation_map = OrientationMap(
+        num_x = self.orientation_map.num_x,
+        num_y = self.orientation_map.num_y,
+        num_matches=1)
+    im_grain = np.zeros((
+        self.orientation_map.num_x,
+        self.orientation_map.num_y), dtype='bool')
+    im_count = np.zeros((
+        self.orientation_map.num_x,
+        self.orientation_map.num_y))
+    im_mark = np.zeros((
+        self.orientation_map.num_x,
+        self.orientation_map.num_y))
+
+    # coordinates
+    xa,ya = np.meshgrid(
+        range(self.orientation_map.num_x),
+        range(self.orientation_map.num_y),
+        indexing = 'ij')
+
+    # Loop over grains to determine number in each pixel
+    for a0 in range(self.cluster_sizes.shape[0]):
+        if self.cluster_sizes[a0] >= area_min:
+            im_grain[:] = False
+            im_grain[
+                self.cluster_inds[a0][0,:],
+                self.cluster_inds[a0][1,:],
+            ] = True
+            im_count += im_grain
+    im_stripe = im_count >= 2
+    im_single = np.logical_not(im_stripe)
+
+    # loop over grains
+    for a0 in range(1):
+        if self.cluster_sizes[a0] >= area_min:
+            im_grain[:] = False
+            im_grain[
+                self.cluster_inds[a0][0,:],
+                self.cluster_inds[a0][1,:],
+            ] = True
+
+            sub = np.logical_and(
+                im_grain,
+                im_single)
+            print(np.sum(sub))
+
+            sub = np.logical_and(
+                im_grain,
+                im_stripe)
+            print(np.sum(sub))
+
+
+
+
+    fig,ax = plt.subplots(figsize=(8,8))
+    ax.imshow(im_stripe)
+
+
+
+
+    return orientation_map
 
 
 def calculate_strain(

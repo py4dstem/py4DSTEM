@@ -37,6 +37,7 @@ class Crystal:
         match_orientations,
         match_single_pattern,
         cluster_grains,
+        cluster_orientation_map,
         calculate_strain,
         save_ang_file,
         symmetry_reduce_directions,
