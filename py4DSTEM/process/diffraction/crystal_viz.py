@@ -1752,6 +1752,7 @@ def plot_cluster_size(
     self,
     area_min = None,
     area_max = None,
+    area_step = 1,
     weight_intensity = False,
     pixel_area = 1.0,
     pixel_area_units = 'px^2',
@@ -1764,9 +1765,11 @@ def plot_cluster_size(
     Parameters
     --------
     area_min: int (optional)
-        Min area to include
+        Min area to include in pixels^2
     area_max: int (optional)
-        Max area bin in pixels
+        Max area bin in pixels^2
+    area_step: int (optional)
+        Step size of the histogram bin in pixels^2
     weight_intensity: bool
         Weight histogram by the peak intensity.
     pixel_area: float
@@ -1787,37 +1790,34 @@ def plot_cluster_size(
 
     if area_max is None:
         area_max = np.max(self.cluster_sizes)
-    area = np.arange(area_max)
+    area = np.arange(0,area_max,area_step)
     if area_min is None:
         sub = self.cluster_sizes.astype('int') < area_max
     else:
         sub = np.logical_and(
-            self.cluster_sizes.astype('int') < area_max,
             self.cluster_sizes.astype('int') >= area_min,
+            self.cluster_sizes.astype('int') < area_max
             )
-
-
     if weight_intensity:
         hist = np.bincount(
-            self.cluster_sizes[sub],
+            self.cluster_sizes[sub] // area_step,
             weights = self.cluster_sig[sub],
-            minlength = area_max,
+            minlength = area.shape[0],
             )
     else:
         hist = np.bincount(
-            self.cluster_sizes[sub],
-            minlength = area_max,
+            self.cluster_sizes[sub] // area_step,
+            minlength = area.shape[0],
             )
-
-
+        
     # plotting
     fig,ax = plt.subplots(figsize = figsize)
     ax.bar(
         area * pixel_area,
         hist,
-        width = 0.8 * pixel_area,
+        width = 0.8 * pixel_area * area_step,
         )
-
+    ax.set_xlim((0,area_max*pixel_area))
     ax.set_xlabel('Grain Area [' + pixel_area_units + ']')
     if weight_intensity:
         ax.set_ylabel('Total Signal [arb. units]')
@@ -1826,10 +1826,6 @@ def plot_cluster_size(
 
     if returnfig:
         return fig,ax
-
-
-
-
 
 
 def axisEqual3D(ax):
