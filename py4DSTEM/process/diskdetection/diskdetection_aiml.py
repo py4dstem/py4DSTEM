@@ -8,16 +8,16 @@ import glob
 import json
 import shutil
 import numpy as np
-from py4DSTEM.io.datastructure.py4dstem import QPoints, BraggVectors
 
 from scipy.ndimage import gaussian_filter
 from time import time
 from numbers import Number
 
+from emdfile import tqdmnd, PointList, PointListArray
+from py4DSTEM.process.diskdetection.braggvectors import BraggVectors
+from py4DSTEM.classes import QPoints
 from py4DSTEM.process.utils import get_maxima_2D
 # from py4DSTEM.process.diskdetection import universal_threshold
-from py4DSTEM.utils.tqdmnd import tqdmnd
-from py4DSTEM.io import PointList, PointListArray
 
 def find_Bragg_disks_aiml_single_DP(DP, probe,
                                      num_attempts = 5,
