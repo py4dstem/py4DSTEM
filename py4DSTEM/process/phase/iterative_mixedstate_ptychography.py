@@ -473,14 +473,14 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
         shifted_probes = fft_shift(self._probe[0], self._positions_px_fractional, xp)
         probe_intensities = xp.abs(shifted_probes) ** 2
         probe_overlap = self._sum_overlapping_patches_bincounts(probe_intensities)
-        probe_overlap = self._gaussian_filter(probe_overlap,1.0)
+        probe_overlap = self._gaussian_filter(probe_overlap, 1.0)
 
         if object_fov_mask is None:
             self._object_fov_mask = asnumpy(probe_overlap > 0.25 * probe_overlap.max())
         else:
             self._object_fov_mask = np.asarray(object_fov_mask)
         self._object_fov_mask_inverse = np.invert(self._object_fov_mask)
-        
+
         if plot_probe_overlaps:
             figsize = kwargs.get("figsize", (9, 4))
             cmap = kwargs.get("cmap", "Greys_r")
@@ -1170,16 +1170,14 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
                 current_object,
                 shrinkage_rad,
                 object_mask,
-                )
-        
+            )
+
         if self._object_type == "complex":
             current_object = self._object_threshold_constraint(
                 current_object, pure_phase_object
             )
         elif object_positivity:
-            current_object = self._object_positivity_constraint(
-                current_object
-            )
+            current_object = self._object_positivity_constraint(current_object)
 
         if fix_com:
             current_probe = self._probe_center_of_mass_constraint(current_probe)
@@ -1606,11 +1604,13 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
                 self._probe,
                 self._positions_px,
                 fix_com=fix_com and a0 >= fix_probe_iter,
-                symmetrize_probe= a0 < symmetrize_probe_iter,
-                fix_probe_amplitude= a0 < fix_probe_amplitude_iter and a0 >= fix_probe_iter,
+                symmetrize_probe=a0 < symmetrize_probe_iter,
+                fix_probe_amplitude=a0 < fix_probe_amplitude_iter
+                and a0 >= fix_probe_iter,
                 fix_probe_amplitude_relative_radius=fix_probe_amplitude_relative_radius,
                 fix_probe_amplitude_relative_width=fix_probe_amplitude_relative_width,
-                fix_probe_fourier_amplitude= a0 < fix_probe_fourier_amplitude_iter and a0 >= fix_probe_iter,
+                fix_probe_fourier_amplitude=a0 < fix_probe_fourier_amplitude_iter
+                and a0 >= fix_probe_iter,
                 fix_probe_fourier_amplitude_threshold=fix_probe_fourier_amplitude_threshold,
                 fix_positions=a0 < fix_positions_iter,
                 global_affine_transformation=global_affine_transformation,
@@ -1621,11 +1621,13 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
                 and (q_lowpass is not None or q_highpass is not None),
                 q_lowpass=q_lowpass,
                 q_highpass=q_highpass,
-                butterworth_order = butterworth_order,
+                butterworth_order=butterworth_order,
                 orthogonalize_probe=orthogonalize_probe,
                 object_positivity=object_positivity,
                 shrinkage_rad=shrinkage_rad,
-                object_mask = self._object_fov_mask_inverse if fix_potential_baseline else None,
+                object_mask=self._object_fov_mask_inverse
+                if fix_potential_baseline
+                else None,
                 pure_phase_object=a0 < pure_phase_object_iter
                 and self._object_type == "complex",
             )
@@ -2167,7 +2169,7 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
         if probe is None:
             probe = list(self.probe_fourier)
         else:
-            if isinstance(probe,np.ndarray) and probe.ndim ==2:
+            if isinstance(probe, np.ndarray) and probe.ndim == 2:
                 probe = [probe]
             probe = [asnumpy(self._return_fourier_probe(pr)) for pr in probe]
 
