@@ -749,7 +749,6 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
                 probe_overlap = self._sum_overlapping_patches_bincounts(
                     probe_intensities
                 )
-                probe_overlap = self._gaussian_filter(probe_overlap, 1.0)
 
                 probe_overlap_3D += probe_overlap[None]
 
@@ -759,6 +758,7 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
                     -beta_deg,
                 )
 
+            probe_overlap_3D = self._gaussian_filter(probe_overlap_3D, 1.0)
             self._object_fov_mask = asnumpy(
                 probe_overlap_3D > 0.25 * probe_overlap_3D.max()
             )
@@ -2327,7 +2327,7 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
                         object_positivity=object_positivity,
                         shrinkage_rad=shrinkage_rad,
                         object_mask=self._object_fov_mask_inverse
-                        if fix_potential_baseline
+                        if fix_potential_baseline and self._object_fov_mask_inverse.sum() > 0 
                         else None,
                     )
 
@@ -2371,7 +2371,7 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
                     object_positivity=object_positivity,
                     shrinkage_rad=shrinkage_rad,
                     object_mask=self._object_fov_mask_inverse
-                    if fix_potential_baseline
+                    if fix_potential_baseline and self._object_fov_mask_inverse.sum() > 0 
                     else None,
                 )
 
