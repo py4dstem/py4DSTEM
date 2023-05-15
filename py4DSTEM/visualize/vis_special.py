@@ -935,17 +935,42 @@ def show_complex(
         if returnfig==True, return the figure and the axis.
     """
     # convert to complex colors
-    rgb = Complex2RGB(ar_complex, vmin, vmax, hue_start=hue_start, invert=invert)
+    if isinstance(ar_complex, list):
+        if isinstance(ar_complex[0], list):
+            rgb = [Complex2RGB(ar, vmin, vmax, hue_start = hue_start, invert=invert) for sublist in ar_complex for ar in sublist]
+            H = len(ar_complex)
+            W = len(ar_complex[0])
 
+        else:
+            rgb = [Complex2RGB(ar, vmin, vmax, hue_start=hue_start, invert=invert) for ar in ar_complex]
+            if len(rgb[0].shape) == 4:
+                H = len(ar_complex)
+                W = rgb[0].shape[0]
+            else:
+                H = 1
+                W = len(ar_complex)
+        is_grid = True
+    else:
+        rgb = Complex2RGB(ar_complex, vmin, vmax, hue_start=hue_start, invert=invert)
+        if len(rgb.shape) == 4:
+            is_grid = True
+            H = 1
+            W = rgb.shape[0]
+        elif len(rgb.shape) == 5:
+            is_grid = True
+            H = rgb.shape[0]
+            W = rgb.shape[1]
+            rgb = rgb.reshape((-1,)+rgb.shape[-3:])
+        else:
+            is_grid = False
     # plot
-
-    if len(rgb.shape) > 3:
+    if is_grid:
         from py4DSTEM.visualize import show_image_grid
 
         fig, ax = show_image_grid(
             get_ar=lambda i: rgb[i],
-            H=1,
-            W=rgb.shape[0],
+            H=H,
+            W=W,
             vmin=0,
             vmax=1,
             intensity_range="absolute",
