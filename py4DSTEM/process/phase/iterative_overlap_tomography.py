@@ -366,6 +366,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
         diffraction_patterns_transpose: bool = None,
         force_com_shifts: Sequence[float] = None,
         progress_bar: bool = True,
+        object_fov_mask: np.ndarray = None,
         **kwargs,
     ):
         """
@@ -401,6 +402,9 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
             Amplitudes come from diffraction patterns shifted with
             the CoM in the upper left corner for each probe unless
             shift is overwritten. One tuple per tilt.
+        object_fov_mask: np.ndarray (boolean)
+            Boolean mask of FOV. Used to calculate additional shrinkage of object
+            If None, probe_overlap intensity is thresholded
 
         Returns
         --------
@@ -660,6 +664,57 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
             self._slice_thicknesses,
         )
 
+        # overlaps
+        if object_fov_mask is None:
+            probe_overlap_3D = xp.zeros_like(self._object)
+
+            previous_angle_deg = 0
+            for tilt_index in np.arange(self._num_tilts):
+                current_angle_deg = self._tilt_angles_deg[tilt_index]
+                probe_overlap_3D = self._rotate(
+                    probe_overlap_3D,
+                    current_angle_deg - previous_angle_deg,
+                    axes=(0, 2),
+                    reshape=False,
+                    order=2,
+                )
+
+                self._positions_px = self._positions_px_all[
+                    self._cum_probes_per_tilt[tilt_index] : self._cum_probes_per_tilt[
+                        tilt_index + 1
+                    ]
+                ]
+                self._positions_px_fractional = self._positions_px - xp.round(
+                    self._positions_px
+                )
+                shifted_probes = fft_shift(
+                    self._probe, self._positions_px_fractional, xp
+                )
+                probe_intensities = xp.abs(shifted_probes) ** 2
+                probe_overlap = self._sum_overlapping_patches_bincounts(
+                    probe_intensities
+                )
+                probe_overlap = self._gaussian_filter(probe_overlap, 1.0)
+
+                probe_overlap_3D += probe_overlap[None]
+                previous_angle_deg = current_angle_deg
+
+            self._object_fov_mask = asnumpy(
+                probe_overlap_3D > 0.25 * probe_overlap_3D.max()
+            )
+        else:
+            self._object_fov_mask = np.asarray(object_fov_mask)
+            self._positions_px = self._positions_px_all[: self._cum_probes_per_tilt[1]]
+            self._positions_px_fractional = self._positions_px - xp.round(
+                self._positions_px
+            )
+            shifted_probes = fft_shift(self._probe, self._positions_px_fractional, xp)
+            probe_intensities = xp.abs(shifted_probes) ** 2
+            probe_overlap = self._sum_overlapping_patches_bincounts(probe_intensities)
+            probe_overlap = self._gaussian_filter(probe_overlap, 1.0)
+
+        self._object_fov_mask_inverse = np.invert(self._object_fov_mask)
+
         if plot_probe_overlaps:
             figsize = kwargs.get("figsize", (13, 4))
             cmap = kwargs.get("cmap", "Greys_r")
@@ -697,15 +752,6 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                 hue_start=hue_start,
                 invert=invert,
             )
-
-            # overlaps
-            self._positions_px = self._positions_px_all[: self._cum_probes_per_tilt[1]]
-            self._positions_px_fractional = self._positions_px - xp.round(
-                self._positions_px
-            )
-            shifted_probes = fft_shift(self._probe, self._positions_px_fractional, xp)
-            probe_intensities = xp.abs(shifted_probes) ** 2
-            probe_overlap = self._sum_overlapping_patches_bincounts(probe_intensities)
 
             extent = [
                 0,
@@ -1459,6 +1505,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
         q_highpass,
         object_positivity,
         shrinkage_rad,
+        object_mask,
     ):
         """
         Ptychographic constraints operator.
@@ -1502,6 +1549,8 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
             If True, forces object to be positive
         shrinkage_rad: float
             Phase shift in radians to be subtracted from the potential at each iteration
+        object_mask: np.ndarray (boolean)
+            If not None, used to calculate additional shrinkage using masked-mean of object
 
         Returns
         --------
@@ -1525,10 +1574,15 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                 q_highpass,
             )
 
-        if object_positivity:
-            current_object = self._object_positivity_constraint(
-                current_object, shrinkage_rad
+        if shrinkage_rad > 0.0 or object_mask is not None:
+            current_object = self._object_shrinkage_constraint(
+                current_object,
+                shrinkage_rad,
+                object_mask,
             )
+
+        if object_positivity:
+            current_object = self._object_positivity_constraint(current_object)
 
         if fix_com:
             current_probe = self._probe_center_of_mass_constraint(current_probe)
@@ -1587,7 +1641,8 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
         q_lowpass: float = None,
         q_highpass: float = None,
         object_positivity: bool = True,
-        shrinkage_rad: float = None,
+        shrinkage_rad: float = 0.0,
+        fix_potential_baseline: bool = True,
         collective_tilt_updates: bool = False,
         store_iterations: bool = False,
         progress_bar: bool = True,
@@ -2033,6 +2088,9 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                         q_highpass=q_highpass,
                         object_positivity=object_positivity,
                         shrinkage_rad=shrinkage_rad,
+                        object_mask=self._object_fov_mask_inverse
+                        if fix_potential_baseline
+                        else None,
                     )
 
             # Normalize Error Over Tilts
@@ -2069,6 +2127,9 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                     q_highpass=q_highpass,
                     object_positivity=object_positivity,
                     shrinkage_rad=shrinkage_rad,
+                    object_mask=self._object_fov_mask_inverse
+                    if fix_potential_baseline
+                    else None,
                 )
 
             self.error_iterations.append(error.item())
