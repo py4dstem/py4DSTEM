@@ -704,7 +704,6 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
                 self._probe = xp.asarray(self._probe, dtype=xp.complex64)
 
         self._probe_initial = self._probe.copy()
-        self._probe_initial_fft_amplitude = xp.abs(xp.fft.fft2(self._probe_initial))
 
         # Precomputed propagator arrays
         self._slice_thicknesses = np.tile(
@@ -1563,6 +1562,10 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
         current_probe,
         current_positions,
         fix_com,
+        symmetrize_probe,
+        fix_probe_amplitude,
+        fix_probe_amplitude_relative_radius,
+        fix_probe_amplitude_relative_width,
         fix_probe_fourier_amplitude,
         fix_probe_fourier_amplitude_threshold,
         fix_positions,
@@ -1592,6 +1595,14 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
             Current positions estimate
         fix_com: bool
             If True, probe CoM is fixed to the center
+        symmetrize_probe: bool
+            If True, the probe is radially-averaged
+        fix_probe_amplitude: bool
+            If True, probe amplitude is constrained by top hat function
+        fix_probe_amplitude_relative_radius: float
+            Relative location of top-hat inflection point, between 0 and 0.5
+        fix_probe_amplitude_relative_width: float
+            Relative width of top-hat sigmoid, between 0 and 0.5
         fix_probe_fourier_amplitude: bool
             If True, probe fourier amplitude is constrained by top hat function
         fix_probe_fourier_amplitude_threshold: float
@@ -1671,13 +1682,22 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
                 current_object[0], shrinkage_rad
             )
 
-        if fix_probe_fourier_amplitude:
-            current_probe = self._probe_fourier_amplitude_constraint(
-                current_probe, fix_probe_fourier_amplitude_threshold
-            )
-
         if fix_com:
             current_probe = self._probe_center_of_mass_constraint(current_probe)
+
+        if symmetrize_probe:
+            current_probe = self._probe_radial_symmetrization_constraint(
+                current_probe
+                )
+
+        if fix_probe_amplitude:
+            current_probe = self._probe_amplitude_constraint(
+                current_probe, fix_probe_amplitude_relative_radius, fix_probe_amplitude_relative_width
+            )
+        elif fix_probe_fourier_amplitude:
+            current_probe = self._probe_fourier_amplitude_constraint(
+                current_probe, fix_probe_fourier_amplitude_threshold, fix_probe_amplitude_relative_width
+            )
 
         if not fix_positions:
             current_positions = self._positions_center_of_mass_constraint(
@@ -1703,8 +1723,12 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
         positions_step_size: float = 0.9,
         fix_com: bool = True,
         fix_probe_iter: int = 0,
-        fix_probe_fourier_amplitude_iter: int = np.inf,
-        fix_probe_fourier_amplitude_threshold: float = None,
+        symmetrize_probe_iter: int = 0,
+        fix_probe_amplitude_iter: int = 0,
+        fix_probe_amplitude_relative_radius: float = 0.5,
+        fix_probe_amplitude_relative_width: float = 0.05,
+        fix_probe_fourier_amplitude_iter: int = 0,
+        fix_probe_fourier_amplitude_threshold: float = 0.9,
         fix_positions_iter: int = np.inf,
         global_affine_transformation: bool = True,
         gaussian_filter_sigma_e: float = None,
@@ -1755,6 +1779,14 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
             If True, fixes center of mass of probe
         fix_probe_iter: int, optional
             Number of iterations to run with a fixed probe before updating probe estimate
+        symmetrize_probe_iter: int, optional
+            Number of iterations to run with a fixed probe before updating probe estimate
+        fix_probe_amplitude: bool
+            If True, probe amplitude is constrained by top hat function
+        fix_probe_amplitude_relative_radius: float
+            Relative location of top-hat inflection point, between 0 and 0.5
+        fix_probe_amplitude_relative_width: float
+            Relative width of top-hat sigmoid, between 0 and 0.5
         fix_probe_fourier_amplitude: bool
             If True, probe fourier amplitude is constrained by top hat function
         fix_probe_fourier_amplitude_threshold: float
@@ -2213,9 +2245,11 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
                         self._probe,
                         self._positions_px_all[start_tilt:end_tilt],
                         fix_com=fix_com and a0 >= fix_probe_iter,
-                        fix_probe_fourier_amplitude=a0
-                        < fix_probe_fourier_amplitude_iter
-                        and fix_probe_fourier_amplitude_threshold is not None,
+                        symmetrize_probe= a0 < symmetrize_probe_iter,
+                        fix_probe_amplitude= a0 < fix_probe_amplitude_iter and a0 >= fix_probe_iter,
+                        fix_probe_amplitude_relative_radius=fix_probe_amplitude_relative_radius,
+                        fix_probe_amplitude_relative_width=fix_probe_amplitude_relative_width,
+                        fix_probe_fourier_amplitude= a0 < fix_probe_fourier_amplitude_iter and a0 >= fix_probe_iter,
                         fix_probe_fourier_amplitude_threshold=fix_probe_fourier_amplitude_threshold,
                         fix_positions=a0 < fix_positions_iter,
                         global_affine_transformation=global_affine_transformation,
@@ -2250,8 +2284,11 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
                     self._probe,
                     None,
                     fix_com=fix_com and a0 >= fix_probe_iter,
-                    fix_probe_fourier_amplitude=a0 < fix_probe_fourier_amplitude_iter
-                    and fix_probe_fourier_amplitude_threshold is not None,
+                    symmetrize_probe= a0 < symmetrize_probe_iter,
+                    fix_probe_amplitude= a0 < fix_probe_amplitude_iter and a0 >= fix_probe_iter,
+                    fix_probe_amplitude_relative_radius=fix_probe_amplitude_relative_radius,
+                    fix_probe_amplitude_relative_width=fix_probe_amplitude_relative_width,
+                    fix_probe_fourier_amplitude= a0 < fix_probe_fourier_amplitude_iter and a0 >= fix_probe_iter,
                     fix_probe_fourier_amplitude_threshold=fix_probe_fourier_amplitude_threshold,
                     fix_positions=True,
                     global_affine_transformation=global_affine_transformation,
