@@ -9,11 +9,11 @@ from typing import Tuple
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.gridspec import GridSpec
-from py4DSTEM.io import DataCube
+from py4DSTEM import DataCube
 from py4DSTEM.process.phase.iterative_base_class import PhaseReconstruction
 from py4DSTEM.process.utils.cross_correlate import align_images_fourier
 from py4DSTEM.process.utils.utils import electron_wavelength_angstrom
-from py4DSTEM.utils.tqdmnd import tqdmnd
+from emdfile import tqdmnd
 from scipy.linalg import polar
 from scipy.optimize import curve_fit
 from scipy.special import comb
