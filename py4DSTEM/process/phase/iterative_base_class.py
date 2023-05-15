@@ -32,6 +32,7 @@ from py4DSTEM.process.utils import (
 
 warnings.simplefilter(action="always", category=UserWarning)
 
+
 class PhaseReconstruction(Custom):
     """
     Base phase reconstruction class.
@@ -57,10 +58,10 @@ class PhaseReconstruction(Custom):
 
     def set_save_defaults(
         self,
-        save_datacube:bool=False,
-        save_exit_waves:bool=False,
-        save_iterations:bool=True,
-        save_iterations_frequency:int=1,
+        save_datacube: bool = False,
+        save_exit_waves: bool = False,
+        save_iterations: bool = True,
+        save_iterations_frequency: int = 1,
     ):
         """
         Sets the class defaults for saving reconstructions to file.
@@ -193,7 +194,7 @@ class PhaseReconstruction(Custom):
                         force_nonnegative=True,
                     )
             datacube.calibration.set_Q_pixel_size(Q_pixel_size / resampling_factor_x)
-        
+
         if probe_roi_shape is not None:
             Qx, Qy = datacube.shape[-2:]
             Sx, Sy = probe_roi_shape
@@ -1093,9 +1094,13 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
         Wraps datasets and metadata to write in emdfile classes,
         notably: the object and probe arrays.
         """
+
+        asnumpy = self._asnumpy
+
         # instantiation metadata
         tf = AffineTransform(angle=-self._rotation_best_rad)
         pos = self.positions
+
         if pos.ndim == 2:
             origin = np.mean(pos, axis=0)
         else:
@@ -1103,7 +1108,7 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
         scan_positions = tf(pos, origin)
 
         vacuum_probe_intensity = (
-            self._asnumpy(self._vacuum_probe_intensity)
+            asnumpy(self._vacuum_probe_intensity)
             if self._vacuum_probe_intensity is not None
             else None
         )
@@ -1138,9 +1143,11 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
             data={
                 "rotation_angle_rad": self._rotation_best_rad,
                 "data_transpose": self._rotation_best_transpose,
+                "positions_px": asnumpy(self._positions_px),
                 "region_of_interest_shape": self._region_of_interest_shape,
                 "num_diffraction_patterns": self._num_diffraction_patterns,
                 "sampling": self.sampling,
+                "angular_sampling": self.angular_sampling,
             },
         )
 
@@ -1154,7 +1161,7 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
 
             error = [self.error_iterations[i] for i in iterations]
         else:
-            error = self.error
+            error = getattr(self, "error", 0.0)
 
         self.metadata = Metadata(
             name="reconstruction_metadata",
@@ -1194,19 +1201,19 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
             # object
             self._object_emd = Array(
                 name="reconstruction_object",
-                data=self._asnumpy(self._xp.asarray(self._object)),
+                data=asnumpy(self._xp.asarray(self._object)),
             )
 
             # probe
             self._probe_emd = Array(
-                name="reconstruction_probe", data=self._asnumpy(self._probe)
+                name="reconstruction_probe", data=asnumpy(self._probe)
             )
 
         # exit_waves
         if self._save_exit_waves:
             self._exit_waves_emd = Array(
                 name="reconstruction_exit_waves",
-                data=self._asnumpy(self._xp.asarray(self._exit_waves)),
+                data=asnumpy(self._xp.asarray(self._exit_waves)),
             )
 
         # datacube
@@ -1281,14 +1288,16 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
         Sets post-initialization properties, notably some preprocessing meta
         """
         xp = self._xp
+        asnumpy = self._asnumpy
 
         # Preprocess metadata
         preprocess_md = _read_metadata(group, "preprocess_metadata")
         self._rotation_best_rad = preprocess_md["rotation_angle_rad"]
         self._rotation_best_transpose = preprocess_md["data_transpose"]
+        self._positions_px = xp.asarray(preprocess_md["positions_px"])
+        self._angular_sampling = preprocess_md["angular_sampling"]
         self._region_of_interest_shape = preprocess_md["region_of_interest_shape"]
         self._num_diffraction_patterns = preprocess_md["num_diffraction_patterns"]
-        self._preprocessed = False
 
         # Reconstruction metadata
         reconstruction_md = _read_metadata(group, "reconstruction_metadata")
@@ -1310,6 +1319,12 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
             self.error = error[-1]
         else:
             self.error = error
+
+        # Slim preprocessing to enable visualize
+        self._positions_px_com = xp.mean(self._positions_px, axis=0)
+        self.object = asnumpy(self._object)
+        self.probe = asnumpy(self._probe)
+        self._preprocessed = True
 
     def _set_polar_parameters(self, parameters: dict):
         """
@@ -1425,7 +1440,7 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
             The pixel dimensions of the window
         array_shape: (2,) Sequence[int]
             The pixel dimensions of the array the window will be embedded in
-        
+
         Returns
         -------
         window_indices: length-2 tuple of
@@ -1981,7 +1996,7 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
         ----------
         obj: array, optional
             if None is specified, uses self._object
-        
+
         Returns
         -------
         object_fft_amplitude: np.ndarray
@@ -2050,7 +2065,7 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
     def show_object_fft(self, obj=None, **kwargs):
         """
         Plot FFT of reconstructed object
-        
+
         Parameters
         ----------
         obj: complex array, optional
