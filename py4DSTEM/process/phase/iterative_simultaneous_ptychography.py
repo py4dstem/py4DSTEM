@@ -700,14 +700,14 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
         shifted_probes = fft_shift(self._probe, self._positions_px_fractional, xp)
         probe_intensities = xp.abs(shifted_probes) ** 2
         probe_overlap = self._sum_overlapping_patches_bincounts(probe_intensities)
-        probe_overlap = self._gaussian_filter(probe_overlap,1.0)
+        probe_overlap = self._gaussian_filter(probe_overlap, 1.0)
 
         if object_fov_mask is None:
             self._object_fov_mask = asnumpy(probe_overlap > 0.25 * probe_overlap.max())
         else:
             self._object_fov_mask = np.asarray(object_fov_mask)
         self._object_fov_mask_inverse = np.invert(self._object_fov_mask)
-        
+
         if plot_probe_overlaps:
             figsize = kwargs.get("figsize", (9, 4))
             cmap = kwargs.get("cmap", "Greys_r")
@@ -2292,16 +2292,14 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
         constrained_positions: np.ndarray
             Constrained positions estimate
         """
-        
+
         electrostatic_obj, magnetic_obj = current_object
 
         if gaussian_filter:
             electrostatic_obj = self._object_gaussian_constraint(
-                electrostatic_obj,
-                gaussian_filter_sigma_e,
-                pure_phase_object
+                electrostatic_obj, gaussian_filter_sigma_e, pure_phase_object
             )
-            if not warmup_iteration: 
+            if not warmup_iteration:
                 magnetic_obj = self._object_gaussian_constraint(
                     magnetic_obj,
                     gaussian_filter_sigma_m,
@@ -2331,34 +2329,34 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
                 electrostatic_obj,
                 shrinkage_rad,
                 object_mask,
-                )
-        
+            )
+
         if self._object_type == "complex":
             electrostatic_obj = self._object_threshold_constraint(
                 electrostatic_obj, pure_phase_object
             )
         elif object_positivity:
-            electrostatic_obj = self._object_positivity_constraint(
-                electrostatic_obj
-            )
+            electrostatic_obj = self._object_positivity_constraint(electrostatic_obj)
 
         current_object = (electrostatic_obj, magnetic_obj)
-        
+
         if fix_com:
             current_probe = self._probe_center_of_mass_constraint(current_probe)
-        
+
         if symmetrize_probe:
-            current_probe = self._probe_radial_symmetrization_constraint(
-                current_probe
-                )
+            current_probe = self._probe_radial_symmetrization_constraint(current_probe)
 
         if fix_probe_amplitude:
             current_probe = self._probe_amplitude_constraint(
-                current_probe, fix_probe_amplitude_relative_radius, fix_probe_amplitude_relative_width
+                current_probe,
+                fix_probe_amplitude_relative_radius,
+                fix_probe_amplitude_relative_width,
             )
         elif fix_probe_fourier_amplitude:
             current_probe = self._probe_fourier_amplitude_constraint(
-                current_probe, fix_probe_fourier_amplitude_threshold, fix_probe_amplitude_relative_width
+                current_probe,
+                fix_probe_fourier_amplitude_threshold,
+                fix_probe_amplitude_relative_width,
             )
 
         if not fix_positions:
@@ -2804,11 +2802,13 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
                 self._probe,
                 self._positions_px,
                 fix_com=fix_com and a0 >= fix_probe_iter,
-                symmetrize_probe= a0 < symmetrize_probe_iter,
-                fix_probe_amplitude= a0 < fix_probe_amplitude_iter and a0 >= fix_probe_iter,
+                symmetrize_probe=a0 < symmetrize_probe_iter,
+                fix_probe_amplitude=a0 < fix_probe_amplitude_iter
+                and a0 >= fix_probe_iter,
                 fix_probe_amplitude_relative_radius=fix_probe_amplitude_relative_radius,
                 fix_probe_amplitude_relative_width=fix_probe_amplitude_relative_width,
-                fix_probe_fourier_amplitude= a0 < fix_probe_fourier_amplitude_iter and a0 >= fix_probe_iter,
+                fix_probe_fourier_amplitude=a0 < fix_probe_fourier_amplitude_iter
+                and a0 >= fix_probe_iter,
                 fix_probe_fourier_amplitude_threshold=fix_probe_fourier_amplitude_threshold,
                 fix_positions=a0 < fix_positions_iter,
                 global_affine_transformation=global_affine_transformation,
@@ -2823,10 +2823,12 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
                 q_lowpass_m=q_lowpass_m,
                 q_highpass_e=q_highpass_e,
                 q_highpass_m=q_highpass_m,
-                butterworth_order = butterworth_order,
+                butterworth_order=butterworth_order,
                 object_positivity=object_positivity,
                 shrinkage_rad=shrinkage_rad,
-                object_mask = self._object_fov_mask_inverse if fix_potential_baseline else None,
+                object_mask=self._object_fov_mask_inverse
+                if fix_potential_baseline
+                else None,
                 pure_phase_object=a0 < pure_phase_object_iter
                 and self._object_type == "complex",
             )

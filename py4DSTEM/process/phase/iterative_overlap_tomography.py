@@ -1529,22 +1529,24 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
             current_object = self._object_positivity_constraint(
                 current_object, shrinkage_rad
             )
-        
+
         if fix_com:
             current_probe = self._probe_center_of_mass_constraint(current_probe)
 
         if symmetrize_probe:
-            current_probe = self._probe_radial_symmetrization_constraint(
-                current_probe
-                )
+            current_probe = self._probe_radial_symmetrization_constraint(current_probe)
 
         if fix_probe_amplitude:
             current_probe = self._probe_amplitude_constraint(
-                current_probe, fix_probe_amplitude_relative_radius, fix_probe_amplitude_relative_width
+                current_probe,
+                fix_probe_amplitude_relative_radius,
+                fix_probe_amplitude_relative_width,
             )
         elif fix_probe_fourier_amplitude:
             current_probe = self._probe_fourier_amplitude_constraint(
-                current_probe, fix_probe_fourier_amplitude_threshold, fix_probe_amplitude_relative_width
+                current_probe,
+                fix_probe_fourier_amplitude_threshold,
+                fix_probe_amplitude_relative_width,
             )
 
         if not fix_positions:
@@ -2011,11 +2013,14 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                         self._probe,
                         self._positions_px_all[start_tilt:end_tilt],
                         fix_com=fix_com and a0 >= fix_probe_iter,
-                        symmetrize_probe= a0 < symmetrize_probe_iter,
-                        fix_probe_amplitude= a0 < fix_probe_amplitude_iter and a0 >= fix_probe_iter,
+                        symmetrize_probe=a0 < symmetrize_probe_iter,
+                        fix_probe_amplitude=a0 < fix_probe_amplitude_iter
+                        and a0 >= fix_probe_iter,
                         fix_probe_amplitude_relative_radius=fix_probe_amplitude_relative_radius,
                         fix_probe_amplitude_relative_width=fix_probe_amplitude_relative_width,
-                        fix_probe_fourier_amplitude= a0 < fix_probe_fourier_amplitude_iter and a0 >= fix_probe_iter,
+                        fix_probe_fourier_amplitude=a0
+                        < fix_probe_fourier_amplitude_iter
+                        and a0 >= fix_probe_iter,
                         fix_probe_fourier_amplitude_threshold=fix_probe_fourier_amplitude_threshold,
                         fix_positions=a0 < fix_positions_iter,
                         global_affine_transformation=global_affine_transformation,
@@ -2045,11 +2050,13 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                     self._probe,
                     None,
                     fix_com=fix_com and a0 >= fix_probe_iter,
-                    symmetrize_probe= a0 < symmetrize_probe_iter,
-                    fix_probe_amplitude= a0 < fix_probe_amplitude_iter and a0 >= fix_probe_iter,
+                    symmetrize_probe=a0 < symmetrize_probe_iter,
+                    fix_probe_amplitude=a0 < fix_probe_amplitude_iter
+                    and a0 >= fix_probe_iter,
                     fix_probe_amplitude_relative_radius=fix_probe_amplitude_relative_radius,
                     fix_probe_amplitude_relative_width=fix_probe_amplitude_relative_width,
-                    fix_probe_fourier_amplitude= a0 < fix_probe_fourier_amplitude_iter and a0 >= fix_probe_iter,
+                    fix_probe_fourier_amplitude=a0 < fix_probe_fourier_amplitude_iter
+                    and a0 >= fix_probe_iter,
                     fix_probe_fourier_amplitude_threshold=fix_probe_fourier_amplitude_threshold,
                     fix_positions=True,
                     global_affine_transformation=global_affine_transformation,

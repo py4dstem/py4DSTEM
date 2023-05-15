@@ -1,10 +1,11 @@
+import numpy as np
 from py4DSTEM.process.phase.utils import (
     array_slice,
     estimate_global_transformation_ransac,
     fft_shift,
 )
 from py4DSTEM.process.utils import get_CoM
-import numpy as np
+
 
 class PtychographicConstraints:
     """
@@ -36,7 +37,7 @@ class PtychographicConstraints:
         else:
             amplitude = xp.minimum(xp.abs(current_object), 1.0)
 
-        return amplitude * xp.exp(1.0j*phase)
+        return amplitude * xp.exp(1.0j * phase)
 
     def _object_shrinkage_constraint(self, current_object, shrinkage_rad, object_mask):
         """
@@ -57,21 +58,21 @@ class PtychographicConstraints:
         constrained_object: np.ndarray
             Constrained object estimate
         """
-        xp = self._xp 
+        xp = self._xp
 
         if self._object_type == "complex":
             phase = xp.angle(current_object)
             amp = xp.abs(current_object)
-        
+
             if object_mask is not None:
-                shrinkage_rad += phase[...,object_mask].mean()
+                shrinkage_rad += phase[..., object_mask].mean()
 
             phase -= shrinkage_rad
-            
+
             current_object = amp * xp.exp(1.0j * phase)
         else:
             if object_mask is not None:
-                shrinkage_rad += current_object[...,object_mask].mean()
+                shrinkage_rad += current_object[..., object_mask].mean()
 
             current_object -= shrinkage_rad
 
@@ -86,14 +87,14 @@ class PtychographicConstraints:
         --------
         current_object: np.ndarray
             Current object estimate
-        
+
         Returns
         --------
         constrained_object: np.ndarray
             Constrained object estimate
         """
         xp = self._xp
-        
+
         return xp.maximum(current_object, 0.0)
 
     def _object_gaussian_constraint(
@@ -129,7 +130,9 @@ class PtychographicConstraints:
 
         return current_object
 
-    def _object_butterworth_constraint(self, current_object, q_lowpass, q_highpass, butterworth_order):
+    def _object_butterworth_constraint(
+        self, current_object, q_lowpass, q_highpass, butterworth_order
+    ):
         """
         Ptychographic butterworth filter.
         Used for low/high-pass filtering object.
@@ -159,9 +162,9 @@ class PtychographicConstraints:
 
         env = xp.ones_like(qra)
         if q_highpass:
-            env *= 1 - 1 / (1 + (qra / q_highpass) ** (2*butterworth_order))
+            env *= 1 - 1 / (1 + (qra / q_highpass) ** (2 * butterworth_order))
         if q_lowpass:
-            env *= 1 / (1 + (qra / q_lowpass) ** (2*butterworth_order))
+            env *= 1 / (1 + (qra / q_lowpass) ** (2 * butterworth_order))
 
         current_object = xp.fft.ifft2(xp.fft.fft2(current_object) * env)
 
@@ -321,7 +324,9 @@ class PtychographicConstraints:
         probe_center = xp.array(self._region_of_interest_shape) / 2
         probe_intensity = xp.abs(current_probe) ** 2
 
-        probe_x0, probe_y0 = get_CoM(probe_intensity, device="cpu" if xp is np else "gpu")
+        probe_x0, probe_y0 = get_CoM(
+            probe_intensity, device="cpu" if xp is np else "gpu"
+        )
         shifted_probe = fft_shift(
             current_probe, probe_center - xp.array([probe_x0, probe_y0]), xp
         )
@@ -337,28 +342,28 @@ class PtychographicConstraints:
         xp = self._xp
 
         sx, sy = current_probe.shape
-        
+
         if center is None:
-            center = (sx//2,sy//2)
-       
+            center = (sx // 2, sy // 2)
+
         if num_bins is None:
-            num_bins = np.maximum(sx,sy)*2 + 1
-            
+            num_bins = np.maximum(sx, sy) * 2 + 1
+
         cx, cy = center
         X, Y = xp.ogrid[0:sx, 0:sy]
         r = xp.hypot(X - cx, Y - cy)
-        
-        rbin = (num_bins*r/r.max()).astype("int")
+
+        rbin = (num_bins * r / r.max()).astype("int")
         num = xp.bincount(rbin.ravel(), current_probe.ravel())
         denom = xp.bincount(rbin.ravel())
-        denom[denom==0]=1
-        
+        denom[denom == 0] = 1
+
         radial_mean = num / denom
-        
+
         for r_bin, r_mean in enumerate(radial_mean):
             if r_bin != 0.0:
-                current_probe[np.where(rbin==r_bin)] = r_mean
-            
+                current_probe[np.where(rbin == r_bin)] = r_mean
+
         return current_probe
 
     def _probe_radial_symmetrization_constraint(
@@ -368,21 +373,27 @@ class PtychographicConstraints:
         center=None,
     ):
         xp = self._xp
-        
-        current_probe_sum = xp.sum(xp.abs(current_probe)**2)
-        
+
+        current_probe_sum = xp.sum(xp.abs(current_probe) ** 2)
+
         current_probe_real = current_probe.real.copy()
         current_probe_imag = current_probe.imag.copy()
-        
-        current_probe_real = self._probe_radial_symmetrization_constraint_base(current_probe_real,num_bins,center)
-        current_probe_imag = self._probe_radial_symmetrization_constraint_base(current_probe_imag,num_bins,center)
-        
-        current_probe = current_probe_real + 1.0j*current_probe_imag
-        current_probe *= xp.sqrt(current_probe_sum/np.sum(np.abs(current_probe)**2))
-        
+
+        current_probe_real = self._probe_radial_symmetrization_constraint_base(
+            current_probe_real, num_bins, center
+        )
+        current_probe_imag = self._probe_radial_symmetrization_constraint_base(
+            current_probe_imag, num_bins, center
+        )
+
+        current_probe = current_probe_real + 1.0j * current_probe_imag
+        current_probe *= xp.sqrt(current_probe_sum / np.sum(np.abs(current_probe) ** 2))
+
         return current_probe
 
-    def _probe_amplitude_constraint(self, current_probe, relative_radius, relative_width):
+    def _probe_amplitude_constraint(
+        self, current_probe, relative_radius, relative_width
+    ):
         """
         Ptychographic top-hat filtering of probe.
 
@@ -403,24 +414,26 @@ class PtychographicConstraints:
         xp = self._xp
         erf = self._erf
 
-        probe_intensity = xp.abs(current_probe)**2
+        probe_intensity = xp.abs(current_probe) ** 2
         current_probe_sum = xp.sum(probe_intensity)
 
-        x = xp.linspace(-1/2,1/2,current_probe.shape[0])
-        y = xp.linspace(-1/2,1/2,current_probe.shape[1])
-        xa, ya = xp.meshgrid(x, y, indexing='ij')
+        x = xp.linspace(-1 / 2, 1 / 2, current_probe.shape[0])
+        y = xp.linspace(-1 / 2, 1 / 2, current_probe.shape[1])
+        xa, ya = xp.meshgrid(x, y, indexing="ij")
         ra = xp.sqrt(xa**2 + ya**2) - relative_radius
 
-        sigma = np.sqrt(np.pi)/relative_width
+        sigma = np.sqrt(np.pi) / relative_width
         tophat_mask = 0.5 * (1 - erf(sigma * ra / (1 - ra**2)))
 
         updated_probe = current_probe * tophat_mask
         updated_probe_sum = xp.sum(xp.abs(updated_probe) ** 2)
-        normalization = xp.sqrt(current_probe_sum/updated_probe_sum)
+        normalization = xp.sqrt(current_probe_sum / updated_probe_sum)
 
         return updated_probe * normalization
 
-    def _probe_fourier_amplitude_constraint(self, current_probe, threshold, relative_width):
+    def _probe_fourier_amplitude_constraint(
+        self, current_probe, threshold, relative_width
+    ):
         """
         Ptychographic top-hat filtering of Fourier probe.
 
@@ -452,18 +465,18 @@ class PtychographicConstraints:
 
         if threshold_px == 0:
             return current_probe
-        
+
         qx = xp.fft.fftfreq(current_probe.shape[0], 1)
         qy = xp.fft.fftfreq(current_probe.shape[1], 1)
         qya, qxa = xp.meshgrid(qy, qx)
         qra = xp.sqrt(qxa**2 + qya**2) - threshold_px / current_probe.shape[0]
 
-        sigma = np.sqrt(np.pi)/relative_width
+        sigma = np.sqrt(np.pi) / relative_width
         tophat_mask = 0.5 * (1 - erf(sigma * qra / (1 - qra**2)))
 
         updated_probe = xp.fft.ifft2(current_probe_fft * tophat_mask)
         updated_probe_sum = xp.sum(xp.abs(updated_probe) ** 2)
-        normalization = xp.sqrt(current_probe_sum/updated_probe_sum)
+        normalization = xp.sqrt(current_probe_sum / updated_probe_sum)
 
         return updated_probe * normalization
 

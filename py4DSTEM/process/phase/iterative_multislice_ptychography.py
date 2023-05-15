@@ -529,12 +529,12 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
             self._energy,
             self._slice_thicknesses,
         )
-        
+
         # overlaps
         shifted_probes = fft_shift(self._probe, self._positions_px_fractional, xp)
         probe_intensities = xp.abs(shifted_probes) ** 2
         probe_overlap = self._sum_overlapping_patches_bincounts(probe_intensities)
-        probe_overlap = self._gaussian_filter(probe_overlap,1.0)
+        probe_overlap = self._gaussian_filter(probe_overlap, 1.0)
 
         if object_fov_mask is None:
             self._object_fov_mask = asnumpy(probe_overlap > 0.25 * probe_overlap.max())
@@ -1275,7 +1275,9 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
 
         return current_positions
 
-    def _object_butterworth_constraint(self, current_object, q_lowpass, q_highpass, butterworth_order):
+    def _object_butterworth_constraint(
+        self, current_object, q_lowpass, q_highpass, butterworth_order
+    ):
         """
         2D Butterworth filter
         Used for low/high-pass filtering object.
@@ -1302,9 +1304,9 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
 
         env = xp.ones_like(qra)
         if q_highpass:
-            env *= 1 - 1 / (1 + (qra / q_highpass) ** (2*butterworth_order))
+            env *= 1 - 1 / (1 + (qra / q_highpass) ** (2 * butterworth_order))
         if q_lowpass:
-            env *= 1 / (1 + (qra / q_lowpass) ** (2*butterworth_order))
+            env *= 1 / (1 + (qra / q_lowpass) ** (2 * butterworth_order))
 
         current_object = xp.fft.ifft2(xp.fft.fft2(current_object) * env[None])
 
@@ -1512,34 +1514,34 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
                 current_object,
                 shrinkage_rad,
                 object_mask,
-                )
+            )
 
         if self._object_type == "complex":
             current_object = self._object_threshold_constraint(
                 current_object, pure_phase_object
             )
         elif object_positivity:
-            current_object = self._object_positivity_constraint(
-                current_object
-            )
-        
+            current_object = self._object_positivity_constraint(current_object)
+
         if fix_com:
             current_probe = self._probe_center_of_mass_constraint(current_probe)
 
         if symmetrize_probe:
-            current_probe = self._probe_radial_symmetrization_constraint(
-                current_probe
-                )
+            current_probe = self._probe_radial_symmetrization_constraint(current_probe)
 
         if fix_probe_amplitude:
             current_probe = self._probe_amplitude_constraint(
-                current_probe, fix_probe_amplitude_relative_radius, fix_probe_amplitude_relative_width
+                current_probe,
+                fix_probe_amplitude_relative_radius,
+                fix_probe_amplitude_relative_width,
             )
         elif fix_probe_fourier_amplitude:
             current_probe = self._probe_fourier_amplitude_constraint(
-                current_probe, fix_probe_fourier_amplitude_threshold, fix_probe_amplitude_relative_width
+                current_probe,
+                fix_probe_fourier_amplitude_threshold,
+                fix_probe_amplitude_relative_width,
             )
-        
+
         if not fix_positions:
             current_positions = self._positions_center_of_mass_constraint(
                 current_positions
@@ -1970,11 +1972,13 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
                 self._probe,
                 self._positions_px,
                 fix_com=fix_com and a0 >= fix_probe_iter,
-                symmetrize_probe= a0 < symmetrize_probe_iter,
-                fix_probe_amplitude= a0 < fix_probe_amplitude_iter and a0 >= fix_probe_iter,
+                symmetrize_probe=a0 < symmetrize_probe_iter,
+                fix_probe_amplitude=a0 < fix_probe_amplitude_iter
+                and a0 >= fix_probe_iter,
                 fix_probe_amplitude_relative_radius=fix_probe_amplitude_relative_radius,
                 fix_probe_amplitude_relative_width=fix_probe_amplitude_relative_width,
-                fix_probe_fourier_amplitude= a0 < fix_probe_fourier_amplitude_iter and a0 >= fix_probe_iter,
+                fix_probe_fourier_amplitude=a0 < fix_probe_fourier_amplitude_iter
+                and a0 >= fix_probe_iter,
                 fix_probe_fourier_amplitude_threshold=fix_probe_fourier_amplitude_threshold,
                 fix_positions=a0 < fix_positions_iter,
                 global_affine_transformation=global_affine_transformation,
@@ -1985,7 +1989,7 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
                 and (q_lowpass is not None or q_highpass is not None),
                 q_lowpass=q_lowpass,
                 q_highpass=q_highpass,
-                butterworth_order = butterworth_order,
+                butterworth_order=butterworth_order,
                 kz_regularization_filter=a0 < kz_regularization_filter_iter
                 and kz_regularization_gamma is not None,
                 kz_regularization_gamma=kz_regularization_gamma[a0]
@@ -1995,7 +1999,9 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
                 identical_slices=a0 < identical_slices_iter,
                 object_positivity=object_positivity,
                 shrinkage_rad=shrinkage_rad,
-                object_mask = self._object_fov_mask_inverse if fix_potential_baseline else None,
+                object_mask=self._object_fov_mask_inverse
+                if fix_potential_baseline
+                else None,
                 pure_phase_object=a0 < pure_phase_object_iter
                 and self._object_type == "complex",
                 tv_denoise=a0 < tv_denoise_iter and tv_denoise_weight is not None,
