@@ -1530,7 +1530,7 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
                 object_positivity=object_positivity,
                 shrinkage_rad=shrinkage_rad,
                 object_mask=self._object_fov_mask_inverse
-                if fix_potential_baseline
+                if fix_potential_baseline and self._object_fov_mask_inverse.sum() > 0 
                 else None,
                 pure_phase_object=a0 < pure_phase_object_iter
                 and self._object_type == "complex",

@@ -668,12 +668,11 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
         if object_fov_mask is None:
             probe_overlap_3D = xp.zeros_like(self._object)
 
-            previous_angle_deg = 0
             for tilt_index in np.arange(self._num_tilts):
                 current_angle_deg = self._tilt_angles_deg[tilt_index]
                 probe_overlap_3D = self._rotate(
                     probe_overlap_3D,
-                    current_angle_deg - previous_angle_deg,
+                    current_angle_deg,
                     axes=(0, 2),
                     reshape=False,
                     order=2,
@@ -694,11 +693,18 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                 probe_overlap = self._sum_overlapping_patches_bincounts(
                     probe_intensities
                 )
-                probe_overlap = self._gaussian_filter(probe_overlap, 1.0)
 
                 probe_overlap_3D += probe_overlap[None]
-                previous_angle_deg = current_angle_deg
+                
+                probe_overlap_3D = self._rotate(
+                    probe_overlap_3D,
+                    -current_angle_deg,
+                    axes=(0, 2),
+                    reshape=False,
+                    order=2,
+                )
 
+            probe_overlap_3D = self._gaussian_filter(probe_overlap_3D, 1.0)
             self._object_fov_mask = asnumpy(
                 probe_overlap_3D > 0.25 * probe_overlap_3D.max()
             )
@@ -2089,7 +2095,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                         object_positivity=object_positivity,
                         shrinkage_rad=shrinkage_rad,
                         object_mask=self._object_fov_mask_inverse
-                        if fix_potential_baseline
+                        if fix_potential_baseline and self._object_fov_mask_inverse.sum() > 0 
                         else None,
                     )
 
@@ -2128,7 +2134,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                     object_positivity=object_positivity,
                     shrinkage_rad=shrinkage_rad,
                     object_mask=self._object_fov_mask_inverse
-                    if fix_potential_baseline
+                    if fix_potential_baseline and self._object_fov_mask_inverse.sum() > 0 
                     else None,
                 )
 
