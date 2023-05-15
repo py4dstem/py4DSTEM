@@ -1,13 +1,17 @@
 # Functions for finding Bragg disks using AI/ML pipeline (CUDA version)
 '''
-
 Functions for finding Braggdisks (AI/ML) using cupy and tensorflow-gpu
-
 '''
 
 import numpy as np
 from time import time
-from py4DSTEM.io.datastructure.py4dstem import QPoints, BraggVectors
+
+from emdfile import tqdmnd
+from py4DSTEM.process.diskdetection.braggvectors import BraggVectors
+from py4DSTEM.classes import PointList, PointListArray, QPoints
+from py4DSTEM.process.diskdetection.kernels import kernels
+from py4DSTEM.process.diskdetection.diskdetection_aiml import _get_latest_model
+# from py4DSTEM.process.diskdetection.diskdetection import universal_threshold
 
 try:
     import cupy as cp
@@ -21,12 +25,8 @@ except:
 
 from cupyx.scipy.ndimage import gaussian_filter
 
-from py4DSTEM.process.diskdetection.diskdetection_aiml import _get_latest_model
 
-from py4DSTEM.io import PointList, PointListArray
-from py4DSTEM.utils.tqdmnd import tqdmnd
-from py4DSTEM.process.diskdetection.kernels import kernels
-# from py4DSTEM.process.diskdetection.diskdetection import universal_threshold
+
 
 def find_Bragg_disks_aiml_CUDA(datacube, probe,
                           num_attempts = 5,

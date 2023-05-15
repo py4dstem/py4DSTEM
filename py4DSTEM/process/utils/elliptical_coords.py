@@ -256,7 +256,7 @@ def elliptical_resample_datacube(
     this on the peak positions than the entire datacube.
     """
 
-    from py4DSTEM import tqdmnd
+    from emdfile import tqdmnd
 
     for rx, ry in tqdmnd(datacube.R_Nx, datacube.R_Ny):
         datacube.data[rx, ry] = elliptical_resample(
