@@ -1,7 +1,7 @@
 # Cross correlation function
 
 import numpy as np
-from py4DSTEM.process.utils import get_shifted_ar
+from py4DSTEM.preprocess.utils import get_shifted_ar
 from py4DSTEM.process.utils.multicorr import upsampled_correlation
 
 try:
