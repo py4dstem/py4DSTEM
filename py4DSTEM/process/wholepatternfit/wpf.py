@@ -9,7 +9,7 @@ from scipy.optimize import least_squares, minimize
 import matplotlib.pyplot as plt
 import matplotlib.colors as mpl_c
 from matplotlib.gridspec import GridSpec
-
+import warnings
 
 class WholePatternFit:
 
@@ -228,33 +228,37 @@ class WholePatternFit:
                 []
             )  # clear this so it doesn't grow: TODO make this not stupid
 
-            x0 = self.fit_data.data[rx, ry] if restart else self.x0
+            try:
+                x0 = self.fit_data.data[rx, ry] if restart else self.x0
 
-            if self.hasJacobian & self.use_jacobian:
-                opt = least_squares(
-                    self._pattern_error,
-                    x0,
-                    jac=self._jacobian,
-                    bounds=(self.lower_bound, self.upper_bound),
-                    args=(current_pattern, shared_data),
-                    **fit_opts,
-                )
-            else:
-                opt = least_squares(
-                    self._pattern_error,
-                    x0,
-                    bounds=(self.lower_bound, self.upper_bound),
-                    args=(current_pattern, shared_data),
-                    **fit_opts,
-                )
+                if self.hasJacobian & self.use_jacobian:
+                    opt = least_squares(
+                        self._pattern_error,
+                        x0,
+                        jac=self._jacobian,
+                        bounds=(self.lower_bound, self.upper_bound),
+                        args=(current_pattern, shared_data),
+                        **fit_opts,
+                    )
+                else:
+                    opt = least_squares(
+                        self._pattern_error,
+                        x0,
+                        bounds=(self.lower_bound, self.upper_bound),
+                        args=(current_pattern, shared_data),
+                        **fit_opts,
+                    )
 
-            fit_data[rx, ry, :] = opt.x
-            fit_metrics[rx, ry, :] = [
-                opt.cost,
-                opt.optimality,
-                opt.nfev,
-                opt.status,
-            ]
+                fit_data[rx, ry, :] = opt.x
+                fit_metrics[rx, ry, :] = [
+                    opt.cost,
+                    opt.optimality,
+                    opt.nfev,
+                    opt.status,
+                ]
+            except LinAlgError as err:
+                warnings.warn(f'Fit on positon ({rx,ry}) failed with error {err}')
+
 
         # Convert to RealSlices
         model_names = []
