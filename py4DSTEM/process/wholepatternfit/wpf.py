@@ -71,6 +71,8 @@ class WholePatternFit:
         self.meanCBED = (
             meanCBED if meanCBED is not None else np.mean(datacube.data, axis=(0, 1))
         )
+        # Global scaling parameter
+        self.intensity_scale = 1/np.mean(self.meanCBED)
 
         self.mask = mask if mask is not None else np.ones_like(self.meanCBED)
 
@@ -127,7 +129,7 @@ class WholePatternFit:
 
         # update parameters:
         self._scrape_model_params()
-        return self._pattern(self.x0, self.static_data.copy())
+        return self._pattern(self.x0, self.static_data.copy()) / self.intensity_scale
 
     def fit_to_mean_CBED(self, **fit_opts):
 
@@ -135,7 +137,7 @@ class WholePatternFit:
         self._scrape_model_params()
 
         # set the current active pattern to the mean CBED:
-        current_pattern = self.meanCBED
+        current_pattern = self.meanCBED * self.intensity_scale
         shared_data = self.static_data.copy()
 
         self._fevals = []
@@ -179,7 +181,7 @@ class WholePatternFit:
         ax.set_xlabel("Iterations")
         ax.set_yscale("log")
 
-        DP = self._pattern(self.mean_CBED_fit.x, shared_data)
+        DP = self._pattern(self.mean_CBED_fit.x, shared_data) / self.intensity_scale
         ax = fig.add_subplot(gs[0, 1])
         CyRd = mpl_c.LinearSegmentedColormap.from_list(
             "CyRd", ["#00ccff", "#ffffff", "#ff0000"]
@@ -206,7 +208,29 @@ class WholePatternFit:
 
         return opt
 
-    def fit_all_patterns(self, restart=False, **fit_opts):
+    def fit_all_patterns(
+        self, 
+        resume = False, 
+        **fit_opts
+        ):
+        """
+        Apply model fitting to all patterns.
+
+        Parameters
+        ----------
+        resume: bool (optional)
+            Set to true to continue a previous fit with more iterations.
+        fit_opts: args (optional)
+            args passed to scipy.optimize.least_squares
+
+        Returns
+        --------
+        fit_data: RealSlice
+            Fitted coefficients for all probe positions
+        fit_metrics: RealSlice
+            Fitting metrixs for all probe positions
+
+        """
 
         # make sure we have the latest parameters
         self._scrape_model_params()
@@ -215,21 +239,21 @@ class WholePatternFit:
         self._track = False
         self._fevals = []
 
-        if restart:
-            assert hasattr(self, "fit_data"), "No existing data for restart!"
+        if resume:
+            assert hasattr(self, "fit_data"), "No existing data resuming fit!"
 
         fit_data = np.zeros((self.datacube.R_Nx, self.datacube.R_Ny, self.x0.shape[0]))
         fit_metrics = np.zeros((self.datacube.R_Nx, self.datacube.R_Ny, 4))
 
         for rx, ry in tqdmnd(self.datacube.R_Nx, self.datacube.R_Ny):
-            current_pattern = self.datacube.data[rx, ry, :, :]
+            current_pattern = self.datacube.data[rx, ry, :, :] * self.intensity_scale
             shared_data = self.static_data.copy()
             self._cost_history = (
                 []
             )  # clear this so it doesn't grow: TODO make this not stupid
 
             try:
-                x0 = self.fit_data.data[rx, ry] if restart else self.x0
+                x0 = self.fit_data.data[rx, ry] if resume else self.x0
 
                 if self.hasJacobian & self.use_jacobian:
                     opt = least_squares(
@@ -256,7 +280,8 @@ class WholePatternFit:
                     opt.nfev,
                     opt.status,
                 ]
-            except LinAlgError as err:
+            # except LinAlgError as err:
+            except err:
                 warnings.warn(f'Fit on positon ({rx,ry}) failed with error {err}')
 
 
