@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.gridspec import GridSpec
 from mpl_toolkits.axes_grid1 import ImageGrid, make_axes_locatable
-from py4DSTEM.visualize.vis_special import Complex2RGB, add_colorbar_arg
+from py4DSTEM.visualize.vis_special import Complex2RGB, add_colorbar_arg, show_complex
 
 try:
     import cupy as cp
@@ -1922,7 +1922,7 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
                 (
                     propagated_probes,
                     object_patches,
-                    transmitted_probes,
+                    self._transmitted_probes,
                     self._exit_waves,
                     batch_error,
                 ) = self._forward(
@@ -1954,7 +1954,7 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
                     positions_px[start:end] = self._position_correction(
                         self._object,
                         self._probe,
-                        transmitted_probes,
+                        self._transmitted_probes,
                         amplitudes,
                         self._positions_px,
                         positions_step_size,
@@ -2000,7 +2000,7 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
                 object_positivity=object_positivity,
                 shrinkage_rad=shrinkage_rad,
                 object_mask=self._object_fov_mask_inverse
-                if fix_potential_baseline and self._object_fov_mask_inverse.sum() > 0 
+                if fix_potential_baseline and self._object_fov_mask_inverse.sum() > 0
                 else None,
                 pure_phase_object=a0 < pure_phase_object_iter
                 and self._object_type == "complex",
@@ -2534,6 +2534,72 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
                 **kwargs,
             )
         return self
+
+    def show_transmitted_probe(
+        self,
+        plot_fourier_probe: bool = False,
+        **kwargs,
+    ):
+        """
+        Plots the min, max, and mean transmitted probe after propagation and transmission.
+
+        Parameters
+        ----------
+        plot_fourier_probe: boolean, optional
+            If True, the transmitted probes are also plotted in Fourier space
+        kwargs:
+            Passed to show_complex
+        """
+
+        xp = self._xp
+
+        transmitted_probe_intensities = xp.sum(
+            xp.abs(self._transmitted_probes) ** 2, axis=(-2, -1)
+        )
+        min_intensity_transmitted = self._transmitted_probes[
+            xp.argmin(transmitted_probe_intensities)
+        ]
+        max_intensity_transmitted = self._transmitted_probes[
+            xp.argmax(transmitted_probe_intensities)
+        ]
+        mean_transmitted = self._transmitted_probes.mean(0)
+        probes = [
+            self._asnumpy(probe)
+            for probe in [
+                mean_transmitted,
+                min_intensity_transmitted,
+                max_intensity_transmitted,
+            ]
+        ]
+        title = [
+            "Mean Transmitted Probe",
+            "Min Intensity Transmitted Probe",
+            "Max Intensity Transmitted Probe",
+        ]
+
+        if plot_fourier_probe:
+            bottom_row = [
+                self._asnumpy(self._return_fourier_probe(probe))
+                for probe in [
+                    mean_transmitted,
+                    min_intensity_transmitted,
+                    max_intensity_transmitted,
+                ]
+            ]
+            probes = [probes, bottom_row]
+
+            title += [
+                "Mean Transmitted Fourier Probe",
+                "Min Intensity Transmitted Fourier Probe",
+                "Max Intensity Transmitted Fourier Probe",
+            ]
+
+        title = kwargs.get("title", title)
+        show_complex(
+            probes,
+            title=title,
+            **kwargs,
+        )
 
     def show_slices(
         self,
