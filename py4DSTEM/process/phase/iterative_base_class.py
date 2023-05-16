@@ -39,7 +39,7 @@ class PhaseReconstruction(Custom):
     Defines various common functions and properties for subclasses to inherit.
     """
 
-    def attach_datacube(self, dc: DataCube):
+    def attach_datacube(self, datacube: DataCube):
         """
         Attaches a datacube to a class initialized without one.
 
@@ -53,7 +53,7 @@ class PhaseReconstruction(Custom):
         self: PhaseReconstruction
             Self to enable chaining
         """
-        self._datacube = dc
+        self._datacube = datacube
         return self
 
     def set_save_defaults(
