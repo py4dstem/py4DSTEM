@@ -53,7 +53,7 @@ class PtychographyOptimizer:
         n_initial_points:int,
         ):
 
-        self._optimization_function = self._get_optimization_function(
+        self._optimization_function, pbar = self._get_optimization_function(
             self._reconstruction_type,
             self._parameter_list,
             n_calls,
@@ -72,19 +72,32 @@ class PtychographyOptimizer:
             n_initial_points=n_initial_points,
             x0 = self._x0
         )
+
+        # Finish the tqdm progressbar so subsequent things behave nicely
+        pbar.close()
+
         return self
 
-    def visualize(self,):
-        if len(self._parameter_list) == 1:
+    def visualize(
+        self,
+        gp_model=True,
+        convergence=False,
+        objective=True,
+        evaluations=False,
+    ):
+        if len(self._parameter_list) == 1 and gp_model:
             plot_gaussian_process(self._skopt_result)
             plt.show()
 
-        plot_convergence(self._skopt_result)
-        plt.show()
-        plot_objective(self._skopt_result)
-        plt.show()
-        plot_evaluations(self._skopt_result)
-        plt.show()
+        if convergence:
+            plot_convergence(self._skopt_result)
+            plt.show()
+        if objective:
+            plot_objective(self._skopt_result)
+            plt.show()
+        if evaluations:
+            plot_evaluations(self._skopt_result)
+            plt.show()
         return self
 
     def get_optimized_arguments(self):
@@ -154,7 +167,7 @@ class PtychographyOptimizer:
         reco_params = list(reconstruct_optimization_param_names.keys())
 
         # Make a progress bar
-        pbar = tqdm(total=n_iterations,desc="Optimizing Parameters")
+        pbar = tqdm(total=n_iterations,desc="Optimizing parameters")
 
         # Target function for Gaussian process optimization that takes a single
         # dict of named parameters and returns the ptycho error metric
@@ -172,7 +185,7 @@ class PtychographyOptimizer:
 
             return ptycho.error
                 
-        return f
+        return f, pbar
 
     def _set_optimizer_defaults(self):
         """
