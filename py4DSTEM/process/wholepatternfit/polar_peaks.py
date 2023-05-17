@@ -3,7 +3,7 @@ This sub-module contains functions for polar transform peak detection of amorpho
 
 """
 
-from py4DSTEM import tqdmnd
+from emdfile import tqdmnd
 from scipy.ndimage import gaussian_filter
 from sklearn.decomposition import PCA
 from itertools import product
