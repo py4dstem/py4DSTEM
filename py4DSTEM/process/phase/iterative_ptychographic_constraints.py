@@ -480,6 +480,51 @@ class PtychographicConstraints:
 
         return updated_probe * normalization
 
+    def _probe_residual_aberration_filtering_constraint(
+        self,
+        current_probe,
+        gaussian_filter_sigma,
+        fix_amplitude,
+    ):
+        """
+        Ptychographic probe smoothing constraint.
+        Removes/adds known (initialization) aberrations before/after smoothing.
+
+        Parameters
+        ----------
+        current_probe: np.ndarray
+            Current positions estimate
+        gaussian_filter_sigma: float
+            Standard deviation of gaussian kernel
+        fix_amplitude: bool
+            If True, only the phase is smoothed
+
+        Returns
+        --------
+        constrained_probe: np.ndarray
+            Constrained probe estimate
+        """
+        
+        xp = self._xp
+        gaussian_filter = self._gaussian_filter
+        known_aberrations_array = self._known_aberrations_array
+        
+        fourier_probe = self._return_fourier_probe(current_probe)
+        if fix_amplitude:
+            fourier_probe_abs = xp.abs(fourier_probe)
+        
+        fourier_probe *= xp.conjugate(known_aberrations_array)
+        fourier_probe = gaussian_filter(fourier_probe,gaussian_filter_sigma)
+        fourier_probe *= known_aberrations_array
+
+        if fix_amplitude:
+            fourier_probe_angle = xp.angle(fourier_probe)
+            fourier_probe = fourier_probe_abs * xp.exp(1.0j*fourier_probe_angle)
+        
+        current_probe = xp.fft.ifftshift(xp.fft.ifft2(xp.fft.fftshift(fourier_probe)))
+        
+        return current_probe
+
     def _positions_center_of_mass_constraint(self, current_positions):
         """
         Ptychographic position center of mass constraint.

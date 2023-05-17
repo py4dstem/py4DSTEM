@@ -696,6 +696,16 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
 
         self._probe_initial = self._probe.copy()
 
+        self._known_aberrations_array = ComplexProbe(
+                energy = self._energy,
+                gpts = self._region_of_interest_shape,
+                sampling = self.sampling,
+                parameters=self._polar_parameters,
+                device=self._device,
+                )._evaluate_ctf()
+
+        self._known_aberrations_array = xp.fft.ifftshift(self._known_aberrations_array)
+        
         # overlaps
         shifted_probes = fft_shift(self._probe, self._positions_px_fractional, xp)
         probe_intensities = xp.abs(shifted_probes) ** 2
@@ -2205,6 +2215,9 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
         pure_phase_object,
         fix_com,
         symmetrize_probe,
+        probe_gaussian_filter,
+        probe_gaussian_filter_sigma,
+        probe_gaussian_filter_fix_amplitude,
         fix_probe_amplitude,
         fix_probe_amplitude_relative_radius,
         fix_probe_amplitude_relative_width,
@@ -2262,6 +2275,12 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
             Standard deviation of gaussian kernel for electrostatic object
         gaussian_filter_sigma_m: float
             Standard deviation of gaussian kernel for magnetic object
+        probe_gaussian_filter: bool
+            If True, applies reciprocal-space gaussian filtering on residual aberrations
+        probe_gaussian_filter_sigma: float
+            Standard deviation of gaussian kernel
+        probe_gaussian_filter_fix_amplitude: bool
+            If True, only the probe phase is smoothed
         butterworth_filter: bool
             If True, applies high-pass butteworth filter
         q_lowpass_e: float
@@ -2343,6 +2362,11 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
         if fix_com:
             current_probe = self._probe_center_of_mass_constraint(current_probe)
 
+        if probe_gaussian_filter:
+            current_probe = self._probe_residual_aberration_filtering_constraint(
+                current_probe, probe_gaussian_filter_sigma, probe_gaussian_filter_fix_amplitude,
+            )
+        
         if symmetrize_probe:
             current_probe = self._probe_radial_symmetrization_constraint(current_probe)
 
@@ -2396,6 +2420,9 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
         gaussian_filter_sigma_e: float = None,
         gaussian_filter_sigma_m: float = None,
         gaussian_filter_iter: int = np.inf,
+        probe_gaussian_filter_sigma: float = None,
+        probe_gaussian_filter_residual_aberrations_iter: int = np.inf,
+        probe_gaussian_filter_fix_amplitude: bool = True,
         butterworth_filter_iter: int = np.inf,
         q_lowpass_e: float = None,
         q_lowpass_m: float = None,
@@ -2466,6 +2493,12 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
             Standard deviation of gaussian kernel for magnetic object
         gaussian_filter_iter: int, optional
             Number of iterations to run using object smoothness constraint
+        probe_gaussian_filter_sigma: float, optional
+            Standard deviation of probe gaussian kernel
+        probe_gaussian_filter_residual_aberrations_iter: int, optional
+            Number of iterations to run using probe smoothing of residual aberrations
+        probe_gaussian_filter_fix_amplitude: bool
+            If True, only the probe phase is smoothed
         butterworth_filter_iter: int, optional
             Number of iterations to run using high-pass butteworth filter
         q_lowpass_e: float
@@ -2803,6 +2836,10 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
                 self._positions_px,
                 fix_com=fix_com and a0 >= fix_probe_iter,
                 symmetrize_probe=a0 < symmetrize_probe_iter,
+                probe_gaussian_filter=a0 < probe_gaussian_filter_residual_aberrations_iter
+                and probe_gaussian_filter_sigma is not None,
+                probe_gaussian_filter_sigma=probe_gaussian_filter_sigma,
+                probe_gaussian_filter_fix_amplitude = probe_gaussian_filter_fix_amplitude,
                 fix_probe_amplitude=a0 < fix_probe_amplitude_iter
                 and a0 >= fix_probe_iter,
                 fix_probe_amplitude_relative_radius=fix_probe_amplitude_relative_radius,
