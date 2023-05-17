@@ -595,7 +595,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                     self._vacuum_probe_intensity, dtype=xp.float32
                 )
                 probe_x0, probe_y0 = get_CoM(
-                    self._vacuum_probe_intensity, device="cpu" if xp is np else "gpu"
+                    self._vacuum_probe_intensity, device=self._device
                 )
                 shift_x = self._region_of_interest_shape[0] // 2 - probe_x0
                 shift_y = self._region_of_interest_shape[1] // 2 - probe_y0
@@ -604,7 +604,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                     shift_x,
                     shift_y,
                     bilinear=True,
-                    device="cpu" if xp is np else "gpu",
+                    device=self._device,
                 )
 
             self._probe = (
@@ -616,7 +616,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                     rolloff=self._rolloff,
                     vacuum_probe_intensity=self._vacuum_probe_intensity,
                     parameters=self._polar_parameters,
-                    device="cpu" if xp is np else "gpu",
+                    device=self._device,
                 )
                 .build()
                 ._array
@@ -653,15 +653,15 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
         self._probe_initial = self._probe.copy()
 
         self._known_aberrations_array = ComplexProbe(
-                energy = self._energy,
-                gpts = self._region_of_interest_shape,
-                sampling = self.sampling,
-                parameters=self._polar_parameters,
-                device=self._device,
-                )._evaluate_ctf()
+            energy=self._energy,
+            gpts=self._region_of_interest_shape,
+            sampling=self.sampling,
+            parameters=self._polar_parameters,
+            device=self._device,
+        )._evaluate_ctf()
 
         self._known_aberrations_array = xp.fft.ifftshift(self._known_aberrations_array)
-        
+
         # Precomputed propagator arrays
         self._slice_thicknesses = np.tile(
             self._object_shape[1] * self.sampling[1] / self._num_slices,
@@ -705,7 +705,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                 )
 
                 probe_overlap_3D += probe_overlap[None]
-                
+
                 probe_overlap_3D = self._rotate(
                     probe_overlap_3D,
                     -current_angle_deg,
@@ -1611,10 +1611,12 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
 
         if fix_com:
             current_probe = self._probe_center_of_mass_constraint(current_probe)
-        
+
         if probe_gaussian_filter:
             current_probe = self._probe_residual_aberration_filtering_constraint(
-                current_probe, probe_gaussian_filter_sigma, probe_gaussian_filter_fix_amplitude,
+                current_probe,
+                probe_gaussian_filter_sigma,
+                probe_gaussian_filter_fix_amplitude,
             )
 
         if symmetrize_probe:
@@ -2108,10 +2110,11 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                         self._positions_px_all[start_tilt:end_tilt],
                         fix_com=fix_com and a0 >= fix_probe_iter,
                         symmetrize_probe=a0 < symmetrize_probe_iter,
-                        probe_gaussian_filter=a0 < probe_gaussian_filter_residual_aberrations_iter
+                        probe_gaussian_filter=a0
+                        < probe_gaussian_filter_residual_aberrations_iter
                         and probe_gaussian_filter_sigma is not None,
                         probe_gaussian_filter_sigma=probe_gaussian_filter_sigma,
-                        probe_gaussian_filter_fix_amplitude = probe_gaussian_filter_fix_amplitude,
+                        probe_gaussian_filter_fix_amplitude=probe_gaussian_filter_fix_amplitude,
                         fix_probe_amplitude=a0 < fix_probe_amplitude_iter
                         and a0 >= fix_probe_iter,
                         fix_probe_amplitude_relative_radius=fix_probe_amplitude_relative_radius,
@@ -2132,7 +2135,8 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                         object_positivity=object_positivity,
                         shrinkage_rad=shrinkage_rad,
                         object_mask=self._object_fov_mask_inverse
-                        if fix_potential_baseline and self._object_fov_mask_inverse.sum() > 0 
+                        if fix_potential_baseline
+                        and self._object_fov_mask_inverse.sum() > 0
                         else None,
                     )
 
@@ -2152,10 +2156,11 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                     None,
                     fix_com=fix_com and a0 >= fix_probe_iter,
                     symmetrize_probe=a0 < symmetrize_probe_iter,
-                    probe_gaussian_filter=a0 < probe_gaussian_filter_residual_aberrations_iter
+                    probe_gaussian_filter=a0
+                    < probe_gaussian_filter_residual_aberrations_iter
                     and probe_gaussian_filter_sigma is not None,
                     probe_gaussian_filter_sigma=probe_gaussian_filter_sigma,
-                    probe_gaussian_filter_fix_amplitude = probe_gaussian_filter_fix_amplitude,
+                    probe_gaussian_filter_fix_amplitude=probe_gaussian_filter_fix_amplitude,
                     fix_probe_amplitude=a0 < fix_probe_amplitude_iter
                     and a0 >= fix_probe_iter,
                     fix_probe_amplitude_relative_radius=fix_probe_amplitude_relative_radius,
@@ -2175,7 +2180,8 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                     object_positivity=object_positivity,
                     shrinkage_rad=shrinkage_rad,
                     object_mask=self._object_fov_mask_inverse
-                    if fix_potential_baseline and self._object_fov_mask_inverse.sum() > 0 
+                    if fix_potential_baseline
+                    and self._object_fov_mask_inverse.sum() > 0
                     else None,
                 )
 
