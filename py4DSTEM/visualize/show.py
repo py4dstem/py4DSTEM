@@ -332,11 +332,7 @@ def show(
                 return
         else:
             # generate a multichannel combined RGB image
-            # del args['ar']
-            # del args['combine_images']
-            # del args['return_ar_scaled']
-            # del args['show_image']
-
+            
             # init
             num_images = len(ar)
             hue_angles = np.linspace(0.0,2.0*np.pi,num_images,endpoint=False)
