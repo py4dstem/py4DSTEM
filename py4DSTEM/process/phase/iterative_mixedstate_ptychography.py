@@ -398,7 +398,7 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
                     )
                     probe_x0, probe_y0 = get_CoM(
                         self._vacuum_probe_intensity,
-                        device="cpu" if xp is np else "gpu",
+                        device=self._device,
                     )
                     shift_x = self._region_of_interest_shape[0] // 2 - probe_x0
                     shift_y = self._region_of_interest_shape[1] // 2 - probe_y0
@@ -407,7 +407,7 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
                         shift_x,
                         shift_y,
                         bilinear=True,
-                        device="cpu" if xp is np else "gpu",
+                        device=self._device,
                     )
 
                 _probe = (
@@ -419,7 +419,7 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
                         rolloff=self._rolloff,
                         vacuum_probe_intensity=self._vacuum_probe_intensity,
                         parameters=self._polar_parameters,
-                        device="cpu" if xp is np else "gpu",
+                        device=self._device,
                     )
                     .build()
                     ._array
@@ -467,14 +467,14 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
             self._probe = xp.asarray(self._probe, dtype=xp.complex64)
 
         self._probe_initial = self._probe.copy()
-        
+
         self._known_aberrations_array = ComplexProbe(
-                energy = self._energy,
-                gpts = self._region_of_interest_shape,
-                sampling = self.sampling,
-                parameters=self._polar_parameters,
-                device=self._device,
-                )._evaluate_ctf()
+            energy=self._energy,
+            gpts=self._region_of_interest_shape,
+            sampling=self.sampling,
+            parameters=self._polar_parameters,
+            device=self._device,
+        )._evaluate_ctf()
 
         self._known_aberrations_array = xp.fft.ifftshift(self._known_aberrations_array)
 
@@ -1634,10 +1634,11 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
                 self._positions_px,
                 fix_com=fix_com and a0 >= fix_probe_iter,
                 symmetrize_probe=a0 < symmetrize_probe_iter,
-                probe_gaussian_filter=a0 < probe_gaussian_filter_residual_aberrations_iter
+                probe_gaussian_filter=a0
+                < probe_gaussian_filter_residual_aberrations_iter
                 and probe_gaussian_filter_sigma is not None,
                 probe_gaussian_filter_sigma=probe_gaussian_filter_sigma,
-                probe_gaussian_filter_fix_amplitude = probe_gaussian_filter_fix_amplitude,
+                probe_gaussian_filter_fix_amplitude=probe_gaussian_filter_fix_amplitude,
                 fix_probe_amplitude=a0 < fix_probe_amplitude_iter
                 and a0 >= fix_probe_iter,
                 fix_probe_amplitude_relative_radius=fix_probe_amplitude_relative_radius,
@@ -1659,7 +1660,7 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
                 object_positivity=object_positivity,
                 shrinkage_rad=shrinkage_rad,
                 object_mask=self._object_fov_mask_inverse
-                if fix_potential_baseline and self._object_fov_mask_inverse.sum() > 0 
+                if fix_potential_baseline and self._object_fov_mask_inverse.sum() > 0
                 else None,
                 pure_phase_object=a0 < pure_phase_object_iter
                 and self._object_type == "complex",

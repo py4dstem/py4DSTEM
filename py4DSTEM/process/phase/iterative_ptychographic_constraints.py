@@ -375,18 +375,20 @@ class PtychographicConstraints:
         xp = self._xp
 
         current_probe_sum = xp.sum(xp.abs(current_probe) ** 2)
+        fourier_probe = self._return_fourier_probe(current_probe)
 
-        current_probe_real = current_probe.real.copy()
-        current_probe_imag = current_probe.imag.copy()
+        fourier_probe_real = fourier_probe.real.copy()
+        fourier_probe_imag = fourier_probe.imag.copy()
 
-        current_probe_real = self._probe_radial_symmetrization_constraint_base(
-            current_probe_real, num_bins, center
+        fourier_probe_real = self._probe_radial_symmetrization_constraint_base(
+            fourier_probe_real, num_bins, center
         )
-        current_probe_imag = self._probe_radial_symmetrization_constraint_base(
-            current_probe_imag, num_bins, center
+        fourier_probe_imag = self._probe_radial_symmetrization_constraint_base(
+            fourier_probe_imag, num_bins, center
         )
 
-        current_probe = current_probe_real + 1.0j * current_probe_imag
+        fourier_probe = fourier_probe_real + 1.0j * fourier_probe_imag
+        current_probe = xp.fft.ifftshift(xp.fft.ifft2(xp.fft.fftshift(fourier_probe)))
         current_probe *= xp.sqrt(current_probe_sum / np.sum(np.abs(current_probe) ** 2))
 
         return current_probe
@@ -504,25 +506,25 @@ class PtychographicConstraints:
         constrained_probe: np.ndarray
             Constrained probe estimate
         """
-        
+
         xp = self._xp
         gaussian_filter = self._gaussian_filter
         known_aberrations_array = self._known_aberrations_array
-        
+
         fourier_probe = self._return_fourier_probe(current_probe)
         if fix_amplitude:
             fourier_probe_abs = xp.abs(fourier_probe)
-        
+
         fourier_probe *= xp.conjugate(known_aberrations_array)
-        fourier_probe = gaussian_filter(fourier_probe,gaussian_filter_sigma)
+        fourier_probe = gaussian_filter(fourier_probe, gaussian_filter_sigma)
         fourier_probe *= known_aberrations_array
 
         if fix_amplitude:
             fourier_probe_angle = xp.angle(fourier_probe)
-            fourier_probe = fourier_probe_abs * xp.exp(1.0j*fourier_probe_angle)
-        
+            fourier_probe = fourier_probe_abs * xp.exp(1.0j * fourier_probe_angle)
+
         current_probe = xp.fft.ifftshift(xp.fft.ifft2(xp.fft.fftshift(fourier_probe)))
-        
+
         return current_probe
 
     def _positions_center_of_mass_constraint(self, current_positions):
