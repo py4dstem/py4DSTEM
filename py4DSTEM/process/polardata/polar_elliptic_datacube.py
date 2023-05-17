@@ -1,6 +1,6 @@
 import numpy as np
 from py4DSTEM.classes import DataCube
-from py4DSTEM.process.amorphous.polar_datacube import PolarDatacube
+from py4DSTEM.process.polardata.polar_datacube import PolarDatacube
 
 
 
