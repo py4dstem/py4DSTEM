@@ -1,4 +1,4 @@
-from py4DSTEM.process.amorphous import (
+from py4DSTEM.process.polardata import (
     PolarDatacube,
     PolarEllipticDatacube,
 )
