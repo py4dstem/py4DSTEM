@@ -40,25 +40,27 @@ class PolarDatacube:
         assert(hasattr(self._datacube,'calibration')), "No .calibration found"
         self.calibration = self._datacube.calibration
 
-        # set up calibration state
-        self.setcal()
+        # setup data getter
         self._set_polar_data_getter()
 
 
-        # set up sampling
+        # setup sampling
 
-        # polar sampling
+        # polar
         if qmax is None:
             qmax = np.min(self._datacube.Qshape) / np.sqrt(2)
         self.set_radial_bins(qmin,qmax,qstep)
         self.set_annular_bins(n_annular)
 
-        # cartesian sampling
+        # cartesian
         self._xa,self._ya = np.meshgrid(
             np.arange(self._datacube.Q_Nx),
             np.arange(self._datacube.Q_Ny),
             indexing = 'ij'
         )
+
+        pass
+
 
 
     # sampling methods + properties
@@ -118,14 +120,21 @@ class PolarDatacube:
         n_annular
     ):
         self._n_annular = n_annular
-        self.annular_bins = np.linspace(
+        self._annular_bins = np.linspace(
             0,
             2*np.pi,
             self._n_annular,
             endpoint = False
         )
         self.set_polar_shape()
-        self.annular_step = self.annular_bins[1] - self.annular_bins[0]
+        self._annular_step = self.annular_bins[1] - self.annular_bins[0]
+
+    @property
+    def annular_bins(self):
+        return self._annular_bins
+    @property
+    def annular_step(self):
+        return self._annular_step
 
     @property
     def n_annular(self):
@@ -143,62 +152,13 @@ class PolarDatacube:
             self.polar_size = np.prod(self.polar_shape)
 
 
-    # calibration state
-
-    def setcal(
-        self,
-        ellipse = None,
-        pixel = None,
-    ):
-        """
-        Calling
-
-            >>> polarcube.setcal(
-            >>>     ellipse = bool,
-            >>>     pixel = bool,
-            >>> )
-
-        sets the calibrations that will be applied to diffraction data that is
-        subsequently retrieved with
-
-            >>> polarcube.data[ scan_x, scan_y ]
-
-        Any arguments left as `None` will be automatically set based on
-        the calibration measurements available.
-        """
-        c = self.calibration
-
-        # autodetect
-        if ellipse is None:
-            ellipse = False if c.get_ellipse() is None else True
-        if pixel is None:
-            pixel = False if c.get_Q_pixel_size() == 1 else True
-
-        # validate requested state
-        if ellipse:
-            assert(c.get_ellipse() is not None), "Requested calibration not found"
-        if pixel:
-            assert(c.get_Q_pixel_size() is not None), "Requested calibration not found"
-
-        # set the calibrations
-        self._calstate = {
-            "ellipse" : ellipse,
-            "pixel" : pixel,
-        }
-        pass
-
-    @property
-    def calstate(self):
-        return self._calstate
-
-
-    # raw data
+    # expose raw data
     @property
     def data_raw(self):
         return self._datacube
 
 
-    # retrieve transformed data
+    # expose transformed data
     @property
     def data(self):
         return self._polar_data_getter
@@ -226,8 +186,6 @@ class PolarDataGetter:
             cartesian_data = ans,
             cal = self._polarcube.calibration,
             scanxy = (x,y),
-            ellipse = self._polarcube.calstate['ellipse'],
-            pixel = self._polarcube.calstate['pixel'],
         )
         return ans
 
@@ -235,7 +193,6 @@ class PolarDataGetter:
         space = ' '*len(self.__class__.__name__)+'  '
         string = f"{self.__class__.__name__}( "
         string += "Retrieves the diffraction pattern at scan position (x,y) in polar coordinates when sliced with [x,y]."
-        string += "\n"+space+"Set which calibrations to apply with polarcube.setcal(...). )"
         return string
 
     def _transform(
@@ -243,8 +200,6 @@ class PolarDataGetter:
         cartesian_data,
         cal,
         scanxy,
-        ellipse,
-        pixel,
         ):
         """
         Return a transformed copy of the diffraction pattern `cartesian_data`.
@@ -300,61 +255,5 @@ class PolarDataGetter:
         # output
         ans = np.reshape(im, self._polarcube.polar_shape)
         return ans
-
-
-
-
-#        # ellipse
-#        if ellipse:
-#            a,b,theta = cal.get_ellipse(x,y)
-#            # Get the transformation matrix
-#            e = b/a
-#            sint, cost = np.sin(theta-np.pi/2.), np.cos(theta-np.pi/2.)
-#            T = np.array(
-#                    [
-#                        [e*sint**2 + cost**2, sint*cost*(1-e)],
-#                        [sint*cost*(1-e), sint**2 + e*cost**2]
-#                    ]
-#                )
-#            # apply it
-#            xyar_i = np.vstack([ans['qx'],ans['qy']])
-#            xyar_f = np.matmul(T, xyar_i)
-#            ans['qx'] = xyar_f[0, :]
-#            ans['qy'] = xyar_f[1, :]
-#
-#
-#        # pixel size
-#        if pixel:
-#            qpix = cal.get_Q_pixel_size()
-#            ans['qx'] *= qpix
-#            ans['qy'] *= qpix
-#
-#
-#        # Q/R rotation
-#        if rotate:
-#            flip = cal.get_QR_flip()
-#            theta = cal.get_QR_rotation_degrees()
-#            # rotation matrix
-#            R = np.array([
-#                [np.cos(theta), -np.sin(theta)],
-#                [np.sin(theta), np.cos(theta)]])
-#            # apply
-#            if flip:
-#                positions = R @ np.vstack((ans["qy"], ans["qx"]))
-#            else:
-#                positions = R @ np.vstack((ans["qx"], ans["qy"]))
-#            # update
-#            ans['qx'] = positions[0,:]
-#            ans['qy'] = positions[1,:]
-#
-#
-#        # return
-#        return ans
-
-
-
-
-
-
 
 

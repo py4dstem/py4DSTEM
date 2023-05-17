@@ -24,7 +24,10 @@ from py4DSTEM.classes import (
     Data,
 )
 from py4DSTEM.process.diskdetection import BraggVectors, BraggVectorMap
-from py4DSTEM.process.amorph import PolarDatacube
+from py4DSTEM.process import (
+    PolarDatacube,
+    PolarEllipticDatacube,
+)
 
 
 # submodules
