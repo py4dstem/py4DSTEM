@@ -11,4 +11,5 @@ from py4DSTEM.process import classification
 from py4DSTEM.process import latticevectors
 from py4DSTEM.process import diffraction
 from py4DSTEM.process import wholepatternfit
+from py4DSTEM.process import amorph
 
