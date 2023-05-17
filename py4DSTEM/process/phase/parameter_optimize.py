@@ -73,6 +73,10 @@ class PtychographyOptimizer:
             x0 = self._x0
         )
 
+        print("Optimized parameters:")
+        for p,x in zip(self._parameter_list, self._skopt_result.x):
+            print(f"{p.name}: {x}")
+
         # Finish the tqdm progressbar so subsequent things behave nicely
         pbar.close()
 
