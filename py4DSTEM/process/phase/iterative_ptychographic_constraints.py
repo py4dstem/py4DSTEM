@@ -109,7 +109,7 @@ class PtychographicConstraints:
         current_object: np.ndarray
             Current object estimate
         gaussian_filter_sigma: float
-            Standard deviation of gaussian kernel
+            Standard deviation of gaussian kernel in A
         pure_phase_object: bool
             If True, gaussian blur performed on phase only
 
@@ -120,7 +120,8 @@ class PtychographicConstraints:
         """
         xp = self._xp
         gaussian_filter = self._gaussian_filter
-
+        gaussian_filter_sigma /= xp.sqrt(self.sampling[0] ** 2 + self.sampling[1] ** 2)
+        
         if pure_phase_object:
             phase = xp.angle(current_object)
             phase = gaussian_filter(phase, gaussian_filter_sigma)

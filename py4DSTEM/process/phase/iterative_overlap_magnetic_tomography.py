@@ -786,18 +786,12 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
         self._object_fov_mask_inverse = np.invert(self._object_fov_mask)
 
         if plot_probe_overlaps:
-            figsize = kwargs.get("figsize", (13, 4))
-            cmap = kwargs.get("cmap", "Greys_r")
-            vmin = kwargs.get("vmin", None)
-            vmax = kwargs.get("vmax", None)
-            hue_start = kwargs.get("hue_start", 0)
-            invert = kwargs.get("invert", False)
-            kwargs.pop("figsize", None)
-            kwargs.pop("cmap", None)
-            kwargs.pop("vmin", None)
-            kwargs.pop("vmax", None)
-            kwargs.pop("hue_start", None)
-            kwargs.pop("invert", None)
+            figsize = kwargs.pop("figsize", (13, 4))
+            cmap = kwargs.pop("cmap", "Greys_r")
+            vmin = kwargs.pop("vmin", None)
+            vmax = kwargs.pop("vmax", None)
+            hue_start = kwargs.pop("hue_start", 0)
+            invert = kwargs.pop("invert", False)
 
             # initial probe
             complex_probe_rgb = Complex2RGB(
@@ -1545,7 +1539,7 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
         current_object: np.ndarray
             Current object estimate
         gaussian_filter_sigma: float
-            Standard deviation of gaussian kernel
+            Standard deviation of gaussian kernel in A
 
         Returns
         --------
@@ -1554,6 +1548,7 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
         """
         gaussian_filter = self._gaussian_filter
 
+        gaussian_filter_sigma /= xp.sqrt(self.sampling[0] ** 2 + self.sampling[1] ** 2)
         current_object = gaussian_filter(current_object, gaussian_filter_sigma)
 
         return current_object
@@ -1682,9 +1677,9 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
         gaussian_filter: bool
             If True, applies real-space gaussian filter
         gaussian_filter_sigma_e: float
-            Standard deviation of gaussian kernel for electrostatic object
+            Standard deviation of gaussian kernel for electrostatic object in A
         gaussian_filter_sigma_m: float
-            Standard deviation of gaussian kernel for magnetic object
+            Standard deviation of gaussian kernel for magnetic object in A
         butterworth_filter: bool
             If True, applies high-pass butteworth filter
         q_lowpass_e: float
@@ -1867,7 +1862,7 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
         fix_probe_iter: int, optional
             Number of iterations to run with a fixed probe before updating probe estimate
         symmetrize_probe_iter: int, optional
-            Number of iterations to run with a fixed probe before updating probe estimate
+            Number of iterations to run before radially-averaging the probe
         fix_probe_amplitude: bool
             If True, probe amplitude is constrained by top hat function
         fix_probe_amplitude_relative_radius: float
@@ -1883,8 +1878,10 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
             Number of iterations to run with fixed positions before updating positions estimate
         global_affine_transformation: bool, optional
             If True, positions are assumed to be a global affine transform from initial scan
-        gaussian_filter_sigma: float, optional
-            Standard deviation of gaussian kernel
+        gaussian_filter_sigma_e: float
+            Standard deviation of gaussian kernel for electrostatic object in A
+        gaussian_filter_sigma_m: float
+            Standard deviation of gaussian kernel for magnetic object in A
         gaussian_filter_iter: int, optional
             Number of iterations to run using object smoothness constraint
         probe_gaussian_filter_sigma: float, optional
@@ -2380,11 +2377,7 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
             if collective_tilt_updates:
                 self._object += collective_object / self._num_tilts
 
-                (
-                    self._object,
-                    self._probe,
-                    _,
-                ) = self._constraints(
+                (self._object, self._probe, _,) = self._constraints(
                     self._object,
                     self._probe,
                     None,
@@ -2509,8 +2502,7 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
             min/max y indices
         """
 
-        cmap = kwargs.get("cmap", "magma")
-        kwargs.pop("cmap", None)
+        cmap = kwargs.pop("cmap", "magma")
 
         asnumpy = self._asnumpy
 
@@ -2589,12 +2581,9 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
         y_lims: tuple(float,float)
             min/max y indices
         """
-        figsize = kwargs.get("figsize", (14, 10) if cbar else (12, 10))
-        cmap_e = kwargs.get("cmap_e", "magma")
-        cmap_m = kwargs.get("cmap_m", "PuOr")
-        kwargs.pop("figsize", None)
-        kwargs.pop("cmap_e", None)
-        kwargs.pop("cmap_m", None)
+        figsize = kwargs.pop("figsize", (14, 10) if cbar else (12, 10))
+        cmap_e = kwargs.pop("cmap_e", "magma")
+        cmap_m = kwargs.pop("cmap_m", "PuOr")
 
         asnumpy = self._asnumpy
 
@@ -2757,15 +2746,10 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
             ]
         ).max()
 
-        vmin_e = kwargs.get("vmin_e", 0.0)
-        vmax_e = kwargs.get("vmax_e", max_e)
-        vmin_m = kwargs.get("vmin_m", -max_m)
-        vmax_m = kwargs.get("vmax_m", max_m)
-
-        kwargs.pop("vmin_e", None)
-        kwargs.pop("vmax_e", None)
-        kwargs.pop("vmin_m", None)
-        kwargs.pop("vmax_m", None)
+        vmin_e = kwargs.pop("vmin_e", 0.0)
+        vmax_e = kwargs.pop("vmax_e", max_e)
+        vmin_m = kwargs.pop("vmin_m", -max_m)
+        vmax_m = kwargs.pop("vmax_m", max_m)
 
         if plot_convergence:
             spec = GridSpec(
@@ -3022,16 +3006,11 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
                 y_lims=y_lims,
             )
 
-        figsize = kwargs.get("figsize", (6, 6))
-        kwargs.pop("figsize", None)
-        cmap = kwargs.get("cmap", "magma")
-        kwargs.pop("cmap", None)
-        vmin = kwargs.get("vmin", 0)
-        kwargs.pop("vmin", None)
-        vmax = kwargs.get("vmax", 1)
-        kwargs.pop("vmax", None)
-        power = kwargs.get("power", 0.2)
-        kwargs.pop("power", None)
+        figsize = kwargs.pop("figsize", (6, 6))
+        cmap = kwargs.pop("cmap", "magma")
+        vmin = kwargs.pop("vmin", 0)
+        vmax = kwargs.pop("vmax", 1)
+        power = kwargs.pop("power", 0.2)
 
         pixelsize = 1 / (object_fft.shape[0] * self.sampling[0])
         show(

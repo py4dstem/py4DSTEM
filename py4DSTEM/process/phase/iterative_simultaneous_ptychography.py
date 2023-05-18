@@ -719,18 +719,12 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
         self._object_fov_mask_inverse = np.invert(self._object_fov_mask)
 
         if plot_probe_overlaps:
-            figsize = kwargs.get("figsize", (9, 4))
-            cmap = kwargs.get("cmap", "Greys_r")
-            vmin = kwargs.get("vmin", None)
-            vmax = kwargs.get("vmax", None)
-            hue_start = kwargs.get("hue_start", 0)
-            invert = kwargs.get("invert", False)
-            kwargs.pop("figsize", None)
-            kwargs.pop("cmap", None)
-            kwargs.pop("vmin", None)
-            kwargs.pop("vmax", None)
-            kwargs.pop("hue_start", None)
-            kwargs.pop("invert", None)
+            figsize = kwargs.pop("figsize", (9, 4))
+            cmap = kwargs.pop("cmap", "Greys_r")
+            vmin = kwargs.pop("vmin", None)
+            vmax = kwargs.pop("vmax", None)
+            hue_start = kwargs.pop("hue_start", 0)
+            invert = kwargs.pop("invert", False)
 
             # initial probe
             complex_probe_rgb = Complex2RGB(
@@ -2272,9 +2266,9 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
         gaussian_filter: bool
             If True, applies real-space gaussian filter
         gaussian_filter_sigma_e: float
-            Standard deviation of gaussian kernel for electrostatic object
+            Standard deviation of gaussian kernel for electrostatic object in A
         gaussian_filter_sigma_m: float
-            Standard deviation of gaussian kernel for magnetic object
+            Standard deviation of gaussian kernel for magnetic object in A
         probe_gaussian_filter: bool
             If True, applies reciprocal-space gaussian filtering on residual aberrations
         probe_gaussian_filter_sigma: float
@@ -2473,7 +2467,7 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
         fix_probe_iter: int, optional
             Number of iterations to run with a fixed probe before updating probe estimate
         symmetrize_probe_iter: int, optional
-            Number of iterations to run with a fixed probe before updating probe estimate
+            Number of iterations to run before radially-averaging the probe
         fix_probe_amplitude: bool
             If True, probe amplitude is constrained by top hat function
         fix_probe_amplitude_relative_radius: float
@@ -2490,9 +2484,9 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
         global_affine_transformation: bool, optional
             If True, positions are assumed to be a global affine transform from initial scan
         gaussian_filter_sigma_e: float
-            Standard deviation of gaussian kernel for electrostatic object
+            Standard deviation of gaussian kernel for electrostatic object in A
         gaussian_filter_sigma_m: float
-            Standard deviation of gaussian kernel for magnetic object
+            Standard deviation of gaussian kernel for magnetic object in A
         gaussian_filter_iter: int, optional
             Number of iterations to run using object smoothness constraint
         probe_gaussian_filter_sigma: float, optional
@@ -2923,8 +2917,7 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
         padding : int, optional
             Pixels to pad by post rotating-cropping object
         """
-        cmap = kwargs.get("cmap", "magma")
-        kwargs.pop("cmap", None)
+        cmap = kwargs.pop("cmap", "magma")
 
         if self._object_type == "complex":
             obj = np.angle(self.object[0])
@@ -2988,16 +2981,11 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
         padding : int, optional
             Pixels to pad by post rotating-cropping object
         """
-        figsize = kwargs.get("figsize", (12, 5))
-        cmap_e = kwargs.get("cmap_e", "magma")
-        cmap_m = kwargs.get("cmap_m", "PuOr")
-        invert = kwargs.get("invert", False)
-        hue_start = kwargs.get("hue_start", 0)
-        kwargs.pop("figsize", None)
-        kwargs.pop("cmap_e", None)
-        kwargs.pop("cmap_m", None)
-        kwargs.pop("invert", None)
-        kwargs.pop("hue_start", None)
+        figsize = kwargs.pop("figsize", (12, 5))
+        cmap_e = kwargs.pop("cmap_e", "magma")
+        cmap_m = kwargs.pop("cmap_m", "PuOr")
+        invert = kwargs.pop("invert", False)
+        hue_start = kwargs.pop("hue_start", 0)
 
         if self._object_type == "complex":
             obj_e = np.angle(self.object[0])
@@ -3014,15 +3002,10 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
         max_m = np.abs(rotated_magnetic).max()
         min_m = -max_m
 
-        vmin_e = kwargs.get("vmin_e", min_e)
-        vmax_e = kwargs.get("vmax_e", max_e)
-        vmin_m = kwargs.get("vmin_m", min_m)
-        vmax_m = kwargs.get("vmax_m", max_m)
-
-        kwargs.pop("vmin_e", None)
-        kwargs.pop("vmax_e", None)
-        kwargs.pop("vmin_m", None)
-        kwargs.pop("vmax_m", None)
+        vmin_e = kwargs.pop("vmin_e", min_e)
+        vmax_e = kwargs.pop("vmax_e", max_e)
+        vmin_m = kwargs.pop("vmin_m", min_m)
+        vmax_m = kwargs.pop("vmax_m", max_m)
 
         extent = [
             0,
