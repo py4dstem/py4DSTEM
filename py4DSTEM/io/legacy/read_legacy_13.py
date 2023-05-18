@@ -257,6 +257,7 @@ def _get_v13_class(grp):
         'QPoints' : QPoints,
         'BraggVectors' : BraggVectors
     }
+    print(grp)
     if 'py4dstem_class' in grp.attrs:
         classname = grp.attrs['py4dstem_class']
     elif 'emd_group_type' in grp.attrs:
@@ -268,12 +269,15 @@ def _get_v13_class(grp):
             2 : PointList,
             3 : PointListArray,
         }[emd_group_type]
+    else:
+        warnings.warn(f"Can't determine class type of H5 group {grp}; skipping...")
+        return None
     try:
         __class__ = lookup[classname]
         return __class__
     except KeyError:
-        raise Exception(f"Unknown classname {classname}")
-
+        warnings.warn(f"Can't determine class type of H5 group {grp}; skipping...")
+        return None
 
 
 
