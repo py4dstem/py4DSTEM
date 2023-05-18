@@ -1455,6 +1455,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
             Constrained object estimate
         """
         gaussian_filter = self._gaussian_filter
+        xp = self._xp
         gaussian_filter_sigma /= xp.sqrt(self.sampling[0] ** 2 + self.sampling[1] ** 2)
 
         current_object = gaussian_filter(current_object, gaussian_filter_sigma)
