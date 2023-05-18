@@ -18,6 +18,7 @@ class PolarDatacube:
         qstep = 1.0,
         n_annular = 180,
         qscale = None,
+        mask = None,
         ):
         """
         Parameters
@@ -30,9 +31,13 @@ class PolarDatacube:
             Maximum radius of the polar transformation
         qstep : number
             Width of radial bins
-        n_annular = 180
+        n_annular : integer
             Number of bins in the annular direction. Bins will each
             have a width of 360/num_annular_bins, in degrees
+        qscale : number or None
+            Radial scaling power to apply to polar transform
+        mask : boolean array
+            Cartesian space shaped mask to apply to all transforms
         """
         assert(isinstance(datacube,DataCube))
         self._datacube = datacube
@@ -62,6 +67,9 @@ class PolarDatacube:
 
         # scaling data by q**power
         self.qscale = qscale
+
+        # mask
+        self.mask = mask
 
         pass
 
@@ -187,6 +195,24 @@ class PolarDatacube:
         if x is not None:
             self._qscale_ar = np.arange(self.polar_shape[1])**x
 
+    # mask properties
+    @property
+    def mask(self):
+        return self._mask
+    @mask.setter
+    def mask(self,x):
+        if x is None:
+            self._mask = x
+        else:
+            assert(x.shape == self._datacube.Qshape), "Mask shape must match diffraction space"
+            self._mask = x
+            self._mask_polar = self.transform(
+                x
+            )
+    @property
+    def mask_polar(self):
+        return self._mask_polar
+
 
     def __repr__(self):
         space = ' '*len(self.__class__.__name__)+'  '
@@ -232,8 +258,17 @@ class PolarDataGetter:
         # scaling
         if self._polarcube.qscale is not None:
             ans *= self._polarcube._qscale_ar[np.newaxis,:]
-        # return
-        return ans
+        # return...
+        if self._polarcube.mask is None:
+            return ans
+        # ...or mask and return
+        else:
+            # TODO
+            #mask = self._transform(
+
+            #)
+            pass
+            return ans
 
     def _get_origin(
         self,
@@ -256,7 +291,7 @@ class PolarDataGetter:
         """
         # get calibrations
         if origin is None:
-            origin = self._polarcube.calibration._get_origin_mean()
+            origin = self._polarcube.calibration.get_origin_mean()
 
         # shifted coordinates
         x = self._polarcube._xa - origin[0]

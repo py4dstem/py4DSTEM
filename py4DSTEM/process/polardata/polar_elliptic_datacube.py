@@ -17,6 +17,7 @@ class PolarEllipticDatacube(PolarDatacube):
         qmax = None,
         qstep = 1.0,
         n_annular = 180,
+        qscale = None
         ):
         """
         Parameters
@@ -42,6 +43,7 @@ class PolarEllipticDatacube(PolarDatacube):
             qmax = qmax,
             qstep = qstep,
             n_annular = n_annular,
+            qscale = qscale
         )
 
         # overwrite PolarDatacube's getter
