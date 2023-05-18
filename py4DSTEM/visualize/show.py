@@ -507,6 +507,10 @@ def show(
         ind_vmax = np.min([len(vals)-1,ind_vmax])
         vmin = vals[ind_vmin]
         vmax = vals[ind_vmax]
+        # check if vmin and vmax are the same, defaulting to minmax scaling if needed
+        if vmax == vmin:
+            vmin = vals[0]
+            vmax = vals[-1]
     elif intensity_range == 'minmax':
         vmin,vmax = np.nanmin(_ar),np.nanmax(_ar)
     elif intensity_range == 'absolute':

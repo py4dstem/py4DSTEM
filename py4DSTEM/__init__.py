@@ -19,6 +19,7 @@ from py4DSTEM.process.diskdetection import BraggVectors, BraggVectorMap
 
 from emdfile import (
     Node,
+    Root,
     Metadata,
     Array,
     PointList,
