@@ -121,7 +121,7 @@ class PtychographicConstraints:
         xp = self._xp
         gaussian_filter = self._gaussian_filter
         gaussian_filter_sigma /= xp.sqrt(self.sampling[0] ** 2 + self.sampling[1] ** 2)
-        
+
         if pure_phase_object:
             phase = xp.angle(current_object)
             phase = gaussian_filter(phase, gaussian_filter_sigma)

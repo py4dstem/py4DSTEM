@@ -504,6 +504,7 @@ class DPCReconstruction(PhaseReconstruction):
         constrained_object: np.ndarray
             Constrained object estimate
         """
+        xp = self._xp
         gaussian_filter = self._gaussian_filter
 
         gaussian_filter_sigma /= xp.sqrt(self.sampling[0] ** 2 + self.sampling[1] ** 2)
