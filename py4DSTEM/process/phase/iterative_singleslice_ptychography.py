@@ -453,18 +453,12 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
         self._object_fov_mask_inverse = np.invert(self._object_fov_mask)
 
         if plot_probe_overlaps:
-            figsize = kwargs.get("figsize", (9, 4))
-            cmap = kwargs.get("cmap", "Greys_r")
-            vmin = kwargs.get("vmin", None)
-            vmax = kwargs.get("vmax", None)
-            hue_start = kwargs.get("hue_start", 0)
-            invert = kwargs.get("invert", False)
-            kwargs.pop("figsize", None)
-            kwargs.pop("cmap", None)
-            kwargs.pop("vmin", None)
-            kwargs.pop("vmax", None)
-            kwargs.pop("hue_start", None)
-            kwargs.pop("invert", None)
+            figsize = kwargs.pop("figsize", (9, 4))
+            cmap = kwargs.pop("cmap", "Greys_r")
+            vmin = kwargs.pop("vmin", None)
+            vmax = kwargs.pop("vmax", None)
+            hue_start = kwargs.pop("hue_start", 0)
+            invert = kwargs.pop("invert", False)
 
             # initial probe
             complex_probe_rgb = Complex2RGB(
@@ -1046,7 +1040,7 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
         gaussian_filter: bool
             If True, applies real-space gaussian filter
         gaussian_filter_sigma: float
-            Standard deviation of gaussian kernel
+            Standard deviation of gaussian kernel in A
         butterworth_filter: bool
             If True, applies high-pass butteworth filter
         q_lowpass: float
@@ -1209,7 +1203,7 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
         fix_probe_iter: int, optional
             Number of iterations to run with a fixed probe before updating probe estimate
         symmetrize_probe_iter: int, optional
-            Number of iterations to run with a fixed probe before updating probe estimate
+            Number of iterations to run before radially-averaging the probe
         fix_probe_amplitude: bool
             If True, probe amplitude is constrained by top hat function
         fix_probe_amplitude_relative_radius: float
@@ -1226,7 +1220,7 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
         global_affine_transformation: bool, optional
             If True, positions are assumed to be a global affine transform from initial scan
         gaussian_filter_sigma: float, optional
-            Standard deviation of gaussian kernel
+            Standard deviation of gaussian kernel in A
         gaussian_filter_iter: int, optional
             Number of iterations to run using object smoothness constraint
         probe_gaussian_filter_sigma: float, optional
@@ -1613,8 +1607,7 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
         padding : int, optional
             Pixels to pad by post rotating-cropping object
         """
-        cmap = kwargs.get("cmap", "magma")
-        kwargs.pop("cmap", None)
+        cmap = kwargs.pop("cmap", "magma")
 
         if self._object_type == "complex":
             obj = np.angle(self.object)
@@ -1678,14 +1671,10 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
         padding : int, optional
             Pixels to pad by post rotating-cropping object
         """
-        figsize = kwargs.get("figsize", (8, 5))
-        cmap = kwargs.get("cmap", "magma")
-        invert = kwargs.get("invert", False)
-        hue_start = kwargs.get("hue_start", 0)
-        kwargs.pop("figsize", None)
-        kwargs.pop("cmap", None)
-        kwargs.pop("invert", None)
-        kwargs.pop("hue_start", None)
+        figsize = kwargs.pop("figsize", (8, 5))
+        cmap = kwargs.pop("cmap", "magma")
+        invert = kwargs.pop("invert", False)
+        hue_start = kwargs.pop("hue_start", 0)
 
         if self._object_type == "complex":
             obj = np.angle(self.object)
@@ -1896,14 +1885,10 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
             if plot_convergence
             else (3 * iterations_grid[1], 3 * iterations_grid[0])
         )
-        figsize = kwargs.get("figsize", auto_figsize)
-        cmap = kwargs.get("cmap", "inferno")
-        invert = kwargs.get("invert", False)
-        hue_start = kwargs.get("hue_start", 0)
-        kwargs.pop("figsize", None)
-        kwargs.pop("cmap", None)
-        kwargs.pop("invert", None)
-        kwargs.pop("hue_start", None)
+        figsize = kwargs.pop("figsize", auto_figsize)
+        cmap = kwargs.pop("cmap", "inferno")
+        invert = kwargs.pop("invert", False)
+        hue_start = kwargs.pop("hue_start", 0)
 
         errors = np.array(self.error_iterations)
 

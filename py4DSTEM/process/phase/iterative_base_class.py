@@ -944,11 +944,8 @@ class PhaseReconstruction(Custom):
 
         # Optionally, plot CoM
         if plot_center_of_mass == "all":
-            figsize = kwargs.get("figsize", (8, 12))
-            cmap = kwargs.get("cmap", "RdBu_r")
-            kwargs.pop("cmap", None)
-            kwargs.pop("figsize", None)
-
+            figsize = kwargs.pop("figsize", (8, 12))
+            cmap = kwargs.pop("cmap", "RdBu_r")
             extent = [
                 0,
                 self._scan_sampling[1] * self._intensities.shape[1],
@@ -984,10 +981,8 @@ class PhaseReconstruction(Custom):
                 ax.set_title(title)
 
         elif plot_center_of_mass == "default":
-            figsize = kwargs.get("figsize", (8, 4))
-            cmap = kwargs.get("cmap", "RdBu_r")
-            kwargs.pop("cmap", None)
-            kwargs.pop("figsize", None)
+            figsize = kwargs.pop("figsize", (8, 4))
+            cmap = kwargs.pop("cmap", "RdBu_r")
 
             extent = [
                 0,
@@ -1932,10 +1927,8 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
         initial_pos = asnumpy(self._positions_initial)
         pos = self.positions
 
-        figsize = kwargs.get("figsize", (6, 6))
-        color = kwargs.get("color", (1, 0, 0, 1))
-        kwargs.pop("figsize", None)
-        kwargs.pop("color", None)
+        figsize = kwargs.pop("figsize", (6, 6))
+        color = kwargs.pop("color", (1, 0, 0, 1))
 
         fig, ax = plt.subplots(figsize=figsize)
         ax.quiver(
@@ -2047,8 +2040,7 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
         if pixelunits is None:
             pixelunits = r"$\AA^{-1}$"
 
-        figsize = kwargs.get("figsize", (6, 6))
-        kwargs.pop("figsize", None)
+        figsize = kwargs.pop("figsize", (6, 6))
 
         fig, ax = plt.subplots(figsize=figsize)
         show_complex(
@@ -2076,16 +2068,11 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
         else:
             object_fft = self._return_object_fft(obj)
 
-        figsize = kwargs.get("figsize", (6, 6))
-        kwargs.pop("figsize", None)
-        cmap = kwargs.get("cmap", "magma")
-        kwargs.pop("cmap", None)
-        vmin = kwargs.get("vmin", 0)
-        kwargs.pop("vmin", None)
-        vmax = kwargs.get("vmax", 1)
-        kwargs.pop("vmax", None)
-        power = kwargs.get("power", 0.2)
-        kwargs.pop("power", None)
+        figsize = kwargs.pop("figsize", (6, 6))
+        cmap = kwargs.pop("cmap", "magma")
+        vmin = kwargs.pop("vmin", 0)
+        vmax = kwargs.pop("vmax", 1)
+        power = kwargs.pop("power", 0.2)
 
         pixelsize = 1 / (object_fft.shape[0] * self.sampling[0])
         show(

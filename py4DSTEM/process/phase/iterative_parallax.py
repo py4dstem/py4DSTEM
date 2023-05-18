@@ -364,8 +364,7 @@ class ParallaxReconstruction(PhaseReconstruction):
         self.recon_BF = asnumpy(self._recon_BF)
 
         if plot_average_bf:
-            figsize = kwargs.get("figsize", (6, 6))
-            kwargs.pop("figsize", None)
+            figsize = kwargs.pop("figsize", (6, 6))
 
             fig, ax = plt.subplots(figsize=figsize)
 
@@ -1062,10 +1061,8 @@ class ParallaxReconstruction(PhaseReconstruction):
 
         # plotting
         if plot_corrected_phase:
-            figsize = kwargs.get("figsize", (6, 6))
-            cmap = kwargs.get("cmap", "magma")
-            kwargs.pop("figsize", None)
-            kwargs.pop("cmap", None)
+            figsize = kwargs.pop("figsize", (6, 6))
+            cmap = kwargs.pop("cmap", "magma")
 
             fig, ax = plt.subplots(figsize=figsize)
 
@@ -1159,10 +1156,8 @@ class ParallaxReconstruction(PhaseReconstruction):
                 wspace=0.15,
             )
 
-            figsize = kwargs.get("figsize", (4 * ncols, 4 * nrows))
-            cmap = kwargs.get("cmap", "magma")
-            kwargs.pop("figsize", None)
-            kwargs.pop("cmap", None)
+            figsize = kwargs.pop("figsize", (4 * ncols, 4 * nrows))
+            cmap = kwargs.pop("cmap", "magma")
 
             fig = plt.figure(figsize=figsize)
 
@@ -1274,8 +1269,7 @@ class ParallaxReconstruction(PhaseReconstruction):
 
         """
 
-        cmap = kwargs.get("cmap", "magma")
-        kwargs.pop("cmap", None)
+        cmap = kwargs.pop("cmap", "magma")
 
         cropped_object = self._crop_padded_object(self._recon_BF, remaining_padding)
 
@@ -1311,10 +1305,8 @@ class ParallaxReconstruction(PhaseReconstruction):
         xp = self._xp
         asnumpy = self._asnumpy
 
-        figsize = kwargs.get("figsize", (6, 6))
-        color = kwargs.get("color", (1, 0, 0, 1))
-        kwargs.pop("figsize", None)
-        kwargs.pop("color", None)
+        figsize = kwargs.pop("figsize", (6, 6))
+        color = kwargs.pop("color", (1, 0, 0, 1))
 
         fig, ax = plt.subplots(figsize=figsize)
 
@@ -1351,8 +1343,7 @@ class ParallaxReconstruction(PhaseReconstruction):
             Self to accommodate chaining
         """
 
-        figsize = kwargs.get("figsize", (6, 6))
-        kwargs.pop("figsize", None)
+        figsize = kwargs.pop("figsize", (6, 6))
 
         fig, ax = plt.subplots(figsize=figsize)
 

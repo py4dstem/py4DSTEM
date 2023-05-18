@@ -497,7 +497,7 @@ class DPCReconstruction(PhaseReconstruction):
         current_object: np.ndarray
             Current object estimate
         gaussian_filter_sigma: float
-            Standard deviation of gaussian kernel
+            Standard deviation of gaussian kernel in A
 
         Returns
         --------
@@ -506,6 +506,7 @@ class DPCReconstruction(PhaseReconstruction):
         """
         gaussian_filter = self._gaussian_filter
 
+        gaussian_filter_sigma /= xp.sqrt(self.sampling[0] ** 2 + self.sampling[1] ** 2)
         current_object = gaussian_filter(current_object, gaussian_filter_sigma)
 
         return current_object
@@ -564,7 +565,7 @@ class DPCReconstruction(PhaseReconstruction):
         gaussian_filter: bool
             If True, applies real-space gaussian filter
         gaussian_filter_sigma: float
-            Standard deviation of gaussian kernel
+            Standard deviation of gaussian kernel in A
         butterworth_filter: bool
             If True, applies high-pass butteworth filter
         q_lowpass: float
@@ -621,7 +622,7 @@ class DPCReconstruction(PhaseReconstruction):
         progress_bar: bool, optional
             If True, reconstruction progress bar will be printed
         gaussian_filter_sigma: float, optional
-            Standard deviation of gaussian kernel
+            Standard deviation of gaussian kernel in A
         gaussian_filter_iter: int, optional
             Number of iterations to run using object smoothness constraint
         butterworth_filter_iter: int, optional
@@ -747,10 +748,8 @@ class DPCReconstruction(PhaseReconstruction):
             If true, the NMSE error plot is displayed
         """
 
-        figsize = kwargs.get("figsize", (8, 8))
-        cmap = kwargs.get("cmap", "magma")
-        kwargs.pop("figsize", None)
-        kwargs.pop("cmap", None)
+        figsize = kwargs.pop("figsize", (8, 8))
+        cmap = kwargs.pop("cmap", "magma")
 
         if plot_convergence:
             spec = GridSpec(ncols=1, nrows=2, height_ratios=[4, 1], hspace=0.15)
@@ -837,10 +836,8 @@ class DPCReconstruction(PhaseReconstruction):
             if plot_convergence
             else (3 * iterations_grid[1], 3 * iterations_grid[0])
         )
-        figsize = kwargs.get("figsize", auto_figsize)
-        cmap = kwargs.get("cmap", "magma")
-        kwargs.pop("figsize", None)
-        kwargs.pop("cmap", None)
+        figsize = kwargs.pop("figsize", auto_figsize)
+        cmap = kwargs.pop("cmap", "magma")
 
         total_grids = np.prod(iterations_grid)
         errors = self.error_iterations

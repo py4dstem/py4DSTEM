@@ -1221,7 +1221,7 @@ def make_array_rfft_compatible(array_nd, axis=0, xp=np):
     return padded_array
 
 
-def my_dst_I(array_nd, xp=np):
+def dst_I(array_nd, xp=np):
     """1D rfft-based DST-I"""
     d = array_nd.ndim
     for axis in range(d):
@@ -1233,10 +1233,10 @@ def my_dst_I(array_nd, xp=np):
     return array_nd
 
 
-def my_idst_I(array_nd, xp=np):
+def idst_I(array_nd, xp=np):
     """1D rfft-based iDST-I"""
     scaling = np.prod((np.array(array_nd.shape) + 1) * 2)
-    return my_dst_I(array_nd, xp=xp) / scaling
+    return dst_I(array_nd, xp=xp) / scaling
 
 
 def preconditioned_laplacian(num_exterior, spacing=1, xp=np):
@@ -1265,9 +1265,9 @@ def preconditioned_poisson_solver(rhs_interior, spacing=1, xp=np):
         dst_u = (dst_rhs / op).reshape((nx, ny, nz))
         sol = idstn(dst_u, type=1)
     else:
-        dst_rhs = my_dst_I(rhs_interior, xp=xp).ravel()
+        dst_rhs = dst_I(rhs_interior, xp=xp).ravel()
         dst_u = (dst_rhs / op).reshape((nx, ny, nz))
-        sol = my_idst_I(dst_u, xp=xp)
+        sol = idst_I(dst_u, xp=xp)
 
     return sol
 

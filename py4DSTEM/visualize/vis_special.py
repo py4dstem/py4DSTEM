@@ -806,7 +806,13 @@ def show_selected_dps(datacube,positions,im,bragg_pos=None,
                     **kwargs)
 
 def Complex2RGB(complex_data, vmin=None, vmax = None, hue_start = 0, invert=False):
-    
+    """
+    complex_data (array): complex array to plot
+    vmin (float)        : minimum absolute value 
+    vmax (float)        : maximum absolute value 
+    hue_start (float)   : rotational offset for colormap (degrees)
+    inverse (bool)      : if True, uses light color scheme
+    """
     amp = np.abs(complex_data)
     if np.isclose(np.max(amp),np.min(amp)):
         if vmin is None:
@@ -838,55 +844,14 @@ def Complex2RGB(complex_data, vmin=None, vmax = None, hue_start = 0, invert=Fals
     
     return 1-rgb if invert else rgb
 
-def Complex2RGB_legacy(complex_array, vmin=None, vmax=None, hue_start=90):
-    """
-    Function to turn a complex array into rgb for plotting
-    Args:
-        complex_array (2D array)      : complex array
-        vmin (float, optional)        : minimum absolute value
-        vmax (float, optional)        : maximum absolute value
-            if None, vmin/vmax are set to fractions of the distribution of pixel values in the array, 
-            e.g. vmin=0.02 will set the minumum display value to saturate the lower 2% of pixels
-        hue_start(float, optional)    : phase offset (degrees)
-    Returns:
-        rgb array for plotting
-    """
-    amp = np.abs(complex_array)
-    if np.isclose(np.max(amp),np.min(amp)):
-        if vmin is None:
-            vmin = 0
-        if vmax is None:
-            vmax = np.max(amp)
-    else:
-        if vmin is None:
-            vmin = 0.02
-        if vmax is None:
-            vmax = 0.98
-        vals = np.sort(amp[~np.isnan(amp)])
-        ind_vmin = np.round((vals.shape[0] - 1) * vmin).astype("int")
-        ind_vmax = np.round((vals.shape[0] - 1) * vmax).astype("int")
-        ind_vmin = np.max([0, ind_vmin])
-        ind_vmax = np.min([len(vals) - 1, ind_vmax])
-        vmin = vals[ind_vmin]
-        vmax = vals[ind_vmax]
-    
-    amp = np.where(amp < vmin, vmin, amp)
-    amp = np.where(amp > vmax, vmax, amp)
-
-    ph = np.angle(complex_array, deg=1) + hue_start
-
-    h = (ph % 360) / 360
-    s = 0.85 * np.ones_like(h)
-    v = (amp - vmin) / (vmax - vmin)
-
-    hsv = np.dstack((h, s, v))
-    if hsv.shape[-1] != 3:
-        hsv = hsv.reshape(hsv.shape[0], hsv.shape[1], 3, hsv.shape[2] // 3)
-        hsv = hsv.swapaxes(-1, -2)
-
-    return hsv_to_rgb(hsv)
-
 def add_colorbar_arg(cax, vmin = None, vmax = None, hue_start = 0, invert = False):
+    """
+    cax                 : axis to add cbar too
+    vmin (float)        : minimum absolute value 
+    vmax (float)        : maximum absolute value 
+    hue_start (float)   : rotational offset for colormap (degrees)
+    inverse (bool)      : if True, uses light color scheme
+    """
     z = np.exp(1j * np.linspace(-np.pi, np.pi, 200))
     rgb_vals = Complex2RGB(z, vmin=vmin, vmax=vmax, hue_start=hue_start, invert=invert)
     newcmp = mcolors.ListedColormap(rgb_vals)
@@ -929,7 +894,9 @@ def show_complex(
         pixelunits (str, optional)  : units for scalebar
         pixelsize (float, optional) : size of one pixel in pixelunits for scalebar
         returnfig (bool, optional)  : if True, the function returns the tuple (figure,axis)
-
+        hue_start (float, optional) : rotational offset for colormap (degrees)
+        inverse (bool)              : if True, uses light color scheme
+    
     Returns:
         if returnfig==False (default), the figure is plotted and nothing is returned.
         if returnfig==True, return the figure and the axis.
