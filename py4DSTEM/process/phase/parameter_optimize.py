@@ -9,11 +9,13 @@ from skopt.plots import (
 )
 from skopt.utils import use_named_args
 import matplotlib.pyplot as plt
+import numpy as np
 
 from functools import partial
 from typing import Union
 
 from py4DSTEM.process.phase.iterative_base_class import PhaseReconstruction
+from py4DSTEM.process.phase.utils import AffineTransform
 
 
 class PtychographyOptimizer:
@@ -25,6 +27,7 @@ class PtychographyOptimizer:
         self,
         reconstruction_type: type[PhaseReconstruction],
         init_args: dict,
+        affine_args:dict,
         preprocess_args: dict,
         reconstruction_args: dict,
     ):
@@ -39,6 +42,10 @@ class PtychographyOptimizer:
             self._init_optimize_args,
         ) = self._split_static_and_optimization_vars(init_args)
         (
+            self._affine_static_args,
+            self._affine_optimize_args,
+        ) = self._split_static_and_optimization_vars(affine_args)
+        (
             self._preprocess_static_args,
             self._preprocess_optimize_args,
         ) = self._split_static_and_optimization_vars(preprocess_args)
@@ -52,6 +59,7 @@ class PtychographyOptimizer:
         self._x0 = []
         for k, v in (
             self._init_optimize_args
+            | self._affine_optimize_args
             | self._preprocess_optimize_args
             | self._reconstruction_optimize_args
         ).items():
@@ -59,6 +67,7 @@ class PtychographyOptimizer:
             self._x0.append(v._initial_value)
 
         self._init_args = init_args
+        self._affine_args = affine_args
         self._preprocess_args = preprocess_args
         self._reconstruction_args = reconstruction_args
 
@@ -71,17 +80,26 @@ class PtychographyOptimizer:
         n_calls: int,
         n_initial_points: int,
     ):
-        self._optimization_function, pbar = self._get_optimization_function(
+        self._optimization_function = self._get_optimization_function(
             self._reconstruction_type,
             self._parameter_list,
             n_calls,
             self._init_static_args,
+            self._affine_static_args,
             self._preprocess_static_args,
             self._reconstruction_static_args,
             self._init_optimize_args,
+            self._affine_optimize_args,
             self._preprocess_optimize_args,
             self._reconstruction_optimize_args,
         )
+
+        # Make a progress bar
+        pbar = tqdm(total=n_calls, desc="Optimizing parameters")
+        # We need to wrap the callback because if it returns a value
+        # the optimizer breaks its loop
+        def callback(*args,**kwargs):
+            pbar.update(1)
 
         self._skopt_result = gp_minimize(
             self._optimization_function,
@@ -89,6 +107,7 @@ class PtychographyOptimizer:
             n_calls=n_calls,
             n_initial_points=n_initial_points,
             x0=self._x0,
+            callback=callback,
         )
 
         print("Optimized parameters:")
@@ -107,10 +126,9 @@ class PtychographyOptimizer:
         objective=True,
         evaluations=False,
     ):
-        if len(self._parameter_list) == 1 and gp_model:
+        if (len(self._parameter_list) == 1) and gp_model:
             plot_gaussian_process(self._skopt_result)
             plt.show()
-
         if convergence:
             plot_convergence(self._skopt_result)
             plt.show()
@@ -126,6 +144,13 @@ class PtychographyOptimizer:
         init_opt = self._replace_optimized_parameters(
             self._init_args, self._parameter_list
         )
+        affine_opt = self._replace_optimized_parameters(
+            self._affine_args, self._parameter_list
+        )
+        affine_transform = partial(AffineTransform, **self._affine_static_args)(**affine_opt)
+        scan_positions = self._get_scan_positions(affine_transform, init_opt['datacube'])
+        init_opt['initial_scan_positions'] = scan_positions
+
         prep_opt = self._replace_optimized_parameters(
             self._preprocess_args, self._parameter_list
         )
@@ -154,11 +179,18 @@ class PtychographyOptimizer:
         optimization_args = {}
         for k, v in argdict.items():
             if isinstance(v, OptimizationParameter):
-                # unwrap the OptimizationParameter object into a skopt object
-                optimization_args[k] = v  # ._get(k)
+                optimization_args[k] = v
             else:
                 static_args[k] = v
         return static_args, optimization_args
+
+    def _get_scan_positions(self, affine_transform, dataset):
+        R_pixel_size = dataset.calibration.get_R_pixel_size()
+        x,y = np.arange(dataset.R_Nx)*R_pixel_size, np.arange(dataset.R_Ny)*R_pixel_size
+        x, y = np.meshgrid(x, y, indexing="ij")
+        scan_positions = np.stack((x.ravel(),y.ravel()),axis=1)
+        scan_positions = scan_positions @ affine_transform.asarray()
+        return scan_positions
 
     def _get_optimization_function(
         self,
@@ -166,11 +198,13 @@ class PtychographyOptimizer:
         parameter_list: list,
         n_iterations: int,
         init_static_args: dict,
+        affine_static_args:dict,
         preprocess_static_args: dict,
         reconstruct_static_args: dict,
-        init_optimization_param_names: dict,
-        preprocess_optimization_param_names: dict,
-        reconstruct_optimization_param_names: dict,
+        init_optimization_params: dict,
+        affine_optimization_params: dict,
+        preprocess_optimization_params: dict,
+        reconstruct_optimization_params: dict,
     ):
         """
         Wrap the ptychography pipeline into a single function that encapsulates all of the
@@ -186,33 +220,38 @@ class PtychographyOptimizer:
 
         # Construct partial methods to encapsulate the static parameters
         obj = partial(cls, **init_static_args)
+        affine = partial(AffineTransform, **affine_static_args)
         prep = partial(cls.preprocess, **preprocess_static_args)
         recon = partial(cls.reconstruct, **reconstruct_static_args)
 
-        init_params = list(init_optimization_param_names.keys())
-        prep_params = list(preprocess_optimization_param_names.keys())
-        reco_params = list(reconstruct_optimization_param_names.keys())
-
-        # Make a progress bar
-        pbar = tqdm(total=n_iterations, desc="Optimizing parameters")
+        init_params = list(init_optimization_params.keys())
+        afft_params = list(affine_optimization_params.keys())
+        prep_params = list(preprocess_optimization_params.keys())
+        reco_params = list(reconstruct_optimization_params.keys())
 
         # Target function for Gaussian process optimization that takes a single
         # dict of named parameters and returns the ptycho error metric
         @use_named_args(parameter_list)
         def f(**kwargs):
             init_args = {k: kwargs[k] for k in init_params}
+            afft_args = {k: kwargs[k] for k in afft_params}
             prep_args = {k: kwargs[k] for k in prep_params}
             reco_args = {k: kwargs[k] for k in reco_params}
+
+            # Create affine transform object
+            tr = affine(**afft_args)
+            # Apply affine transform to pixel grid, using the 
+            # calibrations lifted from the dataset
+            dataset = init_static_args['datacube']
+            init_args['initial_scan_positions'] = self._get_scan_positions(tr, dataset)
 
             ptycho = obj(**init_args)
             prep(ptycho, **prep_args)
             recon(ptycho, **reco_args)
 
-            pbar.update(1)
-
             return ptycho.error
 
-        return f, pbar
+        return f
 
     def _set_optimizer_defaults(self):
         """
