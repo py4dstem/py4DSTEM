@@ -281,8 +281,8 @@ class WholePatternFit:
                     opt.status,
                 ]
             # except LinAlgError as err:
-            except err:
-                warnings.warn(f'Fit on positon ({rx,ry}) failed with error {err}')
+            except:
+                warnings.warn(f'Fit on positon ({rx,ry}) failed with error')
 
 
         # Convert to RealSlices
