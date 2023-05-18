@@ -26,7 +26,7 @@ from py4DSTEM.process.utils import (
     fourier_resample,
     get_shifted_ar,
 )
-from py4DSTEM.utils.tqdmnd import tqdmnd
+from py4DSTEM import tqdmnd
 
 warnings.simplefilter(action="always", category=UserWarning)
 
