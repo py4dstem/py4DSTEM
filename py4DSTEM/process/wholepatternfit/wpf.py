@@ -281,6 +281,11 @@ class WholePatternFit:
                     opt.status,
                 ]
             # except LinAlgError as err:
+           # added so that sending an interupt or keyboard interupt breaks out of the for loop rather than just the probe
+            except InterruptedError:
+                break
+            except KeyboardInterrupt:
+                break
             except:
                 warnings.warn(f'Fit on positon ({rx,ry}) failed with error')
 
