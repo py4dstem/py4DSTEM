@@ -70,6 +70,12 @@ class PolarEllipticDataGetter:
             cal = self._polarcube.calibration,
             scanxy = (x,y),
         )
+        norm = self._transform(
+            np.ones_like(self._polarcube._datacube[x,y]),
+            cal = self._polarcube.calibration,
+            scanxy = (x,y)
+        )
+        ans = np.divide(ans, norm, out=np.zeros_like(ans), where=norm!=0)
         return ans
 
     def __repr__(self):
@@ -102,23 +108,16 @@ class PolarEllipticDataGetter:
         y = self._polarcube._ya - origin[1]
 
 
-        # TODO
-
-        # Get (qx,qy) corresponding to each (r,phi) in the newly defined coords
-        #xr = rr * np.cos(pp)
-        #yr = rr * np.sin(pp)
-        #qx = qx0 + xr * np.cos(theta) - yr * (b / a) * np.sin(theta)
-        #qy = qy0 + xr * np.sin(theta) + yr * (b / a) * np.cos(theta)
-
-
-        # polar-elliptic coordinate indices
-        r_ind = (np.sqrt(x**2 + y**2) - self._polarcube.radial_bins[0]) / self._polarcube.qstep
-        t_ind = np.arctan2(y, x) / self._polarcube.annular_step
+        # polar-elliptic coordinates
+        tt = np.arctan2(y,x) + np.pi/2 - theta
+        rr = np.hypot(x,y) * (1 - (1-(b/a))*np.square(np.sin(tt))) # is this right?????
+        r_ind = (rr - self._polarcube.radial_bins[0]) / self._polarcube.qstep
+        t_ind = tt / self._polarcube.annular_step
         r_ind_floor = np.floor(r_ind).astype('int')
         t_ind_floor = np.floor(t_ind).astype('int')
         dr = r_ind - r_ind_floor
         dt = t_ind - t_ind_floor
-        # t_ind_floor = np.mod(t_ind_floor, self.num_annular_bins)
+
 
         # polar transformation
         sub = np.logical_and(r_ind_floor >= 0, r_ind_floor < self._polarcube.polar_shape[1])
@@ -151,77 +150,6 @@ class PolarEllipticDataGetter:
         # output
         ans = np.reshape(im, self._polarcube.polar_shape)
         return ans
-
-
-
-
-
-
-#### begin code from utils/cartesian_to_polarelliptical
-
-
-# Utility functions
-
-# convert (A,B,C) <-> (a,b,theta) representations
-
-def convert_ellipse_params(A, B, C):
-    """
-    Converts ellipse parameters from canonical form (A,B,C) into semi-axis lengths and
-    tilt (a,b,theta).
-    See module docstring for more info.
-
-    Args:
-        A,B,C (floats): parameters of an ellipse in the form:
-                             Ax^2 + Bxy + Cy^2 = 1
-
-    Returns:
-        (3-tuple): A 3-tuple consisting of:
-
-        * **a**: (float) the semimajor axis length
-        * **b**: (float) the semiminor axis length
-        * **theta**: (float) the tilt of the ellipse semimajor axis with respect to
-          the x-axis, in radians
-    """
-    val = np.sqrt((A - C) ** 2 + B**2)
-    b4a = B**2 - 4 * A * C
-    # Get theta
-    if B == 0:
-        if A < C:
-            theta = 0
-        else:
-            theta = np.pi / 2.0
-    else:
-        theta = np.arctan2((C - A - val), B)
-    # Get a,b
-    a = -np.sqrt(-2 * b4a * (A + C + val)) / b4a
-    b = -np.sqrt(-2 * b4a * (A + C - val)) / b4a
-    a, b = max(a, b), min(a, b)
-    return a, b, theta
-
-
-def convert_ellipse_params_r(a, b, theta):
-    """
-    Converts from ellipse parameters (a,b,theta) to (A,B,C).
-    See module docstring for more info.
-
-    Args:
-        a,b,theta (floats): parameters of an ellipse, where `a`/`b` are the
-            semimajor/semiminor axis lengths, and theta is the tilt of the semimajor axis
-            with respect to the x-axis, in radians.
-
-    Returns:
-        (3-tuple): A 3-tuple consisting of (A,B,C), the ellipse parameters in
-            canonical form.
-    """
-    sin2, cos2 = np.sin(theta) ** 2, np.cos(theta) ** 2
-    a2, b2 = a**2, b**2
-    A = sin2 / b2 + cos2 / a2
-    C = cos2 / b2 + sin2 / a2
-    B = 2 * (b2 - a2) * np.sin(theta) * np.cos(theta) / (a2 * b2)
-    return A, B, C
-
-
-
 
 
 
