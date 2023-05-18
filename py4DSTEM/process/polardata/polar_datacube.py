@@ -168,6 +168,19 @@ class PolarDatacube:
             polarcube = self
         )
 
+    # expose transformation
+    @property
+    def transform(self):
+        return self._polar_data_getter._transform
+
+    def __repr__(self):
+        space = ' '*len(self.__class__.__name__)+'  '
+        string = f"{self.__class__.__name__}( "
+        string += "Retrieves diffraction images in polar coordinates, using .data[x,y]"
+        return string
+
+
+
 
 
 
@@ -180,37 +193,42 @@ class PolarDataGetter:
         self._polarcube = polarcube
 
     def __getitem__(self,pos):
+        # unpack scan position
         x,y = pos
-        ans = self._polarcube._datacube[x,y]
-        ans = self._transform(
-            cartesian_data = ans,
-            cal = self._polarcube.calibration,
-            scanxy = (x,y),
+        # get the data
+        cartesian_data = self._polarcube._datacube[x,y]
+        # find the origin
+        origin = self._get_origin(
+            (x,y),
+            self._polarcube.calibration
         )
+        # apply the transform
+        ans = self._transform(
+            cartesian_data = cartesian_data,
+            origin = origin
+        )
+        # return
         return ans
 
-    def __repr__(self):
-        space = ' '*len(self.__class__.__name__)+'  '
-        string = f"{self.__class__.__name__}( "
-        string += "Retrieves the diffraction pattern at scan position (x,y) in polar coordinates when sliced with [x,y]."
-        return string
+    def _get_origin(
+        self,
+        pos,
+        cal
+        ):
+        x,y = pos
+        assert(cal.get_origin(x,y) is not None), "No center found! Try setting the origin."
+        origin = cal.get_origin(x,y)
+        return origin
+
 
     def _transform(
         self,
         cartesian_data,
-        cal,
-        scanxy,
+        origin,
         ):
         """
         Return a transformed copy of the diffraction pattern `cartesian_data`.
         """
-        # scan position
-        x,y = scanxy
-
-        # origin
-        assert(cal.get_origin(x,y) is not None), "No center found! Try setting the origin."
-        origin = cal.get_origin(x,y)
-
         # shifted coordinates
         x = self._polarcube._xa - origin[0]
         y = self._polarcube._ya - origin[1]
@@ -255,5 +273,11 @@ class PolarDataGetter:
         # output
         ans = np.reshape(im, self._polarcube.polar_shape)
         return ans
+
+    def __repr__(self):
+        space = ' '*len(self.__class__.__name__)+'  '
+        string = f"{self.__class__.__name__}( "
+        string += "Retrieves the diffraction pattern at scan position (x,y) in polar coordinates when sliced with [x,y]."
+        return string
 
 

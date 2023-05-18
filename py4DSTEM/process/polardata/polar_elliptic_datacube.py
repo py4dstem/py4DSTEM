@@ -1,6 +1,6 @@
 import numpy as np
 from py4DSTEM.classes import DataCube
-from py4DSTEM.process.polardata.polar_datacube import PolarDatacube
+from py4DSTEM.process.polardata.polar_datacube import PolarDatacube,PolarDataGetter
 
 
 
@@ -54,7 +54,7 @@ class PolarEllipticDatacube(PolarDatacube):
 
 
 
-class PolarEllipticDataGetter:
+class PolarEllipticDataGetter(PolarDataGetter):
 
     def __init__(
         self,
@@ -63,44 +63,60 @@ class PolarEllipticDataGetter:
         self._polarcube = polarcube
 
     def __getitem__(self,pos):
+        # unpack scan position
         x,y = pos
+        # get the data
         ans = self._polarcube._datacube[x,y]
+        # find the origin
+        origin = self._get_origin(
+            (x,y),
+            self._polarcube.calibration
+        )
+        # get the ellipticity
+        ellipse = self._get_ellipticity(
+            (x,y),
+            self._polarcube.calibration
+        )
+        # apply the transform
         ans = self._transform(
             cartesian_data = ans,
-            cal = self._polarcube.calibration,
-            scanxy = (x,y),
+            origin = origin,
+            ellipse = ellipse
         )
+        # get a normalization array
         norm = self._transform(
             np.ones_like(self._polarcube._datacube[x,y]),
-            cal = self._polarcube.calibration,
-            scanxy = (x,y)
+            origin = origin,
+            ellipse = ellipse
         )
+        # normalize
         ans = np.divide(ans, norm, out=np.zeros_like(ans), where=norm!=0)
+        # return
         return ans
 
-    def __repr__(self):
-        space = ' '*len(self.__class__.__name__)+'  '
-        string = f"{self.__class__.__name__}( "
-        string += "Retrieves the diffraction pattern at scan position (x,y) in polar elliptic coordinates when sliced with [x,y]."
-        return string
+
+    def _get_ellipticity(
+        self,
+        pos,
+        cal
+        ):
+        x,y = pos
+        assert(cal.get_ellipse(x,y) is not None), "No elliptical calibrations found!"
+        ellipse = cal.get_ellipse(x,y)
+        return ellipse
+
+
 
     def _transform(
         self,
         cartesian_data,
-        cal,
-        scanxy,
+        origin,
+        ellipse
         ):
         """
         Return a transformed copy of the diffraction pattern `cartesian_data`.
         """
-        # scan position
-        x,y = scanxy
-
-        # get calibrations
-        assert(cal.get_origin(x,y) is not None), "No center found! Try setting the origin."
-        assert(cal.get_ellipse(x,y) is not None), "No elliptical calibrations found!"
-        origin = cal.get_origin(x,y)
-        ellipse = cal.get_ellipse(x,y)
+        # unpack ellipse
         a,b,theta = ellipse
 
         # shifted coordinates
