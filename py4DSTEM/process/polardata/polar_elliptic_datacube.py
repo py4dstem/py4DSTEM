@@ -66,7 +66,7 @@ class PolarEllipticDataGetter(PolarDataGetter):
         # unpack scan position
         x,y = pos
         # get the data
-        ans = self._polarcube._datacube[x,y]
+        cartesian_data = self._polarcube._datacube[x,y]
         # find the origin
         origin = self._get_origin(
             (x,y),
@@ -79,18 +79,21 @@ class PolarEllipticDataGetter(PolarDataGetter):
         )
         # apply the transform
         ans = self._transform(
-            cartesian_data = ans,
+            cartesian_data = cartesian_data,
             origin = origin,
             ellipse = ellipse
         )
         # get a normalization array
         norm = self._transform(
-            np.ones_like(self._polarcube._datacube[x,y]),
+            np.ones_like(cartesian_data),
             origin = origin,
             ellipse = ellipse
         )
         # normalize
         ans = np.divide(ans, norm, out=np.zeros_like(ans), where=norm!=0)
+        # scaling
+        if self._polarcube.qscale is not None:
+            ans *= self._polarcube._qscale_ar[np.newaxis,:]
         # return
         return ans
 
@@ -110,12 +113,18 @@ class PolarEllipticDataGetter(PolarDataGetter):
     def _transform(
         self,
         cartesian_data,
-        origin,
-        ellipse
+        origin = None,
+        ellipse = None
         ):
         """
         Return a transformed copy of the diffraction pattern `cartesian_data`.
         """
+        # get calibrations
+        if origin is None:
+            origin = self._polarcube.calibration.get_origin_mean()
+        if ellipse is None:
+            ellipse = self._polarcube.calibration.get_ellipse()
+
         # unpack ellipse
         a,b,theta = ellipse
 
@@ -124,9 +133,25 @@ class PolarEllipticDataGetter(PolarDataGetter):
         y = self._polarcube._ya - origin[1]
 
 
-        # polar-elliptic coordinates
-        tt = np.arctan2(y,x) + np.pi/2 - theta
-        rr = np.hypot(x,y) * (1 - (1-(b/a))*np.square(np.sin(tt))) # is this right?????
+        # transformation matrix (elliptic cartesian -> circular cartesian)
+        A = (a/b)*np.cos(theta)
+        B = - np.sin(theta)
+        C = (a/b)*np.sin(theta)
+        D = np.cos(theta)
+        det = 1 / (A*D - B*C)
+
+        # circular cartesian coords
+        xc =  x*D - y*B
+        yc = -x*C + y*A
+
+        # polar coords
+        rr = det * np.hypot(
+            xc,
+            yc
+        )
+        tt = np.arctan2(yc,xc) - np.pi/2
+
+        # get bins and interpolation vals
         r_ind = (rr - self._polarcube.radial_bins[0]) / self._polarcube.qstep
         t_ind = tt / self._polarcube.annular_step
         r_ind_floor = np.floor(r_ind).astype('int')
@@ -134,8 +159,7 @@ class PolarEllipticDataGetter(PolarDataGetter):
         dr = r_ind - r_ind_floor
         dt = t_ind - t_ind_floor
 
-
-        # polar transformation
+        # get polar resampled data
         sub = np.logical_and(r_ind_floor >= 0, r_ind_floor < self._polarcube.polar_shape[1])
         im = np.bincount(
             r_ind_floor[sub] + \

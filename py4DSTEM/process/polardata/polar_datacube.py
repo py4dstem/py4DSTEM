@@ -17,6 +17,7 @@ class PolarDatacube:
         qmax = None,
         qstep = 1.0,
         n_annular = 180,
+        qscale = None,
         ):
         """
         Parameters
@@ -58,6 +59,9 @@ class PolarDatacube:
             np.arange(self._datacube.Q_Ny),
             indexing = 'ij'
         )
+
+        # scaling data by q**power
+        self.qscale = qscale
 
         pass
 
@@ -173,6 +177,17 @@ class PolarDatacube:
     def transform(self):
         return self._polar_data_getter._transform
 
+    # scaling property
+    @property
+    def qscale(self):
+        return self._qscale
+    @qscale.setter
+    def qscale(self,x):
+        self._qscale = x
+        if x is not None:
+            self._qscale_ar = np.arange(self.polar_shape[1])**x
+
+
     def __repr__(self):
         space = ' '*len(self.__class__.__name__)+'  '
         string = f"{self.__class__.__name__}( "
@@ -207,6 +222,16 @@ class PolarDataGetter:
             cartesian_data = cartesian_data,
             origin = origin
         )
+        # get a normalization array
+        norm = self._transform(
+            np.ones_like(cartesian_data),
+            origin = origin,
+        )
+        # normalize
+        ans = np.divide(ans, norm, out=np.zeros_like(ans), where=norm!=0)
+        # scaling
+        if self._polarcube.qscale is not None:
+            ans *= self._polarcube._qscale_ar[np.newaxis,:]
         # return
         return ans
 
@@ -224,11 +249,15 @@ class PolarDataGetter:
     def _transform(
         self,
         cartesian_data,
-        origin,
+        origin = None,
         ):
         """
         Return a transformed copy of the diffraction pattern `cartesian_data`.
         """
+        # get calibrations
+        if origin is None:
+            origin = self._polarcube.calibration._get_origin_mean()
+
         # shifted coordinates
         x = self._polarcube._xa - origin[0]
         y = self._polarcube._ya - origin[1]
