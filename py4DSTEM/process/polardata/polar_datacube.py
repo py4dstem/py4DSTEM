@@ -17,6 +17,8 @@ class PolarDatacube:
         qmax = None,
         qstep = 1.0,
         n_annular = 180,
+        qscale = None,
+        mask = None,
         ):
         """
         Parameters
@@ -29,9 +31,13 @@ class PolarDatacube:
             Maximum radius of the polar transformation
         qstep : number
             Width of radial bins
-        n_annular = 180
+        n_annular : integer
             Number of bins in the annular direction. Bins will each
             have a width of 360/num_annular_bins, in degrees
+        qscale : number or None
+            Radial scaling power to apply to polar transform
+        mask : boolean array
+            Cartesian space shaped mask to apply to all transforms
         """
         assert(isinstance(datacube,DataCube))
         self._datacube = datacube
@@ -58,6 +64,12 @@ class PolarDatacube:
             np.arange(self._datacube.Q_Ny),
             indexing = 'ij'
         )
+
+        # scaling data by q**power
+        self.qscale = qscale
+
+        # mask
+        self.mask = mask
 
         pass
 
@@ -168,6 +180,48 @@ class PolarDatacube:
             polarcube = self
         )
 
+    # expose transformation
+    @property
+    def transform(self):
+        return self._polar_data_getter._transform
+
+    # scaling property
+    @property
+    def qscale(self):
+        return self._qscale
+    @qscale.setter
+    def qscale(self,x):
+        self._qscale = x
+        if x is not None:
+            self._qscale_ar = np.arange(self.polar_shape[1])**x
+
+    # mask properties
+    @property
+    def mask(self):
+        return self._mask
+    @mask.setter
+    def mask(self,x):
+        if x is None:
+            self._mask = x
+        else:
+            assert(x.shape == self._datacube.Qshape), "Mask shape must match diffraction space"
+            self._mask = x
+            self._mask_polar = self.transform(
+                x
+            )
+    @property
+    def mask_polar(self):
+        return self._mask_polar
+
+
+    def __repr__(self):
+        space = ' '*len(self.__class__.__name__)+'  '
+        string = f"{self.__class__.__name__}( "
+        string += "Retrieves diffraction images in polar coordinates, using .data[x,y]"
+        return string
+
+
+
 
 
 
@@ -180,36 +234,64 @@ class PolarDataGetter:
         self._polarcube = polarcube
 
     def __getitem__(self,pos):
+        # unpack scan position
         x,y = pos
-        ans = self._polarcube._datacube[x,y]
-        ans = self._transform(
-            cartesian_data = ans,
-            cal = self._polarcube.calibration,
-            scanxy = (x,y),
+        # get the data
+        cartesian_data = self._polarcube._datacube[x,y]
+        # find the origin
+        origin = self._get_origin(
+            (x,y),
+            self._polarcube.calibration
         )
-        return ans
+        # apply the transform
+        ans = self._transform(
+            cartesian_data = cartesian_data,
+            origin = origin
+        )
+        # get a normalization array
+        norm = self._transform(
+            np.ones_like(cartesian_data),
+            origin = origin,
+        )
+        # normalize
+        ans = np.divide(ans, norm, out=np.zeros_like(ans), where=norm!=0)
+        # scaling
+        if self._polarcube.qscale is not None:
+            ans *= self._polarcube._qscale_ar[np.newaxis,:]
+        # return...
+        if self._polarcube.mask is None:
+            return ans
+        # ...or mask and return
+        else:
+            # TODO
+            #mask = self._transform(
 
-    def __repr__(self):
-        space = ' '*len(self.__class__.__name__)+'  '
-        string = f"{self.__class__.__name__}( "
-        string += "Retrieves the diffraction pattern at scan position (x,y) in polar coordinates when sliced with [x,y]."
-        return string
+            #)
+            pass
+            return ans
+
+    def _get_origin(
+        self,
+        pos,
+        cal
+        ):
+        x,y = pos
+        assert(cal.get_origin(x,y) is not None), "No center found! Try setting the origin."
+        origin = cal.get_origin(x,y)
+        return origin
+
 
     def _transform(
         self,
         cartesian_data,
-        cal,
-        scanxy,
+        origin = None,
         ):
         """
         Return a transformed copy of the diffraction pattern `cartesian_data`.
         """
-        # scan position
-        x,y = scanxy
-
-        # origin
-        assert(cal.get_origin(x,y) is not None), "No center found! Try setting the origin."
-        origin = cal.get_origin(x,y)
+        # get calibrations
+        if origin is None:
+            origin = self._polarcube.calibration.get_origin_mean()
 
         # shifted coordinates
         x = self._polarcube._xa - origin[0]
@@ -255,5 +337,11 @@ class PolarDataGetter:
         # output
         ans = np.reshape(im, self._polarcube.polar_shape)
         return ans
+
+    def __repr__(self):
+        space = ' '*len(self.__class__.__name__)+'  '
+        string = f"{self.__class__.__name__}( "
+        string += "Retrieves the diffraction pattern at scan position (x,y) in polar coordinates when sliced with [x,y]."
+        return string
 
 
