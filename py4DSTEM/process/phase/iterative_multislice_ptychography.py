@@ -1696,7 +1696,7 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
             If True, forces object to be positive
         shrinkage_rad: float
             Phase shift in radians to be subtracted from the potential at each iteration
-        fix_potential_baseline: boool
+        fix_potential_baseline: bool
             If true, the potential mean outside the FOV is forced to zero at each iteration
         pure_phase_object_iter: int, optional
             Number of iterations where object amplitude is set to unity
