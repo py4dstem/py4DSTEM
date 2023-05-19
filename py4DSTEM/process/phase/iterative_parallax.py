@@ -1290,6 +1290,7 @@ class ParallaxReconstruction(PhaseReconstruction):
     def _visualize_shifts(
         self,
         scale_arrows=1,
+        plot_arrow_freq=1,
         **kwargs,
     ):
         """
@@ -1299,7 +1300,8 @@ class ParallaxReconstruction(PhaseReconstruction):
         ----------
         scale_arrows: float, optional
             Scale to multiply shifts by
-
+        plot_arrow_freq: int, optional
+            Frequency of shifts to plot in quiver plot
         """
 
         xp = self._xp
@@ -1310,14 +1312,26 @@ class ParallaxReconstruction(PhaseReconstruction):
 
         fig, ax = plt.subplots(figsize=figsize)
 
+        dp_mask_ind = xp.nonzero(self._dp_mask)
+        yy, xx = xp.meshgrid(
+            xp.arange(self._dp_mean.shape[1]), xp.arange(self._dp_mean.shape[0])
+        )
+        freq_mask = xp.logical_and(xx % plot_arrow_freq == 0, yy % plot_arrow_freq == 0)
+        masked_ind = xp.logical_and(freq_mask, self._dp_mask)
+        plot_ind = masked_ind[dp_mask_ind]
+
         ax.quiver(
-            asnumpy(self._kxy[:, 1]),
-            asnumpy(self._kxy[:, 0]),
+            asnumpy(self._kxy[plot_ind, 1]),
+            asnumpy(self._kxy[plot_ind, 0]),
             asnumpy(
-                self._xy_shifts[:, 1] * scale_arrows * self._reciprocal_sampling[0]
+                self._xy_shifts[plot_ind, 1]
+                * scale_arrows
+                * self._reciprocal_sampling[0]
             ),
             asnumpy(
-                self._xy_shifts[:, 0] * scale_arrows * self._reciprocal_sampling[1]
+                self._xy_shifts[plot_ind, 0]
+                * scale_arrows
+                * self._reciprocal_sampling[1]
             ),
             color=color,
             angles="xy",
