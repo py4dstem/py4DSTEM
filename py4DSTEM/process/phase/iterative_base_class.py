@@ -1898,6 +1898,7 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
     def plot_position_correction(
         self,
         scale_arrows=1,
+        plot_arrow_freq=1,
         verbose=True,
         **kwargs,
     ):
@@ -1932,10 +1933,12 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
 
         fig, ax = plt.subplots(figsize=figsize)
         ax.quiver(
-            initial_pos[:, 1],
-            initial_pos[:, 0],
-            (pos[:, 1] - initial_pos[:, 1]) * scale_arrows,
-            (pos[:, 0] - initial_pos[:, 0]) * scale_arrows,
+            initial_pos[::plot_arrow_freq, 1],
+            initial_pos[::plot_arrow_freq, 0],
+            (pos[::plot_arrow_freq, 1] - initial_pos[::plot_arrow_freq, 1])
+            * scale_arrows,
+            (pos[::plot_arrow_freq, 0] - initial_pos[::plot_arrow_freq, 0])
+            * scale_arrows,
             scale_units="xy",
             scale=1,
             color=color,
