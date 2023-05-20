@@ -321,6 +321,7 @@ def show(
             intensity_range = clipvals
 
     # plot a grid if `ar` is a list, or use multichannel functionality to make an RGBa image
+    ar = ar[0] if (isinstance(ar,list) and len(ar) == 1) else ar
     if isinstance(ar,list):
         args = locals()
         if 'kwargs' in args.keys():
