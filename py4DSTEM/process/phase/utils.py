@@ -5,9 +5,12 @@ import numpy as np
 
 try:
     import cupy as cp
+    from cupyx.scipy.fft import rfft
 except ImportError:
     cp = None
+    from scipy.fft import dstn, idstn
 
+from py4DSTEM.process.utils.cross_correlate import align_and_shift_images
 from py4DSTEM.process.utils.utils import electron_wavelength_angstrom
 from scipy.ndimage import gaussian_filter
 
@@ -108,9 +111,6 @@ class ComplexProbe:
         parameters: Mapping[str, float] = None,
         **kwargs,
     ):
-
-        # Should probably be abstracted away in a device.py similar to:
-        # https://github.com/abTEM/abTEM/blob/master/abtem/device.py
         if device == "cpu":
             self._xp = np
             self._asnumpy = np.asarray
@@ -171,7 +171,6 @@ class ComplexProbe:
     def evaluate_aperture(
         self, alpha: Union[float, np.ndarray], phi: Union[float, np.ndarray] = None
     ) -> Union[float, np.ndarray]:
-
         xp = self._xp
         semiangle_cutoff = self._semiangle_cutoff / 1000
 
@@ -420,8 +419,8 @@ class ComplexProbe:
     def get_spatial_frequencies(self):
         xp = self._xp
         kx, ky = spatial_frequencies(self._gpts, self._sampling)
-        kx = xp.asarray(kx)
-        ky = xp.asarray(ky)
+        kx = xp.asarray(kx, dtype=xp.float32)
+        ky = xp.asarray(ky, dtype=xp.float32)
         return kx, ky
 
     def polar_coordinates(self, x, y):
@@ -435,13 +434,12 @@ class ComplexProbe:
         """Builds complex probe in the center of the region of interest."""
         xp = self._xp
         array = xp.fft.fftshift(xp.fft.ifft2(self._evaluate_ctf()))
-        # if self._vacuum_probe_intensity is not None:
         array = array / xp.sqrt((xp.abs(array) ** 2).sum())
         self._array = array
         return self
 
     def visualize(self, **kwargs):
-        """Plots the probe amplitude."""
+        """Plots the probe intensity."""
         xp = self._xp
         asnumpy = self._asnumpy
 
@@ -522,9 +520,9 @@ def fourier_translation_operator(
     kx, ky = spatial_frequencies(shape, (1.0, 1.0))
     kx = kx.reshape((1, -1, 1))
     ky = ky.reshape((1, 1, -1))
-    kx = xp.asarray(kx)
-    ky = xp.asarray(ky)
-    positions = xp.asarray(positions)
+    kx = xp.asarray(kx, dtype=xp.float32)
+    ky = xp.asarray(ky, dtype=xp.float32)
+    positions = xp.asarray(positions, dtype=xp.float32)
     x = positions[:, 0].reshape((-1,) + (1, 1))
     y = positions[:, 1].reshape((-1,) + (1, 1))
 
@@ -621,7 +619,6 @@ def generate_batches(
 
 
 #### Affine transformation functions
-# Adapted from https://github.com/AdvancedPhotonSource/tike/blob/f9004a32fda5e49fa63b987e9ffe3c8447d59950/src/tike/ptycho/position.py
 
 
 class AffineTransform:
@@ -640,9 +637,9 @@ class AffineTransform:
     scale1: float
         y-scaling
     shear1: float
-        \gamma shear
+        \\gamma shear
     angle: float
-        \theta rotation angle
+        \\theta rotation angle
     t0: float
         x-translation
     t1: float
@@ -658,7 +655,6 @@ class AffineTransform:
         t0: float = 0.0,
         t1: float = 0.0,
     ):
-
         self.scale0 = scale0
         self.scale1 = scale1
         self.shear1 = shear1
@@ -668,7 +664,8 @@ class AffineTransform:
 
     @classmethod
     def fromarray(self, T: np.ndarray):
-        """Return an Affine Transfrom from a 2x2 matrix.
+        """
+        Return an Affine Transfrom from a 2x2 matrix.
         Use decomposition method from Graphics Gems 2 Section 7.1
         """
         R = T[:2, :2].copy()
@@ -700,7 +697,8 @@ class AffineTransform:
         )
 
     def asarray(self):
-        """Return an 2x2 matrix of scale, shear, rotation.
+        """
+        Return an 2x2 matrix of scale, shear, rotation.
         This matrix is scale @ shear @ rotate from left to right.
         """
         cosx = np.cos(self.angle)
@@ -730,9 +728,10 @@ class AffineTransform:
         )
 
     def asarray3(self):
-        """Return an 3x2 matrix of scale, shear, rotation, translation.
-        This matrix is scale @ shear @ rotate from left to right. Expects a
-        homogenous (z) coordinate of 1.
+        """
+        Return an 3x2 matrix of scale, shear, rotation, translation.
+        This matrix is scale @ shear @ rotate from left to right.
+        Expects a homogenous (z) coordinate of 1.
         """
         T = np.empty((3, 2), dtype="float32")
         T[2] = (self.t0, self.t1)
@@ -751,9 +750,9 @@ class AffineTransform:
         )
 
     def __call__(self, x: np.ndarray, origin=(0, 0), xp=np):
-        origin = xp.asarray(origin)
+        origin = xp.asarray(origin, dtype=xp.float32)
         tf_matrix = self.asarray()
-        tf_matrix = xp.asarray(tf_matrix)
+        tf_matrix = xp.asarray(tf_matrix, dtype=xp.float32)
         tf_translation = xp.array((self.t0, self.t1)) + origin
         return ((x - origin) @ tf_matrix) + tf_translation
 
@@ -775,8 +774,7 @@ def estimate_global_transformation(
     xp=np,
 ):
     """Use least squares to estimate the global affine transformation."""
-
-    origin = xp.asarray(origin)
+    origin = xp.asarray(origin, dtype=xp.float32)
 
     try:
         if translation_allowed:
@@ -904,22 +902,18 @@ def fourier_ring_correlation(
     half_bit: ndarray
         half-bit criteria
     """
+    if device == "cpu":
+        xp = np
+    elif device == "gpu":
+        xp = cp
 
     if align_images:
-        from py4DSTEM.process.utils.cross_correlate import align_and_shift_images
-
         image_2 = align_and_shift_images(
             image_1,
             image_2,
             upsample_factor=upsample_factor,
             device=device,
         )
-
-    if device == "cpu":
-        xp = np
-
-    elif device == "gpu":
-        xp = cp
 
     fft_image_1 = xp.fft.fft2(image_1)
     fft_image_2 = xp.fft.fft2(image_2)
@@ -1005,14 +999,13 @@ def return_1D_profile(
     n: ndarray
         Number of pixels in each bin
     """
-    if pixel_size is None:
-        pixel_size = (1, 1)
-
     if device == "cpu":
         xp = np
-
     elif device == "gpu":
         xp = cp
+
+    if pixel_size is None:
+        pixel_size = (1, 1)
 
     x = xp.fft.fftfreq(intensity.shape[0], pixel_size[0])
     y = xp.fft.fftfreq(intensity.shape[1], pixel_size[1])
@@ -1047,97 +1040,247 @@ def return_1D_profile(
 
     return q_bins, I_bins, n
 
-def fourier_rotate_real_volume(array, angle, axes = (0,1), xp = np):
 
-    input_arr = xp.asarray(array)
+def fourier_rotate_real_volume(array, angle, axes=(0, 1), xp=np):
+    """
+    Rotates a 3D array using three Fourier-based shear operators.
+
+    Parameters
+     ----------
+    array: ndarray
+        3D array to rotate
+    angle: float
+        Angle in deg to rotate array by
+    axes: tuple, Optional
+        Axes defining plane in which to rotate about
+    xp: Callable, optional
+        Array computing module
+
+    Returns
+    --------
+    output_arr: ndarray
+        Fourier-rotated array
+    """
+    input_arr = xp.asarray(array, dtype=array.dtype)
     array_shape = np.array(input_arr.shape)
     ndim = input_arr.ndim
 
     if ndim != 3:
-        raise ValueError('input array should be 3D')
+        raise ValueError("input array should be 3D")
 
     axes = list(axes)
 
     if len(axes) != 2:
-        raise ValueError('axes should contain exactly two values')
+        raise ValueError("axes should contain exactly two values")
 
     if not all([float(ax).is_integer() for ax in axes]):
-        raise ValueError('axes should contain only integer values')
+        raise ValueError("axes should contain only integer values")
 
     if axes[0] < 0:
         axes[0] += ndim
     if axes[1] < 0:
         axes[1] += ndim
     if axes[0] < 0 or axes[1] < 0 or axes[0] >= ndim or axes[1] >= ndim:
-        raise ValueError('invalid rotation plane specified')
+        raise ValueError("invalid rotation plane specified")
 
     axes.sort()
-    rotation_ax = np.setdiff1d([0,1,2],axes)[0]
+    rotation_ax = np.setdiff1d([0, 1, 2], axes)[0]
     plane_dims = array_shape[axes]
 
-    qx = xp.fft.fftfreq(plane_dims[0],1)
-    qy = xp.fft.fftfreq(plane_dims[1],1)
-    qxa, qya = xp.meshgrid(qx, qy, indexing='ij')
+    qx = xp.fft.fftfreq(plane_dims[0], 1)
+    qy = xp.fft.fftfreq(plane_dims[1], 1)
+    qxa, qya = xp.meshgrid(qx, qy, indexing="ij")
 
-    x = xp.arange(plane_dims[0]) - plane_dims[0]/2
-    y = xp.arange(plane_dims[1]) - plane_dims[1]/2
-    xa, ya = xp.meshgrid(x, y, indexing='ij')
+    x = xp.arange(plane_dims[0]) - plane_dims[0] / 2
+    y = xp.arange(plane_dims[1]) - plane_dims[1] / 2
+    xa, ya = xp.meshgrid(x, y, indexing="ij")
 
-    theta_90   = round(angle / 90)
+    theta_90 = round(angle / 90)
     theta_rest = (angle + 45) % 90 - 45
 
     theta = np.deg2rad(theta_rest)
-    a = np.tan(-theta/2)
+    a = np.tan(-theta / 2)
     b = np.sin(theta)
 
-    xOp = xp.exp(-2j*np.pi*qxa*ya*a)
-    yOp = xp.exp(-2j*np.pi*qya*xa*b)
+    xOp = xp.exp(-2j * np.pi * qxa * ya * a)
+    yOp = xp.exp(-2j * np.pi * qya * xa * b)
 
     output_arr = input_arr.copy()
 
     # 90 degree rotation
     if abs(theta_90) > 0:
         if plane_dims[0] == plane_dims[1]:
-            output_arr = xp.rot90(output_arr,theta_90, axes= axes)
+            output_arr = xp.rot90(output_arr, theta_90, axes=axes)
         else:
             if plane_dims[0] > plane_dims[1]:
-                xx = np.arange(plane_dims[1]) + (plane_dims[0]-plane_dims[1])//2
+                xx = np.arange(plane_dims[1]) + (plane_dims[0] - plane_dims[1]) // 2
                 if rotation_ax == 0:
-                    output_arr[:,xx,:] = xp.rot90(output_arr[:,xx,:],theta_90, axes= axes)
-                    output_arr[:,:xx[0],:] = 0
-                    output_arr[:,xx[-1]:,:] = 0
+                    output_arr[:, xx, :] = xp.rot90(
+                        output_arr[:, xx, :], theta_90, axes=axes
+                    )
+                    output_arr[:, : xx[0], :] = 0
+                    output_arr[:, xx[-1] :, :] = 0
                 else:
-                    output_arr[xx,:,:] = xp.rot90(output_arr[xx,:,:],theta_90, axes= axes)
-                    output_arr[:xx[0],:,:] = 0
-                    output_arr[xx[-1]:,:,:] = 0
+                    output_arr[xx, :, :] = xp.rot90(
+                        output_arr[xx, :, :], theta_90, axes=axes
+                    )
+                    output_arr[: xx[0], :, :] = 0
+                    output_arr[xx[-1] :, :, :] = 0
             else:
-                yy = np.arange(plane_dims[0]) + (plane_dims[1]-plane_dims[0])//2
+                yy = np.arange(plane_dims[0]) + (plane_dims[1] - plane_dims[0]) // 2
                 if rotation_ax == 2:
-                    output_arr[:,yy,:] = xp.rot90(output_arr[:,yy,:],theta_90, axes= axes)
-                    output_arr[:,:yy[0],:] = 0
-                    output_arr[:,yy[-1]:,:] = 0
+                    output_arr[:, yy, :] = xp.rot90(
+                        output_arr[:, yy, :], theta_90, axes=axes
+                    )
+                    output_arr[:, : yy[0], :] = 0
+                    output_arr[:, yy[-1] :, :] = 0
                 else:
-                    output_arr[:,:,yy] = xp.rot90(output_arr[:,:,yy],theta_90, axes= axes)
-                    output_arr[:,:,:yy[0]] = 0
-                    output_arr[:,:,yy[-1]:] = 0
+                    output_arr[:, :, yy] = xp.rot90(
+                        output_arr[:, :, yy], theta_90, axes=axes
+                    )
+                    output_arr[:, :, : yy[0]] = 0
+                    output_arr[:, :, yy[-1] :] = 0
 
     # small rotation
     if rotation_ax == 0:
-        output_arr = xp.fft.ifft(xp.fft.fft(output_arr,axis=1)*xOp[None,:],axis=1)
-        output_arr = xp.fft.ifft(xp.fft.fft(output_arr,axis=2)*yOp[None,:],axis=2)
-        output_arr = xp.fft.ifft(xp.fft.fft(output_arr,axis=1)*xOp[None,:],axis=1)
+        output_arr = xp.fft.ifft(xp.fft.fft(output_arr, axis=1) * xOp[None, :], axis=1)
+        output_arr = xp.fft.ifft(xp.fft.fft(output_arr, axis=2) * yOp[None, :], axis=2)
+        output_arr = xp.fft.ifft(xp.fft.fft(output_arr, axis=1) * xOp[None, :], axis=1)
         output_arr = xp.real(output_arr)
 
     elif rotation_ax == 1:
-        output_arr = xp.fft.ifft(xp.fft.fft(output_arr,axis=0)*xOp[:,None,:],axis=0)
-        output_arr = xp.fft.ifft(xp.fft.fft(output_arr,axis=2)*yOp[:,None,:],axis=2)
-        output_arr = xp.fft.ifft(xp.fft.fft(output_arr,axis=0)*xOp[:,None,:],axis=0)
+        output_arr = xp.fft.ifft(
+            xp.fft.fft(output_arr, axis=0) * xOp[:, None, :], axis=0
+        )
+        output_arr = xp.fft.ifft(
+            xp.fft.fft(output_arr, axis=2) * yOp[:, None, :], axis=2
+        )
+        output_arr = xp.fft.ifft(
+            xp.fft.fft(output_arr, axis=0) * xOp[:, None, :], axis=0
+        )
         output_arr = np.real(output_arr)
 
     else:
-        output_arr = xp.fft.ifft(xp.fft.fft(output_arr,axis=0)*xOp[:,:,None],axis=0)
-        output_arr = xp.fft.ifft(xp.fft.fft(output_arr,axis=1)*yOp[:,:,None],axis=1)
-        output_arr = xp.fft.ifft(xp.fft.fft(output_arr,axis=0)*xOp[:,:,None],axis=0)
+        output_arr = xp.fft.ifft(
+            xp.fft.fft(output_arr, axis=0) * xOp[:, :, None], axis=0
+        )
+        output_arr = xp.fft.ifft(
+            xp.fft.fft(output_arr, axis=1) * yOp[:, :, None], axis=1
+        )
+        output_arr = xp.fft.ifft(
+            xp.fft.fft(output_arr, axis=0) * xOp[:, :, None], axis=0
+        )
         output_arr = xp.real(output_arr)
 
     return output_arr
+
+
+### Divergence Projection Functions
+
+
+def compute_divergence(vector_field, spacings, xp=np):
+    """Computes divergence of vector_field"""
+    num_dims = len(spacings)
+    div = xp.zeros_like(vector_field[0])
+
+    for i in range(num_dims):
+        div += xp.gradient(vector_field[i], spacings[i], axis=i)
+
+    return div
+
+
+def compute_gradient(scalar_field, spacings, xp=np):
+    """Computes gradient of scalar_field"""
+    num_dims = len(spacings)
+    grad = xp.zeros((num_dims,) + scalar_field.shape)
+
+    for i in range(num_dims):
+        grad[i] = xp.gradient(scalar_field, spacings[i], axis=i)
+
+    return grad
+
+
+def array_slice(axis, ndim, start, end, step=1):
+    """Returns array slice along dynamic axis"""
+    return (slice(None),) * (axis % ndim) + (slice(start, end, step),)
+
+
+def make_array_rfft_compatible(array_nd, axis=0, xp=np):
+    """Expand array to be rfft compatible"""
+    array_shape = np.array(array_nd.shape)
+    d = array_nd.ndim
+    n = array_shape[axis]
+    array_shape[axis] = (n + 1) * 2
+
+    dtype = array_nd.dtype
+    padded_array = xp.zeros(array_shape, dtype=dtype)
+
+    padded_array[array_slice(axis, d, 1, n + 1)] = -array_nd
+    padded_array[array_slice(axis, d, None, -n - 1, -1)] = array_nd
+
+    return padded_array
+
+
+def dst_I(array_nd, xp=np):
+    """1D rfft-based DST-I"""
+    d = array_nd.ndim
+    for axis in range(d):
+        crop_slice = array_slice(axis, d, 1, -1)
+        array_nd = rfft(
+            make_array_rfft_compatible(array_nd, axis=axis, xp=xp), axis=axis
+        )[crop_slice].imag
+
+    return array_nd
+
+
+def idst_I(array_nd, xp=np):
+    """1D rfft-based iDST-I"""
+    scaling = np.prod((np.array(array_nd.shape) + 1) * 2)
+    return dst_I(array_nd, xp=xp) / scaling
+
+
+def preconditioned_laplacian(num_exterior, spacing=1, xp=np):
+    """DST-I eigenvalues"""
+    n = num_exterior - 1
+    evals_1d = 2 - 2 * xp.cos(np.pi * xp.arange(1, num_exterior) / num_exterior)
+
+    op = (
+        xp.repeat(evals_1d, n**2)
+        + xp.tile(evals_1d, n**2)
+        + xp.tile(xp.repeat(evals_1d, n), n)
+    )
+
+    return -op / spacing**2
+
+
+def preconditioned_poisson_solver(rhs_interior, spacing=1, xp=np):
+    """DST-I based poisson solver"""
+    nx, ny, nz = rhs_interior.shape
+    if nx != ny or nx != nz:
+        raise ValueError()
+
+    op = preconditioned_laplacian(nx + 1, spacing=spacing, xp=xp)
+    if xp is np:
+        dst_rhs = dstn(rhs_interior, type=1).ravel()
+        dst_u = (dst_rhs / op).reshape((nx, ny, nz))
+        sol = idstn(dst_u, type=1)
+    else:
+        dst_rhs = dst_I(rhs_interior, xp=xp).ravel()
+        dst_u = (dst_rhs / op).reshape((nx, ny, nz))
+        sol = idst_I(dst_u, xp=xp)
+
+    return sol
+
+
+def project_vector_field_divergence(vector_field, spacings=(1, 1, 1), xp=np):
+    """
+    Returns solenoidal part of vector field using projection:
+
+    f - \\grad{p}
+    s.t. \\laplacian{p} = \\div{f}
+    """
+
+    div_v = compute_divergence(vector_field, spacings, xp=xp)
+    p = preconditioned_poisson_solver(div_v, spacings[0], xp=xp)
+    grad_p = compute_gradient(p, spacings, xp=xp)
+    return vector_field - grad_p

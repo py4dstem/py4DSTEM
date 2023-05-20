@@ -1,6 +1,6 @@
 """
 Module for reconstructing phase objects from 4DSTEM datasets using iterative methods,
-namely overlap tomography.
+namely overlap magnetic tomography.
 """
 
 import warnings
@@ -9,7 +9,7 @@ from typing import Mapping, Sequence, Tuple
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.gridspec import GridSpec
-from mpl_toolkits.axes_grid1 import ImageGrid, make_axes_locatable
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 from py4DSTEM.visualize import show
 from py4DSTEM.visualize.vis_special import Complex2RGB, add_colorbar_arg
 from scipy.ndimage import rotate as rotate_np
@@ -28,6 +28,7 @@ from py4DSTEM.process.phase.utils import (
     generate_batches,
     polar_aliases,
     polar_symbols,
+    project_vector_field_divergence,
     spatial_frequencies,
 )
 from py4DSTEM.process.utils import electron_wavelength_angstrom, get_CoM, get_shifted_ar
@@ -35,9 +36,9 @@ from py4DSTEM.process.utils import electron_wavelength_angstrom, get_CoM, get_sh
 warnings.simplefilter(action="always", category=UserWarning)
 
 
-class OverlapTomographicReconstruction(PtychographicReconstruction):
+class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
     """
-    Overlap Tomographic Reconstruction Class.
+    Overlap Magnetic Tomographic Reconstruction Class.
 
     List of diffraction intensities dimensions  : (Rx,Ry,Qx,Qy)
     Reconstructed probe dimensions              : (Sx,Sy)
@@ -50,13 +51,17 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
     Parameters
     ----------
     datacube: List of DataCubes
-        Input list of 4D diffraction pattern intensities
+        Input list of 4D diffraction pattern intensities for different tilts
     energy: float
         The electron energy of the wave functions in eV
     num_slices: int
         Number of slices to use in the forward model
     tilt_angles_deg: Sequence[float]
-        List of tilt angles in degrees,
+        List of (\alpha, \beta) tilt angle tuple in degrees,
+        with the following Euler-angle convention:
+          - \alpha tilt around z-axis
+          - \beta tilt around x-axis
+          - -\alpha tilt around z-axis
     semiangle_cutoff: float, optional
         Semiangle cutoff for the initial probe guess
     rolloff: float, optional
@@ -98,7 +103,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
         self,
         energy: float,
         num_slices: int,
-        tilt_angles_deg: Sequence[float],
+        tilt_angles_deg: Sequence[Tuple[float, float]],
         datacube: Sequence[DataCube] = None,
         semiangle_cutoff: float = None,
         rolloff: float = 2.0,
@@ -111,7 +116,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
         initial_scan_positions: Sequence[np.ndarray] = None,
         verbose: bool = True,
         device: str = "cpu",
-        name: str = "overlap-tomographic_reconstruction",
+        name: str = "overlap-magnetic-tomographic_reconstruction",
         **kwargs,
     ):
         Custom.__init__(self, name=name)
@@ -124,9 +129,6 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
             self._gaussian_filter = gaussian_filter
             self._zoom = zoom
             self._rotate = rotate
-            from scipy.special import erf
-
-            self._erf = erf
         elif device == "gpu":
             self._xp = cp
             self._asnumpy = cp.asnumpy
@@ -135,9 +137,6 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
             self._gaussian_filter = gaussian_filter
             self._zoom = zoom
             self._rotate = rotate
-            from cupyx.scipy.special import erf
-
-            self._erf = erf
         else:
             raise ValueError(f"device must be either 'cpu' or 'gpu', not {device}")
 
@@ -254,40 +253,6 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
 
         return xp.fft.ifft2(xp.fft.fft2(array) * propagator_array)
 
-    def _expand_or_project_sliced_object(self, array: np.ndarray, output_z):
-        """
-        OLD Version
-
-        Expands supersliced object or projects voxel-sliced object.
-
-        Parameters
-        ----------
-        array: np.ndarray
-            3D array to expand/project
-        output_z: int
-            Output_dimension to expand/project array to.
-            If output_z > array.shape[0] array is expanded, else it's projected
-
-        Returns
-        -------
-        expanded_or_projected_array: np.ndarray
-            expanded or projected array
-        """
-        zoom = self._zoom
-        input_z = array.shape[0]
-
-        return (
-            zoom(
-                array,
-                (output_z / input_z, 1, 1),
-                order=0,
-                mode="nearest",
-                grid_mode=True,
-            )
-            * input_z
-            / output_z
-        )
-
     def _project_sliced_object(self, array: np.ndarray, output_z):
         """
         Expands supersliced object or projects voxel-sliced object.
@@ -352,6 +317,97 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
 
         normalized_array = array / xp.asarray(voxels_in_slice)[:, None, None]
         return xp.repeat(normalized_array, voxels_per_slice, axis=0)[:output_z]
+
+    def _euler_angle_rotate_volume(
+        self,
+        volume_array,
+        alpha_deg,
+        beta_deg,
+    ):
+        """
+        Rotate 3D volume using alpha, beta, gamma Euler angles according to convention:
+
+        - \-alpha tilt around first axis (z)
+        - \beta tilt around second axis (x)
+        - \alpha tilt around first axis (z)
+
+        Note: since we store array as zxy, the x- and y-axis rotations flip sign below.
+
+        """
+
+        rotate = self._rotate
+        volume = volume_array.copy()
+
+        alpha_deg, beta_deg = np.mod(np.array([alpha_deg, beta_deg]) + 180, 360) - 180
+
+        if alpha_deg == -180:
+            # print(f"rotation of {-beta_deg} around x")
+            volume = rotate(
+                volume,
+                beta_deg,
+                axes=(0, 2),
+                reshape=False,
+                order=3,
+            )
+        elif alpha_deg == -90:
+            # print(f"rotation of {beta_deg} around y")
+            volume = rotate(
+                volume,
+                -beta_deg,
+                axes=(0, 1),
+                reshape=False,
+                order=3,
+            )
+        elif alpha_deg == 0:
+            # print(f"rotation of {beta_deg} around x")
+            volume = rotate(
+                volume,
+                -beta_deg,
+                axes=(0, 2),
+                reshape=False,
+                order=3,
+            )
+        elif alpha_deg == 90:
+            # print(f"rotation of {-beta_deg} around y")
+            volume = rotate(
+                volume,
+                beta_deg,
+                axes=(0, 1),
+                reshape=False,
+                order=3,
+            )
+        else:
+            # print((
+            #     f"rotation of {-alpha_deg} around z, "
+            #     f"rotation of {beta_deg} around x, "
+            #     f"rotation of {alpha_deg} around z."
+            # ))
+
+            volume = rotate(
+                volume,
+                -alpha_deg,
+                axes=(1, 2),
+                reshape=False,
+                order=3,
+            )
+
+            volume = rotate(
+                volume,
+                -beta_deg,
+                axes=(0, 2),
+                reshape=False,
+                order=3,
+            )
+
+            volume = rotate(
+                volume,
+                alpha_deg,
+                axes=(1, 2),
+                reshape=False,
+                order=3,
+            )
+
+        return volume
 
     def preprocess(
         self,
@@ -430,6 +486,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
 
         # Prepopulate various arrays
         num_probes_per_tilt = [0]
+
         for dc in self._datacube:
             rx, ry = dc.Rshape
             num_probes_per_tilt.append(rx * ry)
@@ -553,14 +610,14 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
             q = np.max([np.round(q + pad_y), self._region_of_interest_shape[1]]).astype(
                 "int"
             )
-            self._object = xp.zeros((q, p, q), dtype=xp.float32)
+            self._object = xp.zeros((4, q, p, q), dtype=xp.float32)
         else:
             self._object = xp.asarray(self._object, dtype=xp.float32)
 
         self._object_initial = self._object.copy()
         self._object_type_initial = self._object_type
         self._object_shape = self._object.shape[-2:]
-        self._num_voxels = self._object.shape[0]
+        self._num_voxels = self._object.shape[1]
 
         # Center Probes
         self._positions_px_all = xp.asarray(self._positions_px_all, dtype=xp.float32)
@@ -676,16 +733,15 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
 
         # overlaps
         if object_fov_mask is None:
-            probe_overlap_3D = xp.zeros_like(self._object)
+            probe_overlap_3D = xp.zeros_like(self._object[0])
 
             for tilt_index in np.arange(self._num_tilts):
-                current_angle_deg = self._tilt_angles_deg[tilt_index]
-                probe_overlap_3D = self._rotate(
+                alpha_deg, beta_deg = self._tilt_angles_deg[tilt_index]
+
+                probe_overlap_3D = self._euler_angle_rotate_volume(
                     probe_overlap_3D,
-                    current_angle_deg,
-                    axes=(0, 2),
-                    reshape=False,
-                    order=2,
+                    alpha_deg,
+                    beta_deg,
                 )
 
                 self._positions_px = self._positions_px_all[
@@ -706,12 +762,10 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
 
                 probe_overlap_3D += probe_overlap[None]
 
-                probe_overlap_3D = self._rotate(
+                probe_overlap_3D = self._euler_angle_rotate_volume(
                     probe_overlap_3D,
-                    -current_angle_deg,
-                    axes=(0, 2),
-                    reshape=False,
-                    order=2,
+                    alpha_deg,
+                    -beta_deg,
                 )
 
             probe_overlap_3D = self._gaussian_filter(probe_overlap_3D, 1.0)
@@ -833,14 +887,18 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
 
         return self
 
-    def _overlap_projection(self, current_object, current_probe):
+    def _overlap_projection(
+        self, current_object_V, current_object_A_projected, current_probe
+    ):
         """
         Ptychographic overlap projection method.
 
         Parameters
         --------
-        current_object: np.ndarray
-            Current object estimate
+        current_object_V: np.ndarray
+            Current electrostatic object estimate
+        current_object_A_projected: np.ndarray
+            Current projected magnetic object estimate
         current_probe: np.ndarray
             Current probe estimate
 
@@ -856,7 +914,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
 
         xp = self._xp
 
-        complex_object = xp.exp(1j * current_object)
+        complex_object = xp.exp(1j * (current_object_V + current_object_A_projected))
         object_patches = complex_object[
             :, self._vectorized_patch_indices_row, self._vectorized_patch_indices_col
         ]
@@ -926,7 +984,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
             DM_AP(\\alpha)   :   a =  -\\alpha, b = 1, c = 1 + \\alpha
               DM: DM_AP(1.0), AP: DM_AP(0.0)
 
-            RAAR(\\beta)     :   a = 1-2\\beta, b = \beta, c = 2
+            RAAR(\\beta)     :   a = 1-2\\beta, b = \\beta, c = 2
               DM : RAAR(1.0)
 
             RRR(\\gamma)     :   a = -\\gamma, b = \\gamma, c = 2
@@ -984,7 +1042,8 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
 
     def _forward(
         self,
-        current_object,
+        current_object_V,
+        current_object_A_projected,
         current_probe,
         amplitudes,
         exit_waves,
@@ -999,8 +1058,10 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
 
         Parameters
         --------
-        current_object: np.ndarray
-            Current object estimate
+        current_object_V: np.ndarray
+            Current electrostatic object estimate
+        current_object_A_projected: np.ndarray
+            Current projected magnetic object estimate
         current_probe: np.ndarray
             Current probe estimate
         amplitudes: np.ndarray
@@ -1031,7 +1092,11 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
             propagated_probes,
             object_patches,
             transmitted_probes,
-        ) = self._overlap_projection(current_object, current_probe)
+        ) = self._overlap_projection(
+            current_object_V,
+            current_object_A_projected,
+            current_probe,
+        )
 
         if use_projection_scheme:
             (
@@ -1055,7 +1120,8 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
 
     def _gradient_descent_adjoint(
         self,
-        current_object,
+        current_object_V,
+        current_object_A_projected,
         current_probe,
         object_patches,
         propagated_probes,
@@ -1070,8 +1136,10 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
 
         Parameters
         --------
-        current_object: np.ndarray
-            Current object estimate
+        current_object_V: np.ndarray
+            Current electrostatic object estimate
+        current_object_A_projected: np.ndarray
+            Current projected magnetic object estimate
         current_probe: np.ndarray
             Current probe estimate
         object_patches: np.ndarray
@@ -1089,8 +1157,10 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
 
         Returns
         --------
-        updated_object: np.ndarray
-            Updated object estimate
+        updated_object_V: np.ndarray
+            Updated electrostatic object estimate
+        updated_object_A_projected: np.ndarray
+            Updated projected magnetic object estimate
         updated_probe: np.ndarray
             Updated probe estimate
         """
@@ -1110,12 +1180,15 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                 + (normalization_min * xp.max(probe_normalization)) ** 2
             )
 
-            current_object[s] += step_size * (
+            object_update = step_size * (
                 self._sum_overlapping_patches_bincounts(
                     xp.real(-1j * xp.conj(obj) * xp.conj(probe) * exit_waves)
                 )
                 * probe_normalization
             )
+
+            current_object_V[s] += object_update
+            current_object_A_projected[s] += object_update
 
             # back-transmit
             exit_waves *= xp.conj(obj)
@@ -1146,11 +1219,12 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                     * object_normalization
                 )
 
-        return current_object, current_probe
+        return current_object_V, current_object_A_projected, current_probe
 
     def _projection_sets_adjoint(
         self,
-        current_object,
+        current_object_V,
+        current_object_A_projected,
         current_probe,
         object_patches,
         propagated_probes,
@@ -1164,8 +1238,10 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
 
         Parameters
         --------
-        current_object: np.ndarray
-            Current object estimate
+        current_object_V: np.ndarray
+            Current electrostatic object estimate
+        current_object_A_projected: np.ndarray
+            Current projected magnetic object estimate
         current_probe: np.ndarray
             Current probe estimate
         object_patches: np.ndarray
@@ -1181,8 +1257,10 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
 
         Returns
         --------
-        updated_object: np.ndarray
-            Updated object estimate
+        updated_object_V: np.ndarray
+            Updated electrostatic object estimate
+        updated_object_A_projected: np.ndarray
+            Updated projected magnetic object estimate
         updated_probe: np.ndarray
             Updated probe estimate
         """
@@ -1204,12 +1282,15 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                 + (normalization_min * xp.max(probe_normalization)) ** 2
             )
 
-            current_object[s] = (
+            object_update = (
                 self._sum_overlapping_patches_bincounts(
-                    xp.real(-1j * xp.conj(obj) * xp.conj(probe) * exit_waves_copy)
+                    xp.real(-1j * xp.conj(obj) * xp.conj(probe) * exit_waves)
                 )
                 * probe_normalization
             )
+
+            current_object_V[s] = object_update
+            current_object_A_projected[s] = object_update
 
             # back-transmit
             exit_waves_copy *= xp.conj(obj)
@@ -1240,11 +1321,12 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                     * object_normalization
                 )
 
-        return current_object, current_probe
+        return current_object_V, current_object_A_projected, current_probe
 
     def _adjoint(
         self,
-        current_object,
+        current_object_V,
+        current_object_A_projected,
         current_probe,
         object_patches,
         propagated_probes,
@@ -1260,8 +1342,10 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
 
         Parameters
         --------
-        current_object: np.ndarray
-            Current object estimate
+        current_object_V: np.ndarray
+            Current electrostatic object estimate
+        current_object_A_projected: np.ndarray
+            Current projected magnetic object estimate
         current_probe: np.ndarray
             Current probe estimate
         object_patches: np.ndarray
@@ -1281,15 +1365,22 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
 
         Returns
         --------
-        updated_object: np.ndarray
-            Updated object estimate
+        updated_object_V: np.ndarray
+            Updated electrostatic object estimate
+        updated_object_A_projected: np.ndarray
+            Updated projected magnetic object estimate
         updated_probe: np.ndarray
             Updated probe estimate
         """
 
         if use_projection_scheme:
-            current_object, current_probe = self._projection_sets_adjoint(
-                current_object,
+            (
+                current_object_V,
+                current_object_A_projected,
+                current_probe,
+            ) = self._projection_sets_adjoint(
+                current_object_V,
+                current_object_A_projected,
                 current_probe,
                 object_patches,
                 propagated_probes,
@@ -1298,8 +1389,13 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                 fix_probe,
             )
         else:
-            current_object, current_probe = self._gradient_descent_adjoint(
-                current_object,
+            (
+                current_object_V,
+                current_object_A_projected,
+                current_probe,
+            ) = self._gradient_descent_adjoint(
+                current_object_V,
+                current_object_A_projected,
                 current_probe,
                 object_patches,
                 propagated_probes,
@@ -1309,7 +1405,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                 fix_probe,
             )
 
-        return current_object, current_probe
+        return current_object_V, current_object_A_projected, current_probe
 
     def _position_correction(
         self,
@@ -1331,7 +1427,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
         current_probe:np.ndarray
             fractionally-shifted probes
         transmitted_probes: np.ndarray
-            Transmitted probes after N-1 propagations and N transmissions
+            Transmitted probes at each layer
         amplitudes: np.ndarray
             Measured amplitudes
         current_positions: np.ndarray
@@ -1351,12 +1447,12 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
         xp = self._xp
 
         # Intensity gradient
-        exit_waves_fft = xp.fft.fft2(transmitted_probes)
+        exit_waves_fft = xp.fft.fft2(transmitted_probes[-1])
         exit_waves_fft_conj = xp.conj(exit_waves_fft)
         estimated_intensity = xp.abs(exit_waves_fft) ** 2
         measured_intensity = amplitudes**2
 
-        flat_shape = (transmitted_probes.shape[0], -1)
+        flat_shape = (transmitted_probes[-1].shape[0], -1)
         difference_intensity = (measured_intensity - estimated_intensity).reshape(
             flat_shape
         )
@@ -1366,56 +1462,52 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
         complex_object = xp.exp(1j * current_object)
 
         # dx
+        propagated_probes = fft_shift(current_probe, self._positions_px_fractional, xp)
         obj_rolled_patches = complex_object[
             :,
             (self._vectorized_patch_indices_row + 1) % self._object_shape[0],
             self._vectorized_patch_indices_col,
         ]
 
-        propagated_probes_perturbed = xp.empty_like(obj_rolled_patches)
-        propagated_probes_perturbed[0] = fft_shift(
-            current_probe, self._positions_px_fractional, xp
-        )
+        transmitted_probes_perturbed = xp.empty_like(obj_rolled_patches)
 
         for s in range(self._num_slices):
             # transmit
-            transmitted_probes_perturbed = (
-                obj_rolled_patches[s] * propagated_probes_perturbed[s]
-            )
+            transmitted_probes_perturbed[s] = obj_rolled_patches[s] * propagated_probes
 
             # propagate
             if s + 1 < self._num_slices:
-                propagated_probes_perturbed[s + 1] = self._propagate_array(
-                    transmitted_probes_perturbed, self._propagator_arrays[s]
+                propagated_probes = self._propagate_array(
+                    transmitted_probes_perturbed[s], self._propagator_arrays[s]
                 )
 
-        exit_waves_dx_fft = exit_waves_fft - xp.fft.fft2(transmitted_probes_perturbed)
+        exit_waves_dx_fft = exit_waves_fft - xp.fft.fft2(
+            transmitted_probes_perturbed[-1]
+        )
 
         # dy
+        propagated_probes = fft_shift(current_probe, self._positions_px_fractional, xp)
         obj_rolled_patches = complex_object[
             :,
             self._vectorized_patch_indices_row,
             (self._vectorized_patch_indices_col + 1) % self._object_shape[1],
         ]
 
-        propagated_probes_perturbed = xp.empty_like(obj_rolled_patches)
-        propagated_probes_perturbed[0] = fft_shift(
-            current_probe, self._positions_px_fractional, xp
-        )
+        transmitted_probes_perturbed = xp.empty_like(obj_rolled_patches)
 
         for s in range(self._num_slices):
             # transmit
-            transmitted_probes_perturbed = (
-                obj_rolled_patches[s] * propagated_probes_perturbed[s]
-            )
+            transmitted_probes_perturbed[s] = obj_rolled_patches[s] * propagated_probes
 
             # propagate
             if s + 1 < self._num_slices:
-                propagated_probes_perturbed[s + 1] = self._propagate_array(
-                    transmitted_probes_perturbed, self._propagator_arrays[s]
+                propagated_probes = self._propagate_array(
+                    transmitted_probes_perturbed[s], self._propagator_arrays[s]
                 )
 
-        exit_waves_dy_fft = exit_waves_fft - xp.fft.fft2(transmitted_probes_perturbed)
+        exit_waves_dy_fft = exit_waves_fft - xp.fft.fft2(
+            transmitted_probes_perturbed[-1]
+        )
 
         partial_intensity_dx = 2 * xp.real(
             exit_waves_dx_fft * exit_waves_fft_conj
@@ -1469,6 +1561,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
             ) > 0
 
             positions_update[..., 0][outlier_ind] = 0
+
         current_positions -= positions_step_size * positions_update[..., 0]
 
         return current_positions
@@ -1492,8 +1585,8 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
         """
         gaussian_filter = self._gaussian_filter
         xp = self._xp
-        gaussian_filter_sigma /= xp.sqrt(self.sampling[0] ** 2 + self.sampling[1] ** 2)
 
+        gaussian_filter_sigma /= xp.sqrt(self.sampling[0] ** 2 + self.sampling[1] ** 2)
         current_object = gaussian_filter(current_object, gaussian_filter_sigma)
 
         return current_object
@@ -1532,6 +1625,29 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
         current_object = xp.fft.ifftn(xp.fft.fftn(current_object) * env)
         return xp.real(current_object)
 
+    def _divergence_free_constraint(self, vector_field):
+        """
+        Leray projection operator
+
+        Parameters
+        --------
+        vector_field: np.ndarray
+            Current object vector as Az, Ax, Ay
+
+        Returns
+        --------
+        projected_vector_field: np.ndarray
+            Divergence-less object vector as Az, Ax, Ay
+        """
+        xp = self._xp
+
+        spacings = (self.sampling[1],) + self.sampling
+        vector_field = project_vector_field_divergence(
+            vector_field, spacings=spacings, xp=xp
+        )
+
+        return vector_field
+
     def _constraints(
         self,
         current_object,
@@ -1550,16 +1666,20 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
         fix_positions,
         global_affine_transformation,
         gaussian_filter,
-        gaussian_filter_sigma,
+        gaussian_filter_sigma_e,
+        gaussian_filter_sigma_m,
         butterworth_filter,
-        q_lowpass,
-        q_highpass,
+        q_lowpass_e,
+        q_lowpass_m,
+        q_highpass_e,
+        q_highpass_m,
         object_positivity,
         shrinkage_rad,
         object_mask,
     ):
         """
         Ptychographic constraints operator.
+        Calls _threshold_object_constraint() and _probe_center_of_mass_constraint()
 
         Parameters
         --------
@@ -1571,8 +1691,8 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
             Current positions estimate
         fix_com: bool
             If True, probe CoM is fixed to the center
-        symmetrize_probe_iter: int, optional
-            Number of iterations to run before radially-averaging the probe
+        symmetrize_probe: bool
+            If True, the probe is radially-averaged
         probe_gaussian_filter: bool
             If True, applies reciprocal-space gaussian filtering on residual aberrations
         probe_gaussian_filter_sigma: float
@@ -1594,20 +1714,24 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
             If True, positions are not updated
         gaussian_filter: bool
             If True, applies real-space gaussian filter
-        gaussian_filter_sigma: float
-            Standard deviation of gaussian kernel in A
+        gaussian_filter_sigma_e: float
+            Standard deviation of gaussian kernel for electrostatic object in A
+        gaussian_filter_sigma_m: float
+            Standard deviation of gaussian kernel for magnetic object in A
         butterworth_filter: bool
-            If True, applies fourier-space butterworth filter
-        q_lowpass: float
-            Cut-off frequency in A^-1 for low-pass butterworth filter
-        q_highpass: float
-            Cut-off frequency in A^-1 for high-pass butterworth filter
+            If True, applies high-pass butteworth filter
+        q_lowpass_e: float
+            Cut-off frequency in A^-1 for low-pass filtering electrostatic object
+        q_lowpass_m: float
+            Cut-off frequency in A^-1 for low-pass filtering magnetic object
+        q_highpass_e: float
+            Cut-off frequency in A^-1 for high-pass filtering electrostatic object
+        q_highpass_m: float
+            Cut-off frequency in A^-1 for high-pass filtering magnetic object
         object_positivity: bool
             If True, forces object to be positive
         shrinkage_rad: float
             Phase shift in radians to be subtracted from the potential at each iteration
-        object_mask: np.ndarray (boolean)
-            If not None, used to calculate additional shrinkage using masked-mean of object
 
         Returns
         --------
@@ -1620,26 +1744,50 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
         """
 
         if gaussian_filter:
-            current_object = self._object_gaussian_constraint(
-                current_object, gaussian_filter_sigma
+            current_object[0] = self._object_gaussian_constraint(
+                current_object[0], gaussian_filter_sigma_e
+            )
+            current_object[1] = self._object_gaussian_constraint(
+                current_object[1], gaussian_filter_sigma_m
+            )
+            current_object[2] = self._object_gaussian_constraint(
+                current_object[2], gaussian_filter_sigma_m
+            )
+            current_object[3] = self._object_gaussian_constraint(
+                current_object[3], gaussian_filter_sigma_m
             )
 
         if butterworth_filter:
-            current_object = self._object_butterworth_constraint(
-                current_object,
-                q_lowpass,
-                q_highpass,
+            current_object[0] = self._object_butterworth_constraint(
+                current_object[0],
+                q_lowpass_e,
+                q_highpass_e,
+            )
+            current_object[1] = self._object_butterworth_constraint(
+                current_object[1],
+                q_lowpass_m,
+                q_highpass_m,
+            )
+            current_object[2] = self._object_butterworth_constraint(
+                current_object[2],
+                q_lowpass_m,
+                q_highpass_m,
+            )
+            current_object[3] = self._object_butterworth_constraint(
+                current_object[3],
+                q_lowpass_m,
+                q_highpass_m,
             )
 
         if shrinkage_rad > 0.0 or object_mask is not None:
-            current_object = self._object_shrinkage_constraint(
-                current_object,
+            current_object[0] = self._object_shrinkage_constraint(
+                current_object[0],
                 shrinkage_rad,
                 object_mask,
             )
 
         if object_positivity:
-            current_object = self._object_positivity_constraint(current_object)
+            current_object[0] = self._object_positivity_constraint(current_object[0])
 
         if fix_com:
             current_probe = self._probe_center_of_mass_constraint(current_probe)
@@ -1700,14 +1848,17 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
         fix_positions_iter: int = np.inf,
         constrain_position_distance: float = None,
         global_affine_transformation: bool = True,
-        gaussian_filter_sigma: float = None,
+        gaussian_filter_sigma_e: float = None,
+        gaussian_filter_sigma_m: float = None,
         gaussian_filter_iter: int = np.inf,
         probe_gaussian_filter_sigma: float = None,
         probe_gaussian_filter_residual_aberrations_iter: int = np.inf,
         probe_gaussian_filter_fix_amplitude: bool = True,
         butterworth_filter_iter: int = np.inf,
-        q_lowpass: float = None,
-        q_highpass: float = None,
+        q_lowpass_e: float = None,
+        q_lowpass_m: float = None,
+        q_highpass_e: float = None,
+        q_highpass_m: float = None,
         object_positivity: bool = True,
         shrinkage_rad: float = 0.0,
         fix_potential_baseline: bool = True,
@@ -1750,7 +1901,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
         fix_probe_iter: int, optional
             Number of iterations to run with a fixed probe before updating probe estimate
         symmetrize_probe_iter: int, optional
-            Number of iterations to run with a fixed probe before updating probe estimate
+            Number of iterations to run before radially-averaging the probe
         fix_probe_amplitude: bool
             If True, probe amplitude is constrained by top hat function
         fix_probe_amplitude_relative_radius: float
@@ -1769,8 +1920,10 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
             field of view in A
         global_affine_transformation: bool, optional
             If True, positions are assumed to be a global affine transform from initial scan
-        gaussian_filter_sigma: float, optional
-            Standard deviation of gaussian kernel in A
+        gaussian_filter_sigma_e: float
+            Standard deviation of gaussian kernel for electrostatic object in A
+        gaussian_filter_sigma_m: float
+            Standard deviation of gaussian kernel for magnetic object in A
         gaussian_filter_iter: int, optional
             Number of iterations to run using object smoothness constraint
         probe_gaussian_filter_sigma: float, optional
@@ -1798,7 +1951,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
 
         Returns
         --------
-        self: OverlapTomographicReconstruction
+        self: OverlapMagneticTomographicReconstruction
             Self to accommodate chaining
         """
         asnumpy = self._asnumpy
@@ -1942,8 +2095,6 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
 
         if max_batch_size is not None:
             xp.random.seed(seed_random)
-        else:
-            max_batch_size = self._num_diffraction_patterns
 
         # initialization
         if store_iterations and (not hasattr(self, "object_iterations") or reset):
@@ -1977,6 +2128,12 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                 else:
                     self._exit_waves = None
 
+        if gaussian_filter_sigma_m is None:
+            gaussian_filter_sigma_m = gaussian_filter_sigma_e
+
+        if q_lowpass_m is None:
+            q_lowpass_m = q_lowpass_e
+
         # main loop
         for a0 in tqdmnd(
             max_iter,
@@ -1993,23 +2150,55 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
             np.random.shuffle(tilt_indices)
 
             for tilt_index in tilt_indices:
+                tilt_error = 0.0
                 self._active_tilt_index = tilt_index
 
-                tilt_error = 0.0
+                alpha_deg, beta_deg = self._tilt_angles_deg[self._active_tilt_index]
+                alpha, beta = np.deg2rad([alpha_deg, beta_deg])
 
-                self._object = self._rotate(
-                    self._object,
-                    self._tilt_angles_deg[self._active_tilt_index],
-                    axes=(0, 2),
-                    reshape=False,
-                    order=3,
+                # V
+                self._object[0] = self._euler_angle_rotate_volume(
+                    self._object[0],
+                    alpha_deg,
+                    beta_deg,
                 )
 
-                object_sliced = self._project_sliced_object(
-                    self._object, self._num_slices
+                # Az
+                self._object[1] = self._euler_angle_rotate_volume(
+                    self._object[1],
+                    alpha_deg,
+                    beta_deg,
                 )
+
+                # Ax
+                self._object[2] = self._euler_angle_rotate_volume(
+                    self._object[2],
+                    alpha_deg,
+                    beta_deg,
+                )
+
+                # Ay
+                self._object[3] = self._euler_angle_rotate_volume(
+                    self._object[3],
+                    alpha_deg,
+                    beta_deg,
+                )
+
+                object_A = self._object[1] * np.cos(beta) + np.sin(beta) * (
+                    self._object[3] * np.cos(alpha) - self._object[2] * np.sin(alpha)
+                )
+
+                object_sliced_V = self._project_sliced_object(
+                    self._object[0], self._num_slices
+                )
+
+                object_sliced_A = self._project_sliced_object(
+                    object_A, self._num_slices
+                )
+
                 if not use_projection_scheme:
-                    object_sliced_old = object_sliced.copy()
+                    object_sliced_old_V = object_sliced_V.copy()
+                    object_sliced_old_A = object_sliced_A.copy()
 
                 start_tilt = self._cum_probes_per_tilt[self._active_tilt_index]
                 end_tilt = self._cum_probes_per_tilt[self._active_tilt_index + 1]
@@ -2017,6 +2206,11 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                 num_diffraction_patterns = end_tilt - start_tilt
                 shuffled_indices = np.arange(num_diffraction_patterns)
                 unshuffled_indices = np.zeros_like(shuffled_indices)
+
+                if max_batch_size is None:
+                    current_max_batch_size = num_diffraction_patterns
+                else:
+                    current_max_batch_size = max_batch_size
 
                 # randomize
                 if not use_projection_scheme:
@@ -2034,7 +2228,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                 ].copy()[shuffled_indices]
 
                 for start, end in generate_batches(
-                    num_diffraction_patterns, max_batch=max_batch_size
+                    num_diffraction_patterns, max_batch=current_max_batch_size
                 ):
                     # batch indices
                     self._positions_px = positions_px[start:end]
@@ -2061,7 +2255,8 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                         self._exit_waves,
                         batch_error,
                     ) = self._forward(
-                        object_sliced,
+                        object_sliced_V,
+                        object_sliced_A,
                         self._probe,
                         amplitudes,
                         self._exit_waves,
@@ -2072,8 +2267,9 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                     )
 
                     # adjoint operator
-                    object_sliced, self._probe = self._adjoint(
-                        object_sliced,
+                    object_sliced_V, object_sliced_A, self._probe = self._adjoint(
+                        object_sliced_V,
+                        object_sliced_A,
                         self._probe,
                         object_patches,
                         propagated_probes,
@@ -2087,7 +2283,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                     # position correction
                     if a0 >= fix_positions_iter:
                         positions_px[start:end] = self._position_correction(
-                            object_sliced,
+                            object_sliced_V,
                             self._probe,
                             transmitted_probes,
                             amplitudes,
@@ -2099,29 +2295,65 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                     tilt_error += batch_error
 
                 if not use_projection_scheme:
-                    object_sliced -= object_sliced_old
+                    object_sliced_V -= object_sliced_old_V
+                    object_sliced_A -= object_sliced_old_A
 
-                object_update = self._expand_sliced_object(
-                    object_sliced, self._num_voxels
+                object_update_V = self._expand_sliced_object(
+                    object_sliced_V, self._num_voxels
+                )
+                object_update_A = self._expand_sliced_object(
+                    object_sliced_A, self._num_voxels
                 )
 
                 if collective_tilt_updates:
-                    collective_object += self._rotate(
-                        object_update,
-                        -self._tilt_angles_deg[self._active_tilt_index],
-                        axes=(0, 2),
-                        reshape=False,
-                        order=3,
+                    collective_object[0] += self._euler_angle_rotate_volume(
+                        object_update_V,
+                        alpha_deg,
+                        -beta_deg,
+                    )
+                    collective_object[1] += self._euler_angle_rotate_volume(
+                        object_update_A * np.cos(beta),
+                        alpha_deg,
+                        -beta_deg,
+                    )
+                    collective_object[2] -= self._euler_angle_rotate_volume(
+                        object_update_A * np.sin(alpha) * np.sin(beta),
+                        alpha_deg,
+                        -beta_deg,
+                    )
+                    collective_object[3] += self._euler_angle_rotate_volume(
+                        object_update_A * np.cos(alpha) * np.sin(beta),
+                        alpha_deg,
+                        -beta_deg,
                     )
                 else:
-                    self._object += object_update
+                    self._object[0] += object_update_V
+                    self._object[1] += object_update_A * np.cos(beta)
+                    self._object[2] -= object_update_A * np.sin(alpha) * np.sin(beta)
+                    self._object[3] += object_update_A * np.cos(alpha) * np.sin(beta)
 
-                self._object = self._rotate(
-                    self._object,
-                    -self._tilt_angles_deg[self._active_tilt_index],
-                    axes=(0, 2),
-                    reshape=False,
-                    order=3,
+                self._object[0] = self._euler_angle_rotate_volume(
+                    self._object[0],
+                    alpha_deg,
+                    -beta_deg,
+                )
+
+                self._object[1] = self._euler_angle_rotate_volume(
+                    self._object[1],
+                    alpha_deg,
+                    -beta_deg,
+                )
+
+                self._object[2] = self._euler_angle_rotate_volume(
+                    self._object[2],
+                    alpha_deg,
+                    -beta_deg,
+                )
+
+                self._object[3] = self._euler_angle_rotate_volume(
+                    self._object[3],
+                    alpha_deg,
+                    -beta_deg,
                 )
 
                 # Normalize Error
@@ -2163,12 +2395,15 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                         fix_positions=a0 < fix_positions_iter,
                         global_affine_transformation=global_affine_transformation,
                         gaussian_filter=a0 < gaussian_filter_iter
-                        and gaussian_filter_sigma is not None,
-                        gaussian_filter_sigma=gaussian_filter_sigma,
+                        and gaussian_filter_sigma_m is not None,
+                        gaussian_filter_sigma_e=gaussian_filter_sigma_e,
+                        gaussian_filter_sigma_m=gaussian_filter_sigma_m,
                         butterworth_filter=a0 < butterworth_filter_iter
-                        and (q_lowpass is not None or q_highpass is not None),
-                        q_lowpass=q_lowpass,
-                        q_highpass=q_highpass,
+                        and (q_lowpass_m is not None or q_highpass_m is not None),
+                        q_lowpass_e=q_lowpass_e,
+                        q_lowpass_m=q_lowpass_m,
+                        q_highpass_e=q_highpass_e,
+                        q_highpass_m=q_highpass_m,
                         object_positivity=object_positivity,
                         shrinkage_rad=shrinkage_rad,
                         object_mask=self._object_fov_mask_inverse
@@ -2179,6 +2414,8 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
 
             # Normalize Error Over Tilts
             error /= self._num_tilts
+
+            self._object[1:] = self._divergence_free_constraint(self._object[1:])
 
             if collective_tilt_updates:
                 self._object += collective_object / self._num_tilts
@@ -2204,12 +2441,15 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                     fix_positions=True,
                     global_affine_transformation=global_affine_transformation,
                     gaussian_filter=a0 < gaussian_filter_iter
-                    and gaussian_filter_sigma is not None,
-                    gaussian_filter_sigma=gaussian_filter_sigma,
+                    and gaussian_filter_sigma_m is not None,
+                    gaussian_filter_sigma_e=gaussian_filter_sigma_e,
+                    gaussian_filter_sigma_m=gaussian_filter_sigma_m,
                     butterworth_filter=a0 < butterworth_filter_iter
-                    and (q_lowpass is not None or q_highpass is not None),
-                    q_lowpass=q_lowpass,
-                    q_highpass=q_highpass,
+                    and (q_lowpass_m is not None or q_highpass_m is not None),
+                    q_lowpass_e=q_lowpass_e,
+                    q_lowpass_m=q_lowpass_m,
+                    q_highpass_e=q_highpass_e,
+                    q_highpass_m=q_highpass_m,
                     object_positivity=object_positivity,
                     shrinkage_rad=shrinkage_rad,
                     object_mask=self._object_fov_mask_inverse
@@ -2311,7 +2551,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
 
         if projection_angle_deg is not None:
             rotated_3d_obj = self._rotate(
-                self._object,
+                self._object[0],
                 projection_angle_deg,
                 axes=projection_axes,
                 reshape=False,
@@ -2319,7 +2559,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
             )
             rotated_3d_obj = asnumpy(rotated_3d_obj)
         else:
-            rotated_3d_obj = self.object
+            rotated_3d_obj = self.object[0]
 
         rotated_object = self._crop_rotate_object_manually(
             rotated_3d_obj.sum(0), angle=None, x_lims=x_lims, y_lims=y_lims
@@ -2358,8 +2598,6 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
         fig,
         cbar: bool,
         plot_convergence: bool,
-        plot_probe: bool,
-        plot_fourier_probe: bool,
         projection_angle_deg: float,
         projection_axes: Tuple[int, int],
         x_lims: Tuple[int, int],
@@ -2377,10 +2615,6 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
             If true, the normalized mean squared error (NMSE) plot is displayed
         cbar: bool, optional
             If true, displays a colorbar
-        plot_probe: bool
-            If true, the reconstructed probe intensity is also displayed
-        plot_fourier_probe: bool, optional
-            If true, the reconstructed complex Fourier probe is displayed
         projection_angle_deg: float
             Angle in degrees to rotate 3D array around prior to projection
         projection_axes: tuple(int,int)
@@ -2390,29 +2624,98 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
         y_lims: tuple(float,float)
             min/max y indices
         """
-        figsize = kwargs.pop("figsize", (8, 5))
-        cmap = kwargs.pop("cmap", "magma")
-        invert = kwargs.pop("invert", False)
-        hue_start = kwargs.pop("hue_start", 0)
+        figsize = kwargs.pop("figsize", (14, 10) if cbar else (12, 10))
+        cmap_e = kwargs.pop("cmap_e", "magma")
+        cmap_m = kwargs.pop("cmap_m", "PuOr")
 
         asnumpy = self._asnumpy
 
         if projection_angle_deg is not None:
-            rotated_3d_obj = self._rotate(
-                self._object,
+            rotated_3d_obj_V = self._rotate(
+                self._object[0],
                 projection_angle_deg,
                 axes=projection_axes,
                 reshape=False,
                 order=2,
             )
-            rotated_3d_obj = asnumpy(rotated_3d_obj)
-        else:
-            rotated_3d_obj = self.object
 
-        rotated_object = self._crop_rotate_object_manually(
-            rotated_3d_obj.sum(0), angle=None, x_lims=x_lims, y_lims=y_lims
+            rotated_3d_obj_Az = self._rotate(
+                self._object[1],
+                projection_angle_deg,
+                axes=projection_axes,
+                reshape=False,
+                order=2,
+            )
+
+            rotated_3d_obj_Ax = self._rotate(
+                self._object[2],
+                projection_angle_deg,
+                axes=projection_axes,
+                reshape=False,
+                order=2,
+            )
+
+            rotated_3d_obj_Ay = self._rotate(
+                self._object[3],
+                projection_angle_deg,
+                axes=projection_axes,
+                reshape=False,
+                order=2,
+            )
+
+            rotated_3d_obj_V = asnumpy(rotated_3d_obj_V)
+            rotated_3d_obj_Az = asnumpy(rotated_3d_obj_Az)
+            rotated_3d_obj_Ax = asnumpy(rotated_3d_obj_Ax)
+            rotated_3d_obj_Ay = asnumpy(rotated_3d_obj_Ay)
+        else:
+            (
+                rotated_3d_obj_V,
+                rotated_3d_obj_Az,
+                rotated_3d_obj_Ax,
+                rotated_3d_obj_Ay,
+            ) = self.object
+
+        rotated_object_Vx = self._crop_rotate_object_manually(
+            rotated_3d_obj_V.sum(1).T, angle=None, x_lims=x_lims, y_lims=y_lims
         )
-        rotated_shape = rotated_object.shape
+        rotated_object_Vy = self._crop_rotate_object_manually(
+            rotated_3d_obj_V.sum(2).T, angle=None, x_lims=x_lims, y_lims=y_lims
+        )
+        rotated_object_Vz = self._crop_rotate_object_manually(
+            rotated_3d_obj_V.sum(0), angle=None, x_lims=x_lims, y_lims=y_lims
+        )
+
+        rotated_object_Azx = self._crop_rotate_object_manually(
+            rotated_3d_obj_Az.sum(1).T, angle=None, x_lims=x_lims, y_lims=y_lims
+        )
+        rotated_object_Azy = self._crop_rotate_object_manually(
+            rotated_3d_obj_Az.sum(2).T, angle=None, x_lims=x_lims, y_lims=y_lims
+        )
+        rotated_object_Azz = self._crop_rotate_object_manually(
+            rotated_3d_obj_Az.sum(0), angle=None, x_lims=x_lims, y_lims=y_lims
+        )
+
+        rotated_object_Axx = self._crop_rotate_object_manually(
+            rotated_3d_obj_Ax.sum(1).T, angle=None, x_lims=x_lims, y_lims=y_lims
+        )
+        rotated_object_Axy = self._crop_rotate_object_manually(
+            rotated_3d_obj_Ax.sum(2).T, angle=None, x_lims=x_lims, y_lims=y_lims
+        )
+        rotated_object_Axz = self._crop_rotate_object_manually(
+            rotated_3d_obj_Ax.sum(0), angle=None, x_lims=x_lims, y_lims=y_lims
+        )
+
+        rotated_object_Ayx = self._crop_rotate_object_manually(
+            rotated_3d_obj_Ay.sum(1).T, angle=None, x_lims=x_lims, y_lims=y_lims
+        )
+        rotated_object_Ayy = self._crop_rotate_object_manually(
+            rotated_3d_obj_Ay.sum(2).T, angle=None, x_lims=x_lims, y_lims=y_lims
+        )
+        rotated_object_Ayz = self._crop_rotate_object_manually(
+            rotated_3d_obj_Ay.sum(0), angle=None, x_lims=x_lims, y_lims=y_lims
+        )
+
+        rotated_shape = rotated_object_Vx.shape
 
         extent = [
             0,
@@ -2421,134 +2724,142 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
             0,
         ]
 
-        probe_extent = [
-            0,
-            self.sampling[1] * self._region_of_interest_shape[1],
-            self.sampling[0] * self._region_of_interest_shape[0],
-            0,
+        arrays = [
+            [
+                rotated_object_Vx,
+                rotated_object_Axx,
+                rotated_object_Ayx,
+                rotated_object_Azx,
+            ],
+            [
+                rotated_object_Vy,
+                rotated_object_Axy,
+                rotated_object_Ayy,
+                rotated_object_Azy,
+            ],
+            [
+                rotated_object_Vz,
+                rotated_object_Axz,
+                rotated_object_Ayz,
+                rotated_object_Azz,
+            ],
         ]
 
+        titles = [
+            [
+                "V projected along x",
+                "Ax projected along x",
+                "Ay projected along x",
+                "Az projected along x",
+            ],
+            [
+                "V projected along y",
+                "Ax projected along y",
+                "Ay projected along y",
+                "Az projected along y",
+            ],
+            [
+                "V projected along z",
+                "Ax projected along z",
+                "Ay projected along z",
+                "Az projected along z",
+            ],
+        ]
+
+        max_e = np.array(
+            [rotated_object_Vx.max(), rotated_object_Vy.max(), rotated_object_Vz.max()]
+        ).max()
+        max_m = np.array(
+            [
+                [
+                    np.abs(rotated_object_Axx).max(),
+                    np.abs(rotated_object_Ayx).max(),
+                    np.abs(rotated_object_Azx).max(),
+                ],
+                [
+                    np.abs(rotated_object_Axy).max(),
+                    np.abs(rotated_object_Ayy).max(),
+                    np.abs(rotated_object_Azy).max(),
+                ],
+                [
+                    np.abs(rotated_object_Axz).max(),
+                    np.abs(rotated_object_Ayz).max(),
+                    np.abs(rotated_object_Azz).max(),
+                ],
+            ]
+        ).max()
+
+        vmin_e = kwargs.pop("vmin_e", 0.0)
+        vmax_e = kwargs.pop("vmax_e", max_e)
+        vmin_m = kwargs.pop("vmin_m", -max_m)
+        vmax_m = kwargs.pop("vmax_m", max_m)
+
         if plot_convergence:
-            if plot_probe or plot_fourier_probe:
-                spec = GridSpec(
-                    ncols=2,
-                    nrows=2,
-                    height_ratios=[4, 1],
-                    hspace=0.15,
-                    width_ratios=[
-                        (extent[1] / extent[2]) / (probe_extent[1] / probe_extent[2]),
-                        1,
-                    ],
-                    wspace=0.35,
-                )
-            else:
-                spec = GridSpec(ncols=1, nrows=2, height_ratios=[4, 1], hspace=0.15)
+            spec = GridSpec(
+                ncols=4, nrows=4, height_ratios=[4, 4, 4, 1], hspace=0.15, wspace=0.35
+            )
         else:
-            if plot_probe or plot_fourier_probe:
-                spec = GridSpec(
-                    ncols=2,
-                    nrows=1,
-                    width_ratios=[
-                        (extent[1] / extent[2]) / (probe_extent[1] / probe_extent[2]),
-                        1,
-                    ],
-                    wspace=0.35,
-                )
-            else:
-                spec = GridSpec(ncols=1, nrows=1)
+            spec = GridSpec(ncols=4, nrows=3, hspace=0.15, wspace=0.35)
 
         if fig is None:
             fig = plt.figure(figsize=figsize)
 
-        if plot_probe or plot_fourier_probe:
-            # Object
-            ax = fig.add_subplot(spec[0, 0])
-            im = ax.imshow(
-                rotated_object,
-                extent=extent,
-                cmap=cmap,
-                **kwargs,
-            )
+        for sp in spec:
+            row, col = np.unravel_index(sp.num1, (4, 4))
 
-            ax.set_ylabel("x [A]")
-            ax.set_xlabel("y [A]")
-            ax.set_title("Reconstructed object projection")
+            if row < 3:
+                ax = fig.add_subplot(sp)
+                if sp.is_first_col():
+                    cmap = cmap_e
+                    vmin = vmin_e
+                    vmax = vmax_e
+                else:
+                    cmap = cmap_m
+                    vmin = vmin_m
+                    vmax = vmax_m
 
-            if cbar:
-                divider = make_axes_locatable(ax)
-                ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
-                fig.add_axes(ax_cb)
-                fig.colorbar(im, cax=ax_cb)
-
-            # Probe
-            kwargs.pop("vmin", None)
-            kwargs.pop("vmax", None)
-
-            ax = fig.add_subplot(spec[0, 1])
-            if plot_fourier_probe:
-                probe_array = Complex2RGB(
-                    self.probe_fourier, hue_start=hue_start, invert=invert
+                im = ax.imshow(
+                    arrays[row][col],
+                    cmap=cmap,
+                    vmin=vmin,
+                    vmax=vmax,
+                    extent=extent,
+                    **kwargs,
                 )
-                ax.set_title("Reconstructed Fourier probe")
-            else:
-                probe_array = Complex2RGB(
-                    self.probe, hue_start=hue_start, invert=invert
-                )
-                ax.set_title("Reconstructed probe")
 
-            im = ax.imshow(
-                probe_array,
-                extent=probe_extent,
-                **kwargs,
-            )
-            ax.set_ylabel("x [A]")
-            ax.set_xlabel("y [A]")
+                if cbar:
+                    divider = make_axes_locatable(ax)
+                    ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
+                    fig.add_axes(ax_cb)
+                    fig.colorbar(im, cax=ax_cb)
 
-            if cbar:
-                divider = make_axes_locatable(ax)
-                ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
-                add_colorbar_arg(ax_cb, hue_start=hue_start, invert=invert)
-        else:
-            ax = fig.add_subplot(spec[0])
-            im = ax.imshow(
-                rotated_object,
-                extent=extent,
-                cmap=cmap,
-                **kwargs,
-            )
-            ax.set_ylabel("x [A]")
-            ax.set_xlabel("y [A]")
-            ax.set_title("Reconstructed object projection")
+                ax.set_title(titles[row][col])
 
-            if cbar:
-                divider = make_axes_locatable(ax)
-                ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
-                fig.add_axes(ax_cb)
-                fig.colorbar(im, cax=ax_cb)
+                if row < 2:
+                    ax.set_xticks([])
+                else:
+                    ax.set_xlabel("y [A]")
+
+                if col > 0:
+                    ax.set_yticks([])
+                else:
+                    ax.set_ylabel("x [A]")
 
         if plot_convergence and hasattr(self, "error_iterations"):
-            kwargs.pop("vmin", None)
-            kwargs.pop("vmax", None)
             errors = np.array(self.error_iterations)
-            if plot_probe:
-                ax = fig.add_subplot(spec[1, :])
-            else:
-                ax = fig.add_subplot(spec[1])
+
+            ax = fig.add_subplot(spec[-1, :])
             ax.semilogy(np.arange(errors.shape[0]), errors, **kwargs)
             ax.set_ylabel("NMSE")
             ax.set_xlabel("Iteration Number")
             ax.yaxis.tick_right()
 
-        fig.suptitle(f"Normalized Mean Squared Error: {self.error:.3e}")
         spec.tight_layout(fig)
 
     def _visualize_all_iterations(
         self,
         fig,
-        cbar: bool,
         plot_convergence: bool,
-        plot_probe: bool,
-        plot_fourier_probe: bool,
         iterations_grid: Tuple[int, int],
         projection_angle_deg: float,
         projection_axes: Tuple[int, int],
@@ -2567,12 +2878,6 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
             If true, the normalized mean squared error (NMSE) plot is displayed
         cbar: bool, optional
             If true, displays a colorbar
-        plot_probe: bool
-            If true, the reconstructed probe intensity is also displayed
-        plot_fourier_probe: bool, optional
-            If true, the reconstructed complex Fourier probe is displayed
-        iterations_grid: Tuple[int,int]
-            Grid dimensions to plot reconstruction iterations
         projection_angle_deg: float
             Angle in degrees to rotate 3D array around prior to projection
         projection_axes: tuple(int,int)
@@ -2581,198 +2886,17 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
             min/max x indices
         y_lims: tuple(float,float)
             min/max y indices
+        iterations_grid: Tuple[int,int]
+            Grid dimensions to plot reconstruction iterations
         """
-        asnumpy = self._asnumpy
-
-        if not hasattr(self, "object_iterations"):
-            raise ValueError(
-                (
-                    "Object and probe iterations were not saved during reconstruction. "
-                    "Please re-run using store_iterations=True."
-                )
-            )
-
-        if iterations_grid == "auto":
-            num_iter = len(self.error_iterations)
-
-            if num_iter == 1:
-                return self._visualize_last_iteration(
-                    fig=fig,
-                    plot_convergence=plot_convergence,
-                    plot_probe=plot_probe,
-                    plot_fourier_probe=plot_fourier_probe,
-                    cbar=cbar,
-                    projection_angle_deg=projection_angle_deg,
-                    projection_axes=projection_axes,
-                    x_lims=x_lims,
-                    y_lims=y_lims,
-                    **kwargs,
-                )
-            elif plot_probe or plot_fourier_probe:
-                iterations_grid = (2, 4) if num_iter > 4 else (2, num_iter)
-            else:
-                iterations_grid = (2, 4) if num_iter > 8 else (2, num_iter // 2)
-        else:
-            if (plot_probe or plot_fourier_probe) and iterations_grid[0] != 2:
-                raise ValueError()
-
-        auto_figsize = (
-            (3 * iterations_grid[1], 3 * iterations_grid[0] + 1)
-            if plot_convergence
-            else (3 * iterations_grid[1], 3 * iterations_grid[0])
-        )
-        figsize = kwargs.pop("figsize", auto_figsize)
-        cmap = kwargs.pop("cmap", "magma")
-        invert = kwargs.pop("invert", False)
-        hue_start = kwargs.pop("hue_start", 0)
-
-        errors = np.array(self.error_iterations)
-
-        if projection_angle_deg is not None:
-            objects = [
-                self._crop_rotate_object_manually(
-                    rotate_np(
-                        obj,
-                        projection_angle_deg,
-                        axes=projection_axes,
-                        reshape=False,
-                        order=2,
-                    ).sum(0),
-                    angle=None,
-                    x_lims=x_lims,
-                    y_lims=y_lims,
-                )
-                for obj in self.object_iterations
-            ]
-        else:
-            objects = [
-                self._crop_rotate_object_manually(
-                    obj.sum(0), angle=None, x_lims=x_lims, y_lims=y_lims
-                )
-                for obj in self.object_iterations
-            ]
-
-        if plot_probe or plot_fourier_probe:
-            total_grids = (np.prod(iterations_grid) / 2).astype("int")
-            probes = self.probe_iterations
-        else:
-            total_grids = np.prod(iterations_grid)
-        max_iter = len(objects) - 1
-        grid_range = range(0, max_iter + 1, max_iter // (total_grids - 1))
-
-        extent = [
-            0,
-            self.sampling[1] * objects[0].shape[1],
-            self.sampling[0] * objects[0].shape[0],
-            0,
-        ]
-
-        probe_extent = [
-            0,
-            self.sampling[1] * self._region_of_interest_shape[1],
-            self.sampling[0] * self._region_of_interest_shape[0],
-            0,
-        ]
-
-        if plot_convergence:
-            if plot_probe or plot_fourier_probe:
-                spec = GridSpec(ncols=1, nrows=3, height_ratios=[4, 4, 1], hspace=0)
-            else:
-                spec = GridSpec(ncols=1, nrows=2, height_ratios=[4, 1], hspace=0)
-        else:
-            if plot_probe or plot_fourier_probe:
-                spec = GridSpec(ncols=1, nrows=2)
-            else:
-                spec = GridSpec(ncols=1, nrows=1)
-
-        if fig is None:
-            fig = plt.figure(figsize=figsize)
-
-        grid = ImageGrid(
-            fig,
-            spec[0],
-            nrows_ncols=(1, iterations_grid[1]) if plot_probe else iterations_grid,
-            axes_pad=(0.75, 0.5) if cbar else 0.5,
-            cbar_mode="each" if cbar else None,
-            cbar_pad="2.5%" if cbar else None,
-        )
-
-        for n, ax in enumerate(grid):
-            im = ax.imshow(
-                objects[grid_range[n]],
-                extent=extent,
-                cmap=cmap,
-                **kwargs,
-            )
-            ax.set_title(f"Iter: {grid_range[n]} Object")
-
-            ax.set_ylabel("x [A]")
-            ax.set_xlabel("y [A]")
-            if cbar:
-                grid.cbar_axes[n].colorbar(im)
-
-        if plot_probe or plot_fourier_probe:
-            kwargs.pop("vmin", None)
-            kwargs.pop("vmax", None)
-            grid = ImageGrid(
-                fig,
-                spec[1],
-                nrows_ncols=(1, iterations_grid[1]),
-                axes_pad=(0.75, 0.5) if cbar else 0.5,
-                cbar_mode="each" if cbar else None,
-                cbar_pad="2.5%" if cbar else None,
-            )
-
-            for n, ax in enumerate(grid):
-                if plot_fourier_probe:
-                    probe_array = Complex2RGB(
-                        asnumpy(self._return_fourier_probe(probes[grid_range[n]])),
-                        hue_start=hue_start,
-                        invert=invert,
-                    )
-                    ax.set_title(f"Iter: {grid_range[n]} Fourier probe")
-                else:
-                    probe_array = Complex2RGB(
-                        probes[grid_range[n]], hue_start=hue_start, invert=invert
-                    )
-                    ax.set_title(f"Iter: {grid_range[n]} probe")
-
-                im = ax.imshow(
-                    probe_array,
-                    extent=probe_extent,
-                    **kwargs,
-                )
-
-                ax.set_ylabel("x [A]")
-                ax.set_xlabel("y [A]")
-
-                if cbar:
-                    add_colorbar_arg(
-                        grid.cbar_axes[n], hue_start=hue_start, invert=invert
-                    )
-
-        if plot_convergence:
-            kwargs.pop("vmin", None)
-            kwargs.pop("vmax", None)
-            if plot_probe:
-                ax2 = fig.add_subplot(spec[2])
-            else:
-                ax2 = fig.add_subplot(spec[1])
-            ax2.semilogy(np.arange(errors.shape[0]), errors, **kwargs)
-            ax2.set_ylabel("NMSE")
-            ax2.set_xlabel("Iteration Number")
-            ax2.yaxis.tick_right()
-
-        spec.tight_layout(fig)
+        raise NotImplementedError()
 
     def visualize(
         self,
         fig=None,
+        cbar: bool = True,
         iterations_grid: Tuple[int, int] = None,
         plot_convergence: bool = True,
-        plot_probe: bool = True,
-        plot_fourier_probe: bool = False,
-        cbar: bool = True,
         projection_angle_deg: float = None,
         projection_axes: Tuple[int, int] = (0, 2),
         x_lims=(None, None),
@@ -2790,12 +2914,6 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
             If true, the normalized mean squared error (NMSE) plot is displayed
         cbar: bool, optional
             If true, displays a colorbar
-        plot_probe: bool
-            If true, the reconstructed probe intensity is also displayed
-        plot_fourier_probe: bool, optional
-            If true, the reconstructed complex Fourier probe is displayed
-        iterations_grid: Tuple[int,int]
-            Grid dimensions to plot reconstruction iterations
         projection_angle_deg: float
             Angle in degrees to rotate 3D array around prior to projection
         projection_axes: tuple(int,int)
@@ -2804,10 +2922,12 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
             min/max x indices
         y_lims: tuple(float,float)
             min/max y indices
+        iterations_grid: Tuple[int,int]
+            Grid dimensions to plot reconstruction iterations
 
         Returns
         --------
-        self: OverlapTomographicReconstruction
+        self: OverlapMagneticTomographicReconstruction
             Self to accommodate chaining
         """
 
@@ -2815,11 +2935,9 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
             self._visualize_last_iteration(
                 fig=fig,
                 plot_convergence=plot_convergence,
-                plot_probe=plot_probe,
-                plot_fourier_probe=plot_fourier_probe,
-                cbar=cbar,
                 projection_angle_deg=projection_angle_deg,
                 projection_axes=projection_axes,
+                cbar=cbar,
                 x_lims=x_lims,
                 y_lims=y_lims,
                 **kwargs,
@@ -2829,11 +2947,9 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                 fig=fig,
                 plot_convergence=plot_convergence,
                 iterations_grid=iterations_grid,
-                plot_probe=plot_probe,
-                plot_fourier_probe=plot_fourier_probe,
-                cbar=cbar,
                 projection_angle_deg=projection_angle_deg,
                 projection_axes=projection_axes,
+                cbar=cbar,
                 x_lims=x_lims,
                 y_lims=y_lims,
                 **kwargs,
@@ -2870,9 +2986,9 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
         asnumpy = self._asnumpy
 
         if obj is None:
-            obj = self._object
+            obj = self._object[0]
         else:
-            obj = xp.asarray(obj, dtype=xp.float32)
+            obj = xp.asarray(obj[0], dtype=xp.float32)
 
         if projection_angle_deg is not None:
             rotated_3d_obj = self._rotate(

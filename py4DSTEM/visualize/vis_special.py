@@ -1,4 +1,4 @@
-import matplotlib.pyplot as plt
+from matplotlib import cm, colors as mcolors, pyplot as plt
 import numpy as np
 from matplotlib.colors import hsv_to_rgb
 from matplotlib.patches import Wedge
@@ -805,22 +805,16 @@ def show_selected_dps(datacube,positions,im,bragg_pos=None,
                     get_pointcolors=lambda i:colors[i],
                     **kwargs)
 
-def Complex2RGB(complex_array, vmin=None, vmax=None, hue_start=90):
+def Complex2RGB(complex_data, vmin=None, vmax = None, hue_start = 0, invert=False):
     """
-    Function to turn a complex array into rgb for plotting
-    Args:
-        complex_array (2D array)      : complex array
-        vmin (float, optional)        : minimum absolute value
-        vmax (float, optional)        : maximum absolute value
-            if None, vmin/vmax are set to fractions of the distribution of pixel values in the array, 
-            e.g. vmin=0.02 will set the minumum display value to saturate the lower 2% of pixels
-        hue_start(float, optional)    : phase offset (degrees)
-    Returns:
-        rgb array for plotting
+    complex_data (array): complex array to plot
+    vmin (float)        : minimum absolute value 
+    vmax (float)        : maximum absolute value 
+    hue_start (float)   : rotational offset for colormap (degrees)
+    inverse (bool)      : if True, uses light color scheme
     """
-    amp = np.abs(complex_array)
-
-    if np.max(amp) == np.min(amp):
+    amp = np.abs(complex_data)
+    if np.isclose(np.max(amp),np.min(amp)):
         if vmin is None:
             vmin = 0
         if vmax is None:
@@ -841,19 +835,36 @@ def Complex2RGB(complex_array, vmin=None, vmax=None, hue_start=90):
     amp = np.where(amp < vmin, vmin, amp)
     amp = np.where(amp > vmax, vmax, amp)
 
-    ph = np.angle(complex_array, deg=1) + hue_start
+    phase = np.angle(complex_data) + np.deg2rad(hue_start)
+    amp /= np.max(amp)
+    rgb = np.zeros(phase.shape +(3,))
+    rgb[...,0] = 0.5*(np.sin(phase)+1)*amp
+    rgb[...,1] = 0.5*(np.sin(phase+np.pi/2)+1)*amp
+    rgb[...,2] = 0.5*(-np.sin(phase)+1)*amp
+    
+    return 1-rgb if invert else rgb
 
-    h = (ph % 360) / 360
-    s = 0.85 * np.ones_like(h)
-    v = (amp - vmin) / (vmax - vmin)
+def add_colorbar_arg(cax, vmin = None, vmax = None, hue_start = 0, invert = False):
+    """
+    cax                 : axis to add cbar too
+    vmin (float)        : minimum absolute value 
+    vmax (float)        : maximum absolute value 
+    hue_start (float)   : rotational offset for colormap (degrees)
+    inverse (bool)      : if True, uses light color scheme
+    """
+    z = np.exp(1j * np.linspace(-np.pi, np.pi, 200))
+    rgb_vals = Complex2RGB(z, vmin=vmin, vmax=vmax, hue_start=hue_start, invert=invert)
+    newcmp = mcolors.ListedColormap(rgb_vals)
+    norm = mcolors.Normalize(vmin=-np.pi, vmax=np.pi)
 
-    hsv = np.dstack((h, s, v))
-    if hsv.shape[-1] != 3:
-        hsv = hsv.reshape(hsv.shape[0], hsv.shape[1], 3, hsv.shape[2] // 3)
-        hsv = hsv.swapaxes(-1, -2)
+    cb1 = plt.colorbar(cm.ScalarMappable(norm=norm, cmap=newcmp), cax=cax)
 
-    return hsv_to_rgb(hsv)
-
+    cb1.set_label("arg", rotation=0, ha="center", va="bottom")
+    cb1.ax.yaxis.set_label_coords(0.5, 1.01)
+    cb1.set_ticks(np.array([-np.pi, -np.pi / 2, 0, np.pi / 2, np.pi]))
+    cb1.set_ticklabels(
+        [r"$-\pi$", r"$-\dfrac{\pi}{2}$", "$0$", r"$\dfrac{\pi}{2}$", r"$\pi$"]
+    )
 
 def show_complex(
     ar_complex,
@@ -864,6 +875,8 @@ def show_complex(
     pixelunits="pixels",
     pixelsize=1,
     returnfig=False,
+    hue_start = 0,
+    invert=False,
     **kwargs
 ):
     """
@@ -881,23 +894,50 @@ def show_complex(
         pixelunits (str, optional)  : units for scalebar
         pixelsize (float, optional) : size of one pixel in pixelunits for scalebar
         returnfig (bool, optional)  : if True, the function returns the tuple (figure,axis)
-
+        hue_start (float, optional) : rotational offset for colormap (degrees)
+        inverse (bool)              : if True, uses light color scheme
+    
     Returns:
         if returnfig==False (default), the figure is plotted and nothing is returned.
         if returnfig==True, return the figure and the axis.
     """
     # convert to complex colors
-    rgb = Complex2RGB(ar_complex, vmin, vmax)
+    if isinstance(ar_complex, list):
+        if isinstance(ar_complex[0], list):
+            rgb = [Complex2RGB(ar, vmin, vmax, hue_start = hue_start, invert=invert) for sublist in ar_complex for ar in sublist]
+            H = len(ar_complex)
+            W = len(ar_complex[0])
 
+        else:
+            rgb = [Complex2RGB(ar, vmin, vmax, hue_start=hue_start, invert=invert) for ar in ar_complex]
+            if len(rgb[0].shape) == 4:
+                H = len(ar_complex)
+                W = rgb[0].shape[0]
+            else:
+                H = 1
+                W = len(ar_complex)
+        is_grid = True
+    else:
+        rgb = Complex2RGB(ar_complex, vmin, vmax, hue_start=hue_start, invert=invert)
+        if len(rgb.shape) == 4:
+            is_grid = True
+            H = 1
+            W = rgb.shape[0]
+        elif len(rgb.shape) == 5:
+            is_grid = True
+            H = rgb.shape[0]
+            W = rgb.shape[1]
+            rgb = rgb.reshape((-1,)+rgb.shape[-3:])
+        else:
+            is_grid = False
     # plot
-
-    if len(rgb.shape) > 3:
+    if is_grid:
         from py4DSTEM.visualize import show_image_grid
 
         fig, ax = show_image_grid(
             get_ar=lambda i: rgb[i],
-            H=1,
-            W=rgb.shape[0],
+            H=H,
+            W=W,
             vmin=0,
             vmax=1,
             intensity_range="absolute",
@@ -930,10 +970,7 @@ def show_complex(
 
     # add color bar
     if cbar == True:
-        if len(rgb.shape) > 2:
-            ax0 = fig.add_axes([1, 0.35, 0.3, 0.3])
-        else:
-            ax0 = fig.add_axes([1, 0.35, 0.3, 0.3])
+        ax0 = fig.add_axes([1, 0.35, 0.3, 0.3])
 
         # create wheel
         AA = 1000
@@ -945,7 +982,7 @@ def show_complex(
         ktheta = kra * np.exp(1j * ktheta)
 
         # convert to hsv
-        rgb = Complex2RGB(ktheta, 0, 0.4)
+        rgb = Complex2RGB(ktheta, 0, 0.4, hue_start = hue_start, invert=invert)
         ind = kra > 0.4
         rgb[ind] = [1, 1, 1]
 
