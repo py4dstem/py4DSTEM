@@ -1,4 +1,5 @@
 from py4DSTEM.version import __version__
+from emdfile import tqdmnd
 
 
 # classes
@@ -39,7 +40,6 @@ from py4DSTEM import visualize
 
 # functions
 
-from emdfile import tqdmnd
 from emdfile import print_h5_tree
 from py4DSTEM.visualize import show
 from py4DSTEM.io import import_file,read,save
