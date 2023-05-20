@@ -1,4 +1,4 @@
-from py4DSTEM.process.polardata import (
+from py4DSTEM.process.polar import (
     PolarDatacube,
     PolarEllipticDatacube,
 )
