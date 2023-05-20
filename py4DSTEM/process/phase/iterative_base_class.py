@@ -1812,6 +1812,7 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
         relevant_amplitudes,
         current_positions,
         positions_step_size,
+        constrain_position_distance,
     ):
         """
         Position correction using estimated intensity gradient.
@@ -1830,6 +1831,9 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
             Current positions estimate
         positions_step_size: float
             Positions step size
+        constrain_position_distance: float
+            Distance to constrain position correction within original
+            field of view in A
 
         Returns
         --------
@@ -1891,8 +1895,40 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
             @ difference_intensity[..., None]
         )
 
-        current_positions -= positions_step_size * positions_update[..., 0]
+        if constrain_position_distance is not None:
+            constrain_position_distance /= xp.sqrt(
+                self.sampling[0] ** 2 + self.sampling[1] ** 2
+            )
+            x1 = (current_positions - positions_step_size * positions_update[..., 0])[
+                :, 0
+            ]
+            y1 = (current_positions - positions_step_size * positions_update[..., 0])[
+                :, 1
+            ]
+            x0 = self._positions_px_initial[:, 0]
+            y0 = self._positions_px_initial[:, 1]
+            if self._rotation_best_transpose:
+                x0, y0 = xp.array([y0, x0])
+                x1, y1 = xp.array([y1, x1])
 
+            if self._rotation_best_rad is not None:
+                rotation_angle = self._rotation_best_rad
+                x0, y0 = x0 * xp.cos(-rotation_angle) + y0 * xp.sin(
+                    -rotation_angle
+                ), -x0 * xp.sin(-rotation_angle) + y0 * xp.cos(-rotation_angle)
+                x1, y1 = x1 * xp.cos(-rotation_angle) + y1 * xp.sin(
+                    -rotation_angle
+                ), -x1 * xp.sin(-rotation_angle) + y1 * xp.cos(-rotation_angle)
+
+            outlier_ind = (x1 > (xp.max(x0) + constrain_position_distance)) + (
+                x1 < (xp.min(x0) - constrain_position_distance)
+            ) + (y1 > (xp.max(y0) + constrain_position_distance)) + (
+                y1 < (xp.min(y0) - constrain_position_distance)
+            ) > 0
+
+            positions_update[..., 0][outlier_ind] = 0
+
+        current_positions -= positions_step_size * positions_update[..., 0]
         return current_positions
 
     def plot_position_correction(

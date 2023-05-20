@@ -641,13 +641,13 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
         Ptychographic fourier projection method for DM_AP and RAAR methods.
         Generalized projection using three parameters: a,b,c
 
-            DM_AP(\alpha)   :   a =  -\alpha, b = 1, c = 1 + \alpha
+            DM_AP(\\alpha)   :   a =  -\\alpha, b = 1, c = 1 + \\alpha
               DM: DM_AP(1.0), AP: DM_AP(0.0)
 
-            RAAR(\beta)     :   a = 1-2\beta, b = \beta, c = 2
+            RAAR(\\beta)     :   a = 1-2\\beta, b = \\beta, c = 2
               DM : RAAR(1.0)
 
-            RRR(\gamma)     :   a = -\gamma, b = \gamma, c = 2
+            RRR(\\gamma)     :   a = -\\gamma, b = \\gamma, c = 2
               DM: RRR(1.0)
 
             SUPERFLIP       :   a = 0, b = 1, c = 2
@@ -1115,7 +1115,7 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
         probe_gaussian_filter: bool
             If True, applies reciprocal-space gaussian filtering on residual aberrations
         probe_gaussian_filter_sigma: float
-            Standard deviation of gaussian kernel
+            Standard deviation of gaussian kernel in A^-1
         probe_gaussian_filter_fix_amplitude: bool
             If True, only the probe phase is smoothed
         symmetrize_probe: bool
@@ -1313,7 +1313,7 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
         gaussian_filter_iter: int, optional
             Number of iterations to run using object smoothness constraint
         probe_gaussian_filter_sigma: float, optional
-            Standard deviation of probe gaussian kernel
+            Standard deviation of probe gaussian kernel in A^-1
         probe_gaussian_filter_residual_aberrations_iter: int, optional
             Number of iterations to run using probe smoothing of residual aberrations
         probe_gaussian_filter_fix_amplitude: bool

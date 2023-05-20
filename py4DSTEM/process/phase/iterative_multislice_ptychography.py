@@ -750,13 +750,13 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
         Ptychographic fourier projection method for DM_AP and RAAR methods.
         Generalized projection using three parameters: a,b,c
 
-            DM_AP(\alpha)   :   a =  -\alpha, b = 1, c = 1 + \alpha
+            DM_AP(\\alpha)   :   a =  -\\alpha, b = 1, c = 1 + \\alpha
               DM: DM_AP(1.0), AP: DM_AP(0.0)
 
-            RAAR(\beta)     :   a = 1-2\beta, b = \beta, c = 2
+            RAAR(\\beta)     :   a = 1-2\\beta, b = \\beta, c = 2
               DM : RAAR(1.0)
 
-            RRR(\gamma)     :   a = -\gamma, b = \gamma, c = 2
+            RRR(\\gamma)     :   a = -\\gamma, b = \\gamma, c = 2
               DM: RRR(1.0)
 
             SUPERFLIP       :   a = 0, b = 1, c = 2
@@ -1158,6 +1158,7 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
         amplitudes,
         current_positions,
         positions_step_size,
+        constrain_position_distance,
     ):
         """
         Position correction using estimated intensity gradient.
@@ -1176,6 +1177,9 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
             Current positions estimate
         positions_step_size: float
             Positions step size
+        constrain_position_distance: float
+            Distance to constrain position correction within original
+            field of view in A
 
         Returns
         --------
@@ -1274,6 +1278,39 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
             @ coefficients_matrix_T
             @ difference_intensity[..., None]
         )
+
+        if constrain_position_distance is not None:
+            constrain_position_distance /= xp.sqrt(
+                self.sampling[0] ** 2 + self.sampling[1] ** 2
+            )
+            x1 = (current_positions - positions_step_size * positions_update[..., 0])[
+                :, 0
+            ]
+            y1 = (current_positions - positions_step_size * positions_update[..., 0])[
+                :, 1
+            ]
+            x0 = self._positions_px_initial[:, 0]
+            y0 = self._positions_px_initial[:, 1]
+            if self._rotation_best_transpose:
+                x0, y0 = xp.array([y0, x0])
+                x1, y1 = xp.array([y1, x1])
+
+            if self._rotation_best_rad is not None:
+                rotation_angle = self._rotation_best_rad
+                x0, y0 = x0 * xp.cos(-rotation_angle) + y0 * xp.sin(
+                    -rotation_angle
+                ), -x0 * xp.sin(-rotation_angle) + y0 * xp.cos(-rotation_angle)
+                x1, y1 = x1 * xp.cos(-rotation_angle) + y1 * xp.sin(
+                    -rotation_angle
+                ), -x1 * xp.sin(-rotation_angle) + y1 * xp.cos(-rotation_angle)
+
+            outlier_ind = (x1 > (xp.max(x0) + constrain_position_distance)) + (
+                x1 < (xp.min(x0) - constrain_position_distance)
+            ) + (y1 > (xp.max(y0) + constrain_position_distance)) + (
+                y1 < (xp.min(y0) - constrain_position_distance)
+            ) > 0
+
+            positions_update[..., 0][outlier_ind] = 0
 
         current_positions -= positions_step_size * positions_update[..., 0]
 
@@ -1434,7 +1471,7 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
         probe_gaussian_filter: bool
             If True, applies reciprocal-space gaussian filtering on residual aberrations
         probe_gaussian_filter_sigma: float
-            Standard deviation of gaussian kernel
+            Standard deviation of gaussian kernel in A^-1
         probe_gaussian_filter_fix_amplitude: bool
             If True, only the probe phase is smoothed
         fix_probe_amplitude: bool
@@ -1593,6 +1630,7 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
         fix_probe_fourier_amplitude_iter: int = 0,
         fix_probe_fourier_amplitude_threshold: float = 0.9,
         fix_positions_iter: int = np.inf,
+        constrain_position_distance: float = None,
         global_affine_transformation: bool = True,
         gaussian_filter_sigma: float = None,
         gaussian_filter_iter: int = np.inf,
@@ -1673,7 +1711,7 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
         gaussian_filter_iter: int, optional
             Number of iterations to run using object smoothness constraint
         probe_gaussian_filter_sigma: float, optional
-            Standard deviation of probe gaussian kernel
+            Standard deviation of probe gaussian kernel in A^-1
         probe_gaussian_filter_residual_aberrations_iter: int, optional
             Number of iterations to run using probe smoothing of residual aberrations
         probe_gaussian_filter_fix_amplitude: bool
@@ -1987,6 +2025,7 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
                         amplitudes,
                         self._positions_px,
                         positions_step_size,
+                        constrain_position_distance,
                     )
 
                 error += batch_error

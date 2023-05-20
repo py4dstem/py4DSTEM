@@ -498,7 +498,7 @@ class PtychographicConstraints:
         current_probe: np.ndarray
             Current positions estimate
         gaussian_filter_sigma: float
-            Standard deviation of gaussian kernel
+            Standard deviation of gaussian kernel in A^-1
         fix_amplitude: bool
             If True, only the phase is smoothed
 
@@ -511,6 +511,9 @@ class PtychographicConstraints:
         xp = self._xp
         gaussian_filter = self._gaussian_filter
         known_aberrations_array = self._known_aberrations_array
+        gaussian_filter_sigma /= xp.sqrt(
+            self._reciprocal_sampling[0] ** 2 + self._reciprocal_sampling[1] ** 2
+        )
 
         fourier_probe = self._return_fourier_probe(current_probe)
         if fix_amplitude:

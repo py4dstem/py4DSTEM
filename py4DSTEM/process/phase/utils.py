@@ -637,9 +637,9 @@ class AffineTransform:
     scale1: float
         y-scaling
     shear1: float
-        \gamma shear
+        \\gamma shear
     angle: float
-        \theta rotation angle
+        \\theta rotation angle
     t0: float
         x-translation
     t1: float
@@ -1276,8 +1276,8 @@ def project_vector_field_divergence(vector_field, spacings=(1, 1, 1), xp=np):
     """
     Returns solenoidal part of vector field using projection:
 
-    f - \grad{p}
-    s.t. \laplacian{p} = \div{f}
+    f - \\grad{p}
+    s.t. \\laplacian{p} = \\div{f}
     """
 
     div_v = compute_divergence(vector_field, spacings, xp=xp)
