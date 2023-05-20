@@ -19,6 +19,8 @@ class PolarDatacube:
         n_annular = 180,
         qscale = None,
         mask = None,
+        ellipse = True,
+        friedel = False,
         ):
         """
         Parameters
@@ -38,7 +40,16 @@ class PolarDatacube:
             Radial scaling power to apply to polar transform
         mask : boolean array
             Cartesian space shaped mask to apply to all transforms
+        ellipse : bool
+            Setting to False forces a circular transform. Setting to True
+            performs an elliptic transform iff elliptic calibrations are
+            available.
+        friedel : bool
+            Setting to True computes the transform mod(pi), i.e. assumes
+            Friedel symmetry is obeyed
         """
+
+        # attach datacube
         assert(isinstance(datacube,DataCube))
         self._datacube = datacube
 
@@ -68,6 +79,9 @@ class PolarDatacube:
 
         # mask
         self.mask = mask
+
+        # ellipse
+        self.ellipse = ellipse
 
         pass
 
@@ -256,7 +270,9 @@ class PolarDataGetter:
     ):
         self._polarcube = polarcube
 
+
     def __getitem__(self,pos):
+
         # unpack scan position
         x,y = pos
         # get the data
@@ -275,6 +291,7 @@ class PolarDataGetter:
         self,
         cartesian_data,
         origin = None,
+        ellipse = None,
         mask = None,
         returnval = 'masked',
         ):
@@ -289,6 +306,9 @@ class PolarDataGetter:
             Variable behavior depending on the arg type. Length 2 tuples uses these
             values directly. Length 2 list of ints uses the calibrated origin value
             at this scan position. None uses the calibrated mean origin.
+        ellipse : tuple or None
+            Variable behavior depending on the arg type. Length 3 tuples uses these
+            values directly (a,b,theta). None uses the calibrated value.
         mask : boolean array or None
             A mask applied to the data before transformation.  The value of masked
             pixels (0's) in the output is determined by `returnval`. Note that this
@@ -309,6 +329,14 @@ class PolarDataGetter:
         else:
             raise Exception(f"Invalid type for `origin`, {type(origin)}")
 
+        if ellipse is None:
+            ellipse = self._polarcube.calibration.get_ellipse()
+        elif isinstance(ellipse,tuple):
+            pass
+        else:
+            raise Exception(f"Invalid type for `ellipse`, {type(ellipse)}")
+
+
         # combine passed mask with default mask
         mask0 = self._polarcube.mask
         if mask is None and mask0 is None:
@@ -323,13 +351,15 @@ class PolarDataGetter:
         # transform data
         ans = self._transform_array(
             cartesian_data,
-            origin
+            origin,
+            ellipse
         )
 
         # transform mask
         norm = self._transform_array(
             mask,
             origin,
+            ellipse
         )
 
         # normalize
@@ -361,23 +391,55 @@ class PolarDataGetter:
     def _transform_array(
         self,
         data,
-        origin
+        origin,
+        ellipse
         ):
 
-        # shifted coordinates
+        # set origin
         x = self._polarcube._xa - origin[0]
         y = self._polarcube._ya - origin[1]
 
-        # polar coordinate indices
-        r_ind = (np.sqrt(x**2 + y**2) - self._polarcube.radial_bins[0]) / self._polarcube.qstep
-        t_ind = np.arctan2(y, x) / self._polarcube.annular_step
+
+        # circular
+        if (ellipse is None) or (self._polarcube.ellipse) is False:
+
+            # get polar coords
+            rr = np.sqrt(x**2 + y**2)
+            tt = np.arctan2(y, x)
+
+        # elliptical
+        else:
+
+            # unpack ellipse
+            a,b,theta = ellipse
+
+            # transformation matrix (elliptic cartesian -> circular cartesian)
+            A = (a/b)*np.cos(theta)
+            B = - np.sin(theta)
+            C = (a/b)*np.sin(theta)
+            D = np.cos(theta)
+            det = 1 / (A*D - B*C)
+
+            # get circular cartesian coords
+            xc =  x*D - y*B
+            yc = -x*C + y*A
+
+            # get polar coords
+            rr = det * np.hypot(xc,yc)
+            tt = np.arctan2(yc,xc) - np.pi/2
+
+
+        # transform to bin sampling
+        r_ind = (rr - self._polarcube.radial_bins[0]) / self._polarcube.qstep
+        t_ind = tt / self._polarcube.annular_step
+
+        # get integers and increments
         r_ind_floor = np.floor(r_ind).astype('int')
         t_ind_floor = np.floor(t_ind).astype('int')
         dr = r_ind - r_ind_floor
         dt = t_ind - t_ind_floor
-        # t_ind_floor = np.mod(t_ind_floor, self.num_annular_bins)
 
-        # polar transformation
+        # resample
         sub = np.logical_and(r_ind_floor >= 0, r_ind_floor < self._polarcube.polar_shape[1])
         im = np.bincount(
             r_ind_floor[sub] + \
@@ -405,7 +467,7 @@ class PolarDataGetter:
             minlength = self._polarcube.polar_size,
         )
 
-        # output
+        # reshape and return
         ans = np.reshape(im, self._polarcube.polar_shape)
         return ans
 
