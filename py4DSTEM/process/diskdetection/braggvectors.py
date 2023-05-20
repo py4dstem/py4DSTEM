@@ -320,7 +320,8 @@ class RawVectorGetter:
         self,
         braggvects,
     ):
-        self._data = data
+        self._bvects = braggvects
+        self._data = braggvects._v_uncal
 
     def __getitem__(self,pos):
         x,y = pos
