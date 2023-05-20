@@ -19,6 +19,7 @@ class PolarDatacube:
         n_annular = 180,
         qscale = None,
         mask = None,
+        mask_thresh = 0.8,
         ellipse = True,
         friedel = False,
         ):
@@ -40,6 +41,9 @@ class PolarDatacube:
             Radial scaling power to apply to polar transform
         mask : boolean array
             Cartesian space shaped mask to apply to all transforms
+        mask_thresh : number
+            Pixels below this value in the transformed mask are considered
+            masked pixels
         ellipse : bool
             Setting to False forces a circular transform. Setting to True
             performs an elliptic transform iff elliptic calibrations are
@@ -77,11 +81,12 @@ class PolarDatacube:
             indexing = 'ij'
         )
 
-        # mask
-        self.mask = mask
-
         # ellipse
         self.ellipse = ellipse
+
+        # mask
+        self._mask_thresh = mask_thresh
+        self.mask = mask
 
         pass
 
@@ -222,6 +227,13 @@ class PolarDatacube:
     @property
     def mask_polar(self):
         return self._mask_polar
+    @property
+    def mask_thresh(self):
+        return self._mask_thresh
+    @mask_thresh.setter
+    def mask_thresh(self,x):
+        self._mask_thresh = x
+        self.mask = self.mask
 
 
     # expose transformation
@@ -293,6 +305,7 @@ class PolarDataGetter:
         origin = None,
         ellipse = None,
         mask = None,
+        mask_thresh = None,
         returnval = 'masked',
         ):
         """
@@ -311,8 +324,12 @@ class PolarDataGetter:
             values directly (a,b,theta). None uses the calibrated value.
         mask : boolean array or None
             A mask applied to the data before transformation.  The value of masked
-            pixels (0's) in the output is determined by `returnval`. Note that this
+            pixels in the output is determined by `returnval`. Note that this
             mask is applied in combination with any mask at PolarData.mask.
+        mask_thresh : number
+            Pixels in the transformed mask with values below this number are
+            considered masked, and will be populated by the values specified
+            by `returnval`.
         returnval : 'masked' or 'nan' or None
             Controls the returned data. 'masked' returns a numpy masked array. 'nan'
             returns a normal numpy array with masked pixels set to np.nan.  None
@@ -348,6 +365,10 @@ class PolarDataGetter:
         else:
             mask = mask*mask0
 
+        if mask_thresh is None:
+            mask_thresh = self._polarcube.mask_thresh
+
+
         # transform data
         ans = self._transform_array(
             cartesian_data,
@@ -361,11 +382,12 @@ class PolarDataGetter:
             origin,
             ellipse
         )
+        mask = norm>mask_thresh
 
         # normalize
         out = np.empty_like(norm)
         out[:] = np.nan
-        ans = np.divide(ans, norm, out=out, where=norm!=0)
+        ans = np.divide(ans, norm, out=out, where=mask!=0)
 
         # scaling
         if self._polarcube.qscale is not None:
