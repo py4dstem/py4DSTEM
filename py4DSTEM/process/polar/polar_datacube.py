@@ -427,7 +427,7 @@ class PolarDataGetter:
 
             # get polar coords
             rr = np.sqrt(x**2 + y**2)
-            tt = np.arctan2(y, x)
+            tt = np.arctan2(y, x) - np.pi/2
 
         # elliptical
         else:
