@@ -132,7 +132,11 @@ class PtychographicConstraints:
         return current_object
 
     def _object_butterworth_constraint(
-        self, current_object, q_lowpass, q_highpass, butterworth_order
+        self,
+        current_object,
+        q_lowpass,
+        q_highpass,
+        butterworth_order,
     ):
         """
         Ptychographic butterworth filter.
@@ -167,7 +171,10 @@ class PtychographicConstraints:
         if q_lowpass:
             env *= 1 / (1 + (qra / q_lowpass) ** (2 * butterworth_order))
 
+        current_object_mean = xp.mean(current_object)
+        current_object -= current_object_mean
         current_object = xp.fft.ifft2(xp.fft.fft2(current_object) * env)
+        current_object += current_object_mean
 
         if self._object_type == "potential":
             current_object = xp.real(current_object)
