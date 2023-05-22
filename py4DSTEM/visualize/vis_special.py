@@ -902,6 +902,7 @@ def show_complex(
         if returnfig==True, return the figure and the axis.
     """
     # convert to complex colors
+    ar_complex = ar_complex[0] if (isinstance(ar_complex,list) and len(ar_complex) == 1) else ar_complex
     if isinstance(ar_complex, list):
         if isinstance(ar_complex[0], list):
             rgb = [Complex2RGB(ar, vmin, vmax, hue_start = hue_start, invert=invert) for sublist in ar_complex for ar in sublist]

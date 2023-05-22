@@ -1349,7 +1349,10 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
         if q_lowpass:
             env *= 1 / (1 + (qra / q_lowpass) ** (2 * butterworth_order))
 
+        current_object_mean = xp.mean(current_object)
+        current_object -= current_object_mean
         current_object = xp.fft.ifft2(xp.fft.fft2(current_object) * env[None])
+        current_object += current_object_mean
 
         if self._object_type == "potential":
             current_object = xp.real(current_object)
