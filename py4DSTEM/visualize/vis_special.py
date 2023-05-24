@@ -159,7 +159,7 @@ def show_qprofile(
     ylabel='Intensity (A.U.)',  
     labelsize=16,
     ticklabelsize=14,
-    grid='on',
+    grid=True,
     label=None,
     **kwargs):
     """
@@ -173,7 +173,7 @@ def show_qprofile(
         ylabel
         labelsize       size of x and y labels
         ticklabelsize
-        grid            'off' or 'on'
+        grid            True or False
         label           a legend label for the plotted curve
     """
     if ymax is None:
