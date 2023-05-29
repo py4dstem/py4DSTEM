@@ -21,7 +21,7 @@ setup(
     author_email='ben.savitzky@gmail.com',
     license='GNU GPLv3',
     keywords="STEM 4DSTEM",
-    python_requires='>=3.9,<3.11',
+    python_requires='>=3.9,<=3.11.3',
     install_requires=[
         'numpy >= 1.19',
         'scipy >= 1.5.2',
