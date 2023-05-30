@@ -46,9 +46,6 @@ setup(
         'aiml-cuda': ['tensorflow == 2.4.1','tensorflow-addons <= 0.14.0','crystal4D','cupy'],
         'numba': ['numba >= 0.49.1']
         },
-    entry_points={
-        'console_scripts': ['py4DSTEM=py4DSTEM.gui.runGUI:launch']
-    },
     package_data={
         'py4DSTEM':['process/utils/scattering_factors.txt',
                     'process/diskdetection/multicorr_row_kernel.cu',
