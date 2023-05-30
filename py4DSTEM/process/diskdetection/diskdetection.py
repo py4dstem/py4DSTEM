@@ -10,7 +10,8 @@ from py4DSTEM.classes import DataCube, QPoints
 from py4DSTEM.preprocess.utils import get_maxima_2D
 from py4DSTEM.process.utils.cross_correlate import get_cross_correlation_FT
 from py4DSTEM.process.diskdetection.diskdetection_aiml import find_Bragg_disks_aiml
-
+from py4DSTEM.preprocess import get_2D_polar_background
+from py4DSTEM import PolarDatacube
 
 
 
@@ -110,7 +111,12 @@ def find_Bragg_disks(
         diffraction pattern). If using distributed disk detection, the
         function must be able to be pickled with by dill.
     radial_bksb : bool
-        TODO
+        if True, computes a radial background given by the median of the
+        (circular) polar transform of each each diffraction pattern, and
+        subtracts this background from the pattern before applying any
+        filter function and computing the cross correlation. The origin
+        position must be set in the datacube's calibrations. Currently
+        only supported for full datacubes on the CPU.
     corrPower : float between 0 and 1, inclusive
         the cross correlation power. A value of 1 corresponds to a cross
         correlation, 0 corresponds to a phase correlation, and intermediate
@@ -230,9 +236,19 @@ def find_Bragg_disks(
                 raise Exception(er)
     # overwrite if ML selected
 
+
     # select a function
-    fns = _get_function_dictionary()
-    fn = fns[mode]
+    fn_dict = {
+        "dp" : _find_Bragg_disks_single,
+        "dp_stack" : _find_Bragg_disks_stack,
+        "dc_CPU" : _find_Bragg_disks_CPU,
+        "dc_GPU" : _find_Bragg_disks_CUDA_unbatched,
+        "dc_GPU_batched" : _find_Bragg_disks_CUDA_batched,
+        "dc_dask" : _find_Bragg_disks_dask,
+        "dc_ipyparallel" : _find_Bragg_disks_ipp,
+        "dc_ml" : find_Bragg_disks_aiml
+    }
+    fn = fn_dict[mode]
 
 
     # prepare kwargs
@@ -248,6 +264,16 @@ def find_Bragg_disks(
         kws['model_path'] = ml_model_path
         kws['num_attempts'] = ml_num_attempts
         kws['batch_size'] = ml_batch_size
+
+    # if radial background subtraction is requested, prepare args
+    if radial_bksb:
+        assert(mode == 'dc_CPU'), "Radial background subtraction is currently only supported for full datacubes on the CPU"
+        polarcube = PolarDatacube( data )
+        origins = data.calibration.get_origin()
+        assert(origins is not None), "Radial background subtraction requires that the origin has been calibrated!"
+
+        kws['radial_bksb_args'] = (polarcube,origins)
+
 
     # run and return
     ans = fn(
@@ -268,22 +294,6 @@ def find_Bragg_disks(
     )
     return ans
 
-
-
-def _get_function_dictionary():
-
-    d = {
-        "dp" : _find_Bragg_disks_single,
-        "dp_stack" : _find_Bragg_disks_stack,
-        "dc_CPU" : _find_Bragg_disks_CPU,
-        "dc_GPU" : _find_Bragg_disks_CUDA_unbatched,
-        "dc_GPU_batched" : _find_Bragg_disks_CUDA_batched,
-        "dc_dask" : _find_Bragg_disks_dask,
-        "dc_ipyparallel" : _find_Bragg_disks_ipp,
-        "dc_ml" : find_Bragg_disks_aiml
-    }
-
-    return d
 
 
 
@@ -456,6 +466,7 @@ def _find_Bragg_disks_CPU(
     minPeakSpacing = 60,
     edgeBoundary = 20,
     maxNumPeaks = 70,
+    radial_bksb_args = None
     ):
 
     # Make the BraggVectors instance
@@ -478,6 +489,20 @@ def _find_Bragg_disks_CPU(
 
         # Get a diffraction pattern
         dp = datacube.data[rx,ry,:,:]
+
+        # Perform radial background subtraction, if requested
+        if radial_bksb_args is not None:
+            # unpack args
+            polarcube,origins = radial_bksb_args
+            origin = origins[0][rx,ry],origins[1][rx,ry]
+            # get background subtracted data
+            dp = _get_radial_bksb_dp(
+                dp,
+                polarcube.data[rx,ry],
+                polarcube.radial_bins,
+                origin,
+            )
+
 
         # Compute
         peaks =_find_Bragg_disks_single(
@@ -505,6 +530,29 @@ def _find_Bragg_disks_CPU(
     # Return
     return braggvectors
 
+
+def _get_radial_bksb_dp(
+    dp,
+    dp_polar,
+    radial_bins,
+    origin
+    ):
+    # get 1D background
+    bkgrd1D_ma = np.ma.median( dp_polar, axis=0 )
+    bkgrd1D = bkgrd1D_ma.data
+    bkgrd1D[bkgrd1D_ma.mask] = 0
+    # get 2D background
+    bkgrd2D = get_2D_polar_background(
+        data = dp,
+        background1D = bkgrd1D,
+        r_bins = radial_bins,
+        p_ellipse = (0,0,1,1,0),
+        center = origin
+    )
+    # get answer and return
+    ans = dp - bkgrd2D
+    ans[ans<0] = 0
+    return ans
 
 
 
