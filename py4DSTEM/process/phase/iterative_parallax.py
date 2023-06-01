@@ -364,8 +364,7 @@ class ParallaxReconstruction(PhaseReconstruction):
         self.recon_BF = asnumpy(self._recon_BF)
 
         if plot_average_bf:
-            figsize = kwargs.get("figsize", (6, 6))
-            kwargs.pop("figsize", None)
+            figsize = kwargs.pop("figsize", (6, 6))
 
             fig, ax = plt.subplots(figsize=figsize)
 
@@ -1062,10 +1061,8 @@ class ParallaxReconstruction(PhaseReconstruction):
 
         # plotting
         if plot_corrected_phase:
-            figsize = kwargs.get("figsize", (6, 6))
-            cmap = kwargs.get("cmap", "magma")
-            kwargs.pop("figsize", None)
-            kwargs.pop("cmap", None)
+            figsize = kwargs.pop("figsize", (6, 6))
+            cmap = kwargs.pop("cmap", "magma")
 
             fig, ax = plt.subplots(figsize=figsize)
 
@@ -1159,10 +1156,8 @@ class ParallaxReconstruction(PhaseReconstruction):
                 wspace=0.15,
             )
 
-            figsize = kwargs.get("figsize", (4 * ncols, 4 * nrows))
-            cmap = kwargs.get("cmap", "magma")
-            kwargs.pop("figsize", None)
-            kwargs.pop("cmap", None)
+            figsize = kwargs.pop("figsize", (4 * ncols, 4 * nrows))
+            cmap = kwargs.pop("cmap", "magma")
 
             fig = plt.figure(figsize=figsize)
 
@@ -1274,8 +1269,7 @@ class ParallaxReconstruction(PhaseReconstruction):
 
         """
 
-        cmap = kwargs.get("cmap", "magma")
-        kwargs.pop("cmap", None)
+        cmap = kwargs.pop("cmap", "magma")
 
         cropped_object = self._crop_padded_object(self._recon_BF, remaining_padding)
 
@@ -1296,6 +1290,7 @@ class ParallaxReconstruction(PhaseReconstruction):
     def _visualize_shifts(
         self,
         scale_arrows=1,
+        plot_arrow_freq=1,
         **kwargs,
     ):
         """
@@ -1305,27 +1300,38 @@ class ParallaxReconstruction(PhaseReconstruction):
         ----------
         scale_arrows: float, optional
             Scale to multiply shifts by
-
+        plot_arrow_freq: int, optional
+            Frequency of shifts to plot in quiver plot
         """
 
         xp = self._xp
         asnumpy = self._asnumpy
 
-        figsize = kwargs.get("figsize", (6, 6))
-        color = kwargs.get("color", (1, 0, 0, 1))
-        kwargs.pop("figsize", None)
-        kwargs.pop("color", None)
+        figsize = kwargs.pop("figsize", (6, 6))
+        color = kwargs.pop("color", (1, 0, 0, 1))
 
         fig, ax = plt.subplots(figsize=figsize)
 
+        dp_mask_ind = xp.nonzero(self._dp_mask)
+        yy, xx = xp.meshgrid(
+            xp.arange(self._dp_mean.shape[1]), xp.arange(self._dp_mean.shape[0])
+        )
+        freq_mask = xp.logical_and(xx % plot_arrow_freq == 0, yy % plot_arrow_freq == 0)
+        masked_ind = xp.logical_and(freq_mask, self._dp_mask)
+        plot_ind = masked_ind[dp_mask_ind]
+
         ax.quiver(
-            asnumpy(self._kxy[:, 1]),
-            asnumpy(self._kxy[:, 0]),
+            asnumpy(self._kxy[plot_ind, 1]),
+            asnumpy(self._kxy[plot_ind, 0]),
             asnumpy(
-                self._xy_shifts[:, 1] * scale_arrows * self._reciprocal_sampling[0]
+                self._xy_shifts[plot_ind, 1]
+                * scale_arrows
+                * self._reciprocal_sampling[0]
             ),
             asnumpy(
-                self._xy_shifts[:, 0] * scale_arrows * self._reciprocal_sampling[1]
+                self._xy_shifts[plot_ind, 0]
+                * scale_arrows
+                * self._reciprocal_sampling[1]
             ),
             color=color,
             angles="xy",
@@ -1351,8 +1357,7 @@ class ParallaxReconstruction(PhaseReconstruction):
             Self to accommodate chaining
         """
 
-        figsize = kwargs.get("figsize", (6, 6))
-        kwargs.pop("figsize", None)
+        figsize = kwargs.pop("figsize", (6, 6))
 
         fig, ax = plt.subplots(figsize=figsize)
 

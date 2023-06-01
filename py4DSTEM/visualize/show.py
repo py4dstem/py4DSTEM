@@ -321,6 +321,7 @@ def show(
             intensity_range = clipvals
 
     # plot a grid if `ar` is a list, or use multichannel functionality to make an RGBa image
+    ar = ar[0] if (isinstance(ar,list) and len(ar) == 1) else ar
     if isinstance(ar,list):
         args = locals()
         if 'kwargs' in args.keys():
@@ -507,6 +508,10 @@ def show(
         ind_vmax = np.min([len(vals)-1,ind_vmax])
         vmin = vals[ind_vmin]
         vmax = vals[ind_vmax]
+        # check if vmin and vmax are the same, defaulting to minmax scaling if needed
+        if vmax == vmin:
+            vmin = vals[0]
+            vmax = vals[-1]
     elif intensity_range == 'minmax':
         vmin,vmax = np.nanmin(_ar),np.nanmax(_ar)
     elif intensity_range == 'absolute':

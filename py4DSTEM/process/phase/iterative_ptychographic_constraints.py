@@ -109,7 +109,7 @@ class PtychographicConstraints:
         current_object: np.ndarray
             Current object estimate
         gaussian_filter_sigma: float
-            Standard deviation of gaussian kernel
+            Standard deviation of gaussian kernel in A
         pure_phase_object: bool
             If True, gaussian blur performed on phase only
 
@@ -120,6 +120,7 @@ class PtychographicConstraints:
         """
         xp = self._xp
         gaussian_filter = self._gaussian_filter
+        gaussian_filter_sigma /= xp.sqrt(self.sampling[0] ** 2 + self.sampling[1] ** 2)
 
         if pure_phase_object:
             phase = xp.angle(current_object)
@@ -131,7 +132,11 @@ class PtychographicConstraints:
         return current_object
 
     def _object_butterworth_constraint(
-        self, current_object, q_lowpass, q_highpass, butterworth_order
+        self,
+        current_object,
+        q_lowpass,
+        q_highpass,
+        butterworth_order,
     ):
         """
         Ptychographic butterworth filter.
@@ -166,7 +171,10 @@ class PtychographicConstraints:
         if q_lowpass:
             env *= 1 / (1 + (qra / q_lowpass) ** (2 * butterworth_order))
 
+        current_object_mean = xp.mean(current_object)
+        current_object -= current_object_mean
         current_object = xp.fft.ifft2(xp.fft.fft2(current_object) * env)
+        current_object += current_object_mean
 
         if self._object_type == "potential":
             current_object = xp.real(current_object)
@@ -375,18 +383,20 @@ class PtychographicConstraints:
         xp = self._xp
 
         current_probe_sum = xp.sum(xp.abs(current_probe) ** 2)
+        fourier_probe = self._return_fourier_probe(current_probe)
 
-        current_probe_real = current_probe.real.copy()
-        current_probe_imag = current_probe.imag.copy()
+        fourier_probe_real = fourier_probe.real.copy()
+        fourier_probe_imag = fourier_probe.imag.copy()
 
-        current_probe_real = self._probe_radial_symmetrization_constraint_base(
-            current_probe_real, num_bins, center
+        fourier_probe_real = self._probe_radial_symmetrization_constraint_base(
+            fourier_probe_real, num_bins, center
         )
-        current_probe_imag = self._probe_radial_symmetrization_constraint_base(
-            current_probe_imag, num_bins, center
+        fourier_probe_imag = self._probe_radial_symmetrization_constraint_base(
+            fourier_probe_imag, num_bins, center
         )
 
-        current_probe = current_probe_real + 1.0j * current_probe_imag
+        fourier_probe = fourier_probe_real + 1.0j * fourier_probe_imag
+        current_probe = xp.fft.ifftshift(xp.fft.ifft2(xp.fft.fftshift(fourier_probe)))
         current_probe *= xp.sqrt(current_probe_sum / np.sum(np.abs(current_probe) ** 2))
 
         return current_probe
@@ -479,6 +489,54 @@ class PtychographicConstraints:
         normalization = xp.sqrt(current_probe_sum / updated_probe_sum)
 
         return updated_probe * normalization
+
+    def _probe_residual_aberration_filtering_constraint(
+        self,
+        current_probe,
+        gaussian_filter_sigma,
+        fix_amplitude,
+    ):
+        """
+        Ptychographic probe smoothing constraint.
+        Removes/adds known (initialization) aberrations before/after smoothing.
+
+        Parameters
+        ----------
+        current_probe: np.ndarray
+            Current positions estimate
+        gaussian_filter_sigma: float
+            Standard deviation of gaussian kernel in A^-1
+        fix_amplitude: bool
+            If True, only the phase is smoothed
+
+        Returns
+        --------
+        constrained_probe: np.ndarray
+            Constrained probe estimate
+        """
+
+        xp = self._xp
+        gaussian_filter = self._gaussian_filter
+        known_aberrations_array = self._known_aberrations_array
+        gaussian_filter_sigma /= xp.sqrt(
+            self._reciprocal_sampling[0] ** 2 + self._reciprocal_sampling[1] ** 2
+        )
+
+        fourier_probe = self._return_fourier_probe(current_probe)
+        if fix_amplitude:
+            fourier_probe_abs = xp.abs(fourier_probe)
+
+        fourier_probe *= xp.conjugate(known_aberrations_array)
+        fourier_probe = gaussian_filter(fourier_probe, gaussian_filter_sigma)
+        fourier_probe *= known_aberrations_array
+
+        if fix_amplitude:
+            fourier_probe_angle = xp.angle(fourier_probe)
+            fourier_probe = fourier_probe_abs * xp.exp(1.0j * fourier_probe_angle)
+
+        current_probe = xp.fft.ifftshift(xp.fft.ifft2(xp.fft.fftshift(fourier_probe)))
+
+        return current_probe
 
     def _positions_center_of_mass_constraint(self, current_positions):
         """

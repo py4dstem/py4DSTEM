@@ -39,7 +39,7 @@ class PhaseReconstruction(Custom):
     Defines various common functions and properties for subclasses to inherit.
     """
 
-    def attach_datacube(self, dc: DataCube):
+    def attach_datacube(self, datacube: DataCube):
         """
         Attaches a datacube to a class initialized without one.
 
@@ -53,7 +53,7 @@ class PhaseReconstruction(Custom):
         self: PhaseReconstruction
             Self to enable chaining
         """
-        self._datacube = dc
+        self._datacube = datacube
         return self
 
     def set_save_defaults(
@@ -944,11 +944,8 @@ class PhaseReconstruction(Custom):
 
         # Optionally, plot CoM
         if plot_center_of_mass == "all":
-            figsize = kwargs.get("figsize", (8, 12))
-            cmap = kwargs.get("cmap", "RdBu_r")
-            kwargs.pop("cmap", None)
-            kwargs.pop("figsize", None)
-
+            figsize = kwargs.pop("figsize", (8, 12))
+            cmap = kwargs.pop("cmap", "RdBu_r")
             extent = [
                 0,
                 self._scan_sampling[1] * self._intensities.shape[1],
@@ -984,10 +981,8 @@ class PhaseReconstruction(Custom):
                 ax.set_title(title)
 
         elif plot_center_of_mass == "default":
-            figsize = kwargs.get("figsize", (8, 4))
-            cmap = kwargs.get("cmap", "RdBu_r")
-            kwargs.pop("cmap", None)
-            kwargs.pop("figsize", None)
+            figsize = kwargs.pop("figsize", (8, 4))
+            cmap = kwargs.pop("cmap", "RdBu_r")
 
             extent = [
                 0,
@@ -1817,6 +1812,7 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
         relevant_amplitudes,
         current_positions,
         positions_step_size,
+        constrain_position_distance,
     ):
         """
         Position correction using estimated intensity gradient.
@@ -1835,6 +1831,9 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
             Current positions estimate
         positions_step_size: float
             Positions step size
+        constrain_position_distance: float
+            Distance to constrain position correction within original
+            field of view in A
 
         Returns
         --------
@@ -1896,13 +1895,46 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
             @ difference_intensity[..., None]
         )
 
-        current_positions -= positions_step_size * positions_update[..., 0]
+        if constrain_position_distance is not None:
+            constrain_position_distance /= xp.sqrt(
+                self.sampling[0] ** 2 + self.sampling[1] ** 2
+            )
+            x1 = (current_positions - positions_step_size * positions_update[..., 0])[
+                :, 0
+            ]
+            y1 = (current_positions - positions_step_size * positions_update[..., 0])[
+                :, 1
+            ]
+            x0 = self._positions_px_initial[:, 0]
+            y0 = self._positions_px_initial[:, 1]
+            if self._rotation_best_transpose:
+                x0, y0 = xp.array([y0, x0])
+                x1, y1 = xp.array([y1, x1])
 
+            if self._rotation_best_rad is not None:
+                rotation_angle = self._rotation_best_rad
+                x0, y0 = x0 * xp.cos(-rotation_angle) + y0 * xp.sin(
+                    -rotation_angle
+                ), -x0 * xp.sin(-rotation_angle) + y0 * xp.cos(-rotation_angle)
+                x1, y1 = x1 * xp.cos(-rotation_angle) + y1 * xp.sin(
+                    -rotation_angle
+                ), -x1 * xp.sin(-rotation_angle) + y1 * xp.cos(-rotation_angle)
+
+            outlier_ind = (x1 > (xp.max(x0) + constrain_position_distance)) + (
+                x1 < (xp.min(x0) - constrain_position_distance)
+            ) + (y1 > (xp.max(y0) + constrain_position_distance)) + (
+                y1 < (xp.min(y0) - constrain_position_distance)
+            ) > 0
+
+            positions_update[..., 0][outlier_ind] = 0
+
+        current_positions -= positions_step_size * positions_update[..., 0]
         return current_positions
 
     def plot_position_correction(
         self,
         scale_arrows=1,
+        plot_arrow_freq=1,
         verbose=True,
         **kwargs,
     ):
@@ -1932,17 +1964,17 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
         initial_pos = asnumpy(self._positions_initial)
         pos = self.positions
 
-        figsize = kwargs.get("figsize", (6, 6))
-        color = kwargs.get("color", (1, 0, 0, 1))
-        kwargs.pop("figsize", None)
-        kwargs.pop("color", None)
+        figsize = kwargs.pop("figsize", (6, 6))
+        color = kwargs.pop("color", (1, 0, 0, 1))
 
         fig, ax = plt.subplots(figsize=figsize)
         ax.quiver(
-            initial_pos[:, 1],
-            initial_pos[:, 0],
-            (pos[:, 1] - initial_pos[:, 1]) * scale_arrows,
-            (pos[:, 0] - initial_pos[:, 0]) * scale_arrows,
+            initial_pos[::plot_arrow_freq, 1],
+            initial_pos[::plot_arrow_freq, 0],
+            (pos[::plot_arrow_freq, 1] - initial_pos[::plot_arrow_freq, 1])
+            * scale_arrows,
+            (pos[::plot_arrow_freq, 0] - initial_pos[::plot_arrow_freq, 0])
+            * scale_arrows,
             scale_units="xy",
             scale=1,
             color=color,
@@ -2047,8 +2079,7 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
         if pixelunits is None:
             pixelunits = r"$\AA^{-1}$"
 
-        figsize = kwargs.get("figsize", (6, 6))
-        kwargs.pop("figsize", None)
+        figsize = kwargs.pop("figsize", (6, 6))
 
         fig, ax = plt.subplots(figsize=figsize)
         show_complex(
@@ -2076,16 +2107,11 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
         else:
             object_fft = self._return_object_fft(obj)
 
-        figsize = kwargs.get("figsize", (6, 6))
-        kwargs.pop("figsize", None)
-        cmap = kwargs.get("cmap", "magma")
-        kwargs.pop("cmap", None)
-        vmin = kwargs.get("vmin", 0)
-        kwargs.pop("vmin", None)
-        vmax = kwargs.get("vmax", 1)
-        kwargs.pop("vmax", None)
-        power = kwargs.get("power", 0.2)
-        kwargs.pop("power", None)
+        figsize = kwargs.pop("figsize", (6, 6))
+        cmap = kwargs.pop("cmap", "magma")
+        vmin = kwargs.pop("vmin", 0)
+        vmax = kwargs.pop("vmax", 1)
+        power = kwargs.pop("power", 0.2)
 
         pixelsize = 1 / (object_fft.shape[0] * self.sampling[0])
         show(
@@ -2152,3 +2178,9 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
         positions[:, 1] *= self.sampling[1]
 
         return asnumpy(positions)
+
+    @property
+    def _object_cropped(self):
+        """ cropped and rotated object """
+
+        return self._crop_rotate_object_fov(self._object)
