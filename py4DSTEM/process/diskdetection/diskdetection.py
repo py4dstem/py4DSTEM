@@ -10,8 +10,6 @@ from py4DSTEM.classes import DataCube, QPoints
 from py4DSTEM.preprocess.utils import get_maxima_2D
 from py4DSTEM.process.utils.cross_correlate import get_cross_correlation_FT
 from py4DSTEM.process.diskdetection.diskdetection_aiml import find_Bragg_disks_aiml
-from py4DSTEM.preprocess import get_2D_polar_background
-from py4DSTEM import PolarDatacube
 
 
 
@@ -20,11 +18,12 @@ def find_Bragg_disks(
     data,
     template,
 
-    filter_function = None,
     radial_bksb = False,
+    filter_function = None,
 
     corrPower = 1,
-    sigma = 2,
+    sigma_dp = 0,
+    sigma_cc = 2,
     subpixel = 'multicorr',
     upsample_factor = 16,
 
@@ -71,9 +70,8 @@ def find_Bragg_disks(
 
     (1) any pre-processing is performed to the diffraction image. This is
         accomplished by passing a callable function to the argument
-        `filter_function`, or a bool to the argument `radial_bksb`.
-        If `filter_function` is None and `radial_bksb` is False,, this
-        is skipped.
+        `filter_function`, a bool to the argument `radial_bksb`, or a value >0
+        to `sigma_dp`. If none of these are passed, this step is skipped.
     (2) the diffraction image is cross correlated with the template.
         Phase/hybrid correlations can be used instead by setting the
         `corrPower` argument. Cross correlation can be skipped entirely,
@@ -82,7 +80,7 @@ def find_Bragg_disks(
         `template`.
     (3) the maxima of the cross correlation are located and their
         positions and intensities stored. The cross correlation may be
-        passed through a gaussian filter first by passing the `sigma`
+        passed through a gaussian filter first by passing the `sigma_cc`
         argument. The method for maximum detection can be set with
         the `subpixel` parameter. Options, from something like fastest/least
         precise to slowest/most precise are 'pixel', 'poly', and 'multicorr'.
@@ -101,6 +99,13 @@ def find_Bragg_disks(
         the vacuum probe template, in real space. For Probe instances,
         this is `probe.kernel`.  If None, does not perform a cross
         correlation.
+    radial_bksb : bool
+        if True, computes a radial background given by the median of the
+        (circular) polar transform of each each diffraction pattern, and
+        subtracts this background from the pattern before applying any
+        filter function and computing the cross correlation. The origin
+        position must be set in the datacube's calibrations. Currently
+        only supported for full datacubes on the CPU.
     filter_function : callable
         filtering function to apply to each diffraction pattern before
         peak finding. Must be a function of only one argument (the
@@ -110,18 +115,14 @@ def find_Bragg_disks(
         diffraction pattern, e.g. the filter can be used to bin the
         diffraction pattern). If using distributed disk detection, the
         function must be able to be pickled with by dill.
-    radial_bksb : bool
-        if True, computes a radial background given by the median of the
-        (circular) polar transform of each each diffraction pattern, and
-        subtracts this background from the pattern before applying any
-        filter function and computing the cross correlation. The origin
-        position must be set in the datacube's calibrations. Currently
-        only supported for full datacubes on the CPU.
     corrPower : float between 0 and 1, inclusive
         the cross correlation power. A value of 1 corresponds to a cross
         correlation, 0 corresponds to a phase correlation, and intermediate
         values correspond to hybrid correlations.
-    sigma : float
+    sigma_dp : float
+        if >0, a gaussian smoothing filter with this standard deviation
+        is applied to the diffraction pattern before maxima are detected
+    sigma_cc : float
         if >0, a gaussian smoothing filter with this standard deviation
         is applied to the cross correlation before maxima are detected
     subpixel : str
@@ -193,16 +194,31 @@ def find_Bragg_disks(
             raise Exception(er)
     else:
         try:
+            # when a position (rx,ry) is passed, get those patterns
+            # and put them in a stack
             dc,rx,ry = data[0],data[1],data[2]
 
             # h5py datasets have different rules for slicing than
             # numpy arrays, so we have to do this manually
             if "h5py" in str(type(dc.data)):
                 data = np.zeros((len(rx),dc.Q_Nx,dc.Q_Ny))
-                for i,(x,y) in enumerate(zip(rx,ry)):
-                    data[i] = dc.data[x,y]
+                # no background subtraction
+                if not radial_bksb:
+                    for i,(x,y) in enumerate(zip(rx,ry)):
+                        data[i] = dc.data[x,y]
+                # with bksubtr
+                else:
+                    for i,(x,y) in enumerate(zip(rx,ry)):
+                        data[i] = dc.get_radial_bksb_dp(rx,ry)
             else:
-                data = dc.data[np.array(rx),np.array(ry),:,:]
+                # no background subtraction
+                if not radial_bksb:
+                    data = dc.data[np.array(rx),np.array(ry),:,:]
+                # with bksubtr
+                else:
+                    data = np.zeros((len(rx),dc.Q_Nx,dc.Q_Ny))
+                    for i,(x,y) in enumerate(zip(rx,ry)):
+                        data[i] = dc.get_radial_bksb_dp(x,y)
             if data.ndim == 2:
                 mode = 'dp'
             elif data.ndim == 3:
@@ -265,14 +281,9 @@ def find_Bragg_disks(
         kws['num_attempts'] = ml_num_attempts
         kws['batch_size'] = ml_batch_size
 
-    # if radial background subtraction is requested, prepare args
-    if radial_bksb:
-        assert(mode == 'dc_CPU'), "Radial background subtraction is currently only supported for full datacubes on the CPU"
-        polarcube = PolarDatacube( data )
-        origins = data.calibration.get_origin()
-        assert(origins is not None), "Radial background subtraction requires that the origin has been calibrated!"
-
-        kws['radial_bksb_args'] = (polarcube,origins)
+    # if radial background subtraction is requested, add to args
+    if radial_bksb and mode=='dc_CPU':
+        kws['radial_bksb'] = radial_bksb
 
 
     # run and return
@@ -281,7 +292,8 @@ def find_Bragg_disks(
         template,
         filter_function = filter_function,
         corrPower = corrPower,
-        sigma = sigma,
+        sigma_dp = sigma_dp,
+        sigma_cc = sigma_cc,
         subpixel = subpixel,
         upsample_factor = upsample_factor,
         minAbsoluteIntensity = minAbsoluteIntensity,
@@ -307,7 +319,8 @@ def _find_Bragg_disks_single(
     template,
     filter_function = None,
     corrPower = 1,
-    sigma = 2,
+    sigma_dp = 0,
+    sigma_cc = 2,
     subpixel = 'poly',
     upsample_factor = 16,
     minAbsoluteIntensity = 0,
@@ -340,6 +353,10 @@ def _find_Bragg_disks_single(
             template_FT = template
 
 
+        # apply any smoothing to the data
+        if sigma_dp>0:
+            DP = gaussian_filter( DP,sigma_dp )
+
         # Compute cross correlation
         # _returnval = 'fourier' if subpixel == 'multicorr' else 'real'
         cc = get_cross_correlation_FT(
@@ -355,6 +372,7 @@ def _find_Bragg_disks_single(
         np.maximum(np.real(np.fft.ifft2(cc)),0),
         subpixel = subpixel,
         upsample_factor = upsample_factor,
+        sigma = sigma_cc,
         minAbsoluteIntensity = minAbsoluteIntensity,
         minRelativeIntensity = minRelativeIntensity,
         relativeToPeak = relativeToPeak,
@@ -407,7 +425,8 @@ def _find_Bragg_disks_stack(
     template,
     filter_function = None,
     corrPower = 1,
-    sigma = 2,
+    sigma_dp = 0,
+    sigma_cc = 2,
     subpixel = 'poly',
     upsample_factor = 16,
     minAbsoluteIntensity = 0,
@@ -429,7 +448,8 @@ def _find_Bragg_disks_stack(
             template,
             filter_function = filter_function,
             corrPower = corrPower,
-            sigma = sigma,
+            sigma_dp = sigma_dp,
+            sigma_cc = sigma_cc,
             subpixel = subpixel,
             upsample_factor = upsample_factor,
             minAbsoluteIntensity = minAbsoluteIntensity,
@@ -457,7 +477,8 @@ def _find_Bragg_disks_CPU(
     probe,
     filter_function = None,
     corrPower = 1,
-    sigma = 2,
+    sigma_dp = 0,
+    sigma_cc = 2,
     subpixel = 'multicorr',
     upsample_factor = 16,
     minAbsoluteIntensity = 0,
@@ -466,7 +487,7 @@ def _find_Bragg_disks_CPU(
     minPeakSpacing = 60,
     edgeBoundary = 20,
     maxNumPeaks = 70,
-    radial_bksb_args = None
+    radial_bksb = False
     ):
 
     # Make the BraggVectors instance
@@ -488,20 +509,13 @@ def _find_Bragg_disks_CPU(
         ):
 
         # Get a diffraction pattern
-        dp = datacube.data[rx,ry,:,:]
 
-        # Perform radial background subtraction, if requested
-        if radial_bksb_args is not None:
-            # unpack args
-            polarcube,origins = radial_bksb_args
-            origin = origins[0][rx,ry],origins[1][rx,ry]
-            # get background subtracted data
-            dp = _get_radial_bksb_dp(
-                dp,
-                polarcube.data[rx,ry],
-                polarcube.radial_bins,
-                origin,
-            )
+        # without background subtraction
+        if not radial_bksb:
+            dp = datacube.data[rx,ry,:,:]
+        # and with
+        else:
+            dp = datacube.get_radial_bksb_dp(rx,ry)
 
 
         # Compute
@@ -510,7 +524,8 @@ def _find_Bragg_disks_CPU(
             template = probe_kernel_FT,
             filter_function = filter_function,
             corrPower = corrPower,
-            sigma = sigma,
+            sigma_dp = sigma_dp,
+            sigma_cc = sigma_cc,
             subpixel = subpixel,
             upsample_factor = upsample_factor,
             minAbsoluteIntensity = minAbsoluteIntensity,
@@ -531,31 +546,6 @@ def _find_Bragg_disks_CPU(
     return braggvectors
 
 
-def _get_radial_bksb_dp(
-    dp,
-    dp_polar,
-    radial_bins,
-    origin
-    ):
-    # get 1D background
-    bkgrd1D_ma = np.ma.median( dp_polar, axis=0 )
-    bkgrd1D = bkgrd1D_ma.data
-    bkgrd1D[bkgrd1D_ma.mask] = 0
-    # get 2D background
-    bkgrd2D = get_2D_polar_background(
-        data = dp,
-        background1D = bkgrd1D,
-        r_bins = radial_bins,
-        p_ellipse = (0,0,1,1,0),
-        center = origin
-    )
-    # get answer and return
-    ans = dp - bkgrd2D
-    ans[ans<0] = 0
-    return ans
-
-
-
 
 # CUDA - unbatched
 
@@ -565,7 +555,8 @@ def _find_Bragg_disks_CUDA_unbatched(
     probe,
     filter_function = None,
     corrPower = 1,
-    sigma = 2,
+    sigma_dp = 0,
+    sigma_cc = 2,
     subpixel = 'multicorr',
     upsample_factor = 16,
     minAbsoluteIntensity = 0,
@@ -583,7 +574,7 @@ def _find_Bragg_disks_CUDA_unbatched(
         probe,
         filter_function=filter_function,
         corrPower=corrPower,
-        sigma=sigma,
+        sigma=sigma_cc,
         subpixel=subpixel,
         upsample_factor=upsample_factor,
         minAbsoluteIntensity=minAbsoluteIntensity,
@@ -610,7 +601,8 @@ def _find_Bragg_disks_CUDA_batched(
     probe,
     filter_function = None,
     corrPower = 1,
-    sigma = 2,
+    sigma_dp = 0,
+    sigma_cc = 2,
     subpixel = 'multicorr',
     upsample_factor = 16,
     minAbsoluteIntensity = 0,
@@ -628,7 +620,7 @@ def _find_Bragg_disks_CUDA_batched(
         probe,
         filter_function=filter_function,
         corrPower=corrPower,
-        sigma=sigma,
+        sigma=sigma_cc,
         subpixel=subpixel,
         upsample_factor=upsample_factor,
         minAbsoluteIntensity=minAbsoluteIntensity,
@@ -659,7 +651,8 @@ def _find_Bragg_disks_ipp(
     cluster_path,
     filter_function = None,
     corrPower = 1,
-    sigma = 2,
+    sigma_dp = 0,
+    sigma_cc = 2,
     subpixel = 'multicorr',
     upsample_factor = 16,
     minAbsoluteIntensity = 0,
@@ -677,7 +670,7 @@ def _find_Bragg_disks_ipp(
         probe,
         filter_function=filter_function,
         corrPower=corrPower,
-        sigma=sigma,
+        sigma=sigma_cc,
         subpixel=subpixel,
         upsample_factor=upsample_factor,
         minAbsoluteIntensity=minAbsoluteIntensity,
@@ -710,7 +703,8 @@ def _find_Bragg_disks_dask(
     cluster_path,
     filter_function = None,
     corrPower = 1,
-    sigma = 2,
+    sigma_dp = 0,
+    sigma_cc = 2,
     subpixel = 'multicorr',
     upsample_factor = 16,
     minAbsoluteIntensity = 0,
@@ -728,7 +722,7 @@ def _find_Bragg_disks_dask(
         probe,
         filter_function=filter_function,
         corrPower=corrPower,
-        sigma=sigma,
+        sigma=sigma_cc,
         subpixel=subpixel,
         upsample_factor=upsample_factor,
         minAbsoluteIntensity=minAbsoluteIntensity,

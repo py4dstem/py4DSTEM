@@ -56,6 +56,7 @@ class PolarDatacube:
         # attach datacube
         assert(isinstance(datacube,DataCube))
         self._datacube = datacube
+        self._datacube.polar = self
 
         # check for calibrations
         assert(hasattr(self._datacube,'calibration')), "No .calibration found"
