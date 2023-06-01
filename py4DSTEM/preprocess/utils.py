@@ -7,11 +7,6 @@ try:
 except ImportError:
     cp = None
 
-try:
-    import cupy as cp
-except ImportError:
-    cp = None
-
 
 def bin2D(array, factor, dtype=np.float64):
     """
