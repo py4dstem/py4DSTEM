@@ -43,9 +43,11 @@ class PtychographyOptimizer:
         Dictionaries of the arguments to __init__, AffineTransform (for distorting the initial
         scan positions), preprocess, and reconstruct are required. For parameters not optimized
         over, the value in the dictionary is used. To optimize a parameter, instead pass an
-        OptimizationParameter object inside the dictionary to specify the bounds, initial guess,
-        and type of parameter. Calling optimize will then run the optimization simultaneously
-        over all optimization parameters. To obtain the optimized parameters, call get_optimized_arguments
+        OptimizationParameter object inside the dictionary to specify the initial guess, bounds, 
+        and type of parameter, for example: 
+            >>> 'param':OptimizationParameter(initial guess, lower bound, upper bound)
+        Calling optimize will then run the optimization simultaneously over all 
+        optimization parameters. To obtain the optimized parameters, call get_optimized_arguments
         to return a set of dictionaries where the OptimizationParameter objects have been replaced
         with the optimal values. These can then be modified for running a full reconstruction.
 
