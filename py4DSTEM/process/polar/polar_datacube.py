@@ -1,6 +1,6 @@
 import numpy as np
 from py4DSTEM.classes import DataCube
-
+from scipy.ndimage import binary_opening,binary_closing
 
 
 
@@ -19,7 +19,7 @@ class PolarDatacube:
         n_annular = 180,
         qscale = None,
         mask = None,
-        mask_thresh = 0.8,
+        mask_thresh = 0.5,
         ellipse = True,
         friedel = False,
         ):
@@ -331,11 +331,12 @@ class PolarDataGetter:
             Pixels in the transformed mask with values below this number are
             considered masked, and will be populated by the values specified
             by `returnval`.
-        returnval : 'masked' or 'nan' or None
+        returnval : 'masked' or 'nan' or 'all' or 'colin'
             Controls the returned data. 'masked' returns a numpy masked array. 'nan'
-            returns a normal numpy array with masked pixels set to np.nan.  None
-            returns a 2-tuple of numpy arrays - the transformed data with masked
-            pixels set to 0, and the transformed mask.
+            returns a normal numpy array with masked pixels set to np.nan.  'all'
+            returns a 3-tuple of numpy arrays - the transformed data with masked
+            pixels set to 'nan', the normalization array, and the transformed mask.
+            'colin' is the same as 'all', except masked pixels are set to 0.
         """
         # get calibrations
         if origin is None:
@@ -358,7 +359,7 @@ class PolarDataGetter:
         # combine passed mask with default mask
         mask0 = self._polarcube.mask
         if mask is None and mask0 is None:
-            mask = np.ones_like(cartesian_data)
+            mask = np.ones_like(cartesian_data,dtype=bool)
         elif mask is None:
             mask = mask0
         elif mask0 is None:
@@ -374,38 +375,58 @@ class PolarDataGetter:
         ans = self._transform_array(
             cartesian_data,
             origin,
-            ellipse
+            ellipse,
+            mask
         )
 
-        # transform mask
+        # get norm
+        ones = np.ones_like(cartesian_data)
         norm = self._transform_array(
-            mask,
+            ones,
             origin,
-            ellipse
+            ellipse,
+            mask = ones
         )
-        mask = norm>mask_thresh
+
+        # transform the mask's inverse
+        mask_inv_polar = self._transform_array(
+            np.logical_not(mask),
+            origin,
+            ellipse,
+            mask
+        )
+
+        # identify masked pixels
+        nan = np.logical_or(norm==0, mask_inv_polar>mask_thresh)
+        nan = binary_closing(nan, border_value=1)
+
+        # adjust norm for masked, non-nan pixels
+        sub = np.logical_and(mask_inv_polar<=mask_thresh, mask_inv_polar!=0)
+        norm[sub] /= (1-mask_inv_polar[sub])
 
         # normalize
         out = np.empty_like(norm)
         out[:] = np.nan
-        ans = np.divide(ans, norm, out=out, where=mask!=0)
+        ans = np.divide(ans, norm, out=out, where=np.logical_not(nan))
 
         # scaling
         if self._polarcube.qscale is not None:
             ans *= self._polarcube._qscale_ar[np.newaxis,:]
 
         # return
-        if returnval == 'masked':
+        if returnval == 'nan':
+            return ans
+        elif returnval == 'all':
+            return (ans,norm,mask_inv_polar)
+        elif returnval == 'colin':
+            ans[np.isnan(ans)] = 0
+            return (ans,norm,mask_inv_polar)
+        elif returnval == 'masked':
             ans = np.ma.array(
                 data = ans,
                 mask = np.isnan(ans)
             )
             return ans
-        elif returnval == 'nan':
-            return ans
-        elif returnval is None:
-            ans[np.isnan(ans)] = 0
-            return (ans,norm)
         else:
             raise Exception(f"Unexpected value {returnval} encountered for `returnval`")
 
@@ -415,7 +436,8 @@ class PolarDataGetter:
         self,
         data,
         origin,
-        ellipse
+        ellipse,
+        mask
         ):
 
         # set origin
@@ -463,7 +485,12 @@ class PolarDataGetter:
         dt = t_ind - t_ind_floor
 
         # resample
-        sub = np.logical_and(r_ind_floor >= 0, r_ind_floor < self._polarcube.polar_shape[1])
+        sub = np.logical_and(
+                np.logical_and(
+                    r_ind_floor >= 0,
+                    r_ind_floor < self._polarcube.polar_shape[1]),
+                    mask
+                )
         im = np.bincount(
             r_ind_floor[sub] + \
             np.mod(t_ind_floor[sub],self._polarcube.polar_shape[0]) * self._polarcube.polar_shape[1],
