@@ -603,6 +603,7 @@ class DPCReconstruction(PhaseReconstruction):
         max_iter: int = 64,
         step_size: float = None,
         stopping_criterion: float = 1e-6,
+        backtrack: bool = True,
         progress_bar: bool = True,
         gaussian_filter_sigma: float = None,
         gaussian_filter_iter: int = np.inf,
@@ -667,6 +668,8 @@ class DPCReconstruction(PhaseReconstruction):
             self._step_size = step_size if step_size is not None else 0.5
             self._padded_phase_object = self._padded_phase_object_initial.copy()
 
+        previous_iteration = self._padded_phase_object.copy()
+
         self.error = getattr(self, "error", np.inf)
 
         if step_size is None:
@@ -689,9 +692,18 @@ class DPCReconstruction(PhaseReconstruction):
                 break
 
             # forward operator
-            com_dx, com_dy, self.error, self._step_size = self._forward(
+            com_dx, com_dy, new_error, self._step_size = self._forward(
                 self._padded_phase_object, mask, mask_inv, self.error, self._step_size
             )
+
+            # if the error went up after the previous step, go back to the step
+            # before the error rose and continue with the halved step size
+            if (new_error > self.error) and backtrack:
+                self._padded_phase_object = previous_iteration
+                print(f"Iteration {a0}, step reduced to {self._step_size}")
+                continue
+            self.error = new_error
+            previous_iteration = self._padded_phase_object.copy()
 
             # adjoint operator
             phase_update = self._adjoint(com_dx, com_dy, self._kx_op, self._ky_op)
