@@ -625,6 +625,10 @@ class DPCReconstruction(PhaseReconstruction):
             Reconstruction update step size
         stopping_criterion: float, optional
             step_size below which reconstruction exits
+        backtrack: bool, optional
+            If True, steps that increase the error metric are rejected
+            and iteration continues with a reduced step size from the
+            previous iteration
         progress_bar: bool, optional
             If True, reconstruction progress bar will be printed
         gaussian_filter_sigma: float, optional
