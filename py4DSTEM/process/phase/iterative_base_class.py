@@ -220,6 +220,9 @@ class PhaseReconstruction(Custom):
         self,
         datacube: DataCube,
         require_calibrations: bool = False,
+        force_scan_sampling: Optional[float] = None,
+        force_angular_sampling: Optional[float] = None,
+        force_reciprocal_sampling: Optional[float] = None,
     ):
         """
         Method to extract intensities and calibrations from datacube.
@@ -230,6 +233,12 @@ class PhaseReconstruction(Custom):
             Input 4D diffraction pattern intensities
         require_calibrations: bool
             If False, warning is issued instead of raising an error
+        force_scan_sampling: float, optional
+            Override DataCube real space scan pixel size calibrations, in Angstrom
+        force_angular_sampling: float, optional
+            Override DataCube reciprocal pixel size calibration, in mrad
+        force_reciprocal_sampling: float, optional
+            Override DataCube reciprocal pixel size calibration, in A^-1
 
         Assigns
         --------
@@ -275,80 +284,115 @@ class PhaseReconstruction(Custom):
         reciprocal_space_units = calibration.get_Q_pixel_units()
 
         # Real-space
-        if real_space_units == "pixels":
-            if require_calibrations:
-                raise ValueError("Real-space calibrations must be given in 'A'")
-
-            warnings.warn(
-                (
-                    "Iterative reconstruction will not be quantitative unless you specify "
-                    "real-space calibrations in 'A'"
-                ),
-                UserWarning,
-            )
-
-            self._scan_sampling = (1.0, 1.0)
-            self._scan_units = ("pixels",) * 2
-
-        elif real_space_units == "A":
-            self._scan_sampling = (calibration.get_R_pixel_size(),) * 2
-            self._scan_units = ("A",) * 2
-        elif real_space_units == "nm":
-            self._scan_sampling = (calibration.get_R_pixel_size() * 10,) * 2
-            self._scan_units = ("A",) * 2
+        if force_scan_sampling is not None:
+            self._scan_sampling = (force_scan_sampling, force_scan_sampling)
+            self._scan_units = "A"
         else:
-            raise ValueError(
-                f"Real-space calibrations must be given in 'A', not {real_space_units}"
-            )
+            if real_space_units == "pixels":
+                if require_calibrations:
+                    raise ValueError("Real-space calibrations must be given in 'A'")
+
+                warnings.warn(
+                    (
+                        "Iterative reconstruction will not be quantitative unless you specify "
+                        "real-space calibrations in 'A'"
+                    ),
+                    UserWarning,
+                )
+
+                self._scan_sampling = (1.0, 1.0)
+                self._scan_units = ("pixels",) * 2
+
+            elif real_space_units == "A":
+                self._scan_sampling = (calibration.get_R_pixel_size(),) * 2
+                self._scan_units = ("A",) * 2
+            elif real_space_units == "nm":
+                self._scan_sampling = (calibration.get_R_pixel_size() * 10,) * 2
+                self._scan_units = ("A",) * 2
+            else:
+                raise ValueError(
+                    f"Real-space calibrations must be given in 'A', not {real_space_units}"
+                )
 
         # Reciprocal-space
-        if reciprocal_space_units == "pixels":
-            if require_calibrations:
-                raise ValueError(
-                    "Reciprocal-space calibrations must be given in in 'A^-1' or 'mrad'"
-                )
-
-            warnings.warn(
-                (
-                    "Iterative reconstruction will not be quantitative unless you specify "
-                    "appropriate reciprocal-space calibrations"
-                ),
-                UserWarning,
+        if force_angular_sampling is not None or force_reciprocal_sampling is not None:
+            # there is no xor keyword in Python!
+            angular = force_angular_sampling is not None
+            reciprocal = force_reciprocal_sampling is not None
+            assert (angular and not reciprocal) or (not angular and reciprocal), (
+                "Only one of angular or reciprocal calibration can be forced!"
             )
 
-            self._angular_sampling = (1.0, 1.0)
-            self._angular_units = ("pixels",) * 2
-            self._reciprocal_sampling = (1.0, 1.0)
-            self._reciprocal_units = ("pixels",) * 2
-
-        elif reciprocal_space_units == "A^-1":
-            reciprocal_size = calibration.get_Q_pixel_size()
-            self._reciprocal_sampling = (reciprocal_size,) * 2
-            self._reciprocal_units = ("A^-1",) * 2
-
-            if self._energy is not None:
-                self._angular_sampling = (
-                    reciprocal_size * electron_wavelength_angstrom(self._energy) * 1e3,
-                ) * 2
+            # angular calibration specified
+            if angular:
+                self._angular_sampling = (force_angular_sampling,) * 2
                 self._angular_units = ("mrad",) * 2
 
-        elif reciprocal_space_units == "mrad":
-            angular_size = calibration.get_Q_pixel_size()
-            self._angular_sampling = (angular_size,) * 2
-            self._angular_units = ("mrad",) * 2
+                if self._energy is not None:
+                    self._reciprocal_sampling = (
+                        force_angular_sampling / electron_wavelength_angstrom(self._energy) / 1e3,
+                    ) * 2
+                    self._reciprocal_units = ("A^-1",) * 2
 
-            if self._energy is not None:
-                self._reciprocal_sampling = (
-                    angular_size / electron_wavelength_angstrom(self._energy) / 1e3,
-                ) * 2
+            # reciprocal calibration specified
+            if reciprocal:
+                self._reciprocal_sampling = (force_reciprocal_sampling,) * 2
                 self._reciprocal_units = ("A^-1",) * 2
+
+                if self._energy is not None:
+                    self._angular_sampling = (
+                        force_reciprocal_sampling * electron_wavelength_angstrom(self._energy) * 1e3,
+                    ) * 2
+                    self._angular_units = ("mrad",) * 2
+
         else:
-            raise ValueError(
-                (
-                    "Reciprocal-space calibrations must be given in 'A^-1' or 'mrad', "
-                    f"not {reciprocal_space_units}"
+            if reciprocal_space_units == "pixels":
+                if require_calibrations:
+                    raise ValueError(
+                        "Reciprocal-space calibrations must be given in in 'A^-1' or 'mrad'"
+                    )
+
+                warnings.warn(
+                    (
+                        "Iterative reconstruction will not be quantitative unless you specify "
+                        "appropriate reciprocal-space calibrations"
+                    ),
+                    UserWarning,
                 )
-            )
+
+                self._angular_sampling = (1.0, 1.0)
+                self._angular_units = ("pixels",) * 2
+                self._reciprocal_sampling = (1.0, 1.0)
+                self._reciprocal_units = ("pixels",) * 2
+
+            elif reciprocal_space_units == "A^-1":
+                reciprocal_size = calibration.get_Q_pixel_size()
+                self._reciprocal_sampling = (reciprocal_size,) * 2
+                self._reciprocal_units = ("A^-1",) * 2
+
+                if self._energy is not None:
+                    self._angular_sampling = (
+                        reciprocal_size * electron_wavelength_angstrom(self._energy) * 1e3,
+                    ) * 2
+                    self._angular_units = ("mrad",) * 2
+
+            elif reciprocal_space_units == "mrad":
+                angular_size = calibration.get_Q_pixel_size()
+                self._angular_sampling = (angular_size,) * 2
+                self._angular_units = ("mrad",) * 2
+
+                if self._energy is not None:
+                    self._reciprocal_sampling = (
+                        angular_size / electron_wavelength_angstrom(self._energy) / 1e3,
+                    ) * 2
+                    self._reciprocal_units = ("A^-1",) * 2
+            else:
+                raise ValueError(
+                    (
+                        "Reciprocal-space calibrations must be given in 'A^-1' or 'mrad', "
+                        f"not {reciprocal_space_units}"
+                    )
+                )
 
         return intensities
 
