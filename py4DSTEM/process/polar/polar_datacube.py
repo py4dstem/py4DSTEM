@@ -1,6 +1,6 @@
 import numpy as np
 from py4DSTEM.classes import DataCube
-from scipy.ndimage import binary_opening,binary_closing
+from scipy.ndimage import binary_opening,binary_closing, gaussian_filter1d
 
 
 
@@ -88,6 +88,12 @@ class PolarDatacube:
         # mask
         self._mask_thresh = mask_thresh
         self.mask = mask
+
+        # KDE normalization 
+        # determine annular bin spacing in pixels
+        annular_bin_step = n_annular / (2*np.pi*(self.radial_bins + qstep * 0.5))
+        # set KDE sigma to be 0.5 * bin_step
+        self._sigma_KDE = annular_bin_step * 0.5
 
         pass
 
@@ -444,7 +450,6 @@ class PolarDataGetter:
         x = self._polarcube._xa - origin[0]
         y = self._polarcube._ya - origin[1]
 
-
         # circular
         if (ellipse is None) or (self._polarcube.ellipse) is False:
 
@@ -517,8 +522,20 @@ class PolarDataGetter:
             minlength = self._polarcube.polar_size,
         )
 
-        # reshape and return
+        # reshape to 2D
         ans = np.reshape(im, self._polarcube.polar_shape)
+
+        # apply KDE
+        for a0 in range(self._polarcube.polar_shape[1]):
+            # Use 5% cutoff value for adjacent pixel in kernel
+            if self._polarcube._sigma_KDE[a0] > 0.1669:
+                ans[:,a0] = gaussian_filter1d(
+                    ans[:,a0],
+                    sigma = self._polarcube._sigma_KDE[a0],
+                    mode = 'wrap',
+                    )
+
+        # return
         return ans
 
 

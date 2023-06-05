@@ -172,7 +172,7 @@ def fit_amorphous_ring(
     if return_all_coefs:
         return coefs
     else:
-        return coefs[0:5]
+        return coefs[:5]
 
 
 def plot_amorphous_ring(
