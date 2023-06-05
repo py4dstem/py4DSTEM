@@ -65,7 +65,6 @@ class PolarDatacube:
         # setup data getter
         self._set_polar_data_getter()
 
-
         # setup sampling
 
         # polar
@@ -85,15 +84,15 @@ class PolarDatacube:
         # ellipse
         self.ellipse = ellipse
 
-        # mask
-        self._mask_thresh = mask_thresh
-        self.mask = mask
-
         # KDE normalization 
         # determine annular bin spacing in pixels
         annular_bin_step = n_annular / (2*np.pi*(self.radial_bins + qstep * 0.5))
         # set KDE sigma to be 0.5 * bin_step
         self._sigma_KDE = annular_bin_step * 0.5
+
+        # mask
+        self._mask_thresh = mask_thresh
+        self.mask = mask
 
         pass
 
@@ -379,41 +378,53 @@ class PolarDataGetter:
 
         # transform data
         ans = self._transform_array(
-            cartesian_data,
+            cartesian_data * mask.astype('float'),
             origin,
             ellipse,
-            mask
         )
 
-        # get norm
-        ones = np.ones_like(cartesian_data)
-        norm = self._transform_array(
-            ones,
+        # transform normalization array
+        ans_norm = self._transform_array(
+            mask.astype('float'),
             origin,
             ellipse,
-            mask = ones
         )
 
-        # transform the mask's inverse
-        mask_inv_polar = self._transform_array(
-            np.logical_not(mask),
-            origin,
-            ellipse,
-            mask
+        # apply normalization
+        ans = np.divide(
+            ans, 
+            ans_norm, 
+            # out = out, 
+            where = ans_norm > 0,
         )
 
-        # identify masked pixels
-        nan = np.logical_or(norm==0, mask_inv_polar>mask_thresh)
-        nan = binary_closing(nan, border_value=1)
+        # # get norm
+        # ones = np.ones_like(cartesian_data)
+        # norm = self._transform_array(
+        #     ones,
+        #     origin,
+        #     ellipse,
+        # )
 
-        # adjust norm for masked, non-nan pixels
-        sub = np.logical_and(mask_inv_polar<=mask_thresh, mask_inv_polar!=0)
-        norm[sub] /= (1-mask_inv_polar[sub])
+        # # transform the mask's inverse
+        # mask_inv_polar = self._transform_array(
+        #     np.logical_not(mask),
+        #     origin,
+        #     ellipse,
+        # )
 
-        # normalize
-        out = np.empty_like(norm)
-        out[:] = np.nan
-        ans = np.divide(ans, norm, out=out, where=np.logical_not(nan))
+        # # identify masked pixels
+        # nan = np.logical_or(norm==0, mask_inv_polar>mask_thresh)
+        # nan = binary_closing(nan, border_value=1)
+
+        # # adjust norm for masked, non-nan pixels
+        # sub = np.logical_and(mask_inv_polar<=mask_thresh, mask_inv_polar!=0)
+        # norm[sub] /= (1-mask_inv_polar[sub])
+
+        # # normalize
+        # out = np.empty_like(norm)
+        # out[:] = np.nan
+        # ans = np.divide(ans, norm, out=out, where=np.logical_not(nan))
 
         # scaling
         if self._polarcube.qscale is not None:
@@ -423,10 +434,10 @@ class PolarDataGetter:
         if returnval == 'nan':
             return ans
         elif returnval == 'all':
-            return (ans,norm,mask_inv_polar)
+            return (ans,ans_norm,mask_inv_polar)
         elif returnval == 'colin':
             ans[np.isnan(ans)] = 0
-            return (ans,norm,mask_inv_polar)
+            return (ans,ans_norm,mask_inv_polar)
         elif returnval == 'masked':
             ans = np.ma.array(
                 data = ans,
@@ -443,7 +454,6 @@ class PolarDataGetter:
         data,
         origin,
         ellipse,
-        mask
         ):
 
         # set origin
@@ -491,11 +501,9 @@ class PolarDataGetter:
 
         # resample
         sub = np.logical_and(
-                np.logical_and(
-                    r_ind_floor >= 0,
-                    r_ind_floor < self._polarcube.polar_shape[1]),
-                    mask
-                )
+            r_ind_floor >= 0,
+            r_ind_floor < self._polarcube.polar_shape[1],
+        )
         im = np.bincount(
             r_ind_floor[sub] + \
             np.mod(t_ind_floor[sub],self._polarcube.polar_shape[0]) * self._polarcube.polar_shape[1],
