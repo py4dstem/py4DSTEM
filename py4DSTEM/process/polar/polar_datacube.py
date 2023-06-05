@@ -86,9 +86,9 @@ class PolarDatacube:
 
         # KDE normalization 
         # determine annular bin spacing in pixels
-        annular_bin_step = n_annular / (2*np.pi*(self.radial_bins + qstep * 0.5))
+        self._annular_bin_step = n_annular / (2*np.pi*(self.radial_bins + qstep * 0.5))
         # set KDE sigma to be 0.5 * bin_step
-        self._sigma_KDE = annular_bin_step * 0.5
+        self._sigma_KDE = self._annular_bin_step * 0.5
 
         # mask
         self._mask_thresh = mask_thresh
@@ -394,9 +394,36 @@ class PolarDataGetter:
         ans = np.divide(
             ans, 
             ans_norm, 
-            # out = out, 
             where = ans_norm > 0,
         )
+
+        # scaling
+        if self._polarcube.qscale is not None:
+            ans *= self._polarcube._qscale_ar[np.newaxis,:]
+
+        # return
+        if returnval == 'masked' or returnval == 'nan':
+            mask_bool = ans_norm * \
+            self._polarcube._annular_bin_step[np.newaxis,:] < 0.1
+
+        if returnval == 'masked':
+            ans = np.ma.array(
+                data = ans,
+                mask = mask_bool
+            )
+            return ans          
+        elif returnval == 'nan':
+            ans[mask_bool] = np.nan
+            return ans
+        elif returnval == 'all':
+            return ans, ans_norm
+        elif returnval == 'colin':
+            return ans
+        else:
+            raise Exception(f"Unexpected value {returnval} encountered for `returnval`")
+
+
+
 
         # # get norm
         # ones = np.ones_like(cartesian_data)
@@ -426,26 +453,23 @@ class PolarDataGetter:
         # out[:] = np.nan
         # ans = np.divide(ans, norm, out=out, where=np.logical_not(nan))
 
-        # scaling
-        if self._polarcube.qscale is not None:
-            ans *= self._polarcube._qscale_ar[np.newaxis,:]
+        # # scaling
+        # if self._polarcube.qscale is not None:
+        #     ans *= self._polarcube._qscale_ar[np.newaxis,:]
 
-        # return
-        if returnval == 'nan':
-            return ans
-        elif returnval == 'all':
-            return (ans,ans_norm,mask_inv_polar)
-        elif returnval == 'colin':
-            ans[np.isnan(ans)] = 0
-            return (ans,ans_norm,mask_inv_polar)
-        elif returnval == 'masked':
-            ans = np.ma.array(
-                data = ans,
-                mask = np.isnan(ans)
-            )
-            return ans
-        else:
-            raise Exception(f"Unexpected value {returnval} encountered for `returnval`")
+        # # return
+        # if returnval == 'nan':
+        #     return ans
+        # elif returnval == 'all':
+        #     return (ans, ans_norm)
+        # elif returnval == 'masked':
+        #     ans = np.ma.array(
+        #         data = ans,
+        #         mask = np.isnan(ans)
+        #     )
+        #     return ans
+        # else:
+        #     raise Exception(f"Unexpected value {returnval} encountered for `returnval`")
 
 
 
