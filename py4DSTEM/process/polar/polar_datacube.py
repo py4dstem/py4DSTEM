@@ -423,56 +423,6 @@ class PolarDataGetter:
             raise Exception(f"Unexpected value {returnval} encountered for `returnval`")
 
 
-
-
-        # # get norm
-        # ones = np.ones_like(cartesian_data)
-        # norm = self._transform_array(
-        #     ones,
-        #     origin,
-        #     ellipse,
-        # )
-
-        # # transform the mask's inverse
-        # mask_inv_polar = self._transform_array(
-        #     np.logical_not(mask),
-        #     origin,
-        #     ellipse,
-        # )
-
-        # # identify masked pixels
-        # nan = np.logical_or(norm==0, mask_inv_polar>mask_thresh)
-        # nan = binary_closing(nan, border_value=1)
-
-        # # adjust norm for masked, non-nan pixels
-        # sub = np.logical_and(mask_inv_polar<=mask_thresh, mask_inv_polar!=0)
-        # norm[sub] /= (1-mask_inv_polar[sub])
-
-        # # normalize
-        # out = np.empty_like(norm)
-        # out[:] = np.nan
-        # ans = np.divide(ans, norm, out=out, where=np.logical_not(nan))
-
-        # # scaling
-        # if self._polarcube.qscale is not None:
-        #     ans *= self._polarcube._qscale_ar[np.newaxis,:]
-
-        # # return
-        # if returnval == 'nan':
-        #     return ans
-        # elif returnval == 'all':
-        #     return (ans, ans_norm)
-        # elif returnval == 'masked':
-        #     ans = np.ma.array(
-        #         data = ans,
-        #         mask = np.isnan(ans)
-        #     )
-        #     return ans
-        # else:
-        #     raise Exception(f"Unexpected value {returnval} encountered for `returnval`")
-
-
-
     def _transform_array(
         self,
         data,
@@ -493,7 +443,6 @@ class PolarDataGetter:
 
         # elliptical
         else:
-
             # unpack ellipse
             a,b,theta = ellipse
 
@@ -511,7 +460,6 @@ class PolarDataGetter:
             # get polar coords
             rr = det * np.hypot(xc,yc)
             tt = np.arctan2(yc,xc) - np.pi/2
-
 
         # transform to bin sampling
         r_ind = (rr - self._polarcube.radial_bins[0]) / self._polarcube.qstep
