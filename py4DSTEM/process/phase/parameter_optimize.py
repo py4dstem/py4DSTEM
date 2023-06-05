@@ -30,9 +30,9 @@ class PtychographyOptimizer:
         self,
         reconstruction_type: type[PhaseReconstruction],
         init_args: dict,
-        affine_args: dict,
         preprocess_args: dict,
         reconstruction_args: dict,
+        affine_args: dict = None,
     ):
         """
         Parameter optimization for ptychographic reconstruction based on Bayesian Optimization
@@ -43,10 +43,10 @@ class PtychographyOptimizer:
         Dictionaries of the arguments to __init__, AffineTransform (for distorting the initial
         scan positions), preprocess, and reconstruct are required. For parameters not optimized
         over, the value in the dictionary is used. To optimize a parameter, instead pass an
-        OptimizationParameter object inside the dictionary to specify the initial guess, bounds, 
-        and type of parameter, for example: 
+        OptimizationParameter object inside the dictionary to specify the initial guess, bounds,
+        and type of parameter, for example:
             >>> 'param':OptimizationParameter(initial guess, lower bound, upper bound)
-        Calling optimize will then run the optimization simultaneously over all 
+        Calling optimize will then run the optimization simultaneously over all
         optimization parameters. To obtain the optimized parameters, call get_optimized_arguments
         to return a set of dictionaries where the OptimizationParameter objects have been replaced
         with the optimal values. These can then be modified for running a full reconstruction.
@@ -57,14 +57,16 @@ class PtychographyOptimizer:
             Type of ptychographic reconstruction to perform
         init_args: dict
             Keyword arguments passed to the __init__ method of the reconstruction class
-        affine_args: dict
-            Keyword arguments passed to AffineTransform. The transform is applied to the initial
-            scan positions.
         preprocess_args: dict
             Keyword arguments passed to the preprocess method the reconstruction object
         reconstruction_args: dict
             Keyword arguments passed to the reconstruct method the the reconstruction object
+        affine_args: dict
+            Keyword arguments passed to AffineTransform. The transform is applied to the initial
+            scan positions.
         """
+        if affine_args is None:
+            affine_args = {}
 
         # loop over each argument dictionary and split into static and optimization variables
         (
