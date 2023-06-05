@@ -220,9 +220,9 @@ class PhaseReconstruction(Custom):
         self,
         datacube: DataCube,
         require_calibrations: bool = False,
-        force_scan_sampling: Optional[float] = None,
-        force_angular_sampling: Optional[float] = None,
-        force_reciprocal_sampling: Optional[float] = None,
+        force_scan_sampling: float = None,
+        force_angular_sampling: float = None,
+        force_reciprocal_sampling: float = None,
     ):
         """
         Method to extract intensities and calibrations from datacube.
