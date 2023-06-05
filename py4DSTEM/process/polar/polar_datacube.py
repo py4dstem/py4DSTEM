@@ -1,6 +1,6 @@
 import numpy as np
 from py4DSTEM.classes import DataCube
-from scipy.ndimage import binary_opening,binary_closing
+from scipy.ndimage import binary_opening,binary_closing, gaussian_filter1d
 
 
 
@@ -65,7 +65,6 @@ class PolarDatacube:
         # setup data getter
         self._set_polar_data_getter()
 
-
         # setup sampling
 
         # polar
@@ -84,6 +83,12 @@ class PolarDatacube:
 
         # ellipse
         self.ellipse = ellipse
+
+        # KDE normalization 
+        # determine annular bin spacing in pixels
+        self._annular_bin_step = n_annular / (2*np.pi*(self.radial_bins + qstep * 0.5))
+        # set KDE sigma to be 0.5 * bin_step
+        self._sigma_KDE = self._annular_bin_step * 0.5
 
         # mask
         self._mask_thresh = mask_thresh
@@ -373,63 +378,49 @@ class PolarDataGetter:
 
         # transform data
         ans = self._transform_array(
-            cartesian_data,
+            cartesian_data * mask.astype('float'),
             origin,
             ellipse,
-            mask
         )
 
-        # get norm
-        ones = np.ones_like(cartesian_data)
-        norm = self._transform_array(
-            ones,
+        # transform normalization array
+        ans_norm = self._transform_array(
+            mask.astype('float'),
             origin,
             ellipse,
-            mask = ones
         )
 
-        # transform the mask's inverse
-        mask_inv_polar = self._transform_array(
-            np.logical_not(mask),
-            origin,
-            ellipse,
-            mask
+        # apply normalization
+        ans = np.divide(
+            ans, 
+            ans_norm, 
+            where = ans_norm > 0,
         )
-
-        # identify masked pixels
-        nan = np.logical_or(norm==0, mask_inv_polar>mask_thresh)
-        nan = binary_closing(nan, border_value=1)
-
-        # adjust norm for masked, non-nan pixels
-        sub = np.logical_and(mask_inv_polar<=mask_thresh, mask_inv_polar!=0)
-        norm[sub] /= (1-mask_inv_polar[sub])
-
-        # normalize
-        out = np.empty_like(norm)
-        out[:] = np.nan
-        ans = np.divide(ans, norm, out=out, where=np.logical_not(nan))
 
         # scaling
         if self._polarcube.qscale is not None:
             ans *= self._polarcube._qscale_ar[np.newaxis,:]
 
         # return
-        if returnval == 'nan':
-            return ans
-        elif returnval == 'all':
-            return (ans,norm,mask_inv_polar)
-        elif returnval == 'colin':
-            ans[np.isnan(ans)] = 0
-            return (ans,norm,mask_inv_polar)
-        elif returnval == 'masked':
+        if returnval == 'masked' or returnval == 'nan':
+            mask_bool = ans_norm * \
+            self._polarcube._annular_bin_step[np.newaxis,:] < 0.1
+
+        if returnval == 'masked':
             ans = np.ma.array(
                 data = ans,
-                mask = np.isnan(ans)
+                mask = mask_bool
             )
+            return ans          
+        elif returnval == 'nan':
+            ans[mask_bool] = np.nan
+            return ans
+        elif returnval == 'all':
+            return ans, ans_norm
+        elif returnval == 'colin':
             return ans
         else:
             raise Exception(f"Unexpected value {returnval} encountered for `returnval`")
-
 
 
     def _transform_array(
@@ -437,13 +428,11 @@ class PolarDataGetter:
         data,
         origin,
         ellipse,
-        mask
         ):
 
         # set origin
         x = self._polarcube._xa - origin[0]
         y = self._polarcube._ya - origin[1]
-
 
         # circular
         if (ellipse is None) or (self._polarcube.ellipse) is False:
@@ -454,7 +443,6 @@ class PolarDataGetter:
 
         # elliptical
         else:
-
             # unpack ellipse
             a,b,theta = ellipse
 
@@ -473,7 +461,6 @@ class PolarDataGetter:
             rr = det * np.hypot(xc,yc)
             tt = np.arctan2(yc,xc) - np.pi/2
 
-
         # transform to bin sampling
         r_ind = (rr - self._polarcube.radial_bins[0]) / self._polarcube.qstep
         t_ind = tt / self._polarcube.annular_step
@@ -486,11 +473,9 @@ class PolarDataGetter:
 
         # resample
         sub = np.logical_and(
-                np.logical_and(
-                    r_ind_floor >= 0,
-                    r_ind_floor < self._polarcube.polar_shape[1]),
-                    mask
-                )
+            r_ind_floor >= 0,
+            r_ind_floor < self._polarcube.polar_shape[1],
+        )
         im = np.bincount(
             r_ind_floor[sub] + \
             np.mod(t_ind_floor[sub],self._polarcube.polar_shape[0]) * self._polarcube.polar_shape[1],
@@ -517,8 +502,20 @@ class PolarDataGetter:
             minlength = self._polarcube.polar_size,
         )
 
-        # reshape and return
+        # reshape to 2D
         ans = np.reshape(im, self._polarcube.polar_shape)
+
+        # apply KDE
+        for a0 in range(self._polarcube.polar_shape[1]):
+            # Use 5% cutoff value for adjacent pixel in kernel
+            if self._polarcube._sigma_KDE[a0] > 0.1669:
+                ans[:,a0] = gaussian_filter1d(
+                    ans[:,a0],
+                    sigma = self._polarcube._sigma_KDE[a0],
+                    mode = 'wrap',
+                    )
+
+        # return
         return ans
 
 
@@ -529,5 +526,4 @@ class PolarDataGetter:
         string = f"{self.__class__.__name__}( "
         string += "Retrieves the diffraction pattern at scan position (x,y) in polar coordinates when sliced with [x,y]."
         return string
-
 
