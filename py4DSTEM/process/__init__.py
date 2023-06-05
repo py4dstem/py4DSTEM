@@ -1,12 +1,9 @@
-from py4DSTEM.process.polardata import (
-    PolarDatacube,
-    PolarEllipticDatacube,
-)
+from py4DSTEM.process.polar import PolarDatacube
 
+from py4DSTEM.process import diskdetection
 from py4DSTEM.process import virtualdiffraction
 from py4DSTEM.process import virtualimage
 from py4DSTEM.process import probe
-from py4DSTEM.process import diskdetection
 from py4DSTEM.process import latticevectors
 from py4DSTEM.process import phase
 from py4DSTEM.process import probe

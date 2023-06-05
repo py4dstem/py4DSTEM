@@ -59,7 +59,7 @@ class BraggVectors(Custom,BraggVectorMethods,Data):
         self.Rshape = Rshape
         self.shape = self.Rshape
         self.Qshape = Qshape
-        self.verbose = verbose 
+        self.verbose = verbose
 
         self._v_uncal = PointListArray(
             dtype = [
@@ -86,7 +86,7 @@ class BraggVectors(Custom,BraggVectorMethods,Data):
         return self._calstate
     def _set_raw_vector_getter(self):
         self._raw_vector_getter = RawVectorGetter(
-            data = self._v_uncal
+            braggvects = self
         )
     def _set_cal_vector_getter(self):
         self._cal_vector_getter = CalibratedVectorGetter(
@@ -318,9 +318,10 @@ class BVects:
 class RawVectorGetter:
     def __init__(
         self,
-        data
+        braggvects,
     ):
-        self._data = data
+        self._bvects = braggvects
+        self._data = braggvects._v_uncal
 
     def __getitem__(self,pos):
         x,y = pos
