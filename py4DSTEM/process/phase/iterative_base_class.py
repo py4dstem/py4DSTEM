@@ -193,8 +193,7 @@ class PhaseReconstruction(Custom):
                         output_size=diffraction_intensities_shape,
                         force_nonnegative=True,
                     )
-            datacube.calibration.set_Q_pixel_size(Q_pixel_size / resampling_factor_x)
-
+        
         if probe_roi_shape is not None:
             Qx, Qy = datacube.shape[-2:]
             Sx, Sy = probe_roi_shape
