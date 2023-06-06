@@ -267,7 +267,7 @@ class PolarDatacube:
     def __repr__(self):
         space = ' '*len(self.__class__.__name__)+'  '
         string = f"{self.__class__.__name__}( "
-        string += "Retrieves diffraction images in polar coordinates, using .data[x,y]"
+        string += "Retrieves diffraction images in polar coordinates, using .data[x,y] )"
         return string
 
 
