@@ -336,13 +336,25 @@ class PolarDataGetter:
             Pixels in the transformed mask with values below this number are
             considered masked, and will be populated by the values specified
             by `returnval`.
-        returnval : 'masked' or 'nan' or 'all' or 'colin'
-            Controls the returned data. 'masked' returns a numpy masked array. 'nan'
-            returns a normal numpy array with masked pixels set to np.nan.  'all'
-            returns a 3-tuple of numpy arrays - the transformed data with masked
-            pixels set to 'nan', the normalization array, and the transformed mask.
-            'colin' is the same as 'all', except masked pixels are set to 0.
+        returnval : 'masked' or 'nan' or 'all' or 'zeros'
+            Controls the returned data, specifically how un-sampled points are handled:
+            -'masked' returns a numpy masked array. 
+            -'nan' returns a normal numpy array with masked pixels set to np.nan.  
+            -'all' returns a 2-tuple of numpy arrays - the transformed data with masked
+                pixels set to 0, and the normalization array showing the transformed mask.
+            'zeros' is the same as 'all', except masked pixels are set to 0.
+        
+         Returns
+        --------
+        ans: np.array
+            The polar-elliptic transformed data.
+        ans_norm: np.array
+            The normalzation mask.
+
+
         """
+
+
         # get calibrations
         if origin is None:
             origin = self._polarcube.calibration.get_origin_mean()
@@ -417,7 +429,7 @@ class PolarDataGetter:
             return ans
         elif returnval == 'all':
             return ans, ans_norm
-        elif returnval == 'colin':
+        elif returnval == 'zeros':
             return ans
         else:
             raise Exception(f"Unexpected value {returnval} encountered for `returnval`")
