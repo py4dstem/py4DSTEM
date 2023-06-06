@@ -22,6 +22,7 @@ def find_Bragg_disks(
     filter_function = None,
 
     corrPower = 1,
+    sigma = None,
     sigma_dp = 0,
     sigma_cc = 2,
     subpixel = 'multicorr',
@@ -119,6 +120,8 @@ def find_Bragg_disks(
         the cross correlation power. A value of 1 corresponds to a cross
         correlation, 0 corresponds to a phase correlation, and intermediate
         values correspond to hybrid correlations.
+    sigma : float
+        alias for `sigma_cc`
     sigma_dp : float
         if >0, a gaussian smoothing filter with this standard deviation
         is applied to the diffraction pattern before maxima are detected
@@ -180,6 +183,7 @@ def find_Bragg_disks(
     """
 
     # parse args
+    sigma_cc = sigma if sigma is not None else sigma_cc
 
     # `data` type
     if isinstance(data, DataCube):
