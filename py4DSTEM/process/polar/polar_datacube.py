@@ -21,7 +21,7 @@ class PolarDatacube:
         mask = None,
         mask_thresh = 0.5,
         ellipse = True,
-        friedel = False,
+        two_fold_rotation = False,
         ):
         """
         Parameters
@@ -48,9 +48,10 @@ class PolarDatacube:
             Setting to False forces a circular transform. Setting to True
             performs an elliptic transform iff elliptic calibrations are
             available.
-        friedel : bool
-            Setting to True computes the transform mod(pi), i.e. assumes
-            Friedel symmetry is obeyed
+        two_fold_rotation : bool
+            Setting to True computes the transform mod(theta,pi), i.e. assumes all patterns
+            posess two-fold rotation (Friedel symmetry).  The output angular range in this case
+            becomes [0, pi) as opposed to the default of [0,2*pi).
         """
 
         # attach datacube
@@ -66,6 +67,12 @@ class PolarDatacube:
         self._set_polar_data_getter()
 
         # setup sampling
+
+        # anngular range, depending on if polar transform spans pi or 2*pi
+        if two_fold_rotation:
+            self._annular_range = np.pi
+        else:
+            self._annular_range = 2.0 * np.pi
 
         # polar
         self._qscale = qscale
@@ -86,8 +93,9 @@ class PolarDatacube:
 
         # KDE normalization 
         # determine annular bin spacing in pixels
-        self._annular_bin_step = n_annular / (2*np.pi*(self.radial_bins + qstep * 0.5))
-        # set KDE sigma to be 0.5 * bin_step
+        self._annular_bin_step = n_annular \
+            / (self._annular_range*(self.radial_bins + qstep * 0.5))
+        # set KDE sigma to be half of the bin_step
         self._sigma_KDE = self._annular_bin_step * 0.5
 
         # mask
@@ -97,9 +105,7 @@ class PolarDatacube:
         pass
 
 
-
     # sampling methods + properties
-
     def set_radial_bins(
         self,
         qmin,
@@ -158,7 +164,7 @@ class PolarDatacube:
         self._n_annular = n_annular
         self._annular_bins = np.linspace(
             0,
-            2*np.pi,
+            self._annular_range,
             self._n_annular,
             endpoint = False
         )
