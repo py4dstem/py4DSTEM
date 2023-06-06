@@ -106,6 +106,7 @@ class PolarDatacube:
 
     from py4DSTEM.process.polar.polar_analysis import (
         calculate_FEM_global,
+        plot_FEM_global,
         calculate_FEM_local,
     )
 
