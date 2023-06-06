@@ -104,6 +104,11 @@ class PolarDatacube:
 
         pass
 
+    from py4DSTEM.process.polar.polar_analysis import (
+        calculate_FEM_global,
+        calculate_FEM_local,
+    )
+
 
     # sampling methods + properties
     def set_radial_bins(
@@ -457,7 +462,9 @@ class PolarDataGetter:
 
             # get polar coords
             rr = np.sqrt(x**2 + y**2)
-            tt = np.arctan2(y, x) - np.pi/2
+            tt = np.mod(
+                np.arctan2(y, x) - np.pi/2,
+                self._polarcube._annular_range)
 
         # elliptical
         else:
@@ -466,7 +473,7 @@ class PolarDataGetter:
 
             # transformation matrix (elliptic cartesian -> circular cartesian)
             A = (a/b)*np.cos(theta)
-            B = - np.sin(theta)
+            B = -np.sin(theta)
             C = (a/b)*np.sin(theta)
             D = np.cos(theta)
             det = 1 / (A*D - B*C)
@@ -477,7 +484,9 @@ class PolarDataGetter:
 
             # get polar coords
             rr = det * np.hypot(xc,yc)
-            tt = np.arctan2(yc,xc) - np.pi/2
+            tt = np.mod(
+                np.arctan2(yc,xc) - np.pi/2,
+                self._polarcube._annular_range)
 
         # transform to bin sampling
         r_ind = (rr - self._polarcube.radial_bins[0]) / self._polarcube.qstep
