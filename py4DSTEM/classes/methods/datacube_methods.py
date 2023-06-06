@@ -986,6 +986,7 @@ class DataCubeMethods:
         filter_function = None,
 
         corrPower = 1,
+        sigma = None,
         sigma_dp = 0,
         sigma_cc = 2,
         subpixel = 'multicorr',
@@ -1087,6 +1088,8 @@ class DataCubeMethods:
             the cross correlation power. A value of 1 corresponds to a cross
             correlation, 0 corresponds to a phase correlation, and intermediate
             values correspond to hybrid correlations.
+        sigma : float
+            alias for `sigma_cc`
         sigma_dp : float
             if >0, a gaussian smoothing filter with this standard deviation
             is applied to the diffraction pattern before maxima are detected
@@ -1146,6 +1149,8 @@ class DataCubeMethods:
             See above.
         """
         from py4DSTEM.process.diskdetection import find_Bragg_disks
+
+        sigma_cc = sigma if sigma is not None else sigma_cc
 
         # parse args
         if data is None:
