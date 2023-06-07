@@ -68,7 +68,7 @@ class PolarDatacube:
 
         # setup sampling
 
-        # anngular range, depending on if polar transform spans pi or 2*pi
+        # annular range, depending on if polar transform spans pi or 2*pi
         if two_fold_rotation:
             self._annular_range = np.pi
         else:
@@ -423,13 +423,9 @@ class PolarDataGetter:
         if self._polarcube.qscale is not None:
             ans *= self._polarcube._qscale_ar[np.newaxis,:]
 
-        # If we need ans_norm or mask_bool to be returned, normalize it by bin sampling
-        # to set the range of the normalzation to be 0 <= ans_norm <= 1.
-        if returnval == 'masked' or returnval == 'nan':
-            ans_norm *= self._polarcube._annular_bin_step[np.newaxis]
-            mask_bool = ans_norm < 0.25
-        elif returnval == 'all':
-            ans_norm *= self._polarcube._annular_bin_step[np.newaxis]
+        # Normalize by the bin sampling, setting the range 0 <= ans_norm <= 1.
+        ans_norm *= self._polarcube._annular_bin_step[np.newaxis]
+        mask_bool = ans_norm < 0.25
 
         # return
         if returnval == 'masked':
