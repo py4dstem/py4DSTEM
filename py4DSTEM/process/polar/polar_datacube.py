@@ -93,7 +93,7 @@ class PolarDatacube:
         # (2) we already compute _annular_step. The difference is, that's in
         # angular units (so is a constant) and this is in distance units,
         # which changes with radius.  The names need to reflect this clearly.
-        self.set_polar_shape()
+        #self.set_polar_shape()
 
         # mask
         self._mask_thresh = mask_thresh
@@ -120,8 +120,8 @@ class PolarDatacube:
             self._qmax,
             self._qstep
         )
-        self.set_polar_shape()
         self.qscale = self._qscale
+        self.set_polar_shape()
 
     @property
     def qmin(self):
@@ -167,8 +167,8 @@ class PolarDatacube:
             self._n_annular,
             endpoint = False
         )
-        self.set_polar_shape()
         self._annular_step = self.annular_bins[1] - self.annular_bins[0]
+        self.set_polar_shape()
 
     @property
     def annular_bins(self):
@@ -409,6 +409,7 @@ class PolarDataGetter:
         ans = np.divide(
             ans,
             ans_norm,
+            out = np.zeros_like(ans),
             where = ans_norm > 0,
         )
 
