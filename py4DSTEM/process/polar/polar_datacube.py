@@ -421,16 +421,21 @@ class PolarDataGetter:
             where = ans_norm > 0,
         )
 
-        # scaling
+        # radial power law scaling of output
         if self._polarcube.qscale is not None:
             ans *= self._polarcube._qscale_ar[np.newaxis,:]
 
-        # return
-        if returnval == 'masked' or returnval == 'nan':
-            mask_bool = ans_norm * \
-            self._polarcube._annular_bin_step[np.newaxis,:] < 0.1
+        # If we need ans_norm or mask_bool to be returned, normalize it by bin sampling
+        # to set the range of the normalzation to be 0 <= ans_norm <= 1.
+        if returnval == 'masked' or returnval == 'nan'
+            ans_norm *= self._polarcube._annular_bin_step[np.newaxis]
+            mask_bool = ans_norm < 0.25
+        elif returnval == 'all':
+            ans_norm *= self._polarcube._annular_bin_step[np.newaxis]
 
+        # return
         if returnval == 'masked':
+            ans[mask_bool] = np.nan
             ans = np.ma.array(
                 data = ans,
                 mask = mask_bool
