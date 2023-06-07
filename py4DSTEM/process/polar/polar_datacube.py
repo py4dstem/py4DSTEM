@@ -427,7 +427,7 @@ class PolarDataGetter:
 
         # If we need ans_norm or mask_bool to be returned, normalize it by bin sampling
         # to set the range of the normalzation to be 0 <= ans_norm <= 1.
-        if returnval == 'masked' or returnval == 'nan'
+        if returnval == 'masked' or returnval == 'nan':
             ans_norm *= self._polarcube._annular_bin_step[np.newaxis]
             mask_bool = ans_norm < 0.25
         elif returnval == 'all':
