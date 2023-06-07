@@ -360,12 +360,10 @@ class PolarDataGetter:
         --------
         ans: np.array
             The polar-elliptic transformed data.
-        ans_norm: np.array
+        ans_norm: np.array (optional)
             The normalzation mask.
 
-
         """
-
 
         # get calibrations
         if origin is None:
