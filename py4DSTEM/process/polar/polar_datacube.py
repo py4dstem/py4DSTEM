@@ -86,9 +86,14 @@ class PolarDatacube:
 
         # KDE normalization 
         # determine annular bin spacing in pixels
-        self._annular_bin_step = n_annular / (2*np.pi*(self.radial_bins + qstep * 0.5))
-        # set KDE sigma to be 0.5 * bin_step
-        self._sigma_KDE = self._annular_bin_step * 0.5
+        # TODO
+        # (1) these two lines need to be in self.set_polar_shape.  This is
+        # the best place for these, since they use both the annular and
+        # radial bins
+        # (2) we already compute _annular_step. The difference is, that's in
+        # angular units (so is a constant) and this is in distance units,
+        # which changes with radius.  The names need to reflect this clearly.
+        self.set_polar_shape()
 
         # mask
         self._mask_thresh = mask_thresh
@@ -181,11 +186,17 @@ class PolarDatacube:
 
     def set_polar_shape(self):
         if hasattr(self,'radial_bins') and hasattr(self,'annular_bins'):
+            # set shape
             self.polar_shape = np.array((
                 self.annular_bins.shape[0],
                 self.radial_bins.shape[0]
             ))
             self.polar_size = np.prod(self.polar_shape)
+            # set KDE params
+            self._annular_bin_step = 1 / (self._annular_step * (self.radial_bins + self.qstep * 0.5))
+            self._sigma_KDE = self._annular_bin_step * 0.5
+
+
 
 
     # scaling property
@@ -253,18 +264,20 @@ class PolarDatacube:
         cartesian_data : array
             The data
         origin : tuple or list or None
-            Variable behavior depending on the arg type. Length 2 tuples uses these
-            values directly. Length 2 list of ints uses the calibrated origin value
-            at this scan position. None uses the calibrated mean origin.
+            Variable behavior depending on the arg type. Length 2 tuples uses
+            these values directly. Length 2 list of ints uses the calibrated
+            origin value at this scan position. None uses the calibrated mean
+            origin.
         mask : boolean array or None
-            A mask applied to the data before transformation.  The value of masked
-            pixels (0's) in the output is determined by `returnval`. Note that this
-            mask is applied in combination with any mask at PolarData.mask.
+            A mask applied to the data before transformation.  The value of
+            masked pixels (0's) in the output is determined by `returnval`. Note
+            that this mask is applied in combination with any mask at
+            PolarData.mask.
         returnval : 'masked' or 'nan' or None
-            Controls the returned data. 'masked' returns a numpy masked array. 'nan'
-            returns a normal numpy array with masked pixels set to np.nan.  None
-            returns a 2-tuple of numpy arrays - the transformed data with masked
-            pixels set to 0, and the transformed mask.
+            Controls the returned data. 'masked' returns a numpy masked array.
+            'nan' returns a normal numpy array with masked pixels set to np.nan.
+            None returns a 2-tuple of numpy arrays - the transformed data with
+            masked pixels set to 0, and the transformed mask.
         """
         return self._polar_data_getter._transform
 
@@ -322,26 +335,28 @@ class PolarDataGetter:
         cartesian_data : array
             The data
         origin : tuple or list or None
-            Variable behavior depending on the arg type. Length 2 tuples uses these
-            values directly. Length 2 list of ints uses the calibrated origin value
-            at this scan position. None uses the calibrated mean origin.
+            Variable behavior depending on the arg type. Length 2 tuples uses
+            these values directly. Length 2 list of ints uses the calibrated
+            origin value at this scan position. None uses the calibrated mean
+            origin.
         ellipse : tuple or None
-            Variable behavior depending on the arg type. Length 3 tuples uses these
-            values directly (a,b,theta). None uses the calibrated value.
+            Variable behavior depending on the arg type. Length 3 tuples uses
+            these values directly (a,b,theta). None uses the calibrated value.
         mask : boolean array or None
-            A mask applied to the data before transformation.  The value of masked
-            pixels in the output is determined by `returnval`. Note that this
-            mask is applied in combination with any mask at PolarData.mask.
+            A mask applied to the data before transformation.  The value of
+            masked pixels in the output is determined by `returnval`. Note that
+            this mask is applied in combination with any mask at PolarData.mask.
         mask_thresh : number
             Pixels in the transformed mask with values below this number are
             considered masked, and will be populated by the values specified
             by `returnval`.
         returnval : 'masked' or 'nan' or 'all' or 'colin'
-            Controls the returned data. 'masked' returns a numpy masked array. 'nan'
-            returns a normal numpy array with masked pixels set to np.nan.  'all'
-            returns a 3-tuple of numpy arrays - the transformed data with masked
-            pixels set to 'nan', the normalization array, and the transformed mask.
-            'colin' is the same as 'all', except masked pixels are set to 0.
+            Controls the returned data. 'masked' returns a numpy masked array.
+            'nan' returns a normal numpy array with masked pixels set to np.nan.
+            'all' returns a 3-tuple of numpy arrays - the transformed data with
+            masked pixels set to 'nan', the normalization array, and the
+            transformed mask. 'colin' is the same as 'all', except masked pixels
+            are set to 0.
         """
         # get calibrations
         if origin is None:
@@ -392,8 +407,8 @@ class PolarDataGetter:
 
         # apply normalization
         ans = np.divide(
-            ans, 
-            ans_norm, 
+            ans,
+            ans_norm,
             where = ans_norm > 0,
         )
 
@@ -411,7 +426,7 @@ class PolarDataGetter:
                 data = ans,
                 mask = mask_bool
             )
-            return ans          
+            return ans
         elif returnval == 'nan':
             ans[mask_bool] = np.nan
             return ans
@@ -508,6 +523,7 @@ class PolarDataGetter:
         # apply KDE
         for a0 in range(self._polarcube.polar_shape[1]):
             # Use 5% cutoff value for adjacent pixel in kernel
+            # TODO: do you mean 16.69% cutoff? Why?
             if self._polarcube._sigma_KDE[a0] > 0.1669:
                 ans[:,a0] = gaussian_filter1d(
                     ans[:,a0],
