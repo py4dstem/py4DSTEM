@@ -21,7 +21,7 @@ class PolarDatacube:
         mask = None,
         mask_thresh = 0.5,
         ellipse = True,
-        friedel = False,
+        two_fold_rotation = False,
         ):
         """
         Parameters
@@ -48,9 +48,10 @@ class PolarDatacube:
             Setting to False forces a circular transform. Setting to True
             performs an elliptic transform iff elliptic calibrations are
             available.
-        friedel : bool
-            Setting to True computes the transform mod(pi), i.e. assumes
-            Friedel symmetry is obeyed
+        two_fold_rotation : bool
+            Setting to True computes the transform mod(theta,pi), i.e. assumes all patterns
+            posess two-fold rotation (Friedel symmetry).  The output angular range in this case
+            becomes [0, pi) as opposed to the default of [0,2*pi).
         """
 
         # attach datacube
@@ -66,6 +67,12 @@ class PolarDatacube:
         self._set_polar_data_getter()
 
         # setup sampling
+
+        # annular range, depending on if polar transform spans pi or 2*pi
+        if two_fold_rotation:
+            self._annular_range = np.pi
+        else:
+            self._annular_range = 2.0 * np.pi
 
         # polar
         self._qscale = qscale
@@ -86,8 +93,9 @@ class PolarDatacube:
 
         # KDE normalization 
         # determine annular bin spacing in pixels
-        self._annular_bin_step = n_annular / (2*np.pi*(self.radial_bins + qstep * 0.5))
-        # set KDE sigma to be 0.5 * bin_step
+        self._annular_bin_step = n_annular \
+            / (self._annular_range*(self.radial_bins + qstep * 0.5))
+        # set KDE sigma to be half of the bin_step
         self._sigma_KDE = self._annular_bin_step * 0.5
 
         # mask
@@ -96,10 +104,14 @@ class PolarDatacube:
 
         pass
 
+    from py4DSTEM.process.polar.polar_analysis import (
+        calculate_FEM_global,
+        plot_FEM_global,
+        calculate_FEM_local,
+    )
 
 
     # sampling methods + properties
-
     def set_radial_bins(
         self,
         qmin,
@@ -158,7 +170,7 @@ class PolarDatacube:
         self._n_annular = n_annular
         self._annular_bins = np.linspace(
             0,
-            2*np.pi,
+            self._annular_range,
             self._n_annular,
             endpoint = False
         )
@@ -336,13 +348,23 @@ class PolarDataGetter:
             Pixels in the transformed mask with values below this number are
             considered masked, and will be populated by the values specified
             by `returnval`.
-        returnval : 'masked' or 'nan' or 'all' or 'colin'
-            Controls the returned data. 'masked' returns a numpy masked array. 'nan'
-            returns a normal numpy array with masked pixels set to np.nan.  'all'
-            returns a 3-tuple of numpy arrays - the transformed data with masked
-            pixels set to 'nan', the normalization array, and the transformed mask.
-            'colin' is the same as 'all', except masked pixels are set to 0.
+        returnval : 'masked' or 'nan' or 'all' or 'zeros'
+            Controls the returned data, specifically how un-sampled points are handled:
+            -'masked' returns a numpy masked array. 
+            -'nan' returns a normal numpy array with masked pixels set to np.nan.  
+            -'all' returns a 2-tuple of numpy arrays - the transformed data with masked
+                pixels set to 0, and the normalization array showing the transformed mask.
+            'zeros' is the same as 'all', except masked pixels are set to 0.
+        
+         Returns
+        --------
+        ans: np.array
+            The polar-elliptic transformed data.
+        ans_norm: np.array (optional)
+            The normalzation mask.
+
         """
+
         # get calibrations
         if origin is None:
             origin = self._polarcube.calibration.get_origin_mean()
@@ -397,16 +419,17 @@ class PolarDataGetter:
             where = ans_norm > 0,
         )
 
-        # scaling
+        # radial power law scaling of output
         if self._polarcube.qscale is not None:
             ans *= self._polarcube._qscale_ar[np.newaxis,:]
 
-        # return
-        if returnval == 'masked' or returnval == 'nan':
-            mask_bool = ans_norm * \
-            self._polarcube._annular_bin_step[np.newaxis,:] < 0.1
+        # Normalize by the bin sampling, setting the range 0 <= ans_norm <= 1.
+        ans_norm *= self._polarcube._annular_bin_step[np.newaxis]
+        mask_bool = ans_norm < 0.25
 
+        # return
         if returnval == 'masked':
+            ans[mask_bool] = np.nan
             ans = np.ma.array(
                 data = ans,
                 mask = mask_bool
@@ -417,7 +440,7 @@ class PolarDataGetter:
             return ans
         elif returnval == 'all':
             return ans, ans_norm
-        elif returnval == 'colin':
+        elif returnval == 'zeros':
             return ans
         else:
             raise Exception(f"Unexpected value {returnval} encountered for `returnval`")
@@ -439,7 +462,9 @@ class PolarDataGetter:
 
             # get polar coords
             rr = np.sqrt(x**2 + y**2)
-            tt = np.arctan2(y, x) - np.pi/2
+            tt = np.mod(
+                np.arctan2(y, x) - np.pi/2,
+                self._polarcube._annular_range)
 
         # elliptical
         else:
@@ -448,7 +473,7 @@ class PolarDataGetter:
 
             # transformation matrix (elliptic cartesian -> circular cartesian)
             A = (a/b)*np.cos(theta)
-            B = - np.sin(theta)
+            B = -np.sin(theta)
             C = (a/b)*np.sin(theta)
             D = np.cos(theta)
             det = 1 / (A*D - B*C)
@@ -459,7 +484,9 @@ class PolarDataGetter:
 
             # get polar coords
             rr = det * np.hypot(xc,yc)
-            tt = np.arctan2(yc,xc) - np.pi/2
+            tt = np.mod(
+                np.arctan2(yc,xc) - np.pi/2,
+                self._polarcube._annular_range)
 
         # transform to bin sampling
         r_ind = (rr - self._polarcube.radial_bins[0]) / self._polarcube.qstep
