@@ -159,7 +159,7 @@ def show_qprofile(
     ylabel='Intensity (A.U.)',  
     labelsize=16,
     ticklabelsize=14,
-    grid='on',
+    grid=True,
     label=None,
     **kwargs):
     """
@@ -173,7 +173,7 @@ def show_qprofile(
         ylabel
         labelsize       size of x and y labels
         ticklabelsize
-        grid            'off' or 'on'
+        grid            True or False
         label           a legend label for the plotted curve
     """
     if ymax is None:
@@ -902,6 +902,7 @@ def show_complex(
         if returnfig==True, return the figure and the axis.
     """
     # convert to complex colors
+    ar_complex = ar_complex[0] if (isinstance(ar_complex,list) and len(ar_complex) == 1) else ar_complex
     if isinstance(ar_complex, list):
         if isinstance(ar_complex[0], list):
             rgb = [Complex2RGB(ar, vmin, vmax, hue_start = hue_start, invert=invert) for sublist in ar_complex for ar in sublist]

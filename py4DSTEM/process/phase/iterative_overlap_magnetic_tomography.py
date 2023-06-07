@@ -1622,7 +1622,11 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
         if q_lowpass:
             env *= 1 / (1 + (qra / q_lowpass) ** 4)
 
+        current_object_mean = xp.mean(current_object)
+        current_object -= current_object_mean
         current_object = xp.fft.ifftn(xp.fft.fftn(current_object) * env)
+        current_object += current_object_mean
+
         return xp.real(current_object)
 
     def _divergence_free_constraint(self, vector_field):
