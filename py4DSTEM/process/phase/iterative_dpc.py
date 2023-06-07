@@ -421,9 +421,6 @@ class DPCReconstruction(PhaseReconstruction):
             xp.mean(self._com_x.ravel() ** 2 + self._com_y.ravel() ** 2)
         )
 
-        if new_error > error:
-            step_size /= 2
-
         return obj_dx, obj_dy, new_error, step_size
 
     def _adjoint(
@@ -671,9 +668,7 @@ class DPCReconstruction(PhaseReconstruction):
             self.error = np.inf
             self._step_size = step_size if step_size is not None else 0.5
             self._padded_phase_object = self._padded_phase_object_initial.copy()
-
-        previous_iteration = self._padded_phase_object.copy()
-
+            
         self.error = getattr(self, "error", np.inf)
 
         if step_size is None:
@@ -694,7 +689,9 @@ class DPCReconstruction(PhaseReconstruction):
         ):
             if self._step_size < stopping_criterion:
                 break
-
+                
+            previous_iteration = self._padded_phase_object.copy()
+            
             # forward operator
             com_dx, com_dy, new_error, self._step_size = self._forward(
                 self._padded_phase_object, mask, mask_inv, self.error, self._step_size
@@ -704,10 +701,10 @@ class DPCReconstruction(PhaseReconstruction):
             # before the error rose and continue with the halved step size
             if (new_error > self.error) and backtrack:
                 self._padded_phase_object = previous_iteration
+                self._step_size /= 2
                 print(f"Iteration {a0}, step reduced to {self._step_size}")
                 continue
             self.error = new_error
-            previous_iteration = self._padded_phase_object.copy()
 
             # adjoint operator
             phase_update = self._adjoint(com_dx, com_dy, self._kx_op, self._ky_op)
