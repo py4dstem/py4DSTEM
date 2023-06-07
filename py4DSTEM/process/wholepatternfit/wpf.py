@@ -1,5 +1,5 @@
-from py4DSTEM.io import DataCube, RealSlice
-from py4DSTEM import tqdmnd
+from py4DSTEM import DataCube, RealSlice
+from emdfile import tqdmnd
 from py4DSTEM.process.wholepatternfit.wp_models import WPFModelPrototype
 
 from typing import Optional

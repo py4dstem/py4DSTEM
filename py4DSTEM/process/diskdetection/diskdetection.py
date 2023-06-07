@@ -4,10 +4,11 @@
 import numpy as np
 from scipy.ndimage import gaussian_filter
 
-from py4DSTEM.io.datastructure.py4dstem import DataCube, QPoints, BraggVectors
-from py4DSTEM.process.utils.get_maxima_2D import get_maxima_2D
+from emdfile import tqdmnd
+from py4DSTEM.process.diskdetection.braggvectors import BraggVectors
+from py4DSTEM.classes import DataCube, QPoints
+from py4DSTEM.preprocess.utils import get_maxima_2D
 from py4DSTEM.process.utils.cross_correlate import get_cross_correlation_FT
-from py4DSTEM.utils.tqdmnd import tqdmnd
 from py4DSTEM.process.diskdetection.diskdetection_aiml import find_Bragg_disks_aiml
 
 
@@ -193,7 +194,7 @@ def find_Bragg_disks(
 
     if ML:
         mode = 'dc_ml'
-    
+
     elif mode == 'datacube':
         if distributed is None and CUDA == False:
             mode = 'dc_CPU'

@@ -1,8 +1,11 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
+
 from py4DSTEM.visualize.show import show,show_points
 from py4DSTEM.visualize.overlay import add_grid_overlay
+
+
 
 def show_DP_grid(datacube,x0,y0,xL,yL,axsize=(6,6),returnfig=False,space=0,**kwargs):
     """
@@ -37,7 +40,7 @@ def show_DP_grid(datacube,x0,y0,xL,yL,axsize=(6,6),returnfig=False,space=0,**kwa
         plt.show()
         return
     else:
-        return fig,ax
+        return fig,axs
 
 def show_grid_overlay(image,x0,y0,xL,yL,color='k',linewidth=1,alpha=1,
                                             returnfig=False,**kwargs):
