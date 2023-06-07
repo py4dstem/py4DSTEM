@@ -287,7 +287,7 @@ class WholePatternFit:
             except KeyboardInterrupt:
                 break
             except:
-                warnings.warn(f'Fit on positon ({rx,ry}) failed with error')
+                warnings.warn(f'Fit on position ({rx,ry}) failed with error')
 
 
         # Convert to RealSlices
