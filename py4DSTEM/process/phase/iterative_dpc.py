@@ -338,13 +338,13 @@ class DPCReconstruction(PhaseReconstruction):
         padded_object_shape = np.round(
             np.array(self._grid_scan_shape) * padding_factor
         ).astype("int")
-        self._padded_phase_object = xp.zeros(padded_object_shape, dtype=xp.float32)
+        self._padded_object_phase = xp.zeros(padded_object_shape, dtype=xp.float32)
         if self._object_phase is not None:
-            self._padded_phase_object[
+            self._padded_object_phase[
                 : self._grid_scan_shape[0], : self._grid_scan_shape[1]
             ] = xp.asarray(self._object_phase, dtype=xp.float32)
 
-        self._padded_phase_object_initial = self._padded_phase_object.copy()
+        self._padded_object_phase_initial = self._padded_object_phase.copy()
 
         # Fourier coordinates and operators
         kx = xp.fft.fftfreq(padded_object_shape[0], d=self._scan_sampling[0])
@@ -479,7 +479,7 @@ class DPCReconstruction(PhaseReconstruction):
 
         Returns
         --------
-        updated_padded_phase_object: np.ndarray
+        updated_padded_object_phase: np.ndarray
             Updated padded phase object estimate
         """
 
@@ -548,6 +548,37 @@ class DPCReconstruction(PhaseReconstruction):
 
         return xp.real(current_object)
 
+    def _object_anti_gridding_contraint(self, current_object):
+        """
+        Zero outer pixels of object fft to remove gridding artifacts
+
+        Parameters
+        --------
+        current_object: np.ndarray
+            Current object estimate
+
+        Returns
+        --------
+        constrained_object: np.ndarray
+            Constrained object estimate
+        """
+        xp = self._xp
+
+        #find indices to zero accounting for object padding 
+        width_x = self._grid_scan_shape[0]
+        width_y = self._grid_scan_shape[1]
+        ind_min_x = int(xp.floor(width_x / 2) - 1)
+        ind_max_x = int(xp.ceil(width_x / 2) + 1)
+        ind_min_y = int(xp.floor(width_y / 2) - 1)
+        ind_max_y = int(xp.ceil(width_y / 2) + 1)
+
+        #zero pixels
+        object_fft = xp.fft.fft2(current_object)
+        object_fft[ind_min_x:-ind_max_x] = 0
+        object_fft[:, ind_min_y:-ind_max_y] = 0
+
+        return xp.real(xp.fft.ifft2(object_fft))
+
     def _constraints(
         self,
         current_object,
@@ -556,6 +587,7 @@ class DPCReconstruction(PhaseReconstruction):
         butterworth_filter,
         q_lowpass,
         q_highpass,
+        anti_gridding,
     ):
         """
         DPC constraints operator.
@@ -574,6 +606,9 @@ class DPCReconstruction(PhaseReconstruction):
             Cut-off frequency in A^-1 for low-pass butterworth filter
         q_highpass: float
             Cut-off frequency in A^-1 for high-pass butterworth filter
+        anti_gridding: bool
+            If true, zero outer pixels of object fft to remove
+            gridding artifacts
 
         Returns
         --------
@@ -592,6 +627,11 @@ class DPCReconstruction(PhaseReconstruction):
                 q_highpass,
             )
 
+        if anti_gridding:
+            current_object = self._object_anti_gridding_contraint(
+                current_object,
+            )
+
         return current_object
 
     def reconstruct(
@@ -607,6 +647,7 @@ class DPCReconstruction(PhaseReconstruction):
         butterworth_filter_iter: int = np.inf,
         q_lowpass: float = None,
         q_highpass: float = None,
+        anti_gridding: float = True,
         store_iterations: bool = False,
     ):
         """
@@ -638,6 +679,9 @@ class DPCReconstruction(PhaseReconstruction):
             Cut-off frequency in A^-1 for low-pass butterworth filter
         q_highpass: float
             Cut-off frequency in A^-1 for high-pass butterworth filter
+        anti_gridding: bool
+            If true, zero outer pixels of object fft to remove
+            gridding artifacts
         store_iterations: bool, optional
             If True, all reconstruction iterations will be stored
 
@@ -667,8 +711,8 @@ class DPCReconstruction(PhaseReconstruction):
         if reset:
             self.error = np.inf
             self._step_size = step_size if step_size is not None else 0.5
-            self._padded_phase_object = self._padded_phase_object_initial.copy()
-            
+            self._padded_object_phase = self._padded_object_phase_initial.copy()
+
         self.error = getattr(self, "error", np.inf)
 
         if step_size is None:
@@ -676,7 +720,7 @@ class DPCReconstruction(PhaseReconstruction):
         else:
             self._step_size = step_size
 
-        mask = xp.zeros(self._padded_phase_object.shape, dtype="bool")
+        mask = xp.zeros(self._padded_object_phase.shape, dtype="bool")
         mask[: self._grid_scan_shape[0], : self._grid_scan_shape[1]] = True
         mask_inv = xp.logical_not(mask)
 
@@ -689,18 +733,18 @@ class DPCReconstruction(PhaseReconstruction):
         ):
             if self._step_size < stopping_criterion:
                 break
-                
-            previous_iteration = self._padded_phase_object.copy()
-            
+
+            previous_iteration = self._padded_object_phase.copy()
+
             # forward operator
             com_dx, com_dy, new_error, self._step_size = self._forward(
-                self._padded_phase_object, mask, mask_inv, self.error, self._step_size
+                self._padded_object_phase, mask, mask_inv, self.error, self._step_size
             )
 
             # if the error went up after the previous step, go back to the step
             # before the error rose and continue with the halved step size
             if (new_error > self.error) and backtrack:
-                self._padded_phase_object = previous_iteration
+                self._padded_object_phase = previous_iteration
                 self._step_size /= 2
                 print(f"Iteration {a0}, step reduced to {self._step_size}")
                 continue
@@ -710,13 +754,13 @@ class DPCReconstruction(PhaseReconstruction):
             phase_update = self._adjoint(com_dx, com_dy, self._kx_op, self._ky_op)
 
             # update
-            self._padded_phase_object = self._update(
-                self._padded_phase_object, phase_update, self._step_size
+            self._padded_object_phase = self._update(
+                self._padded_object_phase, phase_update, self._step_size
             )
 
             # constraints
-            self._padded_phase_object = self._constraints(
-                self._padded_phase_object,
+            self._padded_object_phase = self._constraints(
+                self._padded_object_phase,
                 gaussian_filter=a0 < gaussian_filter_iter
                 and gaussian_filter_sigma is not None,
                 gaussian_filter_sigma=gaussian_filter_sigma,
@@ -724,12 +768,13 @@ class DPCReconstruction(PhaseReconstruction):
                 and (q_lowpass is not None or q_highpass is not None),
                 q_lowpass=q_lowpass,
                 q_highpass=q_highpass,
+                anti_gridding=anti_gridding,
             )
 
             if store_iterations:
                 self.object_phase_iterations.append(
                     asnumpy(
-                        self._padded_phase_object[
+                        self._padded_object_phase[
                             : self._grid_scan_shape[0], : self._grid_scan_shape[1]
                         ].copy()
                     )
@@ -743,7 +788,7 @@ class DPCReconstruction(PhaseReconstruction):
             )
 
         # crop result
-        self._object_phase = self._padded_phase_object[
+        self._object_phase = self._padded_object_phase[
             : self._grid_scan_shape[0], : self._grid_scan_shape[1]
         ]
         self.object_phase = asnumpy(self._object_phase)
