@@ -420,9 +420,6 @@ class DPCReconstruction(PhaseReconstruction):
             xp.mean(self._com_x.ravel() ** 2 + self._com_y.ravel() ** 2)
         )
 
-        if new_error > error:
-            step_size /= 2
-
         return obj_dx, obj_dy, new_error, step_size
 
     def _adjoint(
@@ -602,6 +599,7 @@ class DPCReconstruction(PhaseReconstruction):
         max_iter: int = 64,
         step_size: float = None,
         stopping_criterion: float = 1e-6,
+        backtrack: bool = True,
         progress_bar: bool = True,
         gaussian_filter_sigma: float = None,
         gaussian_filter_iter: int = np.inf,
@@ -623,6 +621,10 @@ class DPCReconstruction(PhaseReconstruction):
             Reconstruction update step size
         stopping_criterion: float, optional
             step_size below which reconstruction exits
+        backtrack: bool, optional
+            If True, steps that increase the error metric are rejected
+            and iteration continues with a reduced step size from the
+            previous iteration
         progress_bar: bool, optional
             If True, reconstruction progress bar will be printed
         gaussian_filter_sigma: float, optional
@@ -665,7 +667,7 @@ class DPCReconstruction(PhaseReconstruction):
             self.error = np.inf
             self._step_size = step_size if step_size is not None else 0.5
             self._padded_phase_object = self._padded_phase_object_initial.copy()
-
+            
         self.error = getattr(self, "error", np.inf)
 
         if step_size is None:
@@ -686,11 +688,22 @@ class DPCReconstruction(PhaseReconstruction):
         ):
             if self._step_size < stopping_criterion:
                 break
-
+                
+            previous_iteration = self._padded_phase_object.copy()
+            
             # forward operator
-            com_dx, com_dy, self.error, self._step_size = self._forward(
+            com_dx, com_dy, new_error, self._step_size = self._forward(
                 self._padded_phase_object, mask, mask_inv, self.error, self._step_size
             )
+
+            # if the error went up after the previous step, go back to the step
+            # before the error rose and continue with the halved step size
+            if (new_error > self.error) and backtrack:
+                self._padded_phase_object = previous_iteration
+                self._step_size /= 2
+                print(f"Iteration {a0}, step reduced to {self._step_size}")
+                continue
+            self.error = new_error
 
             # adjoint operator
             phase_update = self._adjoint(com_dx, com_dy, self._kx_op, self._ky_op)
