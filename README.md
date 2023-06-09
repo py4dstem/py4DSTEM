@@ -1,5 +1,5 @@
 
-> :warning: **py4DSTEM version 0.14 update** :warning: Warning, this is a major update and we expect some workflows to break.  You can still install previous versions of py4DSTEM [as discussed here](#legacyinstall)
+> :warning: **py4DSTEM version 0.14 update** :warning: Warning: this is a major update and we expect some workflows to break.  You can still install previous versions of py4DSTEM [as discussed here](#legacyinstall)
 
 
 
