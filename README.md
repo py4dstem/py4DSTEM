@@ -81,7 +81,7 @@ You can do this in the command line by running `conda activate py4dstem`, or, if
 
 
 
-<a id='legacyinstall'></a>:w
+<a id='legacyinstall'></a>
 ## Legacy installations (version <0.14)
 
 The latest version of py4DSTEM (v0.14) makes changes to the classes and functions which may not be compatible with code written for prior versions.
