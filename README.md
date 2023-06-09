@@ -187,29 +187,6 @@ Please see [here](https://gist.github.com/bsavitzky/8b1ee4c1244814940e7cff450053
 See a list [here](docs/papers.md).
 
 
-## Dependencies
-
-* numpy
-* scipy
-* h5py
-* ncempy
-* numba
-* scikit-image
-* scikit-learn
-* ipywidgets
-* tqdm
-* gdown
-
-
-## Optional dependencies
-
-* ipyparallel
-* dask
-* cupy
-* pymatgen
-
-
-
 
 
 # Acknowledgements
@@ -234,3 +211,4 @@ GNU GPLv3
 
 **py4DSTEM** is open source software distributed under a GPLv3 license.
 It is free to use, alter, or build on, provided that any work derived from **py4DSTEM** is also kept free and open under a GPLv3 license.
+
