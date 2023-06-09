@@ -563,18 +563,18 @@ class DPCReconstruction(PhaseReconstruction):
         """
         xp = self._xp
 
-        #find indices to zero accounting for object padding 
-        width_x = self._grid_scan_shape[0]
-        width_y = self._grid_scan_shape[1]
-        ind_min_x = int(xp.floor(width_x / 2) - 1)
-        ind_max_x = int(xp.ceil(width_x / 2) + 1)
-        ind_min_y = int(xp.floor(width_y / 2) - 1)
-        ind_max_y = int(xp.ceil(width_y / 2) + 1)
+        #find indices to zero 
+        width_x = current_object.shape[0]
+        width_y = current_object.shape[1]
+        ind_min_x = int(xp.floor(width_x / 2) - 2)
+        ind_max_x = int(xp.ceil(width_x / 2) + 2)
+        ind_min_y = int(xp.floor(width_y / 2) - 2)
+        ind_max_y = int(xp.ceil(width_y / 2) + 2)
 
         #zero pixels
         object_fft = xp.fft.fft2(current_object)
-        object_fft[ind_min_x:-ind_max_x] = 0
-        object_fft[:, ind_min_y:-ind_max_y] = 0
+        object_fft[ind_min_x:ind_max_x] = 0
+        object_fft[:, ind_min_y:ind_max_y] = 0
 
         return xp.real(xp.fft.ifft2(object_fft))
 
