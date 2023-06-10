@@ -199,7 +199,7 @@ class BraggVectors(Custom,BraggVectorMethods,Data):
             "pixel" : pixel,
             "rotate" : rotate,
         }
-        if self.verbose: 
+        if self.verbose:
             print('current calstate: ', self.calstate)
         pass
 
