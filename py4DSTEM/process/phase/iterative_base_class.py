@@ -2225,6 +2225,6 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
 
     @property
     def _object_cropped(self):
-        """ cropped and rotated object """
+        """cropped and rotated object"""
 
         return self._crop_rotate_object_fov(self._object)
