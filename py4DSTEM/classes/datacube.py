@@ -52,11 +52,22 @@ class DataCube(Array,RootedNode,Data,DataCubeMethods):
             slicelabels = slicelabels
         )
 
-        # Set up EMD tree
+        # set up EMD tree
         RootedNode.__init__(self)
 
-        # Check for / set up a calibration
+        # set up calibration
         self._setup_calibration( calibration )
+
+        # cartesian coords
+        # TODO - tmp hack, needs to be refactored -
+        # this will break when preprocess methods are called
+        self.qyy,self.qxx = np.meshgrid(
+            np.arange(0,self.Q_Ny),
+            np.arange(0,self.Q_Nx)
+        )
+
+        # polar coords
+        self.polar = None
 
 
 
@@ -65,7 +76,7 @@ class DataCube(Array,RootedNode,Data,DataCubeMethods):
         Ensures that a calibration instance exists. Passing None
         makes a new Calibration instance, puts it in root.calibration, and
         makes a two way link. Passing a Calibration instance attaches that
-        instance. `'skip'` does nothing (used when reading from file).
+        instance. `'skip'` does nothing (internal use, on read from file).
         """
         if cal is None:
             self.calibration = Calibration( datacube = self )
@@ -77,8 +88,50 @@ class DataCube(Array,RootedNode,Data,DataCubeMethods):
             cal._datacube = self
 
 
+    def copy(self):
+        """
+        Copys datacube
+        """
+        from py4DSTEM import DataCube
+        new_datacube = DataCube(
+            data = self.data.copy(),
+            name = self.name,
+            calibration = self.calibration.copy(),
+            slicelabels = self.slicelabels,
+        )
 
+        Qpixsize  = new_datacube.calibration.get_Q_pixel_size()
+        Qpixunits = new_datacube.calibration.get_Q_pixel_units()
+        Rpixsize  = new_datacube.calibration.get_R_pixel_size()
+        Rpixunits = new_datacube.calibration.get_R_pixel_units()
+        
+        new_datacube.set_dim(
+            0,
+            [0,Rpixsize],
+            units = Rpixunits,
+            name = 'Rx'
+        )
+        new_datacube.set_dim(
+            1,
+            [0,Rpixsize],
+            units = Rpixunits,
+            name = 'Ry'
+        )
 
+        new_datacube.set_dim(
+            2,
+            [0,Qpixsize],
+            units = Qpixunits,
+            name = 'Qx'
+        )
+        new_datacube.set_dim(
+            3,
+            [0,Qpixsize],
+            units = Qpixunits,
+            name = 'Qy'
+        )
+
+        return new_datacube
 
 
     # properties
