@@ -825,6 +825,8 @@ class BraggVectorMethods:
             return
 
 
+
+
 ######### END BraggVectorMethods CLASS ########
 
 
