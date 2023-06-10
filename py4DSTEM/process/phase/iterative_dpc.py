@@ -509,7 +509,9 @@ class DPCReconstruction(PhaseReconstruction):
 
         return current_object
 
-    def _object_butterworth_constraint(self, current_object, q_lowpass, q_highpass):
+    def _object_butterworth_constraint(
+        self, current_object, q_lowpass, q_highpass, butterworth_order
+    ):
         """
         Butterworth filter used for low/high-pass filtering.
 
@@ -521,6 +523,8 @@ class DPCReconstruction(PhaseReconstruction):
             Cut-off frequency in A^-1 for low-pass butterworth filter
         q_highpass: float
             Cut-off frequency in A^-1 for high-pass butterworth filter
+        butterworth_order: float
+            Butterworth filter order. Smaller gives a smoother filter
 
         Returns
         --------
@@ -536,9 +540,9 @@ class DPCReconstruction(PhaseReconstruction):
 
         env = xp.ones_like(qra)
         if q_highpass:
-            env *= 1 - 1 / (1 + (qra / q_highpass) ** 4)
+            env *= 1 - 1 / (1 + (qra / q_highpass) ** butterworth_order)
         if q_lowpass:
-            env *= 1 / (1 + (qra / q_lowpass) ** 4)
+            env *= 1 / (1 + (qra / q_lowpass) ** butterworth_order)
 
         current_object_mean = xp.mean(current_object)
         current_object -= current_object_mean
@@ -563,7 +567,7 @@ class DPCReconstruction(PhaseReconstruction):
         """
         xp = self._xp
 
-        #find indices to zero 
+        # find indices to zero
         width_x = current_object.shape[0]
         width_y = current_object.shape[1]
         ind_min_x = int(xp.floor(width_x / 2) - 2)
@@ -571,7 +575,7 @@ class DPCReconstruction(PhaseReconstruction):
         ind_min_y = int(xp.floor(width_y / 2) - 2)
         ind_max_y = int(xp.ceil(width_y / 2) + 2)
 
-        #zero pixels
+        # zero pixels
         object_fft = xp.fft.fft2(current_object)
         object_fft[ind_min_x:ind_max_x] = 0
         object_fft[:, ind_min_y:ind_max_y] = 0
@@ -586,6 +590,7 @@ class DPCReconstruction(PhaseReconstruction):
         butterworth_filter,
         q_lowpass,
         q_highpass,
+        butterworth_order,
         anti_gridding,
     ):
         """
@@ -605,6 +610,8 @@ class DPCReconstruction(PhaseReconstruction):
             Cut-off frequency in A^-1 for low-pass butterworth filter
         q_highpass: float
             Cut-off frequency in A^-1 for high-pass butterworth filter
+        butterworth_order: float
+            Butterworth filter order. Smaller gives a smoother filter
         anti_gridding: bool
             If true, zero outer pixels of object fft to remove
             gridding artifacts
@@ -624,6 +631,7 @@ class DPCReconstruction(PhaseReconstruction):
                 current_object,
                 q_lowpass,
                 q_highpass,
+                butterworth_order,
             )
 
         if anti_gridding:
@@ -646,6 +654,7 @@ class DPCReconstruction(PhaseReconstruction):
         butterworth_filter_iter: int = np.inf,
         q_lowpass: float = None,
         q_highpass: float = None,
+        butterworth_order: float = 2,
         anti_gridding: float = True,
         store_iterations: bool = False,
     ):
@@ -678,6 +687,8 @@ class DPCReconstruction(PhaseReconstruction):
             Cut-off frequency in A^-1 for low-pass butterworth filter
         q_highpass: float
             Cut-off frequency in A^-1 for high-pass butterworth filter
+        butterworth_order: float
+            Butterworth filter order. Smaller gives a smoother filter
         anti_gridding: bool
             If true, zero outer pixels of object fft to remove
             gridding artifacts
@@ -767,6 +778,7 @@ class DPCReconstruction(PhaseReconstruction):
                 and (q_lowpass is not None or q_highpass is not None),
                 q_lowpass=q_lowpass,
                 q_highpass=q_highpass,
+                butterworth_order=butterworth_order,
                 anti_gridding=anti_gridding,
             )
 
