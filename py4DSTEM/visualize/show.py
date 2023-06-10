@@ -321,6 +321,7 @@ def show(
             intensity_range = clipvals
 
     # plot a grid if `ar` is a list, or use multichannel functionality to make an RGBa image
+    ar = ar[0] if (isinstance(ar,list) and len(ar) == 1) else ar
     if isinstance(ar,list):
         args = locals()
         if 'kwargs' in args.keys():
@@ -336,17 +337,17 @@ def show(
             # use show_grid to plot grid of images
             from py4DSTEM.visualize.show_extention import _show_grid
             if returnfig:
-                return _show_grid(**args,**kwargs)
+                return _show_grid(
+                    **args,
+                    **kwargs)
             else:
-                _show_grid(**args,**kwargs)
+                _show_grid(
+                    **args,
+                    **kwargs)
                 return
         else:
             # generate a multichannel combined RGB image
-            del args['ar']
-            del args['combine_images']
-            del args['return_ar_scaled']
-            del args['show_image']
-
+            
             # init
             num_images = len(ar)
             hue_angles = np.linspace(0.0,2.0*np.pi,num_images,endpoint=False)
@@ -359,7 +360,13 @@ def show(
             for a0 in range(num_images):
                 im = show(
                         ar[a0],
-                        **args,
+                        scaling='none',
+                        intensity_range=intensity_range,
+                        clipvals=clipvals,
+                        vmin=vmin,
+                        vmax=vmax,
+                        power=power,
+                        power_offset=power_offset,
                         return_ar_scaled = True,
                         show_image=False,
                         **kwargs,
@@ -372,7 +379,7 @@ def show(
             # Assemble final image
             sat_change = np.maximum(val_total - 1.0, 0.0)
             ar_rgb = np.zeros((ar[0].shape[0],ar[0].shape[1],3))
-            ar_rgb[:,:,0] = np.arctan2(sin_total,cos_total) / (2*np.pi)
+            ar_rgb[:,:,0] = np.mod(np.arctan2(sin_total,cos_total) / (2*np.pi), 1.0)
             ar_rgb[:,:,1] = 1 - sat_change
             ar_rgb[:,:,2] = val_total# np.sqrt(cos_total**2 + sin_total**2)
             ar_rgb = np.clip(ar_rgb,0.0,1.0)
