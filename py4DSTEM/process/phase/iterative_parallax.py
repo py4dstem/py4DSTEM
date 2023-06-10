@@ -8,14 +8,13 @@ from typing import Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
+from emdfile import Custom, tqdmnd
 from matplotlib.gridspec import GridSpec
 from py4DSTEM import DataCube
 from py4DSTEM.process.phase.iterative_base_class import PhaseReconstruction
 from py4DSTEM.process.utils.cross_correlate import align_images_fourier
 from py4DSTEM.process.utils.utils import electron_wavelength_angstrom
-from emdfile import tqdmnd
 from scipy.linalg import polar
-from scipy.optimize import curve_fit
 from scipy.special import comb
 
 try:
@@ -43,16 +42,22 @@ class ParallaxReconstruction(PhaseReconstruction):
         If True, class methods will inherit this and print additional information
     device: str, optional
         Calculation device will be perfomed on. Must be 'cpu' or 'gpu'
+    object_padding_px: Tuple[int,int], optional
+        Pixel dimensions to pad object with
+        If None, the padding is set to half the probe ROI dimensions
     """
 
     def __init__(
         self,
-        datacube: DataCube,
         energy: float,
-        dp_mean: np.ndarray = None,
+        datacube: DataCube = None,
         verbose: bool = False,
+        object_padding_px: Tuple[int, int] = (32, 32),
         device: str = "cpu",
+        name: str = "parallax_reconstruction",
     ):
+        Custom.__init__(self, name=name)
+
         if device == "cpu":
             self._xp = np
             self._asnumpy = np.asarray
@@ -68,15 +73,39 @@ class ParallaxReconstruction(PhaseReconstruction):
         else:
             raise ValueError(f"device must be either 'cpu' or 'gpu', not {device}")
 
-        self._energy = energy
+        # Data
         self._datacube = datacube
-        self._dp_mean = dp_mean
+
+        # Metadata
+        self._energy = energy
         self._verbose = verbose
+        self._object_padding_px = object_padding_px
         self._preprocessed = False
+
+    def to_h5(self, group):
+        """
+        Wraps datasets and metadata to write in emdfile classes,
+        notably ...
+        """
+        raise NotImplementedError()
+
+    @classmethod
+    def _get_constructor_args(cls, group):
+        """
+        Returns a dictionary of arguments/values to pass
+        to the class' __init__ function
+        """
+        raise NotImplementedError()
+
+    def _populate_instance(self, group):
+        """
+        Sets post-initialization properties, notably some preprocessing meta
+        optional; during read, this method is run after object instantiation.
+        """
+        raise NotImplementedError()
 
     def preprocess(
         self,
-        object_padding_px: Tuple[int, int] = (32, 32),
         edge_blend: int = 16,
         threshold_intensity: float = 0.8,
         normalize_images: bool = True,
@@ -91,9 +120,6 @@ class ParallaxReconstruction(PhaseReconstruction):
 
         Parameters
         ----------
-        object_padding_px: Tuple[int,int], optional
-            Pixel dimensions to pad object with
-            If None, the padding is set to half the probe ROI dimensions
         edge_blend: int, optional
             Pixels to blend image at the border
         threshold: float, optional
@@ -120,16 +146,21 @@ class ParallaxReconstruction(PhaseReconstruction):
 
         xp = self._xp
         asnumpy = self._asnumpy
-        self._object_padding_px = object_padding_px
+
+        if self._datacube is None:
+            raise ValueError(
+                (
+                    "The preprocess() method requires a DataCube. "
+                    "Please run parallax.attach_datacube(DataCube) first."
+                )
+            )
 
         # get mean diffraction pattern
-        if self._dp_mean is not None:
-            self._dp_mean = xp.asarray(self._dp_mean, dtype=xp.float32)
-        elif "dp_mean" in self._datacube.tree.keys():
+        try:
             self._dp_mean = xp.asarray(
-                self._datacube.tree["dp_mean"].data, dtype=xp.float32
+                self._datacube.tree("dp_mean").data, dtype=xp.float32
             )
-        else:
+        except AssertionError:
             self._dp_mean = xp.asarray(
                 self._datacube.get_dp_mean().data, dtype=xp.float32
             )
@@ -188,15 +219,15 @@ class ParallaxReconstruction(PhaseReconstruction):
         self._window_inv = 1 - self._window_edge
         self._window_pad = xp.zeros(
             (
-                self._grid_scan_shape[0] + object_padding_px[0],
-                self._grid_scan_shape[1] + object_padding_px[1],
+                self._grid_scan_shape[0] + self._object_padding_px[0],
+                self._grid_scan_shape[1] + self._object_padding_px[1],
             )
         )
         self._window_pad[
-            object_padding_px[0] // 2 : self._grid_scan_shape[0]
-            + object_padding_px[0] // 2,
-            object_padding_px[1] // 2 : self._grid_scan_shape[1]
-            + object_padding_px[1] // 2,
+            self._object_padding_px[0] // 2 : self._grid_scan_shape[0]
+            + self._object_padding_px[0] // 2,
+            self._object_padding_px[1] // 2 : self._grid_scan_shape[1]
+            + self._object_padding_px[1] // 2,
         ] = self._window_edge
 
         # Collect BF images
@@ -205,17 +236,12 @@ class ParallaxReconstruction(PhaseReconstruction):
             (0, 1, 2),
             (1, 2, 0),
         )
-        # if normalize_images:
-        #     all_bfs /= xp.mean(all_bfs, axis=(0, 1))
-        #     all_means = xp.ones(self._num_bf_images)
-        # else:
-        #     all_means = xp.mean(all_bfs, axis=(0, 1))
 
         # initalize
         stack_shape = (
             self._num_bf_images,
-            self._grid_scan_shape[0] + object_padding_px[0],
-            self._grid_scan_shape[1] + object_padding_px[1],
+            self._grid_scan_shape[0] + self._object_padding_px[0],
+            self._grid_scan_shape[1] + self._object_padding_px[1],
         )
         if normalize_images:
             self._stack_BF = xp.ones(stack_shape)
@@ -224,17 +250,17 @@ class ParallaxReconstruction(PhaseReconstruction):
                 all_bfs /= xp.mean(all_bfs, axis=(1, 2))[:, None, None]
                 self._stack_BF[
                     :,
-                    object_padding_px[0] // 2 : self._grid_scan_shape[0]
-                    + object_padding_px[0] // 2,
-                    object_padding_px[1] // 2 : self._grid_scan_shape[1]
-                    + object_padding_px[1] // 2,
+                    self._object_padding_px[0] // 2 : self._grid_scan_shape[0]
+                    + self._object_padding_px[0] // 2,
+                    self._object_padding_px[1] // 2 : self._grid_scan_shape[1]
+                    + self._object_padding_px[1] // 2,
                 ] = (
                     self._window_inv[None] + self._window_edge[None] * all_bfs
                 )
 
             elif normalize_order == 1:
-                x = np.linspace(-0.5, 0.5, all_bfs.shape[1])
-                y = np.linspace(-0.5, 0.5, all_bfs.shape[2])
+                x = xp.linspace(-0.5, 0.5, all_bfs.shape[1])
+                y = xp.linspace(-0.5, 0.5, all_bfs.shape[2])
                 ya, xa = xp.meshgrid(y, x)
                 basis = np.vstack(
                     (
@@ -248,10 +274,10 @@ class ParallaxReconstruction(PhaseReconstruction):
 
                     self._stack_BF[
                         a0,
-                        object_padding_px[0] // 2 : self._grid_scan_shape[0]
-                        + object_padding_px[0] // 2,
-                        object_padding_px[1] // 2 : self._grid_scan_shape[1]
-                        + object_padding_px[1] // 2,
+                        self._object_padding_px[0] // 2 : self._grid_scan_shape[0]
+                        + self._object_padding_px[0] // 2,
+                        self._object_padding_px[1] // 2 : self._grid_scan_shape[1]
+                        + self._object_padding_px[1] // 2,
                     ] = self._window_inv[None] + self._window_edge[None] * all_bfs[
                         a0
                     ] / xp.reshape(
@@ -263,15 +289,14 @@ class ParallaxReconstruction(PhaseReconstruction):
             self._stack_BF = xp.full(stack_shape, all_means[:, None, None])
             self._stack_BF[
                 :,
-                object_padding_px[0] // 2 : self._grid_scan_shape[0]
-                + object_padding_px[0] // 2,
-                object_padding_px[1] // 2 : self._grid_scan_shape[1]
-                + object_padding_px[1] // 2,
+                self._object_padding_px[0] // 2 : self._grid_scan_shape[0]
+                + self._object_padding_px[0] // 2,
+                self._object_padding_px[1] // 2 : self._grid_scan_shape[1]
+                + self._object_padding_px[1] // 2,
             ] = (
                 self._window_inv[None] * all_means[:, None, None]
                 + self._window_edge[None] * all_bfs
             )
-        # self._stack_BF = xp.moveaxis(self._stack_BF, [0, 1, 2], [1, 2, 0])
 
         # Fourier space operators for image shifts
         qx = xp.fft.fftfreq(self._stack_BF.shape[1], d=1)
@@ -339,8 +364,7 @@ class ParallaxReconstruction(PhaseReconstruction):
         self.recon_BF = asnumpy(self._recon_BF)
 
         if plot_average_bf:
-            figsize = kwargs.get("figsize", (6, 6))
-            kwargs.pop("figsize", None)
+            figsize = kwargs.pop("figsize", (6, 6))
 
             fig, ax = plt.subplots(figsize=figsize)
 
@@ -1037,10 +1061,8 @@ class ParallaxReconstruction(PhaseReconstruction):
 
         # plotting
         if plot_corrected_phase:
-            figsize = kwargs.get("figsize", (6, 6))
-            cmap = kwargs.get("cmap", "magma")
-            kwargs.pop("figsize", None)
-            kwargs.pop("cmap", None)
+            figsize = kwargs.pop("figsize", (6, 6))
+            cmap = kwargs.pop("cmap", "magma")
 
             fig, ax = plt.subplots(figsize=figsize)
 
@@ -1134,10 +1156,8 @@ class ParallaxReconstruction(PhaseReconstruction):
                 wspace=0.15,
             )
 
-            figsize = kwargs.get("figsize", (4 * ncols, 4 * nrows))
-            cmap = kwargs.get("cmap", "magma")
-            kwargs.pop("figsize", None)
-            kwargs.pop("cmap", None)
+            figsize = kwargs.pop("figsize", (4 * ncols, 4 * nrows))
+            cmap = kwargs.pop("cmap", "magma")
 
             fig = plt.figure(figsize=figsize)
 
@@ -1160,7 +1180,6 @@ class ParallaxReconstruction(PhaseReconstruction):
                 )
 
             # CTF correction
-            # TODO - check sign of Fresnel prop
             sin_chi = xp.sin(
                 (xp.pi * self._wavelength * (self.aberration_C1 + dz)) * kra2
             )
@@ -1175,7 +1194,6 @@ class ParallaxReconstruction(PhaseReconstruction):
             )
 
             if plot_depth_sections:
-
                 row_index, col_index = np.unravel_index(a0, (nrows, ncols))
                 ax = fig.add_subplot(spec[row_index, col_index])
 
@@ -1251,8 +1269,7 @@ class ParallaxReconstruction(PhaseReconstruction):
 
         """
 
-        cmap = kwargs.get("cmap", "magma")
-        kwargs.pop("cmap", None)
+        cmap = kwargs.pop("cmap", "magma")
 
         cropped_object = self._crop_padded_object(self._recon_BF, remaining_padding)
 
@@ -1273,6 +1290,7 @@ class ParallaxReconstruction(PhaseReconstruction):
     def _visualize_shifts(
         self,
         scale_arrows=1,
+        plot_arrow_freq=1,
         **kwargs,
     ):
         """
@@ -1282,27 +1300,38 @@ class ParallaxReconstruction(PhaseReconstruction):
         ----------
         scale_arrows: float, optional
             Scale to multiply shifts by
-
+        plot_arrow_freq: int, optional
+            Frequency of shifts to plot in quiver plot
         """
 
         xp = self._xp
         asnumpy = self._asnumpy
 
-        figsize = kwargs.get("figsize", (6, 6))
-        color = kwargs.get("color", (1, 0, 0, 1))
-        kwargs.pop("figsize", None)
-        kwargs.pop("color", None)
+        figsize = kwargs.pop("figsize", (6, 6))
+        color = kwargs.pop("color", (1, 0, 0, 1))
 
         fig, ax = plt.subplots(figsize=figsize)
 
+        dp_mask_ind = xp.nonzero(self._dp_mask)
+        yy, xx = xp.meshgrid(
+            xp.arange(self._dp_mean.shape[1]), xp.arange(self._dp_mean.shape[0])
+        )
+        freq_mask = xp.logical_and(xx % plot_arrow_freq == 0, yy % plot_arrow_freq == 0)
+        masked_ind = xp.logical_and(freq_mask, self._dp_mask)
+        plot_ind = masked_ind[dp_mask_ind]
+
         ax.quiver(
-            asnumpy(self._kxy[:, 1]),
-            asnumpy(self._kxy[:, 0]),
+            asnumpy(self._kxy[plot_ind, 1]),
+            asnumpy(self._kxy[plot_ind, 0]),
             asnumpy(
-                self._xy_shifts[:, 1] * scale_arrows * self._reciprocal_sampling[0]
+                self._xy_shifts[plot_ind, 1]
+                * scale_arrows
+                * self._reciprocal_sampling[0]
             ),
             asnumpy(
-                self._xy_shifts[:, 0] * scale_arrows * self._reciprocal_sampling[1]
+                self._xy_shifts[plot_ind, 0]
+                * scale_arrows
+                * self._reciprocal_sampling[1]
             ),
             color=color,
             angles="xy",
@@ -1328,8 +1357,7 @@ class ParallaxReconstruction(PhaseReconstruction):
             Self to accommodate chaining
         """
 
-        figsize = kwargs.get("figsize", (6, 6))
-        kwargs.pop("figsize", None)
+        figsize = kwargs.pop("figsize", (6, 6))
 
         fig, ax = plt.subplots(figsize=figsize)
 
