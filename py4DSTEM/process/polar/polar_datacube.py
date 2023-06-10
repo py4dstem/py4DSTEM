@@ -543,8 +543,8 @@ class PolarDataGetter:
 
         # apply KDE
         for a0 in range(self._polarcube.polar_shape[1]):
-            # Use 5% cutoff value for adjacent pixel in kernel
-            # TODO: do you mean 16.69% cutoff? Why?
+            # Use 5% (= exp(-(1/2*.1669)^2)) cutoff value
+            # for adjacent pixel in kernel
             if self._polarcube._sigma_KDE[a0] > 0.1669:
                 ans[:,a0] = gaussian_filter1d(
                     ans[:,a0],
