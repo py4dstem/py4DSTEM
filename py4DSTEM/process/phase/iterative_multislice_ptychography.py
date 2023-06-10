@@ -1331,6 +1331,8 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
             Cut-off frequency in A^-1 for low-pass butterworth filter
         q_highpass: float
             Cut-off frequency in A^-1 for high-pass butterworth filter
+        butterworth_order: float
+            Butterworth filter order. Smaller gives a smoother filter
 
         Returns
         --------

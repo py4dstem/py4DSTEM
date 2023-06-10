@@ -1591,7 +1591,9 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
 
         return current_object
 
-    def _object_butterworth_constraint(self, current_object, q_lowpass, q_highpass):
+    def _object_butterworth_constraint(
+        self, current_object, q_lowpass, q_highpass, butterworth_order
+    ):
         """
         Butterworth filter
 
@@ -1603,6 +1605,8 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
             Cut-off frequency in A^-1 for low-pass butterworth filter
         q_highpass: float
             Cut-off frequency in A^-1 for high-pass butterworth filter
+        butterworth_order: float
+            Butterworth filter order. Smaller gives a smoother filter
 
         Returns
         --------
@@ -1618,9 +1622,9 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
 
         env = xp.ones_like(qra)
         if q_highpass:
-            env *= 1 - 1 / (1 + (qra / q_highpass) ** 4)
+            env *= 1 - 1 / (1 + (qra / q_highpass) ** butterworth_order)
         if q_lowpass:
-            env *= 1 / (1 + (qra / q_lowpass) ** 4)
+            env *= 1 / (1 + (qra / q_lowpass) ** butterworth_order)
 
         current_object_mean = xp.mean(current_object)
         current_object -= current_object_mean
@@ -1677,6 +1681,7 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
         q_lowpass_m,
         q_highpass_e,
         q_highpass_m,
+        butterworth_order,
         object_positivity,
         shrinkage_rad,
         object_mask,
@@ -1732,6 +1737,8 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
             Cut-off frequency in A^-1 for high-pass filtering electrostatic object
         q_highpass_m: float
             Cut-off frequency in A^-1 for high-pass filtering magnetic object
+        butterworth_order: float
+            Butterworth filter order. Smaller gives a smoother filter
         object_positivity: bool
             If True, forces object to be positive
         shrinkage_rad: float
@@ -1766,21 +1773,25 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
                 current_object[0],
                 q_lowpass_e,
                 q_highpass_e,
+                butterworth_order,
             )
             current_object[1] = self._object_butterworth_constraint(
                 current_object[1],
                 q_lowpass_m,
                 q_highpass_m,
+                butterworth_order,
             )
             current_object[2] = self._object_butterworth_constraint(
                 current_object[2],
                 q_lowpass_m,
                 q_highpass_m,
+                butterworth_order,
             )
             current_object[3] = self._object_butterworth_constraint(
                 current_object[3],
                 q_lowpass_m,
                 q_highpass_m,
+                butterworth_order,
             )
 
         if shrinkage_rad > 0.0 or object_mask is not None:
@@ -1863,6 +1874,7 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
         q_lowpass_m: float = None,
         q_highpass_e: float = None,
         q_highpass_m: float = None,
+        butterworth_order: float = 2,
         object_positivity: bool = True,
         shrinkage_rad: float = 0.0,
         fix_potential_baseline: bool = True,
@@ -1942,6 +1954,8 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
             Cut-off frequency in A^-1 for low-pass butterworth filter
         q_highpass: float
             Cut-off frequency in A^-1 for high-pass butterworth filter
+        butterworth_order: float
+            Butterworth filter order. Smaller gives a smoother filter
         object_positivity: bool, optional
             If True, forces object to be positive
         shrinkage_rad: float
@@ -2408,6 +2422,7 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
                         q_lowpass_m=q_lowpass_m,
                         q_highpass_e=q_highpass_e,
                         q_highpass_m=q_highpass_m,
+                        butterworth_order=butterworth_order,
                         object_positivity=object_positivity,
                         shrinkage_rad=shrinkage_rad,
                         object_mask=self._object_fov_mask_inverse
@@ -2454,6 +2469,7 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
                     q_lowpass_m=q_lowpass_m,
                     q_highpass_e=q_highpass_e,
                     q_highpass_m=q_highpass_m,
+                    butterworth_order=butterworth_order,
                     object_positivity=object_positivity,
                     shrinkage_rad=shrinkage_rad,
                     object_mask=self._object_fov_mask_inverse

@@ -1492,13 +1492,15 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
         """
         gaussian_filter = self._gaussian_filter
         xp = self._xp
-        gaussian_filter_sigma /= xp.sqrt(self.sampling[0] ** 2 + self.sampling[1] ** 2)
 
+        gaussian_filter_sigma /= xp.sqrt(self.sampling[0] ** 2 + self.sampling[1] ** 2)
         current_object = gaussian_filter(current_object, gaussian_filter_sigma)
 
         return current_object
 
-    def _object_butterworth_constraint(self, current_object, q_lowpass, q_highpass):
+    def _object_butterworth_constraint(
+        self, current_object, q_lowpass, q_highpass, butterworth_order
+    ):
         """
         Butterworth filter
 
@@ -1510,7 +1512,8 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
             Cut-off frequency in A^-1 for low-pass butterworth filter
         q_highpass: float
             Cut-off frequency in A^-1 for high-pass butterworth filter
-
+        butterworth_order: float
+            Butterworth filter order. Smaller gives a smoother filter
         Returns
         --------
         constrained_object: np.ndarray
@@ -1525,9 +1528,9 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
 
         env = xp.ones_like(qra)
         if q_highpass:
-            env *= 1 - 1 / (1 + (qra / q_highpass) ** 4)
+            env *= 1 - 1 / (1 + (qra / q_highpass) ** butterworth_order)
         if q_lowpass:
-            env *= 1 / (1 + (qra / q_lowpass) ** 4)
+            env *= 1 / (1 + (qra / q_lowpass) ** butterworth_order)
 
         current_object_mean = xp.mean(current_object)
         current_object -= current_object_mean
@@ -1557,6 +1560,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
         butterworth_filter,
         q_lowpass,
         q_highpass,
+        butterworth_order,
         object_positivity,
         shrinkage_rad,
         object_mask,
@@ -1605,6 +1609,8 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
             Cut-off frequency in A^-1 for low-pass butterworth filter
         q_highpass: float
             Cut-off frequency in A^-1 for high-pass butterworth filter
+        butterworth_order: float
+            Butterworth filter order. Smaller gives a smoother filter
         object_positivity: bool
             If True, forces object to be positive
         shrinkage_rad: float
@@ -1632,6 +1638,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                 current_object,
                 q_lowpass,
                 q_highpass,
+                butterworth_order,
             )
 
         if shrinkage_rad > 0.0 or object_mask is not None:
@@ -1711,6 +1718,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
         butterworth_filter_iter: int = np.inf,
         q_lowpass: float = None,
         q_highpass: float = None,
+        butterworth_order: float = 2,
         object_positivity: bool = True,
         shrinkage_rad: float = 0.0,
         fix_potential_baseline: bool = True,
@@ -1788,6 +1796,8 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
             Cut-off frequency in A^-1 for low-pass butterworth filter
         q_highpass: float
             Cut-off frequency in A^-1 for high-pass butterworth filter
+        butterworth_order: float
+            Butterworth filter order. Smaller gives a smoother filter
         object_positivity: bool, optional
             If True, forces object to be positive
         shrinkage_rad: float
@@ -2172,6 +2182,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                         and (q_lowpass is not None or q_highpass is not None),
                         q_lowpass=q_lowpass,
                         q_highpass=q_highpass,
+                        butterworth_order=butterworth_order,
                         object_positivity=object_positivity,
                         shrinkage_rad=shrinkage_rad,
                         object_mask=self._object_fov_mask_inverse
@@ -2213,6 +2224,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                     and (q_lowpass is not None or q_highpass is not None),
                     q_lowpass=q_lowpass,
                     q_highpass=q_highpass,
+                    butterworth_order=butterworth_order,
                     object_positivity=object_positivity,
                     shrinkage_rad=shrinkage_rad,
                     object_mask=self._object_fov_mask_inverse
