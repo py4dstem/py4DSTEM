@@ -1329,6 +1329,27 @@ class DataCubeMethods:
         ry,
         sigma = 2
     ):
+        """
+        Computes and returns a background image for the diffraction
+        pattern at (rx,ry), populated by radial rings of constant intensity
+        about the origin, with the value of each ring given by the median
+        value of the diffraction pattern at that radial distance.
+
+        Parameters
+        ----------
+        rx : int
+            The x-coord of the beam position
+        ry : int
+            The y-coord of the beam position
+        sigma : number
+            If >0, applying a gaussian smoothing in the radial direction
+            before returning
+
+        Returns
+        -------
+        background : ndarray
+            The radial background
+        """
         # ensure a polar cube and origin exist
         assert(self.polar is not None), "No polar datacube found!"
         assert(self.calibration.get_origin() is not None), "No origin found!"
@@ -1376,6 +1397,26 @@ class DataCubeMethods:
         ry,
         sigma = 2
     ):
+        """
+        Computes and returns the diffraction pattern at beam position (rx,ry)
+        with a radial background subtracted.  See the docstring for
+        datacube.get_radial_background for more info.
+
+        Parameters
+        ----------
+        rx : int
+            The x-coord of the beam position
+        ry : int
+            The y-coord of the beam position
+        sigma : number
+            If >0, applying a gaussian smoothing in the radial direction
+            before returning
+
+        Returns
+        -------
+        data : ndarray
+            The radial background subtracted diffraction image
+        """
         # get 2D background
         background = self.get_radial_bkgrnd( rx,ry,sigma )
 
@@ -1383,6 +1424,237 @@ class DataCubeMethods:
         ans = self.data[rx,ry] - background
         ans[ans<0] = 0
         return ans
+
+
+
+    def get_local_ave_dp(
+        self,
+        rx,
+        ry,
+        radial_bksb = False,
+        sigma = 2,
+        braggmask = False,
+        braggvectors = None,
+        braggmask_radius = None
+    ):
+        """
+        Computes and returns the diffraction pattern at beam position (rx,ry)
+        after weighted local averaging with its nearest-neighbor patterns,
+        using a 3x3 gaussian kernel for the weightings.
+
+        Parameters
+        ----------
+        rx : int
+            The x-coord of the beam position
+        ry : int
+            The y-coord of the beam position
+        radial_bksb : bool
+            It True, apply a radial background subtraction to each pattern
+            before averaging
+        sigma : number
+            If radial_bksb is True, use this sigma for radial smoothing of
+            the background
+        braggmask : bool
+            If True, masks bragg scattering at each scan position before
+            averaging. `braggvectors` and `braggmask_radius` must be
+            specified.
+        braggvectors : BraggVectors
+            The Bragg vectors to use for masking
+        braggmask_radius : number
+            The radius about each Bragg point to mask
+
+        Returns
+        -------
+        data : ndarray
+            The radial background subtracted diffraction image
+        """
+        # define the kernel
+        kernel = np.array([[1,2,1],
+                           [2,4,2],
+                           [1,2,1]])/16.
+
+        # get shape and check for valid inputs
+        nx,ny = self.data.shape[:2]
+        assert(rx>=0 and rx<nx), "rx outside of scan range"
+        assert(ry>=0 and ry<ny), "ry outside of scan range"
+
+        # get the subcube, checking for edge patterns
+        # and modifying the kernel as needed
+        if rx!=0 and rx!=(nx-1) and ry!=0 and ry!=(ny-1):
+            subcube = self.data[rx-1:rx+2,ry-1:ry+2,:,:]
+        elif rx==0 and ry==0:
+            subcube = self.data[:2,:2,:,:]
+            kernel = kernel[1:,1:]
+        elif rx==0 and ry==(ny-1):
+            subcube = self.data[:2,-2:,:,:]
+            kernel = kernel[1:,:-1]
+        elif rx==(nx-1) and ry==0:
+            subcube = self.data[-2:,:2,:,:]
+            kernel = kernel[:-1,1:]
+        elif rx==(nx-1) and ry==(ny-1):
+            subcube = self.data[-2:,-2:,:,:]
+            kernel = kernel[:-1,:-1]
+        elif rx==0:
+            subcube = self.data[:2,ry-1:ry+2,:,:]
+            kernel = kernel[1:,:]
+        elif rx==(nx-1):
+            subcube = self.data[-2:,ry-1:ry+2,:,:]
+            kernel = kernel[:-1,:]
+        elif ry==0:
+            subcube = self.data[rx-1:rx+2,:2,:,:]
+            kernel = kernel[:,1:]
+        elif ry==(ny-1):
+            subcube = self.data[rx-1:rx+2,-2:,:,:]
+            kernel = kernel[:,:-1]
+        else:
+            raise Exception(f'Invalid (rx,ry) = ({rx},{ry})...')
+
+        # normalize the kernel
+        kernel /= np.sum(kernel)
+
+
+        # compute...
+
+        # ...in the simple case
+        if not(radial_bksb) and not(braggmask):
+            ans = np.tensordot(subcube,kernel,axes=((0,1),(0,1)))
+
+        # ...with radial background subtration
+        elif radial_bksb and not(braggmask):
+            # get position of (rx,ry) relative to kernel
+            _xs = 1 if rx!=0 else 0
+            _ys = 1 if ry!=0 else 0
+            x0 = rx - _xs
+            y0 = ry - _ys
+            # compute
+            ans = np.zeros(self.Qshape)
+            for (i,j),w in np.ndenumerate(kernel):
+                x = x0 + i
+                y = y0 + j
+                ans += self.get_radial_bksb_dp(x,y,sigma) * w
+
+        # ...with bragg masking
+        elif not(radial_bksb) and braggmask:
+            assert(braggvectors is not None), "`braggvectors` must be specified or `braggmask` must be turned off!"
+            assert(braggmask_radius is not None), "`braggmask_radius` must be specified or `braggmask` must be turned off!"
+            # get position of (rx,ry) relative to kernel
+            _xs = 1 if rx!=0 else 0
+            _ys = 1 if ry!=0 else 0
+            x0 = rx - _xs
+            y0 = ry - _ys
+            # compute
+            ans = np.zeros(self.Qshape)
+            weights = np.zeros(self.Qshape)
+            for (i,j),w in np.ndenumerate(kernel):
+                x = x0 + i
+                y = y0 + j
+                mask = self.get_braggmask(
+                    braggvectors,
+                    x,
+                    y,
+                    braggmask_radius
+                )
+                weights_curr = mask * w
+                ans += self.data[x,y] * weights_curr
+                weights += weights_curr
+            # normalize
+            out = np.full_like(ans, np.nan)
+            ans_mask = weights>0
+            ans = np.divide(
+                ans,
+                weights,
+                out = out,
+                where = ans_mask
+            )
+            # make masked array
+            ans = np.ma.array(
+                data = ans,
+                mask = np.logical_not(ans_mask)
+            )
+            pass
+
+        # ...with both radial background subtraction and bragg masking
+        else:
+            assert(braggvectors is not None), "`braggvectors` must be specified or `braggmask` must be turned off!"
+            assert(braggmask_radius is not None), "`braggmask_radius` must be specified or `braggmask` must be turned off!"
+            # get position of (rx,ry) relative to kernel
+            _xs = 1 if rx!=0 else 0
+            _ys = 1 if ry!=0 else 0
+            x0 = rx - _xs
+            y0 = ry - _ys
+            # compute
+            ans = np.zeros(self.Qshape)
+            weights = np.zeros(self.Qshape)
+            for (i,j),w in np.ndenumerate(kernel):
+                x = x0 + i
+                y = y0 + j
+                mask = self.get_braggmask(
+                    braggvectors,
+                    x,
+                    y,
+                    braggmask_radius
+                )
+                weights_curr = mask * w
+                ans += self.get_radial_bksb_dp(x,y,sigma) * weights_curr
+                weights += weights_curr
+            # normalize
+            out = np.full_like(ans, np.nan)
+            ans_mask = weights>0
+            ans = np.divide(
+                ans,
+                weights,
+                out = out,
+                where = ans_mask
+            )
+            # make masked array
+            ans = np.ma.array(
+                data = ans,
+                mask = np.logical_not(ans_mask)
+            )
+            pass
+
+        # return
+        return ans
+
+
+
+
+    def get_braggmask(
+        self,
+        braggvectors,
+        rx,
+        ry,
+        radius
+    ):
+        """
+        Returns a boolean mask which is False in a radius of `radius` around
+        each bragg scattering vector at scan position (rx,ry).
+
+        Parameters
+        ----------
+        braggvectors : BraggVectors
+            The bragg vectors
+        rx : int
+            The x-coord of the beam position
+        ry : int
+            The y-coord of the beam position
+        radius : number
+            mask pixels about each bragg vector to this radial distance
+
+        Returns
+        -------
+        mask : boolean ndarray
+        """
+        # allocate space
+        mask = np.ones( self.Qshape, dtype=bool )
+        # get the vectors
+        vects = braggvectors.raw[rx,ry]
+        # loop
+        for idx in range(len(vects.data)):
+            qr = np.hypot(self.qxx-vects.qx[idx], self.qyy-vects.qy[idx])
+            mask = np.logical_and(mask, qr>radius)
+        return mask
+
 
 
 
