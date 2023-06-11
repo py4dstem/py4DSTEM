@@ -1622,9 +1622,9 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
 
         env = xp.ones_like(qra)
         if q_highpass:
-            env *= 1 - 1 / (1 + (qra / q_highpass) ** butterworth_order)
+            env *= 1 - 1 / (1 + (qra / q_highpass) ** (2 * butterworth_order))
         if q_lowpass:
-            env *= 1 / (1 + (qra / q_lowpass) ** butterworth_order)
+            env *= 1 / (1 + (qra / q_lowpass) ** (2 * butterworth_order))
 
         current_object_mean = xp.mean(current_object)
         current_object -= current_object_mean
@@ -2439,7 +2439,11 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
             if collective_tilt_updates:
                 self._object += collective_object / self._num_tilts
 
-                (self._object, self._probe, _,) = self._constraints(
+                (
+                    self._object,
+                    self._probe,
+                    _,
+                ) = self._constraints(
                     self._object,
                     self._probe,
                     None,
