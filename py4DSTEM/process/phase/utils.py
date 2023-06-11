@@ -2,6 +2,7 @@ from typing import Mapping, Tuple, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
+import functools
 
 try:
     import cupy as cp
@@ -1287,3 +1288,16 @@ def project_vector_field_divergence(vector_field, spacings=(1, 1, 1), xp=np):
     p = preconditioned_poisson_solver(div_v, spacings[0], xp=xp)
     grad_p = compute_gradient(p, spacings, xp=xp)
     return vector_field - grad_p
+
+# Nesterov acceleration functions
+# https://blogs.princeton.edu/imabandit/2013/04/01/acceleratedgradientdescent/
+
+@functools.cache
+def nesterov_lambda(one_indexed_iter_num):
+    if one_indexed_iter_num == 0:
+        return 0
+    return (1+np.sqrt(1+4*nesterov_lambda(one_indexed_iter_num-1)**2))/2
+
+def nesterov_gamma(zero_indexed_iter_num):
+    one_indexed_iter_num = zero_indexed_iter_num + 1
+    return (1-nesterov_lambda(one_indexed_iter_num))/nesterov_lambda(one_indexed_iter_num+1)
