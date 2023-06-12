@@ -21,7 +21,7 @@ setup(
     author_email='ben.savitzky@gmail.com',
     license='GNU GPLv3',
     keywords="STEM 4DSTEM",
-    python_requires='>=3.7',
+    python_requires='>=3.9,<3.11',
     install_requires=[
         'numpy >= 1.19',
         'scipy >= 1.5.2',
@@ -35,7 +35,8 @@ setup(
         'dill >= 0.3.3',
         'gdown >= 4.4.0',
         'dask >= 2.3.0',
-        'distributed >= 2.3.0'
+        'distributed >= 2.3.0',
+        'emdfile >= 0.0.6',
         ],
     extras_require={
         'ipyparallel': ['ipyparallel >= 6.2.4', 'dill >= 0.3.3'],
@@ -45,9 +46,6 @@ setup(
         'aiml-cuda': ['tensorflow == 2.4.1','tensorflow-addons <= 0.14.0','crystal4D','cupy'],
         'numba': ['numba >= 0.49.1']
         },
-    entry_points={
-        'console_scripts': ['py4DSTEM=py4DSTEM.gui.runGUI:launch']
-    },
     package_data={
         'py4DSTEM':['process/utils/scattering_factors.txt',
                     'process/diskdetection/multicorr_row_kernel.cu',

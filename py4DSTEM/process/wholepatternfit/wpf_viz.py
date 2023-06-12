@@ -46,6 +46,10 @@ def show_model_grid(self, x=None, **plot_kwargs):
 
 def show_lattice_points(
     self, 
+    im = None,
+    vmin = None,
+    vmax = None,
+    power = None,
     returnfig=False, 
     *args, 
     **kwargs
@@ -53,12 +57,25 @@ def show_lattice_points(
     """
     Plotting utility to show the initial lattice points.
     """
+
+    if im is None:
+        im = self.meanCBED
+    if power is None:
+        power = 0.5
+
     fig, ax = plt.subplots(*args, **kwargs)
-    ax.matshow(
-        self.meanCBED**0.5, 
-        cmap="gray",
-        # cmap="turbo"
-        )
+    if vmin is None and vmax is None:
+        ax.matshow(
+            im**power, 
+            cmap="gray",
+            )
+    else:
+        ax.matshow(
+            im**power,
+            vmin = vmin,
+            vmax = vmax, 
+            cmap="gray",
+            )
 
     for m in self.model:
         if "Lattice" in m.name:
