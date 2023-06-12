@@ -1,467 +1,66 @@
 # Find the origin of diffraction space
 
+import functools
 import numpy as np
 from scipy.ndimage import gaussian_filter
 from scipy.optimize import leastsq
 
+from emdfile import tqdmnd, PointListArray
+from py4DSTEM.classes import DataCube
 from py4DSTEM.process.calibration.probe import get_probe_size
 from py4DSTEM.process.fit import plane,parabola,bezier_two,fit_2D
 from py4DSTEM.process.utils import get_CoM, add_to_2D_array_from_floats, get_maxima_2D
-from py4DSTEM.utils.tqdmnd import tqdmnd
-from py4DSTEM.io.datastructure import PointListArray, DataCube
 
 
-def measure_origin(
-        data,
-        mode,
-        **kwargs
-    ):
+
+# origin setting decorators
+
+def set_measured_origin(fun):
     """
-    Options for the `mode` argument, their uses-cases, and their expected additional input arguments are:
+    This is intended as a decorator function to wrap other functions which measure
+    the position of the origin.  If some function `get_the_origin` returns the
+    position of the origin as a tuple of two (R_Nx,R_Ny)-shaped arrays, then
+    decorating the function definition like
 
-    "dc_no_beamstop" - A datacube with no beamstop, and in which the center beam
-        is brightest throughout.
+        >>> @measure_origin
+        >>> def get_the_origin(...):
 
-        Args:
-            data (DataCube)
+    will make the function also save those arrays as the measured origin in the
+    calibration associated with the data used for the measurement. Any existing
+    measured origin value will be overwritten.
 
-    "bragg_no_beamstop" - A set of bragg peaks for data with no beamstop, and in which
-        the center beam is brightest throughout.
-
-        Args:
-            data (PointListArray)
-            Q_shape (Qx, Qy) from braggvector
-
-    "dc_beamstop" - A datacube with a beamstop
-
-        Args:
-            data (DataCube)
-            mask (2d array)
-
-    "bragg_beamstop" - A set of bragg peaks for data with a beamstop
-
-        Args:
-            data (PointListArray)
-            center_guess (2-tuple)
-            radii   (2-tuple)
-            Q_Nx (int)
-            Q_Ny (int)
-
-
-    Returns:
-        (3 real space shaped arrays) qx0, qy0, mask
+    For the wrapper to work, the decorated function's first argument must have
+    a .calibration property, and its first two return values must be qx0,qy0.
     """
-    # parse args
-    modes = (
-        "dc_no_beamstop",
-        "bragg_no_beamstop",
-        "dc_beamstop",
-        "bragg_beamstop",
-    )
-    assert mode in modes, f"{mode} must be in {modes}"
-
-    # select a fn
-    fn_dict = {
-        "dc_no_beamstop" : get_origin,
-        "dc_beamstop" : get_origin_beamstop,
-        "bragg_no_beamstop" : get_origin_from_braggpeaks,
-        "bragg_beamstop" : get_origin_beamstop_braggpeaks,
-    }
-    fn = fn_dict[mode]
-
-    # run
-    ans = fn(
-        data,
-        **kwargs
-    )
-
-    # return
-    return ans
+    @functools.wraps(fun)
+    def wrapper(*args,**kwargs):
+        ans = fun(*args,**kwargs)
+        data = args[0]
+        cali = data.calibration
+        cali.set_origin_meas((ans[0],ans[1]))
+        return ans
+    return wrapper
 
 
-
-
-
-
-
-
-### Functions for finding the origin
-
-def get_origin_single_dp(dp, r, rscale=1.2):
+def set_fit_origin(fun):
     """
-    Find the origin for a single diffraction pattern, assuming (a) there is no beam stop,
-    and (b) the center beam contains the highest intensity.
-
-    Args:
-        dp (ndarray): the diffraction pattern
-        r (number): the approximate disk radius
-        rscale (number): factor by which `r` is scaled to generate a mask
-
-    Returns:
-        (2-tuple): The origin
+    See docstring for `set_measured_origin`
     """
-    Q_Nx, Q_Ny = dp.shape
-    _qx0, _qy0 = np.unravel_index(np.argmax(gaussian_filter(dp, r)), (Q_Nx, Q_Ny))
-    qyy, qxx = np.meshgrid(np.arange(Q_Ny), np.arange(Q_Nx))
-    mask = np.hypot(qxx - _qx0, qyy - _qy0) < r * rscale
-    qx0, qy0 = get_CoM(dp * mask)
-    return qx0, qy0
+    @functools.wraps(fun)
+    def wrapper(*args,**kwargs):
+        ans = fun(*args,**kwargs)
+        data = args[0]
+        cali = data.calibration
+        cali.set_origin((ans[0],ans[1]))
+        return ans
+    return wrapper
 
 
-def get_origin(
-    datacube,
-    r=None,
-    rscale=1.2,
-    dp_max=None,
-    mask=None
-    ):
-    """
-    Find the origin for all diffraction patterns in a datacube, assuming (a) there is no
-    beam stop, and (b) the center beam contains the highest intensity. Stores the origin
-    positions in the Calibration associated with datacube, and optionally also returns
-    them.
-
-    Args:
-        datacube (DataCube): the data
-        r (number or None): the approximate radius of the center disk. If None (default),
-            tries to compute r using the get_probe_size method.  The data used for this
-            is controlled by dp_max.
-        rscale (number): expand 'r' by this amount to form a mask about the center disk
-            when taking its center of mass
-        dp_max (ndarray or None): the diffraction pattern or dp-shaped array used to
-            compute the center disk radius, if r is left unspecified. Behavior depends
-            on type:
-
-                * if ``dp_max==None`` (default), computes and uses the maximal
-                  diffraction pattern. Note that for a large datacube, this may be a
-                  slow operation.
-                * otherwise, this should be a (Q_Nx,Q_Ny) shaped array
-        mask (ndarray or None): if not None, should be an (R_Nx,R_Ny) shaped
-                    boolean array. Origin is found only where mask==True, and masked
-                    arrays are returned for qx0,qy0
-
-    Returns:
-        (2-tuple of (R_Nx,R_Ny)-shaped ndarrays): the origin, (x,y) at each scan position
-    """
-    if r is None:
-        if dp_max is None:
-            dp_max = np.max(datacube.data, axis=(0, 1))
-        else:
-            assert dp_max.shape == (datacube.Q_Nx, datacube.Q_Ny)
-        r, _, _ = get_probe_size(dp_max)
-
-    qx0 = np.zeros((datacube.R_Nx, datacube.R_Ny))
-    qy0 = np.zeros((datacube.R_Nx, datacube.R_Ny))
-    qyy, qxx = np.meshgrid(np.arange(datacube.Q_Ny), np.arange(datacube.Q_Nx))
-
-    if mask is None:
-        for (rx, ry) in tqdmnd(
-            datacube.R_Nx,
-            datacube.R_Ny,
-            desc="Finding origins",
-            unit="DP",
-            unit_scale=True,
-        ):
-            dp = datacube.data[rx, ry, :, :]
-            _qx0, _qy0 = np.unravel_index(
-                np.argmax(gaussian_filter(dp, r)), (datacube.Q_Nx, datacube.Q_Ny)
-            )
-            _mask = np.hypot(qxx - _qx0, qyy - _qy0) < r * rscale
-            qx0[rx, ry], qy0[rx, ry] = get_CoM(dp * _mask)
-
-    else:
-        assert mask.shape == (datacube.R_Nx, datacube.R_Ny)
-        assert mask.dtype == bool
-        qx0 = np.ma.array(
-            data=qx0, mask=np.zeros((datacube.R_Nx, datacube.R_Ny), dtype=bool)
-        )
-        qy0 = np.ma.array(
-            data=qy0, mask=np.zeros((datacube.R_Nx, datacube.R_Ny), dtype=bool)
-        )
-        for (rx, ry) in tqdmnd(
-            datacube.R_Nx,
-            datacube.R_Ny,
-            desc="Finding origins",
-            unit="DP",
-            unit_scale=True,
-        ):
-            if mask[rx, ry]:
-                dp = datacube.data[rx, ry, :, :]
-                _qx0, _qy0 = np.unravel_index(
-                    np.argmax(gaussian_filter(dp, r)), (datacube.Q_Nx, datacube.Q_Ny)
-                )
-                _mask = np.hypot(qxx - _qx0, qyy - _qy0) < r * rscale
-                qx0.data[rx, ry], qy0.data[rx, ry] = get_CoM(dp * _mask)
-            else:
-                qx0.mask, qy0.mask = True, True
-
-    # return
-    mask = np.ones(datacube.Rshape, dtype=bool)
-    return qx0, qy0, mask
 
 
-def get_origin_from_braggpeaks(
-    braggpeaks,
-    Q_shape,
-    center_guess = None,
-    score_method = None,
-    findcenter="CoM",
-    bvm=None,
-    **kwargs
-):
-    """
-    Gets the diffraction shifts using detected Bragg disk positions.
-
-    If a center guess is not specified, first, a guess at the unscattered beam position is determined, 
-    either by taking the CoM of the Bragg vector map, or by taking its maximal pixel.  Once a unscattered 
-    beam position is determined, the Bragg peak closest to this position is identified. The shifts in these 
-    peaks positions from their average are returned as the diffraction shifts.
-
-    Args:
-        braggpeaks (PointListArray): the Bragg peak positions
-        Q_shape (tuple of ints): the shape of diffration space
-        center_guess (tuple of ints):   initial guess for the center
-        score_method (string):     Method used to find center peak
-            -'intensity': finds the most intense Bragg peak near the center
-            -'distance': finds the closest Bragg peak to the center 
-            -'intensity weighted distance': determines center through a combination of 
-                weighting distance and intensity
-        findcenter (str): specifies the method for determining the unscattered beam
-            position options: 'CoM', or 'max.' Only used if center_guess is None. 
-            CoM (default) finds the center of mass of bragg ector map. 'max' uses
-            the maximum value in the bragg vector map. 
-        bvm (array or None): the braggvector map. If None (default), the bvm is
-            calculated
-
-    Returns:
-        (3-tuple): A 3-tuple comprised of:
-
-            * **qx0** *((R_Nx,R_Ny)-shaped array)*: the origin x-coord
-            * **qy0** *((R_Nx,R_Ny)-shaped array)*: the origin y-coord
-            * **braggvectormap** *((R_Nx,R_Ny)-shaped array)*: the Bragg vector map of only
-              the Bragg peaks identified with the unscattered beam. Useful for diagnostic
-              purposes.
-    """
-    assert isinstance(braggpeaks, PointListArray), "braggpeaks must be a PointListArray"
-    # assert all([isinstance(item, (int, np.integer)) for item in [Q_Nx, Q_Ny]])
-    assert isinstance(findcenter, str), "center must be a str"
-    assert findcenter in ["CoM", "max"], "center must be either 'CoM' or 'max'"
-    assert score_method in ["distance", "intensity", "intensity weighted distance", None], "center must be either 'distance' or 'intensity weighted distance'"
-
-    R_Nx, R_Ny = braggpeaks.shape
-    Q_Nx, Q_Ny = Q_shape
-
-    # Default scoring method
-    if score_method is None:
-        if center_guess is None:
-            score_method = "intensity"
-        else:
-            score_method = "distance"
 
 
-    # Get guess at position of unscattered beam (x0,y0)
-    if center_guess is None:
-        if bvm is None:
-            from py4DSTEM.process.diskdetection.braggvectormap import get_bragg_vector_map_raw
-            braggvectormap_all = get_bragg_vector_map_raw(braggpeaks, Q_Nx, Q_Ny)
-        else:
-            braggvectormap_all = bvm
-        if findcenter == "max":
-            x0, y0 = np.unravel_index(
-                np.argmax(gaussian_filter(braggvectormap_all, 10)), (Q_Nx, Q_Ny)
-            )
-        else:
-            x0, y0 = get_CoM(braggvectormap_all)
-            braggvectormap = np.zeros_like(braggvectormap_all)
-            for Rx in range(R_Nx):
-                for Ry in range(R_Ny):
-                    pointlist = braggpeaks.get_pointlist(Rx, Ry)
-                    if pointlist.length > 0:
-                        r2 = (pointlist.data["qx"] - x0) ** 2 + (
-                            pointlist.data["qy"] - y0
-                        ) ** 2
-                        index = np.argmin(r2)
-                        braggvectormap = add_to_2D_array_from_floats(
-                            braggvectormap,
-                            pointlist.data["qx"][index],
-                            pointlist.data["qy"][index],
-                            pointlist.data["intensity"][index],
-                        )
-            x0, y0 = get_CoM(braggvectormap)
-    else:
-        x0, y0 = center_guess
-
-    # Get Bragg peak closest to unscattered beam at each scan position
-    qx0 = np.zeros((R_Nx, R_Ny))
-    qy0 = np.zeros((R_Nx, R_Ny))
-    for Rx in range(R_Nx):
-        for Ry in range(R_Ny):
-            pointlist = braggpeaks.get_pointlist(Rx, Ry)
-            if pointlist.length > 0:
-                if score_method == "distance":
-                    r2 = (pointlist.data["qx"] - x0) ** 2 + (pointlist.data["qy"] - y0) ** 2
-                    index = np.argmin(r2)
-                elif score_method == "intensity":
-                    index = np.argmax(pointlist.data["intensity"])
-                elif score_method == "intensity weighted distance":
-                    r2 = pointlist.data["intensity"]/(1+((pointlist.data["qx"] - x0) ** 2 + (pointlist.data["qy"] - y0) ** 2))
-                    index = np.argmax(r2)
-                qx0[Rx, Ry] = pointlist.data["qx"][index]
-                qy0[Rx, Ry] = pointlist.data["qy"][index]
-            else:
-                qx0[Rx, Ry] = x0
-                qy0[Rx, Ry] = y0
-
-    # return
-    mask = np.ones(braggpeaks.shape, dtype=bool)
-    return qx0, qy0, mask
-
-def get_origin_single_dp_beamstop(DP: np.ndarray,mask: np.ndarray, **kwargs):
-    """
-    Find the origin for a single diffraction pattern, assuming there is a beam stop.
-
-    Args:
-        DP (np array): diffraction pattern
-        mask (np array): boolean mask which is False under the beamstop and True
-            in the diffraction pattern. One approach to generating this mask
-            is to apply a suitable threshold on the average diffraction pattern
-            and use binary opening/closing to remove and holes
-
-    Returns:
-        qx0, qy0 (tuple) measured center position of diffraction pattern
-    """
-
-    imCorr = np.real(
-        np.fft.ifft2(
-            np.fft.fft2(DP * mask)
-            * np.conj(np.fft.fft2(np.rot90(DP, 2) * np.rot90(mask, 2)))
-        )
-    )
-
-    xp, yp = np.unravel_index(np.argmax(imCorr), imCorr.shape)
-
-    dx = ((xp + DP.shape[0] / 2) % DP.shape[0]) - DP.shape[0] / 2
-    dy = ((yp + DP.shape[1] / 2) % DP.shape[1]) - DP.shape[1] / 2
-
-    return (DP.shape[0] + dx) / 2, (DP.shape[1] + dy) / 2
-
-
-def get_origin_beamstop(datacube: DataCube, mask: np.ndarray, **kwargs):
-    """
-    Find the origin for each diffraction pattern, assuming there is a beam stop.
-
-    Args:
-        datacube (DataCube)
-        mask (np array): boolean mask which is False under the beamstop and True
-            in the diffraction pattern. One approach to generating this mask
-            is to apply a suitable threshold on the average diffraction pattern
-            and use binary opening/closing to remove any holes
-
-    Returns:
-        qx0, qy0 (tuple of np arrays) measured center position of each diffraction pattern
-    """
-
-    qx0 = np.zeros(datacube.data.shape[:2])
-    qy0 = np.zeros_like(qx0)
-
-    for rx, ry in tqdmnd(datacube.R_Nx, datacube.R_Ny):
-        x, y = get_origin_single_dp_beamstop(datacube.data[rx, ry, :, :], mask)
-
-        qx0[rx,ry] = x
-        qy0[rx,ry] = y
-
-    return qx0, qy0
-
-def get_origin_beamstop_braggpeaks(
-    braggpeaks,
-    center_guess,
-    radii,
-    max_dist=2,
-    max_iter=1,
-    **kwargs
-    ):
-    """
-    Find the origin from a set of braggpeaks assuming there is a beamstop, by identifying
-    pairs of conjugate peaks inside an annular region and finding their centers of mass.
-
-    Args:
-        braggpeaks (PointListArray):
-        center_guess (2-tuple): qx0,qy0
-        radii (2-tuple): the inner and outer radii of the specified annular region
-        max_dist (number): the maximum allowed distance between the reflection of two
-            peaks to consider them conjugate pairs
-        max_iter (integer): for values >1, repeats the algorithm after updating center_guess
-
-    Returns:
-        (2d masked array): the origins
-    """
-
-    assert(isinstance(braggpeaks,PointListArray))
-    R_Nx,R_Ny = braggpeaks.shape
-
-
-    # remove peaks outside the annulus
-    braggpeaks_masked = braggpeaks.copy()
-    for rx in range(R_Nx):
-        for ry in range(R_Ny):
-            pl = braggpeaks_masked.get_pointlist(rx,ry)
-            qr = np.hypot(pl.data['qx']-center_guess[0],
-                          pl.data['qy']-center_guess[1])
-            rm = np.logical_not(np.logical_and(qr>=radii[0],qr<=radii[1]))
-            pl.remove(rm)
-
-    # Find all matching conjugate pairs of peaks
-    center_curr = center_guess
-    for ii in range(max_iter):
-        centers = np.zeros((R_Nx,R_Ny,2))
-        found_center = np.zeros((R_Nx,R_Ny),dtype=bool)
-        for rx in range(R_Nx):
-            for ry in range(R_Ny):
-
-                # Get data
-                pl = braggpeaks_masked.get_pointlist(rx,ry)
-                is_paired = np.zeros(len(pl.data),dtype=bool)
-                matches = []
-
-                # Find matching pairs
-                for i in range(len(pl.data)):
-                    if not is_paired[i]:
-                        x,y = pl.data['qx'][i],pl.data['qy'][i]
-                        x_r = -x+2*center_curr[0]
-                        y_r = -y+2*center_curr[1]
-                        dists = np.hypot(x_r-pl.data['qx'],y_r-pl.data['qy'])
-                        dists[is_paired] = 2*max_dist
-                        matched = dists<=max_dist
-                        if(any(matched)):
-                            match = np.argmin(dists)
-                            matches.append((i,match))
-                            is_paired[i],is_paired[match] = True,True
-
-                # Find the center
-                if len(matches)>0:
-                    x0,y0 = [],[]
-                    for i in range(len(matches)):
-                        x0.append(np.mean(pl.data['qx'][list(matches[i])]))
-                        y0.append(np.mean(pl.data['qy'][list(matches[i])]))
-                    x0,y0 = np.mean(x0),np.mean(y0)
-                    centers[rx,ry,:] = x0,y0
-                    found_center[rx,ry] = True
-                else:
-                    found_center[rx,ry] = False
-
-        # Update current center guess
-        x0_curr = np.mean(centers[found_center,0])
-        y0_curr = np.mean(centers[found_center,1])
-        center_curr = x0_curr,y0_curr
-
-    # return
-    mask = found_center
-    qx0,qy0 = centers[:,:,0],centers[:,:,1]
-
-    return qx0,qy0,mask
-
-
-### Functions for fitting the origin
+# fit the origin
 
 def fit_origin(
     data,
@@ -483,7 +82,7 @@ def fit_origin(
     Args:
         data (2-tuple of 2d arrays): the measured origin position (qx0,qy0)
         mask (2b boolean array, optional): ignore points where mask=False
-        fitfunction (str, optional): must be 'plane' or 'parabola' or 'bezier_two' 
+        fitfunction (str, optional): must be 'plane' or 'parabola' or 'bezier_two'
             or 'constant'
         returnfitp (bool, optional): if True, returns the fit parameters
         robust (bool, optional): If set to True, fit will be repeated with outliers
@@ -579,101 +178,184 @@ def fit_origin(
         return ans
 
 
-### Older / soon-to-be-deprecated functions for finding the origin
 
 
-def find_outlier_shifts(xshifts, yshifts, n_sigma=10, edge_boundary=0):
+
+
+### Functions for finding the origin
+
+# for a diffraction pattern
+
+def get_origin_single_dp(dp, r, rscale=1.2):
     """
-    Finds outliers in the shift matrices.
+    Find the origin for a single diffraction pattern, assuming (a) there is no beam stop,
+    and (b) the center beam contains the highest intensity.
 
-    Gets a score function for each scan position Rx,Ry, given by the sum of the absolute values of
-    the difference between the shifts at this position and all 8 NNs. Calculates a histogram of the
-    scoring function, fits a gaussian to its initial peak, and sets a cutoff value to n_sigma times
-    its standard deviation. Values beyond this cutoff are deemed outliers, as are scan positions
-    within edge_boundary pixels of the edge of real space.
-
-    Accepts:
-        xshifts         ((R_Nx,R_Ny)-shaped array) the shifts in x
-        yshifts         ((R_Nx,R_Ny)-shaped array) the shifts in y
-        n_sigma         (float) the cutoff value for the score function, in number of std
-        edge_boundary   (int) number of pixels near the mask edge to mark as outliers
+    Args:
+        dp (ndarray): the diffraction pattern
+        r (number): the approximate disk radius
+        rscale (number): factor by which `r` is scaled to generate a mask
 
     Returns:
-        mask            ((R_nx,R_ny)-shaped array of bools) the outlier mask
-        score           ((R_nx,R_ny)-shaped array) the outlier scores
-        cutoff          (float) the score cutoff value
+        (2-tuple): The origin
     """
-    # Get score
-    score = np.zeros_like(xshifts)
-    score[:-1, :] += np.abs(
-        xshifts[:-1, :] - np.roll(xshifts, (-1, 0), axis=(0, 1))[:-1, :]
-    )
-    score[1:, :] += np.abs(
-        xshifts[1:, :] - np.roll(xshifts, (1, 0), axis=(0, 1))[1:, :]
-    )
-    score[:, :-1] += np.abs(
-        xshifts[:, :-1] - np.roll(xshifts, (0, -1), axis=(0, 1))[:, :-1]
-    )
-    score[:, 1:] += np.abs(
-        xshifts[:, 1:] - np.roll(xshifts, (0, 1), axis=(0, 1))[:, 1:]
-    )
-    score[:-1, :-1] += np.abs(
-        xshifts[:-1, :-1] - np.roll(xshifts, (-1, -1), axis=(0, 1))[:-1, :-1]
-    )
-    score[1:, :-1] += np.abs(
-        xshifts[1:, :-1] - np.roll(xshifts, (1, -1), axis=(0, 1))[1:, :-1]
-    )
-    score[:-1, 1:] += np.abs(
-        xshifts[:-1, 1:] - np.roll(xshifts, (-1, 1), axis=(0, 1))[:-1, 1:]
-    )
-    score[1:, 1:] += np.abs(
-        xshifts[1:, 1:] - np.roll(xshifts, (1, 1), axis=(0, 1))[1:, 1:]
-    )
-    score[:-1, :] += np.abs(
-        yshifts[:-1, :] - np.roll(yshifts, (-1, 0), axis=(0, 1))[:-1, :]
-    )
-    score[1:, :] += np.abs(
-        yshifts[1:, :] - np.roll(yshifts, (1, 0), axis=(0, 1))[1:, :]
-    )
-    score[:, :-1] += np.abs(
-        yshifts[:, :-1] - np.roll(yshifts, (0, -1), axis=(0, 1))[:, :-1]
-    )
-    score[:, 1:] += np.abs(
-        yshifts[:, 1:] - np.roll(yshifts, (0, 1), axis=(0, 1))[:, 1:]
-    )
-    score[:-1, :-1] += np.abs(
-        yshifts[:-1, :-1] - np.roll(yshifts, (-1, -1), axis=(0, 1))[:-1, :-1]
-    )
-    score[1:, :-1] += np.abs(
-        yshifts[1:, :-1] - np.roll(yshifts, (1, -1), axis=(0, 1))[1:, :-1]
-    )
-    score[:-1, 1:] += np.abs(
-        yshifts[:-1, 1:] - np.roll(yshifts, (-1, 1), axis=(0, 1))[:-1, 1:]
-    )
-    score[1:, 1:] += np.abs(
-        yshifts[1:, 1:] - np.roll(yshifts, (1, 1), axis=(0, 1))[1:, 1:]
-    )
-    score[1:-1, 1:-1] /= 8.0
-    score[:1, 1:-1] /= 5.0
-    score[-1:, 1:-1] /= 5.0
-    score[1:-1, :1] /= 5.0
-    score[1:-1, -1:] /= 5.0
-    score[0, 0] /= 3.0
-    score[0, -1] /= 3.0
-    score[-1, 0] /= 3.0
-    score[-1, -1] /= 3.0
+    Q_Nx, Q_Ny = dp.shape
+    _qx0, _qy0 = np.unravel_index(np.argmax(gaussian_filter(dp, r)), (Q_Nx, Q_Ny))
+    qyy, qxx = np.meshgrid(np.arange(Q_Ny), np.arange(Q_Nx))
+    mask = np.hypot(qxx - _qx0, qyy - _qy0) < r * rscale
+    qx0, qy0 = get_CoM(dp * mask)
+    return qx0, qy0
 
-    # Get mask and return
-    cutoff = np.std(score) * n_sigma
-    mask = score > cutoff
-    if edge_boundary > 0:
-        mask[:edge_boundary, :] = True
-        mask[-edge_boundary:, :] = True
-        mask[:, :edge_boundary] = True
-        mask[:, -edge_boundary:] = True
 
-    return mask, score, cutoff
+# for a datacube
 
+def get_origin(
+    datacube,
+    r=None,
+    rscale=1.2,
+    dp_max=None,
+    mask=None
+    ):
+    """
+    Find the origin for all diffraction patterns in a datacube, assuming (a) there is no
+    beam stop, and (b) the center beam contains the highest intensity. Stores the origin
+    positions in the Calibration associated with datacube, and optionally also returns
+    them.
+
+    Args:
+        datacube (DataCube): the data
+        r (number or None): the approximate radius of the center disk. If None (default),
+            tries to compute r using the get_probe_size method.  The data used for this
+            is controlled by dp_max.
+        rscale (number): expand 'r' by this amount to form a mask about the center disk
+            when taking its center of mass
+        dp_max (ndarray or None): the diffraction pattern or dp-shaped array used to
+            compute the center disk radius, if r is left unspecified. Behavior depends
+            on type:
+
+                * if ``dp_max==None`` (default), computes and uses the maximal
+                  diffraction pattern. Note that for a large datacube, this may be a
+                  slow operation.
+                * otherwise, this should be a (Q_Nx,Q_Ny) shaped array
+        mask (ndarray or None): if not None, should be an (R_Nx,R_Ny) shaped
+                    boolean array. Origin is found only where mask==True, and masked
+                    arrays are returned for qx0,qy0
+
+    Returns:
+        (2-tuple of (R_Nx,R_Ny)-shaped ndarrays): the origin, (x,y) at each scan position
+    """
+    if r is None:
+        if dp_max is None:
+            dp_max = np.max(datacube.data, axis=(0, 1))
+        else:
+            assert dp_max.shape == (datacube.Q_Nx, datacube.Q_Ny)
+        r, _, _ = get_probe_size(dp_max)
+
+    qx0 = np.zeros((datacube.R_Nx, datacube.R_Ny))
+    qy0 = np.zeros((datacube.R_Nx, datacube.R_Ny))
+    qyy, qxx = np.meshgrid(np.arange(datacube.Q_Ny), np.arange(datacube.Q_Nx))
+
+    if mask is None:
+        for (rx, ry) in tqdmnd(
+            datacube.R_Nx,
+            datacube.R_Ny,
+            desc="Finding origins",
+            unit="DP",
+            unit_scale=True,
+        ):
+            dp = datacube.data[rx, ry, :, :]
+            _qx0, _qy0 = np.unravel_index(
+                np.argmax(gaussian_filter(dp, r)), (datacube.Q_Nx, datacube.Q_Ny)
+            )
+            _mask = np.hypot(qxx - _qx0, qyy - _qy0) < r * rscale
+            qx0[rx, ry], qy0[rx, ry] = get_CoM(dp * _mask)
+
+    else:
+        assert mask.shape == (datacube.R_Nx, datacube.R_Ny)
+        assert mask.dtype == bool
+        qx0 = np.ma.array(
+            data=qx0, mask=np.zeros((datacube.R_Nx, datacube.R_Ny), dtype=bool)
+        )
+        qy0 = np.ma.array(
+            data=qy0, mask=np.zeros((datacube.R_Nx, datacube.R_Ny), dtype=bool)
+        )
+        for (rx, ry) in tqdmnd(
+            datacube.R_Nx,
+            datacube.R_Ny,
+            desc="Finding origins",
+            unit="DP",
+            unit_scale=True,
+        ):
+            if mask[rx, ry]:
+                dp = datacube.data[rx, ry, :, :]
+                _qx0, _qy0 = np.unravel_index(
+                    np.argmax(gaussian_filter(dp, r)), (datacube.Q_Nx, datacube.Q_Ny)
+                )
+                _mask = np.hypot(qxx - _qx0, qyy - _qy0) < r * rscale
+                qx0.data[rx, ry], qy0.data[rx, ry] = get_CoM(dp * _mask)
+            else:
+                qx0.mask, qy0.mask = True, True
+
+    # return
+    mask = np.ones(datacube.Rshape, dtype=bool)
+    return qx0, qy0, mask
+
+
+def get_origin_single_dp_beamstop(DP: np.ndarray,mask: np.ndarray, **kwargs):
+    """
+    Find the origin for a single diffraction pattern, assuming there is a beam stop.
+
+    Args:
+        DP (np array): diffraction pattern
+        mask (np array): boolean mask which is False under the beamstop and True
+            in the diffraction pattern. One approach to generating this mask
+            is to apply a suitable threshold on the average diffraction pattern
+            and use binary opening/closing to remove and holes
+
+    Returns:
+        qx0, qy0 (tuple) measured center position of diffraction pattern
+    """
+
+    imCorr = np.real(
+        np.fft.ifft2(
+            np.fft.fft2(DP * mask)
+            * np.conj(np.fft.fft2(np.rot90(DP, 2) * np.rot90(mask, 2)))
+        )
+    )
+
+    xp, yp = np.unravel_index(np.argmax(imCorr), imCorr.shape)
+
+    dx = ((xp + DP.shape[0] / 2) % DP.shape[0]) - DP.shape[0] / 2
+    dy = ((yp + DP.shape[1] / 2) % DP.shape[1]) - DP.shape[1] / 2
+
+    return (DP.shape[0] + dx) / 2, (DP.shape[1] + dy) / 2
+
+
+def get_origin_beamstop(datacube: DataCube, mask: np.ndarray, **kwargs):
+    """
+    Find the origin for each diffraction pattern, assuming there is a beam stop.
+
+    Args:
+        datacube (DataCube)
+        mask (np array): boolean mask which is False under the beamstop and True
+            in the diffraction pattern. One approach to generating this mask
+            is to apply a suitable threshold on the average diffraction pattern
+            and use binary opening/closing to remove any holes
+
+    Returns:
+        qx0, qy0 (tuple of np arrays) measured center position of each diffraction pattern
+    """
+
+    qx0 = np.zeros(datacube.data.shape[:2])
+    qy0 = np.zeros_like(qx0)
+
+    for rx, ry in tqdmnd(datacube.R_Nx, datacube.R_Ny):
+        x, y = get_origin_single_dp_beamstop(datacube.data[rx, ry, :, :], mask)
+
+        qx0[rx,ry] = x
+        qy0[rx,ry] = y
+
+    return qx0, qy0
 
 
 
