@@ -504,7 +504,7 @@ class DPCReconstruction(PhaseReconstruction):
         xp = self._xp
         gaussian_filter = self._gaussian_filter
 
-        gaussian_filter_sigma /= xp.sqrt(self.sampling[0] ** 2 + self.sampling[1] ** 2)
+        gaussian_filter_sigma /= self.sampling[0]
         current_object = gaussian_filter(current_object, gaussian_filter_sigma)
 
         return current_object
