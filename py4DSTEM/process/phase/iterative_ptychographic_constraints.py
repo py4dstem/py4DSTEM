@@ -120,7 +120,7 @@ class PtychographicConstraints:
         """
         xp = self._xp
         gaussian_filter = self._gaussian_filter
-        gaussian_filter_sigma /= xp.sqrt(self.sampling[0] ** 2 + self.sampling[1] ** 2)
+        gaussian_filter_sigma /= self.sampling[0]
 
         if pure_phase_object:
             phase = xp.angle(current_object)
@@ -518,9 +518,7 @@ class PtychographicConstraints:
         xp = self._xp
         gaussian_filter = self._gaussian_filter
         known_aberrations_array = self._known_aberrations_array
-        gaussian_filter_sigma /= xp.sqrt(
-            self._reciprocal_sampling[0] ** 2 + self._reciprocal_sampling[1] ** 2
-        )
+        gaussian_filter_sigma /= self._reciprocal_sampling[0]
 
         fourier_probe = self._return_fourier_probe(current_probe)
         if fix_amplitude:
