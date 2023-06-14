@@ -333,7 +333,7 @@ class PtychographicConstraints:
         probe_intensity = xp.abs(current_probe) ** 2
 
         probe_x0, probe_y0 = get_CoM(
-            probe_intensity, device="cpu" if xp is np else "gpu"
+            probe_intensity, device=self._device
         )
         shifted_probe = fft_shift(
             current_probe, probe_center - xp.array([probe_x0, probe_y0]), xp

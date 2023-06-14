@@ -79,6 +79,7 @@ class ParallaxReconstruction(PhaseReconstruction):
         # Metadata
         self._energy = energy
         self._verbose = verbose
+        self._device = device
         self._object_padding_px = object_padding_px
         self._preprocessed = False
 
@@ -725,7 +726,7 @@ class ParallaxReconstruction(PhaseReconstruction):
                     G_ref,
                     G,
                     upsample_factor=upsample_factor,
-                    device="cpu" if xp is np else "gpu",
+                    device=self._device,
                 )
 
                 dx = (
