@@ -1849,7 +1849,7 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
         reconstruction_parameter: float = 1.0,
         max_batch_size: int = None,
         seed_random: int = None,
-        step_size: float = 0.9,
+        step_size: float = 0.5,
         normalization_min: float = 1,
         positions_step_size: float = 0.9,
         fix_com: bool = True,
