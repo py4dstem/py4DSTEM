@@ -9,10 +9,9 @@ from py4DSTEM.io.filereaders import (
     read_empad,
     read_dm,
     read_gatan_K2_bin,
-    load_mib
+    load_mib,
+    read_arina
 )
-
-
 
 
 def import_file(
@@ -37,6 +36,7 @@ def import_file(
             from storage.
         binfactor (int): Diffraction space binning factor for bin-on-load.
         filetype (str): Used to override automatic filetype detection.
+            options include "dm", "empad", "gatan_K2_bin", "mib","arina"
         **kwargs: any additional kwargs are passed to the downstream reader -
             refer to the individual filetype reader function call signatures
             and docstrings for more details.
@@ -72,7 +72,8 @@ def import_file(
         "dm",
         "empad",
         "gatan_K2_bin",
-        "mib"
+        "mib",
+        "arina",
         # "kitware_counted",
     ], "Error: filetype not recognized"
 
@@ -85,10 +86,10 @@ def import_file(
     # elif filetype == "kitware_counted":
     #    data = read_kitware_counted(filepath, mem, binfactor, metadata=metadata, **kwargs)
     elif filetype == "mib":
-        data = load_mib(filepath, mem=mem, binfactor=binfactor,**kwargs)
+        data = load_mib(filepath, mem=mem, binfactor=binfactor, **kwargs)
+    elif filetype == "arina":
+        data = read_arina(filepath, mem=mem, binfactor=binfactor, **kwargs)
     else:
         raise Exception("Bad filetype!")
 
     return data
-
-
