@@ -142,6 +142,12 @@ class PhaseReconstruction(Custom):
         datacube: Datacube
             Resampled and Padded datacube
         """
+        if com_shifts is not None:
+            if np.isscalar(com_shifts[0]):
+                com_shifts = (
+                    np.ones(self._datacube.Rshape) * com_shifts[0],
+                    np.ones(self._datacube.Rshape) * com_shifts[1],
+                )
 
         if diffraction_intensities_shape is not None:
             Qx, Qy = datacube.shape[-2:]
