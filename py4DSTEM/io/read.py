@@ -71,6 +71,10 @@ def read(
     filetype = _parse_filetype(filepath)
     assert filetype == "H5", f"`py4DSTEM.read` loads native HDF5 formatted files, but a file of type {filetype} was detected.  Try loading it using py4DSTEM.import_file"
 
+    # support older `root` input
+    if datapath is None:
+        if 'root' in kwargs:
+            datapath = kwargs['root']
 
     # EMD 1.0 formatted files (py4DSTEM v0.14+)
     if emd._is_EMD_file(filepath):
