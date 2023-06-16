@@ -593,13 +593,14 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
 
         # Object Initialization
         if self._object is None:
-            pad_x, pad_y = self._object_padding_px
-            p, q = np.max(self._positions_px, axis=0)
+            pad_x = self._object_padding_px[0][1]
+            pad_y = self._object_padding_px[1][1]
+            p, q = np.round(np.max(self._positions_px, axis=0))
             p = np.max([np.round(p + pad_x), self._region_of_interest_shape[0]]).astype(
-                int
+                "int"
             )
             q = np.max([np.round(q + pad_y), self._region_of_interest_shape[1]]).astype(
-                int
+                "int"
             )
             if self._object_type == "potential":
                 object_e = xp.zeros((p, q), dtype=xp.float32)
@@ -647,12 +648,10 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
                 probe_x0, probe_y0 = get_CoM(
                     self._vacuum_probe_intensity, device=self._device
                 )
-                shift_x = self._region_of_interest_shape[0] // 2 - probe_x0
-                shift_y = self._region_of_interest_shape[1] // 2 - probe_y0
                 self._vacuum_probe_intensity = get_shifted_ar(
                     self._vacuum_probe_intensity,
-                    shift_x,
-                    shift_y,
+                    -probe_x0,
+                    -probe_y0,
                     bilinear=True,
                     device=self._device,
                 )
@@ -704,8 +703,6 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
             device=self._device,
         )._evaluate_ctf()
 
-        self._known_aberrations_array = xp.fft.ifftshift(self._known_aberrations_array)
-
         # overlaps
         shifted_probes = fft_shift(self._probe, self._positions_px_fractional, xp)
         probe_intensities = xp.abs(shifted_probes) ** 2
@@ -728,7 +725,7 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
 
             # initial probe
             complex_probe_rgb = Complex2RGB(
-                asnumpy(self._probe),
+                self.probe_centered,
                 vmin=vmin,
                 vmax=vmax,
                 hue_start=hue_start,
@@ -2173,34 +2170,6 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
 
         return current_object, current_probe
 
-    def _probe_center_of_mass_constraint(self, current_probe):
-        """
-        Ptychographic threshold constraint.
-        Used for avoiding the scaling ambiguity between probe and object.
-
-        Parameters
-        --------
-        current_probe: np.ndarray
-            Current probe estimate
-
-        Returns
-        --------
-        constrained_probe: np.ndarray
-            Constrained probe estimate
-        """
-        xp = self._xp
-        asnumpy = self._asnumpy
-
-        probe_center = xp.array(self._region_of_interest_shape) / 2
-        probe_intensity = asnumpy(xp.abs(current_probe) ** 2)
-
-        probe_x0, probe_y0 = get_CoM(probe_intensity)
-        shifted_probe = fft_shift(
-            current_probe, probe_center - xp.array([probe_x0, probe_y0]), xp
-        )
-
-        return shifted_probe
-
     def _constraints(
         self,
         current_object,
@@ -2885,14 +2854,14 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
                             asnumpy(self._object[1].copy()),
                         )
                     )
-                self.probe_iterations.append(asnumpy(self._probe.copy()))
+                self.probe_iterations.append(self.probe_centered)
 
         # store result
         if a0 < warmup_iter:
             self.object = (asnumpy(self._object[0]), None)
         else:
             self.object = (asnumpy(self._object[0]), asnumpy(self._object[1]))
-        self.probe = asnumpy(self._probe)
+        self.probe = self.probe_centered
         self.error = error.item()
 
         return self
@@ -3019,12 +2988,20 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
             0,
         ]
 
-        probe_extent = [
-            0,
-            self.sampling[1] * self._region_of_interest_shape[1],
-            self.sampling[0] * self._region_of_interest_shape[0],
-            0,
-        ]
+        if plot_fourier_probe:
+            probe_extent = [
+                0,
+                self.angular_sampling[1] * self._region_of_interest_shape[1],
+                self.angular_sampling[0] * self._region_of_interest_shape[0],
+                0,
+            ]
+        elif plot_probe:
+            probe_extent = [
+                0,
+                self.sampling[1] * self._region_of_interest_shape[1],
+                self.sampling[0] * self._region_of_interest_shape[0],
+                0,
+            ]
 
         if plot_convergence:
             if plot_probe or plot_fourier_probe:
@@ -3111,19 +3088,21 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
                     self.probe_fourier, hue_start=hue_start, invert=invert
                 )
                 ax.set_title("Reconstructed Fourier probe")
+                ax.set_ylabel("kx [mrad]")
+                ax.set_xlabel("ky [mrad]")
             else:
                 probe_array = Complex2RGB(
                     self.probe, hue_start=hue_start, invert=invert
                 )
                 ax.set_title("Reconstructed probe")
+                ax.set_ylabel("x [A]")
+                ax.set_xlabel("y [A]")
 
             im = ax.imshow(
                 probe_array,
                 extent=probe_extent,
                 **kwargs,
             )
-            ax.set_ylabel("x [A]")
-            ax.set_xlabel("y [A]")
 
             if cbar:
                 divider = make_axes_locatable(ax)
