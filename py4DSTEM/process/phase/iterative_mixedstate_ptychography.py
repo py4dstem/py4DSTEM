@@ -347,13 +347,14 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
 
         # Object Initialization
         if self._object is None:
-            pad_x, pad_y = self._object_padding_px
-            p, q = np.max(self._positions_px, axis=0)
+            pad_x = self._object_padding_px[0][1]
+            pad_y = self._object_padding_px[1][1]
+            p, q = np.round(np.max(self._positions_px, axis=0))
             p = np.max([np.round(p + pad_x), self._region_of_interest_shape[0]]).astype(
-                int
+                "int"
             )
             q = np.max([np.round(q + pad_y), self._region_of_interest_shape[1]]).astype(
-                int
+                "int"
             )
             if self._object_type == "potential":
                 self._object = xp.zeros((p, q), dtype=xp.float32)
@@ -400,12 +401,10 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
                         self._vacuum_probe_intensity,
                         device=self._device,
                     )
-                    shift_x = self._region_of_interest_shape[0] // 2 - probe_x0
-                    shift_y = self._region_of_interest_shape[1] // 2 - probe_y0
                     self._vacuum_probe_intensity = get_shifted_ar(
                         self._vacuum_probe_intensity,
-                        shift_x,
-                        shift_y,
+                        -probe_x0,
+                        -probe_y0,
                         bilinear=True,
                         device=self._device,
                     )
@@ -476,8 +475,6 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
             device=self._device,
         )._evaluate_ctf()
 
-        self._known_aberrations_array = xp.fft.ifftshift(self._known_aberrations_array)
-
         # overlaps
         shifted_probes = fft_shift(self._probe[0], self._positions_px_fractional, xp)
         probe_intensities = xp.abs(shifted_probes) ** 2
@@ -500,7 +497,7 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
 
             # initial probe
             complex_probe_rgb = Complex2RGB(
-                asnumpy(self._probe[0]),
+                self.probe_centered[0],
                 vmin=vmin,
                 vmax=vmax,
                 hue_start=hue_start,
@@ -536,7 +533,7 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
             )
             ax1.set_ylabel("x [A]")
             ax1.set_xlabel("y [A]")
-            ax1.set_title("Initial Probe")
+            ax1.set_title("Initial Probe[0]")
 
             ax2.imshow(
                 asnumpy(probe_overlap),
@@ -1021,8 +1018,8 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
 
     def _probe_center_of_mass_constraint(self, current_probe):
         """
-        Ptychographic threshold constraint.
-        Used for avoiding the scaling ambiguity between probe and object.
+        Ptychographic center of mass constraint.
+        Used for centering corner-centered probe intensity.
 
         Parameters
         --------
@@ -1035,15 +1032,12 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
             Constrained probe estimate
         """
         xp = self._xp
-        asnumpy = self._asnumpy
+        probe_intensity = xp.abs(current_probe[0]) ** 2
 
-        probe_center = xp.array(self._region_of_interest_shape) / 2
-        probe_intensity = asnumpy(xp.abs(current_probe[0]) ** 2)
-
-        probe_x0, probe_y0 = get_CoM(probe_intensity)
-        shifted_probe = fft_shift(
-            current_probe, probe_center - xp.array([probe_x0, probe_y0]), xp
+        probe_x0, probe_y0 = get_CoM(
+            probe_intensity, device=self._device, corner_centered=True
         )
+        shifted_probe = fft_shift(current_probe, -xp.array([probe_x0, probe_y0]), xp)
 
         return shifted_probe
 
@@ -1063,10 +1057,9 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
             Orthogonalized probe estimate
         """
         xp = self._xp
+        shape = current_probe.shape
 
-        return orthogonalize(current_probe.reshape((self._num_probes, -1)), xp).reshape(
-            current_probe.shape
-        )
+        return orthogonalize(current_probe.reshape((shape[0], -1)), xp).reshape(shape)
 
     def _constraints(
         self,
@@ -1663,11 +1656,11 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
             self.error_iterations.append(error.item())
             if store_iterations:
                 self.object_iterations.append(asnumpy(self._object.copy()))
-                self.probe_iterations.append(asnumpy(self._probe.copy()))
+                self.probe_iterations.append(self.probe_centered)
 
         # store result
         self.object = asnumpy(self._object)
-        self.probe = asnumpy(self._probe)
+        self.probe = self.probe_centered
         self.error = error.item()
 
         return self
@@ -1779,12 +1772,20 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
             0,
         ]
 
-        probe_extent = [
-            0,
-            self.sampling[1] * self._region_of_interest_shape[1],
-            self.sampling[0] * self._region_of_interest_shape[0],
-            0,
-        ]
+        if plot_fourier_probe:
+            probe_extent = [
+                0,
+                self.angular_sampling[1] * self._region_of_interest_shape[1],
+                self.angular_sampling[0] * self._region_of_interest_shape[0],
+                0,
+            ]
+        elif plot_probe:
+            probe_extent = [
+                0,
+                self.sampling[1] * self._region_of_interest_shape[1],
+                self.sampling[0] * self._region_of_interest_shape[0],
+                0,
+            ]
 
         if plot_convergence:
             if plot_probe or plot_fourier_probe:
@@ -1849,20 +1850,22 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
                 probe_array = Complex2RGB(
                     self.probe_fourier[0], hue_start=hue_start, invert=invert
                 )
-                ax.set_title("Reconstructed Fourier probe")
+                ax.set_title("Reconstructed Fourier probe[0]")
+                ax.set_ylabel("kx [mrad]")
+                ax.set_xlabel("ky [mrad]")
             else:
                 probe_array = Complex2RGB(
                     self.probe[0], hue_start=hue_start, invert=invert
                 )
-                ax.set_title("Reconstructed probe")
+                ax.set_title("Reconstructed probe[0]")
+                ax.set_ylabel("x [A]")
+                ax.set_xlabel("y [A]")
 
             im = ax.imshow(
                 probe_array,
                 extent=probe_extent,
                 **kwargs,
             )
-            ax.set_ylabel("x [A]")
-            ax.set_xlabel("y [A]")
 
             if cbar:
                 divider = make_axes_locatable(ax)
@@ -2006,12 +2009,20 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
             0,
         ]
 
-        probe_extent = [
-            0,
-            self.sampling[1] * self._region_of_interest_shape[1],
-            self.sampling[0] * self._region_of_interest_shape[0],
-            0,
-        ]
+        if plot_fourier_probe:
+            probe_extent = [
+                0,
+                self.angular_sampling[1] * self._region_of_interest_shape[1],
+                self.angular_sampling[0] * self._region_of_interest_shape[0],
+                0,
+            ]
+        elif plot_probe:
+            probe_extent = [
+                0,
+                self.sampling[1] * self._region_of_interest_shape[1],
+                self.sampling[0] * self._region_of_interest_shape[0],
+                0,
+            ]
 
         if plot_convergence:
             if plot_probe or plot_fourier_probe:
@@ -2066,25 +2077,30 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
             for n, ax in enumerate(grid):
                 if plot_fourier_probe:
                     probe_array = Complex2RGB(
-                        asnumpy(self._return_fourier_probe(probes[grid_range[n]][0])),
+                        asnumpy(
+                            self._return_fourier_probe_from_centered_probe(
+                                probes[grid_range[n]][0]
+                            )
+                        ),
                         hue_start=hue_start,
                         invert=invert,
                     )
-                    ax.set_title(f"Iter: {grid_range[n]} Fourier probe")
+                    ax.set_title(f"Iter: {grid_range[n]} Fourier probe[0]")
+                    ax.set_ylabel("kx [mrad]")
+                    ax.set_xlabel("ky [mrad]")
                 else:
                     probe_array = Complex2RGB(
                         probes[grid_range[n]][0], hue_start=hue_start, invert=invert
                     )
-                    ax.set_title(f"Iter: {grid_range[n]} probe")
+                    ax.set_title(f"Iter: {grid_range[n]} probe[0]")
+                    ax.set_ylabel("x [A]")
+                    ax.set_xlabel("y [A]")
 
                 im = ax.imshow(
                     probe_array,
                     extent=probe_extent,
                     **kwargs,
                 )
-
-                ax.set_ylabel("x [A]")
-                ax.set_xlabel("y [A]")
 
                 if cbar:
                     add_colorbar_arg(
