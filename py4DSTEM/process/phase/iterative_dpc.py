@@ -543,7 +543,10 @@ class DPCReconstruction(PhaseReconstruction):
         if q_lowpass:
             env *= 1 / (1 + (qra / q_lowpass) ** 4)
 
+        current_object_mean = xp.mean(current_object)
+        current_object -= current_object_mean
         current_object = xp.fft.ifft2(xp.fft.fft2(current_object) * env)
+        current_object += current_object_mean
 
         return xp.real(current_object)
 
