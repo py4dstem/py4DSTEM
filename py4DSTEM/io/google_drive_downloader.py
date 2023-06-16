@@ -20,6 +20,7 @@ sample_file_ids = {
     'polycrystal_2D_WS2':'1AWB3-UTPiTR9dgrEkNFD7EJYsKnbEy0y',
     'WS2cif':'13zBl6aFExtsz_sew-L0-_ALYJfcgHKjo',
     'polymers':'1lK-TAMXN1MpWG0Q3_4vss_uEZgW2_Xh7',
+    'vac_probe':'1QTcSKzZjHZd1fDimSI_q9_WsAU25NIXe',
 }
 
 # collections of files
@@ -38,6 +39,7 @@ sample_collection_ids = {
         ('polycrystal_2D_WS2.h5',sample_file_ids['polycrystal_2D_WS2']),
         ('WS2.cif',sample_file_ids['WS2cif']),
         ('polymers.h5',sample_file_ids['polymers']),
+        ('vac_probe.h5',sample_file_ids['vac_probe']),
     ),
 }
 

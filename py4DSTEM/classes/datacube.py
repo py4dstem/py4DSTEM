@@ -52,11 +52,22 @@ class DataCube(Array,RootedNode,Data,DataCubeMethods):
             slicelabels = slicelabels
         )
 
-        # Set up EMD tree
+        # set up EMD tree
         RootedNode.__init__(self)
 
-        # Check for / set up a calibration
+        # set up calibration
         self._setup_calibration( calibration )
+
+        # cartesian coords
+        # TODO - tmp hack, needs to be refactored -
+        # this will break when preprocess methods are called
+        self.qyy,self.qxx = np.meshgrid(
+            np.arange(0,self.Q_Ny),
+            np.arange(0,self.Q_Nx)
+        )
+
+        # polar coords
+        self.polar = None
 
 
 
@@ -65,7 +76,7 @@ class DataCube(Array,RootedNode,Data,DataCubeMethods):
         Ensures that a calibration instance exists. Passing None
         makes a new Calibration instance, puts it in root.calibration, and
         makes a two way link. Passing a Calibration instance attaches that
-        instance. `'skip'` does nothing (used when reading from file).
+        instance. `'skip'` does nothing (internal use, on read from file).
         """
         if cal is None:
             self.calibration = Calibration( datacube = self )

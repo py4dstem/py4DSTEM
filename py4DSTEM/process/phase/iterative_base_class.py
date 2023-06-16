@@ -2178,3 +2178,9 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
         positions[:, 1] *= self.sampling[1]
 
         return asnumpy(positions)
+
+    @property
+    def _object_cropped(self):
+        """ cropped and rotated object """
+
+        return self._crop_rotate_object_fov(self._object)
