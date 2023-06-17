@@ -67,8 +67,8 @@ def import_file(
 
     filetype = _parse_filetype(filepath) if filetype is None else filetype
 
-    if filetype == 'EMD':
-        raise Exception("EMD file detected - use py4DSTEM.read, not py4DSTEM.import_file!")
+    if filetype in ('emd', 'legacy'):
+        raise Exception("EMD file or py4DSTEM detected - use py4DSTEM.read, not py4DSTEM.import_file!")
     assert filetype in [
         "dm",
         "empad",
