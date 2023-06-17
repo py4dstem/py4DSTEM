@@ -458,20 +458,6 @@ def spatial_frequencies(gpts: Tuple[int, int], sampling: Tuple[float, float]):
     )
 
 
-def projection(u: np.ndarray, v: np.ndarray, xp):
-    """Projection of vector u onto vector v."""
-    return u * xp.vdot(u, v) / xp.vdot(u, u)
-
-
-def orthogonalize(V: np.ndarray, xp):
-    """Non-normalized QR decomposition using repeated projections."""
-    U = V.copy()
-    for i in range(1, V.shape[0]):
-        for j in range(i):
-            U[i, :] -= projection(U[j, :], V[i, :], xp)
-    return U
-
-
 ### FFT-shift functions
 
 
