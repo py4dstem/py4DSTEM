@@ -9,8 +9,8 @@ def read_arina(
     filename,
     scan_width,
     mem="RAM",
-    binfactor:int=1,
-    dtype_bin:float=None,
+    binfactor: int = 1,
+    dtype_bin: float = None,
 ):
 
     """
@@ -24,13 +24,13 @@ def read_arina(
             the diffraction patterns, allowing them to be retrieved individually
             from storage.
         binfactor (int): Diffraction space binning factor for bin-on-load.
-        dtype_bin(float): specify datatype for bin on load if need something 
+        dtype_bin(float): specify datatype for bin on load if need something
             other than uint16
 
     Returns:
         DataCube
     """
-    assert mem == "RAM", "ARNIA does not support memory mapping"
+    assert mem == "RAM", "read_arina does not support memory mapping"
 
     f = h5py.File(filename, "r")
     nimages = 0
@@ -41,10 +41,10 @@ def read_arina(
         height = f["entry"]["data"][dset].shape[1]
         width = f["entry"]["data"][dset].shape[2]
         dtype = f["entry"]["data"][dset].dtype
-    
-    width = width//binfactor
-    height = height//binfactor
-    
+
+    width = width // binfactor
+    height = height // binfactor
+
     assert (
         nimages % scan_width < 1e-6
     ), "scan_width must be integer multiple of x*y size"
@@ -86,8 +86,8 @@ def _processDataSet(dset, start_index, array_3D, binfactor):
     for i in range(nimages_dset):
         if binfactor == 1:
             array_3D[image_index] = dset[i].astype(array_3D.dtype)
-        else: 
+        else:
             array_3D[image_index] = bin2D(dset[i].astype(array_3D.dtype), binfactor)
-        
+
         image_index = image_index + 1
     return image_index
