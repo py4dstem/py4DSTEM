@@ -1166,6 +1166,15 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
             data=self._polar_parameters,
         )
 
+        # object
+        self._object_emd = Array(
+            name="reconstruction_object",
+            data=asnumpy(self._xp.asarray(self._object)),
+        )
+
+        # probe
+        self._probe_emd = Array(name="reconstruction_probe", data=asnumpy(self._probe))
+
         if is_stack:
             iterations_labels = [f"iteration_{i:03}" for i in iterations]
 
@@ -1173,30 +1182,18 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
             object_iterations = [
                 np.asarray(self.object_iterations[i]) for i in iterations
             ]
-            self._object_emd = Array(
-                name="reconstruction_object",
+            self._object_iterations_emd = Array(
+                name="reconstruction_object_iterations",
                 data=np.stack(object_iterations, axis=0),
                 slicelabels=iterations_labels,
             )
 
             # probe
             probe_iterations = [self.probe_iterations[i] for i in iterations]
-            self._probe_emd = Array(
-                name="reconstruction_probe",
+            self._probe_iterations_emd = Array(
+                name="reconstruction_probe_iterations",
                 data=np.stack(probe_iterations, axis=0),
                 slicelabels=iterations_labels,
-            )
-
-        else:
-            # object
-            self._object_emd = Array(
-                name="reconstruction_object",
-                data=asnumpy(self._xp.asarray(self._object)),
-            )
-
-            # probe
-            self._probe_emd = Array(
-                name="reconstruction_probe", data=asnumpy(self._probe)
             )
 
         # exit_waves
@@ -1239,13 +1236,8 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
         else:
             dc = None
 
-        # Check if stack
-        if dict_data["_object_emd"].is_stack:
-            obj = dict_data["_object_emd"][-1].data
-            probe = dict_data["_probe_emd"][-1].data
-        else:
-            obj = dict_data["_object_emd"].data
-            probe = dict_data["_probe_emd"].data
+        obj = dict_data["_object_emd"].data
+        probe = dict_data["_probe_emd"].data
 
         # Populate args and return
         kwargs = {
@@ -1303,8 +1295,8 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
 
         # Check if stack
         if hasattr(error, "__len__"):
-            self.object_iterations = list(dict_data["_object_emd"].data)
-            self.probe_iterations = list(dict_data["_probe_emd"].data)
+            self.object_iterations = list(dict_data["_object_iterations_emd"].data)
+            self.probe_iterations = list(dict_data["_probe_iterations_emd"].data)
             self.error_iterations = error
             self.error = error[-1]
         else:
@@ -1313,7 +1305,7 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
         # Slim preprocessing to enable visualize
         self._positions_px_com = xp.mean(self._positions_px, axis=0)
         self.object = asnumpy(self._object)
-        self.probe = asnumpy(self._probe)
+        self.probe = self.probe_centered
         self._preprocessed = True
 
     def _set_polar_parameters(self, parameters: dict):
@@ -1401,9 +1393,9 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
             self._object_padding_px = (float_padding, float_padding)
         elif np.isscalar(self._object_padding_px[0]):
             self._object_padding_px = (
-                    (self._object_padding_px[0],)*2,
-                    (self._object_padding_px[1],)*2
-                    )
+                (self._object_padding_px[0],) * 2,
+                (self._object_padding_px[1],) * 2,
+            )
 
         positions[:, 0] += self._object_padding_px[0][0]
         positions[:, 1] += self._object_padding_px[1][0]
