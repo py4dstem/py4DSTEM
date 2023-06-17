@@ -24,7 +24,6 @@ from py4DSTEM.process.phase.utils import (
     ComplexProbe,
     fft_shift,
     generate_batches,
-    orthogonalize,
     polar_aliases,
     polar_symbols,
 )
@@ -1045,6 +1044,7 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
         """
         Ptychographic probe-orthogonalization constraint.
         Used to ensure mixed states are orthogonal to each other.
+        Adapted from https://github.com/AdvancedPhotonSource/tike/blob/main/src/tike/ptycho/probe.py#L690
 
         Parameters
         --------
@@ -1057,9 +1057,25 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
             Orthogonalized probe estimate
         """
         xp = self._xp
-        shape = current_probe.shape
+        n_probes = self._num_probes
 
-        return orthogonalize(current_probe.reshape((shape[0], -1)), xp).reshape(shape)
+        # compute upper half of P* @ P
+        pairwise_dot_product = xp.empty((n_probes, n_probes), dtype=current_probe.dtype)
+
+        for i in range(n_probes):
+            for j in range(i, n_probes):
+                pairwise_dot_product[i, j] = xp.sum(
+                    current_probe[i].conj() * current_probe[j]
+                )
+
+        # compute eigenvectors (effectively cheaper way of computing V* from SVD)
+        _, evecs = xp.linalg.eigh(pairwise_dot_product, UPLO="U")
+        current_probe = xp.tensordot(evecs.T, current_probe, axes=1)
+
+        # sort by real-space intensity
+        intensities = xp.sum(xp.abs(current_probe) ** 2, axis=(-2, -1))
+        intensities_order = xp.argsort(intensities, axis=None)[::-1]
+        return current_probe[intensities_order]
 
     def _constraints(
         self,
