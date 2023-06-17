@@ -26,7 +26,9 @@ def _parse_filetype(fp):
         elif _is_arina(fp):
             return "arina"
 
-
+        elif _is_abTEM(fp):
+            return "abTEM"
+            
     elif fext in [
         ".dm",
         ".dm3",
@@ -60,4 +62,16 @@ def _is_arina(filepath):
         except AssertionError:
             return False
     return True
+
+def _is_abTEM(filepath):
+    """
+    Check if an h5 file is an abTEM file. 
+    """
+    with h5py.File(filepath,'r') as f:
+        try:
+            assert("array" in f.keys())
+        except AssertionError:
+            return False
+    return True
+
 
