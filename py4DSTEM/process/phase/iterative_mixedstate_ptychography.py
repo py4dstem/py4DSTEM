@@ -442,16 +442,10 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
             # Randomly shift phase of other probes
             for i_probe in range(1, self._num_probes):
                 shift_x = xp.exp(
-                    -2j
-                    * np.pi
-                    * (xp.random.rand() - 0.5)
-                    * ((xp.arange(sx) + 0.5) / sx - 0.5)
+                    -2j * np.pi * (xp.random.rand() - 0.5) * xp.fft.fftfreq(sx)
                 )
                 shift_y = xp.exp(
-                    -2j
-                    * np.pi
-                    * (xp.random.rand() - 0.5)
-                    * ((xp.arange(sy) + 0.5) / sy - 0.5)
+                    -2j * np.pi * (xp.random.rand() - 0.5) * xp.fft.fftfreq(sy)
                 )
                 self._probe[i_probe] = (
                     self._probe[i_probe - 1] * shift_x[:, None] * shift_y[None]
@@ -487,7 +481,7 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
         self._object_fov_mask_inverse = np.invert(self._object_fov_mask)
 
         if plot_probe_overlaps:
-            figsize = kwargs.pop("figsize", (9, 4))
+            figsize = kwargs.pop("figsize", (4.5 * self._num_probes + 4, 4))
             cmap = kwargs.pop("cmap", "Greys_r")
             vmin = kwargs.pop("vmin", None)
             vmax = kwargs.pop("vmax", None)
@@ -496,7 +490,7 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
 
             # initial probe
             complex_probe_rgb = Complex2RGB(
-                self.probe_centered[0],
+                self.probe_centered,
                 vmin=vmin,
                 vmax=vmax,
                 hue_start=hue_start,
@@ -517,40 +511,41 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
                 0,
             ]
 
-            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=figsize)
+            fig, axs = plt.subplots(1, self._num_probes + 1, figsize=figsize)
 
-            ax1.imshow(
-                complex_probe_rgb,
-                extent=probe_extent,
-                **kwargs,
-            )
+            for i in range(self._num_probes):
+                axs[i].imshow(
+                    complex_probe_rgb[i],
+                    extent=probe_extent,
+                    **kwargs,
+                )
+                axs[i].set_ylabel("x [A]")
+                axs[i].set_xlabel("y [A]")
+                axs[i].set_title(f"Initial Probe[{i}]")
 
-            divider = make_axes_locatable(ax1)
-            cax1 = divider.append_axes("right", size="5%", pad="2.5%")
-            add_colorbar_arg(
-                cax1, vmin=vmin, vmax=vmax, hue_start=hue_start, invert=invert
-            )
-            ax1.set_ylabel("x [A]")
-            ax1.set_xlabel("y [A]")
-            ax1.set_title("Initial Probe[0]")
+                divider = make_axes_locatable(axs[i])
+                cax = divider.append_axes("right", size="5%", pad="2.5%")
+                add_colorbar_arg(
+                    cax, vmin=vmin, vmax=vmax, hue_start=hue_start, invert=invert
+                )
 
-            ax2.imshow(
+            axs[-1].imshow(
                 asnumpy(probe_overlap),
                 extent=extent,
                 cmap=cmap,
                 **kwargs,
             )
-            ax2.scatter(
+            axs[-1].scatter(
                 self.positions[:, 1],
                 self.positions[:, 0],
                 s=2.5,
                 color=(1, 0, 0, 1),
             )
-            ax2.set_ylabel("x [A]")
-            ax2.set_xlabel("y [A]")
-            ax2.set_xlim((extent[0], extent[1]))
-            ax2.set_ylim((extent[2], extent[3]))
-            ax2.set_title("Object Field of View")
+            axs[-1].set_ylabel("x [A]")
+            axs[-1].set_xlabel("y [A]")
+            axs[-1].set_xlim((extent[0], extent[1]))
+            axs[-1].set_ylim((extent[2], extent[3]))
+            axs[-1].set_title("Object Field of View")
 
             fig.tight_layout()
 
