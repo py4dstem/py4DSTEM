@@ -1581,7 +1581,6 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
             Constrained object estimate
         """
         gaussian_filter = self._gaussian_filter
-        xp = self._xp
 
         gaussian_filter_sigma /= self.sampling[0]
         current_object = gaussian_filter(current_object, gaussian_filter_sigma)
