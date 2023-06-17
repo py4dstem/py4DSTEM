@@ -254,40 +254,6 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
 
         return xp.fft.ifft2(xp.fft.fft2(array) * propagator_array)
 
-    def _expand_or_project_sliced_object(self, array: np.ndarray, output_z):
-        """
-        OLD Version
-
-        Expands supersliced object or projects voxel-sliced object.
-
-        Parameters
-        ----------
-        array: np.ndarray
-            3D array to expand/project
-        output_z: int
-            Output_dimension to expand/project array to.
-            If output_z > array.shape[0] array is expanded, else it's projected
-
-        Returns
-        -------
-        expanded_or_projected_array: np.ndarray
-            expanded or projected array
-        """
-        zoom = self._zoom
-        input_z = array.shape[0]
-
-        return (
-            zoom(
-                array,
-                (output_z / input_z, 1, 1),
-                order=0,
-                mode="nearest",
-                grid_mode=True,
-            )
-            * input_z
-            / output_z
-        )
-
     def _project_sliced_object(self, array: np.ndarray, output_z):
         """
         Expands supersliced object or projects voxel-sliced object.
@@ -545,8 +511,9 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
 
         # Object Initialization
         if self._object is None:
-            pad_x, pad_y = self._object_padding_px
-            p, q = np.max(self._positions_px_all, axis=0)
+            pad_x = self._object_padding_px[0][1]
+            pad_y = self._object_padding_px[1][1]
+            p, q = np.round(np.max(self._positions_px_all, axis=0))
             p = np.max([np.round(p + pad_x), self._region_of_interest_shape[0]]).astype(
                 "int"
             )
@@ -601,8 +568,8 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                 shift_y = self._region_of_interest_shape[1] // 2 - probe_y0
                 self._vacuum_probe_intensity = get_shifted_ar(
                     self._vacuum_probe_intensity,
-                    shift_x,
-                    shift_y,
+                    -probe_x0,
+                    -probe_y0,
                     bilinear=True,
                     device=self._device,
                 )
@@ -659,8 +626,6 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
             parameters=self._polar_parameters,
             device=self._device,
         )._evaluate_ctf()
-
-        self._known_aberrations_array = xp.fft.ifftshift(self._known_aberrations_array)
 
         # Precomputed propagator arrays
         self._slice_thicknesses = np.tile(
@@ -741,7 +706,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
 
             # initial probe
             complex_probe_rgb = Complex2RGB(
-                asnumpy(self._probe),
+                self.probe_centered,
                 vmin=vmin,
                 vmax=vmax,
                 hue_start=hue_start,
@@ -756,7 +721,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                     propagated_probe, self._propagator_arrays[s]
                 )
             complex_propagated_rgb = Complex2RGB(
-                asnumpy(propagated_probe),
+                asnumpy(self._return_centered_probe(propagated_probe)),
                 vmin=vmin,
                 vmax=vmax,
                 hue_start=hue_start,
@@ -2240,11 +2205,11 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
             self.error_iterations.append(error.item())
             if store_iterations:
                 self.object_iterations.append(asnumpy(self._object.copy()))
-                self.probe_iterations.append(asnumpy(self._probe.copy()))
+                self.probe_iterations.append(self.probe_centered)
 
         # store result
         self.object = asnumpy(self._object)
-        self.probe = asnumpy(self._probe)
+        self.probe = self.probe_centered
         self.error = error.item()
 
         return self
@@ -2440,12 +2405,21 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
             0,
         ]
 
-        probe_extent = [
-            0,
-            self.sampling[1] * self._region_of_interest_shape[1],
-            self.sampling[0] * self._region_of_interest_shape[0],
-            0,
-        ]
+        if plot_fourier_probe:
+            probe_extent = [
+                0,
+                self.angular_sampling[1] * self._region_of_interest_shape[1],
+                self.angular_sampling[0] * self._region_of_interest_shape[0],
+                0,
+            ]
+
+        elif plot_probe:
+            probe_extent = [
+                0,
+                self.sampling[1] * self._region_of_interest_shape[1],
+                self.sampling[0] * self._region_of_interest_shape[0],
+                0,
+            ]
 
         if plot_convergence:
             if plot_probe or plot_fourier_probe:
@@ -2509,19 +2483,21 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                     self.probe_fourier, hue_start=hue_start, invert=invert
                 )
                 ax.set_title("Reconstructed Fourier probe")
+                ax.set_ylabel("kx [mrad]")
+                ax.set_xlabel("ky [mrad]")
             else:
                 probe_array = Complex2RGB(
                     self.probe, hue_start=hue_start, invert=invert
                 )
                 ax.set_title("Reconstructed probe")
+                ax.set_ylabel("x [A]")
+                ax.set_xlabel("y [A]")
 
             im = ax.imshow(
                 probe_array,
                 extent=probe_extent,
                 **kwargs,
             )
-            ax.set_ylabel("x [A]")
-            ax.set_xlabel("y [A]")
 
             if cbar:
                 divider = make_axes_locatable(ax)
@@ -2686,12 +2662,20 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
             0,
         ]
 
-        probe_extent = [
-            0,
-            self.sampling[1] * self._region_of_interest_shape[1],
-            self.sampling[0] * self._region_of_interest_shape[0],
-            0,
-        ]
+        if plot_fourier_probe:
+            probe_extent = [
+                0,
+                self.angular_sampling[1] * self._region_of_interest_shape[1],
+                self.angular_sampling[0] * self._region_of_interest_shape[0],
+                0,
+            ]
+        elif plot_probe:
+            probe_extent = [
+                0,
+                self.sampling[1] * self._region_of_interest_shape[1],
+                self.sampling[0] * self._region_of_interest_shape[0],
+                0,
+            ]
 
         if plot_convergence:
             if plot_probe or plot_fourier_probe:
@@ -2745,25 +2729,30 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
             for n, ax in enumerate(grid):
                 if plot_fourier_probe:
                     probe_array = Complex2RGB(
-                        asnumpy(self._return_fourier_probe(probes[grid_range[n]])),
+                        asnumpy(
+                            self._return_fourier_probe_from_centered_probe(
+                                probes[grid_range[n]]
+                            )
+                        ),
                         hue_start=hue_start,
                         invert=invert,
                     )
                     ax.set_title(f"Iter: {grid_range[n]} Fourier probe")
+                    ax.set_ylabel("kx [mrad]")
+                    ax.set_xlabel("ky [mrad]")
                 else:
                     probe_array = Complex2RGB(
                         probes[grid_range[n]], hue_start=hue_start, invert=invert
                     )
                     ax.set_title(f"Iter: {grid_range[n]} probe")
+                    ax.set_ylabel("x [A]")
+                    ax.set_xlabel("y [A]")
 
                 im = ax.imshow(
                     probe_array,
                     extent=probe_extent,
                     **kwargs,
                 )
-
-                ax.set_ylabel("x [A]")
-                ax.set_xlabel("y [A]")
 
                 if cbar:
                     add_colorbar_arg(
@@ -2909,7 +2898,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
             rotated_3d_obj.sum(0), angle=None, x_lims=x_lims, y_lims=y_lims
         )
 
-        return np.abs(np.fft.fftshift(np.fft.fft2(rotated_object)))
+        return np.abs(np.fft.fftshift(np.fft.fft2(np.fft.ifftshift(rotated_object))))
 
     def show_object_fft(
         self,
