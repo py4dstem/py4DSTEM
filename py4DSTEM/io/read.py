@@ -70,7 +70,7 @@ def read(
     assert(exists(filepath)), er2
 
     filetype = _parse_filetype(filepath)
-    assert filetype == "H5", f"`py4DSTEM.read` loads native HDF5 formatted files, but a file of type {filetype} was detected.  Try loading it using py4DSTEM.import_file"
+    assert filetype in ('emd', 'legacy'), f"`py4DSTEM.read` loads native HDF5 formatted files, but a file of type {filetype} was detected.  Try loading it using py4DSTEM.import_file"
 
     # support older `root` input
     if datapath is None:
@@ -78,7 +78,7 @@ def read(
             datapath = kwargs['root']
 
     # EMD 1.0 formatted files (py4DSTEM v0.14+)
-    if emd._is_EMD_file(filepath):
+    if filetype == "emd":
         version = emd._get_EMD_version(filepath)
         if verbose: print(f"EMD version {version[0]}.{version[1]}.{version[2]} detected. Reading...")
         assert emd._version_is_geq(version,(1,0,0)), f"EMD version {version} detected. Expected version >= 1.0.0"
@@ -127,7 +127,7 @@ def read(
 
     # legacy py4DSTEM files (v <= 0.13)
     else:
-        assert legacy.is_py4DSTEM_file(filepath), "path points to an H5 file which is neither an EMD 1.0+ file, nor a recognized legacy py4DSTEM file."
+        assert filetype == "legacy", "path points to an H5 file which is neither an EMD 1.0+ file, nor a recognized legacy py4DSTEM file."
 
 
         # read v13
