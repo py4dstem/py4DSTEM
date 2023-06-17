@@ -1399,6 +1399,12 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
         if self._object_padding_px is None:
             float_padding = self._region_of_interest_shape / 2
             self._object_padding_px = (float_padding, float_padding)
+        elif np.isscalar(self._object_padding_px[0]):
+            self._object_padding_px = (
+                    (self._object_padding_px[0],)*2,
+                    (self._object_padding_px[1],)*2
+                    )
+
         positions[:, 0] += self._object_padding_px[0][0]
         positions[:, 1] += self._object_padding_px[1][0]
 
