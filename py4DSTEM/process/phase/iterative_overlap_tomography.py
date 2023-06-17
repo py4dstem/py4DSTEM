@@ -564,8 +564,6 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                 probe_x0, probe_y0 = get_CoM(
                     self._vacuum_probe_intensity, device=self._device
                 )
-                shift_x = self._region_of_interest_shape[0] // 2 - probe_x0
-                shift_y = self._region_of_interest_shape[1] // 2 - probe_y0
                 self._vacuum_probe_intensity = get_shifted_ar(
                     self._vacuum_probe_intensity,
                     -probe_x0,
@@ -1456,7 +1454,6 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
             Constrained object estimate
         """
         gaussian_filter = self._gaussian_filter
-        xp = self._xp
 
         gaussian_filter_sigma /= self.sampling[0]
         current_object = gaussian_filter(current_object, gaussian_filter_sigma)
