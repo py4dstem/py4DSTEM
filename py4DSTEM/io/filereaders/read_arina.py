@@ -10,6 +10,7 @@ def read_arina(
     scan_width,
     mem="RAM",
     binfactor:int=1,
+    dtype_bin:float=None,
 ):
 
     """
@@ -23,6 +24,8 @@ def read_arina(
             the diffraction patterns, allowing them to be retrieved individually
             from storage.
         binfactor (int): Diffraction space binning factor for bin-on-load.
+        dtype_bin(float): specify datatype for bin on load if need something 
+            other than uint16
 
     Returns:
         DataCube
@@ -50,7 +53,10 @@ def read_arina(
         print("Dataset is uint32 but will be converted to uint16")
         dtype = np.dtype(np.uint16)
 
-    array_3D = np.empty((nimages, width, height), dtype=dtype)
+    if dtype_bin:
+        array_3D = np.empty((nimages, width, height), dtype=dtype_bin)
+    else:
+        array_3D = np.empty((nimages, width, height), dtype=dtype)
 
     image_index = 0
 
