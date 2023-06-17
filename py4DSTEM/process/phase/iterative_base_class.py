@@ -3,7 +3,6 @@ Module for reconstructing phase objects from 4DSTEM datasets using iterative met
 """
 
 import warnings
-from typing import Sequence
 
 import matplotlib.pyplot as plt
 import numpy as np
