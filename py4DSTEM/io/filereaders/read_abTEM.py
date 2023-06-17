@@ -10,8 +10,7 @@ def read_abTEM(
     """
     File reader for abTEM 4D-STEM datasets
     Args:
-        filename: str with path to master file
-        scan_width: x dimension of scan
+        filename: str with path to  file
         mem (str):  Must be "RAM" or "MEMMAP". Specifies how the data is
             loaded; "RAM" transfer the data from storage to RAM, while "MEMMAP"
             leaves the data in storage and creates a memory map which points to
