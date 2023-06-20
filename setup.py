@@ -30,7 +30,6 @@ setup(
         'matplotlib >= 3.2.2',
         'scikit-image >= 0.17.2',
         'scikit-learn >= 0.23.2',
-        'ipywidgets >= 7.6.3',
         'tqdm >= 4.46.1',
         'dill >= 0.3.3',
         'gdown >= 4.4.0',
