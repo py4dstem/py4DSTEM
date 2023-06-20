@@ -486,6 +486,37 @@ class PtychographicConstraints:
 
         return updated_probe * normalization
 
+    def _probe_aperture_constraint(
+        self,
+        current_probe,
+        initial_probe_aperture,
+    ):
+        """
+        Ptychographic constraint to fix Fourier amplitude to initial aperture.
+
+        Parameters
+        ----------
+        current_probe: np.ndarray
+            Current positions estimate
+
+        Returns
+        --------
+        constrained_probe: np.ndarray
+            Constrained probe estimate
+        """
+        xp = self._xp
+
+        current_probe_sum = xp.sum(xp.abs(current_probe) ** 2)
+        current_probe_fft_phase = xp.angle(xp.fft.fft2(current_probe))
+
+        updated_probe = xp.fft.ifft2(
+            xp.exp(1j * current_probe_fft_phase) * initial_probe_aperture
+        )
+        updated_probe_sum = xp.sum(xp.abs(updated_probe) ** 2)
+        normalization = xp.sqrt(current_probe_sum / updated_probe_sum)
+
+        return updated_probe * normalization
+
     def _probe_residual_aberration_filtering_constraint(
         self,
         current_probe,
