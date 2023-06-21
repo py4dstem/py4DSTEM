@@ -12,7 +12,6 @@ Classes
 .. autoclass:: emdfile.PointList
 .. autoclass:: emdfile.PointListArray
 .. autoclass:: emdfile.Root
-.. autoclass:: emdfile.RootedNode
 
 
 Functions
