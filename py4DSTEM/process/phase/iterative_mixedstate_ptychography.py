@@ -459,6 +459,7 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
             self._probe = xp.asarray(self._probe, dtype=xp.complex64)
 
         self._probe_initial = self._probe.copy()
+        self._probe_initial_aperture = None  # Doesn't really make sense for mixed-state
 
         self._known_aberrations_array = ComplexProbe(
             energy=self._energy,
@@ -1083,11 +1084,13 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
         probe_gaussian_filter,
         probe_gaussian_filter_sigma,
         probe_gaussian_filter_fix_amplitude,
-        fix_probe_amplitude,
-        fix_probe_amplitude_relative_radius,
-        fix_probe_amplitude_relative_width,
-        fix_probe_fourier_amplitude,
-        fix_probe_fourier_amplitude_threshold,
+        constrain_probe_amplitude,
+        constrain_probe_amplitude_relative_radius,
+        constrain_probe_amplitude_relative_width,
+        constrain_probe_fourier_amplitude,
+        constrain_probe_fourier_amplitude_threshold,
+        fix_probe_aperture,
+        initial_probe_aperture,
         fix_positions,
         global_affine_transformation,
         gaussian_filter,
@@ -1124,17 +1127,21 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
             If True, only the probe phase is smoothed
         symmetrize_probe: bool
             If True, the probe is radially-averaged
-        fix_probe_amplitude: bool
+        constrain_probe_amplitude: bool
             If True, probe amplitude is constrained by top hat function
-        fix_probe_amplitude_relative_radius: float
+        constrain_probe_amplitude_relative_radius: float
             Relative location of top-hat inflection point, between 0 and 0.5
-        fix_probe_amplitude_relative_width: float
+        constrain_probe_amplitude_relative_width: float
             Relative width of top-hat sigmoid, between 0 and 0.5
-        fix_probe_fourier_amplitude: bool
+        constrain_probe_fourier_amplitude: bool
             If True, probe fourier amplitude is constrained by top hat function
-        fix_probe_fourier_amplitude_threshold: float
+        constrain_probe_fourier_amplitude_threshold: float
             Threshold value for current probe fourier mask. Value should
             be between 0 and 1, where higher values provide the most masking.
+        fix_probe_aperture: bool,
+            If True, probe fourier amplitude is replaced by initial probe aperture.
+        initial_probe_aperture: np.ndarray
+            initial probe aperture to use in replacing probe fourier amplitude
         fix_positions: bool
             If True, positions are not updated
         gaussian_filter: bool
@@ -1203,9 +1210,11 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
             raise NotImplementedError()
         if symmetrize_probe:
             raise NotImplementedError()
-        if fix_probe_amplitude:
+        if fix_probe_aperture:
             raise NotImplementedError()
-        elif fix_probe_fourier_amplitude:
+        elif constrain_probe_amplitude:
+            raise NotImplementedError()
+        elif constrain_probe_fourier_amplitude:
             raise NotImplementedError()
 
         if orthogonalize_probe:
@@ -1237,12 +1246,13 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
         fix_com: bool = True,
         orthogonalize_probe: bool = True,
         fix_probe_iter: int = 0,
+        fix_probe_aperture_iter: int = 0,
         symmetrize_probe_iter: int = 0,
-        fix_probe_amplitude_iter: int = 0,
-        fix_probe_amplitude_relative_radius: float = 0.5,
-        fix_probe_amplitude_relative_width: float = 0.05,
-        fix_probe_fourier_amplitude_iter: int = 0,
-        fix_probe_fourier_amplitude_threshold: float = 0.9,
+        constrain_probe_amplitude_iter: int = 0,
+        constrain_probe_amplitude_relative_radius: float = 0.5,
+        constrain_probe_amplitude_relative_width: float = 0.05,
+        constrain_probe_fourier_amplitude_iter: int = 0,
+        constrain_probe_fourier_amplitude_threshold: float = 0.9,
         fix_positions_iter: int = np.inf,
         global_affine_transformation: bool = True,
         gaussian_filter_sigma: float = None,
@@ -1295,17 +1305,19 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
             If True, fixes center of mass of probe
         fix_probe_iter: int, optional
             Number of iterations to run with a fixed probe before updating probe estimate
+        fix_probe_aperture_iter: int, optional
+            Number of iterations to run with a fixed probe fourier amplitude before updating probe estimate
         symmetrize_probe_iter: int, optional
             Number of iterations to run before radially-averaging the probe
-        fix_probe_amplitude: bool
+        constrain_probe_amplitude: bool
             If True, probe amplitude is constrained by top hat function
-        fix_probe_amplitude_relative_radius: float
+        constrain_probe_amplitude_relative_radius: float
             Relative location of top-hat inflection point, between 0 and 0.5
-        fix_probe_amplitude_relative_width: float
+        constrain_probe_amplitude_relative_width: float
             Relative width of top-hat sigmoid, between 0 and 0.5
-        fix_probe_fourier_amplitude: bool
+        constrain_probe_fourier_amplitude: bool
             If True, probe fourier amplitude is constrained by top hat function
-        fix_probe_fourier_amplitude_threshold: float
+        constrain_probe_fourier_amplitude_threshold: float
             Threshold value for current probe fourier mask. Value should
             be between 0 and 1, where higher values provide the most masking.
         fix_positions_iter: int, optional
@@ -1637,13 +1649,16 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
                 and probe_gaussian_filter_sigma is not None,
                 probe_gaussian_filter_sigma=probe_gaussian_filter_sigma,
                 probe_gaussian_filter_fix_amplitude=probe_gaussian_filter_fix_amplitude,
-                fix_probe_amplitude=a0 < fix_probe_amplitude_iter
+                constrain_probe_amplitude=a0 < constrain_probe_amplitude_iter
                 and a0 >= fix_probe_iter,
-                fix_probe_amplitude_relative_radius=fix_probe_amplitude_relative_radius,
-                fix_probe_amplitude_relative_width=fix_probe_amplitude_relative_width,
-                fix_probe_fourier_amplitude=a0 < fix_probe_fourier_amplitude_iter
+                constrain_probe_amplitude_relative_radius=constrain_probe_amplitude_relative_radius,
+                constrain_probe_amplitude_relative_width=constrain_probe_amplitude_relative_width,
+                constrain_probe_fourier_amplitude=a0
+                < constrain_probe_fourier_amplitude_iter
                 and a0 >= fix_probe_iter,
-                fix_probe_fourier_amplitude_threshold=fix_probe_fourier_amplitude_threshold,
+                constrain_probe_fourier_amplitude_threshold=constrain_probe_fourier_amplitude_threshold,
+                fix_probe_aperture=a0 < fix_probe_aperture_iter,
+                initial_probe_aperture=self._probe_initial_aperture,
                 fix_positions=a0 < fix_positions_iter,
                 global_affine_transformation=global_affine_transformation,
                 gaussian_filter=a0 < gaussian_filter_iter
