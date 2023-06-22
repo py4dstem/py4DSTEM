@@ -1,5 +1,5 @@
 import h5py
-from py4DSTEM.classes import DataCube
+from py4DSTEM.classes import DataCube, VirtualDiffraction, VirtualImage
 
 
 def read_abTEM(
@@ -8,7 +8,7 @@ def read_abTEM(
     binfactor: int = 1,
 ):
     """
-    File reader for abTEM 4D-STEM datasets
+    File reader for abTEM datasets
     Args:
         filename: str with path to  file
         mem (str):  Must be "RAM" or "MEMMAP". Specifies how the data is
@@ -30,29 +30,39 @@ def read_abTEM(
             datasets[key] = f.get(key)[()]
 
     data = datasets["array"]
-    assert len(data.shape) == 4, "reader is for 4D-STEM datasets only"
-
-    datacube = DataCube(data=data)
-
     sampling = datasets["sampling"]
     units = datasets["units"]
 
-    datacube.calibration.set_R_pixel_size(sampling[0])
-    if sampling[0] != sampling[1]:
-        print(
-            "Warning: py4DSTEM currently only handles uniform x,y sampling. Setting sampling with x calibration"
-        )
-    datacube.calibration.set_Q_pixel_size(sampling[2])
-    if sampling[2] != sampling[3]:
-        print(
-            "Warning: py4DSTEM currently only handles uniform qx,qy sampling. Setting sampling with qx calibration"
-        )
+    if len(data.shape) == 4:
 
-    if units[0] == b"\xc3\x85":
-        datacube.calibration.set_R_pixel_units("A")
-    else:
-        datacube.calibration.set_R_pixel_units(units[0].decode("utf-8"))
+        datacube = DataCube(data=data)
 
-    datacube.calibration.set_Q_pixel_units(units[2].decode("utf-8"))
+        datacube.calibration.set_R_pixel_size(sampling[0])
+        if sampling[0] != sampling[1]:
+            print(
+                "Warning: py4DSTEM currently only handles uniform x,y sampling. Setting sampling with x calibration"
+            )
+        datacube.calibration.set_Q_pixel_size(sampling[2])
+        if sampling[2] != sampling[3]:
+            print(
+                "Warning: py4DSTEM currently only handles uniform qx,qy sampling. Setting sampling with qx calibration"
+            )
 
-    return datacube
+        if units[0] == b"\xc3\x85":
+            datacube.calibration.set_R_pixel_units("A")
+        else:
+            datacube.calibration.set_R_pixel_units(units[0].decode("utf-8"))
+
+        datacube.calibration.set_Q_pixel_units(units[2].decode("utf-8"))
+
+        return datacube
+
+    elif len(data.shape) == 2:
+        if units[0] == b"mrad":
+            diffraction = VirtualDiffraction(data=data)
+            # TODO, calibrations for 2D
+            return diffraction
+        elif units[0] == b"\xc3\x85":
+            image = VirtualImage(data=data)
+            # TODO calibrations for 2D
+            return image

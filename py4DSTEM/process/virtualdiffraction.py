@@ -3,17 +3,18 @@
 import numpy as np
 from emdfile import tqdmnd
 
+
 def get_virtual_diffraction(
     datacube,
     method,
-    mode = None,
-    geometry = None,
-    calibrated = False,
-    shift_center = False,
-    verbose = True,
-    return_mask = False,
+    mode=None,
+    geometry=None,
+    calibrated=False,
+    shift_center=False,
+    verbose=True,
+    return_mask=False,
 ):
-    '''
+    """
     Function to calculate virtual diffraction
 
     Args:
@@ -58,36 +59,54 @@ def get_virtual_diffraction(
 
     Returns:
         (2D array): the diffraction image
-    '''
+    """
 
-    assert method in ('max', 'median', 'mean'),\
-        'check doc strings for supported types'
+    assert method in ("max", "median", "mean"), "check doc strings for supported types"
 
-    #create mask
+    # create mask
     if mode is not None:
         use_all_points = False
 
         from py4DSTEM.process.virtualimage import make_detector
-        assert mode in ('point', 'circle', 'circular', 'annulus', 'annular', 'rectangle', 'square', 'rectangular', 'mask'),\
-        'check doc strings for supported modes'
+
+        assert mode in (
+            "point",
+            "circle",
+            "circular",
+            "annulus",
+            "annular",
+            "rectangle",
+            "square",
+            "rectangular",
+            "mask",
+        ), "check doc strings for supported modes"
         g = geometry
 
         if calibrated == True:
-            assert datacube.calibration['R_pixel_units'] == 'A', \
-                'check datacube.calibration. datacube must be calibrated in A to use `calibrated=True`'
+            assert (
+                datacube.calibration["R_pixel_units"] == "A"
+            ), "check datacube.calibration. datacube must be calibrated in A to use `calibrated=True`"
 
-            unit_conversion = datacube.calibration['R_pixel_size']
-            if mode == 'point':
-                g = (g[0]/unit_conversion, g[1]/unit_conversion)
-            if mode in('circle', 'circular'):
-                g = ((g[0][0]/unit_conversion, g[0][1]/unit_conversion),
-                    (g[1]/unit_conversion))
-            if mode in('annulus', 'annular'):
-                g = ((g[0][0]/unit_conversion, g[0][1]/unit_conversion),
-                    (g[1][0]/unit_conversion, g[1][1]/unit_conversion))
-            if mode in('rectangle', 'square', 'rectangular') :
-                g = (g[0]/unit_conversion, g[1]/unit_conversion,
-                     g[2]/unit_conversion, g[3]/unit_conversion)
+            unit_conversion = datacube.calibration["R_pixel_size"]
+            if mode == "point":
+                g = (g[0] / unit_conversion, g[1] / unit_conversion)
+            if mode in ("circle", "circular"):
+                g = (
+                    (g[0][0] / unit_conversion, g[0][1] / unit_conversion),
+                    (g[1] / unit_conversion),
+                )
+            if mode in ("annulus", "annular"):
+                g = (
+                    (g[0][0] / unit_conversion, g[0][1] / unit_conversion),
+                    (g[1][0] / unit_conversion, g[1][1] / unit_conversion),
+                )
+            if mode in ("rectangle", "square", "rectangular"):
+                g = (
+                    g[0] / unit_conversion,
+                    g[1] / unit_conversion,
+                    g[2] / unit_conversion,
+                    g[3] / unit_conversion,
+                )
 
         # Get mask
         mask = make_detector(datacube.Rshape, mode, g)
@@ -99,7 +118,7 @@ def get_virtual_diffraction(
         else:
             mask_is_boolean = False
 
-    #if no mask 
+    # if no mask
     else:
         mask = np.ones(datacube.Rshape, dtype=bool)
         mask_indices = np.nonzero(mask)
@@ -117,48 +136,62 @@ def get_virtual_diffraction(
 
         # ...for the whole pattern
         if use_all_points:
-            if method == 'mean':
-                virtual_diffraction = np.mean(datacube.data, axis=(0,1))
-            elif method == 'max':
-                virtual_diffraction = np.max(datacube.data, axis=(0,1))
+            if method == "mean":
+                virtual_diffraction = np.mean(datacube.data, axis=(0, 1))
+            elif method == "max":
+                virtual_diffraction = np.max(datacube.data, axis=(0, 1))
             else:
-                virtual_diffraction = np.median(datacube.data, axis=(0,1))
+                virtual_diffraction = np.median(datacube.data, axis=(0, 1))
 
         # ...for boolean masks
         elif mask_is_boolean:
-            if method == 'mean':
-                virtual_diffraction = np.mean(datacube.data[mask_indices[0],mask_indices[1],:,:], axis=0)
-            elif method == 'max':
-                virtual_diffraction = np.max(datacube.data[mask_indices[0],mask_indices[1],:,:], axis=0)
+            if method == "mean":
+                virtual_diffraction = np.mean(
+                    datacube.data[mask_indices[0], mask_indices[1], :, :], axis=0
+                )
+            elif method == "max":
+                virtual_diffraction = np.max(
+                    datacube.data[mask_indices[0], mask_indices[1], :, :], axis=0
+                )
             else:
-                virtual_diffraction = np.median(datacube.data[mask_indices[0],mask_indices[1],:,:], axis=0)
+                virtual_diffraction = np.median(
+                    datacube.data[mask_indices[0], mask_indices[1], :, :], axis=0
+                )
 
         # ...for floating point masks
         else:
-            if mask.dtype == 'complex':
-                virtual_diffraction = np.zeros(datacube.Qshape, dtype = 'complex')
+            if mask.dtype == "complex":
+                virtual_diffraction = np.zeros(datacube.Qshape, dtype="complex")
             else:
                 virtual_diffraction = np.zeros(datacube.Qshape)
-            for qx,qy in tqdmnd(
+            for qx, qy in tqdmnd(
                 datacube.Q_Nx,
                 datacube.Q_Ny,
-                disable = not verbose,
+                disable=not verbose,
             ):
-                if method == 'mean':
-                    virtual_diffraction[qx,qy] = np.sum( np.squeeze(datacube.data[:,:,qx,qy])*mask )
-                elif method == 'max':
-                    virtual_diffraction[qx,qy] = np.max( np.squeeze(datacube.data[:,:,qx,qy])*mask )
-                elif method == 'median':
-                    virtual_diffraction[qx,qy] = np.median( np.squeeze(datacube.data[:,:,qx,qy])*mask )
+                if method == "mean":
+                    virtual_diffraction[qx, qy] = np.sum(
+                        np.squeeze(datacube.data[:, :, qx, qy]) * mask
+                    )
+                elif method == "max":
+                    virtual_diffraction[qx, qy] = np.max(
+                        np.squeeze(datacube.data[:, :, qx, qy]) * mask
+                    )
+                elif method == "median":
+                    virtual_diffraction[qx, qy] = np.median(
+                        np.squeeze(datacube.data[:, :, qx, qy]) * mask
+                    )
 
         # norm by weighting term for means
-        if method == 'mean' and not use_all_points:
+        if method == "mean" and not use_all_points:
             virtual_diffraction /= np.sum(mask)
 
     # ...with center shifting
     else:
-        assert method in ('max', 'mean'),\
-            "only 'mean' and 'max' are supported for center-shifted virtual diffraction"
+        assert method in (
+            "max",
+            "mean",
+        ), "only 'mean' and 'max' are supported for center-shifted virtual diffraction"
 
         # Get calibration metadata
         assert datacube.calibration.get_origin(), "origin needs to be calibrated"
@@ -166,58 +199,65 @@ def get_virtual_diffraction(
         x0_mean, y0_mean = datacube.calibration.get_origin_mean()
 
         # get shifts
-        qx_shift = (x0_mean-x0).round().astype(int)
-        qy_shift = (y0_mean-y0).round().astype(int)
-
+        qx_shift = (x0_mean - x0).round().astype(int)
+        qy_shift = (y0_mean - y0).round().astype(int)
 
         # compute...
 
         # ...for boolean masks / whole datacubes
         if mask_is_boolean or use_all_points:
             virtual_diffraction = np.zeros(datacube.Qshape)
-            for rx,ry in zip(mask_indices[0],mask_indices[1]):
+            for rx, ry in zip(mask_indices[0], mask_indices[1]):
                 # get shifted DP
                 DP = np.roll(
-                    datacube.data[rx,ry, :,:,],
-                    (qx_shift[rx,ry], qy_shift[rx,ry]),
-                    axis=(0,1),
-                    )
+                    datacube.data[
+                        rx,
+                        ry,
+                        :,
+                        :,
+                    ],
+                    (qx_shift[rx, ry], qy_shift[rx, ry]),
+                    axis=(0, 1),
+                )
                 # compute
-                if method == 'mean':
+                if method == "mean":
                     virtual_diffraction += DP
-                elif method == 'max':
+                elif method == "max":
                     virtual_diffraction = np.maximum(virtual_diffraction, DP)
-            if method == 'mean':
+            if method == "mean":
                 virtual_diffraction /= len(mask_indices[0])
 
         # ...for floating point masks
         else:
-            if mask.dtype == 'complex':
-                virtual_diffraction = np.zeros(datacube.Qshape, dtype = 'complex')
+            if mask.dtype == "complex":
+                virtual_diffraction = np.zeros(datacube.Qshape, dtype="complex")
             else:
                 virtual_diffraction = np.zeros(datacube.Qshape)
-            for rx,ry in tqdmnd(
+            for rx, ry in tqdmnd(
                 datacube.R_Nx,
                 datacube.R_Ny,
-                disable = not verbose,
+                disable=not verbose,
             ):
                 # get shifted DP
                 DP = np.roll(
-                    datacube.data[rx,ry, :,:,],
-                    (qx_shift[rx,ry], qy_shift[rx,ry]),
-                    axis=(0,1),
-                    )
+                    datacube.data[
+                        rx,
+                        ry,
+                        :,
+                        :,
+                    ],
+                    (qx_shift[rx, ry], qy_shift[rx, ry]),
+                    axis=(0, 1),
+                )
                 # compute
-                w = mask[rx,ry]
+                w = mask[rx, ry]
                 if w > 0:
-                    if method == 'mean':
-                        virtual_diffraction += DP*w
-                    elif method == 'max':
-                        virtual_diffraction = np.maximum(virtual_diffraction, DP*w)
-            if method == 'mean':
+                    if method == "mean":
+                        virtual_diffraction += DP * w
+                    elif method == "max":
+                        virtual_diffraction = np.maximum(virtual_diffraction, DP * w)
+            if method == "mean":
                 virtual_diffraction /= np.sum(mask)
 
     # return
     return virtual_diffraction
-
-
