@@ -56,6 +56,11 @@ file_ids = {
         'filename.name',
         '1-KX0saEYfhZ9IJAOwabH38PCVtfXidJi',
     ),
+    'small_datacube' : (
+        'small_datacube.dm4',
+        # TODO - change this file to something smaller - ideally e.g. shape (4,8,256,256) ~= 4.2MB'
+        '1QTcSKzZjHZd1fDimSI_q9_WsAU25NIXe'
+    ),
 }
 
 # collections of files
