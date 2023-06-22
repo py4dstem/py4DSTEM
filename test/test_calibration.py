@@ -1,40 +1,74 @@
 import py4DSTEM
+from py4DSTEM import Calibration
 import numpy as np
-from os.path import join
+from os import mkdir, remove, rmdir
+from os.path import join, exists
 
-# set filepath
-path = py4DSTEM._TESTPATH + "/io_test_data/small_dm3_3Dstack.dm3"
+# set filepaths
+path_datacube = join(py4DSTEM._TESTPATH, "small_datacube.dm4")
+path_3Darray = join(py4DSTEM._TESTPATH, "io_test_data/small_dm3_3Dstack.dm3")
+
+path_out_dir = join(py4DSTEM._TESTPATH, "test_outputs")
+path_out = join(path_out_dir, "test_calibration.h5")
 
 
+class TestCalibration:
 
-class TestDataCube:
+    # setup
 
-    # setup/teardown
     def setup_class(cls):
+        if not exists(path_out_dir):
+            mkdir(path_out_dir)
 
-        # Read sim Au datacube
-        datacube = py4DSTEM.import_file(path)
+    def teardown_class(cls):
+        if exists(path_out_dir):
+            rmdir(path_out_dir)
+
+    def teardown_method(self):
+        if exists(path_out):
+            remove(path_out)
+
+
+    # test
+
+    def test_imported_datacube_calibration(self):
+
+        datacube = py4DSTEM.import_file(path_datacube)
+
+        assert(hasattr(datacube,'calibration'))
+        assert(isinstance(datacube.calibration,Calibration))
+        assert(hasattr(datacube,'root'))
+        assert(isinstance(datacube.root,py4DSTEM.Root))
+
+
+    def test_instantiated_datacube_calibration(self):
+
         datacube = py4DSTEM.DataCube(
-            data=datacube.data.reshape((10,10,512,512))
+            data = np.ones((4,8,128,128))
         )
-        cls.datacube = datacube
 
-    # tests
+        assert(hasattr(datacube,'calibration'))
+        assert(isinstance(datacube.calibration,Calibration))
+        assert(hasattr(datacube,'root'))
+        assert(isinstance(datacube.root,py4DSTEM.Root))
 
-    def test_binning_default_dtype(self):
+        datacube.calibration.set_Q_pixel_size(10)
 
-        dtype = self.datacube.data.dtype
-        assert(dtype == np.uint16)
+        py4DSTEM.save(
+            path_out,
+            datacube
+        )
 
-        self.datacube.bin_Q(2)
+        new_datacube = py4DSTEM.read(path_out)
 
-        assert(self.datacube.data.dtype == dtype)
+        assert(hasattr(new_datacube,'calibration'))
+        assert(isinstance(new_datacube.calibration,Calibration))
+        assert(hasattr(new_datacube,'root'))
+        assert(isinstance(new_datacube.root,py4DSTEM.Root))
 
-        new_dtype = np.uint32
-        self.datacube.bin_Q(2, dtype=new_dtype)
+        assert(new_datacube.calibration.get_Q_pixel_size() == 10)
 
-        assert(self.datacube.data.dtype == new_dtype)
-        assert(self.datacube.data.dtype != dtype)
 
-        pass
+
+
 
