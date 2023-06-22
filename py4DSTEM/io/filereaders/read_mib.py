@@ -3,7 +3,7 @@
 # Based on the PyXEM load_mib module https://github.com/pyxem/pyxem/blob/563a3bb5f3233f46cd3e57f3cd6f9ddf7af55ad0/pyxem/utils/io_utils.py
 
 import numpy as np
-from py4DSTEM.classes import DataCube
+from py4DSTEM.data import DataCube
 import os
 
 def load_mib(

@@ -5,7 +5,8 @@ from scipy.ndimage import (
     binary_opening, binary_dilation, distance_transform_edt)
 
 from emdfile import tqdmnd
-from py4DSTEM.classes import DataCube, Probe
+from py4DSTEM.data import DataCube
+from py4DSTEM.classes import Probe
 from py4DSTEM.process.utils import get_shifted_ar, get_shift
 
 

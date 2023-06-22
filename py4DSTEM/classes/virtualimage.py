@@ -2,7 +2,7 @@
 from typing import Optional
 import numpy as np
 
-from py4DSTEM.classes import RealSlice,Data
+from py4DSTEM.data import RealSlice,Data
 
 
 

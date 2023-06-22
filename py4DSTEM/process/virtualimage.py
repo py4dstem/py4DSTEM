@@ -2,7 +2,7 @@
 import numpy as np
 import dask.array as da
 from emdfile import tqdmnd
-from py4DSTEM.classes import Calibration
+from py4DSTEM.data import Calibration
 
 def get_virtual_image(
     datacube,
