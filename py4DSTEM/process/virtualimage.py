@@ -1,22 +1,23 @@
 # Functions for generating virtual images
-import numpy as np
 import dask.array as da
+import numpy as np
 from emdfile import tqdmnd
 from py4DSTEM.classes import Calibration
+
 
 def get_virtual_image(
     datacube,
     mode,
     geometry,
-    centered = False,
-    calibrated = False,
-    shift_center = False,
-    verbose = True,
-    dask = False,
-    return_mask = False,
-    test_config = False
+    centered=False,
+    calibrated=False,
+    shift_center=False,
+    verbose=True,
+    dask=False,
+    return_mask=False,
+    test_config=False,
 ):
-    '''
+    """
     Function to calculate virtual image
 
     Args:
@@ -72,25 +73,30 @@ def get_virtual_image(
 
     Returns:
         (2D array) virtual image
-    '''
+    """
 
-    assert mode in ('point', 'circle', 'circular', 'annulus', 'annular', 'rectangle', 'square', 'rectangular', 'mask'),\
-    'check doc strings for supported modes'
+    assert mode in (
+        "point",
+        "circle",
+        "circular",
+        "annulus",
+        "annular",
+        "rectangle",
+        "square",
+        "rectangular",
+        "mask",
+    ), "check doc strings for supported modes"
     if shift_center == True:
         assert centered, "centered must be True if shift_center is True"
     if test_config:
-        for x,y in zip(['centered','calibrated','shift_center'],
-                       [centered,calibrated,shift_center]):
+        for x, y in zip(
+            ["centered", "calibrated", "shift_center"],
+            [centered, calibrated, shift_center],
+        ):
             print(f"{x} = {y}")
 
     # Get geometry
-    g = get_calibrated_geometry(
-        datacube,
-        mode,
-        geometry,
-        centered,
-        calibrated
-    )
+    g = get_calibrated_geometry(datacube, mode, geometry, centered, calibrated)
 
     # Get mask
     mask = make_detector(datacube.Qshape, mode, g)
@@ -98,22 +104,25 @@ def get_virtual_image(
     if return_mask == True and shift_center == False:
         return mask
 
-
     # Calculate images
 
     # no center shifting
     if shift_center == False:
-        # dask 
+        # dask
         if dask == True:
 
             # set up a generalized universal function for dask distribution
-            def _apply_mask_dask(datacube,mask):
-                virtual_image = np.sum(np.multiply(datacube.data,mask), dtype=np.float64)
+            def _apply_mask_dask(datacube, mask):
+                virtual_image = np.sum(
+                    np.multiply(datacube.data, mask), dtype=np.float64
+                )
+
             apply_mask_dask = da.as_gufunc(
-                _apply_mask_dask,signature='(i,j),(i,j)->()',
+                _apply_mask_dask,
+                signature="(i,j),(i,j)->()",
                 output_dtypes=np.float64,
-                axes=[(2,3),(0,1),()],
-                vectorize=True
+                axes=[(2, 3), (0, 1), ()],
+                vectorize=True,
             )
 
             # compute
@@ -123,69 +132,57 @@ def get_virtual_image(
         else:
 
             # compute
-            if mask.dtype == 'complex':
-                virtual_image = np.zeros(datacube.Rshape, dtype = 'complex')
+            if mask.dtype == "complex":
+                virtual_image = np.zeros(datacube.Rshape, dtype="complex")
             else:
                 virtual_image = np.zeros(datacube.Rshape)
-            for rx,ry in tqdmnd(
+            for rx, ry in tqdmnd(
                 datacube.R_Nx,
                 datacube.R_Ny,
-                disable = not verbose,
+                disable=not verbose,
             ):
-                virtual_image[rx,ry] = np.sum(datacube.data[rx,ry]*mask)
+                virtual_image[rx, ry] = np.sum(datacube.data[rx, ry] * mask)
 
     # with center shifting
     else:
 
         # get shifts
         assert datacube.calibration.get_origin_shift(), "origin need to be calibrated"
-        qx_shift,qy_shift = datacube.calibration.get_origin_shift()
+        qx_shift, qy_shift = datacube.calibration.get_origin_shift()
         qx_shift = qx_shift.round().astype(int)
         qy_shift = qy_shift.round().astype(int)
 
         # if return_mask is True, skip computation
         if return_mask is not False:
             try:
-                rx,ry = return_mask
+                rx, ry = return_mask
             except TypeError:
-                raise Exception("when `shift_center` is True, return_mask must be a 2-tuple of ints or False")
+                raise Exception(
+                    "when `shift_center` is True, return_mask must be a 2-tuple of ints or False"
+                )
             # get shifted mask
-            _mask = np.roll(
-                mask,
-                (qx_shift[rx,ry], qy_shift[rx,ry]),
-                axis=(0,1)
-            )
+            _mask = np.roll(mask, (qx_shift[rx, ry], qy_shift[rx, ry]), axis=(0, 1))
             return _mask
 
         # compute
-        if mask.dtype == 'complex':
-            virtual_image = np.zeros(datacube.Rshape, dtype = 'complex')
+        if mask.dtype == "complex":
+            virtual_image = np.zeros(datacube.Rshape, dtype="complex")
         else:
             virtual_image = np.zeros(datacube.Rshape)
 
-        for rx,ry in tqdmnd(
+        for rx, ry in tqdmnd(
             datacube.R_Nx,
             datacube.R_Ny,
-            disable = not verbose,
+            disable=not verbose,
         ):
             # get shifted mask
-            _mask = np.roll(
-                mask,
-                (qx_shift[rx,ry], qy_shift[rx,ry]),
-                axis=(0,1)
-            )
-            virtual_image[rx,ry] = np.sum(datacube.data[rx,ry]*_mask)
+            _mask = np.roll(mask, (qx_shift[rx, ry], qy_shift[rx, ry]), axis=(0, 1))
+            virtual_image[rx, ry] = np.sum(datacube.data[rx, ry] * _mask)
 
     return virtual_image
 
 
-def get_calibrated_geometry(
-    calibration,
-    mode,
-    geometry,
-    centered,
-    calibrated
-    ):
+def get_calibrated_geometry(calibration, mode, geometry, centered, calibrated):
     """
     Determine the detector geometry in pixels, given some mode and geometry
     in calibrated units, where the calibration state is specified by {
@@ -213,9 +210,13 @@ def get_calibrated_geometry(
     else:
         try:
             cal = calibration.calibration
-            assert isinstance(cal, Calibration), "`calibration.calibration` must be a Calibration instance"
+            assert isinstance(
+                cal, Calibration
+            ), "`calibration.calibration` must be a Calibration instance"
         except AttributeError:
-            raise Exception("`calibration` must either be a Calibration instance or have a .calibration attribute")
+            raise Exception(
+                "`calibration` must either be a Calibration instance or have a .calibration attribute"
+            )
 
     # Get calibration metadata
     if centered:
@@ -223,38 +224,45 @@ def get_calibrated_geometry(
         x0_mean, y0_mean = cal.get_origin_mean()
 
     if calibrated:
-        assert cal['Q_pixel_units'] == 'A^-1', \
-        'check calibration - must be calibrated in A^-1 to use `calibrated=True`'
+        assert (
+            cal["Q_pixel_units"] == "A^-1"
+        ), "check calibration - must be calibrated in A^-1 to use `calibrated=True`"
         unit_conversion = cal.get_Q_pixel_size()
-
 
     # Convert units into detector pixels
 
     # Shift center
     if centered == True:
-        if mode == 'point':
+        if mode == "point":
             g = (g[0] + x0_mean, g[1] + y0_mean)
-        if mode in('circle', 'circular', 'annulus', 'annular'):
+        if mode in ("circle", "circular", "annulus", "annular"):
             g = ((g[0][0] + x0_mean, g[0][1] + y0_mean), g[1])
-        if mode in('rectangle', 'square', 'rectangular') :
-             g = (g[0] + x0_mean, g[1] + x0_mean, g[2] + y0_mean, g[3] + y0_mean)
+        if mode in ("rectangle", "square", "rectangular"):
+            g = (g[0] + x0_mean, g[1] + x0_mean, g[2] + y0_mean, g[3] + y0_mean)
 
     # Scale by the detector pixel size
     if calibrated == True:
-        if mode == 'point':
-            g = (g[0]/unit_conversion, g[1]/unit_conversion)
-        if mode in('circle', 'circular'):
-            g = ((g[0][0]/unit_conversion, g[0][1]/unit_conversion),
-                (g[1]/unit_conversion))
-        if mode in('annulus', 'annular'):
-            g = ((g[0][0]/unit_conversion, g[0][1]/unit_conversion),
-                (g[1][0]/unit_conversion, g[1][1]/unit_conversion))
-        if mode in('rectangle', 'square', 'rectangular') :
-            g = (g[0]/unit_conversion, g[1]/unit_conversion,
-                 g[2]/unit_conversion, g[3]/unit_conversion)
+        if mode == "point":
+            g = (g[0] / unit_conversion, g[1] / unit_conversion)
+        if mode in ("circle", "circular"):
+            g = (
+                (g[0][0] / unit_conversion, g[0][1] / unit_conversion),
+                (g[1] / unit_conversion),
+            )
+        if mode in ("annulus", "annular"):
+            g = (
+                (g[0][0] / unit_conversion, g[0][1] / unit_conversion),
+                (g[1][0] / unit_conversion, g[1][1] / unit_conversion),
+            )
+        if mode in ("rectangle", "square", "rectangular"):
+            g = (
+                g[0] / unit_conversion,
+                g[1] / unit_conversion,
+                g[2] / unit_conversion,
+                g[3] / unit_conversion,
+            )
 
     return g
-
 
 
 def make_detector(
@@ -262,7 +270,7 @@ def make_detector(
     mode,
     geometry,
 ):
-    '''
+    """
     Function to return 2D mask
 
     Args:
@@ -291,31 +299,38 @@ def make_detector(
 
     Returns:
         virtual detector in the form of a 2D mask (array)
-    '''
+    """
     g = geometry
 
-    #point mask 
-    if mode == 'point':
-        assert(isinstance(g,tuple) and len(g)==2), 'specify qx and qy as tuple (qx, qy)'
+    # point mask
+    if mode == "point":
+        assert (
+            isinstance(g, tuple) and len(g) == 2
+        ), "specify qx and qy as tuple (qx, qy)"
         mask = np.zeros(shape, dtype=bool)
 
         qx = int(g[0])
         qy = int(g[1])
 
-        mask[qx,qy] = 1
+        mask[qx, qy] = 1
 
-    #circular mask
-    if mode in('circle', 'circular'):
-        assert(isinstance(g,tuple) and len(g)==2 and len(g[0])==2 and isinstance(g[1],(float,int))), \
-        'specify qx, qy, radius_i as ((qx, qy), radius)'
+    # circular mask
+    if mode in ("circle", "circular"):
+        assert (
+            isinstance(g, tuple)
+            and len(g) == 2
+            and len(g[0]) == 2
+            and isinstance(g[1], (float, int))
+        ), "specify qx, qy, radius_i as ((qx, qy), radius)"
 
         qxa, qya = np.indices(shape)
         mask = (qxa - g[0][0]) ** 2 + (qya - g[0][1]) ** 2 < g[1] ** 2
 
-    #annular mask 
-    if mode in('annulus', 'annular'):
-        assert(isinstance(g,tuple) and len(g)==2 and len(g[0])==2 and len(g[1])==2), \
-        'specify qx, qy, radius_i, radius_0 as ((qx, qy), (radius_i, radius_o))'
+    # annular mask
+    if mode in ("annulus", "annular"):
+        assert (
+            isinstance(g, tuple) and len(g) == 2 and len(g[0]) == 2 and len(g[1]) == 2
+        ), "specify qx, qy, radius_i, radius_0 as ((qx, qy), (radius_i, radius_o))"
 
         assert g[1][1] > g[1][0], "Inner radius must be smaller than outer radius"
 
@@ -324,10 +339,11 @@ def make_detector(
         mask2 = (qxa - g[0][0]) ** 2 + (qya - g[0][1]) ** 2 < g[1][1] ** 2
         mask = np.logical_and(mask1, mask2)
 
-    #rectangle mask 
-    if mode in('rectangle', 'square', 'rectangular') :
-        assert(isinstance(g,tuple) and len(g)==4), \
-       'specify x_min, x_max, y_min, y_max as (x_min, x_max, y_min, y_max)'
+    # rectangle mask
+    if mode in ("rectangle", "square", "rectangular"):
+        assert (
+            isinstance(g, tuple) and len(g) == 4
+        ), "specify x_min, x_max, y_min, y_max as (x_min, x_max, y_min, y_max)"
         mask = np.zeros(shape, dtype=bool)
 
         xmin = int(np.round(g[0]))
@@ -337,12 +353,13 @@ def make_detector(
 
         mask[xmin:xmax, ymin:ymax] = 1
 
-    #flexible mask
-    if mode == 'mask':
-        assert type(g) == np.ndarray, '`geometry` type should be `np.ndarray`'
-        assert (g.shape == shape), 'mask and diffraction pattern shapes do not match'
+    # flexible mask
+    if mode == "mask":
+        assert type(g) == np.ndarray, "`geometry` type should be `np.ndarray`"
+        assert g.shape == shape, "mask and diffraction pattern shapes do not match"
         mask = g
     return mask
+
 
 def make_bragg_mask(
     Qshape,
@@ -351,10 +368,10 @@ def make_bragg_mask(
     radius,
     origin,
     max_q,
-    return_sum = True,
+    return_sum=True,
     **kwargs,
-    ):
-    '''
+):
+    """
     Creates and returns a mask consisting of circular disks
     about the points of a 2D lattice.
 
@@ -370,61 +387,49 @@ def make_bragg_mask(
 
     Returns:
         (2 or 3D array) the mask
-    '''
+    """
     nas = np.asarray
-    g1,g2,origin = nas(g1),nas(g2),nas(origin)
+    g1, g2, origin = nas(g1), nas(g2), nas(origin)
 
     # Get N,M, the maximum indices to tile out to
     L1 = np.sqrt(np.sum(g1**2))
-    H = int(max_q/L1) + 1
-    L2 = np.hypot(-g2[0]*g1[1],g2[1]*g1[0])/np.sqrt(np.sum(g1**2))
-    K = int(max_q/L2) + 1
+    H = int(max_q / L1) + 1
+    L2 = np.hypot(-g2[0] * g1[1], g2[1] * g1[0]) / np.sqrt(np.sum(g1**2))
+    K = int(max_q / L2) + 1
 
     # Compute number of points
     N = 0
-    for h in range(-H,H+1):
-        for k in range(-K,K+1):
-            v = h*g1 + k*g2
+    for h in range(-H, H + 1):
+        for k in range(-K, K + 1):
+            v = h * g1 + k * g2
             if np.sqrt(v.dot(v)) < max_q:
                 N += 1
 
-    #create mask
+    # create mask
     mask = np.zeros((Qshape[0], Qshape[1], N), dtype=bool)
     N = 0
-    for h in range(-H,H+1):
-        for k in range(-K,K+1):
-            v = h*g1 + k*g2
+    for h in range(-H, H + 1):
+        for k in range(-K, K + 1):
+            v = h * g1 + k * g2
             if np.sqrt(v.dot(v)) < max_q:
                 center = origin + v
-                mask[:,:,N] = make_detector(
+                mask[:, :, N] = make_detector(
                     Qshape,
-                    mode = 'circle',
-                    geometry = (center, radius),
+                    mode="circle",
+                    geometry=(center, radius),
                 )
                 N += 1
 
-
     if return_sum:
-        mask = np.sum(mask, axis = 2)
+        mask = np.sum(mask, axis=2)
     return mask
-
-
-
-
-
-
-
-
-
-
-
 
 
 def get_virtual_image_pointlistarray(
     peaks,
-    mode = None,
-    geometry = None,
-    ):
+    mode=None,
+    geometry=None,
+):
     """
     Make a virtual image from a pointlist array.
     TODO - implement more virtual detectors.
@@ -451,62 +456,58 @@ def get_virtual_image_pointlistarray(
     if mode is None:
         if geometry is None:
             center = None
-            radial_range = np.array((0,np.inf))
+            radial_range = np.array((0, np.inf))
         else:
             if len(geometry[0]) == 0:
                 center = None
             else:
                 center = np.array(geometry[0])
             if isinstance(geometry[1], int) or isinstance(geometry[1], float):
-                radial_range = np.array((0,geometry[1]))
+                radial_range = np.array((0, geometry[1]))
             elif len(geometry[1]) == 0:
                 radial_range = None
             else:
                 radial_range = np.array(geometry[1])
-    elif mode == 'circular' or mode == 'circle':
-        radial_range = np.array((0,geometry[1]))
+    elif mode == "circular" or mode == "circle":
+        radial_range = np.array((0, geometry[1]))
         if len(geometry[0]) == 0:
-                center = None
+            center = None
         else:
             center = np.array(geometry[0])
-    elif mode == 'annular' or mode == 'annulus':
+    elif mode == "annular" or mode == "annulus":
         radial_range = np.array(geometry[1])
         if len(geometry[0]) == 0:
-                center = None
+            center = None
         else:
             center = np.array(geometry[0])
-
-
 
     # init
     im_virtual = np.zeros(peaks.shape)
 
     # Generate image
-    for rx,ry in tqdmnd(peaks.shape[0],peaks.shape[1]):
-        p = peaks.get_pointlist(rx,ry)
+    for rx, ry in tqdmnd(peaks.shape[0], peaks.shape[1]):
+        p = peaks.get_pointlist(rx, ry)
         if p.data.shape[0] > 0:
             if radial_range is None:
-                im_virtual[rx,ry] = np.sum(p.data['intensity'])
+                im_virtual[rx, ry] = np.sum(p.data["intensity"])
             else:
                 if center is None:
-                    qr = np.hypot(p.data['qx'],p.data['qy'])
+                    qr = np.hypot(p.data["qx"], p.data["qy"])
                 else:
-                    qr = np.hypot(p.data['qx'] - center[0],p.data['qy'] - center[1])
-                sub = np.logical_and(
-                    qr >= radial_range[0],
-                    qr <  radial_range[1])
+                    qr = np.hypot(p.data["qx"] - center[0], p.data["qy"] - center[1])
+                sub = np.logical_and(qr >= radial_range[0], qr < radial_range[1])
                 if np.sum(sub) > 0:
-                    im_virtual[rx,ry] = np.sum(p.data['intensity'][sub])
+                    im_virtual[rx, ry] = np.sum(p.data["intensity"][sub])
 
     return im_virtual
 
 
 def get_virtual_image_braggvectors(
     bragg_peaks,
-    mode = None,
-    geometry = None,
-    ):
-    '''
+    mode=None,
+    geometry=None,
+):
+    """
     Function to calculate virtual images from braggvectors / pointlist arrays.
     TODO - implement these detectors for braggvectors
 
@@ -526,12 +527,12 @@ def get_virtual_image_braggvectors(
 
     Returns:
         im_virtual (2D numpy array): the calculated virtual image
-    '''
+    """
 
     virtual_image = get_virtual_image_pointlistarray(
         bragg_peaks.vectors,
-        mode = mode,
-        geometry = geometry,
-        )
+        mode=mode,
+        geometry=geometry,
+    )
 
     return virtual_image

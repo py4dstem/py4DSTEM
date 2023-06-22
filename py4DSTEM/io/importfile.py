@@ -1,18 +1,18 @@
 # Reader functions for non-native file types
 
 import pathlib
-from os.path import exists, splitext
-from typing import Union, Optional
+from os.path import exists
+from typing import Optional, Union
 
-from py4DSTEM.io.parsefiletype import _parse_filetype
 from py4DSTEM.io.filereaders import (
-    read_empad,
-    read_dm,
-    read_gatan_K2_bin,
     load_mib,
+    read_abTEM,
     read_arina,
-    read_abTEM
+    read_dm,
+    read_empad,
+    read_gatan_K2_bin,
 )
+from py4DSTEM.io.parsefiletype import _parse_filetype
 
 
 def import_file(
@@ -56,9 +56,7 @@ def import_file(
         "RAM",
         "MEMMAP",
     ], 'Error: argument mem must be either "RAM" or "MEMMAP"'
-    assert isinstance(
-        binfactor, int
-    ), "Error: argument binfactor must be an integer"
+    assert isinstance(binfactor, int), "Error: argument binfactor must be an integer"
     assert binfactor >= 1, "Error: binfactor must be >= 1"
     if binfactor > 1:
         assert (
@@ -67,8 +65,10 @@ def import_file(
 
     filetype = _parse_filetype(filepath) if filetype is None else filetype
 
-    if filetype in ('emd', 'legacy'):
-        raise Exception("EMD file or py4DSTEM detected - use py4DSTEM.read, not py4DSTEM.import_file!")
+    if filetype in ("emd", "legacy"):
+        raise Exception(
+            "EMD file or py4DSTEM detected - use py4DSTEM.read, not py4DSTEM.import_file!"
+        )
     assert filetype in [
         "dm",
         "empad",
