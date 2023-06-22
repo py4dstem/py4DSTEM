@@ -3,7 +3,7 @@
 from typing import Optional,Union
 import numpy as np
 
-from emdfile import Array
+from emdfile import Array,Root
 from py4DSTEM.classes import Data, Calibration
 from py4DSTEM.classes.methods import DataCubeMethods
 
@@ -54,7 +54,7 @@ class DataCube(Array,Data,DataCubeMethods):
 
         # set up EMD tree
         root = Root( name = name+"_root" )
-        root.add( self )
+        root.tree( self )
 
         # set up calibration
         self._setup_calibration( calibration )
