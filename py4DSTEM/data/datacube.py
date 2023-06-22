@@ -38,10 +38,6 @@ class DataCube(Array,Data):
         Returns:
             A new DataCube instance.
         """
-
-        # initialize DataCubeMethods
-        super(DataCubeMethods).__init__()
-
         # initialize as an Array
         Array.__init__(
             self,
