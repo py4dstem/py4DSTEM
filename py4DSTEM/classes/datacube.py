@@ -16,8 +16,9 @@ class DataCube(Array,Data,DataCubeMethods):
         self,
         data: np.ndarray,
         name: Optional[str] = 'datacube',
-        calibration: Optional[Union[Calibration,None]] = None,
         slicelabels: Optional[Union[bool,list]] = None,
+        setup_tree: Optional[bool] = True,
+        calibration: Optional[Union[Calibration,None]] = None,
         ):
         """
         Accepts:
@@ -52,12 +53,12 @@ class DataCube(Array,Data,DataCubeMethods):
             slicelabels = slicelabels
         )
 
-        # set up EMD tree
-        root = Root( name = name+"_root" )
-        root.tree( self )
-
-        # set up calibration
-        self._setup_calibration( calibration )
+        # initialize as Data
+        Data.__init__(
+            self,
+            setup_tree,
+            calibration
+        )
 
         # cartesian coords
         # TODO - tmp hack, needs to be refactored -

@@ -3,7 +3,7 @@ import numpy as np
 from os.path import join
 
 # set filepath
-path = py4DSTEM._TESTPATH + "/io_test_data/small_dm3_3Dstack.dm3"
+path = py4DSTEM._TESTPATH + "/small_datacube.dm4"
 
 
 
@@ -12,11 +12,8 @@ class TestDataCube:
     # setup/teardown
     def setup_class(cls):
 
-        # Read sim Au datacube
+        # Read datacube
         datacube = py4DSTEM.import_file(path)
-        datacube = py4DSTEM.DataCube(
-            data=datacube.data.reshape((10,10,512,512))
-        )
         cls.datacube = datacube
 
     # tests

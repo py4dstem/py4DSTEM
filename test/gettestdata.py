@@ -68,7 +68,14 @@ download(
     verbose = args.verbose
 )
 
-
+# Always download the basic datacube
+if args.data is not 'basic':
+    download(
+        'small_datacube',
+        destination = testpath,
+        overwrite = args.overwrite,
+        verbose = args.verbose
+    )
 
 
 
