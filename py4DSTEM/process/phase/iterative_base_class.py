@@ -18,7 +18,7 @@ except ImportError:
     cp = None
 
 from emdfile import Array, Custom, Metadata, _read_metadata, tqdmnd
-from py4DSTEM.classes import Calibration, DataCube
+from py4DSTEM.data import Calibration, DataCube
 from py4DSTEM.process.calibration import fit_origin
 from py4DSTEM.process.phase.iterative_ptychographic_constraints import (
     PtychographicConstraints,

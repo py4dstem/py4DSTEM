@@ -18,7 +18,7 @@ except ImportError:
     cp = None
 
 from emdfile import Custom, tqdmnd
-from py4DSTEM.classes import DataCube
+from py4DSTEM.data import DataCube
 from py4DSTEM.process.phase.iterative_base_class import PtychographicReconstruction
 from py4DSTEM.process.phase.utils import (
     ComplexProbe,

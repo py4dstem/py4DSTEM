@@ -36,15 +36,17 @@ from emdfile import (
     PointListArray
 )
 
-from py4DSTEM.classes import (
+from py4DSTEM.data import (
     Calibration,
     DataCube,
     DiffractionSlice,
-    VirtualDiffraction,
     RealSlice,
-    VirtualImage,
-    Probe,
     QPoints,
+)
+from py4DSTEM.classes import (
+    VirtualImage,
+    VirtualDiffraction,
+    Probe,
 )
 from py4DSTEM.process.diskdetection.braggvectors import BraggVectors
 

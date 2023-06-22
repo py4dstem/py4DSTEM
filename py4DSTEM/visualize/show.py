@@ -9,7 +9,7 @@ from numbers import Number
 from math import log
 from copy import copy
 
-from py4DSTEM.classes import (
+from py4DSTEM.data import (
     Calibration,
     DiffractionSlice,
     RealSlice

@@ -1,5 +1,5 @@
 import numpy as np
-from py4DSTEM.classes import DataCube
+from py4DSTEM.data import DataCube
 from scipy.ndimage import binary_opening,binary_closing, gaussian_filter1d
 
 

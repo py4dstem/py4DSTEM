@@ -4,7 +4,7 @@ import os
 from typing import Union, Optional
 
 from emdfile import tqdmnd, PointList, PointListArray
-from py4DSTEM.classes import RealSlice
+from py4DSTEM.data import RealSlice
 from py4DSTEM.process.diffraction.utils import Orientation, OrientationMap, axisEqual3D
 from py4DSTEM.process.utils import electron_wavelength_angstrom
 

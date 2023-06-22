@@ -1,5 +1,5 @@
 
-from py4DSTEM.classes import DiffractionSlice, Data
+from py4DSTEM.data import DiffractionSlice, Data
 from py4DSTEM.classes.methods import ProbeMethods
 
 from typing import Optional

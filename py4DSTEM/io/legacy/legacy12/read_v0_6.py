@@ -9,7 +9,7 @@ from emdfile import (
     PointList,
     PointListArray
 )
-from py4DSTEM.classes import (
+from py4DSTEM.data import (
     DataCube,
     DiffractionSlice,
     RealSlice,

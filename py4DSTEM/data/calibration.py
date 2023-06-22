@@ -5,7 +5,7 @@ from numbers import Number
 from typing import Optional
 
 from emdfile import Metadata
-from py4DSTEM.classes.propagating_calibration import propagating_calibration
+from py4DSTEM.data.propagating_calibration import propagating_calibration
 
 class Calibration(Metadata):
     """

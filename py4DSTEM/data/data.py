@@ -4,7 +4,7 @@
 import warnings
 
 from emdfile import Node, Root
-from py4DSTEM.classes import Calibration
+from py4DSTEM.data import Calibration
 
 
 class Data:

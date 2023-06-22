@@ -17,7 +17,7 @@ from distributed.protocol.serialize import register_serialization_family
 import distributed
 
 import py4DSTEM
-from py4DSTEM.classes import PointListArray, PointList
+from emdfile import PointListArray, PointList
 from py4DSTEM.process.diskdetection.diskdetection import _find_Bragg_disks_single_DP_FK
 
 

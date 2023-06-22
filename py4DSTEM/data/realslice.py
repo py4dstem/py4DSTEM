@@ -1,7 +1,7 @@
 # Defines the RealSlice class, which stores 2(+1)D real-space shaped data
 
 from emdfile import Array
-from py4DSTEM.classes import Data
+from py4DSTEM.data import Data
 
 from typing import Optional,Union
 import numpy as np

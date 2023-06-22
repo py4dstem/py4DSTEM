@@ -9,7 +9,7 @@ import dill
 
 # local
 import py4DSTEM
-from py4DSTEM.classes import PointListArray
+from emdfile import PointListArray
 
 
 def _find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,

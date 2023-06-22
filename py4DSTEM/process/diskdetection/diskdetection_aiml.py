@@ -15,7 +15,7 @@ from numbers import Number
 
 from emdfile import tqdmnd, PointList, PointListArray
 from py4DSTEM.process.diskdetection.braggvectors import BraggVectors
-from py4DSTEM.classes import QPoints
+from py4DSTEM.data import QPoints
 from py4DSTEM.process.utils import get_maxima_2D
 # from py4DSTEM.process.diskdetection import universal_threshold
 
