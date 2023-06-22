@@ -48,9 +48,9 @@ file_ids = {
         'vac_probe.h5',
         '1QTcSKzZjHZd1fDimSI_q9_WsAU25NIXe',
     ),
-    'small_dm3' : (
-        'small_dm3.dm3',
-        '1RxI1QY6vYMDqqMVPt5GBN6Q_iCwHFU4B'
+    'small_dm3_3Dstack' : (
+        'small_dm3_3Dstack.dm3',
+        '1B-xX3F65JcWzAg0v7f1aVwnawPIfb5_o'
     ),
     'FCU-Net' : (
         'filename.name',
@@ -74,7 +74,7 @@ collection_ids = {
         'vac_probe',
     ),
     'io_test_data' : (
-        'small_dm3',
+        'small_dm3_3Dstack',
         'vac_probe',
     ),
 }
