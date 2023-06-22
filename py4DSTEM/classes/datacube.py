@@ -3,11 +3,11 @@
 from typing import Optional,Union
 import numpy as np
 
-from emdfile import Array,RootedNode
+from emdfile import Array,Root
 from py4DSTEM.classes import Data, Calibration
 from py4DSTEM.classes.methods import DataCubeMethods
 
-class DataCube(Array,RootedNode,Data,DataCubeMethods):
+class DataCube(Array,Data,DataCubeMethods):
     """
     Storage and processing methods for 4D-STEM datasets.
     """
@@ -53,7 +53,8 @@ class DataCube(Array,RootedNode,Data,DataCubeMethods):
         )
 
         # set up EMD tree
-        RootedNode.__init__(self)
+        root = Root( name = name+"_root" )
+        root.tree( self )
 
         # set up calibration
         self._setup_calibration( calibration )
