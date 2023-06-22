@@ -3,8 +3,7 @@ import numpy as np
 from os.path import join
 
 # set filepath
-path = join(py4DSTEM._TESTPATH, "small_dm3.dm3")
-
+path = py4DSTEM._TESTPATH + "/io_test_data/small_dm3_3Dstack.dm3"
 
 
 
