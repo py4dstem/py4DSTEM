@@ -304,16 +304,21 @@ class PtychographyOptimizer:
         # If only ``reconstruct`` has optimization variables, perform
         # preprocessing now, store the ptycho object, and use dummy
         # functions instead of the partials
-        if (len(init_params),len(afft_params),len(prep_params)) == (0,0,0):
+        if (len(init_params), len(afft_params), len(prep_params)) == (0, 0, 0):
             affine_preprocessed = AffineTransform(**affine_static_args)
             init_args = init_static_args.copy()
-            init_args["initial_scan_positions"] = self._get_scan_positions(affine_preprocessed, init_static_args["datacube"])
+            init_args["initial_scan_positions"] = self._get_scan_positions(
+                affine_preprocessed, init_static_args["datacube"]
+            )
 
-            ptycho_preprocessed = cls.__init__(**init_args).preprocess(**preprocess_static_args)
+            ptycho_preprocessed = cls.__init__(**init_args).preprocess(
+                **preprocess_static_args
+            )
 
             def obj(**kwargs):
                 return ptycho_preprocessed
-            def prep(ptycho,**kwargs):
+
+            def prep(ptycho, **kwargs):
                 return ptycho
 
         else:
