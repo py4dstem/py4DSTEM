@@ -50,7 +50,9 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
     datacube: DataCube
         Input 4D diffraction pattern intensities
     semiangle_cutoff: float, optional
-        Semiangle cutoff for the initial probe guess
+        Semiangle cutoff for the initial probe guess in mrad
+    semiangle_cutoff_pixels: float, optional
+        Semiangle cutoff for the initial probe guess in pixels
     rolloff: float, optional
         Semiangle rolloff for the initial probe guess
     vacuum_probe_intensity: np.ndarray, optional
@@ -289,11 +291,6 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
             force_reciprocal_sampling=force_reciprocal_sampling,
         )
 
-        # handle semiangle specified in pixels
-        if self._semiangle_cutoff_pixels:
-            self._semiangle_cutoff = self._semiangle_cutoff_pixels * self._angular_sampling[0]
-
-
         (
             self._com_measured_x,
             self._com_measured_y,
@@ -346,6 +343,11 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
         self._positions_px = self._calculate_scan_positions_in_pixels(
             self._scan_positions
         )
+
+        # handle semiangle specified in pixels
+        if self._semiangle_cutoff_pixels:
+            self._semiangle_cutoff = self._semiangle_cutoff_pixels * self._angular_sampling[0]
+
         # Object Initialization
         if self._object is None:
             pad_x = self._object_padding_px[0][1]
