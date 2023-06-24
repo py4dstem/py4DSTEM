@@ -437,7 +437,9 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
 
         # handle semiangle specified in pixels
         if self._semiangle_cutoff_pixels:
-            self._semiangle_cutoff = self._semiangle_cutoff_pixels * self._angular_sampling[0]
+            self._semiangle_cutoff = (
+                self._semiangle_cutoff_pixels * self._angular_sampling[0]
+            )
 
         # Object Initialization
         if self._object is None:

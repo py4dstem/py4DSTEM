@@ -198,7 +198,7 @@ class PhaseReconstruction(Custom):
                         output_size=diffraction_intensities_shape,
                         force_nonnegative=True,
                     )
-        
+
         if probe_roi_shape is not None:
             Qx, Qy = datacube.shape[-2:]
             Sx, Sy = probe_roi_shape
@@ -324,9 +324,9 @@ class PhaseReconstruction(Custom):
             # there is no xor keyword in Python!
             angular = force_angular_sampling is not None
             reciprocal = force_reciprocal_sampling is not None
-            assert (angular and not reciprocal) or (not angular and reciprocal), (
-                "Only one of angular or reciprocal calibration can be forced!"
-            )
+            assert (angular and not reciprocal) or (
+                not angular and reciprocal
+            ), "Only one of angular or reciprocal calibration can be forced!"
 
             # angular calibration specified
             if angular:
@@ -335,7 +335,9 @@ class PhaseReconstruction(Custom):
 
                 if self._energy is not None:
                     self._reciprocal_sampling = (
-                        force_angular_sampling / electron_wavelength_angstrom(self._energy) / 1e3,
+                        force_angular_sampling
+                        / electron_wavelength_angstrom(self._energy)
+                        / 1e3,
                     ) * 2
                     self._reciprocal_units = ("A^-1",) * 2
 
@@ -346,7 +348,9 @@ class PhaseReconstruction(Custom):
 
                 if self._energy is not None:
                     self._angular_sampling = (
-                        force_reciprocal_sampling * electron_wavelength_angstrom(self._energy) * 1e3,
+                        force_reciprocal_sampling
+                        * electron_wavelength_angstrom(self._energy)
+                        * 1e3,
                     ) * 2
                     self._angular_units = ("mrad",) * 2
 
@@ -377,7 +381,9 @@ class PhaseReconstruction(Custom):
 
                 if self._energy is not None:
                     self._angular_sampling = (
-                        reciprocal_size * electron_wavelength_angstrom(self._energy) * 1e3,
+                        reciprocal_size
+                        * electron_wavelength_angstrom(self._energy)
+                        * 1e3,
                     ) * 2
                     self._angular_units = ("mrad",) * 2
 
