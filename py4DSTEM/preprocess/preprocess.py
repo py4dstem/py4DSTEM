@@ -208,15 +208,30 @@ def crop_data_real(datacube, crop_Rx_min, crop_Rx_max, crop_Ry_min, crop_Ry_max)
     return datacube
 
 
-def bin_data_diffraction(datacube, bin_factor):
+def bin_data_diffraction(
+    datacube,
+    bin_factor,
+    dtype=None
+    ):
     """
     Performs diffraction space binning of data by bin_factor.
+
+    Parameters
+    ----------
+    N : int
+        The binning factor
+    dtype : a datatype (optional)
+        Specify the datatype for the output. If not passed, the datatype
+        is left unchanged
+
     """
     # validate inputs
     assert(type(bin_factor) is int
         ), f"Error: binning factor {bin_factor} is not an int."
     if bin_factor == 1:
         return datacube
+    if dtype is None:
+        dtype = datacube.data.dtype
 
     # get shape
     R_Nx, R_Ny, Q_Nx, Q_Ny = (
@@ -245,7 +260,7 @@ def bin_data_diffraction(datacube, bin_factor):
         bin_factor,
         int(Q_Ny / bin_factor),
         bin_factor,
-    ).sum(axis=(3, 5))
+    ).sum(axis=(3, 5)).astype(dtype)
 
 
     # set dim vectors
