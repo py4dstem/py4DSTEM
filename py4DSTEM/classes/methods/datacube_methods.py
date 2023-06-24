@@ -1,7 +1,8 @@
 # Functions to become DataCube methods
 
 import numpy as np
-from scipy.ndimage import distance_transform_edt, binary_fill_holes
+from scipy.ndimage import distance_transform_edt, binary_fill_holes, gaussian_filter1d
+from scipy.interpolate import interp1d
 
 from emdfile import Array, Metadata, Node
 
@@ -981,10 +982,13 @@ class DataCubeMethods:
         template,
         data = None,
 
+        radial_bksb = False,
         filter_function = None,
 
         corrPower = 1,
-        sigma = 2,
+        sigma = None,
+        sigma_dp = 0,
+        sigma_cc = 2,
         subpixel = 'multicorr',
         upsample_factor = 16,
 
@@ -1008,33 +1012,10 @@ class DataCubeMethods:
         returncalc = True,
         ):
         """
-        Finds the Bragg disks by cross correlation with `template`.
+        Finds the Bragg disks in the diffraction patterns represented by `data` by
+        cross/phase correlatin with `template`.
 
-        For each diffraction image, the algorithm works in 4 steps:
-
-        (1) optional pre-processing by passing the image through some
-            `filter_funtion`, which should accept and return 2D arrays
-        (2) the image is cross correlated with the template.
-            Phase/hybrid correlations can be used instead by setting the
-            `corrPower` argument. Cross correlation can be skipped entirely,
-            and steps 3 and 4 performed directly on the diffraction
-            image itself rathar than a cross correlation, by passing None
-            to `template`.
-        (3) the maxima of the cross correlation are located and their
-            positions and intensities stored. The cross correlation may be
-            passed through a gaussian filter first by passing the `sigma`
-            argument. The method for maximum detection can be set with
-            the `subpixel` parameter. Options, from something like fastest/least
-            precise to slowest/most precise are 'pixel', 'poly', and 'multicorr'.
-        (4) filtering is applied to remove untrusted or undesired positive counts,
-            based on their intensity (`minRelativeIntensity`,`relativeToPeak`,
-            `minAbsoluteIntensity`) their proximity to one another or the
-            image edge (`minPeakSpacing`, `edgeBoundary`), and the total
-            number of peaks per pattern (`maxNumPeaks`).
-
-
-        Running on a subset of the data may be desireable, and is controlled
-        by the `data` parameter. If None (default), runs on the whole DataCube,
+        Behavior depends on `data`. If it is None (default), runs on the whole DataCube,
         and stores the output in its tree. Otherwise, nothing is stored in tree,
         but some value is returned. Valid entries are:
 
@@ -1046,74 +1027,130 @@ class DataCubeMethods:
                 specified by the True counts and return a list of QPoints
                 instances
 
+        For disk detection on a full DataCube, the calculation can be performed
+        on the CPU, GPU or a cluster. By default the CPU is used.  If `CUDA` is set
+        to True, tries to use the GPU.  If `CUDA_batched` is also set to True,
+        batches the FFT/IFFT computations on the GPU. For distribution to a cluster,
+        distributed must be set to a dictionary, with contents describing how
+        distributed processing should be performed - see below for details.
 
-        Args:
-            template (2D array): the vacuum probe template, in real space. For
-                Probe instances, this is `probe.kernel`.  If None, does not
-                perform a cross correlation.
-            data (variable): see above.
-            filter_function (callable): filtering function to apply to each
-                diffraction pattern before peakfinding. Must be a function of only
-                one argument (the diffraction pattern) and return the filtered
-                diffraction pattern. The shape of the returned DP must match the
-                shape of the probe kernel (but does not need to match the shape of
-                the input diffraction pattern, e.g. the filter can be used to
-                bin the diffraction pattern). If using distributed disk
-                detection, the function must be able to be pickled with by dill.
-            corrPower (float between 0 and 1, inclusive): the cross correlation
-                power. A value of 1 corresponds to a cross correaltion, 0
-                corresponds to a phase correlation, and intermediate values
-                giving hybrid correlations.
-            sigma (float): if >0, a gaussian smoothing filter with this standard
-                deviation is applied to the cross correlation before maxima are
-                detected
-            subpixel (str): Whether to use subpixel fitting, and which algorithm
-                to use. Must be in ('none','poly','multicorr').
-                    * 'none': performs no subpixel fitting
-                    * 'poly': polynomial interpolation of correlogram peaks
-                      (default)
-                    * 'multicorr': uses the multicorr algorithm with DFT
-                      upsampling
-            upsample_factor (int): upsampling factor for subpixel fitting (only
-                used when subpixel='multicorr')
-            minAbsoluteIntensity (float): the minimum acceptable correlation peak
-                intensity, on an absolute scale
-            minRelativeIntensity (float): the minimum acceptable correlation peak
-                intensity, relative to the intensity of the brightest peak
-            relativeToPeak (int): specifies the peak against which the minimum
-                relative intensity is measured -- 0=brightest maximum. 1=next
-                brightest, etc.
-            minPeakSpacing (float): the minimum acceptable spacing between
-                detected peaks
-            edgeBoundary (int): minimum acceptable distance for detected peaks
-                from the diffraction image edge, in pixels.
-            maxNumPeaks (int): the maximum number of peaks to return
-            CUDA (bool): If True, import cupy and use an NVIDIA GPU to perform
-                disk detection
-            CUDA_batched (bool): If True, and CUDA is selected, the FFT and IFFT
-                steps of disk detection are performed in batches to better
-                utilize GPU resources.
-            distributed (dict): contains information for parallel processing
-                using an IPyParallel or Dask distributed cluster.  Valid keys
-                are:
-                    * ipyparallel (dict):
-                    * client_file (str): path to client json for connecting to
-                      your existing IPyParallel cluster
-                    * dask (dict): client (object): a dask client that connects
-                      to your existing Dask cluster
-                    * data_file (str): the absolute path to your original data
-                        file containing the datacube
-                    * cluster_path (str): defaults to the working directory
-                      during processing
-                if distributed is None, which is the default, processing will be
-                in serial
-            name (str): name for the output BraggVectors
-            returncalc (bool): if True, returns the answer
 
-        Returns:
-            (BraggVectors or QPoints or list of QPoints)
+        For each diffraction pattern, the algorithm works in 4 steps:
+
+        (1) any pre-processing is performed to the diffraction image. This is
+            accomplished by passing a callable function to the argument
+            `filter_function`, a bool to the argument `radial_bksb`, or a value >0
+            to `sigma_dp`. If none of these are passed, this step is skipped.
+        (2) the diffraction image is cross correlated with the template.
+            Phase/hybrid correlations can be used instead by setting the
+            `corrPower` argument. Cross correlation can be skipped entirely,
+            and the subsequent steps performed directly on the diffraction
+            image instead of the cross correlation, by passing None to
+            `template`.
+        (3) the maxima of the cross correlation are located and their
+            positions and intensities stored. The cross correlation may be
+            passed through a gaussian filter first by passing the `sigma_cc`
+            argument. The method for maximum detection can be set with
+            the `subpixel` parameter. Options, from something like fastest/least
+            precise to slowest/most precise are 'pixel', 'poly', and 'multicorr'.
+        (4) filtering is applied to remove untrusted or undesired positive counts,
+            based on their intensity (`minRelativeIntensity`,`relativeToPeak`,
+            `minAbsoluteIntensity`) their proximity to one another or the
+            image edge (`minPeakSpacing`, `edgeBoundary`), and the total
+            number of peaks per pattern (`maxNumPeaks`).
+
+
+        Parameters
+        ----------
+        template : 2D array
+            the vacuum probe template, in real space. For Probe instances,
+            this is `probe.kernel`.  If None, does not perform a cross
+            correlation.
+        data : variable
+            see above
+        radial_bksb : bool
+            if True, computes a radial background given by the median of the
+            (circular) polar transform of each each diffraction pattern, and
+            subtracts this background from the pattern before applying any
+            filter function and computing the cross correlation. The origin
+            position must be set in the datacube's calibrations. Currently
+            only supported for full datacubes on the CPU.
+        filter_function : callable
+            filtering function to apply to each diffraction pattern before
+            peak finding. Must be a function of only one argument (the
+            diffraction pattern) and return the filtered diffraction pattern.
+            The shape of the returned DP must match the shape of the probe
+            kernel (but does not need to match the shape of the input
+            diffraction pattern, e.g. the filter can be used to bin the
+            diffraction pattern). If using distributed disk detection, the
+            function must be able to be pickled with by dill.
+        corrPower : float between 0 and 1, inclusive
+            the cross correlation power. A value of 1 corresponds to a cross
+            correlation, 0 corresponds to a phase correlation, and intermediate
+            values correspond to hybrid correlations.
+        sigma : float
+            alias for `sigma_cc`
+        sigma_dp : float
+            if >0, a gaussian smoothing filter with this standard deviation
+            is applied to the diffraction pattern before maxima are detected
+        sigma_cc : float
+            if >0, a gaussian smoothing filter with this standard deviation
+            is applied to the cross correlation before maxima are detected
+        subpixel : str
+            Whether to use subpixel fitting, and which algorithm to use.
+            Must be in ('none','poly','multicorr').
+                * 'none': performs no subpixel fitting
+                * 'poly': polynomial interpolation of correlogram peaks (default)
+                * 'multicorr': uses the multicorr algorithm with DFT upsampling
+        upsample_factor : int
+            upsampling factor for subpixel fitting (only used when
+            subpixel='multicorr')
+        minAbsoluteIntensity : float
+            the minimum acceptable correlation peak intensity, on an absolute scale
+        minRelativeIntensity : float
+            the minimum acceptable correlation peak intensity, relative to the
+            intensity of the brightest peak
+        relativeToPeak : int
+            specifies the peak against which the minimum relative intensity is
+            measured -- 0=brightest maximum. 1=next brightest, etc.
+        minPeakSpacing : float
+            the minimum acceptable spacing between detected peaks
+        edgeBoundary (int): minimum acceptable distance for detected peaks from
+            the diffraction image edge, in pixels.
+        maxNumPeaks : int
+            the maximum number of peaks to return
+        CUDA : bool
+            If True, import cupy and use an NVIDIA GPU to perform disk detection
+        CUDA_batched : bool
+            If True, and CUDA is selected, the FFT and IFFT steps of disk detection
+            are performed in batches to better utilize GPU resources.
+        distributed : dict
+            contains information for parallel processing using an IPyParallel or
+            Dask distributed cluster.  Valid keys are:
+                * ipyparallel (dict):
+                * client_file (str): path to client json for connecting to your
+                    existing IPyParallel cluster
+                * dask (dict): client (object): a dask client that connects to
+                    your existing Dask cluster
+                * data_file (str): the absolute path to your original data
+                    file containing the datacube
+                * cluster_path (str): defaults to the working directory during
+                    processing
+            if distributed is None, which is the default, processing will be in
+            serial
+        name : str
+            name for the output BraggVectors
+        returncalc : bool
+            if True, returns the answer
+
+        Returns
+        -------
+        variable
+            See above.
         """
         from py4DSTEM.process.diskdetection import find_Bragg_disks
+
+        sigma_cc = sigma if sigma is not None else sigma_cc
 
         # parse args
         if data is None:
@@ -1133,10 +1170,12 @@ class DataCubeMethods:
             data = x,
             template = template,
 
+            radial_bksb = radial_bksb,
             filter_function = filter_function,
 
             corrPower = corrPower,
-            sigma = sigma,
+            sigma_dp = sigma_dp,
+            sigma_cc = sigma_cc,
             subpixel = subpixel,
             upsample_factor = upsample_factor,
 
@@ -1167,7 +1206,8 @@ class DataCubeMethods:
                     'template' : template,
                     'filter_function' : filter_function,
                     'corrPower' : corrPower,
-                    'sigma' : sigma,
+                    'sigma_dp' : sigma_dp,
+                    'sigma_cc' : sigma_cc,
                     'subpixel' : subpixel,
                     'upsample_factor' : upsample_factor,
                     'minAbsoluteIntensity' : minAbsoluteIntensity,
@@ -1280,4 +1320,342 @@ class DataCubeMethods:
         # return
         if returncalc:
             return mask_beamstop
+
+
+
+    def get_radial_bkgrnd(
+        self,
+        rx,
+        ry,
+        sigma = 2
+    ):
+        """
+        Computes and returns a background image for the diffraction
+        pattern at (rx,ry), populated by radial rings of constant intensity
+        about the origin, with the value of each ring given by the median
+        value of the diffraction pattern at that radial distance.
+
+        Parameters
+        ----------
+        rx : int
+            The x-coord of the beam position
+        ry : int
+            The y-coord of the beam position
+        sigma : number
+            If >0, applying a gaussian smoothing in the radial direction
+            before returning
+
+        Returns
+        -------
+        background : ndarray
+            The radial background
+        """
+        # ensure a polar cube and origin exist
+        assert(self.polar is not None), "No polar datacube found!"
+        assert(self.calibration.get_origin() is not None), "No origin found!"
+
+        # get the 1D median background
+        bkgrd_ma_1d = np.ma.median( self.polar.data[rx,ry], axis=0 )
+        bkgrd_1d = bkgrd_ma_1d.data
+        bkgrd_1d[bkgrd_ma_1d.mask] = 0
+
+        # smooth
+        if sigma>0:
+            bkgrd_1d = gaussian_filter1d(bkgrd_1d, sigma)
+
+        # define the 2D cartesian coordinate system
+        origin = self.calibration.get_origin()
+        origin = origin[0][rx,ry],origin[1][rx,ry]
+        qxx,qyy = self.qxx-origin[0], self.qyy-origin[1]
+
+        # get distance qr in polar-elliptical coords
+        ellipse = self.calibration.get_ellipse()
+        ellipse = (1,1,0) if ellipse is None else ellipse
+        a,b,theta = ellipse
+
+        qrr = np.sqrt(
+            ( (qxx*np.cos(theta)) + (qyy*np.sin(theta)) )**2 +
+            ( (qxx*np.sin(theta)) - (qyy*np.cos(theta)) )**2 / (b/a)**2
+        )
+
+        # make an interpolation function and get the 2D background
+        f = interp1d(
+            self.polar.radial_bins,
+            bkgrd_1d,
+            fill_value = 'extrapolate'
+        )
+        background = f(qrr)
+
+        # return
+        return background
+
+
+
+    def get_radial_bksb_dp(
+        self,
+        rx,
+        ry,
+        sigma = 2
+    ):
+        """
+        Computes and returns the diffraction pattern at beam position (rx,ry)
+        with a radial background subtracted.  See the docstring for
+        datacube.get_radial_background for more info.
+
+        Parameters
+        ----------
+        rx : int
+            The x-coord of the beam position
+        ry : int
+            The y-coord of the beam position
+        sigma : number
+            If >0, applying a gaussian smoothing in the radial direction
+            before returning
+
+        Returns
+        -------
+        data : ndarray
+            The radial background subtracted diffraction image
+        """
+        # get 2D background
+        background = self.get_radial_bkgrnd( rx,ry,sigma )
+
+        # subtract, zero negative values, return
+        ans = self.data[rx,ry] - background
+        ans[ans<0] = 0
+        return ans
+
+
+
+    def get_local_ave_dp(
+        self,
+        rx,
+        ry,
+        radial_bksb = False,
+        sigma = 2,
+        braggmask = False,
+        braggvectors = None,
+        braggmask_radius = None
+    ):
+        """
+        Computes and returns the diffraction pattern at beam position (rx,ry)
+        after weighted local averaging with its nearest-neighbor patterns,
+        using a 3x3 gaussian kernel for the weightings.
+
+        Parameters
+        ----------
+        rx : int
+            The x-coord of the beam position
+        ry : int
+            The y-coord of the beam position
+        radial_bksb : bool
+            It True, apply a radial background subtraction to each pattern
+            before averaging
+        sigma : number
+            If radial_bksb is True, use this sigma for radial smoothing of
+            the background
+        braggmask : bool
+            If True, masks bragg scattering at each scan position before
+            averaging. `braggvectors` and `braggmask_radius` must be
+            specified.
+        braggvectors : BraggVectors
+            The Bragg vectors to use for masking
+        braggmask_radius : number
+            The radius about each Bragg point to mask
+
+        Returns
+        -------
+        data : ndarray
+            The radial background subtracted diffraction image
+        """
+        # define the kernel
+        kernel = np.array([[1,2,1],
+                           [2,4,2],
+                           [1,2,1]])/16.
+
+        # get shape and check for valid inputs
+        nx,ny = self.data.shape[:2]
+        assert(rx>=0 and rx<nx), "rx outside of scan range"
+        assert(ry>=0 and ry<ny), "ry outside of scan range"
+
+        # get the subcube, checking for edge patterns
+        # and modifying the kernel as needed
+        if rx!=0 and rx!=(nx-1) and ry!=0 and ry!=(ny-1):
+            subcube = self.data[rx-1:rx+2,ry-1:ry+2,:,:]
+        elif rx==0 and ry==0:
+            subcube = self.data[:2,:2,:,:]
+            kernel = kernel[1:,1:]
+        elif rx==0 and ry==(ny-1):
+            subcube = self.data[:2,-2:,:,:]
+            kernel = kernel[1:,:-1]
+        elif rx==(nx-1) and ry==0:
+            subcube = self.data[-2:,:2,:,:]
+            kernel = kernel[:-1,1:]
+        elif rx==(nx-1) and ry==(ny-1):
+            subcube = self.data[-2:,-2:,:,:]
+            kernel = kernel[:-1,:-1]
+        elif rx==0:
+            subcube = self.data[:2,ry-1:ry+2,:,:]
+            kernel = kernel[1:,:]
+        elif rx==(nx-1):
+            subcube = self.data[-2:,ry-1:ry+2,:,:]
+            kernel = kernel[:-1,:]
+        elif ry==0:
+            subcube = self.data[rx-1:rx+2,:2,:,:]
+            kernel = kernel[:,1:]
+        elif ry==(ny-1):
+            subcube = self.data[rx-1:rx+2,-2:,:,:]
+            kernel = kernel[:,:-1]
+        else:
+            raise Exception(f'Invalid (rx,ry) = ({rx},{ry})...')
+
+        # normalize the kernel
+        kernel /= np.sum(kernel)
+
+
+        # compute...
+
+        # ...in the simple case
+        if not(radial_bksb) and not(braggmask):
+            ans = np.tensordot(subcube,kernel,axes=((0,1),(0,1)))
+
+        # ...with radial background subtration
+        elif radial_bksb and not(braggmask):
+            # get position of (rx,ry) relative to kernel
+            _xs = 1 if rx!=0 else 0
+            _ys = 1 if ry!=0 else 0
+            x0 = rx - _xs
+            y0 = ry - _ys
+            # compute
+            ans = np.zeros(self.Qshape)
+            for (i,j),w in np.ndenumerate(kernel):
+                x = x0 + i
+                y = y0 + j
+                ans += self.get_radial_bksb_dp(x,y,sigma) * w
+
+        # ...with bragg masking
+        elif not(radial_bksb) and braggmask:
+            assert(braggvectors is not None), "`braggvectors` must be specified or `braggmask` must be turned off!"
+            assert(braggmask_radius is not None), "`braggmask_radius` must be specified or `braggmask` must be turned off!"
+            # get position of (rx,ry) relative to kernel
+            _xs = 1 if rx!=0 else 0
+            _ys = 1 if ry!=0 else 0
+            x0 = rx - _xs
+            y0 = ry - _ys
+            # compute
+            ans = np.zeros(self.Qshape)
+            weights = np.zeros(self.Qshape)
+            for (i,j),w in np.ndenumerate(kernel):
+                x = x0 + i
+                y = y0 + j
+                mask = self.get_braggmask(
+                    braggvectors,
+                    x,
+                    y,
+                    braggmask_radius
+                )
+                weights_curr = mask * w
+                ans += self.data[x,y] * weights_curr
+                weights += weights_curr
+            # normalize
+            out = np.full_like(ans, np.nan)
+            ans_mask = weights>0
+            ans = np.divide(
+                ans,
+                weights,
+                out = out,
+                where = ans_mask
+            )
+            # make masked array
+            ans = np.ma.array(
+                data = ans,
+                mask = np.logical_not(ans_mask)
+            )
+            pass
+
+        # ...with both radial background subtraction and bragg masking
+        else:
+            assert(braggvectors is not None), "`braggvectors` must be specified or `braggmask` must be turned off!"
+            assert(braggmask_radius is not None), "`braggmask_radius` must be specified or `braggmask` must be turned off!"
+            # get position of (rx,ry) relative to kernel
+            _xs = 1 if rx!=0 else 0
+            _ys = 1 if ry!=0 else 0
+            x0 = rx - _xs
+            y0 = ry - _ys
+            # compute
+            ans = np.zeros(self.Qshape)
+            weights = np.zeros(self.Qshape)
+            for (i,j),w in np.ndenumerate(kernel):
+                x = x0 + i
+                y = y0 + j
+                mask = self.get_braggmask(
+                    braggvectors,
+                    x,
+                    y,
+                    braggmask_radius
+                )
+                weights_curr = mask * w
+                ans += self.get_radial_bksb_dp(x,y,sigma) * weights_curr
+                weights += weights_curr
+            # normalize
+            out = np.full_like(ans, np.nan)
+            ans_mask = weights>0
+            ans = np.divide(
+                ans,
+                weights,
+                out = out,
+                where = ans_mask
+            )
+            # make masked array
+            ans = np.ma.array(
+                data = ans,
+                mask = np.logical_not(ans_mask)
+            )
+            pass
+
+        # return
+        return ans
+
+
+
+
+    def get_braggmask(
+        self,
+        braggvectors,
+        rx,
+        ry,
+        radius
+    ):
+        """
+        Returns a boolean mask which is False in a radius of `radius` around
+        each bragg scattering vector at scan position (rx,ry).
+
+        Parameters
+        ----------
+        braggvectors : BraggVectors
+            The bragg vectors
+        rx : int
+            The x-coord of the beam position
+        ry : int
+            The y-coord of the beam position
+        radius : number
+            mask pixels about each bragg vector to this radial distance
+
+        Returns
+        -------
+        mask : boolean ndarray
+        """
+        # allocate space
+        mask = np.ones( self.Qshape, dtype=bool )
+        # get the vectors
+        vects = braggvectors.raw[rx,ry]
+        # loop
+        for idx in range(len(vects.data)):
+            qr = np.hypot(self.qxx-vects.qx[idx], self.qyy-vects.qy[idx])
+            mask = np.logical_and(mask, qr>radius)
+        return mask
+
+
+
+
 
