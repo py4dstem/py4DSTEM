@@ -311,7 +311,7 @@ class PtychographyOptimizer:
                 affine_preprocessed, init_static_args["datacube"]
             )
 
-            ptycho_preprocessed = cls.__init__(**init_args).preprocess(
+            ptycho_preprocessed = cls(**init_args).preprocess(
                 **preprocess_static_args
             )
 
@@ -323,9 +323,9 @@ class PtychographyOptimizer:
 
         else:
             obj = partial(cls, **init_static_args)
-            affine = partial(AffineTransform, **affine_static_args)
             prep = partial(cls.preprocess, **preprocess_static_args)
 
+        affine = partial(AffineTransform, **affine_static_args)
         recon = partial(cls.reconstruct, **reconstruct_static_args)
 
         # Target function for Gaussian process optimization that takes a single
@@ -364,6 +364,7 @@ class PtychographyOptimizer:
 
         self._reconstruction_static_args["progress_bar"] = False
         self._reconstruction_static_args["store_iterations"] = False
+        self._reconstruction_static_args["reset"] = True
 
 
 class OptimizationParameter:
