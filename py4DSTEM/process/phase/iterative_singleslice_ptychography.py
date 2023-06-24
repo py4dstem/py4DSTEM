@@ -346,16 +346,16 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
         self._positions_px = self._calculate_scan_positions_in_pixels(
             self._scan_positions
         )
-
         # Object Initialization
         if self._object is None:
-            pad_x, pad_y = self._object_padding_px
-            p, q = np.max(self._positions_px, axis=0)
+            pad_x = self._object_padding_px[0][1]
+            pad_y = self._object_padding_px[1][1]
+            p, q = np.round(np.max(self._positions_px, axis=0))
             p = np.max([np.round(p + pad_x), self._region_of_interest_shape[0]]).astype(
-                int
+                "int"
             )
             q = np.max([np.round(q + pad_y), self._region_of_interest_shape[1]]).astype(
-                int
+                "int"
             )
             if self._object_type == "potential":
                 self._object = xp.zeros((p, q), dtype=xp.float32)
@@ -398,18 +398,16 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
                     self._vacuum_probe_intensity, dtype=xp.float32
                 )
                 probe_x0, probe_y0 = get_CoM(
-                    self._vacuum_probe_intensity, device="cpu" if xp is np else "gpu"
+                    self._vacuum_probe_intensity,
+                    device=self._device,
                 )
-                shift_x = self._region_of_interest_shape[0] // 2 - probe_x0
-                shift_y = self._region_of_interest_shape[1] // 2 - probe_y0
                 self._vacuum_probe_intensity = get_shifted_ar(
                     self._vacuum_probe_intensity,
-                    shift_x,
-                    shift_y,
+                    -probe_x0,
+                    -probe_y0,
                     bilinear=True,
-                    device="cpu" if xp is np else "gpu",
+                    device=self._device,
                 )
-
             self._probe = (
                 ComplexProbe(
                     gpts=self._region_of_interest_shape,
@@ -419,7 +417,7 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
                     rolloff=self._rolloff,
                     vacuum_probe_intensity=self._vacuum_probe_intensity,
                     parameters=self._polar_parameters,
-                    device="cpu" if xp is np else "gpu",
+                    device=self._device,
                 )
                 .build()
                 ._array
@@ -448,6 +446,15 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
                 self._probe = xp.asarray(self._probe, dtype=xp.complex64)
 
         self._probe_initial = self._probe.copy()
+        self._probe_initial_aperture = xp.abs(xp.fft.fft2(self._probe))
+
+        self._known_aberrations_array = ComplexProbe(
+            energy=self._energy,
+            gpts=self._region_of_interest_shape,
+            sampling=self.sampling,
+            parameters=self._polar_parameters,
+            device=self._device,
+        )._evaluate_ctf()
 
         # overlaps
         shifted_probes = fft_shift(self._probe, self._positions_px_fractional, xp)
@@ -462,22 +469,16 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
         self._object_fov_mask_inverse = np.invert(self._object_fov_mask)
 
         if plot_probe_overlaps:
-            figsize = kwargs.get("figsize", (9, 4))
-            cmap = kwargs.get("cmap", "Greys_r")
-            vmin = kwargs.get("vmin", None)
-            vmax = kwargs.get("vmax", None)
-            hue_start = kwargs.get("hue_start", 0)
-            invert = kwargs.get("invert", False)
-            kwargs.pop("figsize", None)
-            kwargs.pop("cmap", None)
-            kwargs.pop("vmin", None)
-            kwargs.pop("vmax", None)
-            kwargs.pop("hue_start", None)
-            kwargs.pop("invert", None)
+            figsize = kwargs.pop("figsize", (9, 4))
+            cmap = kwargs.pop("cmap", "Greys_r")
+            vmin = kwargs.pop("vmin", None)
+            vmax = kwargs.pop("vmax", None)
+            hue_start = kwargs.pop("hue_start", 0)
+            invert = kwargs.pop("invert", False)
 
             # initial probe
             complex_probe_rgb = Complex2RGB(
-                asnumpy(self._probe),
+                self.probe_centered,
                 vmin=vmin,
                 vmax=vmax,
                 hue_start=hue_start,
@@ -614,13 +615,13 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
         Ptychographic fourier projection method for DM_AP and RAAR methods.
         Generalized projection using three parameters: a,b,c
 
-            DM_AP(\alpha)   :   a =  -\alpha, b = 1, c = 1 + \alpha
+            DM_AP(\\alpha)   :   a =  -\\alpha, b = 1, c = 1 + \\alpha
               DM: DM_AP(1.0), AP: DM_AP(0.0)
 
-            RAAR(\beta)     :   a = 1-2\beta, b = \beta, c = 2
+            RAAR(\\beta)     :   a = 1-2\\beta, b = \\beta, c = 2
               DM : RAAR(1.0)
 
-            RRR(\gamma)     :   a = -\gamma, b = \gamma, c = 2
+            RRR(\\gamma)     :   a = -\\gamma, b = \\gamma, c = 2
               DM: RRR(1.0)
 
             SUPERFLIP       :   a = 0, b = 1, c = 2
@@ -996,11 +997,16 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
         pure_phase_object,
         fix_com,
         symmetrize_probe,
-        fix_probe_amplitude,
-        fix_probe_amplitude_relative_radius,
-        fix_probe_amplitude_relative_width,
-        fix_probe_fourier_amplitude,
-        fix_probe_fourier_amplitude_threshold,
+        probe_gaussian_filter,
+        probe_gaussian_filter_sigma,
+        probe_gaussian_filter_fix_amplitude,
+        constrain_probe_amplitude,
+        constrain_probe_amplitude_relative_radius,
+        constrain_probe_amplitude_relative_width,
+        constrain_probe_fourier_amplitude,
+        constrain_probe_fourier_amplitude_threshold,
+        fix_probe_aperture,
+        initial_probe_aperture,
         fix_positions,
         global_affine_transformation,
         gaussian_filter,
@@ -1030,23 +1036,33 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
             If True, probe CoM is fixed to the center
         symmetrize_probe: bool
             If True, the probe is radially-averaged
-        fix_probe_amplitude: bool
+        probe_gaussian_filter: bool
+            If True, applies reciprocal-space gaussian filtering on residual aberrations
+        probe_gaussian_filter_sigma: float
+            Standard deviation of gaussian kernel in A^-1
+        probe_gaussian_filter_fix_amplitude: bool
+            If True, only the probe phase is smoothed
+        constrain_probe_amplitude: bool
             If True, probe amplitude is constrained by top hat function
-        fix_probe_amplitude_relative_radius: float
+        constrain_probe_amplitude_relative_radius: float
             Relative location of top-hat inflection point, between 0 and 0.5
-        fix_probe_amplitude_relative_width: float
+        constrain_probe_amplitude_relative_width: float
             Relative width of top-hat sigmoid, between 0 and 0.5
-        fix_probe_fourier_amplitude: bool
+        constrain_probe_fourier_amplitude: bool
             If True, probe fourier amplitude is constrained by top hat function
-        fix_probe_fourier_amplitude_threshold: float
+        constrain_probe_fourier_amplitude_threshold: float
             Threshold value for current probe fourier mask. Value should
             be between 0 and 1, where higher values provide the most masking.
+        fix_probe_aperture: bool,
+            If True, probe Fourier amplitude is replaced by initial probe aperture.
+        initial_probe_aperture: np.ndarray,
+            Initial probe aperture to use in replacing probe Fourier amplitude.
         fix_positions: bool
             If True, positions are not updated
         gaussian_filter: bool
             If True, applies real-space gaussian filter
         gaussian_filter_sigma: float
-            Standard deviation of gaussian kernel
+            Standard deviation of gaussian kernel in A
         butterworth_filter: bool
             If True, applies high-pass butteworth filter
         q_lowpass: float
@@ -1102,20 +1118,32 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
         if fix_com:
             current_probe = self._probe_center_of_mass_constraint(current_probe)
 
+        if probe_gaussian_filter:
+            current_probe = self._probe_residual_aberration_filtering_constraint(
+                current_probe,
+                probe_gaussian_filter_sigma,
+                probe_gaussian_filter_fix_amplitude,
+            )
+
         if symmetrize_probe:
             current_probe = self._probe_radial_symmetrization_constraint(current_probe)
 
-        if fix_probe_amplitude:
+        if fix_probe_aperture:
+            current_probe = self._probe_aperture_constraint(
+                current_probe,
+                initial_probe_aperture,
+            )
+        elif constrain_probe_amplitude:
             current_probe = self._probe_amplitude_constraint(
                 current_probe,
-                fix_probe_amplitude_relative_radius,
-                fix_probe_amplitude_relative_width,
+                constrain_probe_amplitude_relative_radius,
+                constrain_probe_amplitude_relative_width,
             )
-        elif fix_probe_fourier_amplitude:
+        elif constrain_probe_fourier_amplitude:
             current_probe = self._probe_fourier_amplitude_constraint(
                 current_probe,
-                fix_probe_fourier_amplitude_threshold,
-                fix_probe_amplitude_relative_width,
+                constrain_probe_fourier_amplitude_threshold,
+                constrain_probe_amplitude_relative_width,
             )
 
         if not fix_positions:
@@ -1137,22 +1165,27 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
         reconstruction_parameter: float = 1.0,
         max_batch_size: int = None,
         seed_random: int = None,
-        step_size: float = 0.9,
+        step_size: float = 0.5,
         normalization_min: float = 1,
         positions_step_size: float = 0.9,
         pure_phase_object_iter: int = 0,
         fix_com: bool = True,
         fix_probe_iter: int = 0,
+        fix_probe_aperture_iter: int = 0,
         symmetrize_probe_iter: int = 0,
-        fix_probe_amplitude_iter: int = 0,
-        fix_probe_amplitude_relative_radius: float = 0.5,
-        fix_probe_amplitude_relative_width: float = 0.05,
-        fix_probe_fourier_amplitude_iter: int = 0,
-        fix_probe_fourier_amplitude_threshold: float = 0.9,
+        constrain_probe_amplitude_iter: int = 0,
+        constrain_probe_amplitude_relative_radius: float = 0.5,
+        constrain_probe_amplitude_relative_width: float = 0.05,
+        constrain_probe_fourier_amplitude_iter: int = 0,
+        constrain_probe_fourier_amplitude_threshold: float = 0.9,
         fix_positions_iter: int = np.inf,
+        constrain_position_distance: float = None,
         global_affine_transformation: bool = True,
         gaussian_filter_sigma: float = None,
         gaussian_filter_iter: int = np.inf,
+        probe_gaussian_filter_sigma: float = None,
+        probe_gaussian_filter_residual_aberrations_iter: int = np.inf,
+        probe_gaussian_filter_fix_amplitude: bool = True,
         butterworth_filter_iter: int = np.inf,
         q_lowpass: float = None,
         q_highpass: float = None,
@@ -1198,27 +1231,38 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
             If True, fixes center of mass of probe
         fix_probe_iter: int, optional
             Number of iterations to run with a fixed probe before updating probe estimate
+        fix_probe_aperture_iter: int, optional
+            Number of iterations to run with a fixed probe Fourier amplitude before updating probe estimate
         symmetrize_probe_iter: int, optional
-            Number of iterations to run with a fixed probe before updating probe estimate
-        fix_probe_amplitude: bool
+            Number of iterations to run before radially-averaging the probe
+        constrain_probe_amplitude: bool
             If True, probe amplitude is constrained by top hat function
-        fix_probe_amplitude_relative_radius: float
+        constrain_probe_amplitude_relative_radius: float
             Relative location of top-hat inflection point, between 0 and 0.5
-        fix_probe_amplitude_relative_width: float
+        constrain_probe_amplitude_relative_width: float
             Relative width of top-hat sigmoid, between 0 and 0.5
-        fix_probe_fourier_amplitude: bool
+        constrain_probe_fourier_amplitude: bool
             If True, probe fourier amplitude is constrained by top hat function
-        fix_probe_fourier_amplitude_threshold: float
+        constrain_probe_fourier_amplitude_threshold: float
             Threshold value for current probe fourier mask. Value should
             be between 0 and 1, where higher values provide the most masking.
         fix_positions_iter: int, optional
             Number of iterations to run with fixed positions before updating positions estimate
+        constrain_position_distance: float, optional
+            Distance to constrain position correction within original
+            field of view in A
         global_affine_transformation: bool, optional
             If True, positions are assumed to be a global affine transform from initial scan
         gaussian_filter_sigma: float, optional
-            Standard deviation of gaussian kernel
+            Standard deviation of gaussian kernel in A
         gaussian_filter_iter: int, optional
             Number of iterations to run using object smoothness constraint
+        probe_gaussian_filter_sigma: float, optional
+            Standard deviation of probe gaussian kernel in A^-1
+        probe_gaussian_filter_fix_amplitude: bool
+            If True, only the probe phase is smoothed
+        probe_gaussian_filter_residual_aberrations_iter: int, optional
+            Number of iterations to run using probe smoothing of residual aberrations
         butterworth_filter_iter: int, optional
             Number of iterations to run using high-pass butteworth filter
         q_lowpass: float
@@ -1231,7 +1275,7 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
             If True, forces object to be positive
         shrinkage_rad: float
             Phase shift in radians to be subtracted from the potential at each iteration
-        fix_potential_baseline: boool
+        fix_potential_baseline: bool
             If true, the potential mean outside the FOV is forced to zero at each iteration
         switch_object_iter: int, optional
             Iteration to switch object type between 'complex' and 'potential' or between
@@ -1514,6 +1558,7 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
                         amplitudes,
                         self._positions_px,
                         positions_step_size,
+                        constrain_position_distance,
                     )
 
                 error += batch_error
@@ -1529,13 +1574,21 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
                 self._positions_px,
                 fix_com=fix_com and a0 >= fix_probe_iter,
                 symmetrize_probe=a0 < symmetrize_probe_iter,
-                fix_probe_amplitude=a0 < fix_probe_amplitude_iter
+                probe_gaussian_filter=a0
+                < probe_gaussian_filter_residual_aberrations_iter
+                and probe_gaussian_filter_sigma is not None,
+                probe_gaussian_filter_sigma=probe_gaussian_filter_sigma,
+                probe_gaussian_filter_fix_amplitude=probe_gaussian_filter_fix_amplitude,
+                constrain_probe_amplitude=a0 < constrain_probe_amplitude_iter
                 and a0 >= fix_probe_iter,
-                fix_probe_amplitude_relative_radius=fix_probe_amplitude_relative_radius,
-                fix_probe_amplitude_relative_width=fix_probe_amplitude_relative_width,
-                fix_probe_fourier_amplitude=a0 < fix_probe_fourier_amplitude_iter
+                constrain_probe_amplitude_relative_radius=constrain_probe_amplitude_relative_radius,
+                constrain_probe_amplitude_relative_width=constrain_probe_amplitude_relative_width,
+                constrain_probe_fourier_amplitude=a0
+                < constrain_probe_fourier_amplitude_iter
                 and a0 >= fix_probe_iter,
-                fix_probe_fourier_amplitude_threshold=fix_probe_fourier_amplitude_threshold,
+                constrain_probe_fourier_amplitude_threshold=constrain_probe_fourier_amplitude_threshold,
+                fix_probe_aperture=a0 < fix_probe_aperture_iter,
+                initial_probe_aperture=self._probe_initial_aperture,
                 fix_positions=a0 < fix_positions_iter,
                 global_affine_transformation=global_affine_transformation,
                 gaussian_filter=a0 < gaussian_filter_iter
@@ -1549,7 +1602,7 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
                 object_positivity=object_positivity,
                 shrinkage_rad=shrinkage_rad,
                 object_mask=self._object_fov_mask_inverse
-                if fix_potential_baseline
+                if fix_potential_baseline and self._object_fov_mask_inverse.sum() > 0
                 else None,
                 pure_phase_object=a0 < pure_phase_object_iter
                 and self._object_type == "complex",
@@ -1558,11 +1611,11 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
             self.error_iterations.append(error.item())
             if store_iterations:
                 self.object_iterations.append(asnumpy(self._object.copy()))
-                self.probe_iterations.append(asnumpy(self._probe.copy()))
+                self.probe_iterations.append(self.probe_centered)
 
         # store result
         self.object = asnumpy(self._object)
-        self.probe = asnumpy(self._probe)
+        self.probe = self.probe_centered
         self.error = error.item()
 
         return self
@@ -1592,8 +1645,7 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
         padding : int, optional
             Pixels to pad by post rotating-cropping object
         """
-        cmap = kwargs.get("cmap", "magma")
-        kwargs.pop("cmap", None)
+        cmap = kwargs.pop("cmap", "magma")
 
         if self._object_type == "complex":
             obj = np.angle(self.object)
@@ -1657,14 +1709,10 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
         padding : int, optional
             Pixels to pad by post rotating-cropping object
         """
-        figsize = kwargs.get("figsize", (8, 5))
-        cmap = kwargs.get("cmap", "magma")
-        invert = kwargs.get("invert", False)
-        hue_start = kwargs.get("hue_start", 0)
-        kwargs.pop("figsize", None)
-        kwargs.pop("cmap", None)
-        kwargs.pop("invert", None)
-        kwargs.pop("hue_start", None)
+        figsize = kwargs.pop("figsize", (8, 5))
+        cmap = kwargs.pop("cmap", "magma")
+        invert = kwargs.pop("invert", False)
+        hue_start = kwargs.pop("hue_start", 0)
 
         if self._object_type == "complex":
             obj = np.angle(self.object)
@@ -1681,12 +1729,20 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
             0,
         ]
 
-        probe_extent = [
-            0,
-            self.sampling[1] * self._region_of_interest_shape[1],
-            self.sampling[0] * self._region_of_interest_shape[0],
-            0,
-        ]
+        if plot_fourier_probe:
+            probe_extent = [
+                0,
+                self.angular_sampling[1] * self._region_of_interest_shape[1],
+                self.angular_sampling[0] * self._region_of_interest_shape[0],
+                0,
+            ]
+        elif plot_probe:
+            probe_extent = [
+                0,
+                self.sampling[1] * self._region_of_interest_shape[1],
+                self.sampling[0] * self._region_of_interest_shape[0],
+                0,
+            ]
 
         if plot_convergence:
             if plot_probe or plot_fourier_probe:
@@ -1752,19 +1808,21 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
                     self.probe_fourier, hue_start=hue_start, invert=invert
                 )
                 ax.set_title("Reconstructed Fourier probe")
+                ax.set_ylabel("kx [mrad]")
+                ax.set_xlabel("ky [mrad]")
             else:
                 probe_array = Complex2RGB(
                     self.probe, hue_start=hue_start, invert=invert
                 )
                 ax.set_title("Reconstructed probe")
+                ax.set_ylabel("x [A]")
+                ax.set_xlabel("y [A]")
 
             im = ax.imshow(
                 probe_array,
                 extent=probe_extent,
                 **kwargs,
             )
-            ax.set_ylabel("x [A]")
-            ax.set_xlabel("y [A]")
 
             if cbar:
                 divider = make_axes_locatable(ax)
@@ -1875,14 +1933,10 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
             if plot_convergence
             else (3 * iterations_grid[1], 3 * iterations_grid[0])
         )
-        figsize = kwargs.get("figsize", auto_figsize)
-        cmap = kwargs.get("cmap", "inferno")
-        invert = kwargs.get("invert", False)
-        hue_start = kwargs.get("hue_start", 0)
-        kwargs.pop("figsize", None)
-        kwargs.pop("cmap", None)
-        kwargs.pop("invert", None)
-        kwargs.pop("hue_start", None)
+        figsize = kwargs.pop("figsize", auto_figsize)
+        cmap = kwargs.pop("cmap", "inferno")
+        invert = kwargs.pop("invert", False)
+        hue_start = kwargs.pop("hue_start", 0)
 
         errors = np.array(self.error_iterations)
 
@@ -1912,12 +1966,20 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
             0,
         ]
 
-        probe_extent = [
-            0,
-            self.sampling[1] * self._region_of_interest_shape[1],
-            self.sampling[0] * self._region_of_interest_shape[0],
-            0,
-        ]
+        if plot_fourier_probe:
+            probe_extent = [
+                0,
+                self.angular_sampling[1] * self._region_of_interest_shape[1],
+                self.angular_sampling[0] * self._region_of_interest_shape[0],
+                0,
+            ]
+        elif plot_probe:
+            probe_extent = [
+                0,
+                self.sampling[1] * self._region_of_interest_shape[1],
+                self.sampling[0] * self._region_of_interest_shape[0],
+                0,
+            ]
 
         if plot_convergence:
             if plot_probe or plot_fourier_probe:
@@ -1973,25 +2035,31 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
             for n, ax in enumerate(grid):
                 if plot_fourier_probe:
                     probe_array = Complex2RGB(
-                        asnumpy(self._return_fourier_probe(probes[grid_range[n]])),
+                        asnumpy(
+                            self._return_fourier_probe_from_centered_probe(
+                                probes[grid_range[n]]
+                            )
+                        ),
                         hue_start=hue_start,
                         invert=invert,
                     )
                     ax.set_title(f"Iter: {grid_range[n]} Fourier probe")
+                    ax.set_ylabel("kx [mrad]")
+                    ax.set_xlabel("ky [mrad]")
+
                 else:
                     probe_array = Complex2RGB(
                         probes[grid_range[n]], hue_start=hue_start, invert=invert
                     )
                     ax.set_title(f"Iter: {grid_range[n]} probe")
+                    ax.set_ylabel("x [A]")
+                    ax.set_xlabel("y [A]")
 
                 im = ax.imshow(
                     probe_array,
                     extent=probe_extent,
                     **kwargs,
                 )
-
-                ax.set_ylabel("x [A]")
-                ax.set_xlabel("y [A]")
 
                 if cbar:
                     add_colorbar_arg(

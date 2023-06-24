@@ -327,9 +327,9 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
         """
         Rotate 3D volume using alpha, beta, gamma Euler angles according to convention:
 
-        - \-alpha tilt around first axis (z)
-        - \beta tilt around second axis (x)
-        - \alpha tilt around first axis (z)
+        - \\-alpha tilt around first axis (z)
+        - \\beta tilt around second axis (x)
+        - \\alpha tilt around first axis (z)
 
         Note: since we store array as zxy, the x- and y-axis rotations flip sign below.
 
@@ -602,8 +602,9 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
 
         # Object Initialization
         if self._object is None:
-            pad_x, pad_y = self._object_padding_px
-            p, q = np.max(self._positions_px_all, axis=0)
+            pad_x = self._object_padding_px[0][1]
+            pad_y = self._object_padding_px[1][1]
+            p, q = np.round(np.max(self._positions_px_all, axis=0))
             p = np.max([np.round(p + pad_x), self._region_of_interest_shape[0]]).astype(
                 "int"
             )
@@ -652,16 +653,14 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
                     self._vacuum_probe_intensity, dtype=xp.float32
                 )
                 probe_x0, probe_y0 = get_CoM(
-                    self._vacuum_probe_intensity, device="cpu" if xp is np else "gpu"
+                    self._vacuum_probe_intensity, device=self._device
                 )
-                shift_x = self._region_of_interest_shape[0] // 2 - probe_x0
-                shift_y = self._region_of_interest_shape[1] // 2 - probe_y0
                 self._vacuum_probe_intensity = get_shifted_ar(
                     self._vacuum_probe_intensity,
-                    shift_x,
-                    shift_y,
+                    -probe_x0,
+                    -probe_y0,
                     bilinear=True,
-                    device="cpu" if xp is np else "gpu",
+                    device=self._device,
                 )
 
             self._probe = (
@@ -673,7 +672,7 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
                     rolloff=self._rolloff,
                     vacuum_probe_intensity=self._vacuum_probe_intensity,
                     parameters=self._polar_parameters,
-                    device="cpu" if xp is np else "gpu",
+                    device=self._device,
                 )
                 .build()
                 ._array
@@ -708,6 +707,15 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
                 self._probe = xp.asarray(self._probe, dtype=xp.complex64)
 
         self._probe_initial = self._probe.copy()
+        self._probe_initial_aperture = xp.abs(xp.fft.fft2(self._probe))
+
+        self._known_aberrations_array = ComplexProbe(
+            energy=self._energy,
+            gpts=self._region_of_interest_shape,
+            sampling=self.sampling,
+            parameters=self._polar_parameters,
+            device=self._device,
+        )._evaluate_ctf()
 
         # Precomputed propagator arrays
         self._slice_thicknesses = np.tile(
@@ -749,7 +757,6 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
                 probe_overlap = self._sum_overlapping_patches_bincounts(
                     probe_intensities
                 )
-                probe_overlap = self._gaussian_filter(probe_overlap, 1.0)
 
                 probe_overlap_3D += probe_overlap[None]
 
@@ -759,6 +766,7 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
                     -beta_deg,
                 )
 
+            probe_overlap_3D = self._gaussian_filter(probe_overlap_3D, 1.0)
             self._object_fov_mask = asnumpy(
                 probe_overlap_3D > 0.25 * probe_overlap_3D.max()
             )
@@ -776,22 +784,16 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
         self._object_fov_mask_inverse = np.invert(self._object_fov_mask)
 
         if plot_probe_overlaps:
-            figsize = kwargs.get("figsize", (13, 4))
-            cmap = kwargs.get("cmap", "Greys_r")
-            vmin = kwargs.get("vmin", None)
-            vmax = kwargs.get("vmax", None)
-            hue_start = kwargs.get("hue_start", 0)
-            invert = kwargs.get("invert", False)
-            kwargs.pop("figsize", None)
-            kwargs.pop("cmap", None)
-            kwargs.pop("vmin", None)
-            kwargs.pop("vmax", None)
-            kwargs.pop("hue_start", None)
-            kwargs.pop("invert", None)
+            figsize = kwargs.pop("figsize", (13, 4))
+            cmap = kwargs.pop("cmap", "Greys_r")
+            vmin = kwargs.pop("vmin", None)
+            vmax = kwargs.pop("vmax", None)
+            hue_start = kwargs.pop("hue_start", 0)
+            invert = kwargs.pop("invert", False)
 
             # initial probe
             complex_probe_rgb = Complex2RGB(
-                asnumpy(self._probe),
+                self.probe_centered,
                 vmin=vmin,
                 vmax=vmax,
                 hue_start=hue_start,
@@ -806,7 +808,7 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
                     propagated_probe, self._propagator_arrays[s]
                 )
             complex_propagated_rgb = Complex2RGB(
-                asnumpy(propagated_probe),
+                asnumpy(self._return_centered_probe(propagated_probe)),
                 vmin=vmin,
                 vmax=vmax,
                 hue_start=hue_start,
@@ -977,13 +979,13 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
         Ptychographic fourier projection method for DM_AP and RAAR methods.
         Generalized projection using three parameters: a,b,c
 
-            DM_AP(\alpha)   :   a =  -\alpha, b = 1, c = 1 + \alpha
+            DM_AP(\\alpha)   :   a =  -\\alpha, b = 1, c = 1 + \\alpha
               DM: DM_AP(1.0), AP: DM_AP(0.0)
 
-            RAAR(\beta)     :   a = 1-2\beta, b = \beta, c = 2
+            RAAR(\\beta)     :   a = 1-2\\beta, b = \\beta, c = 2
               DM : RAAR(1.0)
 
-            RRR(\gamma)     :   a = -\gamma, b = \gamma, c = 2
+            RRR(\\gamma)     :   a = -\\gamma, b = \\gamma, c = 2
               DM: RRR(1.0)
 
             SUPERFLIP       :   a = 0, b = 1, c = 2
@@ -1411,6 +1413,7 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
         amplitudes,
         current_positions,
         positions_step_size,
+        constrain_position_distance,
     ):
         """
         Position correction using estimated intensity gradient.
@@ -1429,6 +1432,9 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
             Current positions estimate
         positions_step_size: float
             Positions step size
+        constrain_position_distance: float
+            Distance to constrain position correction within original
+            field of view in A
 
         Returns
         --------
@@ -1521,6 +1527,39 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
             @ difference_intensity[..., None]
         )
 
+        if constrain_position_distance is not None:
+            constrain_position_distance /= xp.sqrt(
+                self.sampling[0] ** 2 + self.sampling[1] ** 2
+            )
+            x1 = (current_positions - positions_step_size * positions_update[..., 0])[
+                :, 0
+            ]
+            y1 = (current_positions - positions_step_size * positions_update[..., 0])[
+                :, 1
+            ]
+            x0 = self._positions_px_initial[:, 0]
+            y0 = self._positions_px_initial[:, 1]
+            if self._rotation_best_transpose:
+                x0, y0 = xp.array([y0, x0])
+                x1, y1 = xp.array([y1, x1])
+
+            if self._rotation_best_rad is not None:
+                rotation_angle = self._rotation_best_rad
+                x0, y0 = x0 * xp.cos(-rotation_angle) + y0 * xp.sin(
+                    -rotation_angle
+                ), -x0 * xp.sin(-rotation_angle) + y0 * xp.cos(-rotation_angle)
+                x1, y1 = x1 * xp.cos(-rotation_angle) + y1 * xp.sin(
+                    -rotation_angle
+                ), -x1 * xp.sin(-rotation_angle) + y1 * xp.cos(-rotation_angle)
+
+            outlier_ind = (x1 > (xp.max(x0) + constrain_position_distance)) + (
+                x1 < (xp.min(x0) - constrain_position_distance)
+            ) + (y1 > (xp.max(y0) + constrain_position_distance)) + (
+                y1 < (xp.min(y0) - constrain_position_distance)
+            ) > 0
+
+            positions_update[..., 0][outlier_ind] = 0
+
         current_positions -= positions_step_size * positions_update[..., 0]
 
         return current_positions
@@ -1535,7 +1574,7 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
         current_object: np.ndarray
             Current object estimate
         gaussian_filter_sigma: float
-            Standard deviation of gaussian kernel
+            Standard deviation of gaussian kernel in A
 
         Returns
         --------
@@ -1544,11 +1583,14 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
         """
         gaussian_filter = self._gaussian_filter
 
+        gaussian_filter_sigma /= self.sampling[0]
         current_object = gaussian_filter(current_object, gaussian_filter_sigma)
 
         return current_object
 
-    def _object_butterworth_constraint(self, current_object, q_lowpass, q_highpass):
+    def _object_butterworth_constraint(
+        self, current_object, q_lowpass, q_highpass, butterworth_order
+    ):
         """
         Butterworth filter
 
@@ -1560,6 +1602,8 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
             Cut-off frequency in A^-1 for low-pass butterworth filter
         q_highpass: float
             Cut-off frequency in A^-1 for high-pass butterworth filter
+        butterworth_order: float
+            Butterworth filter order. Smaller gives a smoother filter
 
         Returns
         --------
@@ -1575,11 +1619,15 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
 
         env = xp.ones_like(qra)
         if q_highpass:
-            env *= 1 - 1 / (1 + (qra / q_highpass) ** 4)
+            env *= 1 - 1 / (1 + (qra / q_highpass) ** (2 * butterworth_order))
         if q_lowpass:
-            env *= 1 / (1 + (qra / q_lowpass) ** 4)
+            env *= 1 / (1 + (qra / q_lowpass) ** (2 * butterworth_order))
 
+        current_object_mean = xp.mean(current_object)
+        current_object -= current_object_mean
         current_object = xp.fft.ifftn(xp.fft.fftn(current_object) * env)
+        current_object += current_object_mean
+
         return xp.real(current_object)
 
     def _divergence_free_constraint(self, vector_field):
@@ -1612,11 +1660,16 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
         current_positions,
         fix_com,
         symmetrize_probe,
-        fix_probe_amplitude,
-        fix_probe_amplitude_relative_radius,
-        fix_probe_amplitude_relative_width,
-        fix_probe_fourier_amplitude,
-        fix_probe_fourier_amplitude_threshold,
+        probe_gaussian_filter,
+        probe_gaussian_filter_sigma,
+        probe_gaussian_filter_fix_amplitude,
+        constrain_probe_amplitude,
+        constrain_probe_amplitude_relative_radius,
+        constrain_probe_amplitude_relative_width,
+        constrain_probe_fourier_amplitude,
+        constrain_probe_fourier_amplitude_threshold,
+        fix_probe_aperture,
+        initial_probe_aperture,
         fix_positions,
         global_affine_transformation,
         gaussian_filter,
@@ -1627,6 +1680,7 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
         q_lowpass_m,
         q_highpass_e,
         q_highpass_m,
+        butterworth_order,
         object_positivity,
         shrinkage_rad,
         object_mask,
@@ -1647,25 +1701,35 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
             If True, probe CoM is fixed to the center
         symmetrize_probe: bool
             If True, the probe is radially-averaged
-        fix_probe_amplitude: bool
+        probe_gaussian_filter: bool
+            If True, applies reciprocal-space gaussian filtering on residual aberrations
+        probe_gaussian_filter_sigma: float
+            Standard deviation of gaussian kernel in A^-1
+        probe_gaussian_filter_fix_amplitude: bool
+            If True, only the probe phase is smoothed
+        constrain_probe_amplitude: bool
             If True, probe amplitude is constrained by top hat function
-        fix_probe_amplitude_relative_radius: float
+        constrain_probe_amplitude_relative_radius: float
             Relative location of top-hat inflection point, between 0 and 0.5
-        fix_probe_amplitude_relative_width: float
+        constrain_probe_amplitude_relative_width: float
             Relative width of top-hat sigmoid, between 0 and 0.5
-        fix_probe_fourier_amplitude: bool
+        constrain_probe_fourier_amplitude: bool
             If True, probe fourier amplitude is constrained by top hat function
-        fix_probe_fourier_amplitude_threshold: float
+        constrain_probe_fourier_amplitude_threshold: float
             Threshold value for current probe fourier mask. Value should
             be between 0 and 1, where higher values provide the most masking.
+        fix_probe_aperture: bool,
+            If True, probe Fourier amplitude is replaced by initial probe aperture.
+        initial_probe_aperture: np.ndarray,
+            Initial probe aperture to use in replacing probe Fourier amplitude.
         fix_positions: bool
             If True, positions are not updated
         gaussian_filter: bool
             If True, applies real-space gaussian filter
         gaussian_filter_sigma_e: float
-            Standard deviation of gaussian kernel for electrostatic object
+            Standard deviation of gaussian kernel for electrostatic object in A
         gaussian_filter_sigma_m: float
-            Standard deviation of gaussian kernel for magnetic object
+            Standard deviation of gaussian kernel for magnetic object in A
         butterworth_filter: bool
             If True, applies high-pass butteworth filter
         q_lowpass_e: float
@@ -1676,6 +1740,8 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
             Cut-off frequency in A^-1 for high-pass filtering electrostatic object
         q_highpass_m: float
             Cut-off frequency in A^-1 for high-pass filtering magnetic object
+        butterworth_order: float
+            Butterworth filter order. Smaller gives a smoother filter
         object_positivity: bool
             If True, forces object to be positive
         shrinkage_rad: float
@@ -1710,21 +1776,25 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
                 current_object[0],
                 q_lowpass_e,
                 q_highpass_e,
+                butterworth_order,
             )
             current_object[1] = self._object_butterworth_constraint(
                 current_object[1],
                 q_lowpass_m,
                 q_highpass_m,
+                butterworth_order,
             )
             current_object[2] = self._object_butterworth_constraint(
                 current_object[2],
                 q_lowpass_m,
                 q_highpass_m,
+                butterworth_order,
             )
             current_object[3] = self._object_butterworth_constraint(
                 current_object[3],
                 q_lowpass_m,
                 q_highpass_m,
+                butterworth_order,
             )
 
         if shrinkage_rad > 0.0 or object_mask is not None:
@@ -1740,20 +1810,32 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
         if fix_com:
             current_probe = self._probe_center_of_mass_constraint(current_probe)
 
+        if probe_gaussian_filter:
+            current_probe = self._probe_residual_aberration_filtering_constraint(
+                current_probe,
+                probe_gaussian_filter_sigma,
+                probe_gaussian_filter_fix_amplitude,
+            )
+
         if symmetrize_probe:
             current_probe = self._probe_radial_symmetrization_constraint(current_probe)
 
-        if fix_probe_amplitude:
+        if fix_probe_aperture:
+            current_probe = self._probe_aperture_constraint(
+                current_probe,
+                initial_probe_aperture,
+            )
+        elif constrain_probe_amplitude:
             current_probe = self._probe_amplitude_constraint(
                 current_probe,
-                fix_probe_amplitude_relative_radius,
-                fix_probe_amplitude_relative_width,
+                constrain_probe_amplitude_relative_radius,
+                constrain_probe_amplitude_relative_width,
             )
-        elif fix_probe_fourier_amplitude:
+        elif constrain_probe_fourier_amplitude:
             current_probe = self._probe_fourier_amplitude_constraint(
                 current_probe,
-                fix_probe_fourier_amplitude_threshold,
-                fix_probe_amplitude_relative_width,
+                constrain_probe_fourier_amplitude_threshold,
+                constrain_probe_amplitude_relative_width,
             )
 
         if not fix_positions:
@@ -1775,27 +1857,33 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
         reconstruction_parameter: float = 1.0,
         max_batch_size: int = None,
         seed_random: int = None,
-        step_size: float = 0.9,
+        step_size: float = 0.5,
         normalization_min: float = 1,
         positions_step_size: float = 0.9,
         fix_com: bool = True,
         fix_probe_iter: int = 0,
+        fix_probe_aperture_iter: int = 0,
         symmetrize_probe_iter: int = 0,
-        fix_probe_amplitude_iter: int = 0,
-        fix_probe_amplitude_relative_radius: float = 0.5,
-        fix_probe_amplitude_relative_width: float = 0.05,
-        fix_probe_fourier_amplitude_iter: int = 0,
-        fix_probe_fourier_amplitude_threshold: float = 0.9,
+        constrain_probe_amplitude_iter: int = 0,
+        constrain_probe_amplitude_relative_radius: float = 0.5,
+        constrain_probe_amplitude_relative_width: float = 0.05,
+        constrain_probe_fourier_amplitude_iter: int = 0,
+        constrain_probe_fourier_amplitude_threshold: float = 0.9,
         fix_positions_iter: int = np.inf,
+        constrain_position_distance: float = None,
         global_affine_transformation: bool = True,
         gaussian_filter_sigma_e: float = None,
         gaussian_filter_sigma_m: float = None,
         gaussian_filter_iter: int = np.inf,
+        probe_gaussian_filter_sigma: float = None,
+        probe_gaussian_filter_residual_aberrations_iter: int = np.inf,
+        probe_gaussian_filter_fix_amplitude: bool = True,
         butterworth_filter_iter: int = np.inf,
         q_lowpass_e: float = None,
         q_lowpass_m: float = None,
         q_highpass_e: float = None,
         q_highpass_m: float = None,
+        butterworth_order: float = 2,
         object_positivity: bool = True,
         shrinkage_rad: float = 0.0,
         fix_potential_baseline: bool = True,
@@ -1837,33 +1925,48 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
             If True, fixes center of mass of probe
         fix_probe_iter: int, optional
             Number of iterations to run with a fixed probe before updating probe estimate
+        fix_probe_aperture_iter: int, optional
+            Number of iterations to run with a fixed probe Fourier amplitude before updating probe estimate
         symmetrize_probe_iter: int, optional
-            Number of iterations to run with a fixed probe before updating probe estimate
-        fix_probe_amplitude: bool
+            Number of iterations to run before radially-averaging the probe
+        constrain_probe_amplitude: bool
             If True, probe amplitude is constrained by top hat function
-        fix_probe_amplitude_relative_radius: float
+        constrain_probe_amplitude_relative_radius: float
             Relative location of top-hat inflection point, between 0 and 0.5
-        fix_probe_amplitude_relative_width: float
+        constrain_probe_amplitude_relative_width: float
             Relative width of top-hat sigmoid, between 0 and 0.5
-        fix_probe_fourier_amplitude: bool
+        constrain_probe_fourier_amplitude: bool
             If True, probe fourier amplitude is constrained by top hat function
-        fix_probe_fourier_amplitude_threshold: float
+        constrain_probe_fourier_amplitude_threshold: float
             Threshold value for current probe fourier mask. Value should
             be between 0 and 1, where higher values provide the most masking.
         fix_positions_iter: int, optional
             Number of iterations to run with fixed positions before updating positions estimate
+        constrain_position_distance: float, optional
+            Distance to constrain position correction within original
+            field of view in A
         global_affine_transformation: bool, optional
             If True, positions are assumed to be a global affine transform from initial scan
-        gaussian_filter_sigma: float, optional
-            Standard deviation of gaussian kernel
+        gaussian_filter_sigma_e: float
+            Standard deviation of gaussian kernel for electrostatic object in A
+        gaussian_filter_sigma_m: float
+            Standard deviation of gaussian kernel for magnetic object in A
         gaussian_filter_iter: int, optional
             Number of iterations to run using object smoothness constraint
+        probe_gaussian_filter_sigma: float, optional
+            Standard deviation of probe gaussian kernel in A^-1
+        probe_gaussian_filter_residual_aberrations_iter: int, optional
+            Number of iterations to run using probe smoothing of residual aberrations
+        probe_gaussian_filter_fix_amplitude: bool
+            If True, only the probe phase is smoothed
         butterworth_filter_iter: int, optional
             Number of iterations to run using high-pass butteworth filter
         q_lowpass: float
             Cut-off frequency in A^-1 for low-pass butterworth filter
         q_highpass: float
             Cut-off frequency in A^-1 for high-pass butterworth filter
+        butterworth_order: float
+            Butterworth filter order. Smaller gives a smoother filter
         object_positivity: bool, optional
             If True, forces object to be positive
         shrinkage_rad: float
@@ -2215,6 +2318,7 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
                             amplitudes,
                             self._positions_px,
                             positions_step_size,
+                            constrain_position_distance,
                         )
 
                     tilt_error += batch_error
@@ -2304,14 +2408,21 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
                         self._positions_px_all[start_tilt:end_tilt],
                         fix_com=fix_com and a0 >= fix_probe_iter,
                         symmetrize_probe=a0 < symmetrize_probe_iter,
-                        fix_probe_amplitude=a0 < fix_probe_amplitude_iter
+                        probe_gaussian_filter=a0
+                        < probe_gaussian_filter_residual_aberrations_iter
+                        and probe_gaussian_filter_sigma is not None,
+                        probe_gaussian_filter_sigma=probe_gaussian_filter_sigma,
+                        probe_gaussian_filter_fix_amplitude=probe_gaussian_filter_fix_amplitude,
+                        constrain_probe_amplitude=a0 < constrain_probe_amplitude_iter
                         and a0 >= fix_probe_iter,
-                        fix_probe_amplitude_relative_radius=fix_probe_amplitude_relative_radius,
-                        fix_probe_amplitude_relative_width=fix_probe_amplitude_relative_width,
-                        fix_probe_fourier_amplitude=a0
-                        < fix_probe_fourier_amplitude_iter
+                        constrain_probe_amplitude_relative_radius=constrain_probe_amplitude_relative_radius,
+                        constrain_probe_amplitude_relative_width=constrain_probe_amplitude_relative_width,
+                        constrain_probe_fourier_amplitude=a0
+                        < constrain_probe_fourier_amplitude_iter
                         and a0 >= fix_probe_iter,
-                        fix_probe_fourier_amplitude_threshold=fix_probe_fourier_amplitude_threshold,
+                        constrain_probe_fourier_amplitude_threshold=constrain_probe_fourier_amplitude_threshold,
+                        fix_probe_aperture=a0 < fix_probe_aperture_iter,
+                        initial_probe_aperture=self._probe_initial_aperture,
                         fix_positions=a0 < fix_positions_iter,
                         global_affine_transformation=global_affine_transformation,
                         gaussian_filter=a0 < gaussian_filter_iter
@@ -2324,10 +2435,12 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
                         q_lowpass_m=q_lowpass_m,
                         q_highpass_e=q_highpass_e,
                         q_highpass_m=q_highpass_m,
+                        butterworth_order=butterworth_order,
                         object_positivity=object_positivity,
                         shrinkage_rad=shrinkage_rad,
                         object_mask=self._object_fov_mask_inverse
                         if fix_potential_baseline
+                        and self._object_fov_mask_inverse.sum() > 0
                         else None,
                     )
 
@@ -2349,13 +2462,21 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
                     None,
                     fix_com=fix_com and a0 >= fix_probe_iter,
                     symmetrize_probe=a0 < symmetrize_probe_iter,
-                    fix_probe_amplitude=a0 < fix_probe_amplitude_iter
+                    probe_gaussian_filter=a0
+                    < probe_gaussian_filter_residual_aberrations_iter
+                    and probe_gaussian_filter_sigma is not None,
+                    probe_gaussian_filter_sigma=probe_gaussian_filter_sigma,
+                    probe_gaussian_filter_fix_amplitude=probe_gaussian_filter_fix_amplitude,
+                    constrain_probe_amplitude=a0 < constrain_probe_amplitude_iter
                     and a0 >= fix_probe_iter,
-                    fix_probe_amplitude_relative_radius=fix_probe_amplitude_relative_radius,
-                    fix_probe_amplitude_relative_width=fix_probe_amplitude_relative_width,
-                    fix_probe_fourier_amplitude=a0 < fix_probe_fourier_amplitude_iter
+                    constrain_probe_amplitude_relative_radius=constrain_probe_amplitude_relative_radius,
+                    constrain_probe_amplitude_relative_width=constrain_probe_amplitude_relative_width,
+                    constrain_probe_fourier_amplitude=a0
+                    < constrain_probe_fourier_amplitude_iter
                     and a0 >= fix_probe_iter,
-                    fix_probe_fourier_amplitude_threshold=fix_probe_fourier_amplitude_threshold,
+                    constrain_probe_fourier_amplitude_threshold=constrain_probe_fourier_amplitude_threshold,
+                    fix_probe_aperture=a0 < fix_probe_aperture_iter,
+                    initial_probe_aperture=self._probe_initial_aperture,
                     fix_positions=True,
                     global_affine_transformation=global_affine_transformation,
                     gaussian_filter=a0 < gaussian_filter_iter
@@ -2368,21 +2489,23 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
                     q_lowpass_m=q_lowpass_m,
                     q_highpass_e=q_highpass_e,
                     q_highpass_m=q_highpass_m,
+                    butterworth_order=butterworth_order,
                     object_positivity=object_positivity,
                     shrinkage_rad=shrinkage_rad,
                     object_mask=self._object_fov_mask_inverse
                     if fix_potential_baseline
+                    and self._object_fov_mask_inverse.sum() > 0
                     else None,
                 )
 
             self.error_iterations.append(error.item())
             if store_iterations:
                 self.object_iterations.append(asnumpy(self._object.copy()))
-                self.probe_iterations.append(asnumpy(self._probe.copy()))
+                self.probe_iterations.append(self.probe_centered)
 
         # store result
         self.object = asnumpy(self._object)
-        self.probe = asnumpy(self._probe)
+        self.probe = self.probe_centered
         self.error = error.item()
 
         return self
@@ -2462,8 +2585,7 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
             min/max y indices
         """
 
-        cmap = kwargs.get("cmap", "magma")
-        kwargs.pop("cmap", None)
+        cmap = kwargs.pop("cmap", "magma")
 
         asnumpy = self._asnumpy
 
@@ -2542,12 +2664,9 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
         y_lims: tuple(float,float)
             min/max y indices
         """
-        figsize = kwargs.get("figsize", (14, 10) if cbar else (12, 10))
-        cmap_e = kwargs.get("cmap_e", "magma")
-        cmap_m = kwargs.get("cmap_m", "PuOr")
-        kwargs.pop("figsize", None)
-        kwargs.pop("cmap_e", None)
-        kwargs.pop("cmap_m", None)
+        figsize = kwargs.pop("figsize", (14, 10) if cbar else (12, 10))
+        cmap_e = kwargs.pop("cmap_e", "magma")
+        cmap_m = kwargs.pop("cmap_m", "PuOr")
 
         asnumpy = self._asnumpy
 
@@ -2710,15 +2829,10 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
             ]
         ).max()
 
-        vmin_e = kwargs.get("vmin_e", 0.0)
-        vmax_e = kwargs.get("vmax_e", max_e)
-        vmin_m = kwargs.get("vmin_m", -max_m)
-        vmax_m = kwargs.get("vmax_m", max_m)
-
-        kwargs.pop("vmin_e", None)
-        kwargs.pop("vmax_e", None)
-        kwargs.pop("vmin_m", None)
-        kwargs.pop("vmax_m", None)
+        vmin_e = kwargs.pop("vmin_e", 0.0)
+        vmax_e = kwargs.pop("vmax_e", max_e)
+        vmin_m = kwargs.pop("vmin_m", -max_m)
+        vmax_m = kwargs.pop("vmax_m", max_m)
 
         if plot_convergence:
             spec = GridSpec(
@@ -2932,7 +3046,7 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
             rotated_3d_obj.sum(0), angle=None, x_lims=x_lims, y_lims=y_lims
         )
 
-        return np.abs(np.fft.fftshift(np.fft.fft2(rotated_object)))
+        return np.abs(np.fft.fftshift(np.fft.fft2(np.fft.ifftshift(rotated_object))))
 
     def show_object_fft(
         self,
@@ -2975,16 +3089,11 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
                 y_lims=y_lims,
             )
 
-        figsize = kwargs.get("figsize", (6, 6))
-        kwargs.pop("figsize", None)
-        cmap = kwargs.get("cmap", "magma")
-        kwargs.pop("cmap", None)
-        vmin = kwargs.get("vmin", 0)
-        kwargs.pop("vmin", None)
-        vmax = kwargs.get("vmax", 1)
-        kwargs.pop("vmax", None)
-        power = kwargs.get("power", 0.2)
-        kwargs.pop("power", None)
+        figsize = kwargs.pop("figsize", (6, 6))
+        cmap = kwargs.pop("cmap", "magma")
+        vmin = kwargs.pop("vmin", 0)
+        vmax = kwargs.pop("vmax", 1)
+        power = kwargs.pop("power", 0.2)
 
         pixelsize = 1 / (object_fft.shape[0] * self.sampling[0])
         show(

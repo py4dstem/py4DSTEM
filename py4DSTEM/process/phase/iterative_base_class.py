@@ -3,7 +3,6 @@ Module for reconstructing phase objects from 4DSTEM datasets using iterative met
 """
 
 import warnings
-from typing import Sequence
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -39,7 +38,7 @@ class PhaseReconstruction(Custom):
     Defines various common functions and properties for subclasses to inherit.
     """
 
-    def attach_datacube(self, dc: DataCube):
+    def attach_datacube(self, datacube: DataCube):
         """
         Attaches a datacube to a class initialized without one.
 
@@ -53,7 +52,7 @@ class PhaseReconstruction(Custom):
         self: PhaseReconstruction
             Self to enable chaining
         """
-        self._datacube = dc
+        self._datacube = datacube
         return self
 
     def set_save_defaults(
@@ -142,6 +141,12 @@ class PhaseReconstruction(Custom):
         datacube: Datacube
             Resampled and Padded datacube
         """
+        if com_shifts is not None:
+            if np.isscalar(com_shifts[0]):
+                com_shifts = (
+                    np.ones(self._datacube.Rshape) * com_shifts[0],
+                    np.ones(self._datacube.Rshape) * com_shifts[1],
+                )
 
         if diffraction_intensities_shape is not None:
             Qx, Qy = datacube.shape[-2:]
@@ -570,7 +575,7 @@ class PhaseReconstruction(Custom):
                 warnings.warn(
                     (
                         "Best fit rotation forced to "
-                        f"{str(np.round(force_com_rotation))} degrees."
+                        f"{force_com_rotation:.0f} degrees."
                     ),
                     UserWarning,
                 )
@@ -740,12 +745,7 @@ class PhaseReconstruction(Custom):
                         _rotation_best_rad = rotation_angles_rad[ind_min]
 
                 if self._verbose:
-                    print(
-                        (
-                            "Best fit rotation = "
-                            f"{str(np.round(rotation_best_deg))} degrees."
-                        )
-                    )
+                    print(("Best fit rotation = " f"{rotation_best_deg:.0f} degrees."))
 
                 if plot_rotation:
                     figsize = kwargs.get("figsize", (8, 2))
@@ -900,12 +900,7 @@ class PhaseReconstruction(Custom):
                 self._rotation_angles_deg = rotation_angles_deg
                 # Print summary
                 if self._verbose:
-                    print(
-                        (
-                            "Best fit rotation = "
-                            f"{str(np.round(rotation_best_deg))} degrees."
-                        )
-                    )
+                    print(("Best fit rotation = " f"{rotation_best_deg:.0f} degrees."))
                     if _rotation_best_transpose:
                         print("Diffraction intensities should be transposed.")
                     else:
@@ -987,11 +982,8 @@ class PhaseReconstruction(Custom):
 
         # Optionally, plot CoM
         if plot_center_of_mass == "all":
-            figsize = kwargs.get("figsize", (8, 12))
-            cmap = kwargs.get("cmap", "RdBu_r")
-            kwargs.pop("cmap", None)
-            kwargs.pop("figsize", None)
-
+            figsize = kwargs.pop("figsize", (8, 12))
+            cmap = kwargs.pop("cmap", "RdBu_r")
             extent = [
                 0,
                 self._scan_sampling[1] * self._intensities.shape[1],
@@ -1027,10 +1019,8 @@ class PhaseReconstruction(Custom):
                 ax.set_title(title)
 
         elif plot_center_of_mass == "default":
-            figsize = kwargs.get("figsize", (8, 4))
-            cmap = kwargs.get("cmap", "RdBu_r")
-            kwargs.pop("cmap", None)
-            kwargs.pop("figsize", None)
+            figsize = kwargs.pop("figsize", (8, 4))
+            cmap = kwargs.pop("cmap", "RdBu_r")
 
             extent = [
                 0,
@@ -1219,6 +1209,15 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
             data=self._polar_parameters,
         )
 
+        # object
+        self._object_emd = Array(
+            name="reconstruction_object",
+            data=asnumpy(self._xp.asarray(self._object)),
+        )
+
+        # probe
+        self._probe_emd = Array(name="reconstruction_probe", data=asnumpy(self._probe))
+
         if is_stack:
             iterations_labels = [f"iteration_{i:03}" for i in iterations]
 
@@ -1226,30 +1225,18 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
             object_iterations = [
                 np.asarray(self.object_iterations[i]) for i in iterations
             ]
-            self._object_emd = Array(
-                name="reconstruction_object",
+            self._object_iterations_emd = Array(
+                name="reconstruction_object_iterations",
                 data=np.stack(object_iterations, axis=0),
                 slicelabels=iterations_labels,
             )
 
             # probe
             probe_iterations = [self.probe_iterations[i] for i in iterations]
-            self._probe_emd = Array(
-                name="reconstruction_probe",
+            self._probe_iterations_emd = Array(
+                name="reconstruction_probe_iterations",
                 data=np.stack(probe_iterations, axis=0),
                 slicelabels=iterations_labels,
-            )
-
-        else:
-            # object
-            self._object_emd = Array(
-                name="reconstruction_object",
-                data=asnumpy(self._xp.asarray(self._object)),
-            )
-
-            # probe
-            self._probe_emd = Array(
-                name="reconstruction_probe", data=asnumpy(self._probe)
             )
 
         # exit_waves
@@ -1292,13 +1279,8 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
         else:
             dc = None
 
-        # Check if stack
-        if dict_data["_object_emd"].is_stack:
-            obj = dict_data["_object_emd"][-1].data
-            probe = dict_data["_probe_emd"][-1].data
-        else:
-            obj = dict_data["_object_emd"].data
-            probe = dict_data["_probe_emd"].data
+        obj = dict_data["_object_emd"].data
+        probe = dict_data["_probe_emd"].data
 
         # Populate args and return
         kwargs = {
@@ -1356,8 +1338,8 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
 
         # Check if stack
         if hasattr(error, "__len__"):
-            self.object_iterations = list(dict_data["_object_emd"].data)
-            self.probe_iterations = list(dict_data["_probe_emd"].data)
+            self.object_iterations = list(dict_data["_object_iterations_emd"].data)
+            self.probe_iterations = list(dict_data["_probe_iterations_emd"].data)
             self.error_iterations = error
             self.error = error[-1]
         else:
@@ -1366,7 +1348,7 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
         # Slim preprocessing to enable visualize
         self._positions_px_com = xp.mean(self._positions_px, axis=0)
         self.object = asnumpy(self._object)
-        self.probe = asnumpy(self._probe)
+        self.probe = self.probe_centered
         self._preprocessed = True
 
     def _set_polar_parameters(self, parameters: dict):
@@ -1377,11 +1359,6 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
         ----------
         parameters: dict
             Mapping from aberration symbols to their corresponding values.
-
-        Mutates
-        -------
-        self._polar_parameters: dict
-            Updated polar aberrations dictionary
         """
 
         for symbol, value in parameters.items():
@@ -1406,11 +1383,6 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
         positions: (J,2) np.ndarray or None
             Input probe positions in Å.
             If None, a raster scan using experimental parameters is constructed.
-
-        Mutates
-        -------
-        self._object_padding_px: np.ndarray
-            Object array padding in pixels
 
         Returns
         -------
@@ -1460,74 +1432,23 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
         positions -= np.min(positions, axis=0)
 
         if self._object_padding_px is None:
-            self._object_padding_px = self._region_of_interest_shape / 2
-        positions += self._object_padding_px
+            float_padding = self._region_of_interest_shape / 2
+            self._object_padding_px = (float_padding, float_padding)
+        elif np.isscalar(self._object_padding_px[0]):
+            self._object_padding_px = (
+                (self._object_padding_px[0],) * 2,
+                (self._object_padding_px[1],) * 2,
+            )
+
+        positions[:, 0] += self._object_padding_px[0][0]
+        positions[:, 1] += self._object_padding_px[1][0]
 
         return positions
-
-    def _wrapped_indices_2D_window(
-        self,
-        center_position: np.ndarray,
-        window_shape: Sequence[int],
-        array_shape: Sequence[int],
-    ):
-        """
-        Computes periodic indices for a window_shape probe centered at center_position,
-        in object of size array_shape.
-
-        Parameters
-        ----------
-        center_position: (2,) np.ndarray
-            The window center positions in pixels
-        window_shape: (2,) Sequence[int]
-            The pixel dimensions of the window
-        array_shape: (2,) Sequence[int]
-            The pixel dimensions of the array the window will be embedded in
-
-        Returns
-        -------
-        window_indices: length-2 tuple of
-            The 2D indices of the window
-        """
-
-        asnumpy = self._asnumpy
-        sx, sy = array_shape
-        nx, ny = window_shape
-
-        cx, cy = np.round(asnumpy(center_position)).astype(int)
-        ox, oy = (cx - nx // 2, cy - ny // 2)
-
-        return np.ix_(np.arange(ox, ox + nx) % sx, np.arange(oy, oy + ny) % sy)
-
-    def _sum_overlapping_patches(self, patches: np.ndarray):
-        """
-        Sum overlapping patches defined into object shaped array
-
-        Parameters
-        ----------
-        patches: (Rx*Ry,Sx,Sy) np.ndarray
-            Patches to sum
-
-        Returns
-        -------
-        out_array: (Px,Py) np.ndarray
-            Summed array
-        """
-        xp = self._xp
-        positions = self._positions_px
-        patch_shape = self._region_of_interest_shape
-        array_shape = self._object_shape
-
-        out_array = xp.zeros(array_shape, patches.dtype)
-        for ind, pos in enumerate(positions):
-            indices = self._wrapped_indices_2D_window(pos, patch_shape, array_shape)
-            out_array[indices] += patches[ind]
-
-        return out_array
 
     def _sum_overlapping_patches_bincounts_base(self, patches: np.ndarray):
         """
         Base bincouts overlapping patches sum function, operating on real-valued arrays.
+        Note this assumes the probe is corner-centered.
 
         Parameters
         ----------
@@ -1544,8 +1465,8 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
         y0 = xp.round(self._positions_px[:, 1]).astype("int")
 
         roi_shape = self._region_of_interest_shape
-        x_ind = xp.round(xp.arange(roi_shape[0]) - roi_shape[0] / 2).astype("int")
-        y_ind = xp.round(xp.arange(roi_shape[1]) - roi_shape[1] / 2).astype("int")
+        x_ind = xp.fft.fftfreq(roi_shape[0], d=1 / roi_shape[0]).astype("int")
+        y_ind = xp.fft.fftfreq(roi_shape[1], d=1 / roi_shape[1]).astype("int")
 
         flat_weights = patches.ravel()
         indices = (
@@ -1587,6 +1508,7 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
     def _extract_vectorized_patch_indices(self):
         """
         Sets the vectorized row/col indices used for the overlap projection
+        Note this assumes the probe is corner-centered.
 
         Returns
         -------
@@ -1600,8 +1522,8 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
         y0 = xp.round(self._positions_px[:, 1]).astype("int")
 
         roi_shape = self._region_of_interest_shape
-        x_ind = xp.round(xp.arange(roi_shape[0]) - roi_shape[0] / 2).astype("int")
-        y_ind = xp.round(xp.arange(roi_shape[1]) - roi_shape[1] / 2).astype("int")
+        x_ind = xp.fft.fftfreq(roi_shape[0], d=1 / roi_shape[0]).astype("int")
+        y_ind = xp.fft.fftfreq(roi_shape[1], d=1 / roi_shape[1]).astype("int")
 
         obj_shape = self._object_shape
         vectorized_patch_indices_row = (
@@ -1773,8 +1695,7 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
 
             fig = plt.figure(figsize=figsize)
 
-        progress_bar = kwargs.get("progress_bar", False)
-        kwargs.pop("progress_bar", None)
+        progress_bar = kwargs.pop("progress_bar", False)
         # run loop and plot along the way
         self._verbose = False
         for flat_index, (angle, defocus) in enumerate(
@@ -1860,6 +1781,7 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
         relevant_amplitudes,
         current_positions,
         positions_step_size,
+        constrain_position_distance,
     ):
         """
         Position correction using estimated intensity gradient.
@@ -1878,6 +1800,9 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
             Current positions estimate
         positions_step_size: float
             Positions step size
+        constrain_position_distance: float
+            Distance to constrain position correction within original
+            field of view in A
 
         Returns
         --------
@@ -1939,13 +1864,46 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
             @ difference_intensity[..., None]
         )
 
-        current_positions -= positions_step_size * positions_update[..., 0]
+        if constrain_position_distance is not None:
+            constrain_position_distance /= xp.sqrt(
+                self.sampling[0] ** 2 + self.sampling[1] ** 2
+            )
+            x1 = (current_positions - positions_step_size * positions_update[..., 0])[
+                :, 0
+            ]
+            y1 = (current_positions - positions_step_size * positions_update[..., 0])[
+                :, 1
+            ]
+            x0 = self._positions_px_initial[:, 0]
+            y0 = self._positions_px_initial[:, 1]
+            if self._rotation_best_transpose:
+                x0, y0 = xp.array([y0, x0])
+                x1, y1 = xp.array([y1, x1])
 
+            if self._rotation_best_rad is not None:
+                rotation_angle = self._rotation_best_rad
+                x0, y0 = x0 * xp.cos(-rotation_angle) + y0 * xp.sin(
+                    -rotation_angle
+                ), -x0 * xp.sin(-rotation_angle) + y0 * xp.cos(-rotation_angle)
+                x1, y1 = x1 * xp.cos(-rotation_angle) + y1 * xp.sin(
+                    -rotation_angle
+                ), -x1 * xp.sin(-rotation_angle) + y1 * xp.cos(-rotation_angle)
+
+            outlier_ind = (x1 > (xp.max(x0) + constrain_position_distance)) + (
+                x1 < (xp.min(x0) - constrain_position_distance)
+            ) + (y1 > (xp.max(y0) + constrain_position_distance)) + (
+                y1 < (xp.min(y0) - constrain_position_distance)
+            ) > 0
+
+            positions_update[..., 0][outlier_ind] = 0
+
+        current_positions -= positions_step_size * positions_update[..., 0]
         return current_positions
 
     def plot_position_correction(
         self,
         scale_arrows=1,
+        plot_arrow_freq=1,
         verbose=True,
         **kwargs,
     ):
@@ -1975,17 +1933,17 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
         initial_pos = asnumpy(self._positions_initial)
         pos = self.positions
 
-        figsize = kwargs.get("figsize", (6, 6))
-        color = kwargs.get("color", (1, 0, 0, 1))
-        kwargs.pop("figsize", None)
-        kwargs.pop("color", None)
+        figsize = kwargs.pop("figsize", (6, 6))
+        color = kwargs.pop("color", (1, 0, 0, 1))
 
         fig, ax = plt.subplots(figsize=figsize)
         ax.quiver(
-            initial_pos[:, 1],
-            initial_pos[:, 0],
-            (pos[:, 1] - initial_pos[:, 1]) * scale_arrows,
-            (pos[:, 0] - initial_pos[:, 0]) * scale_arrows,
+            initial_pos[::plot_arrow_freq, 1],
+            initial_pos[::plot_arrow_freq, 0],
+            (pos[::plot_arrow_freq, 1] - initial_pos[::plot_arrow_freq, 1])
+            * scale_arrows,
+            (pos[::plot_arrow_freq, 0] - initial_pos[::plot_arrow_freq, 0])
+            * scale_arrows,
             scale_units="xy",
             scale=1,
             color=color,
@@ -2005,7 +1963,7 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
     ):
         """
         Returns complex fourier probe shifted to center of array from
-        complex real space probe in center
+        corner-centered complex real space probe
 
         Parameters
         ----------
@@ -2024,16 +1982,61 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
         else:
             probe = xp.asarray(probe, dtype=xp.complex64)
 
-        return xp.fft.fftshift(
-            xp.fft.fft2(xp.fft.ifftshift(probe, axes=(-2, -1))), axes=(-2, -1)
-        )
+        return xp.fft.fftshift(xp.fft.fft2(probe), axes=(-2, -1))
+
+    def _return_fourier_probe_from_centered_probe(
+        self,
+        probe=None,
+    ):
+        """
+        Returns complex fourier probe shifted to center of array from
+        centered complex real space probe
+
+        Parameters
+        ----------
+        probe: complex array, optional
+            if None is specified, uses self._probe
+
+        Returns
+        -------
+        fourier_probe: np.ndarray
+            Fourier-transformed and center-shifted probe.
+        """
+        xp = self._xp
+        return self._return_fourier_probe(xp.fft.ifftshift(probe, axes=(-2, -1)))
+
+    def _return_centered_probe(
+        self,
+        probe=None,
+    ):
+        """
+        Returns complex probe centered in middle of the array.
+
+        Parameters
+        ----------
+        probe: complex array, optional
+            if None is specified, uses self._probe
+
+        Returns
+        -------
+        centered_probe: np.ndarray
+            Center-shifted probe.
+        """
+        xp = self._xp
+
+        if probe is None:
+            probe = self._probe
+        else:
+            probe = xp.asarray(probe, dtype=xp.complex64)
+
+        return xp.fft.fftshift(probe, axes=(-2, -1))
 
     def _return_object_fft(
         self,
         obj=None,
     ):
         """
-        Returns obj fft shifted to center of array
+        Returns absolute value of obj fft shifted to center of array
 
         Parameters
         ----------
@@ -2051,7 +2054,7 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
             obj = self._object
 
         obj = self._crop_rotate_object_fov(asnumpy(obj))
-        return np.abs(np.fft.fftshift(np.fft.fft2(obj)))
+        return np.abs(np.fft.fftshift(np.fft.fft2(np.fft.ifftshift(obj))))
 
     def show_fourier_probe(
         self,
@@ -2090,8 +2093,7 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
         if pixelunits is None:
             pixelunits = r"$\AA^{-1}$"
 
-        figsize = kwargs.get("figsize", (6, 6))
-        kwargs.pop("figsize", None)
+        figsize = kwargs.pop("figsize", (6, 6))
 
         fig, ax = plt.subplots(figsize=figsize)
         show_complex(
@@ -2119,16 +2121,11 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
         else:
             object_fft = self._return_object_fft(obj)
 
-        figsize = kwargs.get("figsize", (6, 6))
-        kwargs.pop("figsize", None)
-        cmap = kwargs.get("cmap", "magma")
-        kwargs.pop("cmap", None)
-        vmin = kwargs.get("vmin", 0)
-        kwargs.pop("vmin", None)
-        vmax = kwargs.get("vmax", 1)
-        kwargs.pop("vmax", None)
-        power = kwargs.get("power", 0.2)
-        kwargs.pop("power", None)
+        figsize = kwargs.pop("figsize", (6, 6))
+        cmap = kwargs.pop("cmap", "magma")
+        vmin = kwargs.pop("vmin", 0)
+        vmax = kwargs.pop("vmax", 1)
+        power = kwargs.pop("power", 0.2)
 
         pixelsize = 1 / (object_fft.shape[0] * self.sampling[0])
         show(
@@ -2148,12 +2145,20 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
     @property
     def probe_fourier(self):
         """Current probe estimate in Fourier space"""
-
         if not hasattr(self, "_probe"):
             return None
 
         asnumpy = self._asnumpy
         return asnumpy(self._return_fourier_probe(self._probe))
+
+    @property
+    def probe_centered(self):
+        """Current probe estimate shifted to the center"""
+        if not hasattr(self, "_probe"):
+            return None
+
+        asnumpy = self._asnumpy
+        return asnumpy(self._return_centered_probe(self._probe))
 
     @property
     def object_fft(self):
@@ -2195,3 +2200,9 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
         positions[:, 1] *= self.sampling[1]
 
         return asnumpy(positions)
+
+    @property
+    def object_cropped(self):
+        """cropped and rotated object"""
+
+        return self._crop_rotate_object_fov(self._object)
