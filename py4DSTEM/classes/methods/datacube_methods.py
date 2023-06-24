@@ -108,16 +108,26 @@ class DataCubeMethods:
 
     def bin_Q(
         self,
-        N
+        N,
+        dtype = None
         ):
         """
         Bins the data in diffraction space by bin factor N
 
-        Accepts:
-            N (int): the binning factor
+        Parameters
+        ----------
+        N : int
+            The binning factor
+        dtype : a datatype (optional)
+            Specify the datatype for the output. If not passed, the datatype
+            is left unchanged
+
+        Returns
+        ------
+        datacube : DataCube
         """
         from py4DSTEM.preprocess import bin_data_diffraction
-        d = bin_data_diffraction(self,N)
+        d = bin_data_diffraction(self,N,dtype)
         return d
 
     def pad_Q(
