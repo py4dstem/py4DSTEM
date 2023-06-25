@@ -348,7 +348,7 @@ class PtychographyOptimizer:
             prep(ptycho, **prep_args)
             recon(ptycho, **reco_args)
 
-            return ptycho.error
+            return np.log(ptycho.error)
 
         return f
 
