@@ -30,9 +30,9 @@ class PtychographyOptimizer:
         self,
         reconstruction_type: type[PhaseReconstruction],
         init_args: dict,
-        preprocess_args: dict,
-        reconstruction_args: dict,
-        affine_args: dict = None,
+        preprocess_args: dict = {},
+        reconstruction_args: dict = {},
+        affine_args: dict = {},
     ):
         """
         Parameter optimization for ptychographic reconstruction based on Bayesian Optimization
@@ -65,8 +65,6 @@ class PtychographyOptimizer:
             Keyword arguments passed to AffineTransform. The transform is applied to the initial
             scan positions.
         """
-        if affine_args is None:
-            affine_args = {}
 
         # loop over each argument dictionary and split into static and optimization variables
         (
@@ -298,17 +296,40 @@ class PtychographyOptimizer:
         dictionary are used.
         """
 
-        # Construct partial methods to encapsulate the static parameters
-        obj = partial(cls, **init_static_args)
-        affine = partial(AffineTransform, **affine_static_args)
-        prep = partial(cls.preprocess, **preprocess_static_args)
-        recon = partial(cls.reconstruct, **reconstruct_static_args)
-
+        # Get lists of optimization parameters for each step
         init_params = list(init_optimization_params.keys())
         afft_params = list(affine_optimization_params.keys())
         prep_params = list(preprocess_optimization_params.keys())
         reco_params = list(reconstruct_optimization_params.keys())
 
+        # Construct partial methods to encapsulate the static parameters.
+        # If only ``reconstruct`` has optimization variables, perform
+        # preprocessing now, store the ptycho object, and use dummy
+        # functions instead of the partials
+        if (len(init_params), len(afft_params), len(prep_params)) == (0, 0, 0):
+            affine_preprocessed = AffineTransform(**affine_static_args)
+            init_args = init_static_args.copy()
+            init_args["initial_scan_positions"] = self._get_scan_positions(
+                affine_preprocessed, init_static_args["datacube"]
+            )
+
+            ptycho_preprocessed = cls(**init_args).preprocess(
+                **preprocess_static_args
+            )
+
+            def obj(**kwargs):
+                return ptycho_preprocessed
+
+            def prep(ptycho, **kwargs):
+                return ptycho
+
+        else:
+            obj = partial(cls, **init_static_args)
+            prep = partial(cls.preprocess, **preprocess_static_args)
+
+        affine = partial(AffineTransform, **affine_static_args)
+        recon = partial(cls.reconstruct, **reconstruct_static_args)
+        
         # Target function for Gaussian process optimization that takes a single
         # dict of named parameters and returns the ptycho error metric
         @use_named_args(parameter_list)
@@ -345,6 +366,7 @@ class PtychographyOptimizer:
 
         self._reconstruction_static_args["progress_bar"] = False
         self._reconstruction_static_args["store_iterations"] = False
+        self._reconstruction_static_args["reset"] = True
 
 
 class OptimizationParameter:
