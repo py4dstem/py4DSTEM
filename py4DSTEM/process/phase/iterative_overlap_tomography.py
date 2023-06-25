@@ -58,7 +58,9 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
     tilt_angles_deg: Sequence[float]
         List of tilt angles in degrees,
     semiangle_cutoff: float, optional
-        Semiangle cutoff for the initial probe guess
+        Semiangle cutoff for the initial probe guess in mrad
+    semiangle_cutoff_pixels: float, optional
+        Semiangle cutoff for the initial probe guess in pixels
     rolloff: float, optional
         Semiangle rolloff for the initial probe guess
     vacuum_probe_intensity: np.ndarray, optional
@@ -101,6 +103,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
         tilt_angles_deg: Sequence[float],
         datacube: Sequence[DataCube] = None,
         semiangle_cutoff: float = None,
+        semiangle_cutoff_pixels: float = None,
         rolloff: float = 2.0,
         vacuum_probe_intensity: np.ndarray = None,
         polar_parameters: Mapping[str, float] = None,
@@ -172,6 +175,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
         self._scan_positions = initial_scan_positions
         self._energy = energy
         self._semiangle_cutoff = semiangle_cutoff
+        self._semiangle_cutoff_pixels = semiangle_cutoff_pixels
         self._rolloff = rolloff
         self._object_type = object_type
         self._object_padding_px = object_padding_px
@@ -254,40 +258,6 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
 
         return xp.fft.ifft2(xp.fft.fft2(array) * propagator_array)
 
-    def _expand_or_project_sliced_object(self, array: np.ndarray, output_z):
-        """
-        OLD Version
-
-        Expands supersliced object or projects voxel-sliced object.
-
-        Parameters
-        ----------
-        array: np.ndarray
-            3D array to expand/project
-        output_z: int
-            Output_dimension to expand/project array to.
-            If output_z > array.shape[0] array is expanded, else it's projected
-
-        Returns
-        -------
-        expanded_or_projected_array: np.ndarray
-            expanded or projected array
-        """
-        zoom = self._zoom
-        input_z = array.shape[0]
-
-        return (
-            zoom(
-                array,
-                (output_z / input_z, 1, 1),
-                order=0,
-                mode="nearest",
-                grid_mode=True,
-            )
-            * input_z
-            / output_z
-        )
-
     def _project_sliced_object(self, array: np.ndarray, output_z):
         """
         Expands supersliced object or projects voxel-sliced object.
@@ -365,6 +335,9 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
         diffraction_patterns_rotate_degrees: float = None,
         diffraction_patterns_transpose: bool = None,
         force_com_shifts: Sequence[float] = None,
+        force_scan_sampling: float = None,
+        force_angular_sampling: float = None,
+        force_reciprocal_sampling: float = None,
         progress_bar: bool = True,
         object_fov_mask: np.ndarray = None,
         **kwargs,
@@ -402,6 +375,12 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
             Amplitudes come from diffraction patterns shifted with
             the CoM in the upper left corner for each probe unless
             shift is overwritten. One tuple per tilt.
+        force_scan_sampling: float, optional
+            Override DataCube real space scan pixel size calibrations, in Angstrom
+        force_angular_sampling: float, optional
+            Override DataCube reciprocal pixel size calibration, in mrad
+        force_reciprocal_sampling: float, optional
+            Override DataCube reciprocal pixel size calibration, in A^-1
         object_fov_mask: np.ndarray (boolean)
             Boolean mask of FOV. Used to calculate additional shrinkage of object
             If None, probe_overlap intensity is thresholded
@@ -494,6 +473,9 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
             intensities = self._extract_intensities_and_calibrations_from_datacube(
                 self._datacube[tilt_index],
                 require_calibrations=True,
+                force_scan_sampling=force_scan_sampling,
+                force_angular_sampling=force_angular_sampling,
+                force_reciprocal_sampling=force_reciprocal_sampling,
             )
 
             (
@@ -543,10 +525,17 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                 self._scan_positions[tilt_index]
             )
 
+        # handle semiangle specified in pixels
+        if self._semiangle_cutoff_pixels:
+            self._semiangle_cutoff = (
+                self._semiangle_cutoff_pixels * self._angular_sampling[0]
+            )
+
         # Object Initialization
         if self._object is None:
-            pad_x, pad_y = self._object_padding_px
-            p, q = np.max(self._positions_px_all, axis=0)
+            pad_x = self._object_padding_px[0][1]
+            pad_y = self._object_padding_px[1][1]
+            p, q = np.round(np.max(self._positions_px_all, axis=0))
             p = np.max([np.round(p + pad_x), self._region_of_interest_shape[0]]).astype(
                 "int"
             )
@@ -597,12 +586,10 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                 probe_x0, probe_y0 = get_CoM(
                     self._vacuum_probe_intensity, device=self._device
                 )
-                shift_x = self._region_of_interest_shape[0] // 2 - probe_x0
-                shift_y = self._region_of_interest_shape[1] // 2 - probe_y0
                 self._vacuum_probe_intensity = get_shifted_ar(
                     self._vacuum_probe_intensity,
-                    shift_x,
-                    shift_y,
+                    -probe_x0,
+                    -probe_y0,
                     bilinear=True,
                     device=self._device,
                 )
@@ -651,6 +638,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                 self._probe = xp.asarray(self._probe, dtype=xp.complex64)
 
         self._probe_initial = self._probe.copy()
+        self._probe_initial_aperture = xp.abs(xp.fft.fft2(self._probe))
 
         self._known_aberrations_array = ComplexProbe(
             energy=self._energy,
@@ -659,8 +647,6 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
             parameters=self._polar_parameters,
             device=self._device,
         )._evaluate_ctf()
-
-        self._known_aberrations_array = xp.fft.ifftshift(self._known_aberrations_array)
 
         # Precomputed propagator arrays
         self._slice_thicknesses = np.tile(
@@ -741,7 +727,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
 
             # initial probe
             complex_probe_rgb = Complex2RGB(
-                asnumpy(self._probe),
+                self.probe_centered,
                 vmin=vmin,
                 vmax=vmax,
                 hue_start=hue_start,
@@ -756,7 +742,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                     propagated_probe, self._propagator_arrays[s]
                 )
             complex_propagated_rgb = Complex2RGB(
-                asnumpy(propagated_probe),
+                asnumpy(self._return_centered_probe(propagated_probe)),
                 vmin=vmin,
                 vmax=vmax,
                 hue_start=hue_start,
@@ -1491,14 +1477,15 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
             Constrained object estimate
         """
         gaussian_filter = self._gaussian_filter
-        xp = self._xp
-        gaussian_filter_sigma /= xp.sqrt(self.sampling[0] ** 2 + self.sampling[1] ** 2)
 
+        gaussian_filter_sigma /= self.sampling[0]
         current_object = gaussian_filter(current_object, gaussian_filter_sigma)
 
         return current_object
 
-    def _object_butterworth_constraint(self, current_object, q_lowpass, q_highpass):
+    def _object_butterworth_constraint(
+        self, current_object, q_lowpass, q_highpass, butterworth_order
+    ):
         """
         Butterworth filter
 
@@ -1510,7 +1497,8 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
             Cut-off frequency in A^-1 for low-pass butterworth filter
         q_highpass: float
             Cut-off frequency in A^-1 for high-pass butterworth filter
-
+        butterworth_order: float
+            Butterworth filter order. Smaller gives a smoother filter
         Returns
         --------
         constrained_object: np.ndarray
@@ -1525,9 +1513,9 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
 
         env = xp.ones_like(qra)
         if q_highpass:
-            env *= 1 - 1 / (1 + (qra / q_highpass) ** 4)
+            env *= 1 - 1 / (1 + (qra / q_highpass) ** (2 * butterworth_order))
         if q_lowpass:
-            env *= 1 / (1 + (qra / q_lowpass) ** 4)
+            env *= 1 / (1 + (qra / q_lowpass) ** (2 * butterworth_order))
 
         current_object_mean = xp.mean(current_object)
         current_object -= current_object_mean
@@ -1545,11 +1533,13 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
         probe_gaussian_filter,
         probe_gaussian_filter_sigma,
         probe_gaussian_filter_fix_amplitude,
-        fix_probe_amplitude,
-        fix_probe_amplitude_relative_radius,
-        fix_probe_amplitude_relative_width,
-        fix_probe_fourier_amplitude,
-        fix_probe_fourier_amplitude_threshold,
+        constrain_probe_amplitude,
+        constrain_probe_amplitude_relative_radius,
+        constrain_probe_amplitude_relative_width,
+        constrain_probe_fourier_amplitude,
+        constrain_probe_fourier_amplitude_threshold,
+        fix_probe_aperture,
+        initial_probe_aperture,
         fix_positions,
         global_affine_transformation,
         gaussian_filter,
@@ -1557,6 +1547,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
         butterworth_filter,
         q_lowpass,
         q_highpass,
+        butterworth_order,
         object_positivity,
         shrinkage_rad,
         object_mask,
@@ -1582,17 +1573,21 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
             Standard deviation of gaussian kernel in A^-1
         probe_gaussian_filter_fix_amplitude: bool
             If True, only the probe phase is smoothed
-        fix_probe_amplitude: bool
+        constrain_probe_amplitude: bool
             If True, probe amplitude is constrained by top hat function
-        fix_probe_amplitude_relative_radius: float
+        constrain_probe_amplitude_relative_radius: float
             Relative location of top-hat inflection point, between 0 and 0.5
-        fix_probe_amplitude_relative_width: float
+        constrain_probe_amplitude_relative_width: float
             Relative width of top-hat sigmoid, between 0 and 0.5
-        fix_probe_fourier_amplitude: bool
+        constrain_probe_fourier_amplitude: bool
             If True, probe fourier amplitude is constrained by top hat function
-        fix_probe_fourier_amplitude_threshold: float
+        constrain_probe_fourier_amplitude_threshold: float
             Threshold value for current probe fourier mask. Value should
             be between 0 and 1, where higher values provide the most masking.
+        fix_probe_aperture: bool,
+            If True, probe Fourier amplitude is replaced by initial probe aperture.
+        initial_probe_aperture: np.ndarray,
+            Initial probe aperture to use in replacing probe Fourier amplitude.
         fix_positions: bool
             If True, positions are not updated
         gaussian_filter: bool
@@ -1605,6 +1600,8 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
             Cut-off frequency in A^-1 for low-pass butterworth filter
         q_highpass: float
             Cut-off frequency in A^-1 for high-pass butterworth filter
+        butterworth_order: float
+            Butterworth filter order. Smaller gives a smoother filter
         object_positivity: bool
             If True, forces object to be positive
         shrinkage_rad: float
@@ -1632,6 +1629,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                 current_object,
                 q_lowpass,
                 q_highpass,
+                butterworth_order,
             )
 
         if shrinkage_rad > 0.0 or object_mask is not None:
@@ -1657,17 +1655,22 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
         if symmetrize_probe:
             current_probe = self._probe_radial_symmetrization_constraint(current_probe)
 
-        if fix_probe_amplitude:
+        if fix_probe_aperture:
+            current_probe = self._probe_aperture_constraint(
+                current_probe,
+                initial_probe_aperture,
+            )
+        elif constrain_probe_amplitude:
             current_probe = self._probe_amplitude_constraint(
                 current_probe,
-                fix_probe_amplitude_relative_radius,
-                fix_probe_amplitude_relative_width,
+                constrain_probe_amplitude_relative_radius,
+                constrain_probe_amplitude_relative_width,
             )
-        elif fix_probe_fourier_amplitude:
+        elif constrain_probe_fourier_amplitude:
             current_probe = self._probe_fourier_amplitude_constraint(
                 current_probe,
-                fix_probe_fourier_amplitude_threshold,
-                fix_probe_amplitude_relative_width,
+                constrain_probe_fourier_amplitude_threshold,
+                constrain_probe_amplitude_relative_width,
             )
 
         if not fix_positions:
@@ -1689,17 +1692,18 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
         reconstruction_parameter: float = 1.0,
         max_batch_size: int = None,
         seed_random: int = None,
-        step_size: float = 0.9,
+        step_size: float = 0.5,
         normalization_min: float = 1,
         positions_step_size: float = 0.9,
         fix_com: bool = True,
         fix_probe_iter: int = 0,
+        fix_probe_aperture_iter: int = 0,
         symmetrize_probe_iter: int = 0,
-        fix_probe_amplitude_iter: int = 0,
-        fix_probe_amplitude_relative_radius: float = 0.5,
-        fix_probe_amplitude_relative_width: float = 0.05,
-        fix_probe_fourier_amplitude_iter: int = 0,
-        fix_probe_fourier_amplitude_threshold: float = 0.9,
+        constrain_probe_amplitude_iter: int = 0,
+        constrain_probe_amplitude_relative_radius: float = 0.5,
+        constrain_probe_amplitude_relative_width: float = 0.05,
+        constrain_probe_fourier_amplitude_iter: int = 0,
+        constrain_probe_fourier_amplitude_threshold: float = 0.9,
         fix_positions_iter: int = np.inf,
         constrain_position_distance: float = None,
         global_affine_transformation: bool = True,
@@ -1711,6 +1715,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
         butterworth_filter_iter: int = np.inf,
         q_lowpass: float = None,
         q_highpass: float = None,
+        butterworth_order: float = 2,
         object_positivity: bool = True,
         shrinkage_rad: float = 0.0,
         fix_potential_baseline: bool = True,
@@ -1752,17 +1757,19 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
             If True, fixes center of mass of probe
         fix_probe_iter: int, optional
             Number of iterations to run with a fixed probe before updating probe estimate
+        fix_probe_aperture_iter: int, optional
+            Number of iterations to run with a fixed probe Fourier amplitude before updating probe estimate
         symmetrize_probe_iter: int, optional
-            Number of iterations to run with a fixed probe before updating probe estimate
-        fix_probe_amplitude: bool
+            Number of iterations to run before radially-averaging the probe
+        constrain_probe_amplitude: bool
             If True, probe amplitude is constrained by top hat function
-        fix_probe_amplitude_relative_radius: float
+        constrain_probe_amplitude_relative_radius: float
             Relative location of top-hat inflection point, between 0 and 0.5
-        fix_probe_amplitude_relative_width: float
+        constrain_probe_amplitude_relative_width: float
             Relative width of top-hat sigmoid, between 0 and 0.5
-        fix_probe_fourier_amplitude: bool
+        constrain_probe_fourier_amplitude: bool
             If True, probe fourier amplitude is constrained by top hat function
-        fix_probe_fourier_amplitude_threshold: float
+        constrain_probe_fourier_amplitude_threshold: float
             Threshold value for current probe fourier mask. Value should
             be between 0 and 1, where higher values provide the most masking.
         fix_positions_iter: int, optional
@@ -1788,6 +1795,8 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
             Cut-off frequency in A^-1 for low-pass butterworth filter
         q_highpass: float
             Cut-off frequency in A^-1 for high-pass butterworth filter
+        butterworth_order: float
+            Butterworth filter order. Smaller gives a smoother filter
         object_positivity: bool, optional
             If True, forces object to be positive
         shrinkage_rad: float
@@ -2155,14 +2164,16 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                         and probe_gaussian_filter_sigma is not None,
                         probe_gaussian_filter_sigma=probe_gaussian_filter_sigma,
                         probe_gaussian_filter_fix_amplitude=probe_gaussian_filter_fix_amplitude,
-                        fix_probe_amplitude=a0 < fix_probe_amplitude_iter
+                        constrain_probe_amplitude=a0 < constrain_probe_amplitude_iter
                         and a0 >= fix_probe_iter,
-                        fix_probe_amplitude_relative_radius=fix_probe_amplitude_relative_radius,
-                        fix_probe_amplitude_relative_width=fix_probe_amplitude_relative_width,
-                        fix_probe_fourier_amplitude=a0
-                        < fix_probe_fourier_amplitude_iter
+                        constrain_probe_amplitude_relative_radius=constrain_probe_amplitude_relative_radius,
+                        constrain_probe_amplitude_relative_width=constrain_probe_amplitude_relative_width,
+                        constrain_probe_fourier_amplitude=a0
+                        < constrain_probe_fourier_amplitude_iter
                         and a0 >= fix_probe_iter,
-                        fix_probe_fourier_amplitude_threshold=fix_probe_fourier_amplitude_threshold,
+                        constrain_probe_fourier_amplitude_threshold=constrain_probe_fourier_amplitude_threshold,
+                        fix_probe_aperture=a0 < fix_probe_aperture_iter,
+                        initial_probe_aperture=self._probe_initial_aperture,
                         fix_positions=a0 < fix_positions_iter,
                         global_affine_transformation=global_affine_transformation,
                         gaussian_filter=a0 < gaussian_filter_iter
@@ -2172,6 +2183,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                         and (q_lowpass is not None or q_highpass is not None),
                         q_lowpass=q_lowpass,
                         q_highpass=q_highpass,
+                        butterworth_order=butterworth_order,
                         object_positivity=object_positivity,
                         shrinkage_rad=shrinkage_rad,
                         object_mask=self._object_fov_mask_inverse
@@ -2186,7 +2198,11 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
             if collective_tilt_updates:
                 self._object += collective_object / self._num_tilts
 
-                (self._object, self._probe, _,) = self._constraints(
+                (
+                    self._object,
+                    self._probe,
+                    _,
+                ) = self._constraints(
                     self._object,
                     self._probe,
                     None,
@@ -2197,13 +2213,16 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                     and probe_gaussian_filter_sigma is not None,
                     probe_gaussian_filter_sigma=probe_gaussian_filter_sigma,
                     probe_gaussian_filter_fix_amplitude=probe_gaussian_filter_fix_amplitude,
-                    fix_probe_amplitude=a0 < fix_probe_amplitude_iter
+                    constrain_probe_amplitude=a0 < constrain_probe_amplitude_iter
                     and a0 >= fix_probe_iter,
-                    fix_probe_amplitude_relative_radius=fix_probe_amplitude_relative_radius,
-                    fix_probe_amplitude_relative_width=fix_probe_amplitude_relative_width,
-                    fix_probe_fourier_amplitude=a0 < fix_probe_fourier_amplitude_iter
+                    constrain_probe_amplitude_relative_radius=constrain_probe_amplitude_relative_radius,
+                    constrain_probe_amplitude_relative_width=constrain_probe_amplitude_relative_width,
+                    constrain_probe_fourier_amplitude=a0
+                    < constrain_probe_fourier_amplitude_iter
                     and a0 >= fix_probe_iter,
-                    fix_probe_fourier_amplitude_threshold=fix_probe_fourier_amplitude_threshold,
+                    constrain_probe_fourier_amplitude_threshold=constrain_probe_fourier_amplitude_threshold,
+                    fix_probe_aperture=a0 < fix_probe_aperture_iter,
+                    initial_probe_aperture=self._probe_initial_aperture,
                     fix_positions=True,
                     global_affine_transformation=global_affine_transformation,
                     gaussian_filter=a0 < gaussian_filter_iter
@@ -2213,6 +2232,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                     and (q_lowpass is not None or q_highpass is not None),
                     q_lowpass=q_lowpass,
                     q_highpass=q_highpass,
+                    butterworth_order=butterworth_order,
                     object_positivity=object_positivity,
                     shrinkage_rad=shrinkage_rad,
                     object_mask=self._object_fov_mask_inverse
@@ -2224,11 +2244,11 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
             self.error_iterations.append(error.item())
             if store_iterations:
                 self.object_iterations.append(asnumpy(self._object.copy()))
-                self.probe_iterations.append(asnumpy(self._probe.copy()))
+                self.probe_iterations.append(self.probe_centered)
 
         # store result
         self.object = asnumpy(self._object)
-        self.probe = asnumpy(self._probe)
+        self.probe = self.probe_centered
         self.error = error.item()
 
         return self
@@ -2424,12 +2444,21 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
             0,
         ]
 
-        probe_extent = [
-            0,
-            self.sampling[1] * self._region_of_interest_shape[1],
-            self.sampling[0] * self._region_of_interest_shape[0],
-            0,
-        ]
+        if plot_fourier_probe:
+            probe_extent = [
+                0,
+                self.angular_sampling[1] * self._region_of_interest_shape[1],
+                self.angular_sampling[0] * self._region_of_interest_shape[0],
+                0,
+            ]
+
+        elif plot_probe:
+            probe_extent = [
+                0,
+                self.sampling[1] * self._region_of_interest_shape[1],
+                self.sampling[0] * self._region_of_interest_shape[0],
+                0,
+            ]
 
         if plot_convergence:
             if plot_probe or plot_fourier_probe:
@@ -2493,19 +2522,21 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                     self.probe_fourier, hue_start=hue_start, invert=invert
                 )
                 ax.set_title("Reconstructed Fourier probe")
+                ax.set_ylabel("kx [mrad]")
+                ax.set_xlabel("ky [mrad]")
             else:
                 probe_array = Complex2RGB(
                     self.probe, hue_start=hue_start, invert=invert
                 )
                 ax.set_title("Reconstructed probe")
+                ax.set_ylabel("x [A]")
+                ax.set_xlabel("y [A]")
 
             im = ax.imshow(
                 probe_array,
                 extent=probe_extent,
                 **kwargs,
             )
-            ax.set_ylabel("x [A]")
-            ax.set_xlabel("y [A]")
 
             if cbar:
                 divider = make_axes_locatable(ax)
@@ -2670,12 +2701,20 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
             0,
         ]
 
-        probe_extent = [
-            0,
-            self.sampling[1] * self._region_of_interest_shape[1],
-            self.sampling[0] * self._region_of_interest_shape[0],
-            0,
-        ]
+        if plot_fourier_probe:
+            probe_extent = [
+                0,
+                self.angular_sampling[1] * self._region_of_interest_shape[1],
+                self.angular_sampling[0] * self._region_of_interest_shape[0],
+                0,
+            ]
+        elif plot_probe:
+            probe_extent = [
+                0,
+                self.sampling[1] * self._region_of_interest_shape[1],
+                self.sampling[0] * self._region_of_interest_shape[0],
+                0,
+            ]
 
         if plot_convergence:
             if plot_probe or plot_fourier_probe:
@@ -2729,25 +2768,30 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
             for n, ax in enumerate(grid):
                 if plot_fourier_probe:
                     probe_array = Complex2RGB(
-                        asnumpy(self._return_fourier_probe(probes[grid_range[n]])),
+                        asnumpy(
+                            self._return_fourier_probe_from_centered_probe(
+                                probes[grid_range[n]]
+                            )
+                        ),
                         hue_start=hue_start,
                         invert=invert,
                     )
                     ax.set_title(f"Iter: {grid_range[n]} Fourier probe")
+                    ax.set_ylabel("kx [mrad]")
+                    ax.set_xlabel("ky [mrad]")
                 else:
                     probe_array = Complex2RGB(
                         probes[grid_range[n]], hue_start=hue_start, invert=invert
                     )
                     ax.set_title(f"Iter: {grid_range[n]} probe")
+                    ax.set_ylabel("x [A]")
+                    ax.set_xlabel("y [A]")
 
                 im = ax.imshow(
                     probe_array,
                     extent=probe_extent,
                     **kwargs,
                 )
-
-                ax.set_ylabel("x [A]")
-                ax.set_xlabel("y [A]")
 
                 if cbar:
                     add_colorbar_arg(
@@ -2893,7 +2937,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
             rotated_3d_obj.sum(0), angle=None, x_lims=x_lims, y_lims=y_lims
         )
 
-        return np.abs(np.fft.fftshift(np.fft.fft2(rotated_object)))
+        return np.abs(np.fft.fftshift(np.fft.fft2(np.fft.ifftshift(rotated_object))))
 
     def show_object_fft(
         self,

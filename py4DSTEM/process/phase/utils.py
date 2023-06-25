@@ -2,6 +2,7 @@ from typing import Mapping, Tuple, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
+import functools
 
 try:
     import cupy as cp
@@ -14,46 +15,26 @@ from py4DSTEM.process.utils.cross_correlate import align_and_shift_images
 from py4DSTEM.process.utils.utils import electron_wavelength_angstrom
 from scipy.ndimage import gaussian_filter
 
+# fmt: off
+
 #: Symbols for the polar representation of all optical aberrations up to the fifth order.
 polar_symbols = (
-    "C10",
-    "C12",
-    "phi12",
-    "C21",
-    "phi21",
-    "C23",
-    "phi23",
-    "C30",
-    "C32",
-    "phi32",
-    "C34",
-    "phi34",
-    "C41",
-    "phi41",
-    "C43",
-    "phi43",
-    "C45",
-    "phi45",
-    "C50",
-    "C52",
-    "phi52",
-    "C54",
-    "phi54",
-    "C56",
-    "phi56",
+        "C10", "C12", "phi12",
+        "C21", "phi21", "C23", "phi23",
+        "C30", "C32", "phi32", "C34", "phi34",
+        "C41", "phi41", "C43", "phi43", "C45", "phi45",
+        "C50", "C52", "phi52", "C54", "phi54", "C56", "phi56",
 )
 
 #: Aliases for the most commonly used optical aberrations.
 polar_aliases = {
-    "defocus": "C10",
-    "astigmatism": "C12",
-    "astigmatism_angle": "phi12",
-    "coma": "C21",
-    "coma_angle": "phi21",
-    "Cs": "C30",
-    "C5": "C50",
+        "defocus": "C10", "astigmatism": "C12", "astigmatism_angle": "phi12",
+        "coma": "C21", "coma_angle": "phi21",
+        "Cs": "C30",
+        "C5": "C50",
 }
 
+# fmt: on
 
 ### Probe functions
 
@@ -80,6 +61,8 @@ class ComplexProbe:
         Device to perform calculations on. Must be either 'cpu' or 'gpu'
     rolloff: float, optional
         Tapers the cutoff edge over the given angular range [mrad].
+    vacuum_probe_intensity: np.ndarray, optional
+        Squared of corner-centered aperture amplitude to use, instead of semiangle_cutoff + rolloff
     focal_spread: float, optional
         The 1/e width of the focal spread due to chromatic aberration and lens current instability [Å].
     angular_spread: float, optional
@@ -179,7 +162,7 @@ class ComplexProbe:
                 self._vacuum_probe_intensity, dtype=xp.float32
             )
             vacuum_probe_amplitude = xp.sqrt(xp.maximum(vacuum_probe_intensity, 0))
-            return xp.fft.ifftshift(vacuum_probe_amplitude)
+            return vacuum_probe_amplitude
 
         if self._semiangle_cutoff == xp.inf:
             return xp.ones_like(alpha)
@@ -431,9 +414,9 @@ class ComplexProbe:
         return alpha, phi
 
     def build(self):
-        """Builds complex probe in the center of the region of interest."""
+        """Builds corner-centered complex probe in the center of the region of interest."""
         xp = self._xp
-        array = xp.fft.fftshift(xp.fft.ifft2(self._evaluate_ctf()))
+        array = xp.fft.ifft2(self._evaluate_ctf())
         array = array / xp.sqrt((xp.abs(array) ** 2).sum())
         self._array = array
         return self
@@ -447,7 +430,7 @@ class ComplexProbe:
         kwargs.pop("cmap", None)
 
         plt.imshow(
-            asnumpy(xp.abs(self._array) ** 2),
+            asnumpy(xp.abs(xp.fft.ifftshift(self._array)) ** 2),
             cmap=cmap,
             **kwargs,
         )
@@ -473,20 +456,6 @@ def spatial_frequencies(gpts: Tuple[int, int], sampling: Tuple[float, float]):
     return tuple(
         np.fft.fftfreq(n, d).astype(np.float32) for n, d in zip(gpts, sampling)
     )
-
-
-def projection(u: np.ndarray, v: np.ndarray, xp):
-    """Projection of vector u onto vector v."""
-    return u * xp.vdot(u, v) / xp.vdot(u, u)
-
-
-def orthogonalize(V: np.ndarray, xp):
-    """Non-normalized QR decomposition using repeated projections."""
-    U = V.copy()
-    for i in range(1, V.shape[0]):
-        for j in range(i):
-            U[i, :] -= projection(U[j, :], V[i, :], xp)
-    return U
 
 
 ### FFT-shift functions
@@ -1287,3 +1256,21 @@ def project_vector_field_divergence(vector_field, spacings=(1, 1, 1), xp=np):
     p = preconditioned_poisson_solver(div_v, spacings[0], xp=xp)
     grad_p = compute_gradient(p, spacings, xp=xp)
     return vector_field - grad_p
+
+
+# Nesterov acceleration functions
+# https://blogs.princeton.edu/imabandit/2013/04/01/acceleratedgradientdescent/
+
+
+@functools.cache
+def nesterov_lambda(one_indexed_iter_num):
+    if one_indexed_iter_num == 0:
+        return 0
+    return (1 + np.sqrt(1 + 4 * nesterov_lambda(one_indexed_iter_num - 1) ** 2)) / 2
+
+
+def nesterov_gamma(zero_indexed_iter_num):
+    one_indexed_iter_num = zero_indexed_iter_num + 1
+    return (1 - nesterov_lambda(one_indexed_iter_num)) / nesterov_lambda(
+        one_indexed_iter_num + 1
+    )
