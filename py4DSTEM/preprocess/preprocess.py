@@ -645,6 +645,7 @@ def resample_data_diffraction(
         datacube.data = fourier_resample(
             datacube.data, scale=resampling_factor, output_size=output_size
         )
+        datacube.calibration.set_Q_pixel_size(datacube.calibration.get_Q_pixel_size() / resampling_factor)
 
         if not resampling_factor:
             resampling_factor = old_size[2] / output_size[0]
