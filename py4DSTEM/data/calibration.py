@@ -211,7 +211,7 @@ class Calibration(Metadata):
     # EMD root property
     @property
     def root(self):
-        return _root
+        return self._root
     @root.setter
     def root(self):
         raise Exception("Calibration.root does not support assignment; to change the root, use self.set_root")
