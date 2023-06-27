@@ -139,12 +139,12 @@ class DataCube(Array,Data):
         qx0_shift = self.calibration.get_qx0shift(rx,ry)
         if qx0_shift is None:
             raise Exception("Can't compute shifted meshgrid - origin shift is not defined")
-        return qxx - qx0_shift
+        return self.qxx - qx0_shift
     def qyys(self,rx,ry):
         qy0_shift = self.calibration.get_qy0shift(rx,ry)
         if qy0_shift is None:
             raise Exception("Can't compute shifted meshgrid - origin shift is not defined")
-        return qyy - qy0_shift
+        return self.qyy - qy0_shift
 
 
 

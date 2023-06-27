@@ -108,7 +108,7 @@ def read(
                     d = data.root.tree(p)
                     cal.register_target( d )
                     if hasattr(d,'setcal'):
-                        dsetcal()
+                        d.setcal()
             except KeyError:
                 pass
             cal.calibrate()

@@ -26,7 +26,7 @@ class call_method(object):
         some_object = args[0]
         assert hasattr(some_object, "_targets"), "SomeObject object appears to be in an invalid state. _targets attribute is missing."
         for target in some_object._targets:
-            if hasattr(target,'method') and callable(target,method):
+            if hasattr(target,'method') and callable(target.method):
                 try:
                     target.method()
                 except Exception as err:
