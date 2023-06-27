@@ -3,6 +3,7 @@
 from pathlib import Path
 from os.path import exists
 from typing import Optional,Union
+import warnings
 
 import py4DSTEM
 import emdfile as emd
@@ -81,11 +82,37 @@ def read(
         version = emd._get_EMD_version(filepath)
         if verbose: print(f"EMD version {version[0]}.{version[1]}.{version[2]} detected. Reading...")
         assert emd._version_is_geq(version,(1,0,0)), f"EMD version {version} detected. Expected version >= 1.0.0"
+        # read
         data = emd.read(
             filepath,
             emdpath = datapath,
             tree = tree
         )
+        # calibration links
+        if isinstance(data,py4DSTEM.Data):
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore')
+                cal = data.calibration
+        elif isinstance(data,py4DSTEM.Root):
+            try:
+                cal = data.metadata['calibration']
+            except KeyError:
+                cal = None
+        else:
+            cal = None
+        if cal is not None:
+            try:
+                target_paths = cal['_target_paths']
+                del(cal._params['_target_paths'])
+                for p in target_paths:
+                    d = data.root.tree(p)
+                    cal.register_target( d )
+                    if hasattr(d,'setcal'):
+                        dsetcal()
+            except KeyError:
+                pass
+            cal.calibrate()
+        # return
         if verbose: print("Done.")
         return data
 

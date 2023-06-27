@@ -6,7 +6,7 @@ from os.path import join, exists
 
 # set filepaths
 path_datacube = join(py4DSTEM._TESTPATH, "small_datacube.dm4")
-path_3Darray = join(py4DSTEM._TESTPATH, "io_test_data/small_dm3_3Dstack.dm3")
+path_3Darray = join(py4DSTEM._TESTPATH, "test_io/small_dm3_3Dstack.dm3")
 
 path_out_dir = join(py4DSTEM._TESTPATH, "test_outputs")
 path_out = join(path_out_dir, "test_calibration.h5")
