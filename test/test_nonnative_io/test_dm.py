@@ -5,7 +5,7 @@ from os.path import join
 
 # Set filepaths
 filepath_dm4_datacube = join(py4DSTEM._TESTPATH, "small_datacube.dm4")
-filepath_dm3_3Dstack = join(py4DSTEM._TESTPATH, "io_test_data/small_dm3_3Dstack.dm3")
+filepath_dm3_3Dstack = join(py4DSTEM._TESTPATH, "test_io/small_dm3_3Dstack.dm3")
 
 
 def test_dmfile_datacube():

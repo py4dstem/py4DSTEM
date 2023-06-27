@@ -1,5 +1,5 @@
 # Base class for all py4DSTEM data
-# which adds a pointer to 'calibration' metadata
+# which adds an EMD root and a pointer to 'calibration' metadata
 
 import warnings
 
@@ -8,26 +8,80 @@ from py4DSTEM.data import Calibration
 
 
 class Data:
+    """
+    Data in py4DSTEM is stored in filetree like representations, e.g.
+
+    Root
+      |--metadata
+      |     |--calibration
+      |
+      |--some_object(e.g.datacube)
+      |     |--another_object(e.g.max_dp)
+      |             |--etc.
+      |
+      |--one_more_object(e.g.crystal)
+      |     |--etc.
+      :
+
+    In a Python interpreter, do
+
+        >>> data.tree(True)
+
+    to display the data tree of Data instance `data`, and
+
+        >>> data.tree()
+
+    to display the tree of from the current node on, i.e. the branch
+    downstream of `data`.
+
+    Every object can access the calibrations which live in the root metadata
+    of its tree with
+
+        >>> data.calibration
+
+    which returns the calibrations, or, if none are found, raises a warning
+    and returns None.
+
+    Some objects should be modified when the calibrations change - these
+    objects must have .calibrate() method, which is called any time relevant
+    calibration parameters change if the object has been registered with
+    the calibrations.
+
+    To transfer `data` from it's current tree to another existing tree, use
+
+        >>> data.attach(some_other_data)
+
+    which will move the data to the new tree. If the data was registered with
+    it's old calibrations, this will also de-register it there and register
+    it with the new calibrations such that .calibrate() is called when it
+    should be.
+
+    See also the Calibration docstring.
+    """
 
     def __init__(
         self,
-        setup_tree = True,
         calibration = None
         ):
-        assert(isinstance(self,Node)), "Data instances must alse inherit from Node"
+        assert(isinstance(self,Node)), "Data instances must inherit from Node"
         pass
 
-        if setup_tree:
-            # set up EMD tree
+        # set up calibration + EMD tree
+        if calibration is None:
             root = Root( name = self.name+"_root" )
             root.tree( self )
+            self.calibration = Calibration()
+        else:
+            assert(isinstance(calibration,Calibration)), f"`calibration` must be a Calibration, not type {type(calibration)}"
+            self.calibration = calibration
+            if calibration.root is None:
+                calibration._root = Root( name = self.name+"_root" )
+                calibration.root.tree( self )
+            else:
+                calibration.root.tree( self )
 
-            # set up calibration
-            calibration = Calibration() if calibration is None else calibration
-            self._setup_calibration( calibration )
 
-
-    # calibration
+    # calibration property
 
     @property
     def calibration(self):
@@ -49,6 +103,21 @@ class Data:
         self.root.metadata['calibration'] = x
 
 
+    # transfer trees
+
+    def attach(self,node):
+        """
+        Moves self to `node`'s tree, attaching to node's calibration and detaching
+        from the current calibration.
+        """
+        assert(isinstance(node,Node)), f"node must be a Node, not type {type(node)}"
+        assert(hasattr(node,'calibration')), "node must have a calibration"
+        if self in self.calibration._targets:
+            register = True
+            self.calibration.unregister_target(self)
+        node.graft(self)
+        if register:
+            self.calibration.register_target(self)
 
 
 

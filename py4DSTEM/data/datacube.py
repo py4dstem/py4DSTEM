@@ -10,7 +10,6 @@ from py4DSTEM.data import Data, Calibration
 
 
 
-
 class DataCube(Array,Data):
     """
     Storage and processing methods for 4D-STEM datasets.
@@ -21,7 +20,6 @@ class DataCube(Array,Data):
         data: np.ndarray,
         name: Optional[str] = 'datacube',
         slicelabels: Optional[Union[bool,list]] = None,
-        setup_tree: Optional[bool] = True,
         calibration: Optional[Union[Calibration,None]] = None,
         ):
         """
@@ -31,7 +29,6 @@ class DataCube(Array,Data):
             calibration (None or Calibration or 'pass'): default (None)
                 creates and attaches a new Calibration instance to root
                 metadata, or, passing a Calibration instance uses this instead.
-                'skip' is for internal use for the reader
             slicelabels (None or list): names for slices if this is a
                 stack of datacubes
 
@@ -56,38 +53,168 @@ class DataCube(Array,Data):
         # initialize as Data
         Data.__init__(
             self,
-            setup_tree,
             calibration
         )
 
+        # register with calibration
+        self.calibration.register_target(self)
+
         # cartesian coords
-        # TODO - tmp hack, needs to be refactored -
-        # this will break when preprocess methods are called
-        self.qyy,self.qxx = np.meshgrid(
-            np.arange(0,self.Q_Ny),
-            np.arange(0,self.Q_Nx)
-        )
+        self.calibrate()
 
         # polar coords
         self.polar = None
 
 
 
-    def _setup_calibration(self, cal):
+
+    def calibrate(self):
         """
-        Ensures that a calibration instance exists. Passing None
-        makes a new Calibration instance, puts it in root.calibration, and
-        makes a two way link. Passing a Calibration instance attaches that
-        instance. `'skip'` does nothing (internal use, on read from file).
+        Calibrate the coordinate axes of the datacube. Using the calibrations
+        at self.calibration, sets the 4 dim vectors (Qx,Qy,Rx,Ry) according
+        to the pixel size, units and origin positions, then updates the
+        meshgrids representing Q and R space.
         """
-        if cal is None:
-            self.calibration = Calibration( datacube = self )
-        elif cal == 'skip':
-            pass
-        else:
-            assert(isinstance(cal, Calibration)), "`calibration` must be a Calibration instance, not type f{type(cal)}"
-            self.calibration = cal
-            cal._datacube = self
+        assert(self.calibration is not None), "No calibration found!"
+
+        # Get calibration values
+        rpixsize = self.calibration.get_R_pixel_size()
+        rpixunits = self.calibration.get_R_pixel_units()
+        qpixsize = self.calibration.get_Q_pixel_size()
+        qpixunits = self.calibration.get_Q_pixel_units()
+        origin = self.calibration.get_origin_mean()
+        if origin is None or origin==(None,None):
+            origin = (0,0)
+
+        # Calc dim vectors
+        dim_rx = np.arange(self.R_Nx)*rpixsize
+        dim_ry = np.arange(self.R_Ny)*rpixsize
+        dim_qx = -origin[0] + np.arange(self.Q_Nx)*qpixsize
+        dim_qy = -origin[1] + np.arange(self.Q_Ny)*qpixsize
+
+        # Set dim vectors
+        self.set_dim(
+            0,
+            dim_rx,
+            units = rpixunits
+        )
+        self.set_dim(
+            1,
+            dim_ry,
+            units = rpixunits
+        )
+        self.set_dim(
+            2,
+            dim_qx,
+            units = qpixunits
+        )
+        self.set_dim(
+            3,
+            dim_qy,
+            units = qpixunits
+        )
+
+        # Set meshgrids
+        self._qxx,self._qyy = np.meshgrid( dim_qx,dim_qy )
+        self._rxx,self._ryy = np.meshgrid( dim_rx,dim_ry )
+
+
+
+    # coordinate meshgrids
+    @property
+    def rxx(self):
+        return self._rxx
+    @property
+    def ryy(self):
+        return self._ryy
+    @property
+    def qxx(self):
+        return self._qxx
+    @property
+    def qyy(self):
+        return self._qyy
+
+    # coordinate meshgrids with shifted origin
+    def qxxs(self,rx,ry):
+        qx0_shift = self.calibration.get_qx0shift(rx,ry)
+        if qx0_shift is None:
+            raise Exception("Can't compute shifted meshgrid - origin shift is not defined")
+        return qxx - qx0_shift
+    def qyys(self,rx,ry):
+        qy0_shift = self.calibration.get_qy0shift(rx,ry)
+        if qy0_shift is None:
+            raise Exception("Can't compute shifted meshgrid - origin shift is not defined")
+        return qyy - qy0_shift
+
+
+
+    # shape properties
+
+    ## shape
+
+    # FOV
+    @property
+    def R_Nx(self):
+        return self.data.shape[0]
+    @property
+    def R_Ny(self):
+        return self.data.shape[1]
+    @property
+    def Q_Nx(self):
+        return self.data.shape[2]
+    @property
+    def Q_Ny(self):
+        return self.data.shape[3]
+
+    @property
+    def Rshape(self):
+        return (self.data.shape[0],self.data.shape[1])
+    @property
+    def Qshape(self):
+        return (self.data.shape[2],self.data.shape[3])
+
+    @property
+    def R_N(self):
+        return self.R_Nx*self.R_Ny
+
+    # aliases
+    qnx = Q_Nx
+    qny = Q_Ny
+    rnx = R_Nx
+    rny = R_Ny
+    rshape = Rshape
+    qshape = Qshape
+    rn = R_N
+
+
+
+    ## pixel size / units
+
+    # Q 
+    @property
+    def Q_pixel_size(self):
+        return self.calibration.get_Q_pixel_size()
+    @property
+    def Q_pixel_units(self):
+        return self.calibration.get_Q_pixel_units()
+
+    # R
+    @property
+    def R_pixel_size(self):
+        return self.calibration.get_R_pixel_size()
+    @property
+    def R_pixel_units(self):
+        return self.calibration.get_R_pixel_units()
+
+    # aliases
+    qpixsize = Q_pixel_size
+    qpixunit = Q_pixel_units
+    rpixsize = R_pixel_size
+    rpixunit = R_pixel_units
+
+
+
+
 
 
     def copy(self):
@@ -136,69 +263,7 @@ class DataCube(Array,Data):
         return new_datacube
 
 
-    # properties
 
-
-    ## pixel size / units
-
-    # Q 
-    @property
-    def Q_pixel_size(self):
-        return self.calibration.get_Q_pixel_size()
-    @property
-    def Q_pixel_units(self):
-        return self.calibration.get_Q_pixel_units()
-
-    # R
-    @property
-    def R_pixel_size(self):
-        return self.calibration.get_R_pixel_size()
-    @property
-    def R_pixel_units(self):
-        return self.calibration.get_R_pixel_units()
-
-    # aliases
-    qpixsize = Q_pixel_size
-    qpixunit = Q_pixel_units
-    rpixsize = R_pixel_size
-    rpixunit = R_pixel_units
-
-
-    ## shape
-
-    # FOV
-    @property
-    def R_Nx(self):
-        return self.data.shape[0]
-    @property
-    def R_Ny(self):
-        return self.data.shape[1]
-    @property
-    def Q_Nx(self):
-        return self.data.shape[2]
-    @property
-    def Q_Ny(self):
-        return self.data.shape[3]
-
-    @property
-    def Rshape(self):
-        return (self.data.shape[0],self.data.shape[1])
-    @property
-    def Qshape(self):
-        return (self.data.shape[2],self.data.shape[3])
-
-    @property
-    def R_N(self):
-        return self.R_Nx*self.R_Ny
-
-    # aliases
-    qnx = Q_Nx
-    qny = Q_Ny
-    rnx = R_Nx
-    rny = R_Ny
-    rshape = Rshape
-    qshape = Qshape
-    rn = R_N
 
 
 
@@ -223,7 +288,7 @@ class DataCube(Array,Data):
             'data': ar_args['data'],
             'name': ar_args['name'],
             'slicelabels': ar_args['slicelabels'],
-            'calibration': 'skip'
+            'calibration': None
         }
 
         return args

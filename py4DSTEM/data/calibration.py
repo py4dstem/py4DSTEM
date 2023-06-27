@@ -3,45 +3,185 @@
 import numpy as np
 from numbers import Number
 from typing import Optional
+from warnings import warn
 
-from emdfile import Metadata
-from py4DSTEM.data.propagating_calibration import propagating_calibration
+from emdfile import Metadata,Root
+from py4DSTEM.data.propagating_calibration import call_calibrate
 
 class Calibration(Metadata):
     """
     Stores calibration measurements.
 
-    Usage:
+    Usage
+    -----
+    For some calibration instance `c`
 
-        >>> c = Calibration()
+        >>> c['x'] = y
+
+    will set the value of some calibration item called 'x' to y, and
+
+        >>> _y = c['x']
+
+    will return the value currently stored as 'x' and assign it to _y.
+    Additionally, for calibration items in the list `l` given below,
+    the syntax
+
         >>> c.set_p(p)
         >>> p = c.get_p()
 
-    If the parameter has not been set, the getter methods return None. For
-    parameters with multiple values, they're returned as a tuple. If any of
-    the multiple values can't be found, a single None is returned instead.
-    Some parameters may have distinct values for each scan position; these
-    are stored as 2D arrays, and
+    is equivalent to
 
-        >>> c.get_p()
+        >>> c.p = p
+        >>> p = c.p
 
-    will return the entire 2D array, while
+    is equivalent to
+
+        >>> c['p'] = p
+        >>> p = c['p']
+
+    where in the first line of each couplet the parameter `p` is set and in
+    the second it's retrieved, for parameters p in the list
+
+                                                  calibrate
+                                                  ---------
+    l = [
+        Q_pixel_size,                                 *
+        R_pixel_size,                                 *
+        Q_pixel_units,                                *
+        R_pixel_units,                                *
+        qx0,
+        qy0,
+        qx0_mean,
+        qy0_mean,
+        qx0shift,
+        qy0shift,
+        origin,                                       *
+        origin_meas,
+        origin_meas_mask,
+        origin_shift,
+        a,                                            *
+        b,                                            *
+        theta,                                        *
+        p_ellipse,                                    *
+        ellipse,                                      *
+        QR_rotation_degrees,
+        QR_flip,
+        QR_rotflip,                                   *
+        probe_semiangle,
+        probe_param,
+        probe_center,
+        probe_convergence_semiangle_pixels,
+        probe_convergence_semiangle_mrad,
+    ]
+
+    There are two advantages to using the getter/setter syntax for parameters
+    in `l` (e.g. either c.set_p or c.p) instead of the normal dictionary-like
+    getter/setter syntax (i.e. c['p']).  These are (1) enabling retrieving
+    parameters by beam scan position, and (2) enabling propagation of any
+    calibration changes to downstream data objects which are affected by the
+    altered calibrations.  See below.
+
+    Get a parameter by beam scan position
+    -------------------------------------
+    Some parameters support retrieval by beam scan position.  In these cases,
+    calling
 
         >>> c.get_p(rx,ry)
 
-    will return the value of `p` at position `rx,ry`.
+    will return the value of parameter p at beam position (rx,ry). This works
+    only for the above syntax. Using either of
 
-    The Calibration object is capable of automatically calling the ``calibrate`` method
-    of any other py4DSTEM objects when certain calibrations are updated. The methods
-    that trigger propagation of calibration information are tagged with the
-    @propagating_calibration decorator. Use the ``register_target`` method
-    to set up an object to recieve calls to ``calibrate``
+        >>> c.p
+        >>> c['p']
 
+    will return an R-space shaped array.
+
+    Trigger downstream calibrations
+    -------------------------------
+    Some objects store their own internal calibration state, which depends on
+    the calibrations stored here.  For example, a DataCube stores dimension
+    vectors which calibrate its 4 dimensions, and which depend on the pixel
+    sizes and the origin position.
+
+    Modifying certain parameters therefore can trigger other objects which
+    depend on these parameters to re-calibrate themselves by calling their
+    .calibrate() method, if the object has one. Methods marked with a * in the
+    list `l` above have this property. Only objects registered with the
+    Calibration instance will have their .calibrate method triggered by changing
+    these parameters.  An object `data` can be registered by calling
+
+        >>> c.register_target( data )
+
+    and deregistered with
+
+        >>> c.deregister_target( data )
+
+    If an object without a .calibrate method is registerd when a * method is
+    called, nothing happens.
+
+    The .calibrate methods are triggered by setting some parameter `p` using
+    either
+
+        >>> c.set_p( val )
+
+    or
+
+        >>> c.p = val
+
+    syntax.  Setting the parameter with
+
+        >>> c['p'] = val
+
+    will not trigger re-calibrations.
+
+    Calibration + Data
+    ------------------
+    Data in py4DSTEM is stored in filetree like representations, and
+    Calibration instances are the top-level objects in these trees,
+    in that they live here:
+
+    Root
+      |--metadata
+      |     |-- *****---> calibration <---*****
+      |
+      |--some_object(e.g.datacube)
+      |     |--another_object(e.g.max_dp)
+      |             |--etc.
+      |--etc.
+      :
+
+    Every py4DSTEM Data object has a tree with a calibration, and calling
+
+        >>> data.calibration
+
+    will return the that Calibration instance. See also the docstring
+    for the `Data` class.
+
+    Attaching an object to a different Calibration
+    ----------------------------------------------
+    To modify the calibration associated with an object's `data`, use
+
+        >>> c.attach( data )
+
+    where `c` is the new calibration instance `data` is to be associated
+    with. This (1) moves `data` into the top level of `c`'s data tree,
+    which means the new calibration will now be accessible normally at
+
+        >>> data.calibration
+
+    and (2) if and only if `data` was registered with its old calibration,
+    de-registers it there and registers it with the new calibration. If
+    `data` was not registered with the old calibration and it should be
+    registered with the new one, `c.register_target( data )` should be
+    called.
+
+    To attach `data` to a different location in the calibration instance's
+    tree, use `data.attach( node )`. See the Data.attach docstring.
     """
     def __init__(
         self,
         name: Optional[str] = 'calibration',
-        datacube = None
+        root: Optional[Root] = None,
         ):
         """
         Args:
@@ -49,14 +189,17 @@ class Calibration(Metadata):
         """
         Metadata.__init__(
             self,
-            name=name)
+            name=name
+        )
+
+        # Set the root
+        if root is None:
+            root = Root( name="py4DSTEM_root" )
+        self.set_root(root)
 
         # List to hold objects that will re-`calibrate` when
         # certain properties are changed
         self._targets = []
-
-        # set datacube
-        self._datacube = datacube
 
         # set initial pixel values
         self.set_Q_pixel_size(1)
@@ -65,97 +208,141 @@ class Calibration(Metadata):
         self.set_R_pixel_units('pixels')
 
 
+    # EMD root property
+    @property
+    def root(self):
+        return _root
+    @root.setter
+    def root(self):
+        raise Exception("Calibration.root does not support assignment; to change the root, use self.set_root")
+    def set_root(self,root):
+        assert(isinstance(root,Root)), f"root must be a Root, not type {type(root)}"
+        self._root = root
 
-    # datacube
+
+    # Attach data to the calibration instance
+    def attach(self,data):
+        """
+        Attach `data` to this calibration instance, placing it in the top
+        level of the Calibration instance's tree. If `data` was in a
+        different data tree, remove it. If `data` was registered with
+        a different calibration instance, de-register it there and
+        register it here. If `data` was not previously registerd and it
+        should be, after attaching it run `self.register_target(data)`.
+        """
+        from py4DSTEM.data import Data
+        assert(isinstance(data,Data)), f"data must be a Data instance"
+        data.attach(self.root)
+
+
+    # Register for auto-calibration
+    def register_target(self,new_target):
+        """
+        Register an object to recieve calls to it `calibrate`
+        method when certain calibrations get updated
+        """
+        if new_target not in self._targets:
+            self._targets.append(new_target)
+
+    def unregister_target(self,target):
+        """
+        Unlink an object from recieving calls to `calibrate` when
+        certain calibration values are changed
+        """
+        if target in self._targets:
+            self._targets.remove(target)
 
     @property
-    def datacube(self):
-        return self._datacube
+    def targets(self):
+        return tuple(self._targets)
 
 
 
-
-    ### getter/setter methods
-
-
+    ######### Begin Calibration Metadata Params #########
 
     # pixel size/units
 
-    @propagating_calibration
+    @call_calibrate
     def set_Q_pixel_size(self,x):
-        if self._has_datacube():
-            self.datacube.set_dim(2,x)
-            self.datacube.set_dim(3,x)
         self._params['Q_pixel_size'] = x
     def get_Q_pixel_size(self):
         return self._get_value('Q_pixel_size')
+    # aliases
+    @property
+    def Q_pixel_size(self):
+        return self.get_Q_pixel_size()
+    @Q_pixel_size.setter
+    def Q_pixel_size(self,x):
+        self.set_Q_pixel_size(x)
+    @property
+    def qpixsize(self):
+        return self.get_Q_pixel_size()
+    @qpixsize.setter
+    def qpixsize(self,x):
+        self.set_Q_pixel_size(x)
 
-    @propagating_calibration
+    @call_calibrate
     def set_R_pixel_size(self,x):
-        if self._has_datacube():
-            self.datacube.set_dim(0,x)
-            self.datacube.set_dim(1,x)
         self._params['R_pixel_size'] = x
     def get_R_pixel_size(self):
         return self._get_value('R_pixel_size')
+    # aliases
+    @property
+    def R_pixel_size(self):
+        return self.get_R_pixel_size()
+    @R_pixel_size.setter
+    def R_pixel_size(self,x):
+        self.set_R_pixel_size(x)
+    @property
+    def qpixsize(self):
+        return self.get_R_pixel_size()
+    @qpixsize.setter
+    def qpixsize(self,x):
+        self.set_R_pixel_size(x)
 
-    @propagating_calibration
+    @call_calibrate
     def set_Q_pixel_units(self,x):
         assert(x in ('pixels','A^-1','mrad')), f"Q pixel units must be 'A^-1', 'mrad' or 'pixels'."
-        if self._has_datacube():
-            self.datacube.set_dim_units(2,x)
-            self.datacube.set_dim_units(3,x)
         self._params['Q_pixel_units'] = x
     def get_Q_pixel_units(self):
         return self._get_value('Q_pixel_units')
+    # aliases
+    @property
+    def Q_pixel_units(self):
+        return self.get_Q_pixel_units()
+    @Q_pixel_units.setter
+    def Q_pixel_units(self,x):
+        self.set_Q_pixel_units(x)
+    @property
+    def qpixunits(self):
+        return self.get_Q_pixel_units()
+    @qpixunits.setter
+    def qpixunits(self,x):
+        self.set_Q_pixel_units(x)
 
-    @propagating_calibration
+    @call_calibrate
     def set_R_pixel_units(self,x):
-        if self._has_datacube():
-            self.datacube.set_dim_units(0,x)
-            self.datacube.set_dim_units(1,x)
         self._params['R_pixel_units'] = x
     def get_R_pixel_units(self):
         return self._get_value('R_pixel_units')
-
-
-
-    # datacube shape
-
-    def get_R_Nx(self):
-        self._validate_datacube()
-        return self.datacube.R_Nx
-    def get_R_Ny(self):
-        self._validate_datacube()
-        return self.datacube.R_Ny
-    def get_Q_Nx(self):
-        self._validate_datacube()
-        return self.datacube.Q_Nx
-    def get_Q_Ny(self):
-        self._validate_datacube()
-        return self.datacube.Q_Ny
-    def get_datacube_shape(self):
-        self._validate_datacube()
-        """ (R_Nx,R_Ny,Q_Nx,Q_Ny)
-        """
-        return self.datacube.data.dshape
-    def get_Qshape(self,x):
-        self._validate_datacube()
-        return self.data.Qshape
-    def get_Rshape(self,x):
-        self._validate_datacube()
-        return self.data.Rshape
-
-    # is there a datacube?
-    def _validate_datacube(self):
-        assert(self.datacube is not None), "Can't find shape attr because Calibration doesn't point to a DataCube"
-    def _has_datacube(self):
-        return(self.datacube is not None)
-
-
+    # aliases
+    @property
+    def R_pixel_units(self):
+        return self.get_R_pixel_units()
+    @R_pixel_units.setter
+    def R_pixel_units(self,x):
+        self.set_R_pixel_units(x)
+    @property
+    def rpixunits(self):
+        return self.get_R_pixel_units()
+    @rpixunits.setter
+    def rpixunits(self,x):
+        self.set_R_pixel_units(x)
 
 
     # origin
+
+    # qx0,qy0
     def set_qx0(self,x):
         self._params['qx0'] = x
         x = np.asarray(x)
@@ -203,7 +390,60 @@ class Calibration(Metadata):
     def get_origin_meas_mask(self,rx=None,ry=None):
         return self._get_value('origin_meas_mask',rx,ry)
 
-    @propagating_calibration
+    # aliases
+    @property
+    def qx0(self):
+        return self.get_qx0()
+    @qx0.setter
+    def qx0(self,x):
+        self.set_qx0(x)
+    @property
+    def qx0_mean(self):
+        return self.get_qx0_mean()
+    @qx0_mean.setter
+    def qx0_mean(self,x):
+        self.set_qx0_mean(x)
+    @property
+    def qx0shift(self):
+        return self.get_qx0shift()
+    @property
+    def qy0(self):
+        return self.get_qy0()
+    @qy0.setter
+    def qy0(self,x):
+        self.set_qy0(x)
+    @property
+    def qy0_mean(self):
+        return self.get_qy0_mean()
+    @qy0_mean.setter
+    def qy0_mean(self,x):
+        self.set_qy0_mean(x)
+    @property
+    def qy0_shift(self):
+        return self.get_qy0_shift()
+    @property
+    def qx0_meas(self):
+        return self.get_qx0_meas()
+    @qx0_meas.setter
+    def qx0_meas(self,x):
+        self.set_qx0_meas(x)
+    @property
+    def qy0_meas(self):
+        return self.get_qy0_meas()
+    @qy0_meas.setter
+    def qy0_meas(self,x):
+        self.set_qy0_meas(x)
+    @property
+    def origin_meas_mask(self):
+        return self.get_origin_meas_mask()
+    @origin_meas_mask.setter
+    def origin_meas_mask(self,x):
+        self.set_origin_meas_mask(x)
+
+
+    # origin = (qx0,qy0)
+
+    @call_calibrate
     def set_origin(self,x):
         """
         Args:
@@ -252,44 +492,43 @@ class Calibration(Metadata):
             ans = None
         return ans
 
-    def set_probe_semiangle(self,x):
-        self._params['probe_semiangle'] = x
-    def get_probe_semiangle(self):
-        return self._get_value('probe_semiangle')
-    def set_probe_param(self, x):
-        """
-        Args:
-            x (3-tuple): (probe size, x0, y0)
-        """
-        probe_semiangle, qx0, qy0 = x
-        self.set_probe_semiangle(probe_semiangle)
-        self.set_qx0_mean(qx0)
-        self.set_qy0_mean(qy0)
-    def get_probe_param(self):
-        probe_semiangle = self._get_value('probe_semiangle')
-        qx0 = self._get_value('qx0')
-        qy0 = self._get_value('qy0')
-        ans = (probe_semiangle,qx0,qy0)
-        if any([x is None for x in ans]):
-            ans = None
-        return ans
+    # aliases
+    @property
+    def origin(self):
+        return self.get_origin()
+    @origin.setter
+    def origin(self,x):
+        self.set_origin(x)
+    @property
+    def origin_meas(self):
+        return self.get_origin_meas()
+    @origin_meas.setter
+    def origin_meas(self,x):
+        self.set_origin_meas(x)
+    @property
+    def origin_shift(self):
+        return self.get_origin_shift()
 
 
     # ellipse
+
+    @call_calibrate
     def set_a(self,x):
         self._params['a'] = x
     def get_a(self,rx=None,ry=None):
         return self._get_value('a',rx,ry)
+    @call_calibrate
     def set_b(self,x):
         self._params['b'] = x
     def get_b(self,rx=None,ry=None):
         return self._get_value('b',rx,ry)
+    @call_calibrate
     def set_theta(self,x):
         self._params['theta'] = x
     def get_theta(self,rx=None,ry=None):
         return self._get_value('theta',rx,ry)
 
-    @propagating_calibration
+    @call_calibrate
     def set_ellipse(self,x):
         """
         Args:
@@ -300,7 +539,7 @@ class Calibration(Metadata):
         self._params['b'] = b
         self._params['theta'] = theta
 
-    @propagating_calibration
+    @call_calibrate
     def set_p_ellipse(self,x):
         """
         Args:
@@ -323,7 +562,42 @@ class Calibration(Metadata):
         a,b,theta = self.get_ellipse(rx,ry)
         return (qx0,qy0,a,b,theta)
 
+    # aliases
+    @property
+    def a(self):
+        return self.get_a()
+    @a.setter
+    def a(self,x):
+        self.set_a(x)
+    @property
+    def b(self):
+        return self.get_b()
+    @b.setter
+    def b(self,x):
+        self.set_b(x)
+    @property
+    def theta(self):
+        return self.get_theta()
+    @theta.setter
+    def theta(self,x):
+        self.set_theta(x)
+    @property
+    def p_ellipse(self):
+        return self.get_p_ellipse()
+    @p_ellipse.setter
+    def p_ellipse(self,x):
+        self.set_p_ellipse(x)
+    @property
+    def ellipse(self):
+        return self.get_ellipse()
+    @ellipse.setter
+    def ellipse(self,x):
+        self.set_ellipse(x)
+
+
+
     # Q/R-space rotation and flip
+
     def set_QR_rotation_degrees(self,x):
         self._params['QR_rotation_degrees'] = x
     def get_QR_rotation_degrees(self):
@@ -334,7 +608,7 @@ class Calibration(Metadata):
     def get_QR_flip(self):
         return self._get_value('QR_flip')
 
-    @propagating_calibration
+    @call_calibrate
     def set_QR_rotflip(self, rot_flip):
         """
         Args:
@@ -352,20 +626,112 @@ class Calibration(Metadata):
             return None
         return (rot,flip)
 
+    # aliases
+    @property
+    def QR_rotation_degrees(self):
+        return self.get_QR_rotation_degrees()
+    @QR_rotation_degrees.setter
+    def QR_rotation_degrees(self,x):
+        self.set_QR_rotation_degrees(x)
+    @property
+    def QR_flip(self):
+        return self.get_QR_flip()
+    @QR_flip.setter
+    def QR_flip(self,x):
+        self.set_QR_flip(x)
+    @property
+    def QR_rotflip(self):
+        return self.get_QR_rotflip()
+    @QR_rotflip.setter
+    def QR_rotflip(self,x):
+        self.set_QR_rotflip(x)
+
+
+
+
 
     # probe
+
+    def set_probe_semiangle(self,x):
+        self._params['probe_semiangle'] = x
+    def get_probe_semiangle(self):
+        return self._get_value('probe_semiangle')
+    def set_probe_param(self, x):
+        """
+        Args:
+            x (3-tuple): (probe size, x0, y0)
+        """
+        probe_semiangle, qx0, qy0 = x
+        self.set_probe_semiangle(probe_semiangle)
+        self.set_qx0_mean(qx0)
+        self.set_qy0_mean(qy0)
+    def get_probe_param(self):
+        probe_semiangle = self._get_value('probe_semiangle')
+        qx0 = self._get_value('qx0')
+        qy0 = self._get_value('qy0')
+        ans = (probe_semiangle,qx0,qy0)
+        if any([x is None for x in ans]):
+            ans = None
+        return ans
+
     def set_convergence_semiangle_pixels(self,x):
         self._params['convergence_semiangle_pixels'] = x
     def get_convergence_semiangle_pixels(self):
         return self._get_value('convergence_semiangle_pixels')
-    def set_convergence_semiangle_pixels(self,x):
+    def set_convergence_semiangle_mrad(self,x):
         self._params['convergence_semiangle_mrad'] = x
-    def get_convergence_semiangle_pixels(self):
+    def get_convergence_semiangle_mrad(self):
         return self._get_value('convergence_semiangle_mrad')
     def set_probe_center(self,x):
         self._params['probe_center'] = x
     def get_probe_center(self):
         return self._get_value('probe_center')
+
+    #aliases
+    @property
+    def probe_semiangle(self):
+        return self.get_probe_semiangle()
+    @probe_semiangle.setter
+    def probe_semiangle(self,x):
+        self.set_probe_semiangle(x)
+    @property
+    def probe_param(self):
+        return self.get_probe_param()
+    @probe_param.setter
+    def probe_param(self,x):
+        self.set_probe_param(x)
+    @property
+    def probe_center(self):
+        return self.get_probe_center()
+    @probe_center.setter
+    def probe_center(self,x):
+        self.set_probe_center(x)
+    @property
+    def probe_convergence_semiangle_pixels(self):
+        return self.get_probe_convergence_semiangle_pixels()
+    @probe_convergence_semiangle_pixels.setter
+    def probe_convergence_semiangle_pixels(self,x):
+        self.set_probe_convergence_semiangle_pixels(x)
+    @property
+    def probe_convergence_semiangle_mrad(self):
+        return self.get_probe_convergence_semiangle_mrad()
+    @probe_convergence_semiangle_mrad.setter
+    def probe_convergence_semiangle_mrad(self,x):
+        self.set_probe_convergence_semiangle_mrad(x)
+
+
+
+
+
+    ######## End Calibration Metadata Params ########
+
+
+
+    # calibrate targets
+    @call_calibrate
+    def calibrate(self):
+        pass
+
 
 
     # For parameters which can have 2D or (2+n)D array values,
@@ -399,31 +765,24 @@ class Calibration(Metadata):
         return cal
 
 
-    # Methods for assigning objects which will be
-    # auto-calibrated when the Calibration instance is updated
-
-    def register_target(self,new_target):
-        """
-        Register an object to recieve calls to it `calibrate`
-        method when certain calibrations get updated
-        """
-        self._targets.append(new_target)
-
-    def unregister_target(self,target):
-        """
-        Unlink an object from recieving calls to `calibrate` when
-        certain calibration values are changed
-        """
-        if target in self._targets:
-            self._targets.remove(target)
-
 
     # HDF5 i/o
 
     # write is inherited from Metadata
+    def to_h5(self,group):
+        """
+        Saves the metadata dictionary _params to group, then adds the
+        calibration's target's list
+        """
+        # Add targets list to metadata
+        targets = [x._treepath for x in self.targets]
+        self['_target_paths'] = targets
+        # Save the metadata
+        Metadata.to_h5(self,group)
 
     # read
-    def from_h5(group):
+    @classmethod
+    def from_h5(cls,group):
         """
         Takes a valid group for an HDF5 file object which is open in
         read mode. Determines if it's a valid Metadata representation, and

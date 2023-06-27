@@ -54,7 +54,7 @@ if not exists(testpath):
 if args.data == 'tutorials':
     data = 'tutorials'
 elif args.data == 'io':
-    data = 'io_test_data'
+    data = 'test_io'
 elif args.data == 'basic':
     data = 'small_datacube'
 else:
@@ -69,7 +69,7 @@ download(
 )
 
 # Always download the basic datacube
-if args.data is not 'basic':
+if args.data != 'basic':
     download(
         'small_datacube',
         destination = testpath,

@@ -3,7 +3,7 @@ from os.path import join
 
 
 # Set filepaths
-filepath = join(_TESTPATH, "v13_sample.h5")
+filepath = join(_TESTPATH, "test_io/legacy_v0.13.h5")
 
 
 
