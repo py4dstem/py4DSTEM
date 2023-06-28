@@ -3,9 +3,11 @@
 import numpy as np
 from scipy.ndimage import distance_transform_edt, binary_fill_holes, gaussian_filter1d
 from scipy.interpolate import interp1d
+from scipy.ndimage import (
+    binary_opening, binary_dilation, distance_transform_edt)
 from typing import Optional,Union
 
-from emdfile import Array, Metadata, Node, Root
+from emdfile import Array, Metadata, Node, Root, tqdmnd
 from py4DSTEM.data import Data, Calibration
 
 
@@ -329,7 +331,7 @@ class DataCube(Array,Data):
                 data = data,
                 name = name
             )
-        self.tree( data )
+        self.attach( data )
 
     def set_scan_shape(
         self,
@@ -640,7 +642,7 @@ class DataCube(Array,Data):
         )
 
         # add to the tree
-        self.tree( dp )
+        self.attach( dp )
 
         # return
         if returncalc:
@@ -738,7 +740,7 @@ class DataCube(Array,Data):
         )
 
         # add to the tree
-        self.tree( dp )
+        self.attach( dp )
 
         # return
         if returncalc:
@@ -837,7 +839,7 @@ class DataCube(Array,Data):
         )
 
         # add to the tree
-        self.tree( dp )
+        self.attach( dp )
 
         # return
         if returncalc:
@@ -933,7 +935,7 @@ class DataCube(Array,Data):
         )
 
         # add to the tree
-        self.tree( dp )
+        self.attach( dp )
 
         # return
         if returncalc:
@@ -1059,7 +1061,7 @@ class DataCube(Array,Data):
         )
 
         # add to the tree
-        self.tree( im )
+        self.attach( im )
 
         # return
         if returncalc:
@@ -1141,50 +1143,98 @@ class DataCube(Array,Data):
     def get_vacuum_probe(
         self,
         ROI = None,
-        name = 'probe',
-        returncalc = True,
+        align = True,
+        mask = None,
+        threshold = 0.2,
+        expansion = 12,
+        opening = 3,
+        verbose = False,
+        returncalc = True
         ):
         """
-        Computes a vacuum probe from the DataCube by aligning and averaging
-        either all or some subset of the diffraction patterns.
+        Computes a vacuum probe.
 
-        Args:
-            ROI (None or boolean array or tuple): if None, uses the whole
-                datacube. Otherwise, uses a subset of diffraction patterns.
-                If `ROI` is a boolean array, it should be Rspace shaped, and
-                diffraction patterns where True are used. Else should be
-                a 4-tuple representing (Rxmin,Rxmax,Rymin,Rymax) of a
-                rectangular region to use.
+        Which diffraction patterns are included in the calculation is specified
+        by the `ROI` parameter.  Diffraction patterns are aligned before averaging
+        if `align` is True (default). A global mask is applied to each diffraction
+        pattern before aligning/averaging if `mask` is specified. After averaging,
+        a final masking step is applied according to the parameters `threshold`,
+        `expansion`, and `opening`.
 
-        Returns:
-            (Probe) a Probe instance
+        Parameters
+        ----------
+        ROI : optional, boolean array or len 4 list/tuple
+            If unspecified, uses the whole datacube. If a boolean array is
+            passed must be real-space shaped, and True pixels are used. If a
+            4-tuple is passed, uses the region inside the limits
+            (rx_min,rx_max,ry_min,ry_max)
+        align : optional, bool
+            if True, aligns the probes before averaging
+        mask : optional, array
+            mask applied to each diffraction pattern before alignment and
+            averaging
+        threshold : float
+            in the final masking step, values less than max(probe)*threshold
+            are considered outside the probe
+        expansion : int
+            number of pixels by which the final mask is expanded after
+            thresholding
+        opening : int
+            size of binary opening applied to the final mask to eliminate stray
+            bright pixels
+        verbose : bool
+            toggles verbose output
+        returncalc : bool
+            if True, returns the answer
 
+        Returns
+        -------
+        probe : Probe, optional
+            the vacuum probe
         """
+        from py4DSTEM.process.utils import get_shifted_ar, get_shift
+        from py4DSTEM.process.diskdetection import Probe
 
-        # perform computation
-        from py4DSTEM.classes.probe import Probe
-        from py4DSTEM.process.probe import get_vacuum_probe
+        # parse region to use
         if ROI is None:
-            x = get_vacuum_probe(
-                self
-            )
+            ROI = np.ones(self.Rshape,dtype=bool)
+        elif isinstance(ROI,tuple):
+            assert(len(ROI)==4), "if ROI is a tuple must be length 4"
+            _ROI = np.ones(self.Rshape,dtype=bool)
+            ROI = _ROI[ROI[0]:ROI[1],ROI[2]:ROI[3]]
         else:
-            x = get_vacuum_probe(
-                self,
-                ROI = ROI
-            )
+            assert(isinstance(ROI,np.ndarray))
+            assert(ROI.shape == self.Rshape)
+        xy = np.vstack(np.nonzero(ROI))
+        length = xy.shape[1]
 
-        # wrap with a py4dstem class
-        x = Probe(
-            data = x
-        )
+        # setup global mask
+        if mask is None:
+            mask = 1
+        else:
+            assert(mask.shape == self.Qshape)
 
-        # add to the tree
-        self.tree( x )
+        # compute average probe
+        probe = self.data[xy[0,0],xy[1,0],:,:]
+        for n in tqdmnd(range(1,length)):
+            curr_DP = self.data[xy[0,n],xy[1,n],:,:] * mask
+            if align:
+                xshift,yshift = get_shift(probe, curr_DP)
+                curr_DP = get_shifted_ar(curr_DP, xshift, yshift)
+            probe = probe*(n-1)/n + curr_DP/n
 
-        # return
+        # mask
+        mask = probe > np.max(probe)*threshold
+        mask = binary_opening(mask, iterations=opening)
+        mask = binary_dilation(mask, iterations=1)
+        mask = np.cos((np.pi/2)*np.minimum(distance_transform_edt(np.logical_not(mask)) / expansion, 1))**2
+        probe *= mask
+
+        # make a probe, add to tree, and return
+        probe = Probe(probe)
+        self.attach(probe)
         if returncalc:
-            return x
+            return probe
 
 
 
@@ -1248,7 +1298,7 @@ class DataCube(Array,Data):
             DP = self.tree( 'dp_mean' ).data
         elif type(dp) == str:
             assert dp in self._branch.keys(), "mode not found"
-            DP = self.tree( dp )
+            DP = self.attach( dp )
         elif type(dp) == np.ndarray:
             assert len(dp.shape) == 2, "must be a 2D array"
             DP = dp
@@ -1540,7 +1590,7 @@ class DataCube(Array,Data):
 
             # add to tree
             if data is None:
-                self.tree( peaks )
+                self.attach( peaks )
 
         # return
         if returncalc:
@@ -1626,7 +1676,7 @@ class DataCube(Array,Data):
         )
 
         # Add to tree
-        self.tree( mask_beamstop )
+        self.attach( mask_beamstop )
 
         # return
         if returncalc:

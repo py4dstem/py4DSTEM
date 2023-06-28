@@ -17,7 +17,8 @@ class RealSlice(Array,Data):
         data: np.ndarray,
         name: Optional[str] = 'realslice',
         units: Optional[str] = 'intensity',
-        slicelabels: Optional[Union[bool,list]] = None
+        slicelabels: Optional[Union[bool,list]] = None,
+        calibration = None
         ):
         """
         Accepts:
@@ -36,6 +37,11 @@ class RealSlice(Array,Data):
             name = name,
             units = 'intensity',
             slicelabels = slicelabels
+        )
+        # initialize as Data
+        Data.__init__(
+            self,
+            calibration
         )
 
 

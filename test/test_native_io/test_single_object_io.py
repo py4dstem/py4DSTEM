@@ -14,8 +14,8 @@ from py4DSTEM.data import (
     RealSlice,
     QPoints,
 )
-from py4DSTEM.process.diskdetection import BraggVectors
-from py4DSTEM.classes import Probe, VirtualDiffraction, VirtualImage
+from py4DSTEM.process.diskdetection import BraggVectors,Probe
+from py4DSTEM.classes import VirtualDiffraction, VirtualImage
 
 # Set paths
 dirpath = py4DSTEM._TESTPATH
