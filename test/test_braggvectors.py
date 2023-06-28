@@ -24,7 +24,7 @@ class TestDiskDetectionBasic:
         mask = np.zeros(datacube.Rshape,dtype=bool)
         mask[28:33,14:19] = 1
         probe = datacube.get_vacuum_probe( ROI=mask )
-        alpha_pr,qx0_pr,qy0_pr = py4DSTEM.process.probe.get_probe_size( probe.probe )
+        alpha_pr,qx0_pr,qy0_pr = py4DSTEM.process.calibration.get_probe_size( probe.probe )
         probe.get_kernel(
             mode='sigmoid',
             origin=(qx0_pr,qy0_pr),

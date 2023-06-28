@@ -159,13 +159,13 @@ class Calibration(Metadata):
 
     Attaching an object to a different Calibration
     ----------------------------------------------
-    To modify the calibration associated with an object's `data`, use
+    To modify the calibration associated with some object `data`, use
 
         >>> c.attach( data )
 
-    where `c` is the new calibration instance `data` is to be associated
-    with. This (1) moves `data` into the top level of `c`'s data tree,
-    which means the new calibration will now be accessible normally at
+    where `c` is the new calibration instance. This (1) moves `data` into the
+    top level of `c`'s data tree, which means the new calibration will now be
+    accessible normally at
 
         >>> data.calibration
 
@@ -176,7 +176,7 @@ class Calibration(Metadata):
     called.
 
     To attach `data` to a different location in the calibration instance's
-    tree, use `data.attach( node )`. See the Data.attach docstring.
+    tree, use `node.attach( data )`. See the Data.attach docstring.
     """
     def __init__(
         self,
@@ -232,7 +232,7 @@ class Calibration(Metadata):
         """
         from py4DSTEM.data import Data
         assert(isinstance(data,Data)), f"data must be a Data instance"
-        data.attach(self.root)
+        self.root.attach(data)
 
 
     # Register for auto-calibration

@@ -107,17 +107,22 @@ class Data:
 
     def attach(self,node):
         """
-        Moves self to `node`'s tree, attaching to node's calibration and detaching
-        from the current calibration.
+        Attach `node` to the current object's tree, attaching calibration and detaching
+        calibrations as needed.
         """
         assert(isinstance(node,Node)), f"node must be a Node, not type {type(node)}"
-        assert(hasattr(node,'calibration')), "node must have a calibration"
-        if self in self.calibration._targets:
-            register = True
-            self.calibration.unregister_target(self)
-        node.graft(self)
+        register = False
+        if hasattr(node,'calibration'):
+            if node.calibration is not None:
+                if node in node.calibration._targets:
+                    register = True
+                    node.calibration.unregister_target(node)
+        if node.root is None:
+            self.tree(node)
+        else:
+            self.graft(node)
         if register:
-            self.calibration.register_target(self)
+            self.calibration.register_target(node)
 
 
 

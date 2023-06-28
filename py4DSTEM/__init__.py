@@ -25,9 +25,9 @@ from py4DSTEM.data import (
 from py4DSTEM.classes import (
     VirtualDiffraction,
     VirtualImage,
-    Probe,
 )
 from py4DSTEM.process.diskdetection import (
+    Probe,
     BraggVectors,
     BraggVectorMap,
 )

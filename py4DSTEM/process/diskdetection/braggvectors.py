@@ -53,8 +53,10 @@ class BraggVectors(Custom,BraggVectorMethods,Data):
         Qshape,
         name = 'braggvectors',
         verbose = True,
+        calibration = None
         ):
         Custom.__init__(self,name=name)
+        Data.__init__(self,calibration=calibration)
 
         self.Rshape = Rshape
         self.shape = self.Rshape
