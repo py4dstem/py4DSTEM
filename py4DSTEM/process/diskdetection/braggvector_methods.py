@@ -4,7 +4,6 @@ import numpy as np
 from scipy.ndimage import gaussian_filter
 from emdfile import Array,Metadata
 from emdfile import _read_metadata
-from py4DSTEM.process.calibration.origin import set_measured_origin, set_fit_origin
 from py4DSTEM.process.utils import get_CoM
 
 
@@ -179,7 +178,6 @@ class BraggVectorMethods:
 
     # calibration measurements
 
-    @set_measured_origin
     def measure_origin(
         self,
         center_guess = None,
@@ -269,11 +267,14 @@ class BraggVectorMethods:
                     qx0[Rx, Ry] = x0
                     qy0[Rx, Ry] = y0
 
+        # set calibration metadata
+        self.calibration.set_origin_meas((qx0,qy0))
+        self.calibration.set_origin_meas_mask(mask)
+
         # return
         return qx0, qy0, mask
 
 
-    @set_measured_origin
     def measure_origin_beamstop(
         self,
         center_guess,
@@ -353,14 +354,18 @@ class BraggVectorMethods:
             y0_curr = np.mean(centers[found_center,1])
             center_curr = x0_curr,y0_curr
 
-        # return
+        # collect answers
         mask = found_center
         qx0,qy0 = centers[:,:,0],centers[:,:,1]
 
+        # set calibration metadata
+        self.calibration.set_origin_meas((qx0,qy0))
+        self.calibration.set_origin_meas_mask(mask)
+
+        # return
         return qx0,qy0,mask
 
 
-    @set_fit_origin
     def fit_origin(
         self,
         mask=None,
@@ -456,6 +461,8 @@ class BraggVectorMethods:
                 **kwargs,
             )
 
+        # update calibration metadata
+        self.calibration.set_origin((qx0_fit,qy0_fit))
         self.setcal()
 
         if returncalc:
@@ -472,11 +479,11 @@ class BraggVectorMethods:
         ):
         """
         Args:
-            bvm (BraggVectorMap): a 2D array used for ellipse fitting 
+            bvm (BraggVectorMap): a 2D array used for ellipse fitting
             center (2-tuple of floats): the center (x0,y0) of the annular fitting region
             fitradii (2-tuple of floats): inner and outer radii (ri,ro) of the fit region
             mask (ar-shaped ndarray of bools): ignore data wherever mask==True
-        
+
         Returns:
             p_ellipse if returncal is True
         """

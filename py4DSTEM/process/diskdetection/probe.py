@@ -326,7 +326,7 @@ class Probe(DiffractionSlice,Data):
             must be in 'flat','gaussian','sigmoid','sigmoid_log'
         origin : 2-tuple, optional
             specify the origin. If not passed, looks for a value for the probe
-            origin in metadata. If not found there, calls .measure_probe.
+            origin in metadata. If not found there, calls .measure_disk.
         data : 2d array, optional
             if specified, uses this array instead of the probe image to compute
             the kernel
@@ -372,11 +372,6 @@ class Probe(DiffractionSlice,Data):
 
         # get the data
         probe = data if data is not None else self.probe
-
-        print()
-        print('meow')
-        print(kwargs)
-        print()
 
         # compute
         kern = fn(
@@ -530,6 +525,10 @@ class Probe(DiffractionSlice,Data):
         kernel : 2d array
             the cross-correlation kernel
         """
+        # parse inputs
+        if isinstance(probe,Probe):
+            probe = probe.probe
+
         valid_types = ('logistic','sine_squared')
         assert(type in valid_types), "type must be in {}".format(valid_types)
         Q_Nx, Q_Ny = probe.shape

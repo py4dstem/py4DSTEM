@@ -12,49 +12,49 @@ from py4DSTEM.process.fit import plane,parabola,bezier_two,fit_2D
 from py4DSTEM.process.utils import get_CoM, add_to_2D_array_from_floats, get_maxima_2D
 
 
-
-# origin setting decorators
-
-def set_measured_origin(fun):
-    """
-    This is intended as a decorator function to wrap other functions which measure
-    the position of the origin.  If some function `get_the_origin` returns the
-    position of the origin as a tuple of two (R_Nx,R_Ny)-shaped arrays, then
-    decorating the function definition like
-
-        >>> @measure_origin
-        >>> def get_the_origin(...):
-
-    will make the function also save those arrays as the measured origin in the
-    calibration associated with the data used for the measurement. Any existing
-    measured origin value will be overwritten.
-
-    For the wrapper to work, the decorated function's first argument must have
-    a .calibration property, and its first two return values must be qx0,qy0.
-    """
-    @functools.wraps(fun)
-    def wrapper(*args,**kwargs):
-        ans = fun(*args,**kwargs)
-        data = args[0]
-        cali = data.calibration
-        cali.set_origin_meas((ans[0],ans[1]))
-        return ans
-    return wrapper
-
-
-def set_fit_origin(fun):
-    """
-    See docstring for `set_measured_origin`
-    """
-    @functools.wraps(fun)
-    def wrapper(*args,**kwargs):
-        ans = fun(*args,**kwargs)
-        data = args[0]
-        cali = data.calibration
-        cali.set_origin((ans[0],ans[1]))
-        return ans
-    return wrapper
-
+# 
+# # origin setting decorators
+# 
+# def set_measured_origin(fun):
+#     """
+#     This is intended as a decorator function to wrap other functions which measure
+#     the position of the origin.  If some function `get_the_origin` returns the
+#     position of the origin as a tuple of two (R_Nx,R_Ny)-shaped arrays, then
+#     decorating the function definition like
+# 
+#         >>> @measure_origin
+#         >>> def get_the_origin(...):
+# 
+#     will make the function also save those arrays as the measured origin in the
+#     calibration associated with the data used for the measurement. Any existing
+#     measured origin value will be overwritten.
+# 
+#     For the wrapper to work, the decorated function's first argument must have
+#     a .calibration property, and its first two return values must be qx0,qy0.
+#     """
+#     @functools.wraps(fun)
+#     def wrapper(*args,**kwargs):
+#         ans = fun(*args,**kwargs)
+#         data = args[0]
+#         cali = data.calibration
+#         cali.set_origin_meas((ans[0],ans[1]))
+#         return ans
+#     return wrapper
+# 
+# 
+# def set_fit_origin(fun):
+#     """
+#     See docstring for `set_measured_origin`
+#     """
+#     @functools.wraps(fun)
+#     def wrapper(*args,**kwargs):
+#         ans = fun(*args,**kwargs)
+#         data = args[0]
+#         cali = data.calibration
+#         cali.set_origin((ans[0],ans[1]))
+#         return ans
+#     return wrapper
+# 
 
 
 
