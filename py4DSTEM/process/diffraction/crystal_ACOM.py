@@ -776,7 +776,7 @@ def match_orientations(
     ):
 
         orientation = self.match_single_pattern(
-            bragg_peaks_array.get_pointlist(rx, ry),
+            bragg_peaks_array.cal[rx, ry],
             num_matches_return=num_matches_return,
             min_number_peaks=min_number_peaks,
             inversion_symmetry=inversion_symmetry,
@@ -1616,9 +1616,10 @@ def calculate_strain(
     # Initialize empty strain maps
     strain_map = RealSlice(
         data=np.zeros((
+            5,
             bragg_peaks_array.shape[0],
-            bragg_peaks_array.shape[1],
-            5)),
+            bragg_peaks_array.shape[1]
+            )),
         slicelabels=('e_xx','e_yy','e_xy','theta','mask'),
         name='strain_map')
     if mask_from_corr:
@@ -1646,7 +1647,7 @@ def calculate_strain(
         disable=not progress_bar,
         ):
         # Get bragg peaks from experiment and reference
-        p = bragg_peaks_array.get_pointlist(rx,ry)
+        p = bragg_peaks_array.cal[rx,ry]
 
         if p.data.shape[0] >= min_num_peaks:
             p_ref = self.generate_diffraction_pattern(
