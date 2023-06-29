@@ -1,5 +1,5 @@
 from emdfile import save as _save
-
+import warnings
 
 def save(
     filepath,
@@ -18,10 +18,12 @@ def save(
     # data items on read
 
     cal = None
-    if hasattr(data,'calibration') and data.calibration is not None:
-        cal = data.calibration
-        rp = '/'.join(data._treepath.split('/')[:-1])
-        cal['_root_treepath'] = rp
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        if hasattr(data,'calibration') and data.calibration is not None:
+            cal = data.calibration
+            rp = '/'.join(data._treepath.split('/')[:-1])
+            cal['_root_treepath'] = rp
 
     _save(
         filepath,
