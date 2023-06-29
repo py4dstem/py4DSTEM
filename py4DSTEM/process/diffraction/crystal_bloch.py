@@ -7,7 +7,7 @@ from time import time
 from tqdm import tqdm
 from dataclasses import dataclass
 
-from py4DSTEM.io.datastructure import PointList
+from emdfile import PointList
 from py4DSTEM.process.utils import electron_wavelength_angstrom, single_atom_scatter
 from py4DSTEM.process.diffraction.WK_scattering_factors import compute_WK_factor
 
@@ -624,7 +624,7 @@ def generate_CBED(
     thickness = np.atleast_1d(thickness)
 
     if LACBED:
-        # In LACBED mode, the DP datastructure is a list of dicts mapping tuples of ints to numpy arrays
+        # In LACBED mode, the DP classes is a list of dicts mapping tuples of ints to numpy arrays
         DP = [
             {
                 (d["h"], d["k"], d["l"]): np.zeros(DP_size, dtype=dtype)
@@ -633,7 +633,7 @@ def generate_CBED(
             for _ in range(len(thickness))
         ]
     else:
-        # In CBED mode, the DP datastructure is a list of arrays
+        # In CBED mode, the DP classes is a list of arrays
         DP = [np.zeros(DP_size, dtype=dtype) for _ in range(len(thickness))]
 
     if return_probe:

@@ -151,7 +151,7 @@ def cartesian_to_polarelliptical_transform(
             * **pp**: *(2D array)* meshgrid of the phi coordinates
     """
     if mask is None:
-        mask = np.ones_like(cartesianData, dtype=bool)
+        mask = np.ones_like(cartesianData.data, dtype=bool)
     assert (
         cartesianData.shape == mask.shape
     ), "Mask and cartesian data array shapes must match."
@@ -256,7 +256,7 @@ def elliptical_resample_datacube(
     this on the peak positions than the entire datacube.
     """
 
-    from py4DSTEM import tqdmnd
+    from emdfile import tqdmnd
 
     for rx, ry in tqdmnd(datacube.R_Nx, datacube.R_Ny):
         datacube.data[rx, ry] = elliptical_resample(
