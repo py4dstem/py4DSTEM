@@ -6,7 +6,7 @@ from scipy.ndimage import (
 
 from emdfile import tqdmnd
 from py4DSTEM.data import DataCube
-from py4DSTEM.classes import Probe
+from py4DSTEM.process.diskdetection import Probe
 from py4DSTEM.process.utils import get_shifted_ar, get_shift
 
 
