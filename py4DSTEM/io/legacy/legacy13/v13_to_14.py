@@ -1,5 +1,6 @@
 # Convert v13 to v14 classes
 
+import numpy as np
 from emdfile import tqdmnd
 
 
@@ -137,9 +138,13 @@ def _v13_to_14_cls(obj):
         )
 
     elif isinstance(obj, DiffractionSlice13):
+        if obj.is_stack:
+            data = np.rollaxis(obj.data, axis=2)
+        else:
+            data = obj.data
         x = DiffractionSlice(
             name = obj.name,
-            data = obj.data,
+            data = data,
             units = obj.units,
             slicelabels = obj.slicelabels
         )
@@ -151,9 +156,13 @@ def _v13_to_14_cls(obj):
         )
 
     elif isinstance(obj, RealSlice13):
+        if obj.is_stack:
+            data = np.rollaxis(obj.data, axis=2)
+        else:
+            data = obj.data
         x = RealSlice(
             name = obj.name,
-            data = obj.data,
+            data = data,
             units = obj.units,
             slicelabels = obj.slicelabels
         )
@@ -195,9 +204,13 @@ def _v13_to_14_cls(obj):
     elif isinstance(obj, Array13):
 
         # prepare arguments
+        if obj.is_stack:
+            data = np.rollaxis(obj.data, axis=2)
+        else:
+            data = obj.data
         args = {
             'name' : obj.name,
-            'data' : obj.data
+            'data' : data
         }
         if hasattr(obj,'units'): args['units'] = obj.units
         if hasattr(obj,'dim_names'): args['dim_names'] = obj.dim_names
