@@ -7,7 +7,7 @@ from py4DSTEM.preprocess.utils import bin2D
 
 def read_arina(
     filename,
-    scan_width,
+    scan_width=1,
     mem="RAM",
     binfactor: int = 1,
     dtype_bin: float = None,

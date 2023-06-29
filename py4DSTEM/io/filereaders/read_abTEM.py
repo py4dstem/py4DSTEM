@@ -60,9 +60,19 @@ def read_abTEM(
     elif len(data.shape) == 2:
         if units[0] == b"mrad":
             diffraction = VirtualDiffraction(data=data)
-            # TODO, calibrations for 2D
+            if sampling[0] != sampling[1]:
+                print(
+                    "Warning: py4DSTEM currently only handles uniform qx,qy sampling. Setting sampling with x calibration"
+                )
+            diffraction.calibration.set_Q_pixel_units(units[0].decode("utf-8"))
+            diffraction.calibration.set_Q_pixel_size(sampling[0])
             return diffraction
         elif units[0] == b"\xc3\x85":
             image = VirtualImage(data=data)
-            # TODO calibrations for 2D
+            if sampling[0] != sampling[1]:
+                print(
+                    "Warning: py4DSTEM currently only handles uniform x,y sampling. Setting sampling with x calibration"
+                )
+            image.calibration.set_Q_pixel_units("A")
+            image.calibration.set_Q_pixel_size(sampling[0])
             return image
