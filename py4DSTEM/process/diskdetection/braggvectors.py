@@ -80,8 +80,14 @@ class BraggVectors(Custom,BraggVectorMethods,Data):
             "pixel" : False,
             "rotate" : False,
         }
+
+        # register with calibrations
+        self.calibration.register_target(self)
+
+        # setup vector getters
         self._set_raw_vector_getter()
         self._set_cal_vector_getter()
+
 
     @property
     def calstate(self):

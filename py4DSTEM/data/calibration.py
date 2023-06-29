@@ -202,10 +202,10 @@ class Calibration(Metadata):
         self._targets = []
 
         # set initial pixel values
-        self.set_Q_pixel_size(1)
-        self.set_R_pixel_size(1)
-        self.set_Q_pixel_units('pixels')
-        self.set_R_pixel_units('pixels')
+        self['Q_pixel_size'] = 1
+        self['R_pixel_size'] = 1
+        self['Q_pixel_units'] = 'pixels'
+        self['R_pixel_units'] = 'pixels'
 
 
     # EMD root property
@@ -779,6 +779,7 @@ class Calibration(Metadata):
         self['_target_paths'] = targets
         # Save the metadata
         Metadata.to_h5(self,group)
+        del(self._params['_target_paths'])
 
     # read
     @classmethod

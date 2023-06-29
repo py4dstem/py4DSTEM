@@ -82,13 +82,15 @@ def read(
         version = emd._get_EMD_version(filepath)
         if verbose: print(f"EMD version {version[0]}.{version[1]}.{version[2]} detected. Reading...")
         assert emd._version_is_geq(version,(1,0,0)), f"EMD version {version} detected. Expected version >= 1.0.0"
+
         # read
         data = emd.read(
             filepath,
             emdpath = datapath,
             tree = tree
         )
-        # calibration links
+
+        # add calibration links
         if isinstance(data,py4DSTEM.Data):
             with warnings.catch_warnings():
                 warnings.simplefilter('ignore')
@@ -102,16 +104,22 @@ def read(
             cal = None
         if cal is not None:
             try:
+                root_treepath = cal['_root_treepath']
                 target_paths = cal['_target_paths']
                 del(cal._params['_target_paths'])
                 for p in target_paths:
-                    d = data.root.tree(p)
-                    cal.register_target( d )
-                    if hasattr(d,'setcal'):
-                        d.setcal()
+                    try:
+                        p = p.replace(root_treepath,'')
+                        d = data.root.tree(p)
+                        cal.register_target( d )
+                        if hasattr(d,'setcal'):
+                            d.setcal()
+                    except AssertionError:
+                        pass
             except KeyError:
                 pass
             cal.calibrate()
+
         # return
         if verbose: print("Done.")
         return data
