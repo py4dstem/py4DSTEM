@@ -21,7 +21,7 @@ class PolarDatacube:
         mask = None,
         mask_thresh = 0.25,
         ellipse = True,
-        two_fold_rotation = False,
+        two_fold_symmetry = False,
         ):
         """
         Parameters
@@ -29,14 +29,15 @@ class PolarDatacube:
         datacube : DataCube
             The datacube in cartesian coordinates
         qmin : number
-            Minumum radius of the polar transformation
+            Minumum radius of the polar transformation, in pixels
         qmax : number or None
-            Maximum radius of the polar transformation
+            Maximum radius of the polar transformation, in pixels
         qstep : number
-            Width of radial bins
+            Width of radial bins, in pixels
         n_annular : integer
             Number of bins in the annular direction. Bins will each
-            have a width of 360/num_annular_bins, in degrees
+            have a width of 360/n_annular, or 180/n_annular if
+            two_fold_rotation is set to True, in degrees
         qscale : number or None
             Radial scaling power to apply to polar transform
         mask : boolean array
@@ -49,9 +50,10 @@ class PolarDatacube:
             performs an elliptic transform iff elliptic calibrations are
             available.
         two_fold_rotation : bool
-            Setting to True computes the transform mod(theta,pi), i.e. assumes all patterns
-            posess two-fold rotation (Friedel symmetry).  The output angular range in this case
-            becomes [0, pi) as opposed to the default of [0,2*pi).
+            Setting to True computes the transform mod(theta,pi), i.e. assumes
+            all patterns possess two-fold rotation (Friedel symmetry).  The
+            output angular range in this case becomes [0, pi) as opposed to the
+            default of [0,2*pi).
         """
 
         # attach datacube
@@ -68,17 +70,12 @@ class PolarDatacube:
 
         # setup sampling
 
-        # annular range, depending on if polar transform spans pi or 2*pi
-        if two_fold_rotation:
-            self._annular_range = np.pi
-        else:
-            self._annular_range = 2.0 * np.pi
-
         # polar
         self._qscale = qscale
         if qmax is None:
             qmax = np.min(self._datacube.Qshape) / np.sqrt(2)
-        self.set_annular_bins(n_annular)
+        self._n_annular = n_annular
+        self.two_fold_symmetry = two_fold_symmetry #implicitly calls set_annular_bins
         self.set_radial_bins(qmin,qmax,qstep)
 
         # cartesian
@@ -176,6 +173,18 @@ class PolarDatacube:
     @property
     def annular_step(self):
         return self._annular_step
+    @property
+    def two_fold_symmetry(self):
+        return self._two_fold_symmetry
+    @two_fold_symmetry.setter
+    def two_fold_symmetry(self,x):
+        assert(isinstance(x,bool)), f"two_fold_symmetry must be boolean, not type {type(x)}"
+        self._two_fold_symmetry = x
+        if x:
+            self._annular_range = np.pi
+        else:
+            self._annular_range = 2 * np.pi
+        self.set_annular_bins(self._n_annular)
 
     @property
     def n_annular(self):
@@ -196,6 +205,17 @@ class PolarDatacube:
             self._annular_bin_step = 1 / (self._annular_step * (self.radial_bins + self.qstep * 0.5))
             self._sigma_KDE = self._annular_bin_step * 0.5
 
+
+    # coordinate grid properties
+    @property
+    def tt(self):
+        return self._annular_bins
+    @property
+    def tt_deg(self):
+        return self._annular_bins * 180/np.pi
+    @property
+    def qq(self):
+        return self.radial_bins * self.calibration.get_Q_pixel_size()
 
 
 
