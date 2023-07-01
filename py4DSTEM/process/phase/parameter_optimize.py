@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from functools import partial
-from typing import Union
+from typing import Union, Callable
 
 from py4DSTEM.process.phase.iterative_base_class import PhaseReconstruction
 from py4DSTEM.process.phase.utils import AffineTransform
@@ -109,8 +109,9 @@ class PtychographyOptimizer:
 
     def optimize(
         self,
-        n_calls: int,
-        n_initial_points: int,
+        n_calls: int = 50,
+        n_initial_points: int = 20,
+        error_metric: Union[Callable, str] = "log",
         **skopt_kwargs: dict,
     ):
         """
@@ -123,10 +124,29 @@ class PtychographyOptimizer:
         n_initial_points: int
             Number of uniformly spaced trial points to test before
             beginning Bayesian optimization (must be less than n_calls)
+        error_metric: Callable or str
+            Function used to compute the reconstruction error.
+            When passed as a string, may be one of:
+                'log': log(NMSE) of final object
+                'linear': NMSE of final object
+                'log-converged': log(NMSE) of final object if
+                    NMSE is decreasing, 0 if NMSE increasing
+                'linear-converged': NMSE of final object if
+                    NMSE is decreasing, 1 if NMSE increasing
+                'TV': sum( abs( grad( object ) ) ) / sum( abs( object ) )
+                'std': negative standard deviation of cropped object
+                'std-phase': negative standard deviation of
+                    phase of the cropped object
+            When passed as a Callable, a function that takes the
+                PhaseReconstruction object as its only argument
+                and returns the error metric as a single float
         skopt_kwargs: dict
             Additional arguments to be passed to skopt.gp_minimize
 
         """
+
+        error_metric = self._get_error_metric(error_metric)
+
         self._optimization_function = self._get_optimization_function(
             self._reconstruction_type,
             self._parameter_list,
@@ -139,6 +159,7 @@ class PtychographyOptimizer:
             self._affine_optimize_args,
             self._preprocess_optimize_args,
             self._reconstruction_optimize_args,
+            error_metric,
         )
 
         # Make a progress bar
@@ -272,6 +293,74 @@ class PtychographyOptimizer:
         scan_positions = scan_positions @ affine_transform.asarray()
         return scan_positions
 
+    def _get_error_metric(self, error_metric: Union[Callable, str]) -> Callable:
+        """
+        Get error metric as a function, converting builtin method names
+        to functions
+        """
+
+        if callable(error_metric):
+            return error_metric
+
+        assert error_metric in (
+            "log",
+            "linear",
+            "log-converged",
+            "linear-converged",
+            "TV",
+            "std",
+            "std-phase",
+        ), f"Error metric {error_metric} not recognized."
+
+        if error_metric == "log":
+
+            def f(ptycho):
+                return np.log(ptycho.error)
+
+        elif error_metric == "linear":
+
+            def f(ptycho):
+                return ptycho.error
+
+        elif error_metric == "log-converged":
+
+            def f(ptycho):
+                converged = ptycho.error_iterations[-1] <= np.min(
+                    ptycho.error_iterations
+                )
+                return np.log(ptycho.error) if converged else 0.0
+
+        elif error_metric == "log-linear":
+
+            def f(ptycho):
+                converged = ptycho.error_iterations[-1] <= np.min(
+                    ptycho.error_iterations
+                )
+                return ptycho.error if converged else 1.0
+
+        elif error_metric == "TV":
+
+            def f(ptycho):
+                gx, gy = np.gradient(ptycho.object_cropped, axis=(-2, -1))
+                obj_mag = np.sum(np.abs(ptycho.object_cropped))
+                tv = np.sum(np.abs(gx)) + np.sum(np.abs(gy))
+                return tv / obj_mag
+
+        elif error_metric == "std":
+
+            def f(ptycho):
+                return -np.std(ptycho.object_cropped)
+
+        elif error_metric == "std-phase":
+
+            def f(ptycho):
+                return -np.std(np.angle(ptycho.object_cropped))
+
+        else:
+            raise ValueError(f"Error metric {error_metric} not recognized.")
+
+        return f
+
     def _get_optimization_function(
         self,
         cls: type[PhaseReconstruction],
@@ -285,6 +374,7 @@ class PtychographyOptimizer:
         affine_optimization_params: dict,
         preprocess_optimization_params: dict,
         reconstruct_optimization_params: dict,
+        error_metric: Callable,
     ):
         """
         Wrap the ptychography pipeline into a single function that encapsulates all of the
@@ -315,9 +405,7 @@ class PtychographyOptimizer:
                 affine_preprocessed, init_static_args["datacube"]
             )
 
-            ptycho_preprocessed = cls(**init_args).preprocess(
-                **preprocess_static_args
-            )
+            ptycho_preprocessed = cls(**init_args).preprocess(**preprocess_static_args)
 
             def obj(**kwargs):
                 return ptycho_preprocessed
@@ -352,7 +440,7 @@ class PtychographyOptimizer:
             prep(ptycho, **prep_args)
             recon(ptycho, **reco_args)
 
-            return np.log(ptycho.error)
+            return error_metric(ptycho)
 
         return f
 
