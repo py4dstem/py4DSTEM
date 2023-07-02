@@ -21,9 +21,8 @@ from py4DSTEM.process.phase.utils import AffineTransform
 class PtychographyOptimizer:
     """
     Optimize ptychographic hyperparameters with Bayesian Optimization of a
-    Gaussian process. Any of the arguments to the ptychographic
-    init-preprocess-reconstruct pipeline can be optimized over (including
-    boolean or other flag options)
+    Gaussian process. Any of the scalar-valued real or integer,  boolean, or categorical 
+    arguments to the ptychographic init-preprocess-reconstruct pipeline can be optimized over.
     """
 
     def __init__(
