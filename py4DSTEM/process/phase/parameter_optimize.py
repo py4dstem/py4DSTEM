@@ -460,6 +460,8 @@ class OptimizationParameter:
         if space == "bool":
             categories = [True, False]
 
+        if not categories:
+            raise ValueError("Empty list of categories!")
         # store necessary information
         self._initial_value = initial_value
         self._categories = categories
