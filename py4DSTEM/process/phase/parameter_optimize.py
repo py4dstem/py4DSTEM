@@ -444,7 +444,8 @@ class OptimizationParameter:
 
 
         scaling = scaling.lower()
-        assert scaling in ("uniform", "log-uniform"), f"Unknown scaling: {scaling}"
+        if scaling not in ("uniform", "log-uniform"):
+            raise ValueError(f"Unknown scaling: {scaling}")
 
         # Get the right scikit-optimize class
         space_map = {
