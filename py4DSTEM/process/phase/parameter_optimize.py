@@ -2,10 +2,10 @@ from tqdm import tqdm
 from skopt import gp_minimize
 from skopt.space import Real, Integer, Categorical
 from skopt.plots import (
-    plot_convergence,
-    plot_gaussian_process,
-    plot_evaluations,
-    plot_objective,
+    plot_convergence as skopt_plot_convergence,
+    plot_gaussian_process as skopt_plot_gaussian_process,
+    plot_evaluations as skopt_plot_evaluations,
+    plot_objective as skopt_plot_objective,
 )
 from skopt.utils import use_named_args
 import matplotlib.pyplot as plt
