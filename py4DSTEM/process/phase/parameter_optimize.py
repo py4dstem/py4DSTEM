@@ -473,7 +473,6 @@ class OptimizationParameter:
     def _get(self, name):
         self._name = name
         if self._param_type is Categorical:
-            assert self._categories is not None, "Empty list of categories!"
             self._skopt_param = self._param_type(
                 name=self._name, categories=self._categories
             )
