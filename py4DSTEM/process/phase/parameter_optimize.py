@@ -149,7 +149,6 @@ class PtychographyOptimizer:
         self._optimization_function = self._get_optimization_function(
             self._reconstruction_type,
             self._parameter_list,
-            n_calls,
             self._init_static_args,
             self._affine_static_args,
             self._preprocess_static_args,
