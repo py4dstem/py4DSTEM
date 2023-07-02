@@ -439,12 +439,9 @@ class OptimizationParameter:
         """
         # Check input
         space = space.lower()
-        assert space in (
-            "real",
-            "integer",
-            "bool",
-            "categorical",
-        ), f"Unknown Parameter type: {space}"
+        if space not in ("real", "integer", "bool", "categorical"):
+            raise ValueError(f"Unknown Parameter type: {space}")
+
 
         scaling = scaling.lower()
         assert scaling in ("uniform", "log-uniform"), f"Unknown scaling: {scaling}"
