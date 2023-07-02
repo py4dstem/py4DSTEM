@@ -189,37 +189,78 @@ class PtychographyOptimizer:
 
     def visualize(
         self,
-        gp_model=True,
-        convergence=False,
-        objective=True,
-        evaluations=False,
+        plot_gp_model=True,
+        plot_convergence=False,
+        plot_objective=True,
+        plot_evaluations=False,
+        **kwargs,
     ):
         """
         Visualize optimization results
 
         Parameters
         ----------
-        gp_model: bool
+        plot_gp_model: bool
             Display fitted Gaussian process model (only available for 1-dimensional problem)
-        convergence: bool
+        plot_convergence: bool
             Display convergence history
-        objective: bool
+        plot_objective: bool
             Display GP objective function and partial dependence plots
-        evaluations: bool
+        plot_evaluations: bool
             Display histograms of sampled points
+        kwargs:
+            Passed directly to the skopt plot_gassian_process/plot_objective
         """
-        if (len(self._parameter_list) == 1) and gp_model:
-            plot_gaussian_process(self._skopt_result)
-            plt.show()
-        if convergence:
-            plot_convergence(self._skopt_result)
-            plt.show()
-        if objective:
-            plot_objective(self._skopt_result)
-            plt.show()
-        if evaluations:
-            plot_evaluations(self._skopt_result)
-            plt.show()
+        ndims = len(self._parameter_list)
+        if ndims == 1:
+            if plot_convergence:
+                figsize = kwargs.pop("figsize", (9, 9))
+                spec = GridSpec(nrows=2,ncols=1,height_ratios=[2,1], hspace=0.15)
+            else:
+                figsize = kwargs.pop("figsize", (9, 6))
+                spec = GridSpec(nrows=1,ncols=1)
+
+            fig = plt.figure(figsize = figsize)
+            ax = fig.add_subplot(spec[0])
+            skopt_plot_gaussian_process(self._skopt_result,ax=ax, **kwargs)
+
+            if plot_convergence:
+                ax = fig.add_subplot(spec[1])
+                skopt_plot_convergence(self._skopt_result,ax=ax)
+
+        else:
+            if plot_convergence:
+                figsize = kwargs.pop("figsize", (4*ndims, 4*(ndims+0.5)))
+                spec = GridSpec(nrows=ndims+1,ncols=ndims,height_ratios=[2]*ndims+[1], hspace=0.15)
+            else:
+                figsize = kwargs.pop("figsize", (4*ndims, 4*ndims))
+                spec = GridSpec(nrows=ndims,ncols=ndims, hspace=0.15)
+
+            if plot_evaluations:
+                axs = skopt_plot_evaluations(self._skopt_result)
+            elif plot_objective:
+                cmap = kwargs.pop("cmap", 'magma')
+                axs = skopt_plot_objective(self._skopt_result, cmap=cmap,**kwargs)
+            elif plot_convergence:
+                skopt_plot_convergence(self._skopt_result)
+                return self
+
+            fig = axs[0,0].figure
+            fig.set_size_inches(figsize)
+            for i in range(ndims):
+                for j in range(ndims):
+                    ax = axs[i,j]
+                    ax.remove()
+                    ax.figure = fig
+                    fig.add_axes(ax)
+                    ax.set_subplotspec(spec[i,j])
+
+            if plot_convergence:
+                ax = fig.add_subplot(spec[ndims,:])
+                skopt_plot_convergence(self._skopt_result,ax=ax)
+
+        spec.tight_layout(fig)
+
         return self
 
     def get_optimized_arguments(self):
