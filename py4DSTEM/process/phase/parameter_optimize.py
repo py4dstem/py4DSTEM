@@ -364,7 +364,6 @@ class PtychographyOptimizer:
         self,
         cls: type[PhaseReconstruction],
         parameter_list: list,
-        n_iterations: int,
         init_static_args: dict,
         affine_static_args: dict,
         preprocess_static_args: dict,
