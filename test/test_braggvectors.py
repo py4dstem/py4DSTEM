@@ -45,6 +45,14 @@ class TestDiskDetectionBasic:
         #     'CUDA': True,
         }
 
+        # find disks
+        cls.braggpeaks = datacube.find_Bragg_disks(
+            template = probe.kernel,
+            **cls.detect_params,
+        )
+
+        # set an arbitrary center for testing
+        cls.braggpeaks.calibration.set_origin((datacube.Qshape[0]/2,datacube.Qshape[1]/2))
 
 
 
@@ -68,20 +76,19 @@ class TestDiskDetectionBasic:
             **self.detect_params,
         )
 
-    def test_disk_detection(self):
+    def test_BraggVectors(self):
 
-        braggpeaks = self.datacube.find_Bragg_disks(
-            template = self.probe.kernel,
-            **self.detect_params,
-        )
+        print(self.braggpeaks)
+        print()
+        print(self.braggpeaks.raw[0,0])
+        print()
+        print(self.braggpeaks.cal[0,0])
+        print()
+        print(self.braggpeaks.get_vectors(
+            scan_x=5,scan_y=5,
+            center=True,ellipse=False,pixel=False,rotate=False
+        ))
 
-
-        print(braggpeaks)
-        print()
-        print(braggpeaks.raw[0,0])
-        print()
-        print(braggpeaks.cal[0,0])
-        print()
 
 
 

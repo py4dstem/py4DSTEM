@@ -45,6 +45,19 @@ class BraggVectors(Custom,BraggVectorMethods,Data):
         >>> vects.qx,vects.qy,vects.I
         >>> vects['qx'],vects['qy'],vects['intensity']
 
+    Alternatively, you can access the centered vectors in pixel units with
+
+        >>> vects.get_vectors(
+        >>>     scan_x,
+        >>>     scan_y,
+        >>>     center = bool,
+        >>>     ellipse = bool,
+        >>>     pixel = bool,
+        >>>     rotate = bool
+        >>> )
+
+    which will return the vectors at scan position (scan_x,scan_y) with the
+    requested calibrations applied.
     """
 
     def __init__(
@@ -211,6 +224,46 @@ class BraggVectors(Custom,BraggVectorMethods,Data):
             print('current calstate: ', self.calstate)
         pass
 
+
+    # vector getter method
+
+    def get_vectors(
+        self,
+        scan_x,
+        scan_y,
+        center,
+        ellipse,
+        pixel,
+        rotate
+    ):
+        """
+        Returns the bragg vectors at the specified scan position with
+        the specified calibration state.
+
+        Parameters
+        ----------
+        scan_x : int
+        scan_y : int
+        center : bool
+        ellipse : bool
+        pixel : bool
+        rotate : bool
+
+        Returns
+        -------
+        vectors : BVects
+        """
+        ans = self._v_uncal[scan_x,scan_y].data
+        ans = self.cal._transform(
+            data = ans,
+            cal = self.calibration,
+            scanxy = (scan_x,scan_y),
+            center = center,
+            ellipse = ellipse,
+            pixel = pixel,
+            rotate = rotate,
+        )
+        return BVects(ans)
 
 
     # copy
@@ -397,13 +450,16 @@ class CalibratedVectorGetter:
 
         if center:
             origin = cal.get_origin(x,y)
+            assert(origin is not None), "Requested calibration was not found!"
             ans['qx'] -= origin[0]
             ans['qy'] -= origin[1]
 
 
         # ellipse
         if ellipse:
-            a,b,theta = cal.get_ellipse(x,y)
+            ell = cal.get_ellipse(x,y)
+            assert(ell is not None), "Requested calibration was not found!"
+            a,b,theta = ell
             # Get the transformation matrix
             e = b/a
             sint, cost = np.sin(theta-np.pi/2.), np.cos(theta-np.pi/2.)
@@ -423,6 +479,7 @@ class CalibratedVectorGetter:
         # pixel size
         if pixel:
             qpix = cal.get_Q_pixel_size()
+            assert(qpix is not None), "Requested calibration was not found!"
             ans['qx'] *= qpix
             ans['qy'] *= qpix
 
@@ -431,6 +488,8 @@ class CalibratedVectorGetter:
         if rotate:
             flip = cal.get_QR_flip()
             theta = cal.get_QR_rotation_degrees()
+            assert(flip is not None), "Requested calibration was not found!"
+            assert(theta is not None), "Requested calibration was not found!"
             # rotation matrix
             R = np.array([
                 [np.cos(theta), -np.sin(theta)],
