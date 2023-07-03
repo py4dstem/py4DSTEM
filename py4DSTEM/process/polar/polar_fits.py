@@ -10,10 +10,11 @@ def fit_amorphous_ring(
     center,
     radial_range,
     coefs = None,
+    mask_dp = None,
     show_fit_mask = False,
     verbose = False,
     plot_result = True,
-    plot_log_scale = True,
+    plot_log_scale = False,
     plot_int_scale = (-3,3),
     figsize = (8,8),
     return_all_coefs = True,
@@ -30,6 +31,10 @@ def fit_amorphous_ring(
         (x,y) center coordinates for fitting mask
     radial_range: np.array
         (radius_inner, radius_outer) radial range to perform fitting over
+    coefs: np.array (optional)
+        Array containing initial fitting coefficients for the amorphous fit.
+    mask_dp: np.array
+        Dark field mask for fitting, in addition to the radial range specified above.
     show_fit_mask: bool
         Set to true to preview the fitting mask and initial guess for the ellipse params
     verbose: bool
@@ -66,6 +71,9 @@ def fit_amorphous_ring(
         ra2 >= radial_range[0]**2,
         ra2 <= radial_range[1]**2,
         )
+    if mask_dp is not None:
+        # Logical AND the radial mask with the user-provided mask
+        mask = np.logical_and(mask, mask_dp)
     vals = im[mask]
     basis = np.vstack((xa[mask],ya[mask]))
 
@@ -118,9 +126,11 @@ def fit_amorphous_ring(
             int_range = (
                 int_med + plot_int_scale[0]*int_std, 
                 int_med + plot_int_scale[1]*int_std)
-            im_plot = np.tile(np.clip(
-                (np.log(im[:,:,None]) - int_range[0]) / (int_range[1] - int_range[0]),
-                0,1),(1,1,3))
+            im_plot = np.tile(
+                np.clip(
+                    (np.log(im[:,:,None]) - int_range[0]) / (int_range[1] - int_range[0]),
+                    0,1),
+                (1,1,3))
 
         else:
             int_med = np.median(vals)

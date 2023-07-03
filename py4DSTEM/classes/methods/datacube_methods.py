@@ -1325,7 +1325,7 @@ class DataCubeMethods:
         )
 
         # Add to tree
-        self.tree( mask_beamstop )
+        self.tree(x)
 
         # return
         if returncalc:
