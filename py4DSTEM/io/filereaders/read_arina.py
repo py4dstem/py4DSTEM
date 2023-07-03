@@ -71,8 +71,11 @@ def read_arina(
     scan_height = int(nimages / scan_width)
 
     datacube = DataCube(
-        array_3D.reshape(
-            scan_width, scan_height, array_3D.data.shape[1], array_3D.data.shape[2]
+        np.flip(
+            array_3D.reshape(
+                scan_width, scan_height, array_3D.data.shape[1], array_3D.data.shape[2]
+            ),
+            0,
         )
     )
 
