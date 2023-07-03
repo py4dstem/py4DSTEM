@@ -135,6 +135,8 @@ class PtychographyOptimizer:
                 'std': negative standard deviation of cropped object
                 'std-phase': negative standard deviation of
                     phase of the cropped object
+                'entropy-phase': entropy of the phase of the 
+                    cropped object
             When passed as a Callable, a function that takes the
                 PhaseReconstruction object as its only argument
                 and returns the error metric as a single float
