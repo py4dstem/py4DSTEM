@@ -9,6 +9,7 @@ from skopt.plots import (
 )
 from skopt.utils import use_named_args
 import matplotlib.pyplot as plt
+from matplotlib.gridspec import GridSpec
 import numpy as np
 
 from functools import partial
@@ -347,6 +348,7 @@ class PtychographyOptimizer:
             "TV",
             "std",
             "std-phase",
+            "entropy-phase",
         ), f"Error metric {error_metric} not recognized."
 
         if error_metric == "log":
@@ -392,6 +394,15 @@ class PtychographyOptimizer:
 
             def f(ptycho):
                 return -np.std(np.angle(ptycho.object_cropped))
+
+        elif error_metric == "entropy-phase":
+            def f(ptycho):
+                obj = np.angle(ptycho.object_cropped)
+                gx,gy = np.gradient(obj)
+                ghist,_,_ = np.histogram2d(gx.ravel(),gy.ravel(),bins=obj.shape,density=True)
+                nz = ghist > 0
+                S = np.sum(ghist[nz] * np.log2(ghist[nz]))
+                return S
 
         else:
             raise ValueError(f"Error metric {error_metric} not recognized.")
