@@ -204,6 +204,9 @@ class PolarDatacube:
             # set KDE params
             self._annular_bin_step = 1 / (self._annular_step * (self.radial_bins + self.qstep * 0.5))
             self._sigma_KDE = self._annular_bin_step * 0.5
+            # set array indices
+            self._annular_indices = np.arange(self.polar_shape[0]).astype(int)
+            self._radial_indices = np.arange(self.polar_shape[1]).astype(int)
 
 
     # coordinate grid properties
