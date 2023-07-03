@@ -73,11 +73,12 @@ def fit_origin(
 ):
     """
     Fits the position of the origin of diffraction space to a plane or parabola,
-    given some 2D arrays (qx0_meas,qy0_meas) of measured center positions, optionally
-    masked by the Boolean array `mask`. The 2D data arrays may be passed directly as
-    a 2-tuple to the arg `data`, or, if `data` is either a DataCube or Calibration
-    instance, they will be retreived automatically. If a DataCube or Calibration are
-    passed, fitted origin and residuals are stored there directly.
+    given some 2D arrays (qx0_meas,qy0_meas) of measured center positions,
+    optionally masked by the Boolean array `mask`. The 2D data arrays may be
+    passed directly as a 2-tuple to the arg `data`, or, if `data` is either a
+    DataCube or Calibration instance, they will be retreived automatically. If a
+    DataCube or Calibration are passed, fitted origin and residuals are stored
+    there directly.
 
     Args:
         data (2-tuple of 2d arrays): the measured origin position (qx0,qy0)
