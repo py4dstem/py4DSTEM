@@ -492,7 +492,7 @@ class PolarDataGetter:
             # get polar coords
             rr = np.sqrt(x**2 + y**2)
             tt = np.mod(
-                np.arctan2(y, x) - np.pi/2,
+                np.arctan2(y, x),
                 self._polarcube._annular_range)
 
         # elliptical
@@ -500,21 +500,12 @@ class PolarDataGetter:
             # unpack ellipse
             a,b,theta = ellipse
 
-            # transformation matrix (elliptic cartesian -> circular cartesian)
-            A = (a/b)*np.cos(theta)
-            B = -np.sin(theta)
-            C = (a/b)*np.sin(theta)
-            D = np.cos(theta)
-            det = 1 / (A*D - B*C)
-
-            # get circular cartesian coords
-            xc =  x*D - y*B
-            yc = -x*C + y*A
-
-            # get polar coords
-            rr = det * np.hypot(xc,yc)
+            # Get polar coords
+            xc = x*np.cos(theta) + y*np.sin(theta)
+            yc = (y*np.cos(theta) - x*np.sin(theta))*(a/b)
+            rr = (b/a) * np.hypot(xc,yc)
             tt = np.mod(
-                np.arctan2(yc,xc) - np.pi/2,
+                np.arctan2(yc,xc) + theta,
                 self._polarcube._annular_range)
 
         # transform to bin sampling
