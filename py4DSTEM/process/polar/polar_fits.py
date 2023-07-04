@@ -357,6 +357,3 @@ def amorphous_model(basis, *coefs):
     int_model[sub] += int12*np.exp(dr2[sub]/(-2*sigma2**2))
 
     return int_model
-
-
-

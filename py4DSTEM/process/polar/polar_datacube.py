@@ -99,6 +99,10 @@ class PolarDatacube:
         plot_FEM_global,
         calculate_FEM_local,
     )
+    from py4DSTEM.process.polar.polar_peaks import (
+        find_peaks_single_pattern,
+        find_peaks,
+    )
 
 
     # sampling methods + properties
@@ -465,6 +469,7 @@ class PolarDataGetter:
             )
             return ans
         elif returnval == 'nan':
+            ans[mask_bool] = np.nan
             return ans
         elif returnval == 'all':
             return ans, ans_norm, norm_array, mask_bool
