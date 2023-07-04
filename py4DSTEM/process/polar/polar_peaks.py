@@ -6,13 +6,16 @@ from scipy.ndimage import gaussian_filter
 from skimage.feature import peak_local_max
 from scipy.signal import peak_prominences
 
-from py4DSTEM import PointList
+# from emdfile import tqdmnd, PointList, PointListArray
+from py4DSTEM import tqdmnd, PointList, PointListArray
 
 def find_peaks_single_pattern(
     self,
     x,
     y,
     mask = None,
+    bragg_peaks = None,
+    bragg_mask_radius = None,
     sigma_annular_deg = 10.0,
     sigma_radial_px = 3.0,
     radial_background_subtract = True,
@@ -23,9 +26,11 @@ def find_peaks_single_pattern(
     threshold_prom_radial = None,
     remove_masked_peaks = False,
     scale_sigma = 0.25,
+    return_background = False,
     plot_result = True,
     plot_power_scale = 1.0,
     plot_scale_size = 100.0,
+    returnfig = False,
     ):
     """
     Peak detection function for polar transformations.
@@ -36,6 +41,10 @@ def find_peaks_single_pattern(
         x index of diffraction pattern
     y: int
         y index of diffraction pattern
+    mask: np.array
+        Boolean mask in Cartesian space, to filter detected peaks.
+    bragg_peaks: py4DSTEM.BraggVectors
+        Set of Bragg peaks used to generated a mask in Cartesian space, to filter detected peaks
     sigma_annular_deg: float
         smoothing along the annular direction in degrees, periodic
     sigma_radial_px: float
@@ -51,6 +60,18 @@ def find_peaks_single_pattern(
 
     """
 
+    # if needed, generate mask from Bragg peaks
+    if bragg_peaks is not None:
+        mask_bragg = self._datacube.get_braggmask(
+            bragg_peaks,
+            x,
+            y,
+            radius = bragg_mask_radius,
+        )
+        if mask is None:
+            mask = mask_bragg
+        else:
+            mask = np.logical_or(mask, mask_bragg)
 
 
     # Convert sigma values into units of bins
@@ -177,15 +198,6 @@ def find_peaks_single_pattern(
             )
 
     # Output data as a pointlist
-    # peaks_polar = np.zeros(
-    #     peaks.shape[0], 
-    #     dtype={
-    #         'names':('qt', 'qr', 'intensity',
-    #             'sigma_annular', 'prom_annular',
-    #             'sigma_radial',  'prom_radial',
-    #             ),
-    #         'formats':('f8', 'f8', 'f8', 'f8', 'f8', 'f8', 'f8')}
-    #     )
     peaks_polar = PointList(
             np.column_stack((peaks, peaks_int, peaks_prom)).ravel().view([
             ('qt', np.float),
@@ -250,30 +262,38 @@ def find_peaks_single_pattern(
         ax.set_xlim((0,im_plot.shape[1]-1))
         ax.set_ylim((im_plot.shape[0]-1,0))
 
-    # ax.imshow(np.hstack((
-    #     im_polar,
-    #     im_polar_sm * 2,
-    #     # np.tile(sig_bg[None,:],(im_polar.shape[0],1))
-    #     )),
-    #     cmap = 'gray',
-    # )
-    # ax.imshow(
-    #     im_polar_sm,
-    # )
-
-
-    return peaks_polar
-
+    if returnfig and plot_result:
+        if return_background:
+            return peaks_polar, sig_bg, fig, ax
+        else:
+            return peaks_polar, fig, ax            
+    else:
+        if return_background:
+            return peaks_polar, sig_bg
+        else:
+            return peaks_polar
 
 
 def find_peaks(
     self,
     mask = None,
+    bragg_peaks = None,
+    bragg_mask_radius = None,
     sigma_annular_deg = 10.0,
-    sigma_radial_px = 2.0,
+    sigma_radial_px = 3.0,
+    radial_background_subtract = True,
+    radial_background_thresh = 0.25,
+    num_peaks_max = 100,
+    threshold_abs = 1.0,
+    threshold_prom_annular = None,
+    threshold_prom_radial = None,
+    remove_masked_peaks = False,
+    scale_sigma = 0.25,
+    progress_bar = True,
     ):
     """
-    Peak detection function for polar transformations.
+    Peak detection function for polar transformations. Loop through all probe positions,
+    find peaks.  Store the peak positions and background signals.
 
     Parameters
     --------
@@ -285,5 +305,99 @@ def find_peaks(
     Returns
     --------
 
+    """
+
+    # init
+    self.bragg_peaks = bragg_peaks
+    self.peaks = PointListArray(
+        dtype = [
+        ('qt', '<f8'), 
+        ('qr', '<f8'), 
+        ('intensity', '<f8'), 
+        ('prom_annular', '<f8'), 
+        ('sigma_annular', '<f8'), 
+        ('prom_radial', '<f8'), 
+        ('sigma_radial', '<f8')],
+        shape = self._datacube.Rshape,
+        name = 'peaks_polardata',
+        )
+    self.background_radial = np.zeros((
+        self._datacube.Rshape[0],
+        self._datacube.Rshape[1],
+        self.radial_bins.shape[0],
+        ))
+
+    # Loop over probe positions
+    for rx, ry in tqdmnd(
+        *bragg_peaks.shape,
+        desc="Finding peaks",
+        unit=" images",
+        disable=not progress_bar,
+        ):
+
+        polar_peaks, sig_bg = self.find_peaks_single_pattern(
+            rx,
+            ry,
+            mask = mask,
+            bragg_peaks = bragg_peaks,
+            bragg_mask_radius = bragg_mask_radius,
+            sigma_annular_deg = sigma_annular_deg,
+            sigma_radial_px = sigma_radial_px,
+            radial_background_subtract = radial_background_subtract,
+            radial_background_thresh = radial_background_thresh,
+            num_peaks_max = num_peaks_max,
+            threshold_abs = threshold_abs,
+            threshold_prom_annular = threshold_prom_annular,
+            threshold_prom_radial = threshold_prom_radial,
+            remove_masked_peaks = remove_masked_peaks,
+            scale_sigma = scale_sigma,
+            return_background = True,
+            plot_result = False,
+            )
+
+        self.peaks[rx,ry] = polar_peaks
+        self.background_radial[rx,ry] = sig_bg
+
+
+
+def refine_peaks(
+    self,
+    radial_background_subtract = True,
+    ):
+    """
+    Use local 2D elliptic gaussian fitting to refine the peak locations. 
+    Optionally include background offset of the peaks.
+
+    """
+    pass
+
+
+def plot_radial_peaks(
+    self,
+    returnfig = True,
+    ):
+    """
+    Calculate and plot the total peak signal as a function of the radial coordinate.
+
+    """
+    pass
+
+
+def plot_radial_background(
+    self,
+    returnfig = True,
+    ):
+    """
+    Calculate and plot the mean background signal, background standard deviation.
+
+    """
+    pass
+
+
+def make_orientation_histogram(
+    self,
+    ):
+    """
+    Make an orientation histogram, in order to use flowline visualization of orientation maps.
     """
     pass
