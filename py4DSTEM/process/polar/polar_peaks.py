@@ -375,7 +375,10 @@ def refine_peaks(
     Optionally include background offset of the peaks.
 
     """
-    pass
+    
+    # See if the intial detected peaks have been saved 
+
+
 
 
 def plot_radial_peaks(
@@ -518,8 +521,8 @@ def plot_radial_background(
 def make_orientation_histogram(
     self,
     radial_ranges: np.ndarray = None,
-    orientation_offset_degrees: float = 0.0,
     orientation_flip_sign: bool = False,
+    orientation_offset_degrees: float = 0.0,
     orientation_separate_bins: bool = False,
     upsample_factor: float = 4.0,
     theta_step_deg: float = None,
@@ -539,8 +542,8 @@ def make_orientation_histogram(
 
     Args:
         radial_ranges (np array):           Size (N x 2) array for N radial bins, or (2,) for a single bin.
+        orientation_flip_sign (bool):       Flip the direction of theta
         orientation_offset_degrees (float): Offset for orientation angles
-
         orientation_separate_bins (bool):   whether to place multiple angles into multiple radial bins.
         upsample_factor (float):            Upsample factor
         theta_step_deg (float):             Step size along annular direction in degrees
@@ -615,8 +618,12 @@ def make_orientation_histogram(
                 add_data = True
                 intensity = self.peaks[rx,ry]['intensity'][sub]
 
-                # Angles
+                # Angles of all peaks
                 theta = self.peaks[rx,ry]['qt'][sub] * self.annular_step
+                if orientation_flip_sign:
+                    theta *= -1
+                theta += orientation_offset_degrees
+
                 t = theta / dtheta
 
             if add_data:
