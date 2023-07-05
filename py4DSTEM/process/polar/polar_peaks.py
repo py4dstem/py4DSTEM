@@ -405,8 +405,8 @@ def refine_peaks(
         self.peaks_init = self.peaks.copy()
 
     # coordinate scaling
-    dt = self._annular_step
-    dq = self._radial_step
+    t_step = self._annular_step
+    q_step = self._radial_step
 
     # Coordinate array for the fit
     qq,tt = np.meshgrid(
@@ -422,8 +422,8 @@ def refine_peaks(
     for rx, ry in tqdmnd(
         # 1,#self._datacube.Rshape[0],
         # 1,#self._datacube.Rshape[1],
-        range(11,12),
-        range(11,12),
+        range(21,22),
+        range(21,22),
         desc="Refining peaks ",
         unit=" images",
         disable=not progress_bar,
@@ -463,15 +463,15 @@ def refine_peaks(
             p = self.peaks[rx,ry]
 
         # loop over peaks
-        for a0 in range(1,2):#p.data.shape[0]):
+        for a0 in range(p.data.shape[0]):
 
             if radial_background_subtract:
                 p0 = [
                     p['intensity'][a0],
-                    p['qt'][a0] * dt,
-                    p['qr'][a0] * dq,
-                    p['sigma_annular'][a0] * dt,
-                    p['sigma_radial'][a0] * dq,
+                    p['qt'][a0] * t_step,
+                    p['qr'][a0] * q_step,
+                    p['sigma_annular'][a0] * t_step,
+                    p['sigma_radial'][a0] * q_step,
                     ]
 
                 dt = np.mod(tt - p0[1] + np.pi/2, np.pi) - np.pi/2
@@ -496,17 +496,6 @@ def refine_peaks(
                     p0 = p0,
                     # bounds = bounds,
                     )
-                # p0 = popt[0]
-                # print(p0)
-
-                # p_fit = fit_2D_polar_gaussian(
-                #     tq[:,mask_peak.ravel()],
-                #     p0 = p0,
-                #     constant_background = False,
-                #     )
-                # p0 = p_fit[0]
-                # print(p0)
-
 
                 im_test2 = polar_twofold_gaussian_2D(
                     tq,
@@ -524,37 +513,11 @@ def refine_peaks(
                     im_test2 * mask_peak,
                     )))
 
-                # p_fit = fit_2D_polar_gaussian(
-                #     tq,
-                #     p0 = p0,
-                #     constant_background = False,
-                #     )
-
-                # p_new = p_fit[0]
-                # int0 = p_new[0]
-                # qt = p_new[1] / dt
-                # qr = p_new[2] / dq
-                # sigma_annular = p_new[3] / dt 
-                # sigma_radial = p_new[4] / dq 
-
-                # print(p0)
-                # print()
-                # print(int0, qt, qr, sigma_annular, sigma_radial)
-                # print()
-
-                # print(p0)
-                # print()
-                # print(p_new)
-                # print()
-                # print(p_new[0])
-                # print(p['intensity'].data[a0])
-
-
-                # p['intensity'][a0] = p_new[0],
-                # p['qt'][a0] = p_new[1] / dq,
-                # p['qr'][a0] = p_new[2] / dt,
-                # p['sigma_annular'][a0] = p_new[3] / dt,
-                # p['sigma_radial'][a0] = p_new[4] / dq,
+                self.peaks[rx,ry]['intensity'][a0] = p0[0]
+                self.peaks[rx,ry]['qt'][a0] = p0[1] / t_step
+                self.peaks[rx,ry]['qr'][a0] = p0[2] / q_step
+                self.peaks[rx,ry]['sigma_annular'][a0] = p0[3] / t_step
+                self.peaks[rx,ry]['sigma_radial'][a0] = p0[4] / q_step
 
             else:
                 pass
