@@ -2,9 +2,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-from scipy.ndimage import gaussian_filter
-from skimage.feature import peak_local_max
+from scipy.ndimage import gaussian_filter, gaussian_filter1d
 from scipy.signal import peak_prominences
+from skimage.feature import peak_local_max
 
 # from emdfile import tqdmnd, PointList, PointListArray
 from py4DSTEM import tqdmnd, PointList, PointListArray
@@ -87,7 +87,6 @@ def find_peaks_single_pattern(
     # Change sign convention of mask
     mask_bool = np.logical_not(mask_bool)
 
-
     # Background subtraction
     if radial_background_subtract:
         sig_bg = np.zeros(im_polar.shape[1])
@@ -96,6 +95,7 @@ def find_peaks_single_pattern(
                 vals = np.sort(im_polar[mask_bool[:,a0],a0])
                 ind = np.round(radial_background_thresh * (vals.shape[0]-1)).astype('int')
                 sig_bg[a0] = vals[ind]
+        sig_bg_mask = np.sum(mask_bool, axis=0) >= (im_polar.shape[0]//2)
         im_polar = np.maximum(im_polar - sig_bg[None,:], 0)
 
     # apply smoothing and normalization
@@ -264,12 +264,12 @@ def find_peaks_single_pattern(
 
     if returnfig and plot_result:
         if return_background:
-            return peaks_polar, sig_bg, fig, ax
+            return peaks_polar, sig_bg, sig_bg_mask, fig, ax
         else:
             return peaks_polar, fig, ax            
     else:
         if return_background:
-            return peaks_polar, sig_bg
+            return peaks_polar, sig_bg, sig_bg_mask
         else:
             return peaks_polar
 
@@ -326,16 +326,22 @@ def find_peaks(
         self._datacube.Rshape[1],
         self.radial_bins.shape[0],
         ))
+    self.background_radial_mask = np.zeros((
+        self._datacube.Rshape[0],
+        self._datacube.Rshape[1],
+        self.radial_bins.shape[0],
+        ), dtype='bool')
 
     # Loop over probe positions
     for rx, ry in tqdmnd(
-        *bragg_peaks.shape,
+        self._datacube.Rshape[0],
+        self._datacube.Rshape[1],
         desc="Finding peaks",
         unit=" images",
         disable=not progress_bar,
         ):
 
-        polar_peaks, sig_bg = self.find_peaks_single_pattern(
+        polar_peaks, sig_bg, sig_bg_mask = self.find_peaks_single_pattern(
             rx,
             ry,
             mask = mask,
@@ -357,7 +363,7 @@ def find_peaks(
 
         self.peaks[rx,ry] = polar_peaks
         self.background_radial[rx,ry] = sig_bg
-
+        self.background_radial_mask[rx,ry] = sig_bg_mask
 
 
 def refine_peaks(
@@ -374,30 +380,308 @@ def refine_peaks(
 
 def plot_radial_peaks(
     self,
-    returnfig = True,
+    qmin = None,
+    qmax = None,
+    qstep = None,
+    figsize = (8,4),
+    returnfig = False,
     ):
     """
     Calculate and plot the total peak signal as a function of the radial coordinate.
 
     """
-    pass
+    
+    # Get all peak data
+    vects = np.concatenate(
+        [self.peaks[i,j].data for i in range(self._datacube.Rshape[0]) for j in range(self._datacube.Rshape[1])])
+    qr = vects['qr'] * self.calibration.get_Q_pixel_size()
+    intensity = vects['intensity']
+
+    # bins
+    if qmin is None:
+        qmin = self.qq[0]
+    if qmax is None:
+        qmax = self.qq[-1]
+    if qstep is None:
+        qstep = self.qq[1] - self.qq[0]
+    q_bins = np.arange(qmin,qmax,qstep)
+    q_num = q_bins.shape[0]
+
+    # histogram
+    q_ind = (qr - qmin) / qstep
+    qf = np.floor(q_ind).astype("int")
+    dq = q_ind - qf
+
+    sub = np.logical_and(qf >= 0, qf < q_num)
+    int_peaks = np.bincount(
+        np.floor(q_ind[sub]).astype("int"),
+        weights=(1 - dq[sub]) * intensity[sub],
+        minlength=q_num,
+    )
+    sub = np.logical_and(q_ind >= -1, q_ind < q_num - 1)
+    int_peaks += np.bincount(
+        np.floor(q_ind[sub] + 1).astype("int"),
+        weights=dq[sub] * intensity[sub],
+        minlength=q_num,
+    )
+
+
+
+    # plotting
+    fig,ax = plt.subplots(figsize = figsize)
+    ax.plot(
+        q_bins,
+        int_peaks,
+        color = 'r',
+        linewidth = 2,
+        )
+    ax.set_xlim((q_bins[0],q_bins[-1]))
+    ax.set_xlabel(
+        'Scattering Angle (' + self.calibration.get_Q_pixel_units() +')',
+        fontsize = 14,
+        )
+    ax.set_ylabel(
+        'Total Peak Signal',
+        fontsize = 14,
+        )
+
+    if returnfig:
+        return fig,ax
+
+
 
 
 def plot_radial_background(
     self,
-    returnfig = True,
+    figsize = (8,4),
+    returnfig = False,
     ):
     """
     Calculate and plot the mean background signal, background standard deviation.
 
     """
-    pass
+    
+    # mean
+    self.background_radial_mean = np.sum(
+        self.background_radial * self.background_radial_mask,
+        axis=(0,1))
+    background_radial_mean_norm = np.sum(
+        self.background_radial_mask,
+        axis=(0,1))
+    self.background_mask = \
+        background_radial_mean_norm > (np.max(background_radial_mean_norm)*0.05)
+    self.background_radial_mean[self.background_mask] \
+        /= background_radial_mean_norm[self.background_mask]
+    self.background_radial_mean[np.logical_not(self.background_mask)] = 0
+
+    # variance and standard deviation
+    self.background_radial_var = np.sum(
+        (self.background_radial - self.background_radial_mean[None,None,:])**2 \
+        * self.background_radial_mask,
+        axis=(0,1))
+    self.background_radial_var[self.background_mask] \
+        /= self.background_radial_var[self.background_mask]
+    self.background_radial_var[np.logical_not(self.background_mask)] = 0
+    self.background_radial_std = np.sqrt(self.background_radial_var)
+
+
+    fig,ax = plt.subplots(figsize = figsize)
+    ax.fill_between(
+        self.qq[self.background_mask], 
+        self.background_radial_mean[self.background_mask] \
+        - self.background_radial_std[self.background_mask], 
+        self.background_radial_mean[self.background_mask] \
+        + self.background_radial_std[self.background_mask], 
+        color = 'r',
+        alpha=0.2,
+        )
+    ax.plot(
+        self.qq[self.background_mask],
+        self.background_radial_mean[self.background_mask],
+        color = 'r',
+        linewidth = 2,
+        )
+    ax.set_xlim((self.qq[0],self.qq[-1]))
+    ax.set_xlabel(
+        'Scattering Angle (' + self.calibration.get_Q_pixel_units() +')',
+        fontsize = 14,
+        )
+    ax.set_ylabel(
+        'Background Signal',
+        fontsize = 14,
+        )
+
+    if returnfig:
+        return fig,ax
 
 
 def make_orientation_histogram(
     self,
+    radial_ranges: np.ndarray = None,
+    orientation_offset_degrees: float = 0.0,
+    orientation_flip_sign: bool = False,
+    orientation_separate_bins: bool = False,
+    upsample_factor: float = 4.0,
+    theta_step_deg: float = None,
+    sigma_x: float = 1.0,
+    sigma_y: float = 1.0,
+    sigma_theta: float = 3.0,
+    normalize_intensity_image: bool = False,
+    normalize_intensity_stack: bool = True,
+    progress_bar: bool = True,
     ):
     """
     Make an orientation histogram, in order to use flowline visualization of orientation maps.
+    Use peaks attached to polardatacube.
+
+    NOTE - currently assumes two fold rotation symmetry
+    TODO - add support for non two fold symmetry polardatacube
+
+    Args:
+        radial_ranges (np array):           Size (N x 2) array for N radial bins, or (2,) for a single bin.
+        orientation_offset_degrees (float): Offset for orientation angles
+
+        orientation_separate_bins (bool):   whether to place multiple angles into multiple radial bins.
+        upsample_factor (float):            Upsample factor
+        theta_step_deg (float):             Step size along annular direction in degrees
+        sigma_x (float):                    Smoothing in x direction before upsample
+        sigma_y (float):                    Smoothing in x direction before upsample
+        sigma_theta (float):                Smoothing in annular direction (units of bins, periodic)
+        normalize_intensity_image (bool):   Normalize to max peak intensity = 1, per image
+        normalize_intensity_stack (bool):   Normalize to max peak intensity = 1, all images
+        progress_bar (bool):                Enable progress bar
+
+    Returns:
+        orient_hist (array):                4D array containing Bragg peak intensity histogram 
+                                            [radial_bin x_probe y_probe theta]
     """
-    pass
+
+    # coordinates
+    if theta_step_deg is None:
+        # Get angles from polardatacube
+        theta = self.tt
+    else:
+        theta = np.arange(0,180,theta_step_deg) * np.pi / 180.0
+    dtheta = theta[1] - theta[0]
+    dtheta_deg = dtheta * 180 / np.pi
+    num_theta_bins = np.size(theta)
+
+    # Input bins
+    radial_ranges = np.array(radial_ranges)
+    if radial_ranges.ndim == 1:
+        radial_ranges = radial_ranges[None,:]
+    radial_ranges_2 = radial_ranges**2
+    num_radii = radial_ranges.shape[0]
+    size_input = self._datacube.shape[0:2]
+
+    # Output size
+    size_output = np.round(np.array(size_input).astype('float') * upsample_factor).astype('int')
+
+    # output init
+    orient_hist = np.zeros([
+        num_radii,
+        size_output[0],
+        size_output[1],
+        num_theta_bins])
+
+    # Loop over all probe positions
+    for a0 in range(num_radii):
+        t = "Generating histogram " + str(a0)
+        # for rx, ry in tqdmnd(
+        #         *bragg_peaks.shape, desc=t,unit=" probe positions", disable=not progress_bar
+        #     ):
+        for rx, ry in tqdmnd(
+                *size_input, 
+                desc=t,
+                unit=" probe positions", 
+                disable=not progress_bar
+            ):
+            x = (rx + 0.5)*upsample_factor - 0.5
+            y = (ry + 0.5)*upsample_factor - 0.5
+            x = np.clip(x,0,size_output[0]-2)
+            y = np.clip(y,0,size_output[1]-2)
+
+            xF = np.floor(x).astype('int')
+            yF = np.floor(y).astype('int')
+            dx = x - xF
+            dy = y - yF
+
+            add_data = False
+
+            q = self.peaks[rx,ry]['qr'] * self.calibration.get_Q_pixel_size()
+            r2 = q**2
+            sub = np.logical_and(r2 >= radial_ranges_2[a0,0], r2 < radial_ranges_2[a0,1])                
+            if np.any(sub):
+                add_data = True
+                intensity = self.peaks[rx,ry]['intensity'][sub]
+
+                # Angles
+                theta = self.peaks[rx,ry]['qt'][sub] * self.annular_step
+                t = theta / dtheta
+
+            if add_data:
+                tF = np.floor(t).astype('int')
+                dt = t - tF
+
+                orient_hist[a0,xF  ,yF  ,:] = orient_hist[a0,xF  ,yF  ,:] + \
+                    np.bincount(np.mod(tF  ,num_theta_bins),
+                        weights=(1-dx)*(1-dy)*(1-dt)*intensity,minlength=num_theta_bins)
+                orient_hist[a0,xF  ,yF  ,:] = orient_hist[a0,xF  ,yF  ,:] + \
+                    np.bincount(np.mod(tF+1,num_theta_bins),
+                        weights=(1-dx)*(1-dy)*(  dt)*intensity,minlength=num_theta_bins)
+
+                orient_hist[a0,xF+1,yF  ,:] = orient_hist[a0,xF+1,yF  ,:] + \
+                    np.bincount(np.mod(tF  ,num_theta_bins),
+                        weights=(  dx)*(1-dy)*(1-dt)*intensity,minlength=num_theta_bins)
+                orient_hist[a0,xF+1,yF  ,:] = orient_hist[a0,xF+1,yF  ,:] + \
+                    np.bincount(np.mod(tF+1,num_theta_bins),
+                        weights=(  dx)*(1-dy)*(  dt)*intensity,minlength=num_theta_bins)
+ 
+                orient_hist[a0,xF  ,yF+1,:] = orient_hist[a0,xF  ,yF+1,:] + \
+                    np.bincount(np.mod(tF  ,num_theta_bins),
+                        weights=(1-dx)*(  dy)*(1-dt)*intensity,minlength=num_theta_bins)
+                orient_hist[a0,xF  ,yF+1,:] = orient_hist[a0,xF  ,yF+1,:] + \
+                    np.bincount(np.mod(tF+1,num_theta_bins),
+                        weights=(1-dx)*(  dy)*(  dt)*intensity,minlength=num_theta_bins)
+
+                orient_hist[a0,xF+1,yF+1,:] = orient_hist[a0,xF+1,yF+1,:] + \
+                    np.bincount(np.mod(tF  ,num_theta_bins),
+                        weights=(  dx)*(  dy)*(1-dt)*intensity,minlength=num_theta_bins)
+                orient_hist[a0,xF+1,yF+1,:] = orient_hist[a0,xF+1,yF+1,:] + \
+                    np.bincount(np.mod(tF+1,num_theta_bins),
+                        weights=(  dx)*(  dy)*(  dt)*intensity,minlength=num_theta_bins)           
+
+    # smoothing / interpolation
+    if (sigma_x is not None) or (sigma_y is not None) or (sigma_theta is not None):
+        if num_radii > 1:
+            print('Interpolating orientation matrices ...', end='')
+        else:
+            print('Interpolating orientation matrix ...', end='')            
+        if sigma_x is not None and sigma_x > 0:
+            orient_hist = gaussian_filter1d(
+                orient_hist,sigma_x*upsample_factor,
+                mode='nearest',
+                axis=1,
+                truncate=3.0)
+        if sigma_y is not None and sigma_y > 0:
+            orient_hist = gaussian_filter1d(
+                orient_hist,sigma_y*upsample_factor,
+                mode='nearest',
+                axis=2,
+                truncate=3.0)
+        if sigma_theta is not None and sigma_theta > 0:
+            orient_hist = gaussian_filter1d(
+                orient_hist,sigma_theta/dtheta_deg,
+                mode='wrap',
+                axis=3,
+                truncate=2.0)
+        print(' done.')
+
+    # normalization
+    if normalize_intensity_stack is True:
+            orient_hist = orient_hist / np.max(orient_hist)
+    elif normalize_intensity_image is True:
+        for a0 in range(num_radii):
+            orient_hist[a0,:,:,:] = orient_hist[a0,:,:,:] / np.max(orient_hist[a0,:,:,:])
+
+    return orient_hist
