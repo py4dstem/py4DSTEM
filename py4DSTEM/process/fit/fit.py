@@ -41,6 +41,8 @@ def fit_2D(
     """
     Performs a 2D fit.
 
+    TODO: make returning the mask optional
+
     Parameters
     ----------
     function : callable
@@ -61,11 +63,10 @@ def fit_2D(
     robust_thresh : int
         The robust fitting cutoff
 
-
     Returns:
-    (popt,pcov,fit_at) : 3-tuple
-        The optimal fit parameters, the fitting covariance matrix, and the
-        the fit array with the returned `popt` params
+    (popt,pcov,fit_at, mask) : 4-tuple
+        The optimal fit parameters, the fitting covariance matrix, the
+        the fit array with the returned `popt` params, and the mask
     """
     # get shape
     shape = data.shape
@@ -112,7 +113,7 @@ def fit_2D(
             p0=popt)
 
     fit_ar = function(xy,*popt).reshape(shape)
-    return popt, pcov, fit_ar,mask
+    return popt, pcov, fit_ar, mask
 
 
 # Functions for fitting
@@ -158,6 +159,49 @@ def polar_gaussian_2D(
             - ( t2/(2*sigma_t**2) + \
                 (q-mu_q)**2/(2*sigma_q**2) ) ) + C
 
+
+def polar_twofold_gaussian_2D(
+    tq,
+    I0,
+    mu_t,
+    mu_q,
+    sigma_t,
+    sigma_q,
+    ):
+    
+    # unpack position
+    t,q = tq
+
+    # theta periodicity
+    dt = np.mod(t - mu_t + np.pi/2, np.pi) - np.pi/2
+
+    # output intensity
+    return I0 * np.exp(
+        (dt**2 / (-2.0*sigma_t**2)) + \
+        ((q - mu_q)**2 / (-2.0*sigma_q**2)) )
+
+def polar_twofold_gaussian_2D_background(
+    tq,
+    I0,
+    mu_t,
+    mu_q,
+    sigma_t,
+    sigma_q,
+    C,
+    ):
+    
+    # unpack position
+    t,q = tq
+
+    # theta periodicity
+    dt = np.mod(t - mu_t + np.pi/2, np.pi) - np.pi/2
+
+    # output intensity
+    return C + I0 * np.exp(
+        (dt**2 / (-2.0*sigma_t**2)) + \
+        ((q - mu_q)**2 / (-2.0*sigma_q**2)) )
+
+
 def fit_2D_polar_gaussian(
     data,
     mask = None,
@@ -165,15 +209,22 @@ def fit_2D_polar_gaussian(
     robust = False,
     robust_steps = 3,
     robust_thresh = 2,
-):
+    constant_background = False,
+    ):
     """
+
+    NOTE - this cannot work without using pixel coordinates - something is wrong in the workflow.
+
+
     Fits a 2D gaussian to the pixels in `data` which are set to True in `mask`.
 
     The gaussian is anisotropic and oriented along (t,q), centered at
     (mu_t,mu_q), has standard deviations (sigma_t,sigma_q), maximum of I0,
-    and a constant offset of C, and is periodic in t.
+    and an optional constant offset of C, and is periodic in t.
 
         f(x,y) = I0 * exp( - (x-mu_x)^2/(2sig_x^2) + (y-mu_y)^2/(2sig_y^2) )
+        or
+        f(x,y) = I0 * exp( - (x-mu_x)^2/(2sig_x^2) + (y-mu_y)^2/(2sig_y^2) ) + C
 
     Parameters
     ----------
@@ -189,21 +240,35 @@ def fit_2D_polar_gaussian(
         number of robust fit iterations
     robust_thresh : number
         the robust fitting threshold
+    constant_background : bool
+        whether or not to include constant background
 
     Returns
     -------
     (popt,pcov,fit_ar) : 3-tuple
         the optimal fit parameters, the covariance matrix, and the fit array
     """
-    return fit_2D(
-        polar_gaussian_2D,
-        data = data,
-        data_mask = mask,
-        popt = p0,
-        robust = robust,
-        robust_steps = robust_steps,
-        robust_thresh = robust_thresh
-    )
+
+    if constant_background:
+        return fit_2D(
+            polar_twofold_gaussian_2D_background,
+            data = data,
+            data_mask = mask,
+            popt = p0,
+            robust = robust,
+            robust_steps = robust_steps,
+            robust_thresh = robust_thresh
+        )
+    else:
+        return fit_2D(
+            polar_twofold_gaussian_2D,
+            data = data,
+            data_mask = mask,
+            popt = p0,
+            robust = robust,
+            robust_steps = robust_steps,
+            robust_thresh = robust_thresh
+        )
 
 
 

@@ -126,6 +126,7 @@ class PolarDatacube:
             self._qstep
         )
         self.qscale = self._qscale
+        self._radial_step = self._datacube.calibration.get_Q_pixel_size() * self._qstep
         self.set_polar_shape()
 
     @property

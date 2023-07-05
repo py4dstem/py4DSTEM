@@ -5,9 +5,11 @@ import matplotlib.pyplot as plt
 from scipy.ndimage import gaussian_filter, gaussian_filter1d
 from scipy.signal import peak_prominences
 from skimage.feature import peak_local_max
+from scipy.optimize import curve_fit
 
 # from emdfile import tqdmnd, PointList, PointListArray
 from py4DSTEM import tqdmnd, PointList, PointListArray
+# from py4DSTEM.process.fit import fit_2D_polar_gaussian
 
 def find_peaks_single_pattern(
     self,
@@ -309,6 +311,7 @@ def find_peaks(
 
     # init
     self.bragg_peaks = bragg_peaks
+    self.bragg_mask_radius = bragg_mask_radius
     self.peaks = PointListArray(
         dtype = [
         ('qt', '<f8'), 
@@ -336,7 +339,7 @@ def find_peaks(
     for rx, ry in tqdmnd(
         self._datacube.Rshape[0],
         self._datacube.Rshape[1],
-        desc="Finding peaks",
+        desc="Finding peaks ",
         unit=" images",
         disable=not progress_bar,
         ):
@@ -368,18 +371,212 @@ def find_peaks(
 
 def refine_peaks(
     self,
+    mask = None,
     radial_background_subtract = True,
+    reset_fits_to_init_positions = False,
+    fit_range_sigma_annular = 2.0,
+    fit_range_sigma_radial = 2.0,
+    progress_bar = True,
     ):
     """
     Use local 2D elliptic gaussian fitting to refine the peak locations. 
     Optionally include background offset of the peaks.
 
+    Parameters
+    --------
+    mask: np.array
+        Mask image to apply to all images
+    radial_background_subtract: bool
+        Subtract radial background before fitting
+    reset_init_positions: bool
+        Use the initial peak parameters for fitting
+    fit_range_sigma_annular: float
+        Fit range in annular direction, in terms of the current sigma_annular
+    fit_range_sigma_radial: float
+        Fit range in radial direction, in terms of the current sigma_radial
+
+    Returns
+    --------
+
     """
     
-    # See if the intial detected peaks have been saved 
+    # See if the intial detected peaks have been saved yet, copy them if needed
+    if not hasattr(self, "peaks_init"):
+        self.peaks_init = self.peaks.copy()
+
+    # coordinate scaling
+    dt = self._annular_step
+    dq = self._radial_step
+
+    # Coordinate array for the fit
+    qq,tt = np.meshgrid(
+        self.qq,
+        self.tt,
+        )
+    tq = np.vstack([
+        tt.ravel(),
+        qq.ravel(),
+    ])
+
+    # Loop over probe positions
+    for rx, ry in tqdmnd(
+        # 1,#self._datacube.Rshape[0],
+        # 1,#self._datacube.Rshape[1],
+        range(11,12),
+        range(11,12),
+        desc="Refining peaks ",
+        unit=" images",
+        disable=not progress_bar,
+        ):
+        # mask
+        # if needed, generate mask from Bragg peaks
+        if self.bragg_peaks is not None:
+            mask_bragg = self._datacube.get_braggmask(
+                self.bragg_peaks,
+                rx,
+                ry,
+                radius = self.bragg_mask_radius,
+            )
+            if mask is None:
+                mask_fit = mask_bragg
+            else:
+                mask_fit = np.logical_or(mask, mask_bragg)
 
 
+        # Get polar image
+        im_polar, im_polar_norm, norm_array, mask_bool = self.transform(
+                self._datacube.data[rx,ry],
+                mask = mask_fit,
+                returnval = 'all_zeros', 
+            )
+        # Change sign convention of mask
+        mask_bool = np.logical_not(mask_bool)
+        # Background subtraction
+        if radial_background_subtract:
+            sig_bg = self.background_radial[rx,ry]
+            im_polar = np.maximum(im_polar - sig_bg[None,:], 0)
 
+        # initial peak positions
+        if reset_fits_to_init_positions:
+            p = self.peaks_init[rx,ry]
+        else:
+            p = self.peaks[rx,ry]
+
+        # loop over peaks
+        for a0 in range(1,2):#p.data.shape[0]):
+
+            if radial_background_subtract:
+                p0 = [
+                    p['intensity'][a0],
+                    p['qt'][a0] * dt,
+                    p['qr'][a0] * dq,
+                    p['sigma_annular'][a0] * dt,
+                    p['sigma_radial'][a0] * dq,
+                    ]
+
+                dt = np.mod(tt - p0[1] + np.pi/2, np.pi) - np.pi/2
+                mask_peak = np.logical_and(mask_bool,
+                    dt**2/(fit_range_sigma_annular*p0[3])**2 \
+                    + (qq-p0[2])**2/(fit_range_sigma_radial*p0[4])**2 <= 1)
+
+                from py4DSTEM.process.fit import polar_twofold_gaussian_2D
+                im_test1 = polar_twofold_gaussian_2D(
+                    tq,
+                    p0[0],
+                    p0[1],
+                    p0[2],
+                    p0[3],
+                    p0[4],
+                    ).reshape(im_polar.shape)
+
+                p0, pcov = curve_fit(
+                    polar_twofold_gaussian_2D, 
+                    tq[:,mask_peak.ravel()], 
+                    im_polar[mask_peak], 
+                    p0 = p0,
+                    # bounds = bounds,
+                    )
+                # p0 = popt[0]
+                # print(p0)
+
+                # p_fit = fit_2D_polar_gaussian(
+                #     tq[:,mask_peak.ravel()],
+                #     p0 = p0,
+                #     constant_background = False,
+                #     )
+                # p0 = p_fit[0]
+                # print(p0)
+
+
+                im_test2 = polar_twofold_gaussian_2D(
+                    tq,
+                    p0[0],
+                    p0[1],
+                    p0[2],
+                    p0[3],
+                    p0[4],
+                    ).reshape(im_polar.shape)
+
+                fig,ax = plt.subplots(figsize = (12,6))
+                ax.imshow(np.hstack((
+                    im_polar * mask_peak,
+                    im_test1 * mask_peak,
+                    im_test2 * mask_peak,
+                    )))
+
+                # p_fit = fit_2D_polar_gaussian(
+                #     tq,
+                #     p0 = p0,
+                #     constant_background = False,
+                #     )
+
+                # p_new = p_fit[0]
+                # int0 = p_new[0]
+                # qt = p_new[1] / dt
+                # qr = p_new[2] / dq
+                # sigma_annular = p_new[3] / dt 
+                # sigma_radial = p_new[4] / dq 
+
+                # print(p0)
+                # print()
+                # print(int0, qt, qr, sigma_annular, sigma_radial)
+                # print()
+
+                # print(p0)
+                # print()
+                # print(p_new)
+                # print()
+                # print(p_new[0])
+                # print(p['intensity'].data[a0])
+
+
+                # p['intensity'][a0] = p_new[0],
+                # p['qt'][a0] = p_new[1] / dq,
+                # p['qr'][a0] = p_new[2] / dt,
+                # p['sigma_annular'][a0] = p_new[3] / dt,
+                # p['sigma_radial'][a0] = p_new[4] / dq,
+
+            else:
+                pass
+
+
+        # print(p0[0])
+        # print(p[0])
+
+
+    # Testing
+    fig,ax = plt.subplots()
+    ax.imshow(
+        im_polar**0.5,
+        cmap = 'gray',
+        )
+    ax.scatter(
+        p['qr'],
+        p['qt'],
+        marker = '+',
+        color = 'r',
+        s = 100
+        )
 
 def plot_radial_peaks(
     self,
@@ -397,7 +594,7 @@ def plot_radial_peaks(
     # Get all peak data
     vects = np.concatenate(
         [self.peaks[i,j].data for i in range(self._datacube.Rshape[0]) for j in range(self._datacube.Rshape[1])])
-    qr = vects['qr'] * self.calibration.get_Q_pixel_size()
+    qr = vects['qr'] * self._radial_step 
     intensity = vects['intensity']
 
     # bins
@@ -490,7 +687,7 @@ def plot_radial_background(
 
     fig,ax = plt.subplots(figsize = figsize)
     ax.fill_between(
-        self.qq[self.background_mask], 
+        self.qq[self.background_mask] * self._radial_step, 
         self.background_radial_mean[self.background_mask] \
         - self.background_radial_std[self.background_mask], 
         self.background_radial_mean[self.background_mask] \
@@ -504,7 +701,9 @@ def plot_radial_background(
         color = 'r',
         linewidth = 2,
         )
-    ax.set_xlim((self.qq[0],self.qq[-1]))
+    ax.set_xlim((
+        self.qq[0] * self._radial_step,
+        self.qq[-1]  * self._radial_step))
     ax.set_xlabel(
         'Scattering Angle (' + self.calibration.get_Q_pixel_units() +')',
         fontsize = 14,
@@ -611,7 +810,7 @@ def make_orientation_histogram(
 
             add_data = False
 
-            q = self.peaks[rx,ry]['qr'] * self.calibration.get_Q_pixel_size()
+            q = self.peaks[rx,ry]['qr'] * self._radial_step
             r2 = q**2
             sub = np.logical_and(r2 >= radial_ranges_2[a0,0], r2 < radial_ranges_2[a0,1])                
             if np.any(sub):
@@ -619,7 +818,7 @@ def make_orientation_histogram(
                 intensity = self.peaks[rx,ry]['intensity'][sub]
 
                 # Angles of all peaks
-                theta = self.peaks[rx,ry]['qt'][sub] * self.annular_step
+                theta = self.peaks[rx,ry]['qt'][sub] * self._annular_step
                 if orientation_flip_sign:
                     theta *= -1
                 theta += orientation_offset_degrees
