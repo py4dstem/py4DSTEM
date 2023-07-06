@@ -467,19 +467,27 @@ class PtychographyOptimizer:
 
         return f
 
-    def _set_optimizer_defaults(self):
+    def _set_optimizer_defaults(
+        verbose = False,
+        plot_center_of_mass = False,
+        plot_rotation = False,
+        plot_probe_overlaps = False,
+        progress_bar = False,
+        store_iterations = False,
+        reset = True,
+        ):
         """
-        Set all of the verbose and plotting to False
+        Set all of the verbose and plotting to False, allowing for user-overwrite.
         """
-        self._init_static_args["verbose"] = False
+        self._init_static_args["verbose"] = verbose
 
-        self._preprocess_static_args["plot_center_of_mass"] = False
-        self._preprocess_static_args["plot_rotation"] = False
-        self._preprocess_static_args["plot_probe_overlaps"] = False
+        self._preprocess_static_args["plot_center_of_mass"] = plot_center_of_mass
+        self._preprocess_static_args["plot_rotation"] = plot_rotation
+        self._preprocess_static_args["plot_probe_overlaps"] = plot_probe_overlaps
 
-        self._reconstruction_static_args["progress_bar"] = False
-        self._reconstruction_static_args["store_iterations"] = False
-        self._reconstruction_static_args["reset"] = True
+        self._reconstruction_static_args["progress_bar"] = progress_bar
+        self._reconstruction_static_args["store_iterations"] = store_iterations
+        self._reconstruction_static_args["reset"] = reset
 
 
 class OptimizationParameter:
