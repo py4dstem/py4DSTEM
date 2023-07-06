@@ -275,12 +275,14 @@ class PtychographyOptimizer:
             where the OptimizationParameter items have been replaced with the optimal
             values obtained from the optimizer
         """
-        init_opt = self._replace_optimized_parameters(
-            self._init_args, self._parameter_list
-        )
-        affine_opt = self._replace_optimized_parameters(
-            self._affine_args, self._parameter_list
-        )
+        optimized_dict = {p.name: v for p,v in zip(self._parameter_list,self._skopt_result.x)}
+        
+        filtered_dict = { k: v for k,v in optimized_dict.items() if k in self._init_args }
+        init_opt = self._init_args | filtered_dict
+        
+        filtered_dict = { k: v for k,v in optimized_dict.items() if k in self._affine_args }
+        affine_opt = self._affine_args | filtered_dict
+        
         affine_transform = partial(AffineTransform, **self._affine_static_args)(
             **affine_opt
         )
@@ -288,29 +290,14 @@ class PtychographyOptimizer:
             affine_transform, init_opt["datacube"]
         )
         init_opt["initial_scan_positions"] = scan_positions
-
-        prep_opt = self._replace_optimized_parameters(
-            self._preprocess_args, self._parameter_list
-        )
-        reco_opt = self._replace_optimized_parameters(
-            self._reconstruction_args, self._parameter_list
-        )
-
+        
+        filtered_dict = { k: v for k,v in optimized_dict.items() if k in self._preprocess_args }
+        prep_opt = self._preprocess_args | filtered_dict
+        
+        filtered_dict = { k: v for k,v in optimized_dict.items() if k in self._reconstruction_args }
+        reco_opt = self._reconstruction_args | filtered_dict
+        
         return init_opt, prep_opt, reco_opt
-
-    def _replace_optimized_parameters(self, arg_dict, parameters):
-        opt_args = {}
-        for k, v in arg_dict.items():
-            # Check for optimization parameters
-            if isinstance(v, OptimizationParameter):
-                # Find the right parameter in the list
-                # There is probably a better way to do this inverse mapping!
-                for i, p in enumerate(parameters):
-                    if p.name == k:
-                        opt_args[k] = self._skopt_result.x[i]
-            else:
-                opt_args[k] = v
-        return opt_args
 
     def _split_static_and_optimization_vars(self, argdict):
         static_args = {}
@@ -493,19 +480,27 @@ class PtychographyOptimizer:
 
         return f
 
-    def _set_optimizer_defaults(self):
+    def _set_optimizer_defaults(
+        verbose = False,
+        plot_center_of_mass = False,
+        plot_rotation = False,
+        plot_probe_overlaps = False,
+        progress_bar = False,
+        store_iterations = False,
+        reset = True,
+        ):
         """
-        Set all of the verbose and plotting to False
+        Set all of the verbose and plotting to False, allowing for user-overwrite.
         """
-        self._init_static_args["verbose"] = False
+        self._init_static_args["verbose"] = verbose
 
-        self._preprocess_static_args["plot_center_of_mass"] = False
-        self._preprocess_static_args["plot_rotation"] = False
-        self._preprocess_static_args["plot_probe_overlaps"] = False
+        self._preprocess_static_args["plot_center_of_mass"] = plot_center_of_mass
+        self._preprocess_static_args["plot_rotation"] = plot_rotation
+        self._preprocess_static_args["plot_probe_overlaps"] = plot_probe_overlaps
 
-        self._reconstruction_static_args["progress_bar"] = False
-        self._reconstruction_static_args["store_iterations"] = False
-        self._reconstruction_static_args["reset"] = True
+        self._reconstruction_static_args["progress_bar"] = progress_bar
+        self._reconstruction_static_args["store_iterations"] = store_iterations
+        self._reconstruction_static_args["reset"] = reset
 
 
 class OptimizationParameter:
