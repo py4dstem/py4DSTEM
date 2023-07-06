@@ -1,7 +1,7 @@
 # Functions to become DataCube methods
 
 import numpy as np
-from scipy.ndimage import distance_transform_edt, binary_fill_holes, gaussian_filter1d
+from scipy.ndimage import distance_transform_edt, binary_fill_holes, gaussian_filter1d, gaussian_filter
 from scipy.interpolate import interp1d
 
 from emdfile import Array, Metadata, Node
@@ -1298,11 +1298,11 @@ class DataCubeMethods:
             # im = self.tree["dp_max"].data.astype('float')
             if not "dp_max" in self._branch.keys():
                 self.get_dp_max();
-            im = self.tree("dp_max")
+            im = self.tree("dp_max").data.astype('float')
         else:
             if not "dp_mean" in self._branch.keys():
                 self.get_dp_mean();
-            im = self.tree("dp_mean")
+            im = self.tree("dp_mean").data
             # if not "dp_mean" in self.tree.keys():
             #     self.get_dp_mean();
             # im = self.tree["dp_mean"].data.astype('float')
