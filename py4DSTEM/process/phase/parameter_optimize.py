@@ -483,6 +483,7 @@ class PtychographyOptimizer:
         return f
 
     def _set_optimizer_defaults(
+        self,
         verbose = False,
         plot_center_of_mass = False,
         plot_rotation = False,
