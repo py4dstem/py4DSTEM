@@ -20,6 +20,7 @@ def find_peaks_single_pattern(
     bragg_mask_radius = None,
     sigma_annular_deg = 10.0,
     sigma_radial_px = 3.0,
+    sigma_annular_deg_max = None,
     radial_background_subtract = True,
     radial_background_thresh = 0.25,
     num_peaks_max = 100,
@@ -27,7 +28,8 @@ def find_peaks_single_pattern(
     threshold_prom_annular = None,
     threshold_prom_radial = None,
     remove_masked_peaks = False,
-    scale_sigma = 0.25,
+    scale_sigma_annular = 0.5,
+    scale_sigma_radial = 0.25,
     return_background = False,
     plot_result = True,
     plot_power_scale = 1.0,
@@ -51,6 +53,9 @@ def find_peaks_single_pattern(
         smoothing along the annular direction in degrees, periodic
     sigma_radial_px: float
         smoothing along the radial direction in pixels, not periodic
+    sigma_annular_deg_max: float
+        Specify this value for the max annular sigma.  Peaks larger than this will be split 
+        into multiple peaks, depending on the ratio.
     radial_background_subtract: bool
         If true, subtract radial background estimate
     radial_background_thresh: float
@@ -145,7 +150,7 @@ def find_peaks_single_pattern(
             trace_annular, 
             annular_ind_center,
             )
-        sigma_annular = scale_sigma * np.maximum(
+        sigma_annular = scale_sigma_annular * np.maximum(
             annular_ind_center - p_annular[1],
             p_annular[2] - annular_ind_center)
 
@@ -155,7 +160,7 @@ def find_peaks_single_pattern(
             trace_radial, 
             np.atleast_1d(peaks[a0,1]),
             )
-        sigma_radial = scale_sigma * np.maximum(
+        sigma_radial = scale_sigma_radial * np.maximum(
             peaks[a0,1] - p_radial[1],
             p_radial[2] - peaks[a0,1])
 
@@ -199,9 +204,46 @@ def find_peaks_single_pattern(
             axis = 0,
             )
 
+    # combine peaks into one array
+    peaks_all = np.column_stack((peaks, peaks_int, peaks_prom))
+
+    # Split peaks into multiple peaks if they have sigma values larger than user-specified threshold
+    if sigma_annular_deg_max is not None:
+        peaks_new = np.zeros((0,peaks_all.shape[1]))
+        for a0 in range(peaks_all.shape[0]):
+            if peaks_all[a0,4] >= (1.5*sigma_annular_deg_max):
+                num = np.round(peaks_all[a0,4] / sigma_annular_deg_max)
+                sigma_annular_new = peaks_all[a0,4] / num
+
+                v = np.arange(num)
+                v -= np.mean(v)
+                t_new = np.mod(peaks_all[a0,0] + 2*v*sigma_annular_new,
+                    self._n_annular)
+
+                for a1 in range(num.astype('int')):
+                    peaks_new = np.vstack((
+                        peaks_new,
+                        np.array((
+                            t_new[a1],
+                            peaks_all[a0,1],
+                            peaks_all[a0,2],
+                            peaks_all[a0,3],
+                            sigma_annular_new,
+                            peaks_all[a0,5],
+                            peaks_all[a0,6],
+                        )),
+                    ))
+            else:
+                peaks_new = np.vstack((
+                    peaks_new,
+                    peaks_all[a0,:]
+                ))
+        peaks_all = peaks_new
+
+
     # Output data as a pointlist
     peaks_polar = PointList(
-            np.column_stack((peaks, peaks_int, peaks_prom)).ravel().view([
+            peaks_all.ravel().view([
             ('qt', np.float),
             ('qr', np.float),
             ('intensity', np.float),
@@ -283,6 +325,7 @@ def find_peaks(
     bragg_mask_radius = None,
     sigma_annular_deg = 10.0,
     sigma_radial_px = 3.0,
+    sigma_annular_deg_max = None,
     radial_background_subtract = True,
     radial_background_thresh = 0.25,
     num_peaks_max = 100,
@@ -290,7 +333,8 @@ def find_peaks(
     threshold_prom_annular = None,
     threshold_prom_radial = None,
     remove_masked_peaks = False,
-    scale_sigma = 0.25,
+    scale_sigma_annular = 0.5,
+    scale_sigma_radial = 0.25,
     progress_bar = True,
     ):
     """
@@ -352,6 +396,7 @@ def find_peaks(
             bragg_mask_radius = bragg_mask_radius,
             sigma_annular_deg = sigma_annular_deg,
             sigma_radial_px = sigma_radial_px,
+            sigma_annular_deg_max = sigma_annular_deg_max,
             radial_background_subtract = radial_background_subtract,
             radial_background_thresh = radial_background_thresh,
             num_peaks_max = num_peaks_max,
@@ -359,7 +404,8 @@ def find_peaks(
             threshold_prom_annular = threshold_prom_annular,
             threshold_prom_radial = threshold_prom_radial,
             remove_masked_peaks = remove_masked_peaks,
-            scale_sigma = scale_sigma,
+            scale_sigma_annular = scale_sigma_annular,
+            scale_sigma_radial = scale_sigma_radial,
             return_background = True,
             plot_result = False,
             )
