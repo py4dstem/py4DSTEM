@@ -34,7 +34,7 @@ def get_probe_size(DP, thresh_lower=0.01, thresh_upper=0.99, N=100):
             * **x0**: *(float)* the x position of the central disk center
             * **y0**: *(float)* the y position of the central disk center
     """
-    from py4DSTEM.process.diskdetection import Probe
+    from py4DSTEM.braggvectors import Probe
 
     # parse input
     if isinstance(DP,Probe):

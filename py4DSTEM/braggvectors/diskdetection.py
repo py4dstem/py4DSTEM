@@ -5,12 +5,12 @@ import numpy as np
 from scipy.ndimage import gaussian_filter
 
 from emdfile import tqdmnd
-from py4DSTEM.process.diskdetection.braggvectors import BraggVectors
+from py4DSTEM.braggvectors.braggvectors import BraggVectors
 from py4DSTEM.data import QPoints
 from py4DSTEM.datacube import DataCube
 from py4DSTEM.preprocess.utils import get_maxima_2D
 from py4DSTEM.process.utils.cross_correlate import get_cross_correlation_FT
-from py4DSTEM.process.diskdetection.diskdetection_aiml import find_Bragg_disks_aiml
+from py4DSTEM.braggvectors.diskdetection_aiml import find_Bragg_disks_aiml
 
 
 
@@ -573,7 +573,7 @@ def _find_Bragg_disks_CUDA_unbatched(
     ):
 
     # compute
-    from py4DSTEM.process.diskdetection.diskdetection_cuda import find_Bragg_disks_CUDA
+    from py4DSTEM.braggvectors.diskdetection_cuda import find_Bragg_disks_CUDA
     peaks = find_Bragg_disks_CUDA(
         datacube,
         probe,
@@ -619,7 +619,7 @@ def _find_Bragg_disks_CUDA_batched(
     ):
 
     # compute
-    from py4DSTEM.process.diskdetection.diskdetection_cuda import find_Bragg_disks_CUDA
+    from py4DSTEM.braggvectors.diskdetection_cuda import find_Bragg_disks_CUDA
     peaks = find_Bragg_disks_CUDA(
         datacube,
         probe,
@@ -669,7 +669,7 @@ def _find_Bragg_disks_ipp(
     ):
 
     # compute
-    from py4DSTEM.process.diskdetection.diskdetection_parallel import find_Bragg_disks_ipp
+    from py4DSTEM.braggvectors.diskdetection_parallel import find_Bragg_disks_ipp
     peaks = find_Bragg_disks_ipp(
         datacube,
         probe,
@@ -721,7 +721,7 @@ def _find_Bragg_disks_dask(
     ):
 
     # compute
-    from py4DSTEM.process.diskdetection.diskdetection_parallel import find_Bragg_disks_dask
+    from py4DSTEM.braggvectors.diskdetection_parallel import find_Bragg_disks_dask
     peaks = find_Bragg_disks_dask(
         datacube,
         probe,

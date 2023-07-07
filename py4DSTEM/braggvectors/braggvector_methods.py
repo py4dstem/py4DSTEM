@@ -22,7 +22,8 @@ class BraggVectorMethods:
         weights_thresh = 0.005,
         ):
         """
-        Returns a 2D histogram of Bragg vector intensities in diffraction space.
+        Returns a 2D histogram of Bragg vector intensities in diffraction space,
+        aka a Bragg vector map.
 
         Parameters
         ----------
@@ -173,6 +174,118 @@ class BraggVectorMethods:
 
     # aliases
     get_bvm = get_bragg_vector_map = histogram
+
+
+
+    # bragg virtual imaging
+
+    def get_virtual_image(
+        self,
+        mode = None,
+        geometry = None,
+        returncalc = True
+        ):
+        '''
+        Calculates a virtual image based on the values of the Braggvectors
+        integrated over some detector function determined by `mode` and
+        `geometry`.
+
+        Parameters
+        ----------
+        mode : str
+            defines the type of detector used. Options:
+              - 'circular', 'circle': uses round detector, like bright field
+              - 'annular', 'annulus': uses annular detector, like dark field
+        geometry : variable
+            expected value depends on the value of `mode`, as follows:
+              - 'circle', 'circular': nested 2-tuple, ((qx,qy),radius)
+              - 'annular' or 'annulus': nested 2-tuple,
+                ((qx,qy),(radius_i,radius_o))
+             All values are in pixels.  Note that (qx,qy) can be skipped, which
+             assumes peaks centered at (0,0)
+
+        Returns
+        -------
+        virtual_im : VirtualImage
+        '''
+        # parse inputs
+        circle_modes = ['circular','circle']
+        annulus_modes = ['annular','annulus']
+        modes = circle_modes + annulus_modes + [None]
+        assert(mode in modes), f"Unrecognized mode {mode}"
+
+        # set geometry
+#         if mode is None:
+#             if geometry is None:
+#                 center = None
+#                 radial_range = np.array((0,np.inf))
+#             else:
+#                 if len(geometry[0]) == 0:
+#                     center = None
+#                 else:
+#                     center = np.array(geometry[0])
+#                 if isinstance(geometry[1], int) or isinstance(geometry[1], float):
+#                     radial_range = np.array((0,geometry[1]))
+#                 elif len(geometry[1]) == 0:
+#                     radial_range = None
+#                 else:
+#                     radial_range = np.array(geometry[1])
+#         elif mode == 'circular' or mode == 'circle':
+#             radial_range = np.array((0,geometry[1]))
+#             if len(geometry[0]) == 0:
+#                     center = None
+#             else:
+#                 center = np.array(geometry[0])
+#         elif mode == 'annular' or mode == 'annulus':
+#             radial_range = np.array(geometry[1])
+#             if len(geometry[0]) == 0:
+#                     center = None
+#             else:
+#                 center = np.array(geometry[0])
+
+
+
+        # allocate space
+        im_virtual = np.zeros(peaks.shape)
+
+        # generate image
+        for rx,ry in tqdmnd(peaks.shape[0],peaks.shape[1]):
+            p = peaks.get_pointlist(rx,ry)
+            if p.data.shape[0] > 0:
+                if radial_range is None:
+                    im_virtual[rx,ry] = np.sum(p.data['intensity'])
+                else:
+                    if center is None:
+                        qr = np.hypot(p.data['qx'],p.data['qy'])
+                    else:
+                        qr = np.hypot(p.data['qx'] - center[0],p.data['qy'] - center[1])
+                    sub = np.logical_and(
+                        qr >= radial_range[0],
+                        qr <  radial_range[1])
+                    if np.sum(sub) > 0:
+                        im_virtual[rx,ry] = np.sum(p.data['intensity'][sub])
+
+#         # generate image
+#         for rx,ry in tqdmnd(peaks.shape[0],peaks.shape[1]):
+#             p = peaks.get_pointlist(rx,ry)
+#             if p.data.shape[0] > 0:
+#                 if radial_range is None:
+#                     im_virtual[rx,ry] = np.sum(p.data['intensity'])
+#                 else:
+#                     if center is None:
+#                         qr = np.hypot(p.data['qx'],p.data['qy'])
+#                     else:
+#                         qr = np.hypot(p.data['qx'] - center[0],p.data['qy'] - center[1])
+#                     sub = np.logical_and(
+#                         qr >= radial_range[0],
+#                         qr <  radial_range[1])
+#                     if np.sum(sub) > 0:
+#                         im_virtual[rx,ry] = np.sum(p.data['intensity'][sub])
+
+        # TODO wrap in VirtualImage
+
+        return im_virtual
+
 
 
 

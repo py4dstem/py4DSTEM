@@ -2,7 +2,7 @@
 
 from py4DSTEM.data import Data
 from emdfile import Custom,PointListArray,PointList,Metadata
-from py4DSTEM.process.diskdetection.braggvector_methods import BraggVectorMethods
+from py4DSTEM.braggvectors.braggvector_methods import BraggVectorMethods
 from os.path import basename
 import numpy as np
 from warnings import warn

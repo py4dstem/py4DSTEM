@@ -12,7 +12,7 @@ import numba
 
 from emdfile import tqdmnd
 from py4DSTEM import PointList, PointListArray
-from py4DSTEM.process.diskdetection.kernels import kernels
+from py4DSTEM.braggvectors.kernels import kernels
 
 
 def find_Bragg_disks_CUDA(

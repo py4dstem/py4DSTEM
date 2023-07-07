@@ -18,7 +18,7 @@ import distributed
 
 import py4DSTEM
 from emdfile import PointListArray, PointList
-from py4DSTEM.process.diskdetection.diskdetection import _find_Bragg_disks_single_DP_FK
+from py4DSTEM.braggvectors.diskdetection import _find_Bragg_disks_single_DP_FK
 
 
 

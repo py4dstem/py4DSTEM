@@ -1003,7 +1003,7 @@ class DataCube(
             the vacuum probe
         """
         from py4DSTEM.process.utils import get_shifted_ar, get_shift
-        from py4DSTEM.process.diskdetection import Probe
+        from py4DSTEM.braggvectors import Probe
 
         # parse region to use
         if ROI is None:
@@ -1319,7 +1319,7 @@ class DataCube(
         variable
             See above.
         """
-        from py4DSTEM.process.diskdetection import find_Bragg_disks
+        from py4DSTEM.braggvectors import find_Bragg_disks
 
         sigma_cc = sigma if sigma is not None else sigma_cc
 

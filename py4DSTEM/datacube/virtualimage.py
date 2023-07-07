@@ -1,11 +1,8 @@
-# Methods and classes for generating virtual images
-
-# includes
-# --------
-# VirtualImage - a container for virtual image data + metadata
-# DataCubeVirtualImager - methods inherited by DataCube for virt imaging
-# BraggVectorsVirtualImager - methods inherited by BraggVectors for virt imaging
-
+# Virtual imaging from a datacube. Includes:
+#  * VirtualImage - a container for virtual image data + metadata
+#  * DataCubeVirtualImager - methods inherited by DataCube for virt imaging
+#
+# for bragg virtual imaging methods, goto diskdetection.virtualimage.py
 
 import numpy as np
 import dask.array as da
@@ -17,8 +14,7 @@ from py4DSTEM.visualize.show import show
 
 
 
-# Virtual image class
-# a container for the final virtual image data/metadata
+# Virtual image container class
 
 class VirtualImage(RealSlice,Data):
     """
@@ -63,9 +59,7 @@ class VirtualImage(RealSlice,Data):
 
 
 
-# DataCubeVirtualImage class
-# inherited by DataCube, adding the methods performing
-# virtual image computations
+# DataCube virtual imaging methods
 
 class DataCubeVirtualImager:
 
@@ -820,3 +814,4 @@ def get_virtual_image_braggvectors(
         )
 
     return virtual_image
+

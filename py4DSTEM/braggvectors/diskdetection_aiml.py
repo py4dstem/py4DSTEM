@@ -14,10 +14,10 @@ from time import time
 from numbers import Number
 
 from emdfile import tqdmnd, PointList, PointListArray
-from py4DSTEM.process.diskdetection.braggvectors import BraggVectors
+from py4DSTEM.braggvectors.braggvectors import BraggVectors
 from py4DSTEM.data import QPoints
 from py4DSTEM.process.utils import get_maxima_2D
-# from py4DSTEM.process.diskdetection import universal_threshold
+# from py4DSTEM.braggvectors import universal_threshold
 
 def find_Bragg_disks_aiml_single_DP(DP, probe,
                                      num_attempts = 5,
@@ -430,7 +430,7 @@ def find_Bragg_disks_aiml_serial(datacube, probe,
                                                                    int(t2/60), int(t2%60)))
 
     if global_threshold == True:
-        from py4DSTEM.process.diskdetection import universal_threshold
+        from py4DSTEM.braggvectors import universal_threshold
 
         peaks = universal_threshold(peaks, minGlobalIntensity, metric, minPeakSpacing,
                                     maxNumPeaks)
@@ -624,7 +624,7 @@ def find_Bragg_disks_aiml(datacube, probe,
                                                 name=name,
                                                 filter_function=filter_function)
         elif _check_cuda_device_available():
-            from py4DSTEM.process.diskdetection.diskdetection_aiml_cuda import find_Bragg_disks_aiml_CUDA
+            from py4DSTEM.braggvectors.diskdetection_aiml_cuda import find_Bragg_disks_aiml_CUDA
             return find_Bragg_disks_aiml_CUDA(datacube,
                                               probe,
                                               num_attempts = num_attempts,
