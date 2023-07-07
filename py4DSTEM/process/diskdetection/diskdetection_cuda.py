@@ -198,9 +198,9 @@ def find_Bragg_disks_CUDA(
                     threads=threads,
                 )
 
-            # clean up
-            del batched_subcube, batched_crosscorr, subFFT, cc, ccc
-            cp.get_default_memory_pool().free_all_blocks()
+        # clean up
+        del batched_subcube, batched_crosscorr, subFFT, cc, ccc
+        cp.get_default_memory_pool().free_all_blocks()
 
 
     else:
