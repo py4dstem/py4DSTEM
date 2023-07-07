@@ -791,6 +791,7 @@ def refine_peaks(
     self,
     mask = None,
     # reset_fits_to_init_positions = False,
+    scale_sigma_estimate = 0.5,
     min_num_pixels_fit = 10,
     progress_bar = True,
     ):
@@ -808,6 +809,8 @@ def refine_peaks(
         Subtract radial background before fitting
     reset_fits_to_init_positions: bool
         Use the initial peak parameters for fitting
+    scale_sigma_estimate: float
+        Factor to reduce sigma of peaks by, to prevent fit from running away.
     min_num_pixels_fit: int
         Minimum number of pixels to perform fitting
     progress_bar: bool
@@ -818,20 +821,6 @@ def refine_peaks(
 
     """
 
-    # init
-    self.peaks_refine = PointListArray(
-        dtype = [
-        ('qt', '<f8'), 
-        ('qr', '<f8'), 
-        ('intensity', '<f8'), 
-        ('prom_annular', '<f8'), 
-        ('sigma_annular', '<f8'), 
-        ('prom_radial', '<f8'), 
-        ('sigma_radial', '<f8')],
-        shape = self._datacube.Rshape,
-        name = 'peaks_polardata_refined',
-        )
-
     # coordinate scaling
     t_step = self._annular_step
     q_step = self._radial_step
@@ -840,14 +829,37 @@ def refine_peaks(
     num_rings = np.round((self.background_coefs.shape[0]-3)/3).astype('int')
 
     # basis
-    basis = np.zeros((self.qq.shape[0],2))
-    basis[:,0] = self.qq
-    basis[1,0] = num_rings
+    qq,tt = np.meshgrid(
+        self.qq,
+        self.tt,
+        )
+    basis = np.zeros((qq.size,3))
+    basis[:,0] = tt.ravel()
+    basis[:,1] = qq.ravel()
+    basis[:,2] = num_rings
+
+    # init
+    self.peaks_refine = PointListArray(
+        dtype = [
+        ('qt', 'float'), 
+        ('qr', 'float'), 
+        ('intensity', 'float'), 
+        ('sigma_annular', 'float'), 
+        ('sigma_radial', 'float')],
+        shape = self._datacube.Rshape,
+        name = 'peaks_polardata_refined',
+        )
+    self.background_refine = np.zeros((
+        self.background_radial.shape[0],
+        self.background_radial.shape[0],
+        np.round(3*num_rings+3).astype('int'),
+        ))
+
 
     # Main loop over probe positions
     for rx, ry in tqdmnd(
         np.arange(40,41),#self._datacube.shape[0],
-        np.arange(20,21),#self._datacube.shape[1],
+        np.arange(70,71),#self._datacube.shape[1],
         desc="Refining peaks ",
         unit=" probe positions",
         disable=not progress_bar):
@@ -863,34 +875,94 @@ def refine_peaks(
 
         # Get initial peaks, in dimensioned units
         p = self.peaks[rx,ry]
-        num_peaks = p.data.shape[0]
         qt = p.data['qt'] * t_step
         qr = (p.data['qr'] + self.qmin) * q_step
         int_peaks = p.data['intensity']
         s_annular = p.data['sigma_annular'] * t_step
-        s_radial = (p.data['sigma_radial'] + self.qmin) * q_step
+        s_radial = p.data['sigma_radial'] * q_step
+        num_peaks = p['qt'].shape[0]
 
         # unified coefficients
-        basis[1,1] = num_peaks
+        # Note we sharpen sigma estimate for refinement
         coefs_all = np.hstack((
             self.background_coefs,
-            self.background_coefs,
+            qt,
+            qr,
+            int_peaks,
+            s_annular * scale_sigma_estimate,
+            s_radial * scale_sigma_estimate,
             ))
-        print(coefs_all.shape)
-
 
         # Construct fitting model
-        def fit_image(basis,coefs):
+        def fit_image(basis, *coefs):
+            coefs = np.squeeze(np.array(coefs))
 
-            pass
+            num_rings = np.round(basis[0,2]).astype('int')
+            num_peaks = np.round((coefs.shape[0] - (3*num_rings+3))/5).astype('int')
+
+            coefs_bg = coefs[:(3*num_rings+3)]
+            coefs_peaks = coefs[(3*num_rings+3):]
 
 
+            # Background
+            sig = self.background_model(
+                basis[:,1],
+                coefs_bg)
 
-    fig,ax = plt.subplots(figsize=(8,4))
-    ax.imshow(
-        im_polar,
-        cmap = 'turbo',
-        )
+            # add peaks
+            for a0 in range(num_peaks):
+                dt = np.mod(basis[:,0] - coefs_peaks[num_peaks*0+a0] + np.pi/2, np.pi) - np.pi/2
+                dq = basis[:,1] - coefs_peaks[num_peaks*1+a0]
+
+                sig += coefs_peaks[num_peaks*2+a0] \
+                    * np.exp(
+                        dt**2 / (-2*coefs_peaks[num_peaks*3+a0]**2) + \
+                        dq**2 / (-2*coefs_peaks[num_peaks*4+a0]**2))
+
+            return sig
+
+        # refine fitting model
+        coefs_all = curve_fit(
+            fit_image, 
+            basis[mask_bool.ravel(),:], 
+            im_polar[mask_bool], 
+            p0 = coefs_all,
+            xtol = 1e-12,
+            # bounds = (lb,ub),
+        )[0]
+
+        # Output refined parameters for background
+        coefs_bg = coefs_all[:(3*num_rings+3)]
+        self.background_refine[rx,ry] = coefs_bg
+
+        # Output refined peak parameters
+        coefs_peaks = np.reshape(
+            coefs_all[(3*num_rings+3):],
+            (5,num_peaks)).T
+        self.peaks_refine[rx,ry] = PointList(
+            coefs_peaks.ravel().view([
+                ('qt', float),
+                ('qr', float),
+                ('intensity', float),
+                ('sigma_annular', float),
+                ('sigma_radial', float),
+            ]),
+            name = 'peaks_polar')
+
+    # # Testing
+    # im_fit = np.reshape(
+    #     fit_image(basis,coefs_all),
+    #     self.polar_shape)
+
+
+    # fig,ax = plt.subplots(figsize=(8,6))
+    # ax.imshow(
+    #     np.vstack((
+    #         im_polar,
+    #         im_fit,
+    #     )),
+    #     cmap = 'turbo',
+    #     )
 
 
 def plot_radial_background(
