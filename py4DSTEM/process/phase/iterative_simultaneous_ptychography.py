@@ -3052,10 +3052,10 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
 
         if plot_fourier_probe:
             probe_extent = [
-                0,
-                self.angular_sampling[1] * self._region_of_interest_shape[1],
-                self.angular_sampling[0] * self._region_of_interest_shape[0],
-                0,
+                -self.angular_sampling[1] * self._region_of_interest_shape[1] / 2,
+                self.angular_sampling[1] * self._region_of_interest_shape[1] / 2,
+                self.angular_sampling[0] * self._region_of_interest_shape[0] / 2,
+                -self.angular_sampling[0] * self._region_of_interest_shape[0] / 2,
             ]
         elif plot_probe:
             probe_extent = [
