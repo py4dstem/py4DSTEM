@@ -613,6 +613,8 @@ class AffineTransform:
         x-translation
     t1: float
         y-translation
+    dilation: float
+        Isotropic expansion (multiplies scale0 and scale1)
     """
 
     def __init__(
@@ -623,9 +625,10 @@ class AffineTransform:
         angle: float = 0.0,
         t0: float = 0.0,
         t1: float = 0.0,
+        dilation: float = 1.0,
     ):
-        self.scale0 = scale0
-        self.scale1 = scale1
+        self.scale0 = scale0 * dilation
+        self.scale1 = scale1 * dilation
         self.shear1 = shear1
         self.angle = angle
         self.t0 = t0
