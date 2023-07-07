@@ -22,7 +22,7 @@ from py4DSTEM.process.phase.utils import AffineTransform
 class PtychographyOptimizer:
     """
     Optimize ptychographic hyperparameters with Bayesian Optimization of a
-    Gaussian process. Any of the scalar-valued real or integer,  boolean, or categorical 
+    Gaussian process. Any of the scalar-valued real or integer,  boolean, or categorical
     arguments to the ptychographic init-preprocess-reconstruct pipeline can be optimized over.
     """
 
@@ -135,7 +135,7 @@ class PtychographyOptimizer:
                 'std': negative standard deviation of cropped object
                 'std-phase': negative standard deviation of
                     phase of the cropped object
-                'entropy-phase': entropy of the phase of the 
+                'entropy-phase': entropy of the phase of the
                     cropped object
             When passed as a Callable, a function that takes the
                 PhaseReconstruction object as its only argument
@@ -216,49 +216,54 @@ class PtychographyOptimizer:
         if ndims == 1:
             if plot_convergence:
                 figsize = kwargs.pop("figsize", (9, 9))
-                spec = GridSpec(nrows=2,ncols=1,height_ratios=[2,1], hspace=0.15)
+                spec = GridSpec(nrows=2, ncols=1, height_ratios=[2, 1], hspace=0.15)
             else:
                 figsize = kwargs.pop("figsize", (9, 6))
-                spec = GridSpec(nrows=1,ncols=1)
+                spec = GridSpec(nrows=1, ncols=1)
 
-            fig = plt.figure(figsize = figsize)
+            fig = plt.figure(figsize=figsize)
             ax = fig.add_subplot(spec[0])
-            skopt_plot_gaussian_process(self._skopt_result,ax=ax, **kwargs)
+            skopt_plot_gaussian_process(self._skopt_result, ax=ax, **kwargs)
 
             if plot_convergence:
                 ax = fig.add_subplot(spec[1])
-                skopt_plot_convergence(self._skopt_result,ax=ax)
+                skopt_plot_convergence(self._skopt_result, ax=ax)
 
         else:
             if plot_convergence:
-                figsize = kwargs.pop("figsize", (4*ndims, 4*(ndims+0.5)))
-                spec = GridSpec(nrows=ndims+1,ncols=ndims,height_ratios=[2]*ndims+[1], hspace=0.15)
+                figsize = kwargs.pop("figsize", (4 * ndims, 4 * (ndims + 0.5)))
+                spec = GridSpec(
+                    nrows=ndims + 1,
+                    ncols=ndims,
+                    height_ratios=[2] * ndims + [1],
+                    hspace=0.15,
+                )
             else:
-                figsize = kwargs.pop("figsize", (4*ndims, 4*ndims))
-                spec = GridSpec(nrows=ndims,ncols=ndims, hspace=0.15)
+                figsize = kwargs.pop("figsize", (4 * ndims, 4 * ndims))
+                spec = GridSpec(nrows=ndims, ncols=ndims, hspace=0.15)
 
             if plot_evaluations:
                 axs = skopt_plot_evaluations(self._skopt_result)
             elif plot_objective:
-                cmap = kwargs.pop("cmap", 'magma')
-                axs = skopt_plot_objective(self._skopt_result, cmap=cmap,**kwargs)
+                cmap = kwargs.pop("cmap", "magma")
+                axs = skopt_plot_objective(self._skopt_result, cmap=cmap, **kwargs)
             elif plot_convergence:
                 skopt_plot_convergence(self._skopt_result)
                 return self
 
-            fig = axs[0,0].figure
+            fig = axs[0, 0].figure
             fig.set_size_inches(figsize)
             for i in range(ndims):
                 for j in range(ndims):
-                    ax = axs[i,j]
+                    ax = axs[i, j]
                     ax.remove()
                     ax.figure = fig
                     fig.add_axes(ax)
-                    ax.set_subplotspec(spec[i,j])
+                    ax.set_subplotspec(spec[i, j])
 
             if plot_convergence:
-                ax = fig.add_subplot(spec[ndims,:])
-                skopt_plot_convergence(self._skopt_result,ax=ax)
+                ax = fig.add_subplot(spec[ndims, :])
+                skopt_plot_convergence(self._skopt_result, ax=ax)
 
         spec.tight_layout(fig)
 
@@ -275,14 +280,20 @@ class PtychographyOptimizer:
             where the OptimizationParameter items have been replaced with the optimal
             values obtained from the optimizer
         """
-        optimized_dict = {p.name: v for p,v in zip(self._parameter_list,self._skopt_result.x)}
-        
-        filtered_dict = { k: v for k,v in optimized_dict.items() if k in self._init_args }
+        optimized_dict = {
+            p.name: v for p, v in zip(self._parameter_list, self._skopt_result.x)
+        }
+
+        filtered_dict = {
+            k: v for k, v in optimized_dict.items() if k in self._init_args
+        }
         init_opt = self._init_args | filtered_dict
-        
-        filtered_dict = { k: v for k,v in optimized_dict.items() if k in self._affine_args }
+
+        filtered_dict = {
+            k: v for k, v in optimized_dict.items() if k in self._affine_args
+        }
         affine_opt = self._affine_args | filtered_dict
-        
+
         affine_transform = partial(AffineTransform, **self._affine_static_args)(
             **affine_opt
         )
@@ -290,13 +301,17 @@ class PtychographyOptimizer:
             affine_transform, init_opt["datacube"]
         )
         init_opt["initial_scan_positions"] = scan_positions
-        
-        filtered_dict = { k: v for k,v in optimized_dict.items() if k in self._preprocess_args }
+
+        filtered_dict = {
+            k: v for k, v in optimized_dict.items() if k in self._preprocess_args
+        }
         prep_opt = self._preprocess_args | filtered_dict
-        
-        filtered_dict = { k: v for k,v in optimized_dict.items() if k in self._reconstruction_args }
+
+        filtered_dict = {
+            k: v for k, v in optimized_dict.items() if k in self._reconstruction_args
+        }
         reco_opt = self._reconstruction_args | filtered_dict
-        
+
         return init_opt, prep_opt, reco_opt
 
     def _split_static_and_optimization_vars(self, argdict):
@@ -385,10 +400,13 @@ class PtychographyOptimizer:
                 return -np.std(np.angle(ptycho.object_cropped))
 
         elif error_metric == "entropy-phase":
+
             def f(ptycho):
                 obj = np.angle(ptycho.object_cropped)
-                gx,gy = np.gradient(obj)
-                ghist,_,_ = np.histogram2d(gx.ravel(),gy.ravel(),bins=obj.shape,density=True)
+                gx, gy = np.gradient(obj)
+                ghist, _, _ = np.histogram2d(
+                    gx.ravel(), gy.ravel(), bins=obj.shape, density=True
+                )
                 nz = ghist > 0
                 S = np.sum(ghist[nz] * np.log2(ghist[nz]))
                 return S
@@ -482,14 +500,14 @@ class PtychographyOptimizer:
 
     def _set_optimizer_defaults(
         self,
-        verbose = False,
-        plot_center_of_mass = False,
-        plot_rotation = False,
-        plot_probe_overlaps = False,
-        progress_bar = False,
-        store_iterations = False,
-        reset = True,
-        ):
+        verbose=False,
+        plot_center_of_mass=False,
+        plot_rotation=False,
+        plot_probe_overlaps=False,
+        progress_bar=False,
+        store_iterations=False,
+        reset=True,
+    ):
         """
         Set all of the verbose and plotting to False, allowing for user-overwrite.
         """
@@ -538,7 +556,6 @@ class OptimizationParameter:
         space = space.lower()
         if space not in ("real", "integer", "bool", "categorical"):
             raise ValueError(f"Unknown Parameter type: {space}")
-
 
         scaling = scaling.lower()
         if scaling not in ("uniform", "log-uniform"):
