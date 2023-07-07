@@ -7,15 +7,17 @@ import py4DSTEM
 from py4DSTEM import save,read
 import emdfile as emd
 
-from py4DSTEM.data import (
-    DataCube,
+from py4DSTEM import (
     Calibration,
     DiffractionSlice,
     RealSlice,
     QPoints,
+    DataCube,
+    VirtualImage,
+    VirtualDiffraction,
+    BraggVectors,
+    Probe
 )
-from py4DSTEM.process.diskdetection import BraggVectors,Probe
-from py4DSTEM.classes import VirtualDiffraction, VirtualImage
 
 # Set paths
 dirpath = py4DSTEM._TESTPATH

@@ -6,10 +6,6 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.spatial import Voronoi
 
 from emdfile import PointList
-from py4DSTEM.data import DataCube,Calibration
-from py4DSTEM.process.utils import get_voronoi_vertices,convert_ellipse_params
-from py4DSTEM.process.calibration import double_sided_gaussian
-from py4DSTEM.process.latticevectors import get_selected_lattice_vectors
 from py4DSTEM.visualize import show
 from py4DSTEM.visualize.overlay import (
     add_pointlabels,
@@ -21,6 +17,8 @@ from py4DSTEM.visualize.overlay import (
 )
 from py4DSTEM.visualize.vis_grid import show_image_grid
 from py4DSTEM.visualize.vis_RQ import ax_addaxes,ax_addaxes_QtoR
+
+
 
 
 
@@ -93,6 +91,8 @@ def show_amorphous_ring_fit(dp,fitradii,p_dsg,N=12,cmap=('gray','gray'),
         ellipse (bool): if True, overlay an ellipse
         returnfig (bool): if True, returns the figure
     """
+    from py4DSTEM.process.calibration import double_sided_gaussian
+    from py4DSTEM.process.utils import convert_ellipse_params
     assert(len(p_dsg)==11)
     assert(isinstance(N,(int,np.integer)))
     if isinstance(cmap,tuple):
@@ -258,6 +258,7 @@ def show_voronoi(ar,x,y,color_points='r',color_lines='w',max_dist=None,
     """
     words
     """
+    from py4DSTEM.process.utils import get_voronoi_vertices
     Nx,Ny = ar.shape
     points = np.vstack((x,y)).T
     voronoi = Voronoi(points)
@@ -604,6 +605,8 @@ def select_lattice_vectors(ar,gx,gy,i0,i1,i2,
         if returnfig==False:    g1,g2
         if returnfig==True      g1,g2,fig,ax
     """
+    from py4DSTEM.process.latticevectors import get_selected_lattice_vectors
+
     # Make the figure
     fig,(ax1,ax2) = plt.subplots(1,2,figsize=figsize)
     show(ar,figax=(fig,ax1),**kwargs)
@@ -702,6 +705,8 @@ def show_origin_meas(data):
     Args:
         data (DataCube or Calibration or 2-tuple of arrays (qx0,qy0))
     """
+    from py4DSTEM.data import Calibration
+    from py4DSTEM.datacube import DataCube
     if isinstance(data,tuple):
         assert len(data)==2
         qx,qy = data
@@ -722,6 +727,8 @@ def show_origin_fit(data):
         data (DataCube or Calibration or (3,2)-tuple of arrays
             ((qx0_meas,qy0_meas),(qx0_fit,qy0_fit),(qx0_residuals,qy0_residuals))
     """
+    from py4DSTEM.data import Calibration
+    from py4DSTEM.datacube import DataCube
     if isinstance(data,tuple):
         assert len(data)==3
         qx0_meas,qy_meas = data[0]
@@ -764,6 +771,7 @@ def show_selected_dps(datacube,positions,im,bragg_pos=None,
         **kwargs (dict): arguments passed to visualize.show for the
             *diffraction patterns*. Default is `scaling='log'`
     """
+    from py4DSTEM.datacube import DataCube
     assert isinstance(datacube,DataCube)
     N = len(positions)
     assert(all([len(x)==2 for x in positions])), "Improperly formated argument `positions`"

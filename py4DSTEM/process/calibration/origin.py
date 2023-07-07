@@ -6,7 +6,7 @@ from scipy.ndimage import gaussian_filter
 from scipy.optimize import leastsq
 
 from emdfile import tqdmnd, PointListArray
-from py4DSTEM.data import DataCube
+from py4DSTEM.datacube import DataCube
 from py4DSTEM.process.calibration.probe import get_probe_size
 from py4DSTEM.process.fit import plane,parabola,bezier_two,fit_2D
 from py4DSTEM.process.utils import get_CoM, add_to_2D_array_from_floats, get_maxima_2D

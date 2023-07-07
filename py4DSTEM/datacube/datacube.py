@@ -9,10 +9,14 @@ from typing import Optional,Union
 
 from emdfile import Array, Metadata, Node, Root, tqdmnd
 from py4DSTEM.data import Data, Calibration
+from py4DSTEM.datacube.virtualimage import DataCubeVirtualImager
 
 
-
-class DataCube(Array,Data):
+class DataCube(
+    Array,
+    Data,
+    DataCubeVirtualImager
+    ):
     """
     Storage and processing methods for 4D-STEM datasets.
     """
@@ -940,200 +944,6 @@ class DataCube(Array,Data):
         # return
         if returncalc:
             return dp
-
-
-
-    # Virtual imaging
-
-    def get_virtual_image(
-        self,
-        mode,
-        geometry,
-        centered = False,
-        calibrated = False,
-        shift_center = False,
-        verbose = True,
-        dask = False,
-        return_mask = False,
-        name = 'virtual_image',
-        returncalc = True,
-        test_config = False
-        ):
-        """
-        Get a virtual image and store it in `datacube`s tree under `name`.
-        The kind of virtual image is specified by the `mode` argument.
-
-        Args:
-            mode (str): defines geometry mode for calculating virtual image
-                options:
-                    - 'point' uses singular point as detector
-                    - 'circle' or 'circular' uses round detector, like bright
-                      field
-                    - 'annular' or 'annulus' uses annular detector, like dark
-                      field
-                    - 'rectangle', 'square', 'rectangular', uses rectangular
-                      detector
-                    - 'mask' flexible detector, any 2D array
-            geometry (variable) : valid entries are determined by the `mode`,
-                values in
-            pixels argument, as follows:
-                - 'point': 2-tuple, (qx,qy), ints
-                - 'circle' or 'circular': nested 2-tuple, ((qx,qy),radius),
-                - 'annular' or 'annulus': nested 2-tuple,
-                  ((qx,qy),(radius_i,radius_o)),
-                - 'rectangle', 'square', 'rectangular': 4-tuple,
-                  (xmin,xmax,ymin,ymax)
-                - `mask`: any boolean or floating point 2D array with the same
-                  size as datacube.Qshape
-            centered (bool): if False, the origin is in the upper left corner.
-                 If True, the origin is set to the mean origin in the datacube
-                 calibrations, so that a bright-field image could be specified
-                 with, e.g., geometry = ((0,0),R).  The origin can set with
-                 datacube.calibration.set_origin().  For `mode="mask"`,
-                 has no effect. Default is False.
-            calibrated (bool): if True, geometry is specified in units of 'A^-1'
-                instead of pixels. The datacube's calibrations must have its
-                `"Q_pixel_units"` parameter set to "A^-1". For `mode="mask"`, has
-                no effect. Default is False.
-            shift_center (bool): if True, the mask is shifted at each real space
-                position to account for any shifting of the origin of the
-                diffraction images. The datacube's calibration['origin']
-                parameter must be set. The shift applied to each pattern is the
-                difference between the local origin position and the mean origin
-                position over all patterns, rounded to the nearest integer for
-                speed. Default is False.
-            verbose (bool): if True, show progress bar
-            dask (bool): if True, use dask arrays
-            return_mask (bool): if False (default) returns a virtual image as
-                usual. If True, does *not* generate or return a virtual image,
-                instead returning the mask that would be used in virtual image
-                computation for any call to this function where
-                `shift_center = False`. Otherwise, must be a 2-tuple of integers
-                corresponding to a scan position (rx,ry); in this case, returns
-                the mask that would be used for virtual image computation at this
-                scan position with `shift_center` set to `True`. Setting
-                return_mask to True does not add anything to the datacube's tree
-            name (str): the output object's name
-            returncalc (bool): if True, returns the output
-        Returns:
-            (Optional): if returncalc is True, returns the VirtualImage
-        """
-        # perform computation
-        from py4DSTEM.classes.virtualimage import VirtualImage
-        from py4DSTEM.process.virtualimage import get_virtual_image
-        im = get_virtual_image(
-            self,
-            mode = mode,
-            geometry = geometry,
-            centered = centered,
-            calibrated = calibrated,
-            shift_center = shift_center,
-            verbose = verbose,
-            dask = dask,
-            return_mask = return_mask,
-            test_config = test_config
-        )
-
-        # if a mask is requested, skip the remaining i/o functionality
-        if return_mask is not False:
-            return im
-
-        # wrap with a py4dstem class
-        im = VirtualImage(
-            data = im,
-            name = name,
-        )
-
-        # add generating params as metadata
-        im.metadata = Metadata(
-            name = 'gen_params',
-            data = {
-                'mode' : mode,
-                'geometry' : geometry,
-                'shift_center' : shift_center,
-                'centered' : centered,
-                'calibrated' : calibrated,
-                'verbose' : verbose,
-                'dask' : dask,
-                'return_mask' : return_mask,
-                'test_config' : test_config
-            }
-        )
-
-        # add to the tree
-        self.attach( im )
-
-        # return
-        if returncalc:
-            return im
-
-
-    # Position detector
-
-    def position_detector(
-        self,
-        mode,
-        geometry,
-        scan_position = None,
-        centered = None,
-        calibrated = None,
-        shift_center = None,
-        invert = False,
-        color = 'r',
-        alpha = 0.7,
-    ):
-        """
-        Display a diffraction space image with an overlaid mask representing
-        a virtual detector.
-
-        Args:
-            mode: see py4DSTEM.process.get_virtual_image
-            geometry: see py4DSTEM.process.get_virtual_image
-            scan_position: if None, positions the unshifted detector over the
-                mean or max diffraction pattern. Otherwise, must be a tuple
-                (rx,ry) of ints, and a detector is positioned over the
-                diffraction pattern at this position, including shifts if they
-                would be applied for this dataset (i.e. if it contains the
-                appropriate calibrations)
-            centered (bool): if False, the origin is in the upper left corner.
-                 If True, the origin is set to the mean origin in the datacube
-                 calibrations, so that a bright-field image could be specified
-                 with, e.g., geometry = ((0,0),R). The origin can set with
-                 datacube.calibration.set_origin().  For `mode="mask"`,
-                 has no effect. Default is False.
-            calibrated (bool): if True, geometry is specified in units of 'A^-1'
-                instead of pixels. The datacube's calibrations must have its
-                `"Q_pixel_units"` parameter set to "A^-1". For `mode="mask"`, has
-                no effect.
-            shift_center (bool): if True, the mask is shifted at each real space
-                position to account for any shifting of the origin of the
-                diffraction images. The datacube's calibration['origin']
-                parameter must be set. The shift applied to each pattern is the
-                difference between the local origin position and the mean origin
-                position over all patterns, rounded to the nearest integer for
-                speed.
-            invert (bool): if True, invert the display mask
-        """
-
-        # parse inputs
-        if scan_position is None:
-            data = self
-        else:
-            data = (self,scan_position[0],scan_position[1])
-
-        # make and show visualization
-        from py4DSTEM.visualize import position_detector
-        position_detector(
-            data,
-            mode,
-            geometry,
-            centered,
-            calibrated,
-            shift_center,
-            invert = invert,
-            color = color,
-            alpha = alpha,
-        )
 
 
 
