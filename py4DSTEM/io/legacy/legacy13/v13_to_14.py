@@ -39,13 +39,15 @@ from emdfile import (
 
 from py4DSTEM.data import (
     Calibration,
-    DataCube,
     DiffractionSlice,
     RealSlice,
     QPoints,
 )
+from py4DSTEM.datacube import (
+    DataCube,
+    VirtualImage
+)
 from py4DSTEM.classes import (
-    VirtualImage,
     VirtualDiffraction,
 )
 from py4DSTEM.process.diskdetection import BraggVectors, Probe

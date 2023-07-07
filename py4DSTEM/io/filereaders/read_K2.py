@@ -9,7 +9,7 @@ try:
 except ImportError:
     pass
 from emdfile import tqdmnd
-from py4DSTEM.data import DataCube
+from py4DSTEM.datacube import DataCube
 
 
 def read_gatan_K2_bin(fp, mem="MEMMAP", binfactor=1, metadata=False, **kwargs):
