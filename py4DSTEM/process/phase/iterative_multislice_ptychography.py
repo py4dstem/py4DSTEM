@@ -1653,6 +1653,9 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
         max_iter: int = 64,
         reconstruction_method: str = "gradient-descent",
         reconstruction_parameter: float = 1.0,
+        reconstruction_parameter_a: float = None,
+        reconstruction_parameter_b: float = None,
+        reconstruction_parameter_c: float = None,
         max_batch_size: int = None,
         seed_random: int = None,
         step_size: float = 0.5,
@@ -1703,7 +1706,7 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
             Maximum number of iterations to run
         reconstruction_method: str, optional
             Specifies which reconstruction algorithm to use, one of:
-            "generalized-projection",
+            "generalized-projections",
             "DM_AP" (or "difference-map_alternating-projections"),
             "RAAR" (or "relaxed-averaged-alternating-reflections"),
             "RRR" (or "relax-reflect-reflect"),
@@ -1711,8 +1714,12 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
             "GD" (or "gradient_descent")
         reconstruction_parameter: float, optional
             Reconstruction parameter for various reconstruction methods above.
-        reconstruction_parameter: float, optional
-            Tuning parameter to interpolate b/w DM-AP and DM-RAAR
+        reconstruction_parameter_a: float, optional
+            Reconstruction parameter a for reconstruction_method='generalized-projections'.
+        reconstruction_parameter_b: float, optional
+            Reconstruction parameter b for reconstruction_method='generalized-projections'.
+        reconstruction_parameter_c: float, optional
+            Reconstruction parameter c for reconstruction_method='generalized-projections'.
         max_batch_size: int, optional
             Max number of probes to update at once
         seed_random: int, optional
@@ -1804,17 +1811,23 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
 
         # Reconstruction method
 
-        if reconstruction_method == "generalized-projection":
-            if np.array(reconstruction_parameter).shape != (3,):
+        if reconstruction_method == "generalized-projections":
+            if (
+                reconstruction_parameter_a is None
+                or reconstruction_parameter_b is None
+                or reconstruction_parameter_c is None
+            ):
                 raise ValueError(
                     (
-                        "reconstruction_parameter must be a list of three numbers "
-                        "when using `reconstriction_method`=generalized-projection."
+                        "reconstruction_parameter_a/b/c must all be specified "
+                        "when using reconstruction_method='generalized-projections'."
                     )
                 )
 
             use_projection_scheme = True
-            projection_a, projection_b, projection_c = reconstruction_parameter
+            projection_a = reconstruction_parameter_a
+            projection_b = reconstruction_parameter_b
+            projection_c = reconstruction_parameter_c
             step_size = None
         elif (
             reconstruction_method == "DM_AP"
@@ -1873,7 +1886,8 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
         else:
             raise ValueError(
                 (
-                    "reconstruction_method must be one of 'DM_AP' (or 'difference-map_alternating-projections'), "
+                    "reconstruction_method must be one of 'generalized-projections', "
+                    "'DM_AP' (or 'difference-map_alternating-projections'), "
                     "'RAAR' (or 'relaxed-averaged-alternating-reflections'), "
                     "'RRR' (or 'relax-reflect-reflect'), "
                     "'SUPERFLIP' (or 'charge-flipping'), "
