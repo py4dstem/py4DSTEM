@@ -37,7 +37,8 @@ from py4DSTEM.data import (
 # datacube
 from py4DSTEM.datacube import (
     DataCube,
-    VirtualImage
+    VirtualImage,
+    VirtualDiffraction
 )
 
 
@@ -60,17 +61,13 @@ from py4DSTEM.braggvectors import (
 
 # TODO - crystal
 # TODO - ptycho
-# TODO - others?
+# TODO - others
 
-# TODO - where?
+# TODO - where
 from py4DSTEM.process import (
     PolarDatacube,
 )
 
-# TODO - to datacube
-from py4DSTEM.classes import (
-    VirtualDiffraction,
-)
 
 
 
