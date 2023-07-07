@@ -1,22 +1,19 @@
-from tqdm import tqdm
-from skopt import gp_minimize
-from skopt.space import Real, Integer, Categorical
-from skopt.plots import (
-    plot_convergence as skopt_plot_convergence,
-    plot_gaussian_process as skopt_plot_gaussian_process,
-    plot_evaluations as skopt_plot_evaluations,
-    plot_objective as skopt_plot_objective,
-)
-from skopt.utils import use_named_args
-import matplotlib.pyplot as plt
-from matplotlib.gridspec import GridSpec
-import numpy as np
-
 from functools import partial
-from typing import Union, Callable
+from typing import Callable, Union
 
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.gridspec import GridSpec
 from py4DSTEM.process.phase.iterative_base_class import PhaseReconstruction
 from py4DSTEM.process.phase.utils import AffineTransform
+from skopt import gp_minimize
+from skopt.plots import plot_convergence as skopt_plot_convergence
+from skopt.plots import plot_evaluations as skopt_plot_evaluations
+from skopt.plots import plot_gaussian_process as skopt_plot_gaussian_process
+from skopt.plots import plot_objective as skopt_plot_objective
+from skopt.space import Categorical, Integer, Real
+from skopt.utils import use_named_args
+from tqdm import tqdm
 
 
 class PtychographyOptimizer:
