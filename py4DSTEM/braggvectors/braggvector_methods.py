@@ -2,9 +2,12 @@
 
 import numpy as np
 from scipy.ndimage import gaussian_filter
+import inspect
+
 from emdfile import Array,Metadata
 from emdfile import _read_metadata
 from py4DSTEM.process.utils import get_CoM
+from py4DSTEM.datacube import VirtualImage
 
 
 class BraggVectorMethods:
@@ -183,6 +186,7 @@ class BraggVectorMethods:
         self,
         mode = None,
         geometry = None,
+        name = 'bragg_virtual_image',
         returncalc = True
         ):
         '''
@@ -215,76 +219,77 @@ class BraggVectorMethods:
         assert(mode in modes), f"Unrecognized mode {mode}"
 
         # set geometry
-#         if mode is None:
-#             if geometry is None:
-#                 center = None
-#                 radial_range = np.array((0,np.inf))
-#             else:
-#                 if len(geometry[0]) == 0:
-#                     center = None
-#                 else:
-#                     center = np.array(geometry[0])
-#                 if isinstance(geometry[1], int) or isinstance(geometry[1], float):
-#                     radial_range = np.array((0,geometry[1]))
-#                 elif len(geometry[1]) == 0:
-#                     radial_range = None
-#                 else:
-#                     radial_range = np.array(geometry[1])
-#         elif mode == 'circular' or mode == 'circle':
-#             radial_range = np.array((0,geometry[1]))
-#             if len(geometry[0]) == 0:
-#                     center = None
-#             else:
-#                 center = np.array(geometry[0])
-#         elif mode == 'annular' or mode == 'annulus':
-#             radial_range = np.array(geometry[1])
-#             if len(geometry[0]) == 0:
-#                     center = None
-#             else:
-#                 center = np.array(geometry[0])
-
-
+        if mode is None:
+            if geometry is None:
+                center = None
+                radial_range = np.array((0,np.inf))
+            else:
+                if len(geometry[0]) == 0:
+                    center = None
+                else:
+                    center = np.array(geometry[0])
+                if isinstance(geometry[1], int) or isinstance(geometry[1], float):
+                    radial_range = np.array((0,geometry[1]))
+                elif len(geometry[1]) == 0:
+                    radial_range = None
+                else:
+                    radial_range = np.array(geometry[1])
+        elif mode == 'circular' or mode == 'circle':
+            radial_range = np.array((0,geometry[1]))
+            if len(geometry[0]) == 0:
+                    center = None
+            else:
+                center = np.array(geometry[0])
+        elif mode == 'annular' or mode == 'annulus':
+            radial_range = np.array(geometry[1])
+            if len(geometry[0]) == 0:
+                    center = None
+            else:
+                center = np.array(geometry[0])
 
         # allocate space
-        im_virtual = np.zeros(peaks.shape)
+        im_virtual = np.zeros(self.shape)
 
         # generate image
-        for rx,ry in tqdmnd(peaks.shape[0],peaks.shape[1]):
-            p = peaks.get_pointlist(rx,ry)
+        for rx,ry in tqdmnd(self.shape[0],self.shape[1]):
+            p = self.raw[rx,ry]
             if p.data.shape[0] > 0:
                 if radial_range is None:
-                    im_virtual[rx,ry] = np.sum(p.data['intensity'])
+                    im_virtual[rx,ry] = np.sum(p.I)
                 else:
                     if center is None:
-                        qr = np.hypot(p.data['qx'],p.data['qy'])
+                        qr = np.hypot(p.qx,p.qy)
                     else:
-                        qr = np.hypot(p.data['qx'] - center[0],p.data['qy'] - center[1])
+                        qr = np.hypot(p.qx - center[0],p.qy - center[1])
                     sub = np.logical_and(
                         qr >= radial_range[0],
                         qr <  radial_range[1])
                     if np.sum(sub) > 0:
-                        im_virtual[rx,ry] = np.sum(p.data['intensity'][sub])
+                        im_virtual[rx,ry] = np.sum(p.I[sub])
 
-#         # generate image
-#         for rx,ry in tqdmnd(peaks.shape[0],peaks.shape[1]):
-#             p = peaks.get_pointlist(rx,ry)
-#             if p.data.shape[0] > 0:
-#                 if radial_range is None:
-#                     im_virtual[rx,ry] = np.sum(p.data['intensity'])
-#                 else:
-#                     if center is None:
-#                         qr = np.hypot(p.data['qx'],p.data['qy'])
-#                     else:
-#                         qr = np.hypot(p.data['qx'] - center[0],p.data['qy'] - center[1])
-#                     sub = np.logical_and(
-#                         qr >= radial_range[0],
-#                         qr <  radial_range[1])
-#                     if np.sum(sub) > 0:
-#                         im_virtual[rx,ry] = np.sum(p.data['intensity'][sub])
+        # wrap in Virtual Image class
+        ans = VirtualImage(
+            data = im_virtual,
+            name = name
+        )
+        # add generating params as metadta
+        ans.metadata = Metadata(
+            name = 'gen_params',
+            data = {
+                '_calling_method' : inspect.stack()[0][3],
+                '_calling_class' : __class__.__name__,
+                'mode' : mode,
+                'geometry' : geometry,
+                'name' : name,
+                'returncalc' : returncalc
+            }
+        )
+        # attach to the tree
+        self.attach( ans)
 
-        # TODO wrap in VirtualImage
-
-        return im_virtual
+        # return
+        if returncalc:
+            return ans
 
 
 

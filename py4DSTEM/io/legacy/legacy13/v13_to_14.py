@@ -45,9 +45,7 @@ from py4DSTEM.data import (
 )
 from py4DSTEM.datacube import (
     DataCube,
-    VirtualImage
-)
-from py4DSTEM.classes import (
+    VirtualImage,
     VirtualDiffraction,
 )
 

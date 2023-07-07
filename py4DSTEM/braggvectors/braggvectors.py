@@ -72,7 +72,6 @@ class BraggVectors(Custom,BraggVectorMethods,Data):
         Data.__init__(self,calibration=calibration)
 
         self.Rshape = Rshape
-        self.shape = self.Rshape
         self.Qshape = Qshape
         self.verbose = verbose
 
@@ -102,6 +101,8 @@ class BraggVectors(Custom,BraggVectorMethods,Data):
         self._set_cal_vector_getter()
 
 
+    # calibration state, vector getters
+
     @property
     def calstate(self):
         return self._calstate
@@ -115,6 +116,10 @@ class BraggVectors(Custom,BraggVectorMethods,Data):
         )
 
 
+    # shape
+    @property
+    def shape(self):
+        return self.Rshape
 
 
     # raw vectors
@@ -130,7 +135,6 @@ class BraggVectors(Custom,BraggVectorMethods,Data):
         """
         # use the vector getter to grab the vector
         return self._raw_vector_getter
-
 
 
     # calibrated vectors
