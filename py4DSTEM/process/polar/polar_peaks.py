@@ -798,6 +798,8 @@ def refine_peaks(
     Use global fitting model for all images. Requires an background model 
     specified with self.model_radial_background().
 
+    TODO: add fitting reset
+
     Parameters
     --------
     mask: np.array
@@ -817,14 +819,78 @@ def refine_peaks(
     """
 
     # init
-    
+    self.peaks_refine = PointListArray(
+        dtype = [
+        ('qt', '<f8'), 
+        ('qr', '<f8'), 
+        ('intensity', '<f8'), 
+        ('prom_annular', '<f8'), 
+        ('sigma_annular', '<f8'), 
+        ('prom_radial', '<f8'), 
+        ('sigma_radial', '<f8')],
+        shape = self._datacube.Rshape,
+        name = 'peaks_polardata_refined',
+        )
+
+    # coordinate scaling
+    t_step = self._annular_step
+    q_step = self._radial_step
+
+    # Background model params
+    num_rings = np.round((self.background_coefs.shape[0]-3)/3).astype('int')
+
+    # basis
+    basis = np.zeros((self.qq.shape[0],2))
+    basis[:,0] = self.qq
+    basis[1,0] = num_rings
+
+    # Main loop over probe positions
+    for rx, ry in tqdmnd(
+        np.arange(40,41),#self._datacube.shape[0],
+        np.arange(20,21),#self._datacube.shape[1],
+        desc="Refining peaks ",
+        unit=" probe positions",
+        disable=not progress_bar):
+
+        # Get transformed image and normalization array
+        im_polar, im_polar_norm, norm_array, mask_bool = self.transform(
+                self._datacube.data[rx,ry],
+                mask = mask,
+                returnval = 'all_zeros', 
+            )
+        # Change sign convention of mask
+        mask_bool = np.logical_not(mask_bool)
+
+        # Get initial peaks, in dimensioned units
+        p = self.peaks[rx,ry]
+        num_peaks = p.data.shape[0]
+        qt = p.data['qt'] * t_step
+        qr = (p.data['qr'] + self.qmin) * q_step
+        int_peaks = p.data['intensity']
+        s_annular = p.data['sigma_annular'] * t_step
+        s_radial = (p.data['sigma_radial'] + self.qmin) * q_step
+
+        # unified coefficients
+        basis[1,1] = num_peaks
+        coefs_all = np.hstack((
+            self.background_coefs,
+            self.background_coefs,
+            ))
+        print(coefs_all.shape)
 
 
-    # Main loop
+        # Construct fitting model
+        def fit_image(basis,coefs):
+
+            pass
 
 
 
-
+    fig,ax = plt.subplots(figsize=(8,4))
+    ax.imshow(
+        im_polar,
+        cmap = 'turbo',
+        )
 
 
 def plot_radial_background(
@@ -865,7 +931,7 @@ def plot_radial_background(
 
 
     if q_pixel_units:
-        q_axis = np.arange(self.polar_shape[1])
+        q_axis = np.arange(self.qq.shape[0])
     else:
         q_axis = self.qq[self.background_mask]
 
