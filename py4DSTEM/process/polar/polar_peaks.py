@@ -6,6 +6,7 @@ from scipy.ndimage import gaussian_filter, gaussian_filter1d
 from scipy.signal import peak_prominences
 from skimage.feature import peak_local_max
 from scipy.optimize import curve_fit
+import warnings
 
 # from emdfile import tqdmnd, PointList, PointListArray
 from py4DSTEM import tqdmnd, PointList, PointListArray
@@ -799,7 +800,9 @@ def refine_peaks(
     Use global fitting model for all images. Requires an background model 
     specified with self.model_radial_background().
 
-    TODO: add fitting reset
+    TODO:   add fitting reset
+            add min number pixels condition
+            track any failed fitting points, output as a boolean array
 
     Parameters
     --------
@@ -850,16 +853,16 @@ def refine_peaks(
         name = 'peaks_polardata_refined',
         )
     self.background_refine = np.zeros((
-        self.background_radial.shape[0],
-        self.background_radial.shape[0],
+        self._datacube.Rshape[0],
+        self._datacube.Rshape[1],
         np.round(3*num_rings+3).astype('int'),
         ))
 
 
     # Main loop over probe positions
     for rx, ry in tqdmnd(
-        np.arange(40,41),#self._datacube.shape[0],
-        np.arange(70,71),#self._datacube.shape[1],
+        self._datacube.shape[0],
+        self._datacube.shape[1],
         desc="Refining peaks ",
         unit=" probe positions",
         disable=not progress_bar):
@@ -922,32 +925,40 @@ def refine_peaks(
             return sig
 
         # refine fitting model
-        coefs_all = curve_fit(
-            fit_image, 
-            basis[mask_bool.ravel(),:], 
-            im_polar[mask_bool], 
-            p0 = coefs_all,
-            xtol = 1e-12,
-            # bounds = (lb,ub),
-        )[0]
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore')
+                coefs_all = curve_fit(
+                    fit_image, 
+                    basis[mask_bool.ravel(),:], 
+                    im_polar[mask_bool], 
+                    p0 = coefs_all,
+                    xtol = 1e-12,
+                    # bounds = (lb,ub),
+                )[0]
+
+            # Output refined peak parameters
+            coefs_peaks = np.reshape(
+                coefs_all[(3*num_rings+3):],
+                (5,num_peaks)).T
+            self.peaks_refine[rx,ry] = PointList(
+                coefs_peaks.ravel().view([
+                    ('qt', float),
+                    ('qr', float),
+                    ('intensity', float),
+                    ('sigma_annular', float),
+                    ('sigma_radial', float),
+                ]),
+                name = 'peaks_polar')
+        except:
+            # if fitting has failed, we will output the mean background signal,
+            # but none of the peaks.
+            pass
 
         # Output refined parameters for background
         coefs_bg = coefs_all[:(3*num_rings+3)]
         self.background_refine[rx,ry] = coefs_bg
 
-        # Output refined peak parameters
-        coefs_peaks = np.reshape(
-            coefs_all[(3*num_rings+3):],
-            (5,num_peaks)).T
-        self.peaks_refine[rx,ry] = PointList(
-            coefs_peaks.ravel().view([
-                ('qt', float),
-                ('qr', float),
-                ('intensity', float),
-                ('sigma_annular', float),
-                ('sigma_radial', float),
-            ]),
-            name = 'peaks_polar')
 
     # # Testing
     # im_fit = np.reshape(
