@@ -50,7 +50,9 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
     datacube: DataCube
         Input 4D diffraction pattern intensities
     semiangle_cutoff: float, optional
-        Semiangle cutoff for the initial probe guess
+        Semiangle cutoff for the initial probe guess in mrad
+    semiangle_cutoff_pixels: float, optional
+        Semiangle cutoff for the initial probe guess in pixels
     rolloff: float, optional
         Semiangle rolloff for the initial probe guess
     vacuum_probe_intensity: np.ndarray, optional
@@ -91,6 +93,7 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
         energy: float,
         datacube: DataCube = None,
         semiangle_cutoff: float = None,
+        semiangle_cutoff_pixels: float = None,
         rolloff: float = 2.0,
         vacuum_probe_intensity: np.ndarray = None,
         polar_parameters: Mapping[str, float] = None,
@@ -156,6 +159,7 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
         self._scan_positions = initial_scan_positions
         self._energy = energy
         self._semiangle_cutoff = semiangle_cutoff
+        self._semiangle_cutoff_pixels = semiangle_cutoff_pixels
         self._rolloff = rolloff
         self._object_type = object_type
         self._object_padding_px = object_padding_px
@@ -180,6 +184,9 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
         force_com_rotation: float = None,
         force_com_transpose: float = None,
         force_com_shifts: float = None,
+        force_scan_sampling: float = None,
+        force_angular_sampling: float = None,
+        force_reciprocal_sampling: float = None,
         object_fov_mask: np.ndarray = None,
         **kwargs,
     ):
@@ -229,6 +236,12 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
             Amplitudes come from diffraction patterns shifted with
             the CoM in the upper left corner for each probe unless
             shift is overwritten.
+        force_scan_sampling: float, optional
+            Override DataCube real space scan pixel size calibrations, in Angstrom
+        force_angular_sampling: float, optional
+            Override DataCube reciprocal pixel size calibration, in mrad
+        force_reciprocal_sampling: float, optional
+            Override DataCube reciprocal pixel size calibration, in A^-1
         object_fov_mask: np.ndarray (boolean)
             Boolean mask of FOV. Used to calculate additional shrinkage of object
             If None, probe_overlap intensity is thresholded
@@ -273,6 +286,9 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
         self._intensities = self._extract_intensities_and_calibrations_from_datacube(
             self._datacube,
             require_calibrations=True,
+            force_scan_sampling=force_scan_sampling,
+            force_angular_sampling=force_angular_sampling,
+            force_reciprocal_sampling=force_reciprocal_sampling,
         )
 
         (
@@ -327,6 +343,13 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
         self._positions_px = self._calculate_scan_positions_in_pixels(
             self._scan_positions
         )
+
+        # handle semiangle specified in pixels
+        if self._semiangle_cutoff_pixels:
+            self._semiangle_cutoff = (
+                self._semiangle_cutoff_pixels * self._angular_sampling[0]
+            )
+
         # Object Initialization
         if self._object is None:
             pad_x = self._object_padding_px[0][1]

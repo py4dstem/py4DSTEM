@@ -640,9 +640,16 @@ def resample_data_diffraction(
             )
             resampling_factor = resampling_factor[0]
 
+        old_size = datacube.data.shape
+
         datacube.data = fourier_resample(
             datacube.data, scale=resampling_factor, output_size=output_size
         )
+        
+        if not resampling_factor:
+            resampling_factor = old_size[2] / output_size[0]
+        if datacube.calibration.get_Q_pixel_size() is not None:
+            datacube.calibration.set_Q_pixel_size(datacube.calibration.get_Q_pixel_size() / resampling_factor)
 
     elif method == "bilinear":
         from scipy.ndimage import zoom
@@ -674,6 +681,8 @@ def resample_data_diffraction(
 
         resampling_factor = np.concatenate(((1, 1), resampling_factor))
         datacube.data = zoom(datacube.data, resampling_factor, order=1)
+        datacube.calibration.set_Q_pixel_size(datacube.calibration.get_Q_pixel_size() / resampling_factor[2])
+
     else:
         raise ValueError(
             f"'method' needs to be one of 'bilinear' or 'fourier', not {method}."
