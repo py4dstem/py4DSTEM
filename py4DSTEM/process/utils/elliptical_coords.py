@@ -151,7 +151,7 @@ def cartesian_to_polarelliptical_transform(
             * **pp**: *(2D array)* meshgrid of the phi coordinates
     """
     if mask is None:
-        mask = np.ones_like(cartesianData, dtype=bool)
+        mask = np.ones_like(cartesianData.data, dtype=bool)
     assert (
         cartesianData.shape == mask.shape
     ), "Mask and cartesian data array shapes must match."
