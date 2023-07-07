@@ -244,13 +244,13 @@ def find_peaks_single_pattern(
     # Output data as a pointlist
     peaks_polar = PointList(
             peaks_all.ravel().view([
-            ('qt', np.float),
-            ('qr', np.float),
-            ('intensity', np.float),
-            ('prom_annular', np.float),
-            ('sigma_annular', np.float),
-            ('prom_radial', np.float),
-            ('sigma_radial', np.float),
+            ('qt', float),
+            ('qr', float),
+            ('intensity', float),
+            ('prom_annular', float),
+            ('sigma_annular', float),
+            ('prom_radial', float),
+            ('sigma_radial', float),
         ]),
         name = 'peaks_polar')
     
@@ -415,10 +415,10 @@ def find_peaks(
         self.background_radial_mask[rx,ry] = sig_bg_mask
 
 
-def refine_peaks(
+def refine_peaks_local(
     self,
     mask = None,
-    radial_background_subtract = True,
+    radial_background_subtract = False,
     reset_fits_to_init_positions = False,
     fit_range_sigma_annular = 2.0,
     fit_range_sigma_radial = 2.0,
@@ -592,9 +592,11 @@ def refine_peaks(
 
 def plot_radial_peaks(
     self,
+    q_pixel_units = False,
     qmin = None,
     qmax = None,
     qstep = None,
+    label_y_axis = False,
     figsize = (8,4),
     returnfig = False,
     ):
@@ -606,7 +608,10 @@ def plot_radial_peaks(
     # Get all peak data
     vects = np.concatenate(
         [self.peaks[i,j].data for i in range(self._datacube.Rshape[0]) for j in range(self._datacube.Rshape[1])])
-    qr = vects['qr'] * self._radial_step 
+    if q_pixel_units:
+        qr = vects['qr']
+    else:
+        qr = (vects['qr'] + self.qmin) * self._radial_step
     intensity = vects['intensity']
 
     # bins
@@ -618,9 +623,11 @@ def plot_radial_peaks(
         qstep = self.qq[1] - self.qq[0]
     q_bins = np.arange(qmin,qmax,qstep)
     q_num = q_bins.shape[0]
+    if q_pixel_units:
+        q_bins /= self._radial_step
 
     # histogram
-    q_ind = (qr - qmin) / qstep
+    q_ind = (qr - q_bins[0]) / (q_bins[1] - q_bins[0])
     qf = np.floor(q_ind).astype("int")
     dq = q_ind - qf
 
@@ -647,23 +654,184 @@ def plot_radial_peaks(
         linewidth = 2,
         )
     ax.set_xlim((q_bins[0],q_bins[-1]))
-    ax.set_xlabel(
-        'Scattering Angle (' + self.calibration.get_Q_pixel_units() +')',
-        fontsize = 14,
-        )
+    if q_pixel_units:
+        ax.set_xlabel(
+            'Scattering Angle (pixels)',
+            fontsize = 14,
+            )
+    else:
+        ax.set_xlabel(
+            'Scattering Angle (' + self.calibration.get_Q_pixel_units() +')',
+            fontsize = 14,
+            )
     ax.set_ylabel(
         'Total Peak Signal',
         fontsize = 14,
         )
+    if not label_y_axis:
+        ax.tick_params(
+            left = False,
+            labelleft = False)
 
     if returnfig:
         return fig,ax
+
+
+def model_radial_background(
+    self,
+    ring_position = None,
+    ring_sigma = None,
+    ring_int = None,
+    refine_model = True,
+    plot_result = True,
+    ):
+    """
+    User provided radial background model, of the form:
+
+    int = int_const
+        + int_0 * exp( - q**2 / (2*s0**2) )
+        + int_1 * exp( - (q - q_1)**2 / (2*s1**2) )
+        + ...
+        + int_n * exp( - (q - q_n)**2 / (2*sn**2) )
+
+    where n is the number of amorphous halos / rings included in the fit.
+        
+    """
+
+    # Get mean radial background and mask
+    self.background_radial_mean = np.sum(
+        self.background_radial * self.background_radial_mask,
+        axis=(0,1))
+    background_radial_mean_norm = np.sum(
+        self.background_radial_mask,
+        axis=(0,1))
+    self.background_mask = \
+        background_radial_mean_norm > (np.max(background_radial_mean_norm)*0.05)
+    self.background_radial_mean[self.background_mask] \
+        /= background_radial_mean_norm[self.background_mask]
+    self.background_radial_mean[np.logical_not(self.background_mask)] = 0
+
+    # init
+    if ring_position is not None:
+        ring_position = np.atleast_1d(np.array(ring_position))
+        num_rings = ring_position.shape[0]
+    else:
+        num_rings = 0
+    self.background_coefs = np.zeros(3 + 3*num_rings)
+
+    if ring_sigma is None:
+        ring_sigma = np.atleast_1d(np.ones(num_rings)) \
+            * self.polar_shape[1] * 0.05 * self._radial_step
+    else:
+        ring_sigma = np.atleast_1d(np.array(ring_sigma))
+
+    # Background model initial parameters
+    int_const = np.min(self.background_radial_mean)
+    int_0 = np.max(self.background_radial_mean) - int_const
+    sigma_0 = self.polar_shape[1] * 0.25 * self._radial_step
+    self.background_coefs[0] = int_const
+    self.background_coefs[1] = int_0
+    self.background_coefs[2] = sigma_0
+
+    # Additional Gaussians
+    if ring_int is None:
+        # Estimate peak intensities
+        sig_0 = int_const + int_0*np.exp(self.qq**2/(-2*sigma_0**2))
+        sig_peaks = np.maximum(self.background_radial_mean - sig_0, 0.0)
+
+        ring_int = np.atleast_1d(np.zeros(num_rings))
+        for a0 in range(num_rings):
+            ind = np.argmin(np.abs(self.qq - ring_position[a0]))
+            ring_int[a0] = sig_peaks[ind]
+
+    else:
+        ring_int = np.atleast_1d(np.array(ring_int))
+    for a0 in range(num_rings):
+        self.background_coefs[3*a0+3] = ring_int[a0]
+        self.background_coefs[3*a0+4] = ring_sigma[a0]
+        self.background_coefs[3*a0+5] = ring_position[a0]
+
+    # Create background model
+    def background_model(q, *coefs):
+        coefs = np.squeeze(np.array(coefs))
+        num_rings = np.round((coefs.shape[0] - 3)/3).astype('int')
+
+        sig = np.ones(q.shape[0])*coefs[0]
+        sig += coefs[1]*np.exp(q**2/(-2*coefs[2]**2))
+
+        for a0 in range(num_rings):
+            sig += coefs[3*a0+3]*np.exp(
+                (q-coefs[3*a0+5])**2 / (-2*coefs[3*a0+4]**2))
+
+        return sig
+
+    self.background_model = background_model
+
+    # Refine background model coefficients
+    if refine_model:
+        self.background_coefs = curve_fit(
+            self.background_model, 
+            self.qq[self.background_mask], 
+            self.background_radial_mean[self.background_mask], 
+            p0 = self.background_coefs,
+            xtol = 1e-12,
+            # bounds = (lb,ub),
+        )[0]
+
+    # plotting
+    if plot_result:
+        self.plot_radial_background(
+                q_pixel_units = False,   
+                plot_background_model = True,
+            )
+
+
+
+def refine_peaks(
+    self,
+    mask = None,
+    # reset_fits_to_init_positions = False,
+    min_num_pixels_fit = 10,
+    progress_bar = True,
+    ):
+    """
+    Use global fitting model for all images. Requires an background model 
+    specified with self.model_radial_background().
+
+    Parameters
+    --------
+    mask: np.array
+        Mask image to apply to all images
+    radial_background_subtract: bool
+        Subtract radial background before fitting
+    reset_fits_to_init_positions: bool
+        Use the initial peak parameters for fitting
+    min_num_pixels_fit: int
+        Minimum number of pixels to perform fitting
+    progress_bar: bool
+        Enable progress bar
+
+    Returns
+    --------
+
+    """
+
+    # init
+    
+
+
+    # Main loop
+
+
 
 
 
 
 def plot_radial_background(
     self,
+    q_pixel_units = False,
+    label_y_axis = False,
+    plot_background_model = False,
     figsize = (8,4),
     returnfig = False,
     ):
@@ -696,9 +864,14 @@ def plot_radial_background(
     self.background_radial_std = np.sqrt(self.background_radial_var)
 
 
+    if q_pixel_units:
+        q_axis = np.arange(self.polar_shape[1])
+    else:
+        q_axis = self.qq[self.background_mask]
+
     fig,ax = plt.subplots(figsize = figsize)
     ax.fill_between(
-        self.qq[self.background_mask], 
+        q_axis, 
         self.background_radial_mean[self.background_mask] \
         - self.background_radial_std[self.background_mask], 
         self.background_radial_mean[self.background_mask] \
@@ -707,22 +880,48 @@ def plot_radial_background(
         alpha=0.2,
         )
     ax.plot(
-        self.qq[self.background_mask],
+        q_axis,
         self.background_radial_mean[self.background_mask],
         color = 'r',
         linewidth = 2,
         )
+
+    # overlay fitting model
+    if plot_background_model:
+        sig = self.background_model(
+            self.qq,
+            self.background_coefs,
+            )
+        ax.plot(
+            q_axis,
+            sig,
+            color = 'k',
+            linewidth = 2,
+            linestyle = '--'
+            )
+
+    # plot appearance
     ax.set_xlim((
-        self.qq[0],
-        self.qq[-1]))
-    ax.set_xlabel(
-        'Scattering Angle (' + self.calibration.get_Q_pixel_units() +')',
-        fontsize = 14,
-        )
+        q_axis[0],
+        q_axis[-1]))
+    if q_pixel_units:
+        ax.set_xlabel(
+            'Scattering Angle (pixels)',
+            fontsize = 14,
+            )
+    else:
+        ax.set_xlabel(
+            'Scattering Angle (' + self.calibration.get_Q_pixel_units() +')',
+            fontsize = 14,
+            )
     ax.set_ylabel(
         'Background Signal',
         fontsize = 14,
         )
+    if not label_y_axis:
+        ax.tick_params(
+            left = False,
+            labelleft = False)
 
     if returnfig:
         return fig,ax
@@ -820,10 +1019,10 @@ def make_orientation_histogram(
             dy = y - yF
 
             add_data = False
-
-            q = self.peaks[rx,ry]['qr'] * self._radial_step
+            q = (self.peaks[rx,ry]['qr'] + self.qmin) * self._radial_step
             r2 = q**2
             sub = np.logical_and(r2 >= radial_ranges_2[a0,0], r2 < radial_ranges_2[a0,1])                
+
             if np.any(sub):
                 add_data = True
                 intensity = self.peaks[rx,ry]['intensity'][sub]
