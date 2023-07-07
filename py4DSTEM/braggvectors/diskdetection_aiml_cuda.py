@@ -7,12 +7,12 @@ import numpy as np
 from time import time
 
 from emdfile import tqdmnd
-from py4DSTEM.process.diskdetection.braggvectors import BraggVectors
+from py4DSTEM.braggvectors.braggvectors import BraggVectors
 from emdfile import PointList, PointListArray
 from py4DSTEM.data import QPoints
-from py4DSTEM.process.diskdetection.kernels import kernels
-from py4DSTEM.process.diskdetection.diskdetection_aiml import _get_latest_model
-# from py4DSTEM.process.diskdetection.diskdetection import universal_threshold
+from py4DSTEM.braggvectors.kernels import kernels
+from py4DSTEM.braggvectors.diskdetection_aiml import _get_latest_model
+# from py4DSTEM.braggvectors.diskdetection import universal_threshold
 
 try:
     import cupy as cp
@@ -195,7 +195,7 @@ def find_Bragg_disks_aiml_CUDA(datacube, probe,
     print("Analyzed {} diffraction patterns in {}h {}m {}s".format(datacube.R_N, int(t2/3600),
                                                                    int(t2/60), int(t2%60)))
     if global_threshold == True:
-        from py4DSTEM.process.diskdetection import universal_threshold
+        from py4DSTEM.braggvectors import universal_threshold
         peaks = universal_threshold(peaks, minGlobalIntensity, metric, minPeakSpacing,
                                     maxNumPeaks)
     peaks.name = name

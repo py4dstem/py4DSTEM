@@ -50,7 +50,6 @@ from py4DSTEM.datacube import (
 from py4DSTEM.classes import (
     VirtualDiffraction,
 )
-from py4DSTEM.process.diskdetection import BraggVectors, Probe
 
 
 
@@ -179,6 +178,7 @@ def _v13_to_14_cls(obj):
         pass
 
     elif isinstance(obj, Probe13):
+        from py4DSTEM.braggvectors import Probe
         x = Probe(
             name = obj.name,
             data = obj.data
@@ -191,6 +191,7 @@ def _v13_to_14_cls(obj):
         )
 
     elif isinstance(obj, BraggVectors13):
+        from py4DSTEM.braggvectors import BraggVectors
         x = BraggVectors(
             name = obj.name,
             Rshape = obj.Rshape,

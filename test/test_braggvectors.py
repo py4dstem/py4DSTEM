@@ -61,7 +61,7 @@ class TestDiskDetectionBasic:
 
     def test_BraggVectors_import(self):
 
-        from py4DSTEM.process.diskdetection import BraggVectors
+        from py4DSTEM.braggvectors import BraggVectors
         pass
 
 
