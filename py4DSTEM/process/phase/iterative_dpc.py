@@ -4,7 +4,7 @@ namely DPC.
 """
 
 import warnings
-from typing import Tuple
+from typing import Tuple, Union, Sequence
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -239,7 +239,8 @@ class DPCReconstruction(PhaseReconstruction):
         fit_function: str = "plane",
         force_com_rotation: float = None,
         force_com_transpose: bool = None,
-        force_com_shifts: float = None,
+        force_com_shifts: Union[Sequence[np.ndarray], Sequence[float]] = None,
+        force_com_measured: Sequence[np.ndarray] = None,
         plot_center_of_mass: str = "default",
         plot_rotation: bool = True,
         **kwargs,
@@ -270,6 +271,8 @@ class DPCReconstruction(PhaseReconstruction):
             Force whether diffraction intensities need to be transposed.
         force_com_shifts: tuple of ndarrays (CoMx, CoMy)
             Force CoM fitted shifts
+        force_com_measured: tuple of ndarrays (CoMx measured, CoMy measured)
+            Force CoM measured shifts
         plot_center_of_mass: str, optional
             If 'default', the corrected CoM arrays will be displayed
             If 'all', the computed and fitted CoM arrays will be displayed
@@ -287,12 +290,18 @@ class DPCReconstruction(PhaseReconstruction):
         self._dp_mask = dp_mask
 
         if self._datacube is None:
-            raise ValueError(
-                (
-                    "The preprocess() method requires a DataCube. "
-                    "Please run dpc.attach_datacube(DataCube) first."
+            if force_com_measured is None:
+                raise ValueError(
+                    (
+                        "The preprocess() method requires either a DataCube "
+                        "or `force_com_measured`. "
+                        "Please run dpc.attach_datacube(DataCube) to attach DataCube."
+                    )
                 )
-            )
+            else:
+                self._datacube = DataCube(
+                    data=np.empty(force_com_measured[0].shape + (1, 1))
+                )
 
         self._intensities = self._extract_intensities_and_calibrations_from_datacube(
             self._datacube,
@@ -311,6 +320,7 @@ class DPCReconstruction(PhaseReconstruction):
             dp_mask=self._dp_mask,
             fit_function=fit_function,
             com_shifts=force_com_shifts,
+            com_measured=force_com_measured,
         )
 
         (
