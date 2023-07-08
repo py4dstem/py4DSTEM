@@ -280,7 +280,7 @@ class PhaseReconstruction(Custom):
 
         # Copies intensities to device casting to float32
         xp = self._xp
-        intensities = xp.asarray(datacube.data, dtype=xp.float32)
+        intensities = datacube.data
         self._grid_scan_shape = intensities.shape[:2]
 
         # Extracts calibrations
@@ -413,6 +413,7 @@ class PhaseReconstruction(Custom):
         dp_mask: np.ndarray = None,
         fit_function: str = "plane",
         com_shifts: np.ndarray = None,
+        com_measured: np.ndarray = None,
     ):
         """
         Common preprocessing function to compute and fit diffraction intensities CoM
@@ -425,9 +426,10 @@ class PhaseReconstruction(Custom):
             If not None, apply mask to datacube amplitude
         fit_function: str, optional
             2D fitting function for CoM fitting. One of 'plane','parabola','bezier_two'
-        com_shifts, np.ndarray, optional
+        com_shifts, tuple of ndarrays (CoMx measured, CoMy measured)
             If not None, com_shifts are fitted on the measured CoM values.
-
+        com_measured: tuple of ndarrays (CoMx measured, CoMy measured)
+            If not None, com_measured are passed as com_measured_x, com_measured_y
         Returns
         -------
 
@@ -448,39 +450,48 @@ class PhaseReconstruction(Custom):
         xp = self._xp
         asnumpy = self._asnumpy
 
-        # Coordinates
-        kx = xp.arange(intensities.shape[-2], dtype=xp.float32)
-        ky = xp.arange(intensities.shape[-1], dtype=xp.float32)
-        kya, kxa = xp.meshgrid(ky, kx)
+        intensities = xp.asarray(intensities, dtype=xp.float32)
 
-        # calculate CoM
-        if dp_mask is not None:
-            if dp_mask.shape != intensities.shape[-2:]:
-                raise ValueError(
-                    (
-                        f"Mask shape should be (Qx,Qy):{intensities.shape[-2:]}, "
-                        f"not {dp_mask.shape}"
-                    )
-                )
-            intensities_mask = intensities * xp.asarray(dp_mask, dtype=xp.float32)
+        # for ptycho
+        if com_measured:
+            com_measured_x, com_measured_y = com_measured
+
         else:
-            intensities_mask = intensities
+            # Coordinates
+            kx = xp.arange(intensities.shape[-2], dtype=xp.float32)
+            ky = xp.arange(intensities.shape[-1], dtype=xp.float32)
+            kya, kxa = xp.meshgrid(ky, kx)
 
-        intensities_sum = xp.sum(intensities_mask, axis=(-2, -1))
-        com_measured_x = (
-            xp.sum(intensities_mask * kxa[None, None], axis=(-2, -1)) / intensities_sum
-        )
-        com_measured_y = (
-            xp.sum(intensities_mask * kya[None, None], axis=(-2, -1)) / intensities_sum
-        )
+            # calculate CoM
+            if dp_mask is not None:
+                if dp_mask.shape != intensities.shape[-2:]:
+                    raise ValueError(
+                        (
+                            f"Mask shape should be (Qx,Qy):{intensities.shape[-2:]}, "
+                            f"not {dp_mask.shape}"
+                        )
+                    )
+                intensities_mask = intensities * xp.asarray(dp_mask, dtype=xp.float32)
+            else:
+                intensities_mask = intensities
 
-        # Fit function to center of mass
+            intensities_sum = xp.sum(intensities_mask, axis=(-2, -1))
+            com_measured_x = (
+                xp.sum(intensities_mask * kxa[None, None], axis=(-2, -1))
+                / intensities_sum
+            )
+            com_measured_y = (
+                xp.sum(intensities_mask * kya[None, None], axis=(-2, -1))
+                / intensities_sum
+            )
+
         if com_shifts is None:
             com_shifts = fit_origin(
                 (asnumpy(com_measured_x), asnumpy(com_measured_y)),
                 fitfunction=fit_function,
             )
 
+        # Fit function to center of mass
         com_fitted_x = xp.asarray(com_shifts[0], dtype=xp.float32)
         com_fitted_y = xp.asarray(com_shifts[1], dtype=xp.float32)
 
@@ -992,8 +1003,8 @@ class PhaseReconstruction(Custom):
             cmap = kwargs.pop("cmap", "RdBu_r")
             extent = [
                 0,
-                self._scan_sampling[1] * self._intensities.shape[1],
-                self._scan_sampling[0] * self._intensities.shape[0],
+                self._scan_sampling[1] * _com_measured_x.shape[1],
+                self._scan_sampling[0] * _com_measured_x.shape[0],
                 0,
             ]
 
@@ -1030,8 +1041,8 @@ class PhaseReconstruction(Custom):
 
             extent = [
                 0,
-                self._scan_sampling[1] * self._intensities.shape[1],
-                self._scan_sampling[0] * self._intensities.shape[0],
+                self._scan_sampling[1] * com_x.shape[1],
+                self._scan_sampling[0] * com_x.shape[0],
                 0,
             ]
 

@@ -2488,11 +2488,7 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
             if collective_tilt_updates:
                 self._object += collective_object / self._num_tilts
 
-                (
-                    self._object,
-                    self._probe,
-                    _,
-                ) = self._constraints(
+                (self._object, self._probe, _,) = self._constraints(
                     self._object,
                     self._probe,
                     None,
