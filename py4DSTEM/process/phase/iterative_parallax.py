@@ -171,6 +171,7 @@ class ParallaxReconstruction(PhaseReconstruction):
             self._datacube,
             require_calibrations=True,
         )
+        self._intensities = xp.asarray(self._intensities, dtype=xp.float32)
 
         # make sure mean diffraction pattern is shaped correctly
         if (self._dp_mean.shape[0] != self._intensities.shape[2]) or (
