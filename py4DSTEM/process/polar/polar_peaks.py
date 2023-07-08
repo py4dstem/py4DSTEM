@@ -1083,6 +1083,9 @@ def make_orientation_histogram(
     orientation_offset_degrees: float = 0.0,
     orientation_separate_bins: bool = False,
     upsample_factor: float = 4.0,
+    use_refined_peaks = True,
+    use_peak_sigma = False,
+    peak_sigma_samples = 6,
     theta_step_deg: float = None,
     sigma_x: float = 1.0,
     sigma_y: float = 1.0,
@@ -1104,6 +1107,8 @@ def make_orientation_histogram(
         orientation_offset_degrees (float): Offset for orientation angles
         orientation_separate_bins (bool):   whether to place multiple angles into multiple radial bins.
         upsample_factor (float):            Upsample factor
+        use_refined_peaks (float):          Use refined peak positions
+        use_peak_sigma (float):             Spread signal along annular direction using measured std.
         theta_step_deg (float):             Step size along annular direction in degrees
         sigma_x (float):                    Smoothing in x direction before upsample
         sigma_y (float):                    Smoothing in x direction before upsample
@@ -1145,6 +1150,10 @@ def make_orientation_histogram(
         size_output[1],
         num_theta_bins])
 
+    if use_peak_sigma:
+        v_sigma = np.linspace(-2,2,2*peak_sigma_samples+1)
+        w_sigma = np.exp(-v_sigma**2/2)
+
     # Loop over all probe positions
     for a0 in range(num_radii):
         t = "Generating histogram " + str(a0)
@@ -1168,7 +1177,10 @@ def make_orientation_histogram(
             dy = y - yF
 
             add_data = False
-            q = (self.peaks[rx,ry]['qr'] + self.qmin) * self._radial_step
+            if use_refined_peaks:
+                q = self.peaks_refine[rx,ry]['qr']
+            else:
+                q = (self.peaks[rx,ry]['qr'] + self.qmin) * self._radial_step
             r2 = q**2
             sub = np.logical_and(r2 >= radial_ranges_2[a0,0], r2 < radial_ranges_2[a0,1])                
 
@@ -1177,12 +1189,21 @@ def make_orientation_histogram(
                 intensity = self.peaks[rx,ry]['intensity'][sub]
 
                 # Angles of all peaks
-                theta = self.peaks[rx,ry]['qt'][sub] * self._annular_step
+                if use_refined_peaks:
+                    theta = self.peaks_refine[rx,ry]['qt'][sub]
+                else:
+                    theta = self.peaks[rx,ry]['qt'][sub] * self._annular_step
                 if orientation_flip_sign:
                     theta *= -1
                 theta += orientation_offset_degrees
 
                 t = theta / dtheta
+
+                # If needed, expand signal using peak sigma to write into multiple bins
+                if use_peak_sigma:
+                    theta_std = self.peaks_refine[rx,ry]['sigma_annular'][sub] / dtheta
+                    t = (t[:,None] + theta_std[:,None]*v_sigma[None,:]).ravel()
+                    intensity = (intensity[:,None] * w_sigma[None,:]).ravel()
 
             if add_data:
                 tF = np.floor(t).astype('int')
