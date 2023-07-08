@@ -1157,9 +1157,7 @@ def make_orientation_histogram(
     # Loop over all probe positions
     for a0 in range(num_radii):
         t = "Generating histogram " + str(a0)
-        # for rx, ry in tqdmnd(
-        #         *bragg_peaks.shape, desc=t,unit=" probe positions", disable=not progress_bar
-        #     ):
+
         for rx, ry in tqdmnd(
                 *size_input, 
                 desc=t,
