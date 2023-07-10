@@ -1284,6 +1284,8 @@ def nesterov_gamma(zero_indexed_iter_num):
 def regularize_probe_amp(
     probe_init,
     width_max_pixels = 2.0,
+    enforce_constant_intensity = True,
+    return_coefs = False,
     plot_result = False,
     plot_polar = False,
     cmap = 'turbo',
@@ -1299,6 +1301,10 @@ def regularize_probe_amp(
         2D complex image of the probe in Fourier space.
     width_max_pixels: float
         Maximum edge width of the probe in pixels.
+    enforce_constant_intensity: bool
+        Set to true to make intensity inside the aperture constant.
+    return_coefs: bool
+        If true, fitting coefficients will also be returned.
     plot_result: bool
         Plot the input and output probes.
     plot_polar: bool
@@ -1316,6 +1322,9 @@ def regularize_probe_amp(
     --------
     probe_corr: np.array
         2D complex image of the corrected probe in Fourier space.
+    coefs_all: np.array (optional)
+        coefficients for the 
+
 
 
     """
@@ -1323,7 +1332,7 @@ def regularize_probe_amp(
     # Get probe intensity
     probe_amp = np.abs(probe_init)
     probe_int = probe_amp**2
-    
+
     # coordinates
     xa,ya = np.meshgrid(
         np.arange(probe_init.shape[0]),
@@ -1351,7 +1360,7 @@ def regularize_probe_amp(
     sub = polar_int > (np.max(polar_int)*0.5)
     sig_0 = np.mean(polar_int[sub])
     rad_0 = np.max(np.argwhere(np.sum(sub,axis=0)))
-    width = np.minimum(1.0, width_max_pixels)
+    width = width_max_pixels * 0.5
 
     # init
     coefs_all = np.zeros((polar_int.shape[0],3))
@@ -1360,7 +1369,7 @@ def regularize_probe_amp(
     coefs_all[:,2] = width
 
     # bounds
-    lb = (0, 0, 0.5)
+    lb = (0.0, 0.0, 1e-4)
     ub = (np.inf, np.inf, width_max_pixels)
 
     # refine parameters, generate polar image
@@ -1378,26 +1387,30 @@ def regularize_probe_amp(
             radius,
             coefs_all[a0,:])
 
-    # Compute best-fit constant intensity inside probe
-    sig_0 = np.median(coefs_all[:,0])
-    coefs_all[:,0] = sig_0
-    lb = (sig_0-1e-8, 0, 0.5)
-    ub = (sig_0+1e-8, np.inf, width_max_pixels)
+    if enforce_constant_intensity:
+        # Compute best-fit constant intensity inside probe, update bounds
+        sig_0 = np.median(coefs_all[:,0])
+        coefs_all[:,0] = sig_0
+        lb = (sig_0-1e-8, 0.0, 1e-4)
+        ub = (sig_0+1e-8, np.inf, width_max_pixels)
 
-    # refine parameters, generate polar image
-    polar_int_corr = np.zeros_like(polar_int)
-    for a0 in range(polar_int.shape[0]):
-        coefs_all[a0,:] = curve_fit(
-                step_model, 
-                radius, 
-                polar_int[a0,:], 
-                p0 = coefs_all[a0,:],
-                xtol = 1e-12,
-                bounds = (lb,ub),
-            )[0]
-        polar_int_corr[a0,:] = step_model(
-            radius,
-            coefs_all[a0,:])
+        # refine parameters, generate polar image
+        polar_int_corr = np.zeros_like(polar_int)
+        for a0 in range(polar_int.shape[0]):
+            coefs_all[a0,:] = curve_fit(
+                    step_model, 
+                    radius, 
+                    polar_int[a0,:], 
+                    p0 = coefs_all[a0,:],
+                    xtol = 1e-12,
+                    bounds = (lb,ub),
+                )[0]
+            polar_int_corr[a0,:] = step_model(
+                radius,
+                coefs_all[a0,:])
+
+    else:
+        polar_int_corr = polar_fit
 
     # Convert back to cartesian coordinates
     int_corr = im_polar_to_cart(
@@ -1431,7 +1444,10 @@ def regularize_probe_amp(
             cmap = 'turbo',
             )    
 
-    return probe_corr
+    if return_coefs:
+        return probe_corr, coefs_all
+    else:
+        return probe_corr
     
 
 def step_model(radius, *coefs):
@@ -1441,7 +1457,7 @@ def step_model(radius, *coefs):
     rad_0 = coefs[1]
     width = coefs[2]
 
-    return sig_0 * np.clip((rad_0 - radius) / width, 0, 1)
+    return sig_0 * np.clip((rad_0 - radius) / width, 0.0, 1.0)
 
 
 def im_cart_to_polar(
