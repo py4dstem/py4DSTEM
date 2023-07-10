@@ -767,6 +767,18 @@ def match_orientations(
         num_x=bragg_peaks_array.shape[0],
         num_y=bragg_peaks_array.shape[1],
         num_matches=num_matches_return)
+    
+    #check cal state
+    if bragg_peaks_array.calstate['ellipse'] == False:
+        ellipse = False
+        print('Warning: bragg peaks not elliptically calibrated')
+    else:
+        ellipse = True
+    if bragg_peaks_array.calstate['rotate'] == False:
+        rotate = False
+        print('Warning: bragg peaks not rotationally calibrated')
+    else:
+        rotate = True
 
     for rx, ry in tqdmnd(
         *bragg_peaks_array.shape,
@@ -774,9 +786,17 @@ def match_orientations(
         unit=" PointList",
         disable=not progress_bar,
     ):
+        vectors = bragg_peaks_array.get_vectors(
+            scan_x=rx,
+            scan_y=ry,
+            center=True,
+            ellipse=ellipse,
+            pixel=True,
+            rotate=rotate
+        )
 
         orientation = self.match_single_pattern(
-            bragg_peaks_array.cal[rx, ry],
+            bragg_peaks=vectors,
             num_matches_return=num_matches_return,
             min_number_peaks=min_number_peaks,
             inversion_symmetry=inversion_symmetry,
@@ -1639,6 +1659,18 @@ def calculate_strain(
         corr_kernel_size = self.orientation_kernel_size
     radius_max_2 = corr_kernel_size**2
 
+    #check cal state
+    if bragg_peaks_array.calstate['ellipse'] == False:
+        ellipse = False
+        print('Warning: bragg peaks not elliptically calibrated')
+    else:
+        ellipse = True
+    if bragg_peaks_array.calstate['rotate'] == False:
+        rotate = False
+        print('Warning: bragg peaks not rotationally calibrated')
+    else:
+        rotate = True
+
     # Loop over all probe positions
     for rx, ry in tqdmnd(
         *bragg_peaks_array.shape,
@@ -1647,7 +1679,14 @@ def calculate_strain(
         disable=not progress_bar,
         ):
         # Get bragg peaks from experiment and reference
-        p = bragg_peaks_array.cal[rx,ry]
+        p = bragg_peaks_array.get_vectors(
+            scan_x=rx,
+            scan_y=ry,
+            center=True,
+            ellipse=ellipse,
+            pixel=True,
+            rotate=rotate
+        )
 
         if p.data.shape[0] >= min_num_peaks:
             p_ref = self.generate_diffraction_pattern(
@@ -2071,4 +2110,3 @@ orientation_ranges = {
 
     # "-3m": ["fiber", [0, 0, 1], [90.0, 60.0]],
     # "-3m": ["fiber", [0, 0, 1], [180.0, 30.0]],
-
