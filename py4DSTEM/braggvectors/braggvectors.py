@@ -101,6 +101,17 @@ class BraggVectors(Custom,BraggVectorMethods,Data):
         self._set_cal_vector_getter()
 
 
+    # set new raw vectors
+    def set_raw_vectors(self,x):
+        """ Given some PointListArray x of the correct shape, sets this to the raw vectors
+        """
+        assert(isinstance(x,PointListArray)), f"Raw vectors must be set to a PointListArray, not type {type(x)}"
+        assert(x.shape == self.Rshape), "Shapes don't match!"
+        self._v_uncal = x
+        self._set_raw_vector_getter()
+        self._set_cal_vector_getter()
+
+
     # calibration state, vector getters
 
     @property
