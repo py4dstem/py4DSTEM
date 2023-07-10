@@ -7,172 +7,69 @@ import py4DSTEM
 from py4DSTEM import save,read
 import emdfile as emd
 
-from py4DSTEM.classes import (
-    DataCube,
-    BraggVectors,
+from py4DSTEM import (
+    Calibration,
     DiffractionSlice,
-    VirtualDiffraction,
-    Probe,
     RealSlice,
-    VirtualImage,
     QPoints,
-    Calibration
+    DataCube,
+    VirtualImage,
+    VirtualDiffraction,
+    BraggVectors,
+    Probe
 )
 
 # Set paths
 dirpath = py4DSTEM._TESTPATH
-path_dm3 = join(dirpath,"small_dm3.dm3")
+path_dm3 = join(dirpath,"test_io/small_dm3_3Dstack.dm3")
 path_h5 = join(dirpath,"test.h5")
 
 
+class TestDataCubeIO():
 
-
-class TestSingleDataNodeIO:
-
-    ## Setup and teardown
-
-    @classmethod
-    def setup_class(cls):
-        cls._clear_files(cls)
-        cls._make_data(cls)
-
-    @classmethod
-    def teardown_class(cls):
-        pass
-
-    def setup_method(self, method):
-        pass
-
-    def teardown_method(self, method):
-        self._clear_files()
-
-    def _make_data(self):
-        """ Make
-            - a datacube
-            - a braggvectors instance with only v_uncal
-            - a braggvectors instance with both PLAs
-            - a diffractionslice
-            - a realslice
-            - a probe, with no kernel
-            - a probe, with a kernel
-            - a qpoints instance
-            - a virtualdiffraction instance
-            - a virtualimage instance
+    def test_datacube_instantiation(self):
         """
-        # datacube
-        self.datacube = DataCube(
+        Instantiate a datacube and apply basic calibrations
+        """
+        datacube = DataCube(
             data = np.arange(np.prod((4,5,6,7))).reshape((4,5,6,7))
         )
         # calibration
-        self.datacube.calibration.set_Q_pixel_size(0.062)
-        self.datacube.calibration.set_Q_pixel_units("A^-1")
-        self.datacube.calibration.set_R_pixel_size(2.8)
-        self.datacube.calibration.set_R_pixel_units("nm")
-        # braggvectors
-        self.braggvectors = BraggVectors(
-            Rshape = (5,6),
-            Qshape = (7,8)
-        )
-        for x in range(self.braggvectors.Rshape[0]):
-            for y in range(self.braggvectors.Rshape[1]):
-                L = int(4 * (np.sin(x*y)+1))
-                self.braggvectors.vectors_uncal[x,y].add(
-                    np.ones(L,dtype=self.braggvectors.vectors_uncal.dtype)
-                )
-        # braggvectors 2
-        self.braggvectors2 = BraggVectors(
-            Rshape = (5,6),
-            Qshape = (7,8)
-        )
-        for x in range(self.braggvectors2.Rshape[0]):
-            for y in range(self.braggvectors2.Rshape[1]):
-                L = int(4 * (np.sin(x*y)+1))
-                self.braggvectors2.vectors_uncal[x,y].add(
-                    np.ones(L,dtype=self.braggvectors2.vectors_uncal.dtype)
-                )
-        self.braggvectors2._v_cal = self.braggvectors2._v_uncal.copy(name='_v_uncal')
-        # diffractionslice
-        self.diffractionslice = DiffractionSlice(
-            data = np.arange(np.prod((4,8,2))).reshape((4,8,2)),
-            slicelabels = ['a','b']
-        )
-        # realslice
-        self.realslice = RealSlice(
-            data = np.arange(np.prod((8,4,2))).reshape((8,4,2)),
-            slicelabels = ['x','y']
-        )
-        # virtualdiffraction instance
-        self.virtualdiffraction = VirtualDiffraction(
-            data = np.arange(np.prod((8,4,2))).reshape((8,4,2)),
-        )
-        # virtualimage instance
-        self.virtualimage = VirtualImage(
-            data = np.arange(np.prod((8,4,2))).reshape((8,4,2)),
-        )
-        # probe, with no kernel
-        self.probe1 = Probe(
-            data = np.arange(8*12).reshape((8,12))
-        )
-        # probe, with a kernel
-        self.probe2 = Probe(
-            data = np.arange(8*12*2).reshape((8,12,2))
-        )
-        # qpoints instance
-        self.qpoints = QPoints(
-            data = np.ones(10,
-                dtype = [('qx',float),('qy',float),('intensity',float)]
-            )
-        )
+        datacube.calibration.set_Q_pixel_size(0.062)
+        datacube.calibration.set_Q_pixel_units("A^-1")
+        datacube.calibration.set_R_pixel_size(2.8)
+        datacube.calibration.set_R_pixel_units("nm")
 
+        return datacube
 
-
-
-
-
-
-
-
-    def _clear_files(self):
+    def test_datacube_io(self):
         """
-        Delete h5 files which this test suite wrote
+        Instantiate, save, then read a datacube, and
+        compare its contents before/after
         """
-        paths = [
-            path_h5
-        ]
-        for p in paths:
-            if exists(p):
-                remove(p)
+        datacube = self.test_datacube_instantiation()
 
-
-
-
-
-    ## Tests
-
-    def test_datacube(self):
-        """ Save then read a datacube, and compare its contents before/after
-        """
-        assert(isinstance(self.datacube,DataCube))
+        assert(isinstance(datacube,DataCube))
         # test dim vectors
-        assert(self.datacube.dim_names[0] == 'Rx')
-        assert(self.datacube.dim_names[1] == 'Ry')
-        assert(self.datacube.dim_names[2] == 'Qx')
-        assert(self.datacube.dim_names[3] == 'Qy')
-        assert(self.datacube.dim_units[0] == 'nm')
-        assert(self.datacube.dim_units[1] == 'nm')
-        assert(self.datacube.dim_units[2] == 'A^-1')
-        assert(self.datacube.dim_units[3] == 'A^-1')
-        assert(self.datacube.dims[0][1] == 2.8)
-        assert(self.datacube.dims[2][1] == 0.062)
+        assert(datacube.dim_names[0] == 'Rx')
+        assert(datacube.dim_names[1] == 'Ry')
+        assert(datacube.dim_names[2] == 'Qx')
+        assert(datacube.dim_names[3] == 'Qy')
+        assert(datacube.dim_units[0] == 'nm')
+        assert(datacube.dim_units[1] == 'nm')
+        assert(datacube.dim_units[2] == 'A^-1')
+        assert(datacube.dim_units[3] == 'A^-1')
+        assert(datacube.dims[0][1] == 2.8)
+        assert(datacube.dims[2][1] == 0.062)
         # check the calibrations
-        assert(self.datacube.calibration.get_Q_pixel_size() == 0.062)
-        assert(self.datacube.calibration.get_Q_pixel_units() == "A^-1")
+        assert(datacube.calibration.get_Q_pixel_size() == 0.062)
+        assert(datacube.calibration.get_Q_pixel_units() == "A^-1")
         # save and read
-        save(path_h5,self.datacube)
+        save(path_h5,datacube,mode='o')
         new_datacube = read(path_h5)
         # check it's the same
         assert(isinstance(new_datacube,DataCube))
-        assert(array_equal(self.datacube.data,new_datacube.data))
+        assert(array_equal(datacube.data,new_datacube.data))
         assert(new_datacube.calibration.get_Q_pixel_size() == 0.062)
         assert(new_datacube.calibration.get_Q_pixel_units() == "A^-1")
         assert(new_datacube.dims[0][1] == 2.8)
@@ -180,137 +77,180 @@ class TestSingleDataNodeIO:
 
 
 
+class TestBraggVectorsIO():
 
-    def test_braggvectors(self):
+    def test_braggvectors_instantiation(self):
+        """
+        Instantiate a braggvectors instance
+        """
+        braggvectors = BraggVectors(
+            Rshape = (5,6),
+            Qshape = (7,8)
+        )
+        for x in range(braggvectors.Rshape[0]):
+            for y in range(braggvectors.Rshape[1]):
+                L = int(4 * (np.sin(x*y)+1))
+                braggvectors._v_uncal[x,y].add(
+                    np.ones(L,dtype=braggvectors._v_uncal.dtype)
+                )
+        return braggvectors
+
+
+    def test_braggvectors_io(self):
         """ Save then read a BraggVectors instance, and compare contents before/after
         """
-        assert(isinstance(self.braggvectors,BraggVectors))
+        braggvectors = self.test_braggvectors_instantiation()
+
+        assert(isinstance(braggvectors,BraggVectors))
         # save then read
-        save(path_h5,self.braggvectors)
+        save(path_h5,braggvectors,mode='o')
         new_braggvectors = read(path_h5)
         # check it's the same
         assert(isinstance(new_braggvectors,BraggVectors))
-        assert(new_braggvectors is not self.braggvectors)
+        assert(new_braggvectors is not braggvectors)
         for x in range(new_braggvectors.shape[0]):
             for y in range(new_braggvectors.shape[1]):
                 assert(array_equal(
-                    new_braggvectors.v_uncal[x,y].data,
-                    self.braggvectors.v_uncal[x,y].data))
-        # check that _v_cal isn't there
-        assert(not(hasattr(new_braggvectors,'_v_cal')))
+                    new_braggvectors._v_uncal[x,y].data,
+                    braggvectors._v_uncal[x,y].data))
 
 
-    def test_braggvectors2(self):
-        """ Save then read a BraggVectors instance, and compare contents before/after
-        """
-        assert(isinstance(self.braggvectors2,BraggVectors))
-        # save then read
-        save(path_h5,self.braggvectors2)
-        new_braggvectors = read(path_h5)
-        # check it's the same
-        assert(isinstance(new_braggvectors,BraggVectors))
-        assert(new_braggvectors is not self.braggvectors2)
-        for x in range(new_braggvectors.shape[0]):
-            for y in range(new_braggvectors.shape[1]):
-                assert(array_equal(
-                    new_braggvectors.v_uncal[x,y].data,
-                    self.braggvectors2.v_uncal[x,y].data))
-        # check cal vectors are there
-        assert(hasattr(new_braggvectors,'_v_cal'))
-        # check it's the same
-        for x in range(new_braggvectors.shape[0]):
-            for y in range(new_braggvectors.shape[1]):
-                assert(array_equal(
-                    new_braggvectors.v[x,y].data,
-                    self.braggvectors2.v[x,y].data))
+class TestSlices:
 
 
-    def test_diffractionslice(self):
+    # test instantiation
+
+    def test_diffractionslice_instantiation(self):
+        diffractionslice = DiffractionSlice(
+            data = np.arange(np.prod((4,8,2))).reshape((4,8,2)),
+            slicelabels = ['a','b']
+        )
+        return diffractionslice
+
+    def test_realslice_instantiation(self):
+        realslice = RealSlice(
+            data = np.arange(np.prod((8,4,2))).reshape((8,4,2)),
+            slicelabels = ['x','y']
+        )
+        return realslice
+
+    def test_virtualdiffraction_instantiation(self):
+        virtualdiffraction = VirtualDiffraction(
+            data = np.arange(np.prod((8,4,2))).reshape((8,4,2)),
+        )
+        return virtualdiffraction
+
+    def test_virtualimage_instantiation(self):
+        virtualimage = VirtualImage(
+            data = np.arange(np.prod((8,4,2))).reshape((8,4,2)),
+        )
+        return virtualimage
+
+    def test_probe_instantiation(self):
+        probe = Probe(
+            data = np.arange(8*12).reshape((8,12))
+        )
+        # add a kernel
+        probe.kernel = np.ones_like(probe.probe)
+        # return
+        return probe
+
+
+    # test io
+
+    def test_diffractionslice_io(self):
         """ test diffractionslice io
         """
-        assert(isinstance(self.diffractionslice,DiffractionSlice))
-        # save and read
-        save(path_h5,self.diffractionslice)
-        diffractionslice = read(path_h5)
-        # check it's the same
+        diffractionslice = self.test_diffractionslice_instantiation()
         assert(isinstance(diffractionslice,DiffractionSlice))
-        assert(array_equal(self.diffractionslice.data,diffractionslice.data))
-        assert(diffractionslice.slicelabels == self.diffractionslice.slicelabels)
+        # save and read
+        save(path_h5,diffractionslice,mode='o')
+        new_diffractionslice = read(path_h5)
+        # check it's the same
+        assert(isinstance(new_diffractionslice,DiffractionSlice))
+        assert(array_equal(diffractionslice.data,new_diffractionslice.data))
+        assert(diffractionslice.slicelabels == new_diffractionslice.slicelabels)
 
 
-    def test_realslice(self):
+    def test_realslice_io(self):
         """ test realslice io
         """
-        assert(isinstance(self.realslice,RealSlice))
+        realslice = self.test_realslice_instantiation()
+        assert(isinstance(realslice,RealSlice))
         # save and read
-        save(path_h5,self.realslice)
+        save(path_h5,realslice,mode='o')
         rs = read(path_h5)
         # check it's the same
         assert(isinstance(rs,RealSlice))
-        assert(array_equal(self.realslice.data,rs.data))
-        assert(rs.slicelabels == self.realslice.slicelabels)
+        assert(array_equal(realslice.data,rs.data))
+        assert(rs.slicelabels == realslice.slicelabels)
 
-    def test_virtualdiffraction(self):
+    def test_virtualdiffraction_io(self):
         """ test virtualdiffraction io
         """
-        assert(isinstance(self.virtualdiffraction,VirtualDiffraction))
-        # save and read
-        save(path_h5,self.virtualdiffraction)
-        virtualdiffraction = read(path_h5)
-        # check it's the same
+        virtualdiffraction = self.test_virtualdiffraction_instantiation()
         assert(isinstance(virtualdiffraction,VirtualDiffraction))
-        assert(array_equal(self.virtualdiffraction.data,virtualdiffraction.data))
+        # save and read
+        save(path_h5,virtualdiffraction,mode='o')
+        vd = read(path_h5)
+        # check it's the same
+        assert(isinstance(vd,VirtualDiffraction))
+        assert(array_equal(vd.data,virtualdiffraction.data))
         pass
 
-    def test_virtualimage(self):
+    def test_virtualimage_io(self):
         """ test virtualimage io
         """
-        assert(isinstance(self.virtualimage,VirtualImage))
+        virtualimage = self.test_virtualimage_instantiation()
+        assert(isinstance(virtualimage,VirtualImage))
         # save and read
-        save(path_h5,self.virtualimage)
+        save(path_h5,virtualimage,mode='o')
         virtIm = read(path_h5)
         # check it's the same
         assert(isinstance(virtIm,VirtualImage))
-        assert(array_equal(self.virtualimage.data,virtIm.data))
+        assert(array_equal(virtualimage.data,virtIm.data))
         pass
 
-    def test_probe1(self):
+
+    def test_probe1_io(self):
         """ test probe io
         """
-        assert(isinstance(self.probe1,Probe))
-        # check for an empty kernel array
-        assert(array_equal(self.probe1.kernel,np.zeros_like(self.probe1.probe)))
+        probe0 = self.test_probe_instantiation()
+        assert(isinstance(probe0,Probe))
         # save and read
-        save(path_h5,self.probe1)
+        save(path_h5,probe0,mode='o')
         probe = read(path_h5)
         # check it's the same
         assert(isinstance(probe,Probe))
-        assert(array_equal(self.probe1.data,probe.data))
-        pass
-
-    def test_probe2(self):
-        """ test probe io
-        """
-        assert(isinstance(self.probe2,Probe))
-        # save and read
-        save(path_h5,self.probe2)
-        probe = read(path_h5)
-        # check it's the same
-        assert(isinstance(probe,Probe))
-        assert(array_equal(self.probe2.data,probe.data))
+        assert(array_equal(probe0.data,probe.data))
         pass
 
 
-    def test_qpoints(self):
+
+
+
+class TestPoints:
+
+    def test_qpoints_instantiation(self):
+        qpoints = QPoints(
+            data = np.ones(10,
+                dtype = [('qx',float),('qy',float),('intensity',float)]
+            )
+        )
+        return qpoints
+
+
+    def test_qpoints_io(self):
         """ test qpoints io
         """
-        assert(isinstance(self.qpoints,QPoints))
+        qpoints0 = self.test_qpoints_instantiation()
+        assert(isinstance(qpoints0,QPoints))
         # save and read
-        save(path_h5,self.qpoints)
+        save(path_h5,qpoints0,mode='o')
         qpoints = read(path_h5)
         # check it's the same
         assert(isinstance(qpoints,QPoints))
-        assert(array_equal(self.qpoints.data,qpoints.data))
+        assert(array_equal(qpoints0.data,qpoints.data))
         pass
 
 
