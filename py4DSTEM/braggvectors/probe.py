@@ -2,6 +2,7 @@
 
 import numpy as np
 from typing import Optional
+from warnings import warn
 
 from py4DSTEM.data import DiffractionSlice, Data
 from py4DSTEM.process.calibration import get_probe_size
@@ -425,7 +426,7 @@ class Probe(DiffractionSlice,Data):
             xCoM,yCoM = origin
 
         # Normalize
-        probe = self.probe/np.sum(probe)
+        probe = probe/np.sum(probe)
 
         # Shift center to corners of array
         probe_kernel = get_shifted_ar(probe, -xCoM, -yCoM, bilinear=bilinear)
