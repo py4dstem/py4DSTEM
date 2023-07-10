@@ -553,7 +553,7 @@ def show(
 
 
         # Create colormap with mask_color for bad values
-        cm = copy(plt.colormaps.get_cmap(cmap))
+        cm = copy(plt.get_cmap(cmap))
         if mask_color=='empty':
             cm.set_bad(alpha=0)
         else:
