@@ -2,6 +2,7 @@
 
 import numpy as np
 from scipy.ndimage import gaussian_filter
+from warnings import warn
 import inspect
 
 from emdfile import Array,Metadata
@@ -896,58 +897,126 @@ class BraggVectorMethods:
             return strainmap
 
 
-
-    def get_masked_peaks(
+    def mask_in_Q(
         self,
         mask,
         update_inplace = False,
-        returncalc = True):
+        returncalc = True
+        ):
         """
-        Removes all bragg peaks which fall inside `mask` in the raw
-        (uncalibrated) positions.
+        Remove peaks which fall inside the diffraction shaped boolean array
+        `mask`, in raw (uncalibrated) peak positions.
 
-        Args:
-            mask (bool): binary image where peaks will be deleted
-            update_inplace (bool): if True, removes peaks from this
-                BraggVectors instance. If False, returns a new
-                BraggVectors instance with the requested peaks removed
-            returncalc (bool): if True, return the BraggVectors
+        Parameters
+        ----------
+        mask : 2d boolean array
+            The mask. Must be diffraction space shaped
+        update_inplace : bool
+            If False (default) copies this BraggVectors instance and
+            removes peaks from the copied instance. If True, removes
+            peaks from this instance.
+        returncalc : bool
+            Toggles returning the answer
 
-        Returns:
-            (BraggVectors or None)
+        Returns
+        -------
+        bvects : BraggVectors
         """
+        # Copy peaks, if requested
+        if update_inplace:
+            v = self._v_uncal
+        else:
+            v = self._v_uncal.copy( name='_v_uncal' )
 
-        # Copy peaks
-        v = self._v_uncal.copy( name='_v_uncal' )
-
-        # Loop over all peaks
+        # Loop and remove masked peaks
         for rx in range(v.shape[0]):
             for ry in range(v.shape[1]):
-                p = v.get_pointlist(rx,ry)
-                sub = mask.ravel()[np.ravel_multi_index((
-                    np.round(p.data["qx"]).astype('int'),
-                    np.round(p.data["qy"]).astype('int')),
-                    self.Qshape)]
+                p = v[rx,ry]
+                xs = np.round(p.data["qx"]).astype(int)
+                ys = np.round(p.data["qy"]).astype(int)
+                sub = mask[xs,ys]
                 p.remove(sub)
 
-        # if modifying this BraggVectors instance was requested
+        # assign the return value
         if update_inplace:
-            self._v_uncal = v
             ans = self
-
-        # if a new instance was requested
         else:
             ans = self.copy( name=self.name+'_masked' )
-            ans._v_uncal = v
-
-        # re-calibrate
-        ans.calibrate()
+            ans.set_raw_vectors( v )
 
         # return
         if returncalc:
             return ans
         else:
             return
+
+    # alias
+    def get_masked_peaks(
+        self,
+        mask,
+        update_inplace = False,
+        returncalc = True):
+        """
+        Alias for `mask_in_Q`.
+        """
+        warn("`.get_masked_peaks` is deprecated and will be removed in a future version. Use `.mask_in_Q`")
+        return self.mask_in_Q(
+            mask = mask,
+            update_inplace = update_inplace,
+            returncalc = returncalc
+        )
+
+    def mask_in_R(
+        self,
+        mask,
+        update_inplace = False,
+        returncalc = True
+        ):
+        """
+        Remove peaks which fall inside the real space shaped boolean array
+        `mask`.
+
+        Parameters
+        ----------
+        mask : 2d boolean array
+            The mask. Must be real space shaped
+        update_inplace : bool
+            If False (default) copies this BraggVectors instance and
+            removes peaks from the copied instance. If True, removes
+            peaks from this instance.
+        returncalc : bool
+            Toggles returning the answer
+
+        Returns
+        -------
+        bvects : BraggVectors
+        """
+        # Copy peaks, if requested
+        if update_inplace:
+            v = self._v_uncal
+        else:
+            v = self._v_uncal.copy( name='_v_uncal' )
+
+        # Loop and remove masked peaks
+        for rx in range(v.shape[0]):
+            for ry in range(v.shape[1]):
+                if mask[rx,ry]:
+                    p = v[rx,ry]
+                    p.remove(np.ones(len(p),dtype=bool))
+
+        # assign the return value
+        if update_inplace:
+            ans = self
+        else:
+            ans = self.copy( name=self.name+'_masked' )
+            ans.set_raw_vectors( v )
+
+        # return
+        if returncalc:
+            return ans
+        else:
+            return
+
 
 
 
