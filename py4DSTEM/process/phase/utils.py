@@ -1284,12 +1284,40 @@ def nesterov_gamma(zero_indexed_iter_num):
 def regularize_probe_amp(
     probe_init,
     width_max_pixels = 2.0,
-    plot_polar = False,
     plot_result = False,
+    plot_polar = False,
+    cmap = 'turbo',
     figsize = (5,5),
     ):
     """
-    Assume that the probe is centered in Fourier space.  Note that I re-implemented the polar/cartesian transforms here for portability.
+    Assume that the probe is centered in Fourier space.  Note we 
+    re-implemented the polar/cartesian transforms here for portability.
+    
+    Parameters
+    --------
+    probe_init: np.array
+        2D complex image of the probe in Fourier space.
+    width_max_pixels: float
+        Maximum edge width of the probe in pixels.
+    plot_result: bool
+        Plot the input and output probes.
+    plot_polar: bool
+        Plot the polar transformed images:
+        1 - initial probe
+        2 - best fit of step model for each line
+        3 - best fit enforcing constant intensity inside aperture
+    cmap: string
+        colormap of the plots.
+    figsize: tuple
+        size of the output figures.
+        (will be doubled along horizontal axis for cartesian images)
+
+    Returns
+    --------
+    probe_corr: np.array
+        2D complex image of the corrected probe in Fourier space.
+
+
     """
 
     # Get probe intensity
