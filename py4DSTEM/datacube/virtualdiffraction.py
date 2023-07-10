@@ -177,8 +177,8 @@ class DataCubeVirtualDiffraction:
             if not subpixel:
 
                 # round shifts -> int
-                qx_shift = qshift.round().astype(int)
-                qy_shift = qshift.round().astype(int)
+                qx_shift = qx_shift.round().astype(int)
+                qy_shift = qy_shift.round().astype(int)
 
                 # ...for boolean masks and unmasked
                 if mask is None or mask.dtype==bool:

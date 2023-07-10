@@ -5,8 +5,7 @@ from scipy.ndimage import gaussian_filter
 from warnings import warn
 import inspect
 
-from emdfile import Array,Metadata
-from emdfile import _read_metadata
+from emdfile import Array, Metadata, tqdmnd, _read_metadata
 from py4DSTEM.process.utils import get_CoM
 from py4DSTEM.datacube import VirtualImage
 
