@@ -378,7 +378,6 @@ class ParallaxReconstruction(PhaseReconstruction):
         self._preprocessed = True
 
         if self._device == "gpu":
-            xp = self._xp
             xp._default_memory_pool.free_all_blocks()
             xp.clear_memo()
 
@@ -833,7 +832,6 @@ class ParallaxReconstruction(PhaseReconstruction):
         self.recon_BF = asnumpy(self._recon_BF)
 
         if self._device == "gpu":
-            xp = self._xp
             xp._default_memory_pool.free_all_blocks()
             xp.clear_memo()
 
@@ -887,7 +885,6 @@ class ParallaxReconstruction(PhaseReconstruction):
         self.aberration_A1y = (m_aberration[1, 0] + m_aberration[0, 1]) / 2.0
 
         if self._device == "gpu":
-            xp = self._xp
             xp._default_memory_pool.free_all_blocks()
             xp.clear_memo()
 
@@ -1077,7 +1074,6 @@ class ParallaxReconstruction(PhaseReconstruction):
         self.recon_phase_corrected = asnumpy(self._recon_phase_corrected)
 
         if self._device == "gpu":
-            xp = self._xp
             xp._default_memory_pool.free_all_blocks()
             xp.clear_memo()
 
