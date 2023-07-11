@@ -8,6 +8,8 @@ from py4DSTEM.data import RealSlice
 from py4DSTEM.process.diffraction.utils import Orientation, OrientationMap, axisEqual3D
 from py4DSTEM.process.utils import electron_wavelength_angstrom
 
+from warnings import warn
+
 from numpy.linalg import lstsq
 try:
     import cupy as cp
@@ -771,12 +773,12 @@ def match_orientations(
     #check cal state
     if bragg_peaks_array.calstate['ellipse'] == False:
         ellipse = False
-        print('Warning: bragg peaks not elliptically calibrated')
+        warn('Warning: bragg peaks not elliptically calibrated')
     else:
         ellipse = True
     if bragg_peaks_array.calstate['rotate'] == False:
         rotate = False
-        print('Warning: bragg peaks not rotationally calibrated')
+        warn('bragg peaks not rotationally calibrated')
     else:
         rotate = True
 
@@ -1662,12 +1664,12 @@ def calculate_strain(
     #check cal state
     if bragg_peaks_array.calstate['ellipse'] == False:
         ellipse = False
-        print('Warning: bragg peaks not elliptically calibrated')
+        warn('bragg peaks not elliptically calibrated')
     else:
         ellipse = True
     if bragg_peaks_array.calstate['rotate'] == False:
         rotate = False
-        print('Warning: bragg peaks not rotationally calibrated')
+        warn('bragg peaks not rotationally calibrated')
     else:
         rotate = True
 

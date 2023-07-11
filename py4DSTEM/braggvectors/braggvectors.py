@@ -226,7 +226,7 @@ class BraggVectors(Custom,BraggVectorMethods,Data):
         if pixel:
             assert(c.get_Q_pixel_size() is not None), "Requested calibration not found"
         if rotate:
-            assert(c.get_RQ_rotflip() is not None), "Requested calibration not found"
+            assert(c.get_QR_rotflip() is not None), "Requested calibration not found"
 
         # set the calibrations
         self._calstate = {
