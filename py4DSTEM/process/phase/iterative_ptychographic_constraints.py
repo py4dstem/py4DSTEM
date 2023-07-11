@@ -412,6 +412,7 @@ class PtychographicConstraints:
         updated_probe_fft, _, _, _ = regularize_probe_amplitude(
             asnumpy(current_probe_fft),
             width_max_pixels=width_max_pixels,
+            nearest_angular_neighbor_averaging=5,
             enforce_constant_intensity=enforce_constant_intensity,
             corner_centered=True,
         )
@@ -485,7 +486,7 @@ class PtychographicConstraints:
         fourier_probe_abs = xp.abs(fourier_probe)
         sampling = self.sampling
 
-        fitted_angle = fit_aberration_surface(
+        fitted_angle, _ = fit_aberration_surface(
             fourier_probe,
             sampling,
             max_angular_order,
