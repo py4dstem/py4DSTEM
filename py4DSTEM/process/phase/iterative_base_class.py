@@ -161,8 +161,6 @@ class PhaseReconstruction(Custom):
                     "Datacube calibration can only handle uniform Q-sampling."
                 )
 
-            Q_pixel_size = datacube.calibration.get_Q_pixel_size()
-
             if com_shifts is not None:
                 com_shifts = (
                     com_shifts[0] * resampling_factor_x,
@@ -280,7 +278,6 @@ class PhaseReconstruction(Custom):
         """
 
         # Copies intensities to device casting to float32
-        xp = self._xp
         intensities = datacube.data
         self._grid_scan_shape = intensities.shape[:2]
 
