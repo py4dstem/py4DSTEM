@@ -59,6 +59,9 @@ from py4DSTEM.braggvectors import (
     BraggVectorMap,
 )
 
+# strain
+from py4DSTEM.process import StrainMap
+
 # TODO - crystal
 # TODO - ptycho
 # TODO - others
