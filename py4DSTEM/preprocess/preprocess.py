@@ -281,6 +281,12 @@ def bin_data_diffraction(
     # set calibration pixel size
     datacube.calibration.set_Q_pixel_size(Qpixsize)
 
+    # remake Cartesian coordinate system
+    datacube.qyy,datacube.qxx = np.meshgrid(
+        np.arange(0,datacube.Q_Ny),
+        np.arange(0,datacube.Q_Nx)
+    )
+
     # return
     return datacube
 
