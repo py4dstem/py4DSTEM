@@ -673,6 +673,11 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
 
         self._preprocessed = True
 
+        if self._device == "gpu":
+            xp = self._xp
+            xp._default_memory_pool.free_all_blocks()
+            xp.clear_memo()
+
         return self
 
     def _overlap_projection(self, current_object, current_probe):
@@ -2148,6 +2153,11 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
         self.object = asnumpy(self._object)
         self.probe = self.probe_centered
         self.error = error.item()
+
+        if self._device == "gpu":
+            xp = self._xp
+            xp._default_memory_pool.free_all_blocks()
+            xp.clear_memo()
 
         return self
 
