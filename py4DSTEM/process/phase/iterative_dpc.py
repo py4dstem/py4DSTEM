@@ -368,7 +368,6 @@ class DPCReconstruction(PhaseReconstruction):
         self._preprocessed = True
 
         if self._device == "gpu":
-            xp = self._xp
             xp._default_memory_pool.free_all_blocks()
             xp.clear_memo()
 
@@ -819,7 +818,6 @@ class DPCReconstruction(PhaseReconstruction):
         self.object_phase = asnumpy(self._object_phase)
 
         if self._device == "gpu":
-            xp = self._xp
             xp._default_memory_pool.free_all_blocks()
             xp.clear_memo()
 

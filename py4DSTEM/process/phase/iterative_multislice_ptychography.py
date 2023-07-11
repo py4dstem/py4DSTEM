@@ -674,7 +674,6 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
         self._preprocessed = True
 
         if self._device == "gpu":
-            xp = self._xp
             xp._default_memory_pool.free_all_blocks()
             xp.clear_memo()
 
@@ -2155,7 +2154,6 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
         self.error = error.item()
 
         if self._device == "gpu":
-            xp = self._xp
             xp._default_memory_pool.free_all_blocks()
             xp.clear_memo()
 
