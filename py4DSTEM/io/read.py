@@ -95,7 +95,7 @@ def read(
             with warnings.catch_warnings():
                 warnings.simplefilter('ignore')
                 cal = data.calibration
-        elif isinstance(data,py4DSTEM.Root):
+        elif isinstance(data,emd.Root):
             try:
                 cal = data.metadata['calibration']
             except KeyError:
