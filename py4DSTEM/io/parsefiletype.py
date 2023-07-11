@@ -30,6 +30,8 @@ def _parse_filetype(fp):
 
         elif _is_abTEM(fp):
             return "abTEM"
+        else:
+            raise Exception("not supported `h5` data type")
 
     elif fext in [
         ".dm",

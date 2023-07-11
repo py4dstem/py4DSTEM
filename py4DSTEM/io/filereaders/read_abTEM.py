@@ -1,5 +1,5 @@
 import h5py
-from py4DSTEM.classes import DataCube, VirtualDiffraction, VirtualImage
+from py4DSTEM.classes import DataCube, RealSlice, DiffractionSlice
 
 
 def read_abTEM(
@@ -33,6 +33,8 @@ def read_abTEM(
     sampling = datasets["sampling"]
     units = datasets["units"]
 
+    assert len(data.shape) in (2, 4), "abtem reader supports only 4D and 2D data"
+
     if len(data.shape) == 4:
 
         datacube = DataCube(data=data)
@@ -57,9 +59,9 @@ def read_abTEM(
 
         return datacube
 
-    elif len(data.shape) == 2:
+    else:
         if units[0] == b"mrad":
-            diffraction = VirtualDiffraction(data=data)
+            diffraction = DiffractionSlice(data=data)
             if sampling[0] != sampling[1]:
                 print(
                     "Warning: py4DSTEM currently only handles uniform qx,qy sampling. Setting sampling with x calibration"
@@ -68,7 +70,7 @@ def read_abTEM(
             diffraction.calibration.set_Q_pixel_size(sampling[0])
             return diffraction
         elif units[0] == b"\xc3\x85":
-            image = VirtualImage(data=data)
+            image = RealSlice(data=data)
             if sampling[0] != sampling[1]:
                 print(
                     "Warning: py4DSTEM currently only handles uniform x,y sampling. Setting sampling with x calibration"
