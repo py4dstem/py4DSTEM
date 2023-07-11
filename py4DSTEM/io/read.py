@@ -8,6 +8,7 @@ import warnings
 import emdfile as emd
 import py4DSTEM.io.legacy as legacy
 from py4DSTEM.io.parsefiletype import _parse_filetype
+from py4DSTEM.data import Data
 
 
 def read(
@@ -94,7 +95,7 @@ def read(
         if verbose: print("Data was read from file. Adding calibration links...")
 
         # add calibration links
-        if isinstance(data,py4DSTEM.Data):
+        if isinstance(data,Data):
             with warnings.catch_warnings():
                 warnings.simplefilter('ignore')
                 cal = data.calibration
