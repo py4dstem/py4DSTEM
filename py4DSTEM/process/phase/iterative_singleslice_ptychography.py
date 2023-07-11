@@ -1270,12 +1270,12 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
             Standard deviation of gaussian kernel in A
         gaussian_filter_iter: int, optional
             Number of iterations to run using object smoothness constraint
-        probe_gaussian_filter_sigma: float, optional
-            Standard deviation of probe gaussian kernel in A^-1
-        probe_gaussian_filter_fix_amplitude: bool
-            If True, only the probe phase is smoothed
-        probe_gaussian_filter_residual_aberrations_iter: int, optional
-            Number of iterations to run using probe smoothing of residual aberrations
+        fit_probe_aberrations_iter: int, optional
+            Number of iterations to run while fitting the probe aberrations to a low-order expansion
+        fit_probe_aberrations_max_angular_order: bool
+            Max angular order of probe aberrations basis functions
+        fit_probe_aberrations_max_radial_order: bool
+            Max radial order of probe aberrations basis functions
         butterworth_filter_iter: int, optional
             Number of iterations to run using high-pass butteworth filter
         q_lowpass: float
