@@ -367,6 +367,11 @@ class DPCReconstruction(PhaseReconstruction):
 
         self._preprocessed = True
 
+        if self._device == "gpu":
+            xp = self._xp
+            xp._default_memory_pool.free_all_blocks()
+            xp.clear_memo()
+
         return self
 
     def _forward(
@@ -511,7 +516,6 @@ class DPCReconstruction(PhaseReconstruction):
         constrained_object: np.ndarray
             Constrained object estimate
         """
-        xp = self._xp
         gaussian_filter = self._gaussian_filter
 
         gaussian_filter_sigma /= self.sampling[0]
@@ -813,6 +817,11 @@ class DPCReconstruction(PhaseReconstruction):
             : self._grid_scan_shape[0], : self._grid_scan_shape[1]
         ]
         self.object_phase = asnumpy(self._object_phase)
+
+        if self._device == "gpu":
+            xp = self._xp
+            xp._default_memory_pool.free_all_blocks()
+            xp.clear_memo()
 
         return self
 

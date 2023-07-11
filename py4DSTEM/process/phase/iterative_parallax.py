@@ -172,7 +172,6 @@ class ParallaxReconstruction(PhaseReconstruction):
             require_calibrations=True,
         )
         self._intensities = xp.asarray(self._intensities, dtype=xp.float32)
-
         # make sure mean diffraction pattern is shaped correctly
         if (self._dp_mean.shape[0] != self._intensities.shape[2]) or (
             self._dp_mean.shape[1] != self._intensities.shape[3]
@@ -377,6 +376,12 @@ class ParallaxReconstruction(PhaseReconstruction):
             ax.set_title("Average Bright Field Image")
 
         self._preprocessed = True
+
+        if self._device == "gpu":
+            xp = self._xp
+            xp._default_memory_pool.free_all_blocks()
+            xp.clear_memo()
+
         return self
 
     def tune_angle_and_defocus(
@@ -827,6 +832,11 @@ class ParallaxReconstruction(PhaseReconstruction):
 
         self.recon_BF = asnumpy(self._recon_BF)
 
+        if self._device == "gpu":
+            xp = self._xp
+            xp._default_memory_pool.free_all_blocks()
+            xp.clear_memo()
+
         return self
 
     def aberration_fit(
@@ -875,6 +885,11 @@ class ParallaxReconstruction(PhaseReconstruction):
             m_aberration[0, 0] - m_aberration[1, 1]
         ) / 2.0  # factor /2 for A1 astigmatism? /4?
         self.aberration_A1y = (m_aberration[1, 0] + m_aberration[0, 1]) / 2.0
+
+        if self._device == "gpu":
+            xp = self._xp
+            xp._default_memory_pool.free_all_blocks()
+            xp.clear_memo()
 
         # Print results
         if self._verbose:
@@ -1061,6 +1076,11 @@ class ParallaxReconstruction(PhaseReconstruction):
         self._recon_phase_corrected = xp.real(xp.fft.ifft2(im_fft_corr))
         self.recon_phase_corrected = asnumpy(self._recon_phase_corrected)
 
+        if self._device == "gpu":
+            xp = self._xp
+            xp._default_memory_pool.free_all_blocks()
+            xp.clear_memo()
+
         # plotting
         if plot_corrected_phase:
             figsize = kwargs.pop("figsize", (6, 6))
@@ -1218,6 +1238,11 @@ class ParallaxReconstruction(PhaseReconstruction):
                 ax.set_xticks([])
                 ax.set_yticks([])
                 ax.set_title(f"Depth section: {dz}A")
+
+        if self._device == "gpu":
+            xp = self._xp
+            xp._default_memory_pool.free_all_blocks()
+            xp.clear_memo()
 
         return stack_depth
 
