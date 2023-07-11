@@ -12,10 +12,11 @@ except ImportError:
     cp = None
     from scipy.fft import dstn, idstn
 
+
 from py4DSTEM.process.utils.cross_correlate import align_and_shift_images
 from py4DSTEM.process.utils.utils import electron_wavelength_angstrom
 from py4DSTEM.process.utils import get_CoM
-from scipy.ndimage import gaussian_filter
+from scipy.ndimage import gaussian_filter, uniform_filter1d
 from skimage.restoration import unwrap_phase
 
 # fmt: off
@@ -1282,7 +1283,7 @@ def nesterov_gamma(zero_indexed_iter_num):
 def cartesian_to_polar_transform_2Ddata(
     im_cart,
     xy_center,
-    num_theta_bins=180,
+    num_theta_bins=90,
     radius_max=None,
     corner_centered=False,
     xp=np,
@@ -1411,6 +1412,7 @@ def polar_to_cartesian_transform_2Ddata(
 def regularize_probe_amplitude(
     probe_init,
     width_max_pixels=2.0,
+    nearest_angular_neighbor_averaging=5,
     enforce_constant_intensity=True,
     corner_centered=False,
 ):
@@ -1423,6 +1425,8 @@ def regularize_probe_amplitude(
         2D complex image of the probe in Fourier space.
     width_max_pixels: float
         Maximum edge width of the probe in pixels.
+    nearest_angular_neighbor_averaging: int
+        Number of nearest angular neighbor pixels to average to make aperture less jagged.
     enforce_constant_intensity: bool
         Set to true to make intensity inside the aperture constant.
     corner_centered: bool
@@ -1504,6 +1508,17 @@ def regularize_probe_amplitude(
             xtol=1e-12,
             bounds=(lb, ub),
         )[0]
+        # polar_int_corr[a0, :] = step_model(radius, *coefs_all[a0, :])
+
+    # make aperture less jagged, using moving mean
+    coefs_all = np.apply_along_axis(
+        uniform_filter1d,
+        0,
+        coefs_all,
+        size=nearest_angular_neighbor_averaging,
+        mode="wrap",
+    )
+    for a0 in range(polar_int.shape[0]):
         polar_int_corr[a0, :] = step_model(radius, *coefs_all[a0, :])
 
     # Convert back to cartesian coordinates
@@ -1564,7 +1579,6 @@ def fit_aberration_surface(
     probe_sampling,
     max_angular_order,
     max_radial_order,
-    seed=1,
     xp=np,
 ):
     """ """
@@ -1572,11 +1586,12 @@ def fit_aberration_surface(
     probe_angle = xp.angle(complex_probe)
 
     if xp is np:
-        unwrapped_angle = unwrap_phase(probe_angle, wrap_around=True, seed=seed)
+        probe_angle = probe_angle.astype(np.float64)
+        unwrapped_angle = unwrap_phase(probe_angle, wrap_around=True).astype(xp.float32)
     else:
-        unwrapped_angle = xp.asarray(
-            unwrap_phase(xp.asnumpy(probe_angle), wrap_around=True, seed=seed)
-        )
+        probe_angle = xp.asnumpy(probe_angle).astype(np.float64)
+        unwrapped_angle = unwrap_phase(probe_angle, wrap_around=True)
+        unwrapped_angle = xp.asarray(unwrapped_angle).astype(xp.float32)
 
     basis, _ = aberrations_basis_function(
         complex_probe.shape,
@@ -1595,4 +1610,4 @@ def fit_aberration_surface(
 
     fitted_angle = xp.tensordot(coeff, basis, axes=1)
 
-    return fitted_angle
+    return fitted_angle, coeff
