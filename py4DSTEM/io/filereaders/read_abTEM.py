@@ -70,7 +70,7 @@ def read_abTEM(
             diffraction.calibration.set_Q_pixel_units(units[0].decode("utf-8"))
             diffraction.calibration.set_Q_pixel_size(sampling[0])
             return diffraction
-        elif units[0] == b"\xc3\x85":
+        else units[0] == b"\xc3\x85":
             image = RealSlice(data=data)
             if sampling[0] != sampling[1]:
                 print(
