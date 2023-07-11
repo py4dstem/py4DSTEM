@@ -9,7 +9,7 @@ from numbers import Number
 from math import log
 from copy import copy
 
-from py4DSTEM.classes import (
+from py4DSTEM.data import (
     Calibration,
     DiffractionSlice,
     RealSlice
@@ -553,7 +553,7 @@ def show(
 
 
         # Create colormap with mask_color for bad values
-        cm = copy(plt.cm.get_cmap(cmap))
+        cm = copy(plt.get_cmap(cmap))
         if mask_color=='empty':
             cm.set_bad(alpha=0)
         else:
