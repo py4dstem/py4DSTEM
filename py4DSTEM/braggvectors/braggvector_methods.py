@@ -6,7 +6,6 @@ from warnings import warn
 import inspect
 
 from emdfile import Array, Metadata, tqdmnd, _read_metadata
-from py4DSTEM.process.utils import get_CoM
 from py4DSTEM.datacube import VirtualImage
 
 
@@ -358,6 +357,7 @@ class BraggVectorMethods:
                     np.argmax(gaussian_filter(bvm, 10)), (Q_Nx, Q_Ny)
                 )
             else:
+                from py4DSTEM.process.utils import get_CoM
                 x0, y0 = get_CoM(bvm)
         else:
             x0, y0 = center_guess
