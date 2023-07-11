@@ -2,7 +2,9 @@ from py4DSTEM.version import __version__
 from emdfile import tqdmnd
 
 
-# io classes
+### io
+
+# substructure
 from emdfile import (
     Node,
     Root,
@@ -10,54 +12,82 @@ from emdfile import (
     Array,
     PointList,
     PointListArray,
-    Custom
+    Custom,
+    print_h5_tree,
 )
+_emd_hook = True
 
-# processing classes
-from py4DSTEM.classes import (
-    DataCube,
+# structure
+from py4DSTEM import io
+from py4DSTEM.io import import_file,read,save
+
+
+
+### basic data classes
+
+# data
+from py4DSTEM.data import (
+    Data,
+    Calibration,
     DiffractionSlice,
     RealSlice,
-    VirtualDiffraction,
-    VirtualImage,
-    Probe,
     QPoints,
-    Calibration,
-    Data,
 )
-from py4DSTEM.process.diskdetection import (
+
+# datacube
+from py4DSTEM.datacube import (
+    DataCube,
+    VirtualImage,
+    VirtualDiffraction
+)
+
+
+
+### visualization
+
+from py4DSTEM import visualize
+from py4DSTEM.visualize import show
+
+
+
+### analysis classes
+
+# braggvectors
+from py4DSTEM.braggvectors import (
+    Probe,
     BraggVectors,
     BraggVectorMap,
 )
+
+# TODO - crystal
+# TODO - ptycho
+# TODO - others
+
+# TODO - where
 from py4DSTEM.process import (
     PolarDatacube,
 )
 
 
 
-# submodules
-from py4DSTEM import io
+
+### more submodules
+# TODO
+
 from py4DSTEM import preprocess
 from py4DSTEM import process
-from py4DSTEM import classes
-from py4DSTEM import visualize
 
 
 
+### utilities
 
-# functions
-from emdfile import print_h5_tree
-from py4DSTEM.visualize import show
-from py4DSTEM.io import import_file,read,save
+# config
 from py4DSTEM.utils.configuration_checker import check_config
+# TODO - config .toml
 
-
-# test paths
+# testing
 from os.path import dirname,join
 _TESTPATH = join(dirname(__file__), "../test/unit_test_data")
 
-
-# hook for emd _get_class
-_emd_hook = True
 
 
