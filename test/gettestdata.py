@@ -19,7 +19,7 @@ parser = argparse.ArgumentParser(
 data_options = [
     'tutorials',
     'io',
-    'basic'
+    'basic',
 ]
 
 # Add arguments
@@ -52,21 +52,22 @@ if not exists(testpath):
 
 # Set data collection key
 if args.data == 'tutorials':
-    data = 'tutorials'
+    data = ['tutorials']
 elif args.data == 'io':
-    data = 'test_io'
+    data = ['test_io','test_arina']
 elif args.data == 'basic':
-    data = 'small_datacube'
+    data = ['small_datacube']
 else:
     raise Exception(f"invalid data choice, {parser.data}")
 
 # Download data
-download(
-    data,
-    destination = testpath,
-    overwrite = args.overwrite,
-    verbose = args.verbose
-)
+for d in data:
+    download(
+        d,
+        destination = testpath,
+        overwrite = args.overwrite,
+        verbose = args.verbose
+    )
 
 # Always download the basic datacube
 if args.data != 'basic':
