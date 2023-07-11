@@ -16,6 +16,7 @@ from py4DSTEM.process.utils.cross_correlate import align_and_shift_images
 from py4DSTEM.process.utils.utils import electron_wavelength_angstrom
 from py4DSTEM.process.utils import get_CoM
 from scipy.ndimage import gaussian_filter
+from skimage.restoration import unwrap_phase
 
 # fmt: off
 
@@ -1278,19 +1279,143 @@ def nesterov_gamma(zero_indexed_iter_num):
     )
 
 
-def regularize_probe_amp(
+def cartesian_to_polar_transform_2Ddata(
+    im_cart,
+    xy_center,
+    num_theta_bins=180,
+    radius_max=None,
+    corner_centered=False,
+    xp=np,
+):
+    """
+    Quick cartesian to polar conversion.
+    """
+
+    # coordinates
+    if radius_max is None:
+        if corner_centered:
+            radius_max = np.min(np.array(im_cart.shape) // 2)
+        else:
+            radius_max = np.sqrt(np.sum(np.array(im_cart.shape) ** 2)) // 2
+
+    r = xp.arange(radius_max)
+    t = xp.linspace(
+        0,
+        2.0 * np.pi,
+        num_theta_bins,
+        endpoint=False,
+    )
+    ra, ta = xp.meshgrid(r, t)
+
+    # resampling coordinates
+    x = ra * xp.cos(ta) + xy_center[0]
+    y = ra * xp.sin(ta) + xy_center[1]
+
+    xf = xp.floor(x).astype("int")
+    yf = xp.floor(y).astype("int")
+    dx = x - xf
+    dy = y - yf
+
+    mode = "wrap" if corner_centered else "clip"
+
+    # resample image
+    im_polar = (
+        im_cart.ravel()[
+            xp.ravel_multi_index(
+                (xf, yf),
+                im_cart.shape,
+                mode=mode,
+            )
+        ]
+        * (1 - dx)
+        * (1 - dy)
+        + im_cart.ravel()[
+            xp.ravel_multi_index(
+                (xf + 1, yf),
+                im_cart.shape,
+                mode=mode,
+            )
+        ]
+        * (dx)
+        * (1 - dy)
+        + im_cart.ravel()[
+            xp.ravel_multi_index(
+                (xf, yf + 1),
+                im_cart.shape,
+                mode=mode,
+            )
+        ]
+        * (1 - dx)
+        * (dy)
+        + im_cart.ravel()[
+            xp.ravel_multi_index(
+                (xf + 1, yf + 1),
+                im_cart.shape,
+                mode=mode,
+            )
+        ]
+        * (dx)
+        * (dy)
+    )
+
+    return im_polar
+
+
+def polar_to_cartesian_transform_2Ddata(
+    im_polar,
+    xy_size,
+    xy_center,
+    corner_centered=False,
+    xp=np,
+):
+    """
+    Quick polar to cartesian conversion.
+    """
+
+    # coordinates
+    sx, sy = xy_size
+    cx, cy = xy_center
+
+    if corner_centered:
+        x = xp.fft.fftfreq(sx, d=1 / sx)
+        y = xp.fft.fftfreq(sy, d=1 / sy)
+    else:
+        x = xp.arange(sx)
+        y = xp.arange(sy)
+
+    xa, ya = xp.meshgrid(x, y, indexing="ij")
+    ra = xp.hypot(xa - cx, ya - cy)
+    ta = xp.arctan2(ya - cy, xa - cx)
+
+    t = xp.linspace(0, 2 * np.pi, im_polar.shape[0], endpoint=False)
+    t_step = t[1] - t[0]
+
+    # resampling coordinates
+    t_ind = ta / t_step
+    r_ind = ra.copy()
+    tf = xp.floor(t_ind).astype("int")
+    rf = xp.floor(r_ind).astype("int")
+
+    # resample image
+    im_cart = im_polar.ravel()[
+        xp.ravel_multi_index(
+            (tf, rf),
+            im_polar.shape,
+            mode=("wrap", "clip"),
+        )
+    ]
+
+    return im_cart
+
+
+def regularize_probe_amplitude(
     probe_init,
     width_max_pixels=2.0,
     enforce_constant_intensity=True,
-    return_coefs=False,
-    plot_result=False,
-    plot_polar=False,
-    cmap="turbo",
-    figsize=(5, 5),
+    corner_centered=False,
 ):
     """
-    Assumes the probe is corner-centered in Fourier space.  Note we
-    re-implemented the polar/cartesian transforms here for portability.
+    Fits sigmoid for each angular direction.
 
     Parameters
     --------
@@ -1300,40 +1425,31 @@ def regularize_probe_amp(
         Maximum edge width of the probe in pixels.
     enforce_constant_intensity: bool
         Set to true to make intensity inside the aperture constant.
-    return_coefs: bool
-        If true, fitting coefficients will also be returned.
-    plot_result: bool
-        Plot the input and output probes.
-    plot_polar: bool
-        Plot the polar transformed images:
-        1 - initial probe
-        2 - best fit of step model for each line
-        3 - best fit enforcing constant intensity inside aperture
-    cmap: string
-        colormap of the plots.
-    figsize: tuple
-        size of the output figures.
-        (will be doubled along horizontal axis for cartesian images)
+    corner_centered: bool
+        If True, the probe is assumed to be corner-centered
 
     Returns
     --------
-    probe_corr: np.array
+    probe_corr: np.ndarray
         2D complex image of the corrected probe in Fourier space.
-    coefs_all: np.array (optional)
-        coefficients for the
+    coefs_all: np.ndarray
+        coefficients for the sigmoid fits
     """
 
     # Get probe intensity
     probe_amp = np.abs(probe_init)
+    probe_angle = np.angle(probe_init)
     probe_int = probe_amp**2
 
     # Center of mass for probe intensity
-    xy_center = get_CoM(probe_int, device="cpu", corner_centered=True)
+    xy_center = get_CoM(probe_int, device="cpu", corner_centered=corner_centered)
 
     # Convert intensity to polar coordinates
     polar_int = cartesian_to_polar_transform_2Ddata(
         probe_int,
         xy_center=xy_center,
+        corner_centered=corner_centered,
+        xp=np,
     )
 
     # Fit corrected probe intensity
@@ -1346,6 +1462,9 @@ def regularize_probe_amp(
     width = width_max_pixels * 0.5
 
     # init
+    def step_model(radius, sig_0, rad_0, width):
+        return sig_0 * np.clip((rad_0 - radius) / width, 0.0, 1.0)
+
     coefs_all = np.zeros((polar_int.shape[0], 3))
     coefs_all[:, 0] = sig_0
     coefs_all[:, 1] = rad_0
@@ -1366,194 +1485,114 @@ def regularize_probe_amp(
             xtol=1e-12,
             bounds=(lb, ub),
         )[0]
-        polar_fit[a0, :] = step_model(radius, coefs_all[a0, :])
+        polar_fit[a0, :] = step_model(radius, *coefs_all[a0, :])
 
-    if enforce_constant_intensity:
-        # Compute best-fit constant intensity inside probe, update bounds
-        sig_0 = np.median(coefs_all[:, 0])
-        coefs_all[:, 0] = sig_0
-        lb = (sig_0 - 1e-8, 0.0, 1e-4)
-        ub = (sig_0 + 1e-8, np.inf, width_max_pixels)
+    # Compute best-fit constant intensity inside probe, update bounds
+    sig_0 = np.median(coefs_all[:, 0])
+    coefs_all[:, 0] = sig_0
+    lb = (sig_0 - 1e-8, 0.0, 1e-4)
+    ub = (sig_0 + 1e-8, np.inf, width_max_pixels)
 
-        # refine parameters, generate polar image
-        polar_int_corr = np.zeros_like(polar_int)
-        for a0 in range(polar_int.shape[0]):
-            coefs_all[a0, :] = curve_fit(
-                step_model,
-                radius,
-                polar_int[a0, :],
-                p0=coefs_all[a0, :],
-                xtol=1e-12,
-                bounds=(lb, ub),
-            )[0]
-            polar_int_corr[a0, :] = step_model(radius, coefs_all[a0, :])
-
-    else:
-        polar_int_corr = polar_fit
+    # refine parameters, generate polar image
+    polar_int_corr = np.zeros_like(polar_int)
+    for a0 in range(polar_int.shape[0]):
+        coefs_all[a0, :] = curve_fit(
+            step_model,
+            radius,
+            polar_int[a0, :],
+            p0=coefs_all[a0, :],
+            xtol=1e-12,
+            bounds=(lb, ub),
+        )[0]
+        polar_int_corr[a0, :] = step_model(radius, *coefs_all[a0, :])
 
     # Convert back to cartesian coordinates
     int_corr = polar_to_cartesian_transform_2Ddata(
         polar_int_corr,
         xy_size=probe_init.shape,
         xy_center=xy_center,
+        corner_centered=corner_centered,
     )
+
+    amp_corr = np.sqrt(np.maximum(int_corr, 0))
 
     # Assemble output probe
-    probe_corr = np.sqrt(np.maximum(int_corr, 0)) * np.exp(1j * np.angle(probe_init))
+    if not enforce_constant_intensity:
+        max_coeff = np.sqrt(coefs_all[:, 0]).max()
+        amp_corr = amp_corr / max_coeff * probe_amp
 
-    # plotting
-    if plot_result:
-        fig, ax = plt.subplots(figsize=(figsize[0] * 2, figsize[1]))
-        ax.imshow(
-            np.hstack(
-                (
-                    np.fft.fftshift(probe_int),
-                    np.fft.fftshift(int_corr),
-                )
-            ),
-            cmap="turbo",
-        )
-    if plot_polar:
-        fig, ax = plt.subplots(figsize=figsize)
-        ax.imshow(
-            np.hstack(
-                (
-                    polar_int,
-                    polar_fit,
-                    polar_int_corr,
-                )
-            ),
-            cmap="turbo",
-        )
+    probe_corr = amp_corr * np.exp(1j * probe_angle)
 
-    if return_coefs:
-        return probe_corr, coefs_all
+    return probe_corr, polar_int, polar_int_corr, coefs_all
+
+
+def aberrations_basis_function(
+    probe_size,
+    probe_sampling,
+    max_angular_order,
+    max_radial_order,
+    xp=np,
+):
+    """ """
+    sx, sy = probe_size
+    dx, dy = probe_sampling
+    qx = xp.fft.fftfreq(sx, dx)
+    qy = xp.fft.fftfreq(sy, dy)
+
+    qxa, qya = xp.meshgrid(qx, qy, indexing="ij")
+    q2 = qxa**2 + qya**2
+    theta = xp.arctan2(qya, qxa)
+
+    basis = []
+    index = []
+
+    for n in range(max_angular_order + 1):
+        for m in range((max_radial_order - n) // 2 + 1):
+            basis.append((q2 ** (m + n / 2) * np.cos(n * theta)))
+            index.append((m, n, 0))
+            if n > 0:
+                basis.append((q2 ** (m + n / 2) * np.sin(n * theta)))
+                index.append((m, n, 1))
+
+    basis = xp.array(basis)
+
+    return basis, index
+
+
+def fit_aberration_surface(
+    complex_probe,
+    probe_sampling,
+    max_angular_order,
+    max_radial_order,
+    seed=1,
+    xp=np,
+):
+    """ """
+    probe_amp = xp.abs(complex_probe)
+    probe_angle = xp.angle(complex_probe)
+
+    if xp is np:
+        unwrapped_angle = unwrap_phase(probe_angle, wrap_around=True, seed=seed)
     else:
-        return probe_corr
-
-
-def step_model(radius, *coefs):
-    coefs = np.squeeze(np.array(coefs))
-
-    sig_0 = coefs[0]
-    rad_0 = coefs[1]
-    width = coefs[2]
-
-    return sig_0 * np.clip((rad_0 - radius) / width, 0.0, 1.0)
-
-
-def cartesian_to_polar_transform_2Ddata(
-    im_cart,
-    xy_center,
-    num_theta_bins=180,
-    radius_max=None,
-):
-    """
-    Quick cartesian to polar conversion.
-    """
-
-    # coordinates
-    if radius_max is None:
-        radius_max = np.min(np.array(im_cart.shape) // 2)
-
-    r = np.arange(radius_max)
-    t = np.linspace(
-        0,
-        2.0 * np.pi,
-        num_theta_bins,
-        endpoint=False,
-    )
-    ra, ta = np.meshgrid(r, t)
-
-    # resampling coordinates
-    x = ra * np.cos(ta) + xy_center[0]
-    y = ra * np.sin(ta) + xy_center[1]
-
-    xf = np.floor(x).astype("int")
-    yf = np.floor(y).astype("int")
-    dx = x - xf
-    dy = y - yf
-
-    # resample image
-    im_polar = (
-        im_cart.ravel()[
-            np.ravel_multi_index(
-                (xf, yf),
-                im_cart.shape,
-                mode="wrap",
-            )
-        ]
-        * (1 - dx)
-        * (1 - dy)
-        + im_cart.ravel()[
-            np.ravel_multi_index(
-                (xf + 1, yf),
-                im_cart.shape,
-                mode="wrap",
-            )
-        ]
-        * (dx)
-        * (1 - dy)
-        + im_cart.ravel()[
-            np.ravel_multi_index(
-                (xf, yf + 1),
-                im_cart.shape,
-                mode="wrap",
-            )
-        ]
-        * (1 - dx)
-        * (dy)
-        + im_cart.ravel()[
-            np.ravel_multi_index(
-                (xf + 1, yf + 1),
-                im_cart.shape,
-                mode="wrap",
-            )
-        ]
-        * (dx)
-        * (dy)
-    )
-
-    return im_polar
-
-
-def polar_to_cartesian_transform_2Ddata(
-    im_polar,
-    xy_size,
-    xy_center,
-):
-    """
-    Quick cartesian to polar conversion.
-    """
-
-    # coordinates
-    sx, sy = xy_size
-    cx, cy = xy_center
-
-    x = np.fft.fftfreq(sx, d=1 / sx)
-    y = np.fft.fftfreq(sy, d=1 / sy)
-    xa, ya = np.meshgrid(x, y, indexing="ij")
-    ra = np.hypot(xa - cx, ya - cy)
-    ta = np.arctan2(ya, xa)
-
-    t = np.linspace(0, 2 * np.pi, im_polar.shape[0], endpoint=False)
-    t_step = t[1] - t[0]
-
-    # resampling coordinates
-    t_ind = ta / t_step
-    r_ind = ra.copy()
-    tf = np.floor(t_ind).astype("int")
-    rf = np.floor(r_ind).astype("int")
-    dt = t_ind - tf
-    dr = r_ind - rf
-
-    # resample image
-    im_cart = im_polar.ravel()[
-        np.ravel_multi_index(
-            (tf, rf),
-            im_polar.shape,
-            mode=("wrap", "clip"),
+        unwrapped_angle = xp.asarray(
+            unwrap_phase(xp.asnumpy(probe_angle), wrap_around=True, seed=seed)
         )
-    ]
 
-    return im_cart
+    basis, _ = aberrations_basis_function(
+        complex_probe.shape,
+        probe_sampling,
+        max_angular_order,
+        max_radial_order,
+        xp=xp,
+    )
+
+    raveled_basis = basis.reshape((basis.shape[0], -1))
+    raveled_weights = probe_amp.ravel()
+
+    Aw = raveled_basis.T * raveled_weights[:, None]
+    bw = unwrapped_angle.ravel() * raveled_weights
+    coeff = xp.linalg.lstsq(Aw, bw, rcond=None)[0]
+
+    fitted_angle = xp.tensordot(coeff, basis, axes=1)
+
+    return fitted_angle

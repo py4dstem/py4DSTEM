@@ -1000,15 +1000,15 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
         current_positions,
         pure_phase_object,
         fix_com,
-        symmetrize_probe,
-        probe_gaussian_filter,
-        probe_gaussian_filter_sigma,
-        probe_gaussian_filter_fix_amplitude,
+        fit_probe_aberrations,
+        fit_probe_aberrations_max_angular_order,
+        fit_probe_aberrations_max_radial_order,
         constrain_probe_amplitude,
         constrain_probe_amplitude_relative_radius,
         constrain_probe_amplitude_relative_width,
         constrain_probe_fourier_amplitude,
-        constrain_probe_fourier_amplitude_threshold,
+        constrain_probe_fourier_amplitude_max_width_pixels,
+        constrain_probe_fourier_amplitude_constant_intensity,
         fix_probe_aperture,
         initial_probe_aperture,
         fix_positions,
@@ -1038,14 +1038,12 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
             If True, object amplitude is set to unity
         fix_com: bool
             If True, probe CoM is fixed to the center
-        symmetrize_probe: bool
-            If True, the probe is radially-averaged
-        probe_gaussian_filter: bool
-            If True, applies reciprocal-space gaussian filtering on residual aberrations
-        probe_gaussian_filter_sigma: float
-            Standard deviation of gaussian kernel in A^-1
-        probe_gaussian_filter_fix_amplitude: bool
-            If True, only the probe phase is smoothed
+        fit_probe_aberrations: bool
+            If True, fits the probe aberrations to a low-order expansion
+        fit_probe_aberrations_max_angular_order: bool
+            Max angular order of probe aberrations basis functions
+        fit_probe_aberrations_max_radial_order: bool
+            Max radial order of probe aberrations basis functions
         constrain_probe_amplitude: bool
             If True, probe amplitude is constrained by top hat function
         constrain_probe_amplitude_relative_radius: float
@@ -1053,10 +1051,11 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
         constrain_probe_amplitude_relative_width: float
             Relative width of top-hat sigmoid, between 0 and 0.5
         constrain_probe_fourier_amplitude: bool
-            If True, probe fourier amplitude is constrained by top hat function
-        constrain_probe_fourier_amplitude_threshold: float
-            Threshold value for current probe fourier mask. Value should
-            be between 0 and 1, where higher values provide the most masking.
+            If True, probe aperture is constrained by fitting a sigmoid for each angular frequency.
+        constrain_probe_fourier_amplitude_max_width_pixels: float
+            Maximum pixel width of fitted sigmoid functions.
+        constrain_probe_fourier_amplitude_constant_intensity: bool
+            If True, the probe aperture is additionally constrained to a constant intensity.
         fix_probe_aperture: bool,
             If True, probe Fourier amplitude is replaced by initial probe aperture.
         initial_probe_aperture: np.ndarray,
@@ -1122,31 +1121,29 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
         if fix_com:
             current_probe = self._probe_center_of_mass_constraint(current_probe)
 
-        if probe_gaussian_filter:
-            current_probe = self._probe_residual_aberration_filtering_constraint(
-                current_probe,
-                probe_gaussian_filter_sigma,
-                probe_gaussian_filter_fix_amplitude,
-            )
-
-        if symmetrize_probe:
-            current_probe = self._probe_radial_symmetrization_constraint(current_probe)
-
         if fix_probe_aperture:
             current_probe = self._probe_aperture_constraint(
                 current_probe,
                 initial_probe_aperture,
             )
-        elif constrain_probe_amplitude:
-            current_probe = self._probe_amplitude_constraint(
-                current_probe,
-                constrain_probe_amplitude_relative_radius,
-                constrain_probe_amplitude_relative_width,
-            )
         elif constrain_probe_fourier_amplitude:
             current_probe = self._probe_fourier_amplitude_constraint(
                 current_probe,
-                constrain_probe_fourier_amplitude_threshold,
+                constrain_probe_fourier_amplitude_max_width_pixels,
+                constrain_probe_fourier_amplitude_constant_intensity,
+            )
+
+        if fit_probe_aberrations:
+            current_probe = self._probe_aberration_fitting_constraint(
+                current_probe,
+                fit_probe_aberrations_max_angular_order,
+                fit_probe_aberrations_max_radial_order,
+            )
+
+        if constrain_probe_amplitude:
+            current_probe = self._probe_amplitude_constraint(
+                current_probe,
+                constrain_probe_amplitude_relative_radius,
                 constrain_probe_amplitude_relative_width,
             )
 
@@ -1179,20 +1176,20 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
         fix_com: bool = True,
         fix_probe_iter: int = 0,
         fix_probe_aperture_iter: int = 0,
-        symmetrize_probe_iter: int = 0,
         constrain_probe_amplitude_iter: int = 0,
         constrain_probe_amplitude_relative_radius: float = 0.5,
         constrain_probe_amplitude_relative_width: float = 0.05,
         constrain_probe_fourier_amplitude_iter: int = 0,
-        constrain_probe_fourier_amplitude_threshold: float = 0.9,
+        constrain_probe_fourier_amplitude_max_width_pixels: float = 3.0,
+        constrain_probe_fourier_amplitude_constant_intensity: bool = False,
         fix_positions_iter: int = np.inf,
         constrain_position_distance: float = None,
         global_affine_transformation: bool = True,
         gaussian_filter_sigma: float = None,
         gaussian_filter_iter: int = np.inf,
-        probe_gaussian_filter_sigma: float = None,
-        probe_gaussian_filter_residual_aberrations_iter: int = np.inf,
-        probe_gaussian_filter_fix_amplitude: bool = True,
+        fit_probe_aberrations_iter: int = 0,
+        fit_probe_aberrations_max_angular_order: int = 4,
+        fit_probe_aberrations_max_radial_order: int = 4,
         butterworth_filter_iter: int = np.inf,
         q_lowpass: float = None,
         q_highpass: float = None,
@@ -1246,19 +1243,18 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
             Number of iterations to run with a fixed probe before updating probe estimate
         fix_probe_aperture_iter: int, optional
             Number of iterations to run with a fixed probe Fourier amplitude before updating probe estimate
-        symmetrize_probe_iter: int, optional
-            Number of iterations to run before radially-averaging the probe
-        constrain_probe_amplitude: bool
-            If True, probe amplitude is constrained by top hat function
+        constrain_probe_amplitude_iter: int, optional
+            Number of iterations to run while constraining the real-space probe with a top-hat support.
         constrain_probe_amplitude_relative_radius: float
             Relative location of top-hat inflection point, between 0 and 0.5
         constrain_probe_amplitude_relative_width: float
             Relative width of top-hat sigmoid, between 0 and 0.5
-        constrain_probe_fourier_amplitude: bool
-            If True, probe fourier amplitude is constrained by top hat function
-        constrain_probe_fourier_amplitude_threshold: float
-            Threshold value for current probe fourier mask. Value should
-            be between 0 and 1, where higher values provide the most masking.
+        constrain_probe_fourier_amplitude_iter: int, optional
+            Number of iterations to run while constraining the Fourier-space probe by fitting a sigmoid for each angular frequency.
+        constrain_probe_fourier_amplitude_max_width_pixels: float
+            Maximum pixel width of fitted sigmoid functions.
+        constrain_probe_fourier_amplitude_constant_intensity: bool
+            If True, the probe aperture is additionally constrained to a constant intensity.
         fix_positions_iter: int, optional
             Number of iterations to run with fixed positions before updating positions estimate
         constrain_position_distance: float, optional
@@ -1593,12 +1589,6 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
                 self._probe,
                 self._positions_px,
                 fix_com=fix_com and a0 >= fix_probe_iter,
-                symmetrize_probe=a0 < symmetrize_probe_iter,
-                probe_gaussian_filter=a0
-                < probe_gaussian_filter_residual_aberrations_iter
-                and probe_gaussian_filter_sigma is not None,
-                probe_gaussian_filter_sigma=probe_gaussian_filter_sigma,
-                probe_gaussian_filter_fix_amplitude=probe_gaussian_filter_fix_amplitude,
                 constrain_probe_amplitude=a0 < constrain_probe_amplitude_iter
                 and a0 >= fix_probe_iter,
                 constrain_probe_amplitude_relative_radius=constrain_probe_amplitude_relative_radius,
@@ -1606,7 +1596,12 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
                 constrain_probe_fourier_amplitude=a0
                 < constrain_probe_fourier_amplitude_iter
                 and a0 >= fix_probe_iter,
-                constrain_probe_fourier_amplitude_threshold=constrain_probe_fourier_amplitude_threshold,
+                constrain_probe_fourier_amplitude_max_width_pixels=constrain_probe_fourier_amplitude_max_width_pixels,
+                constrain_probe_fourier_amplitude_constant_intensity=constrain_probe_fourier_amplitude_constant_intensity,
+                fit_probe_aberrations=a0 < fit_probe_aberrations_iter
+                and a0 >= fix_probe_iter,
+                fit_probe_aberrations_max_angular_order=fit_probe_aberrations_max_angular_order,
+                fit_probe_aberrations_max_radial_order=fit_probe_aberrations_max_radial_order,
                 fix_probe_aperture=a0 < fix_probe_aperture_iter,
                 initial_probe_aperture=self._probe_initial_aperture,
                 fix_positions=a0 < fix_positions_iter,
