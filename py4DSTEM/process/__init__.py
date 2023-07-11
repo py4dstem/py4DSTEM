@@ -1,6 +1,5 @@
 from py4DSTEM.process.polar import PolarDatacube
 
-from py4DSTEM.process import virtualdiffraction
 from py4DSTEM.process import latticevectors
 from py4DSTEM.process import phase
 from py4DSTEM.process import calibration
