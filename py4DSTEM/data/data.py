@@ -76,12 +76,12 @@ class Data:
                 self.calibration = Calibration()
         else:
             assert(isinstance(calibration,Calibration)), f"`calibration` must be a Calibration, not type {type(calibration)}"
-            self.calibration = calibration
             if calibration.root is None:
                 calibration._root = Root( name = self.name+"_root" )
                 calibration.root.tree( self )
             else:
                 calibration.root.tree( self )
+            self.calibration = calibration
 
 
     # calibration property
