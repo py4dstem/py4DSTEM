@@ -37,17 +37,17 @@ from emdfile import (
     PointListArray
 )
 
-from py4DSTEM.classes import (
+from py4DSTEM.data import (
     Calibration,
-    DataCube,
     DiffractionSlice,
-    VirtualDiffraction,
     RealSlice,
-    VirtualImage,
-    Probe,
     QPoints,
 )
-from py4DSTEM.process.diskdetection.braggvectors import BraggVectors
+from py4DSTEM.datacube import (
+    DataCube,
+    VirtualImage,
+    VirtualDiffraction,
+)
 
 
 
@@ -176,6 +176,7 @@ def _v13_to_14_cls(obj):
         pass
 
     elif isinstance(obj, Probe13):
+        from py4DSTEM.braggvectors import Probe
         x = Probe(
             name = obj.name,
             data = obj.data
@@ -188,6 +189,7 @@ def _v13_to_14_cls(obj):
         )
 
     elif isinstance(obj, BraggVectors13):
+        from py4DSTEM.braggvectors import BraggVectors
         x = BraggVectors(
             name = obj.name,
             Rshape = obj.Rshape,
