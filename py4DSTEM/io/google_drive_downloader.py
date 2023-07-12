@@ -1,7 +1,127 @@
 import gdown
 import os
 
-from py4DSTEM.io.sample_file_ids import file_ids, collection_ids
+
+### File IDs
+
+# single files
+file_ids = {
+    'sample_diffraction_pattern' : (
+        'a_diffraction_pattern.h5',
+        '1ymYMnuDC0KV6dqduxe2O1qafgSd0jjnU',
+    ),
+    'Au_sim' : (
+        'Au_sim.h5',
+        '1PmbCYosA1eYydWmmZebvf6uon9k_5g_S',
+    ),
+    'carbon_nanotube' : (
+        'carbon_nanotube.h5',
+        '1bHv3u61Cr-y_GkdWHrJGh1lw2VKmt3UM',
+    ),
+    'Si_SiGe_exp' : (
+        'Si_SiGe_exp.h5',
+        '1fXNYSGpe6w6E9RBA-Ai_owZwoj3w8PNC',
+    ),
+    'Si_SiGe_probe' : (
+        'Si_SiGe_probe.h5',
+        '141Tv0YF7c5a-MCrh3CkY_w4FgWtBih80',
+    ),
+    'Si_SiGe_EELS_strain' : (
+        'Si_SiGe_EELS_strain.h5',
+        '1klkecq8IuEOYB-bXchO7RqOcgCl4bmDJ',
+    ),
+    'AuAgPd_wire' : (
+        'AuAgPd_wire.h5',
+        '1OQYW0H6VELsmnLTcwicP88vo2V5E3Oyt',
+    ),
+    'AuAgPd_wire_probe' : (
+        'AuAgPd_wire_probe.h5',
+        '17OduUKpxVBDumSK_VHtnc2XKkaFVN8kq',
+    ),
+    'polycrystal_2D_WS2' : (
+        'polycrystal_2D_WS2.h5',
+        '1AWB3-UTPiTR9dgrEkNFD7EJYsKnbEy0y',
+    ),
+    'WS2cif' : (
+        'WS2.cif',
+        '13zBl6aFExtsz_sew-L0-_ALYJfcgHKjo',
+    ),
+    'polymers' : (
+        'polymers.h5',
+        '1lK-TAMXN1MpWG0Q3_4vss_uEZgW2_Xh7',
+    ),
+    'vac_probe' : (
+        'vac_probe.h5',
+        '1QTcSKzZjHZd1fDimSI_q9_WsAU25NIXe',
+    ),
+    'small_dm3_3Dstack' : (
+        'small_dm3_3Dstack.dm3',
+        '1B-xX3F65JcWzAg0v7f1aVwnawPIfb5_o'
+    ),
+    'FCU-Net' : (
+        'filename.name',
+        '1-KX0saEYfhZ9IJAOwabH38PCVtfXidJi',
+    ),
+    'small_datacube' : (
+        'small_datacube.dm4',
+        # TODO - change this file to something smaller - ideally e.g. shape (4,8,256,256) ~= 4.2MB'
+        '1QTcSKzZjHZd1fDimSI_q9_WsAU25NIXe'
+    ),
+    'legacy_v0.9' : (
+        'legacy_v0.9_simAuNanoplatelet_bin.h5',
+        '1AIRwpcj87vK3ubLaKGj1UiYXZByD2lpu'
+    ),
+    'legacy_v0.13' : (
+        'legacy_v0.13.h5',
+        '1VEqUy0Gthama7YAVkxwbjQwdciHpx8rA'
+    ),
+    'legacy_v0.14' : (
+        'legacy_v0.14.h5',
+        '1eOTEJrpHnNv9_DPrWgZ4-NTN21UbH4aR',
+    ),
+    'test_realslice_io' : (
+        'test_realslice_io.h5',
+        '1siH80-eRJwG5R6AnU4vkoqGWByrrEz1y'
+    ),
+}
+
+# collections of files
+collection_ids = {
+    'tutorials' : (
+        'Au_sim',
+        'carbon_nanotube',
+        'Si_SiGe_exp',
+        'Si_SiGe_probe',
+        'Si_SiGe_EELS_strain',
+        'AuAgPd_wire',
+        'AuAgPd_wire_probe',
+        'polycrystal_2D_WS2',
+        'WS2cif',
+        'polymers',
+        'vac_probe',
+    ),
+    'test_io' : (
+        'small_dm3_3Dstack',
+        'vac_probe',
+        'legacy_v0.9',
+        'legacy_v0.13',
+        'legacy_v0.14',
+        'test_realslice_io',
+    ),
+    'test_braggvectors' : (
+        'Au_sim',
+    )
+}
+
+def get_sample_file_ids():
+    return {
+        'files' : file_ids.keys(),
+        'collections' : collection_ids.keys()
+    }
+
+
+
+### Downloader
 
 def gdrive_download(
     id_,
@@ -19,22 +139,22 @@ def gdrive_download(
         File ID for the desired file.  May be either a key from the list
         of files and collections of files accessible at get_sample_file_ids(),
         or a complete url, or the portions of a google drive link specifying
-        the file ID, i.e. for the address
+        it's google file ID, i.e. for the address
         https://drive.google.com/file/d/1bHv3u61Cr-y_GkdWHrJGh1lw2VKmt3UM/,
         the id string '1bHv3u61Cr-y_GkdWHrJGh1lw2VKmt3UM'.
     destination : None or str
-        The location to download to. If None, downloads to the current
-        working directory. If a string is passed which points to a valid
-        location on the filesystem, downloads there. For collections of
-        files, makes a new directory named after the collection id and
-        places all files there.
+        The location files are downloaded to. If a collection of files has been
+        specified, creates a new directory at the specified destination and
+        downloads the collection there.  If None, downloads to the current
+        working directory. Otherwise must be a string or Path pointint to
+        a valid location on the filesystem.
     overwrite : bool
         Turns overwrite protection on/off.
     filename : None or str
-        Used only if `id_` is a url or gdrive id. Specifies the name of the
-        output file.  If left as None, saves to 'gdrivedownload.file'. If `id_`
-        is a key from the sample file id list, this parameter is ignored and
-        the filenames in that list are used.
+        Used only if `id_` is a url or gdrive id. In these cases, specifies
+        the name of the output file.  If left as None, saves to
+        'gdrivedownload.file'. If `id_` is a key from the sample file id list,
+        this parameter is ignored.
     verbose : bool
         Toggles verbose output
     """
@@ -88,4 +208,7 @@ def gdrive_download(
                     output = output,
                     fuzzy = True
                 )
+
+
+
 

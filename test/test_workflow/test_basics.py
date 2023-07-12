@@ -2,7 +2,7 @@ import py4DSTEM
 from os.path import join
 
 # set filepath
-path = join(py4DSTEM._TESTPATH,"simulatedAuNanoplatelet_binned_v0_9.h5")
+path = join(py4DSTEM._TESTPATH,"test_io/legacy_v0.9_simAuNanoplatelet_bin.h5")
 
 
 

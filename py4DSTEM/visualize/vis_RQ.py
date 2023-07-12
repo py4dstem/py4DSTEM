@@ -3,7 +3,6 @@ import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
 
 from py4DSTEM.visualize.show import show,show_points
-from py4DSTEM.process.calibration.rotation import get_Qvector_from_Rvector,get_Rvector_from_Qvector
 
 
 
@@ -79,6 +78,7 @@ def ax_addvector_RtoQ(ax,vx,vy,vlength,x0,y0,QR_rotation,width=1,color='r'):
                                     the counterclockwise rotation of real space
                                     with respect to diffraction space. In degrees.
     """
+    from py4DSTEM.process.calibration.rotation import get_Qvector_from_Rvector
     _,_,vx,vy = get_Qvector_from_Rvector(vx,vy,QR_rotation)
     vx,vy = vx*vlength,vy*vlength
     ax.arrow(y0,x0,vy,vx,color=color,width=width,length_includes_head=True)
@@ -102,6 +102,7 @@ def ax_addvector_QtoR(ax,vx,vy,vlength,x0,y0,QR_rotation,width=1,color='r'):
                                     the counterclockwise rotation of real space
                                     with respect to diffraction space. In degrees.
     """
+    from py4DSTEM.process.calibration.rotation import get_Rvector_from_Qvector
     vx,vy,_,_ = get_Rvector_from_Qvector(vx,vy,QR_rotation)
     vx,vy = vx*vlength,vy*vlength
     ax.arrow(y0,x0,vy,vx,color=color,width=width,length_includes_head=True)
@@ -278,6 +279,7 @@ def ax_addaxes_QtoR(ax,vx,vy,vlength,x0,y0,QR_rotation,width=1,color='r',
                                     the counterclockwise rotation of real space
                                     with respect to diffraction space. In degrees.
     """
+    from py4DSTEM.process.calibration.rotation import get_Rvector_from_Qvector
     vx,vy,_,_ = get_Rvector_from_Qvector(vx,vy,QR_rotation)
     ax_addaxes(ax,vx,vy,vlength,x0,y0,width=width,color=color,labelaxes=labelaxes,
                labelsize=labelsize,labelcolor=labelcolor,righthandedcoords=True)
@@ -304,6 +306,7 @@ def ax_addaxes_RtoQ(ax,vx,vy,vlength,x0,y0,QR_rotation,width=1,color='r',
                                     the counterclockwise rotation of real space
                                     with respect to diffraction space. In degrees.
     """
+    from py4DSTEM.process.calibration.rotation import get_Qvector_from_Rvector
     _,_,vx,vy = get_Qvector_from_Rvector(vx,vy,QR_rotation)
     ax_addaxes(ax,vx,vy,vlength,x0,y0,width=width,color=color,labelaxes=labelaxes,
                labelsize=labelsize,labelcolor=labelcolor,righthandedcoords=True)
