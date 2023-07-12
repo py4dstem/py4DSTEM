@@ -93,7 +93,7 @@ def _populate_tree(node13,node14,root14):
         if isinstance(newnode14,Metadata):
             pass
         else:
-            node14.tree(newnode14)
+            node14.tree(newnode14,force=True)
         _populate_tree(newnode13,newnode14,root14)
 
 
