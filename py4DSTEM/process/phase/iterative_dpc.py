@@ -4,7 +4,7 @@ namely DPC.
 """
 
 import warnings
-from typing import Tuple, Union, Sequence
+from typing import Sequence, Tuple, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
