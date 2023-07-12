@@ -68,9 +68,12 @@ class Data:
 
         # set up calibration + EMD tree
         if calibration is None:
-            root = Root( name = self.name+"_root" )
-            root.tree( self )
-            self.calibration = Calibration()
+            if self.root is not None and 'calibration' in self.root.metadata:
+                pass
+            else:
+                root = Root( name = self.name+"_root" )
+                root.tree( self )
+                self.calibration = Calibration()
         else:
             assert(isinstance(calibration,Calibration)), f"`calibration` must be a Calibration, not type {type(calibration)}"
             self.calibration = calibration
