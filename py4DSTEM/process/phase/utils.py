@@ -1,8 +1,8 @@
+import functools
 from typing import Mapping, Tuple, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
-import functools
 from scipy.optimize import curve_fit
 
 try:
@@ -12,10 +12,9 @@ except ImportError:
     cp = None
     from scipy.fft import dstn, idstn
 
-
+from py4DSTEM.process.utils import get_CoM
 from py4DSTEM.process.utils.cross_correlate import align_and_shift_images
 from py4DSTEM.process.utils.utils import electron_wavelength_angstrom
-from py4DSTEM.process.utils import get_CoM
 from scipy.ndimage import gaussian_filter, uniform_filter1d
 from skimage.restoration import unwrap_phase
 
