@@ -3,8 +3,8 @@ from py4DSTEM.process.phase.utils import (
     array_slice,
     estimate_global_transformation_ransac,
     fft_shift,
-    regularize_probe_amplitude,
     fit_aberration_surface,
+    regularize_probe_amplitude,
 )
 from py4DSTEM.process.utils import get_CoM
 
