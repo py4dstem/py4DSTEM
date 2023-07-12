@@ -3,6 +3,8 @@ from py4DSTEM.process.phase.utils import (
     array_slice,
     estimate_global_transformation_ransac,
     fft_shift,
+    fit_aberration_surface,
+    regularize_probe_amplitude,
 )
 from py4DSTEM.process.utils import get_CoM
 
@@ -120,7 +122,7 @@ class PtychographicConstraints:
         """
         xp = self._xp
         gaussian_filter = self._gaussian_filter
-        gaussian_filter_sigma /= xp.sqrt(self.sampling[0] ** 2 + self.sampling[1] ** 2)
+        gaussian_filter_sigma /= self.sampling[0]
 
         if pure_phase_object:
             phase = xp.angle(current_object)
@@ -315,7 +317,7 @@ class PtychographicConstraints:
     def _probe_center_of_mass_constraint(self, current_probe):
         """
         Ptychographic center of mass constraint.
-        Used for centering probe intensity.
+        Used for centering corner-centered probe intensity.
 
         Parameters
         --------
@@ -329,77 +331,14 @@ class PtychographicConstraints:
         """
         xp = self._xp
 
-        probe_center = xp.array(self._region_of_interest_shape) / 2
         probe_intensity = xp.abs(current_probe) ** 2
 
         probe_x0, probe_y0 = get_CoM(
-            probe_intensity, device="cpu" if xp is np else "gpu"
+            probe_intensity, device=self._device, corner_centered=True
         )
-        shifted_probe = fft_shift(
-            current_probe, probe_center - xp.array([probe_x0, probe_y0]), xp
-        )
+        shifted_probe = fft_shift(current_probe, -xp.array([probe_x0, probe_y0]), xp)
 
         return shifted_probe
-
-    def _probe_radial_symmetrization_constraint_base(
-        self,
-        current_probe,
-        num_bins=None,
-        center=None,
-    ):
-        xp = self._xp
-
-        sx, sy = current_probe.shape
-
-        if center is None:
-            center = (sx // 2, sy // 2)
-
-        if num_bins is None:
-            num_bins = np.maximum(sx, sy) * 2 + 1
-
-        cx, cy = center
-        X, Y = xp.ogrid[0:sx, 0:sy]
-        r = xp.hypot(X - cx, Y - cy)
-
-        rbin = (num_bins * r / r.max()).astype("int")
-        num = xp.bincount(rbin.ravel(), current_probe.ravel())
-        denom = xp.bincount(rbin.ravel())
-        denom[denom == 0] = 1
-
-        radial_mean = num / denom
-
-        for r_bin, r_mean in enumerate(radial_mean):
-            if r_bin != 0.0:
-                current_probe[np.where(rbin == r_bin)] = r_mean
-
-        return current_probe
-
-    def _probe_radial_symmetrization_constraint(
-        self,
-        current_probe,
-        num_bins=None,
-        center=None,
-    ):
-        xp = self._xp
-
-        current_probe_sum = xp.sum(xp.abs(current_probe) ** 2)
-        fourier_probe = self._return_fourier_probe(current_probe)
-
-        fourier_probe_real = fourier_probe.real.copy()
-        fourier_probe_imag = fourier_probe.imag.copy()
-
-        fourier_probe_real = self._probe_radial_symmetrization_constraint_base(
-            fourier_probe_real, num_bins, center
-        )
-        fourier_probe_imag = self._probe_radial_symmetrization_constraint_base(
-            fourier_probe_imag, num_bins, center
-        )
-
-        fourier_probe = fourier_probe_real + 1.0j * fourier_probe_imag
-        current_probe = xp.fft.ifftshift(xp.fft.ifft2(xp.fft.fftshift(fourier_probe)))
-        current_probe *= xp.sqrt(current_probe_sum / np.sum(np.abs(current_probe) ** 2))
-
-        return current_probe
 
     def _probe_amplitude_constraint(
         self, current_probe, relative_radius, relative_width
@@ -425,24 +364,26 @@ class PtychographicConstraints:
         erf = self._erf
 
         probe_intensity = xp.abs(current_probe) ** 2
-        current_probe_sum = xp.sum(probe_intensity)
+        #current_probe_sum = xp.sum(probe_intensity)
 
-        x = xp.linspace(-1 / 2, 1 / 2, current_probe.shape[0])
-        y = xp.linspace(-1 / 2, 1 / 2, current_probe.shape[1])
-        xa, ya = xp.meshgrid(x, y, indexing="ij")
-        ra = xp.sqrt(xa**2 + ya**2) - relative_radius
+        X = xp.fft.fftfreq(current_probe.shape[0])[:, None]
+        Y = xp.fft.fftfreq(current_probe.shape[1])[None]
+        r = xp.hypot(X, Y) - relative_radius
 
         sigma = np.sqrt(np.pi) / relative_width
-        tophat_mask = 0.5 * (1 - erf(sigma * ra / (1 - ra**2)))
+        tophat_mask = 0.5 * (1 - erf(sigma * r / (1 - r**2)))
 
         updated_probe = current_probe * tophat_mask
-        updated_probe_sum = xp.sum(xp.abs(updated_probe) ** 2)
-        normalization = xp.sqrt(current_probe_sum / updated_probe_sum)
+        #updated_probe_sum = xp.sum(xp.abs(updated_probe) ** 2)
+        #normalization = xp.sqrt(current_probe_sum / updated_probe_sum)
 
-        return updated_probe * normalization
+        return updated_probe #* normalization
 
     def _probe_fourier_amplitude_constraint(
-        self, current_probe, threshold, relative_width
+        self,
+        current_probe,
+        width_max_pixels,
+        enforce_constant_intensity,
     ):
         """
         Ptychographic top-hat filtering of Fourier probe.
@@ -463,38 +404,62 @@ class PtychographicConstraints:
             Constrained probe estimate
         """
         xp = self._xp
-        erf = self._erf
+        asnumpy = self._asnumpy
 
-        current_probe_sum = xp.sum(xp.abs(current_probe) ** 2)
+        #current_probe_sum = xp.sum(xp.abs(current_probe) ** 2)
         current_probe_fft = xp.fft.fft2(current_probe)
-        current_probe_fft_amp = xp.abs(current_probe_fft)
 
-        threshold_px = xp.argmax(
-            current_probe_fft_amp < xp.max(current_probe_fft_amp) * threshold
+        updated_probe_fft, _, _, _ = regularize_probe_amplitude(
+            asnumpy(current_probe_fft),
+            width_max_pixels=width_max_pixels,
+            nearest_angular_neighbor_averaging=5,
+            enforce_constant_intensity=enforce_constant_intensity,
+            corner_centered=True,
         )
 
-        if threshold_px == 0:
-            return current_probe
+        updated_probe_fft = xp.asarray(updated_probe_fft)
+        updated_probe = xp.fft.ifft2(updated_probe_fft)
+        #updated_probe_sum = xp.sum(xp.abs(updated_probe) ** 2)
+        #normalization = xp.sqrt(current_probe_sum / updated_probe_sum)
 
-        qx = xp.fft.fftfreq(current_probe.shape[0], 1)
-        qy = xp.fft.fftfreq(current_probe.shape[1], 1)
-        qya, qxa = xp.meshgrid(qy, qx)
-        qra = xp.sqrt(qxa**2 + qya**2) - threshold_px / current_probe.shape[0]
+        return updated_probe #* normalization
 
-        sigma = np.sqrt(np.pi) / relative_width
-        tophat_mask = 0.5 * (1 - erf(sigma * qra / (1 - qra**2)))
-
-        updated_probe = xp.fft.ifft2(current_probe_fft * tophat_mask)
-        updated_probe_sum = xp.sum(xp.abs(updated_probe) ** 2)
-        normalization = xp.sqrt(current_probe_sum / updated_probe_sum)
-
-        return updated_probe * normalization
-
-    def _probe_residual_aberration_filtering_constraint(
+    def _probe_aperture_constraint(
         self,
         current_probe,
-        gaussian_filter_sigma,
-        fix_amplitude,
+        initial_probe_aperture,
+    ):
+        """
+        Ptychographic constraint to fix Fourier amplitude to initial aperture.
+
+        Parameters
+        ----------
+        current_probe: np.ndarray
+            Current positions estimate
+
+        Returns
+        --------
+        constrained_probe: np.ndarray
+            Constrained probe estimate
+        """
+        xp = self._xp
+
+        #current_probe_sum = xp.sum(xp.abs(current_probe) ** 2)
+        current_probe_fft_phase = xp.angle(xp.fft.fft2(current_probe))
+
+        updated_probe = xp.fft.ifft2(
+            xp.exp(1j * current_probe_fft_phase) * initial_probe_aperture
+        )
+        #updated_probe_sum = xp.sum(xp.abs(updated_probe) ** 2)
+        #normalization = xp.sqrt(current_probe_sum / updated_probe_sum)
+
+        return updated_probe #* normalization
+
+    def _probe_aberration_fitting_constraint(
+        self,
+        current_probe,
+        max_angular_order,
+        max_radial_order,
     ):
         """
         Ptychographic probe smoothing constraint.
@@ -516,25 +481,21 @@ class PtychographicConstraints:
         """
 
         xp = self._xp
-        gaussian_filter = self._gaussian_filter
-        known_aberrations_array = self._known_aberrations_array
-        gaussian_filter_sigma /= xp.sqrt(
-            self._reciprocal_sampling[0] ** 2 + self._reciprocal_sampling[1] ** 2
+
+        fourier_probe = xp.fft.fft2(current_probe)
+        fourier_probe_abs = xp.abs(fourier_probe)
+        sampling = self.sampling
+
+        fitted_angle, _ = fit_aberration_surface(
+            fourier_probe,
+            sampling,
+            max_angular_order,
+            max_radial_order,
+            xp=xp,
         )
 
-        fourier_probe = self._return_fourier_probe(current_probe)
-        if fix_amplitude:
-            fourier_probe_abs = xp.abs(fourier_probe)
-
-        fourier_probe *= xp.conjugate(known_aberrations_array)
-        fourier_probe = gaussian_filter(fourier_probe, gaussian_filter_sigma)
-        fourier_probe *= known_aberrations_array
-
-        if fix_amplitude:
-            fourier_probe_angle = xp.angle(fourier_probe)
-            fourier_probe = fourier_probe_abs * xp.exp(1.0j * fourier_probe_angle)
-
-        current_probe = xp.fft.ifftshift(xp.fft.ifft2(xp.fft.fftshift(fourier_probe)))
+        fourier_probe = fourier_probe_abs * xp.exp(1.0j * fitted_angle)
+        current_probe = xp.fft.ifft2(fourier_probe)
 
         return current_probe
 
