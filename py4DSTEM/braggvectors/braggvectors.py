@@ -250,7 +250,7 @@ class BraggVectors(Custom,BraggVectorMethods,Data):
         ellipse,
         pixel,
         rotate
-    ):
+        ):
         """
         Returns the bragg vectors at the specified scan position with
         the specified calibration state.
@@ -268,6 +268,7 @@ class BraggVectors(Custom,BraggVectorMethods,Data):
         -------
         vectors : BVects
         """
+
         ans = self._v_uncal[scan_x,scan_y].data
         ans = self.cal._transform(
             data = ans,
@@ -280,15 +281,36 @@ class BraggVectors(Custom,BraggVectorMethods,Data):
         )
         return BVects(ans)
 
+    def get_vectors_calibrated(
+        self,
+        scan_x,
+        scan_y,
+        ):
+        """
+        Returns the calibrated bragg vectors at the specified scan position.
+        """
+        ans = self._v_uncal[scan_x,scan_y].data
+        ans = self.cal._transform(
+            data = ans,
+            cal = self.calibration,
+            scanxy = (scan_x,scan_y),
+            center = True,
+            ellipse = True,
+            pixel = True,
+            rotate = True,
+        )
+        return BVects(ans)
+
 
     # copy
-
     def copy(self, name=None):
         name = name if name is not None else self.name+"_copy"
         braggvector_copy = BraggVectors(self.Rshape, self.Qshape, name=name)
         braggvector_copy._v_uncal = self._v_uncal.copy()
         for k in self.metadata.keys():
             braggvector_copy.metadata = self.metadata[k].copy()
+        # TODO - fix this calibration line?
+        braggvector_copy.calibration = self.calibration
         return braggvector_copy
 
 
