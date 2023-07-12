@@ -541,7 +541,7 @@ class BraggVectorMethods:
         try:
             self.calibration.set_origin([qx0_fit,qy0_fit])
         except AttributeError:
-            # should a warning be raised?
+            warn("No calibration found on this datacube - fit values are not being stored")
             pass
         if plot:
             from py4DSTEM.visualize import show_image_grid
@@ -573,6 +573,10 @@ class BraggVectorMethods:
                 W = 3,
                 cmap = cmap,
                 axsize = axsize,
+                title = [
+                    'measured origin, x', 'fitorigin, x', 'residuals, x',
+                    'measured origin, y', 'fitorigin, y', 'residuals, y'
+                ],
                 vmin = -1*plot_range,
                 vmax = 1*plot_range,
                 intensity_range = "absolute",
