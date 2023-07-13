@@ -64,24 +64,41 @@ class Data:
         calibration = None
         ):
         assert(isinstance(self,Node)), "Data instances must inherit from Node"
-        pass
+        assert(calibration is None or isinstance(calibration,Calibration)), f"calibration must be None or a Calibration instance, not type {type(calibration)}"
+
 
         # set up calibration + EMD tree
         if calibration is None:
-            if self.root is not None and 'calibration' in self.root.metadata:
-                pass
-            else:
+            if self.root is None:
                 root = Root( name = self.name+"_root" )
                 root.tree( self )
                 self.calibration = Calibration()
-        else:
-            assert(isinstance(calibration,Calibration)), f"`calibration` must be a Calibration, not type {type(calibration)}"
-            if calibration.root is None:
-                calibration._root = Root( name = self.name+"_root" )
-                calibration.root.tree( self )
+            elif 'calibration' not in self.root.metadata:
+                self.calibration = Calibration()
             else:
-                calibration.root.tree( self )
-            self.calibration = calibration
+                pass
+        elif calibration.root is not None:
+            if self.root is None:
+                calibration.root.tree(self)
+                self.calibration = calibration
+            elif 'calibration' not in self.root.metadata:
+                # TODO
+                self.calibration = calibration
+            else:
+                # raises a warning
+                self.calibration = calibration
+
+
+            assert(isinstance(calibration,Calibration)), f"`calibration` must be a Calibration, not type {type(calibration)}"
+            if self.root is not None and 'calibration' in self.root.metadata:
+                pass
+            else:
+                if calibration.root is None:
+                    calibration._root = Root( name = self.name+"_root" )
+                    calibration.root.tree( self )
+                else:
+                    calibration.root.tree( self )
+                self.calibration = calibration
 
 
     # calibration property
