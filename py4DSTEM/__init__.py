@@ -46,7 +46,7 @@ from py4DSTEM.datacube import (
 ### visualization
 
 from py4DSTEM import visualize
-from py4DSTEM.visualize import show
+from py4DSTEM.visualize import show, show_complex
 
 
 
