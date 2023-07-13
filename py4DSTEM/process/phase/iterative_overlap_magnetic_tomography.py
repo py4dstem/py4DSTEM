@@ -331,9 +331,9 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
         """
         Rotate 3D volume using alpha, beta, gamma Euler angles according to convention:
 
-        - \alpha tilt around first axis (z)
-        - \beta tilt around second axis (x)
-        - \alpha tilt around first axis (z)
+        - \\-alpha tilt around first axis (z)
+        - \\beta tilt around second axis (x)
+        - \\alpha tilt around first axis (z)
 
         Note: since we store array as zxy, the x- and y-axis rotations flip sign below.
 

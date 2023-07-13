@@ -27,9 +27,9 @@ class PtychographyOptimizer:
         self,
         reconstruction_type: type[PhaseReconstruction],
         init_args: dict,
-        preprocess_args: dict,
-        reconstruction_args: dict,
-        affine_args: dict = None,
+        preprocess_args: dict = {},
+        reconstruction_args: dict = {},
+        affine_args: dict = {},
     ):
         """
         Parameter optimization for ptychographic reconstruction based on Bayesian Optimization
@@ -62,8 +62,6 @@ class PtychographyOptimizer:
             Keyword arguments passed to AffineTransform. The transform is applied to the initial
             scan positions.
         """
-        if affine_args is None:
-            affine_args = {}
 
         # loop over each argument dictionary and split into static and optimization variables
         (
