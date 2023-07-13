@@ -65,7 +65,7 @@ class BraggVectors(Custom,BraggVectorMethods,Data):
         Rshape,
         Qshape,
         name = 'braggvectors',
-        verbose = True,
+        verbose = False,
         calibration = None
         ):
         Custom.__init__(self,name=name)
@@ -236,7 +236,7 @@ class BraggVectors(Custom,BraggVectorMethods,Data):
             "rotate" : rotate,
         }
         if self.verbose:
-            print('current calstate: ', self.calstate)
+            print('current calibration state: ', self.calstate)
         pass
 
 
