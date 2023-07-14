@@ -9,7 +9,16 @@ from py4DSTEM.data import Calibration
 
 class Data:
     """
-    Data in py4DSTEM is stored in filetree like representations, e.g.
+    The purpose of the `Data` class is to ensure calibrations are linked
+    to data containing class instances, while allowing multiple objects
+    to share a single Calibration. The calibrations of a Data instance
+    `data` is accessible as
+
+        >>> data.calibration
+
+    In py4DSTEM, Data containing objects are stored internally in filetree
+    like representations, defined by the EMD1.0 and `emdfile` specifications,
+    e.g.
 
     Root
       |--metadata
@@ -23,24 +32,30 @@ class Data:
       |     |--etc.
       :
 
-    In a Python interpreter, do
+    Calibrations are metadata which always live in the root of such a tree.
+    Running `data.calibration` returns the calibrations from the tree root,
+    and therefore the same calibration instance is referred to be all objects
+    in the same tree.  The root itself is accessible from any Data instance
+    as
+
+        >>> data.root
+
+    To examine the tree of a Data instance, in a Python interpreter do
 
         >>> data.tree(True)
 
-    to display the data tree of Data instance `data`, and
+    to display the whole data tree, and
 
         >>> data.tree()
 
     to display the tree of from the current node on, i.e. the branch
     downstream of `data`.
 
-    Every object can access the calibrations which live in the root metadata
-    of its tree with
+    Calling
 
         >>> data.calibration
 
-    which returns the calibrations, or, if none are found, raises a warning
-    and returns None.
+    will raise a warning and return None if no root calibrations are found.
 
     Some objects should be modified when the calibrations change - these
     objects must have .calibrate() method, which is called any time relevant
@@ -64,21 +79,38 @@ class Data:
         calibration = None
         ):
         assert(isinstance(self,Node)), "Data instances must inherit from Node"
-        pass
+        assert(calibration is None or isinstance(calibration,Calibration)), f"calibration must be None or a Calibration instance, not type {type(calibration)}"
+
 
         # set up calibration + EMD tree
         if calibration is None:
-            root = Root( name = self.name+"_root" )
-            root.tree( self )
-            self.calibration = Calibration()
-        else:
-            assert(isinstance(calibration,Calibration)), f"`calibration` must be a Calibration, not type {type(calibration)}"
-            if calibration.root is None:
-                calibration._root = Root( name = self.name+"_root" )
-                calibration.root.tree( self )
+            if self.root is None:
+                root = Root( name=self.name+"_root" )
+                root.tree( self )
+                self.calibration = Calibration()
+            elif 'calibration' not in self.root.metadata:
+                self.calibration = Calibration()
             else:
-                calibration.root.tree( self )
-            self.calibration = calibration
+                pass
+        elif calibration.root is None:
+            if self.root is None:
+                root = Root( name=self.name+"_root" )
+                root.tree(self)
+                self.calibration = calibration
+            elif 'calibration' not in self.root.metadata:
+                self.calibration = calibration
+            else:
+                warnings.warn("A calibration was passed to instantiate a new Data instance, but the instance already has a calibration. The passed calibration *WAS NOT* attached.  To attach the new calibration and overwrite the existing calibration, use `data.calibration = new_calibration`")
+                pass
+        else:
+            if self.root is None:
+                calibration.root.tree(self)
+                self.calibration = calibration
+            elif 'calibration' not in self.root.metadata:
+                self.calibration = calibration
+                warnings.warn("A calibration was passed to instantiate a new Data instance.  The Data already had a root but no calibration, and the calibration already exists in a different root.  The calibration has been added and now lives in both roots, and can therefore be modified from either place!")
+            else:
+                warnings.warn("A calibration was passed to instantiate a new Data instance, however the Data already has a root and calibration, and the calibration already has a root!! The passed calibration *WAS NOT* attached. To attach the new calibration and overwrite the existing calibration, use `data.calibration = new_calibration.")
 
 
     # calibration property
