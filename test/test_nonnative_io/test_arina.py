@@ -4,7 +4,7 @@ from os.path import join
 
 
 # Set filepaths
-filepath = join(py4DSTEM._TESTPATH, "test_arina/STO-STEM_bench_20us_master.h5")
+filepath = join(py4DSTEM._TESTPATH, "test_arina/STO_STEM_bench_20us_master.h5")
 
 
 def test_read_arina():
