@@ -172,18 +172,20 @@ def get_rotated_strain_map(unrotated_strain_map, xaxis_x, xaxis_y, flip_theta):
     sint2 = sint**2
 
     Rx,Ry = unrotated_strain_map.get_slice('e_xx').data.shape
-    rotated_strain_map = RealSlice(data=np.zeros((Rx,Ry,5)),
-                                   slicelabels=['e_xx','e_xy','e_yy','theta','mask'],
-                                   name=unrotated_strain_map.name+"_rotated".format(np.degrees(theta)))
+    rotated_strain_map = RealSlice(
+        data=np.zeros((5, Rx,Ry)),
+        slicelabels=['e_xx','e_xy','e_yy','theta','mask'],
+        name=unrotated_strain_map.name+"_rotated".format(np.degrees(theta))
+    )
 
-    rotated_strain_map.data[:,:,0] = cost2*unrotated_strain_map.get_slice('e_xx').data - 2*cost*sint*unrotated_strain_map.get_slice('e_xy').data + sint2*unrotated_strain_map.get_slice('e_yy').data
-    rotated_strain_map.data[:,:,1] = cost*sint*(unrotated_strain_map.get_slice('e_xx').data-unrotated_strain_map.get_slice('e_yy').data) + (cost2-sint2)*unrotated_strain_map.get_slice('e_xy').data
-    rotated_strain_map.data[:,:,2] = sint2*unrotated_strain_map.get_slice('e_xx').data + 2*cost*sint*unrotated_strain_map.get_slice('e_xy').data + cost2*unrotated_strain_map.get_slice('e_yy').data
+    rotated_strain_map.data[0,:,:] = cost2*unrotated_strain_map.get_slice('e_xx').data - 2*cost*sint*unrotated_strain_map.get_slice('e_xy').data + sint2*unrotated_strain_map.get_slice('e_yy').data
+    rotated_strain_map.data[1,:,:] = cost*sint*(unrotated_strain_map.get_slice('e_xx').data-unrotated_strain_map.get_slice('e_yy').data) + (cost2-sint2)*unrotated_strain_map.get_slice('e_xy').data
+    rotated_strain_map.data[2,:,:] = sint2*unrotated_strain_map.get_slice('e_xx').data + 2*cost*sint*unrotated_strain_map.get_slice('e_xy').data + cost2*unrotated_strain_map.get_slice('e_yy').data
     if flip_theta == True:
-        rotated_strain_map.data[:,:,3] = -unrotated_strain_map.get_slice('theta').data
+        rotated_strain_map.data[3,:,:] = -unrotated_strain_map.get_slice('theta').data
     else: 
-        rotated_strain_map.data[:,:,3] = unrotated_strain_map.get_slice('theta').data
-    rotated_strain_map.data[:,:,4] = unrotated_strain_map.get_slice('mask').data
+        rotated_strain_map.data[3,:,:] = unrotated_strain_map.get_slice('theta').data
+    rotated_strain_map.data[4,:,:] = unrotated_strain_map.get_slice('mask').data
     return rotated_strain_map
 
 
