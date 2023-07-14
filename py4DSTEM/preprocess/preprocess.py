@@ -266,9 +266,7 @@ def bin_data_diffraction(
     Qpixsize = datacube.calibration.get_Q_pixel_size() * bin_factor
     Qpixunits = datacube.calibration.get_Q_pixel_units()
     
-    # set calibration pixel size
-    datacube.calibration.set_Q_pixel_size(Qpixsize)
-
+    
     datacube.set_dim(
         2,
         [0,Qpixsize],
@@ -281,6 +279,10 @@ def bin_data_diffraction(
         units = Qpixunits,
         name = 'Qy'
     )
+
+    # set calibration pixel size
+    datacube.calibration.set_Q_pixel_size(Qpixsize)
+
 
     # return
     return datacube
@@ -769,6 +771,8 @@ def pad_data_diffraction(datacube, pad_factor=None, output_size=None):
         units = Qpixunits,
         name = 'Qy'
     )
+
+    datacube.calibrate()
 
     return datacube
 
