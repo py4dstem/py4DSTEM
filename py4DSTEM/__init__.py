@@ -48,8 +48,6 @@ from py4DSTEM.datacube import (
 from py4DSTEM import visualize
 from py4DSTEM.visualize import show, show_complex
 
-
-
 ### analysis classes
 
 # braggvectors
@@ -58,6 +56,9 @@ from py4DSTEM.braggvectors import (
     BraggVectors,
     BraggVectorMap,
 )
+
+# strain
+from py4DSTEM.process import StrainMap
 
 # TODO - crystal
 # TODO - ptycho

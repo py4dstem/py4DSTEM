@@ -83,6 +83,10 @@ file_ids = {
         'test_realslice_io.h5',
         '1siH80-eRJwG5R6AnU4vkoqGWByrrEz1y'
     ),
+    'test_strain' : (
+        'downsample_Si_SiGe_analysis_braggdisks_cal.h5',
+        '1bYgDdAlnWHyFmY-SwN3KVpMutWBI5MhP'
+    )
 }
 
 # collections of files
@@ -110,6 +114,9 @@ collection_ids = {
     ),
     'test_braggvectors' : (
         'Au_sim',
+    ),
+    'strain' : (
+        'test_strain',
     )
 }
 
