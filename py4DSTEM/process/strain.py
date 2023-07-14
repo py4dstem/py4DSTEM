@@ -385,21 +385,57 @@ class StrainMap(RealSlice, Data):
     def get_strain(
         self, 
         mask=None,
+        g_reference=None,
+        flip_theta=False,
         returncalc=False,
         **kwargs
     ):
-        """ """
+        """ 
+        mask: nd.array (bool) 
+            Use lattice vectors from g1g2_map scan positions
+            wherever mask==True. If mask is None gets median strain
+            map from entire field of view. If mask is not None, gets 
+            reference g1 and g2 from region and then calculates strain.
+        g_reference: nd.array of form [x,y]
+            G_reference (tupe): reference coordinate system for 
+            xaxis_x and xaxis_y
+        flip_theta: bool
+            If True, flips rotation coordinate system
+        returncal: bool
+            It True, returns rotated map
+        """
         if mask is None:
             mask = np.ones(self.g1g2_map.shape, dtype="bool")
 
-        from py4DSTEM.process.latticevectors import get_strain_from_reference_region
+            from py4DSTEM.process.latticevectors import get_strain_from_reference_region
 
-        strainmap_median_g1g2 = get_strain_from_reference_region(
-            self.g1g2_map,
-            mask=mask,
+            strainmap_g1g2 = get_strain_from_reference_region(
+                self.g1g2_map,
+                mask=mask,
+            )
+        else:
+            from py4DSTEM.process.latticevectors import get_reference_g1g2
+            g1_ref,g2_ref = get_reference_g1g2(self.g1g2_map, mask)
+            
+            from py4DSTEM.process.latticevectors import get_strain_from_reference_g1g2
+            strainmap_g1g2 = get_strain_from_reference_g1g2(self.g1g2_map, g1_ref, g2_ref)
+
+        self.strainmap_g1g2 = strainmap_g1g2
+
+        if g_reference is None:
+            g_reference = np.subtract(self.g1, self.g2)
+
+        print(g_reference)
+        from py4DSTEM.process.latticevectors import get_rotated_strain_map
+
+        strainmap_rotated = get_rotated_strain_map(
+            self.strainmap_g1g2,
+            xaxis_x = g_reference[0],
+            xaxis_y = g_reference[1],
+            flip_theta = flip_theta
         )
 
-        self.strainmap_median_g1g2 = strainmap_median_g1g2
+        self.strainmap_rotated = strainmap_rotated
         
         from py4DSTEM.visualize import show_strain
         figsize = kwargs.pop("figsize", (14, 4))
@@ -410,7 +446,7 @@ class StrainMap(RealSlice, Data):
         axes_plots = kwargs.pop("axes_plots",())
 
         fig, ax = show_strain(
-            strainmap_median_g1g2,
+            self.strainmap_rotated,
             vrange_exx=vrange_exx,
             vrange_theta=vrange_theta,
             ticknumber=ticknumber,
@@ -422,10 +458,13 @@ class StrainMap(RealSlice, Data):
         )
 
         if not np.all(mask == True): 
-            for axs in ax.flatten():
-                axs.imshow(mask, alpha = 0.2, cmap = "binary")
+           ax[0][0].imshow(mask, alpha = 0.2, cmap = "binary")
+           ax[0][1].imshow(mask, alpha = 0.2, cmap = "binary")
+           ax[1][0].imshow(mask, alpha = 0.2, cmap = "binary")
+           ax[1][1].imshow(mask, alpha = 0.2, cmap = "binary")
+        
         if returncalc:
-            return strainmap_median_g1g2
+            return self.strainmap_rotated
 
     def show_lattice_vectors(
         ar,
@@ -519,7 +558,9 @@ class StrainMap(RealSlice, Data):
         else:
             plt.show()
             return
-
+    
+    # def copy():
+    #     # TODO - copy method
 
 # def index_bragg_directions(x0, y0, gx, gy, g1, g2):
 #     """
@@ -573,81 +614,81 @@ class StrainMap(RealSlice, Data):
 #     return h,k, bragg_directions
 
 
-def add_indices_to_braggvectors(
-    braggpeaks, lattice, maxPeakSpacing, qx_shift=0, qy_shift=0, mask=None
-):
-    """
-    Using the peak positions (qx,qy) and indices (h,k) in the PointList lattice,
-    identify the indices for each peak in the PointListArray braggpeaks.
-    Return a new braggpeaks_indexed PointListArray, containing a copy of braggpeaks plus
-    three additional data columns -- 'h','k', and 'index_mask' -- specifying the peak
-    indices with the ints (h,k) and indicating whether the peak was successfully indexed
-    or not with the bool index_mask. If `mask` is specified, only the locations where
-    mask is True are indexed.
+# def add_indices_to_braggvectors(
+#     braggpeaks, lattice, maxPeakSpacing, qx_shift=0, qy_shift=0, mask=None
+# ):
+#     """
+#     Using the peak positions (qx,qy) and indices (h,k) in the PointList lattice,
+#     identify the indices for each peak in the PointListArray braggpeaks.
+#     Return a new braggpeaks_indexed PointListArray, containing a copy of braggpeaks plus
+#     three additional data columns -- 'h','k', and 'index_mask' -- specifying the peak
+#     indices with the ints (h,k) and indicating whether the peak was successfully indexed
+#     or not with the bool index_mask. If `mask` is specified, only the locations where
+#     mask is True are indexed.
 
-    Args:
-        braggpeaks (PointListArray): the braggpeaks to index. Must contain
-            the coordinates 'qx', 'qy', and 'intensity'
-        lattice (PointList): the positions (qx,qy) of the (h,k) lattice points.
-            Must contain the coordinates 'qx', 'qy', 'h', and 'k'
-        maxPeakSpacing (float): Maximum distance from the ideal lattice points
-            to include a peak for indexing
-        qx_shift,qy_shift (number): the shift of the origin in the `lattice` PointList
-            relative to the `braggpeaks` PointListArray
-        mask (bool): Boolean mask, same shape as the pointlistarray, indicating which
-            locations should be indexed. This can be used to index different regions of
-            the scan with different lattices
+#     Args:
+#         braggpeaks (PointListArray): the braggpeaks to index. Must contain
+#             the coordinates 'qx', 'qy', and 'intensity'
+#         lattice (PointList): the positions (qx,qy) of the (h,k) lattice points.
+#             Must contain the coordinates 'qx', 'qy', 'h', and 'k'
+#         maxPeakSpacing (float): Maximum distance from the ideal lattice points
+#             to include a peak for indexing
+#         qx_shift,qy_shift (number): the shift of the origin in the `lattice` PointList
+#             relative to the `braggpeaks` PointListArray
+#         mask (bool): Boolean mask, same shape as the pointlistarray, indicating which
+#             locations should be indexed. This can be used to index different regions of
+#             the scan with different lattices
 
-    Returns:
-        (PointListArray): The original braggpeaks pointlistarray, with new coordinates
-        'h', 'k', containing the indices of each indexable peak.
-    """
+#     Returns:
+#         (PointListArray): The original braggpeaks pointlistarray, with new coordinates
+#         'h', 'k', containing the indices of each indexable peak.
+#     """
 
-    assert isinstance(braggpeaks, PointListArray)
-    assert np.all(
-        [name in braggpeaks.dtype.names for name in ("qx", "qy", "intensity")]
-    )
-    assert isinstance(lattice, PointList)
-    assert np.all([name in lattice.dtype.names for name in ("qx", "qy", "h", "k")])
+#     assert isinstance(braggpeaks, PointListArray)
+#     assert np.all(
+#         [name in braggpeaks.dtype.names for name in ("qx", "qy", "intensity")]
+#     )
+#     assert isinstance(lattice, PointList)
+#     assert np.all([name in lattice.dtype.names for name in ("qx", "qy", "h", "k")])
 
-    if mask is None:
-        mask = np.ones(braggpeaks.shape, dtype=bool)
+#     if mask is None:
+#         mask = np.ones(braggpeaks.shape, dtype=bool)
 
-    assert mask.shape == braggpeaks.shape, "mask must have same shape as pointlistarray"
-    assert mask.dtype == bool, "mask must be boolean"
+#     assert mask.shape == braggpeaks.shape, "mask must have same shape as pointlistarray"
+#     assert mask.dtype == bool, "mask must be boolean"
 
-    indexed_braggpeaks = braggpeaks.copy()
+#     indexed_braggpeaks = braggpeaks.copy()
 
-    # add the coordinates if they don't exist
-    if not ("h" in braggpeaks.dtype.names):
-        indexed_braggpeaks = indexed_braggpeaks.add_fields([("h", int)])
-    if not ("k" in braggpeaks.dtype.names):
-        indexed_braggpeaks = indexed_braggpeaks.add_fields([("k", int)])
+#     # add the coordinates if they don't exist
+#     if not ("h" in braggpeaks.dtype.names):
+#         indexed_braggpeaks = indexed_braggpeaks.add_fields([("h", int)])
+#     if not ("k" in braggpeaks.dtype.names):
+#         indexed_braggpeaks = indexed_braggpeaks.add_fields([("k", int)])
 
-    # loop over all the scan positions
-    for Rx, Ry in tqdmnd(mask.shape[0], mask.shape[1]):
-        if mask[Rx, Ry]:
-            pl = indexed_braggpeaks.get_pointlist(Rx, Ry)
-            rm_peak_mask = np.zeros(pl.length, dtype=bool)
+#     # loop over all the scan positions
+#     for Rx, Ry in tqdmnd(mask.shape[0], mask.shape[1]):
+#         if mask[Rx, Ry]:
+#             pl = indexed_braggpeaks.get_pointlist(Rx, Ry)
+#             rm_peak_mask = np.zeros(pl.length, dtype=bool)
 
-            for i in range(pl.length):
-                r2 = (pl.data["qx"][i] - lattice.data["qx"] + qx_shift) ** 2 + (
-                    pl.data["qy"][i] - lattice.data["qy"] + qy_shift
-                ) ** 2
-                ind = np.argmin(r2)
-                if r2[ind] <= maxPeakSpacing**2:
-                    pl.data["h"][i] = lattice.data["h"][ind]
-                    pl.data["k"][i] = lattice.data["k"][ind]
-                else:
-                    rm_peak_mask[i] = True
-            pl.remove(rm_peak_mask)
+#             for i in range(pl.length):
+#                 r2 = (pl.data["qx"][i] - lattice.data["qx"] + qx_shift) ** 2 + (
+#                     pl.data["qy"][i] - lattice.data["qy"] + qy_shift
+#                 ) ** 2
+#                 ind = np.argmin(r2)
+#                 if r2[ind] <= maxPeakSpacing**2:
+#                     pl.data["h"][i] = lattice.data["h"][ind]
+#                     pl.data["k"][i] = lattice.data["k"][ind]
+#                 else:
+#                     rm_peak_mask[i] = True
+#             pl.remove(rm_peak_mask)
 
-    indexed_braggpeaks.name = braggpeaks.name + "_indexed"
-    return indexed_braggpeaks
+#     indexed_braggpeaks.name = braggpeaks.name + "_indexed"
+#     return indexed_braggpeaks
 
     # IO methods
 
-    # TODO - copy method
+    
 
     # read
     @classmethod
