@@ -1,10 +1,12 @@
 # Defines the Strain class
 
 import numpy as np
+import matplotlib.pyplot as plt
 from typing import Optional
 from py4DSTEM.data import RealSlice, Data
 from py4DSTEM.braggvectors import BraggVectors
-
+from py4DSTEM.preprocess.utils import get_maxima_2D
+from py4DSTEM.visualize import show,add_pointlabels,add_vector
 
 
 class StrainMap(RealSlice,Data):
@@ -45,19 +47,26 @@ class StrainMap(RealSlice,Data):
         )
 
         # set up braggvectors
+        # this assigns the bvs, ensures the origin is calibrated,
+        # and adds the strainmap to the bvs' tree
         self.braggvectors = braggvectors
-        # TODO - how to handle changes to braggvectors
-        #   option: register with calibrations and add a .calibrate method
-        #   which {{does something}} when origin changes
-        # TODO - include ellipse cal or no?
-
-        assert(self.root is not None)
 
         # initialize as Data
-        Data.__init__(
-            self,
-            calibration = self.braggvectors.calibration
-        )
+        Data.__init__(self)
+
+        # set calstate
+        # this property is used only to check to make sure that
+        # the braggvectors being used throughout a workflow are
+        # the same. The state of calibration of the vectors is noted
+        # here, and then checked each time the vectors are used -
+        # if they differ, an error message and instructions for
+        # re-calibration are issued
+        self.calstate = self.braggvectors.calstate
+
+        # get the BVM
+        # a new BVM using the current calstate is computed
+        self.bvm = self.braggvectors.histogram()
+
 
 
     # braggvector properties
@@ -73,6 +82,20 @@ class StrainMap(RealSlice,Data):
         self._braggvectors.tree(self,force=True)
 
 
+    def reset_calstate(self):
+        """
+        Resets the calibration state. This recomputes the BVM, and removes any computations
+        this StrainMap instance has stored, which will need to be recomputed.
+        """
+        del(
+            self.g0,
+            self.g1,
+            self.g2,
+        )
+        self.calstate = self.braggvectors.calstate
+        pass
+
+
 
     # Class methods
 
@@ -81,8 +104,6 @@ class StrainMap(RealSlice,Data):
         index_g0,
         index_g1,
         index_g2,
-        mode = 'centered',
-        plot = True,
         subpixel = 'multicorr',
         upsample_factor = 16,
         sigma=0,
@@ -92,39 +113,94 @@ class StrainMap(RealSlice,Data):
         minSpacing=0,
         edgeBoundary=1,
         maxNumPeaks=10,
-        bvm_vis_params = {},
+        figsize=(12,6),
+        c_indices='lightblue',
+        c0='g',
+        c1='r',
+        c2='r',
+        c_vectors='r',
+        c_vectorlabels='w',
+        size_indices=20,
+        width_vectors=1,
+        size_vectorlabels=20,
+        vis_params = {},
         returncalc = False,
+        returnfig=False,
         ):
         """
         Choose which lattice vectors to use for strain mapping.
 
-        Args:
-            index_g0 (int): origin
-            index_g1 (int): second point of vector 1
-            index_g2 (int): second point of vector 2
-            mode (str): centered or raw bragg map
-            plot (bool): plot bragg vector maps and vectors
-            subpixel (str): specifies the subpixel resolution algorithm to use.
-                must be in ('pixel','poly','multicorr'), which correspond
-                to pixel resolution, subpixel resolution by fitting a
-                parabola, and subpixel resultion by Fourier upsampling.
-            upsample_factor: the upsampling factor for the 'multicorr'
-                algorithm
-            sigma: if >0, applies a gaussian filter
-            maxNumPeaks: the maximum number of maxima to return
-            minAbsoluteIntensity, minRelativeIntensity, relativeToPeak,
-                minSpacing, edgeBoundary, maxNumPeaks: filtering applied
-                after maximum detection and before subpixel refinement
+        Overlays the bvm with the points detected via local 2D
+        maxima detection, plus an index for each point. User selects
+        3 points using the overlaid indices, which are identified as
+        the origin and the termini of the lattice vectors g1 and g2.
+
+        Parameters
+        ----------
+        index_g0 : int
+            selected index for the origin
+        index_g1 : int
+            selected index for g1
+        index_g2 :int
+            selected index for g2
+        subpixel : str in ('pixel','poly','multicorr')
+            See the docstring for py4DSTEM.preprocess.get_maxima_2D
+        upsample_factor : int
+            See the py4DSTEM.preprocess.get_maxima_2D docstring
+        sigma : number
+            See the py4DSTEM.preprocess.get_maxima_2D docstring
+        minAbsoluteIntensity : number
+            See the py4DSTEM.preprocess.get_maxima_2D docstring
+        minRelativeIntensity : number
+            See the py4DSTEM.preprocess.get_maxima_2D docstring
+        relativeToPeak : int
+            See the py4DSTEM.preprocess.get_maxima_2D docstring
+        minSpacing : number
+            See the py4DSTEM.preprocess.get_maxima_2D docstring
+        edgeBoundary : number
+            See the py4DSTEM.preprocess.get_maxima_2D docstring
+        maxNumPeaks : int
+            See the py4DSTEM.preprocess.get_maxima_2D docstring
+        figsize : 2-tuple
+            the size of the figure
+        c_indices : color
+            color of the maxima
+        c0 : color
+            color of the origin
+        c1 : color
+            color of g1 point
+        c2 : color
+            color of g2 point
+        c_vectors : color
+            color of the g1/g2 vectors
+        c_vectorlabels : color
+            color of the vector labels
+        size_indices : number
+            size of the indices
+        width_vectors : number
+            width of the vectors
+        size_vectorlabels : number
+            size of the vector labels
+        vis_params : dict
+            additional visualization parameters passed to `show`
+        returncalc : bool
+            toggles returning the answer
+        returnfig : bool
+            toggles returning the figure
+
+        Returns
+        -------
+        (optional) : None or (g0,g1,g2) or (fig,(ax1,ax2)) or both of the latter
         """
-        from py4DSTEM.process.utils import get_maxima_2D
+        # validate inputs
+        for i in (index_g0,index_g1,index_g2):
+            assert isinstance(i,(int,np.integer)), "indices must be integers!"
+        # check the calstate
+        assert(self.calstate == self.braggvectors.calstate), "The calibration state has changed! To resync the calibration state, use `.reset_calstate`."
 
-        if mode == "centered":
-            bvm = self.bvm_centered
-        else:
-            bvm = self.bvm_raw
-
+        # find the maxima
         g = get_maxima_2D(
-            bvm,
+            self.bvm.data,
             subpixel = subpixel,
             upsample_factor = upsample_factor,
             sigma = sigma,
@@ -136,26 +212,246 @@ class StrainMap(RealSlice,Data):
             maxNumPeaks = maxNumPeaks,
         )
 
-        self.g = g
+        # get the lattice vectors
+        gx,gy = g['x'],g['y']
+        g0 = gx[index_g0],gy[index_g0]
+        g1x = gx[index_g1] - g0[0]
+        g1y = gy[index_g1] - g0[1]
+        g2x = gx[index_g2] - g0[0]
+        g2y = gy[index_g2] - g0[1]
+        g1,g2 = (g1x,g1y),(g2x,g2y)
 
-        from py4DSTEM.visualize import select_lattice_vectors
-        g1,g2 = select_lattice_vectors(
-            bvm,
-            gx = g['x'],
-            gy = g['y'],
-            i0 = index_g0,
-            i1 = index_g1,
-            i2 = index_g2,
-            **bvm_vis_params,
-        )
+        # make the figure
+        fig,(ax1,ax2) = plt.subplots(1,2,figsize=figsize)
+        show(self.bvm.data,figax=(fig,ax1),**vis_params)
+        show(self.bvm.data,figax=(fig,ax2),**vis_params)
 
+        # Add indices to left panel
+        d = {'x':gx,'y':gy,'size':size_indices,'color':c_indices}
+        d0 = {'x':gx[index_g0],'y':gy[index_g0],'size':size_indices,
+              'color':c0,'fontweight':'bold','labels':[str(index_g0)]}
+        d1 = {'x':gx[index_g1],'y':gy[index_g1],'size':size_indices,
+              'color':c1,'fontweight':'bold','labels':[str(index_g1)]}
+        d2 = {'x':gx[index_g2],'y':gy[index_g2],'size':size_indices,
+              'color':c2,'fontweight':'bold','labels':[str(index_g2)]}
+        add_pointlabels(ax1,d)
+        add_pointlabels(ax1,d0)
+        add_pointlabels(ax1,d1)
+        add_pointlabels(ax1,d2)
+
+        # Add vectors to right panel
+        dg1 = {'x0':gx[index_g0],'y0':gy[index_g0],'vx':g1[0],'vy':g1[1],'width':width_vectors,
+               'color':c_vectors,'label':r'$g_1$','labelsize':size_vectorlabels,'labelcolor':c_vectorlabels}
+        dg2 = {'x0':gx[index_g0],'y0':gy[index_g0],'vx':g2[0],'vy':g2[1],'width':width_vectors,
+               'color':c_vectors,'label':r'$g_2$','labelsize':size_vectorlabels,'labelcolor':c_vectorlabels}
+        add_vector(ax2,dg1)
+        add_vector(ax2,dg2)
+
+        # store vectors
+        self.g0 = g0
         self.g1 = g1
         self.g2 = g2
 
-        if returncalc:
-            return g1, g2
+        # return
+        if returncalc and returnfig:
+            return (g0,g1,g2),(fig,(ax1,ax2))
+        elif returncalc:
+            return (g0,g1,g2)
+        elif returnfig:
+            return (fig,(ax1,ax2))
+        else:
+            return
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+def index_bragg_directions(x0, y0, gx, gy, g1, g2):
+    """
+    From an origin (x0,y0), a set of reciprocal lattice vectors gx,gy, and an pair of
+    lattice vectors g1=(g1x,g1y), g2=(g2x,g2y), find the indices (h,k) of all the
+    reciprocal lattice directions.
+
+    The approach is to solve the matrix equation
+            ``alpha = beta * M``
+    where alpha is the 2xN array of the (x,y) coordinates of N measured bragg directions,
+    beta is the 2x2 array of the two lattice vectors u,v, and M is the 2xN array of the
+    h,k indices.
+
+    Args:
+        x0 (float): x-coord of origin
+        y0 (float): y-coord of origin
+        gx (1d array): x-coord of the reciprocal lattice vectors
+        gy (1d array): y-coord of the reciprocal lattice vectors
+        g1 (2-tuple of floats): g1x,g1y
+        g2 (2-tuple of floats): g2x,g2y
+
+    Returns:
+        (3-tuple) A 3-tuple containing:
+
+            * **h**: *(ndarray of ints)* first index of the bragg directions
+            * **k**: *(ndarray of ints)* second index of the bragg directions
+            * **bragg_directions**: *(PointList)* a 4-coordinate PointList with the
+              indexed bragg directions; coords 'qx' and 'qy' contain bragg_x and bragg_y
+              coords 'h' and 'k' contain h and k.
+    """
+    # Get beta, the matrix of lattice vectors
+    beta = np.array([[g1[0],g2[0]],[g1[1],g2[1]]])
+
+    # Get alpha, the matrix of measured bragg angles
+    alpha = np.vstack([gx-x0,gy-y0])
+
+    # Calculate M, the matrix of peak positions
+    M = lstsq(beta, alpha, rcond=None)[0].T
+    M = np.round(M).astype(int)
+
+    # Get h,k
+    h = M[:,0]
+    k = M[:,1]
+
+    # Store in a PointList
+    coords = [('qx',float),('qy',float),('h',int),('k',int)]
+    temp_array = np.zeros([], dtype = coords)
+    bragg_directions = PointList(data = temp_array)
+    bragg_directions.add_data_by_field((gx,gy,h,k))
+
+    return h,k, bragg_directions
+
+
+
+def add_indices_to_braggpeaks(braggpeaks, lattice, maxPeakSpacing, qx_shift=0,
+                              qy_shift=0, mask=None):
+    """
+    Using the peak positions (qx,qy) and indices (h,k) in the PointList lattice,
+    identify the indices for each peak in the PointListArray braggpeaks.
+    Return a new braggpeaks_indexed PointListArray, containing a copy of braggpeaks plus
+    three additional data columns -- 'h','k', and 'index_mask' -- specifying the peak
+    indices with the ints (h,k) and indicating whether the peak was successfully indexed
+    or not with the bool index_mask. If `mask` is specified, only the locations where
+    mask is True are indexed.
+
+    Args:
+        braggpeaks (PointListArray): the braggpeaks to index. Must contain
+            the coordinates 'qx', 'qy', and 'intensity'
+        lattice (PointList): the positions (qx,qy) of the (h,k) lattice points.
+            Must contain the coordinates 'qx', 'qy', 'h', and 'k'
+        maxPeakSpacing (float): Maximum distance from the ideal lattice points
+            to include a peak for indexing
+        qx_shift,qy_shift (number): the shift of the origin in the `lattice` PointList
+            relative to the `braggpeaks` PointListArray
+        mask (bool): Boolean mask, same shape as the pointlistarray, indicating which
+            locations should be indexed. This can be used to index different regions of
+            the scan with different lattices
+
+    Returns:
+        (PointListArray): The original braggpeaks pointlistarray, with new coordinates
+        'h', 'k', containing the indices of each indexable peak.
+    """
+
+    assert isinstance(braggpeaks,PointListArray)
+    assert np.all([name in braggpeaks.dtype.names for name in ('qx','qy','intensity')])
+    assert isinstance(lattice, PointList)
+    assert np.all([name in lattice.dtype.names for name in ('qx','qy','h','k')])
+
+    if mask is None:
+        mask = np.ones(braggpeaks.shape,dtype=bool)
+
+    assert mask.shape == braggpeaks.shape, 'mask must have same shape as pointlistarray'
+    assert mask.dtype == bool, 'mask must be boolean'
+
+    indexed_braggpeaks = braggpeaks.copy()
+
+    # add the coordinates if they don't exist
+    if not ('h' in braggpeaks.dtype.names):
+        indexed_braggpeaks = indexed_braggpeaks.add_fields([('h',int)])
+    if not ('k' in braggpeaks.dtype.names):
+        indexed_braggpeaks = indexed_braggpeaks.add_fields([('k',int)])
+
+    # loop over all the scan positions
+    for Rx, Ry in tqdmnd(mask.shape[0],mask.shape[1]):
+        if mask[Rx,Ry]:
+            pl = indexed_braggpeaks.get_pointlist(Rx,Ry)
+            rm_peak_mask = np.zeros(pl.length,dtype=bool)
+
+            for i in range(pl.length):
+                r2 = (pl.data['qx'][i]-lattice.data['qx'] + qx_shift)**2 + \
+                     (pl.data['qy'][i]-lattice.data['qy'] + qy_shift)**2
+                ind = np.argmin(r2)
+                if r2[ind] <= maxPeakSpacing**2:
+                    pl.data['h'][i] = lattice.data['h'][ind]
+                    pl.data['k'][i] = lattice.data['k'][ind]
+                else:
+                    rm_peak_mask[i] = True
+            pl.remove(rm_peak_mask)
+
+    indexed_braggpeaks.name = braggpeaks.name + "_indexed"
+    return indexed_braggpeaks
+
+
+
+
+
+
+
+
+
+
+
+
+    def show_lattice_vectors(ar,x0,y0,g1,g2,color='r',width=1,labelsize=20,labelcolor='w',returnfig=False,**kwargs):
+        """ Adds the vectors g1,g2 to an image, with tail positions at (x0,y0).  g1 and g2 are 2-tuples (gx,gy).
+        """
+        fig,ax = show(ar,returnfig=True,**kwargs)
+
+        # Add vectors
+        dg1 = {'x0':x0,'y0':y0,'vx':g1[0],'vy':g1[1],'width':width,
+               'color':color,'label':r'$g_1$','labelsize':labelsize,'labelcolor':labelcolor}
+        dg2 = {'x0':x0,'y0':y0,'vx':g2[0],'vy':g2[1],'width':width,
+               'color':color,'label':r'$g_2$','labelsize':labelsize,'labelcolor':labelcolor}
+        add_vector(ax,dg1)
+        add_vector(ax,dg2)
+
+        if returnfig:
+            return fig,ax
+        else:
+            plt.show()
+            return
+
+
+    def show_bragg_indexing(ar,braggdirections,voffset=5,hoffset=0,color='w',size=20,
+                            points=True,pointcolor='r',pointsize=50,returnfig=False,**kwargs):
+        """
+        Shows an array with an overlay describing the Bragg directions
+
+        Accepts:
+            ar                  (arrray) the image
+            bragg_directions    (PointList) the bragg scattering directions; must have coordinates
+                                'qx','qy','h', and 'k'. Optionally may also have 'l'.
+        """
+        assert isinstance(braggdirections,PointList)
+        for k in ('qx','qy','h','k'):
+            assert k in braggdirections.data.dtype.fields
+
+        fig,ax = show(ar,returnfig=True,**kwargs)
+        d = {'braggdirections':braggdirections,'voffset':voffset,'hoffset':hoffset,'color':color,
+             'size':size,'points':points,'pointsize':pointsize,'pointcolor':pointcolor}
+        add_bragg_index_labels(ax,d)
+
+        if returnfig:
+            return fig,ax
+        else:
+            plt.show()
+            return
 
 
 
