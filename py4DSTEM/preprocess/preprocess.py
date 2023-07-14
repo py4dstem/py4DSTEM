@@ -262,10 +262,11 @@ def bin_data_diffraction(
         bin_factor,
     ).sum(axis=(3, 5)).astype(dtype)
 
-
     # set dim vectors
     Qpixsize = datacube.calibration.get_Q_pixel_size() * bin_factor
     Qpixunits = datacube.calibration.get_Q_pixel_units()
+    
+    
     datacube.set_dim(
         2,
         [0,Qpixsize],
@@ -278,8 +279,10 @@ def bin_data_diffraction(
         units = Qpixunits,
         name = 'Qy'
     )
+
     # set calibration pixel size
     datacube.calibration.set_Q_pixel_size(Qpixsize)
+
 
     # return
     return datacube
@@ -651,6 +654,11 @@ def resample_data_diffraction(
         if datacube.calibration.get_Q_pixel_size() is not None:
             datacube.calibration.set_Q_pixel_size(datacube.calibration.get_Q_pixel_size() / resampling_factor)
 
+        if not resampling_factor:
+            resampling_factor = old_size[2] / output_size[0]
+        if datacube.calibration.get_Q_pixel_size() is not None:
+            datacube.calibration.set_Q_pixel_size(datacube.calibration.get_Q_pixel_size() / resampling_factor)
+
     elif method == "bilinear":
         from scipy.ndimage import zoom
 
@@ -747,6 +755,24 @@ def pad_data_diffraction(datacube, pad_factor=None, output_size=None):
     )
 
     datacube.data = np.pad(datacube.data, pad_width=pad_width, mode="constant")
+
+    Qpixsize  = datacube.calibration.get_Q_pixel_size()
+    Qpixunits = datacube.calibration.get_Q_pixel_units()
+
+    datacube.set_dim(
+        2,
+        [0,Qpixsize],
+        units = Qpixunits,
+        name = 'Qx'
+    )
+    datacube.set_dim(
+        3,
+        [0,Qpixsize],
+        units = Qpixunits,
+        name = 'Qy'
+    )
+
+    datacube.calibrate()
 
     return datacube
 
