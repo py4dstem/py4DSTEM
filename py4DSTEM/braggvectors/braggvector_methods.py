@@ -186,11 +186,7 @@ class BraggVectorMethods:
         mode = None,
         geometry = None,
         name = 'bragg_virtual_image',
-        returncalc = True,
-        center = True,
-        ellipse = True,
-        pixel = True,
-        rotate = True,
+        returncalc = True
         ):
         '''
         Calculates a virtual image based on the values of the Braggvectors
@@ -208,22 +204,13 @@ class BraggVectorMethods:
               - 'circle', 'circular': nested 2-tuple, ((qx,qy),radius)
               - 'annular' or 'annulus': nested 2-tuple,
                 ((qx,qy),(radius_i,radius_o))
-             Values can be in pixels or calibrated units. Note that (qx,qy) 
-             can be skipped, which assumes peaks centered at (0,0).
-        center: bool
-            Apply calibration - center coordinate.
-        ellipse: bool
-            Apply calibration - elliptical correction.
-        pixel: bool
-            Apply calibration - pixel size.
-        rotate: bool
-            Apply calibration - QR rotation.
+             All values are in pixels.  Note that (qx,qy) can be skipped, which
+             assumes peaks centered at (0,0)
 
         Returns
         -------
         virtual_im : VirtualImage
         '''
-
         # parse inputs
         circle_modes = ['circular','circle']
         annulus_modes = ['annular','annulus']
@@ -233,13 +220,13 @@ class BraggVectorMethods:
         # set geometry
         if mode is None:
             if geometry is None:
-                qxy_center = None
+                center = None
                 radial_range = np.array((0,np.inf))
             else:
                 if len(geometry[0]) == 0:
-                    qxy_center = None
+                    center = None
                 else:
-                    qxy_center = np.array(geometry[0])
+                    center = np.array(geometry[0])
                 if isinstance(geometry[1], int) or isinstance(geometry[1], float):
                     radial_range = np.array((0,geometry[1]))
                 elif len(geometry[1]) == 0:
@@ -249,44 +236,30 @@ class BraggVectorMethods:
         elif mode == 'circular' or mode == 'circle':
             radial_range = np.array((0,geometry[1]))
             if len(geometry[0]) == 0:
-                    qxy_center = None
+                    center = None
             else:
-                qxy_center = np.array(geometry[0])
+                center = np.array(geometry[0])
         elif mode == 'annular' or mode == 'annulus':
             radial_range = np.array(geometry[1])
             if len(geometry[0]) == 0:
-                    qxy_center = None
+                    center = None
             else:
-                qxy_center = np.array(geometry[0])
+                center = np.array(geometry[0])
 
         # allocate space
         im_virtual = np.zeros(self.shape)
 
         # generate image
-        for rx,ry in tqdmnd(
-            self.shape[0],
-            self.shape[1],
-            ):
-            # Get user-specified Bragg vectors
-            p = self.get_vectors(
-                rx,
-                ry,
-                center = center,
-                ellipse = ellipse,
-                pixel = pixel,
-                rotate = rotate,
-                )
-
+        for rx,ry in tqdmnd(self.shape[0],self.shape[1]):
+            p = self.raw[rx,ry]
             if p.data.shape[0] > 0:
                 if radial_range is None:
                     im_virtual[rx,ry] = np.sum(p.I)
                 else:
-                    if qxy_center is None:
+                    if center is None:
                         qr = np.hypot(p.qx,p.qy)
                     else:
-                        qr = np.hypot(
-                            p.qx - qxy_center[0],
-                            p.qy - qxy_center[1])
+                        qr = np.hypot(p.qx - center[0],p.qy - center[1])
                     sub = np.logical_and(
                         qr >= radial_range[0],
                         qr <  radial_range[1])
@@ -311,7 +284,7 @@ class BraggVectorMethods:
             }
         )
         # attach to the tree
-        self.attach(ans)
+        self.attach( ans)
 
         # return
         if returncalc:

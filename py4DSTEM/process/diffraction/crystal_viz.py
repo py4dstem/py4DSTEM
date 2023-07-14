@@ -296,48 +296,30 @@ def plot_scattering_intensity(
     bragg_k_power=0.0,
     bragg_intensity_power=1.0,
     bragg_k_broadening=0.005,
-    figsize: Union[list, tuple, np.ndarray] = (10, 4),
+    figsize: Union[list, tuple, np.ndarray] = (12, 6),
     returnfig: bool = False,
 ):
     """
     1D plot of the structure factors
 
-    Parameters
-    --------
+    Args:
+        k_min (float):                      min k value for profile range.
+        k_max (float):                      max k value for profile range.
+        k_step (float):                     step size of k in profile range.
+        k_broadening (float):               Broadening of simulated pattern.
+        k_power_scale (float):              Scale SF intensities by k**k_power_scale.
+        int_power_scale (float):            Scale SF intensities**int_power_scale.
+        int_scale (float):                  Scale output profile by this value.
+        remove_origin (bool):               Remove origin from plot.
+        bragg_peaks (BraggVectors):         Passed in bragg_peaks for comparison with simulated pattern.
+        bragg_k_power (float):              bragg_peaks scaled by k**bragg_k_power.
+        bragg_intensity_power (float):      bragg_peaks scaled by intensities**bragg_intensity_power.
+        bragg_k_broadening float):          Broadening applied to bragg_peaks.
+        figsize (list, tuple, np.ndarray):  Figure size for plot.
+        returnfig (bool):                   Return figure and axes handles if this is True.
 
-    k_min: float                      
-        min k value for profile range.
-    k_max: float                      
-        max k value for profile range.
-    k_step: float                     
-        Step size of k in profile range.
-    k_broadening: float               
-        Broadening of simulated pattern.
-    k_power_scale: float              
-        Scale SF intensities by k**k_power_scale.
-    int_power_scale: float            
-        Scale SF intensities**int_power_scale.
-    int_scale: float                  
-        Scale output profile by this value.
-    remove_origin: bool               
-        Remove origin from plot.
-    bragg_peaks: BraggVectors         
-        Passed in bragg_peaks for comparison with simulated pattern.
-    bragg_k_power: float              
-        bragg_peaks scaled by k**bragg_k_power.
-    bragg_intensity_power: float      
-        bragg_peaks scaled by intensities**bragg_intensity_power.
-    bragg_k_broadening: float  
-        Broadening applied to bragg_peaks.
-    figsize: list, tuple, np.ndarray
-        Figure size for plot.
-    returnfig (bool):                   
-        Return figure and axes handles if this is True.
-
-    Returns
-    --------
-    fig, ax (optional) 
-        figure and axes handles
+    Returns:
+        fig, ax                     (optional) figure and axes handles
     """
 
     # k coordinates
@@ -363,16 +345,9 @@ def plot_scattering_intensity(
         # concatenate all peaks
         bigpl = np.concatenate(
             [
-                bragg_peaks.get_vectors(
-                    rx,
-                    ry,
-                    center = True,
-                    ellipse = True,
-                    pixel = True,
-                    rotate = True,
-                ).data
-                for rx in range(bragg_peaks.shape[0])
-                for ry in range(bragg_peaks.shape[1])
+                bragg_peaks.cal[i, j].data
+                for i in range(bragg_peaks.shape[0])
+                for j in range(bragg_peaks.shape[1])
             ]
         )
 
@@ -928,9 +903,6 @@ def plot_diffraction_pattern(
     ax.set_ylabel("$q_x$ [Å$^{-1}$]")
 
     if plot_range_kx_ky is not None:
-        plot_range_kx_ky = np.array(plot_range_kx_ky)
-        if plot_range_kx_ky.ndim == 0:
-            plot_range_kx_ky = np.array((plot_range_kx_ky,plot_range_kx_ky))
         ax.set_xlim((-plot_range_kx_ky[0], plot_range_kx_ky[0]))
         ax.set_ylim((-plot_range_kx_ky[1], plot_range_kx_ky[1]))
     else:

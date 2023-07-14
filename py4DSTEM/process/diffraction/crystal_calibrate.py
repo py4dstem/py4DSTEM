@@ -24,7 +24,7 @@ def calibrate_pixel_size(
         k_step = 0.002,
         k_broadening = 0.002,
         fit_all_intensities = True,
-        set_calibration_in_place = False,
+        set_calibration = True,
         verbose = True,
         plot_result = False,
         figsize: Union[list, tuple, np.ndarray] = (12, 6),
@@ -60,13 +60,8 @@ def calibrate_pixel_size(
         figsize (list, tuple, np.ndarray): Figure size of the plot.
         returnfig (bool): Return handles figure and axis
 
-    Returns
-    _______
-
-    
-
-    fig, ax: handles, optional 
-        Figure and axis handles, if returnfig=True.
+    Returns:
+        fig, ax (handles): Optional figure and axis handles, if returnfig=True.
 
     """
 
@@ -117,21 +112,17 @@ def calibrate_pixel_size(
 
     # Get the answer
     pix_size_prev = bragg_peaks.calibration.get_Q_pixel_size()
-    pixel_size_new = pix_size_prev / scale_pixel_size
+    ans = pix_size_prev / scale_pixel_size
 
-    # if requested, apply calibrations in place
-    if set_calibration_in_place:
-        bragg_peaks.calibration.set_Q_pixel_size( pixel_size_new )
+    # if requested, apply calibrations
+    if set_calibration:
+        bragg_peaks.calibration.set_Q_pixel_size( ans )
         bragg_peaks.calibration.set_Q_pixel_units('A^-1')
+        bragg_peaks.setcal()
 
-    # Output calibrated Bragg peaks
-    bragg_peaks_cali = bragg_peaks.copy()
-    bragg_peaks_cali.calibration.set_Q_pixel_size( pixel_size_new )
-    bragg_peaks_cali.calibration.set_Q_pixel_units('A^-1')
-
-    # Output pixel size
+    # Output
     if verbose:
-        print(f"Calibrated pixel size = {np.round(pixel_size_new, decimals=8)} A^-1")
+        print(f"Calibrated pixel size = {np.round(ans, decimals=8)} A^-1")
 
     # Plotting
     if plot_result:
@@ -172,9 +163,9 @@ def calibrate_pixel_size(
 
     # return
     if returnfig and plot_result:
-        return bragg_peaks_cali, (fig,ax)
+        return ans, (fig,ax)
     else:
-        return bragg_peaks_cali
+        return ans
 
 
 
