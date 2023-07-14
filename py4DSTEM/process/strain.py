@@ -87,11 +87,13 @@ class StrainMap(RealSlice,Data):
         Resets the calibration state. This recomputes the BVM, and removes any computations
         this StrainMap instance has stored, which will need to be recomputed.
         """
-        del(
-            self.g0,
-            self.g1,
-            self.g2,
-        )
+        for attr in )
+            'g0',
+            'g1',
+            'g2',
+        ):
+            if hasattr(self,attr):
+                delattr(self,attr)
         self.calstate = self.braggvectors.calstate
         pass
 
