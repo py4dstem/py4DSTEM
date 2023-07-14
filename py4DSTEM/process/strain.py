@@ -438,7 +438,7 @@ class StrainMap(RealSlice, Data):
             flip_theta=flip_theta,
         )
 
-        self.data = strainmap_rotated
+        self.strainmap_rotated = strainmap_rotated
 
         from py4DSTEM.visualize import show_strain
 
@@ -450,7 +450,7 @@ class StrainMap(RealSlice, Data):
         axes_plots = kwargs.pop("axes_plots", ())
 
         fig, ax = show_strain(
-            self.data,
+            self.strainmap_rotated,
             vrange_exx=vrange_exx,
             vrange_theta=vrange_theta,
             ticknumber=ticknumber,
