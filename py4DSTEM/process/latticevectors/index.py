@@ -80,6 +80,9 @@ def index_bragg_directions(x0, y0, gx, gy, g1, g2):
     temp_array = np.zeros([], dtype = coords)
     bragg_directions = PointList(data = temp_array)
     bragg_directions.add_data_by_field((gx,gy,h,k))
+    mask = np.zeros(bragg_directions['qx'].shape[0])
+    mask[0] = 1
+    bragg_directions.remove(mask)
 
     return h,k, bragg_directions
 
@@ -152,8 +155,14 @@ def generate_lattice(ux,uy,vx,vy,x0,y0,Q_Nx,Q_Ny,h_max=None,k_max=None):
 
     return ideal_lattice
 
-def add_indices_to_braggpeaks(braggpeaks, lattice, maxPeakSpacing, qx_shift=0,
-                              qy_shift=0, mask=None):
+def add_indices_to_braggvectors(
+    braggpeaks, 
+    lattice, 
+    maxPeakSpacing, 
+    qx_shift=0,
+    qy_shift=0, 
+    mask=None
+    ):
     """
     Using the peak positions (qx,qy) and indices (h,k) in the PointList lattice,
     identify the indices for each peak in the PointListArray braggpeaks.
@@ -181,43 +190,51 @@ def add_indices_to_braggpeaks(braggpeaks, lattice, maxPeakSpacing, qx_shift=0,
         'h', 'k', containing the indices of each indexable peak.
     """
 
-    assert isinstance(braggpeaks,PointListArray)
-    assert np.all([name in braggpeaks.dtype.names for name in ('qx','qy','intensity')])
-    assert isinstance(lattice, PointList)
-    assert np.all([name in lattice.dtype.names for name in ('qx','qy','h','k')])
+    # assert isinstance(braggpeaks,BraggVectors)
+    # assert isinstance(lattice, PointList)
+    # assert np.all([name in lattice.dtype.names for name in ('qx','qy','h','k')])
 
     if mask is None:
-        mask = np.ones(braggpeaks.shape,dtype=bool)
+        mask = np.ones(braggpeaks.Rshape,dtype=bool)
 
-    assert mask.shape == braggpeaks.shape, 'mask must have same shape as pointlistarray'
+    assert mask.shape == braggpeaks.Rshape, 'mask must have same shape as pointlistarray'
     assert mask.dtype == bool, 'mask must be boolean'
 
-    indexed_braggpeaks = braggpeaks.copy()
 
-    # add the coordinates if they don't exist
-    if not ('h' in braggpeaks.dtype.names):
-        indexed_braggpeaks = indexed_braggpeaks.add_fields([('h',int)])
-    if not ('k' in braggpeaks.dtype.names):
-        indexed_braggpeaks = indexed_braggpeaks.add_fields([('k',int)])
+    coords = [('qx',float),('qy',float),('intensity',float),('h',int),('k',int)]
+
+    indexed_braggpeaks = PointListArray(    
+        dtype = coords,
+        shape = braggpeaks.Rshape,
+    )
+
+    ellipse = braggpeaks.calstate["ellipse"]
 
     # loop over all the scan positions
     for Rx, Ry in tqdmnd(mask.shape[0],mask.shape[1]):
         if mask[Rx,Ry]:
-            pl = indexed_braggpeaks.get_pointlist(Rx,Ry)
-            rm_peak_mask = np.zeros(pl.length,dtype=bool)
-
-            for i in range(pl.length):
+            pl = braggpeaks.get_vectors(
+                scan_x=Rx,
+                scan_y=Ry,
+                center=True,
+                ellipse=ellipse,
+                pixel=False,
+                rotate=False
+            )
+            
+            for i in range(pl.data.shape[0]):
                 r2 = (pl.data['qx'][i]-lattice.data['qx'] + qx_shift)**2 + \
                      (pl.data['qy'][i]-lattice.data['qy'] + qy_shift)**2
                 ind = np.argmin(r2)
                 if r2[ind] <= maxPeakSpacing**2:
-                    pl.data['h'][i] = lattice.data['h'][ind]
-                    pl.data['k'][i] = lattice.data['k'][ind]
-                else:
-                    rm_peak_mask[i] = True
-            pl.remove(rm_peak_mask)
+                    indexed_braggpeaks[Rx,Ry].add_data_by_field((
+                        pl.data['qx'],
+                        pl.data['qy'],
+                        pl.data['intensity'],
+                        lattice.data['h'][ind],
+                        lattice.data['k'][ind]
+                        ))
 
-    indexed_braggpeaks.name = braggpeaks.name + "_indexed"
     return indexed_braggpeaks
 
 
