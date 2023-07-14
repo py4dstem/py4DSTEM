@@ -3,7 +3,7 @@
 import numpy as np
 from scipy.interpolate import interp1d
 from scipy.ndimage import (binary_opening, binary_dilation,
-    distance_transform_edt, binary_fill_holes, gaussian_filter1d)
+    distance_transform_edt, binary_fill_holes, gaussian_filter1d, gaussian_filter)
 from typing import Optional,Union
 
 from emdfile import Array, Metadata, Node, Root, tqdmnd
@@ -1015,8 +1015,11 @@ class DataCube(
     def get_beamstop_mask(
         self,
         threshold = 0.25,
-        distance_edge = 4.0,
+        distance_edge = 2.0,
         include_edges = True,
+        sigma = 0,
+        use_max_dp = False,
+        scale_radial = None,
         name = "mask_beamstop",
         returncalc = True,
         ):
@@ -1031,6 +1034,12 @@ class DataCube(
             distance_edge (float): How many pixels to expand the mask.
             include_edges (bool): If set to True, edge pixels will be included
                 in the mask.
+            sigma (float):
+                Gaussain blur std to apply to image before thresholding.
+            use_max_dp (bool):
+                Use the max DP instead of the mean DP.
+            scale_radial (float):
+                Scale from center of image by this factor (can help with edge)
             name (string): Name of the output array.
             returncalc (bool): Set to true to return the result.
 
@@ -1039,19 +1048,41 @@ class DataCube(
 
         """
 
-        # Calculate dp_mean if needed
-        if not "dp_mean" in self._branch.keys():
-            self.get_dp_mean();
+        if scale_radial is not None:
+            x = np.arange(self.data.shape[2]) * 2.0 / self.data.shape[2]
+            y = np.arange(self.data.shape[3]) * 2.0 / self.data.shape[3]
+            ya, xa = np.meshgrid(y - np.mean(y), x - np.mean(x))
+            im_scale = 1.0 + np.sqrt(xa**2 + ya**2)*scale_radial
 
-        # normalized dp_mean
-        int_sort = np.sort(self.tree("dp_mean").data.ravel())
+        # Get image for beamstop mask
+        if use_max_dp:
+            # if not "dp_mean" in self.tree.keys():
+            #     self.get_dp_max();
+            # im = self.tree["dp_max"].data.astype('float')
+            if not "dp_max" in self._branch.keys():
+                self.get_dp_max();
+            im = self.tree("dp_max").data.astype('float')
+        else:
+            if not "dp_mean" in self._branch.keys():
+                self.get_dp_mean();
+            im = self.tree("dp_mean").data
+            # if not "dp_mean" in self.tree.keys():
+            #     self.get_dp_mean();
+            # im = self.tree["dp_mean"].data.astype('float')
+
+        # smooth and scale if needed
+        if sigma > 0.0:
+            im = gaussian_filter(im, sigma, mode='nearest')
+        if scale_radial is not None:
+            im *= im_scale
+
+        # Calculate beamstop mask
+        int_sort = np.sort(im.ravel())
         ind = np.round(np.clip(
                 int_sort.shape[0]*threshold,
                 0,int_sort.shape[0])).astype('int')
         intensity_threshold = int_sort[ind]
-
-        # Use threshold to calculate initial mask
-        mask_beamstop = self.tree("dp_mean").data >= intensity_threshold
+        mask_beamstop = im >= intensity_threshold
 
         # clean up mask
         mask_beamstop = np.logical_not(binary_fill_holes(np.logical_not(mask_beamstop)))
@@ -1088,7 +1119,7 @@ class DataCube(
         )
 
         # Add to tree
-        self.attach( mask_beamstop )
+
 
         # return
         if returncalc:
