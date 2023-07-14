@@ -5,8 +5,6 @@ from typing import Optional
 from warnings import warn
 
 from py4DSTEM.data import DiffractionSlice, Data
-from py4DSTEM.process.calibration import get_probe_size
-from py4DSTEM.process.utils import get_CoM, get_shifted_ar
 from scipy.ndimage import (
     binary_opening, binary_dilation, distance_transform_edt)
 
@@ -245,6 +243,8 @@ class Probe(DiffractionSlice,Data):
         r, x0, y0 : (3-tuple)
             the radius and origin
         """
+        from py4DSTEM.process.utils import get_CoM
+
         # set the image
         im = self.probe if data is None else data
 
@@ -417,10 +417,13 @@ class Probe(DiffractionSlice,Data):
             the cross-correlation kernel corresponding to the probe, in real
             space
         """
+        from py4DSTEM.process.utils import get_shifted_ar
+
         Q_Nx, Q_Ny = probe.shape
 
         # Get CoM
         if origin is None:
+            from py4DSTEM.process.calibration import get_probe_size
             _,xCoM,yCoM = get_probe_size(probe)
         else:
             xCoM,yCoM = origin
@@ -466,10 +469,13 @@ class Probe(DiffractionSlice,Data):
         kernel : ndarray
             the cross-correlation kernel
         """
+        from py4DSTEM.process.utils import get_shifted_ar
+
         Q_Nx, Q_Ny = probe.shape
 
         # Get CoM
         if origin is None:
+            from py4DSTEM.process.calibration import get_probe_size
             _,xCoM,yCoM = get_probe_size(probe)
         else:
             xCoM,yCoM = origin
@@ -526,6 +532,8 @@ class Probe(DiffractionSlice,Data):
         kernel : 2d array
             the cross-correlation kernel
         """
+        from py4DSTEM.process.utils import get_shifted_ar
+
         # parse inputs
         if isinstance(probe,Probe):
             probe = probe.probe
@@ -537,6 +545,7 @@ class Probe(DiffractionSlice,Data):
 
         # Get CoM
         if origin is None:
+            from py4DSTEM.process.calibration import get_probe_size
             _,xCoM,yCoM = get_probe_size(probe)
         else:
             xCoM,yCoM = origin
