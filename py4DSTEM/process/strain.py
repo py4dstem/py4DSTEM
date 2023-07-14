@@ -65,7 +65,7 @@ class StrainMap(RealSlice,Data):
         assert self.calstate["center"], "braggvectors must be centered"
         # get the BVM
         # a new BVM using the current calstate is computed
-        self.bvm = self.braggvectors.histogram()
+        self.bvm = self.braggvectors.histogram( mode = 'cal')
 
 
 
