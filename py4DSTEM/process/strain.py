@@ -352,6 +352,39 @@ class StrainMap(RealSlice,Data):
         if returncalc:
             braggdirections, bragg_vectors_indexed, g1g2_map
     
+    def get_strain(
+        self,
+        mask = None,
+        returncalc = True
+        ):
+        """
+
+        """
+        if mask is None: 
+            mask = np.ones(self.g1g2_map.shape, dtype = "bool")
+
+        from py4DSTEM.process.latticevectors import get_strain_from_reference_region
+
+        strainmap_median_g1g2 = get_strain_from_reference_region(
+            self.g1g2_map,
+            mask = mask,
+        )
+
+        self.strainmap_median_g1g2 = strainmap_median_g1g2
+        from py4DSTEM.visualize import show_strain
+        show_strain(
+            strainmap_median_g1g2,
+            vrange_exx = [-2.0, 2.0],
+            vrange_theta = [-2.0, 2.0],
+            ticknumber = 3,
+            axes_plots = (),
+            bkgrd = False,
+            figsize = (14,4)
+        )
+        if returncalc:
+            return strainmap_median_g1g2
+
+    
     def show_lattice_vectors(ar,x0,y0,g1,g2,color='r',width=1,labelsize=20,labelcolor='w',returnfig=False,**kwargs):
         """ Adds the vectors g1,g2 to an image, with tail positions at (x0,y0).  g1 and g2 are 2-tuples (gx,gy).
         """

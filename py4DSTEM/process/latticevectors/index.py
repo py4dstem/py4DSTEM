@@ -218,9 +218,9 @@ def add_indices_to_braggvectors(
                 ind = np.argmin(r2)
                 if r2[ind] <= maxPeakSpacing**2:
                     indexed_braggpeaks[Rx,Ry].add_data_by_field((
-                        pl.data['qx'],
-                        pl.data['qy'],
-                        pl.data['intensity'],
+                        pl.data['qx'][i],
+                        pl.data['qy'][i],
+                        pl.data['intensity'][i],
                         lattice.data['h'][ind],
                         lattice.data['k'][ind]
                         ))

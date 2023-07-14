@@ -71,9 +71,11 @@ def get_strain_from_reference_g1g2(g1g2_map, g1, g2):
 
     # Get RealSlice for output storage
     R_Nx,R_Ny = g1g2_map.get_slice('g1x').shape
-    strain_map = RealSlice(data=np.zeros((R_Nx,R_Ny,5)),
-                           slicelabels=('e_xx','e_yy','e_xy','theta','mask'),
-                           name='strain_map')
+    strain_map = RealSlice(
+        data=np.zeros((5, R_Nx, R_Ny)),
+        slicelabels=('e_xx','e_yy','e_xy','theta','mask'),
+        name='strain_map'
+    )
 
     # Get reference lattice matrix
     g1x,g1y = g1
@@ -130,7 +132,8 @@ def get_strain_from_reference_region(g1g2_map, mask):
         Note 1: the strain matrix has been symmetrized, so e_xy and e_yx are identical
     """
     assert isinstance(g1g2_map, RealSlice)
-    assert np.all([name in g1g2_map.slicelabels for name in ('g1x','g1y','g2x','g2y','mask')])
+    assert np.all(
+        [name in g1g2_map.slicelabels for name in ('g1x','g1y','g2x','g2y','mask')])
     assert mask.dtype == bool
 
     g1,g2 = get_reference_g1g2(g1g2_map,mask)
