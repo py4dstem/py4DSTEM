@@ -898,12 +898,19 @@ class Crystal:
         k = np.arange(k_min, k_max + k_step, k_step)
         k_num = k.shape[0]
 
-        # experimental data histogram
+        # concatenate all peaks
         bigpl = np.concatenate(
             [
-                bragg_peaks.cal[i, j].data
-                for i in range(bragg_peaks.shape[0])
-                for j in range(bragg_peaks.shape[1])
+                bragg_peaks.get_vectors(
+                    rx,
+                    ry,
+                    center = True,
+                    ellipse = True,
+                    pixel = True,
+                    rotate = True,
+                ).data
+                for rx in range(bragg_peaks.shape[0])
+                for ry in range(bragg_peaks.shape[1])
             ]
         )
         qr = np.sqrt(bigpl["qx"] ** 2 + bigpl["qy"] ** 2)
