@@ -714,7 +714,7 @@ class BraggVectorMethods:
 
 
 
-    def add_indices_to_braggpeaks(
+    def add_indices_to_braggvectors(
         self,
         maxPeakSpacing,
         mask = None,
@@ -738,9 +738,9 @@ class BraggVectorMethods:
                 locations should be indexed. This can be used to index different regions of
                 the scan with different lattices
         """
-        from py4DSTEM.process.latticevectors import add_indices_to_braggpeaks
+        from py4DSTEM.process.latticevectors import add_indices_to_braggvectors
 
-        bragg_peaks_indexed = add_indices_to_braggpeaks(
+        bragg_peaks_indexed = add_indices_to_braggvectors(
             self.vectors,
             self.braggdirections,
             maxPeakSpacing = maxPeakSpacing,
