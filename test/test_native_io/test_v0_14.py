@@ -3,7 +3,7 @@ from os.path import join,exists
 
 
 
-path = join(py4DSTEM._TESTPATH,'test_v14_sample.h5')
+path = join(py4DSTEM._TESTPATH,'test_io/legacy_v0.14.h5')
 
 
 
@@ -14,7 +14,7 @@ def _make_v14_test_file():
     assert(py4DSTEM.__version__.split('.')[1]=='14'), 'no!'
 
     # Set filepaths
-    filepath_data = join(py4DSTEM._TESTPATH,"simulatedAuNanoplatelet_binned_v0_9.h5")
+    filepath_data = join(py4DSTEM._TESTPATH,"test_io/legacy_v0.9_simAuNanoplatelet_bin.h5")
 
     # Read sim Au datacube
     datacube = py4DSTEM.io.read(

@@ -257,7 +257,7 @@ def _get_v13_class(grp):
         'QPoints' : QPoints,
         'BraggVectors' : BraggVectors
     }
-    print(grp)
+
     if 'py4dstem_class' in grp.attrs:
         classname = grp.attrs['py4dstem_class']
     elif 'emd_group_type' in grp.attrs:
