@@ -382,7 +382,12 @@ class StrainMap(RealSlice, Data):
         if returncalc:
             braggdirections, bragg_vectors_indexed, g1g2_map
 
-    def get_strain(self, mask=None, returncalc=True):
+    def get_strain(
+        self, 
+        mask=None,
+        returncalc=False,
+        **kwargs
+    ):
         """ """
         if mask is None:
             mask = np.ones(self.g1g2_map.shape, dtype="bool")
@@ -395,17 +400,30 @@ class StrainMap(RealSlice, Data):
         )
 
         self.strainmap_median_g1g2 = strainmap_median_g1g2
+        
         from py4DSTEM.visualize import show_strain
+        figsize = kwargs.pop("figsize", (14, 4))
+        vrange_exx = kwargs.pop("vrange_exx", [-2.0, 2.0])
+        vrange_theta = kwargs.pop("vrange_theta", [-2.0, 2.0])
+        ticknumber = kwargs.pop("ticknumber", 3)
+        bkgrd = kwargs.pop("bkgrd", False) 
+        axes_plots = kwargs.pop("axes_plots",())
 
-        show_strain(
+        fig, ax = show_strain(
             strainmap_median_g1g2,
-            vrange_exx=[-2.0, 2.0],
-            vrange_theta=[-2.0, 2.0],
-            ticknumber=3,
-            axes_plots=(),
-            bkgrd=False,
-            figsize=(14, 4),
+            vrange_exx=vrange_exx,
+            vrange_theta=vrange_theta,
+            ticknumber=ticknumber,
+            axes_plots=axes_plots,
+            bkgrd=bkgrd,
+            figsize=figsize,
+            **kwargs,
+            returnfig = True,
         )
+
+        if not np.all(mask == True): 
+            for axs in ax.flatten():
+                axs.imshow(mask, alpha = 0.2, cmap = "binary")
         if returncalc:
             return strainmap_median_g1g2
 
