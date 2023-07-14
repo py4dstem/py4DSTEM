@@ -208,20 +208,10 @@ def add_indices_to_braggvectors(
         shape = braggpeaks.Rshape,
     )
 
-    ellipse = braggpeaks.calstate["ellipse"]
-
     # loop over all the scan positions
     for Rx, Ry in tqdmnd(mask.shape[0],mask.shape[1]):
-        if mask[Rx,Ry]:
-            pl = braggpeaks.get_vectors(
-                scan_x=Rx,
-                scan_y=Ry,
-                center=True,
-                ellipse=ellipse,
-                pixel=False,
-                rotate=False
-            )
-            
+        if mask[Rx,Ry]: 
+            pl = braggpeaks.cal[Rx,Ry]
             for i in range(pl.data.shape[0]):
                 r2 = (pl.data['qx'][i]-lattice.data['qx'] + qx_shift)**2 + \
                      (pl.data['qy'][i]-lattice.data['qy'] + qy_shift)**2
