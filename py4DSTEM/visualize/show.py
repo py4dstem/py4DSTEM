@@ -320,9 +320,6 @@ def show(
         if intensity_range is None:
             intensity_range = clipvals
 
-    if scalebar == True: 
-        scalebar = {}
-
     # plot a grid if `ar` is a list, or use multichannel functionality to make an RGBa image
     ar = ar[0] if (isinstance(ar,list) and len(ar) == 1) else ar
     if isinstance(ar,list):
@@ -394,6 +391,8 @@ def show(
             # Output image for plotting
             ar = ar_rgb
 
+    if scalebar == True: 
+        scalebar = {}
 
     # support for native data types
     elif not isinstance(ar,np.ndarray):
@@ -568,12 +567,8 @@ def show(
                     ax.matshow(mask_display,cmap=cmap,alpha=mask_alpha,vmin=vmin,vmax=vmax)
         # ...or, plot its histogram
         else:
-            # hist,bin_edges = np.histogram(
-            #     _ar,
-            #     bins=np.linspace(np.min(_ar),np.max(_ar),num=n_bins))
-            hist,bin_edges = np.histogram(
-                _ar,
-                bins=np.linspace(vmin,vmax,num=n_bins))
+            hist,bin_edges = np.histogram(_ar,bins=np.linspace(np.min(_ar),
+                                                    np.max(_ar),num=n_bins))
             w = bin_edges[1]-bin_edges[0]
             x = bin_edges[:-1]+w/2.
             ax.bar(x,hist,width=w)

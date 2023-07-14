@@ -559,7 +559,6 @@ class Probe(DiffractionSlice,Data):
             np.mod(np.arange(Q_Ny) + Q_Ny//2, Q_Ny) - Q_Ny//2,
             np.mod(np.arange(Q_Nx) + Q_Nx//2, Q_Nx) - Q_Nx//2)
         qr = np.sqrt(qx**2 + qy**2)
-        
         # Calculate sigmoid
         if type == 'logistic':
             r0 = 0.5*(ro+ri)
