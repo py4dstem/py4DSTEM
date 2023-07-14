@@ -20,6 +20,7 @@ data_options = [
     'tutorials',
     'io',
     'basic',
+    'strain',
 ]
 
 # Add arguments
@@ -57,6 +58,8 @@ elif args.data == 'io':
     data = ['test_io','test_arina']
 elif args.data == 'basic':
     data = ['small_datacube']
+elif args.data == 'strain':
+    data = ['strain']
 else:
     raise Exception(f"invalid data choice, {parser.data}")
 
