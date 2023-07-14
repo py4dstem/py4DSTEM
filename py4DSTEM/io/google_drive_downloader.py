@@ -127,6 +127,10 @@ file_ids = {
         'STO_STEM_bench_20us_data_000010.h5',
         '1_90xAfclNVwMWwQ-YKxNNwBbfR1nfHoB'
     ),
+    'test_strain' : (
+        'downsample_Si_SiGe_analysis_braggdisks_cal.h5',
+        '1bYgDdAlnWHyFmY-SwN3KVpMutWBI5MhP'
+    )
 }
 
 # collections of files
@@ -167,6 +171,9 @@ collection_ids = {
     ),
     'test_braggvectors' : (
         'Au_sim',
+    ),
+    'strain' : (
+        'test_strain',
     )
 }
 

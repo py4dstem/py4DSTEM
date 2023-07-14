@@ -45,7 +45,6 @@ def get_probe_size(DP, thresh_lower=0.01, thresh_upper=0.99, N=100):
 
     # Get r for each mask
     DPmax = np.max(DP)
-    print(DPmax)
     for i in range(len(thresh_vals)):
         thresh = thresh_vals[i]
         mask = DP > DPmax * thresh
