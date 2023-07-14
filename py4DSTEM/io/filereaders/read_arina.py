@@ -11,6 +11,7 @@ def read_arina(
     mem="RAM",
     binfactor: int = 1,
     dtype_bin: float = None,
+    flatfield: np.ndarray = None,
 ):
 
     """
@@ -26,6 +27,8 @@ def read_arina(
         binfactor (int): Diffraction space binning factor for bin-on-load.
         dtype_bin(float): specify datatype for bin on load if need something
             other than uint16
+        flatfield (np.ndarray):
+            flatfield forcorrection factors
 
     Returns:
         DataCube
@@ -60,9 +63,20 @@ def read_arina(
 
     image_index = 0
 
+    if flatfield is None:
+        correction_factors = 1
+    else:
+        # Avoid div by 0 errors -> pixel with value 0 will be set to meadian
+        flatfield[flatfield == 0] = 1
+        correction_factors = np.median(flatfield) / flatfield
+
     for dset in f["entry"]["data"]:
         image_index = _processDataSet(
-            f["entry"]["data"][dset], image_index, array_3D, binfactor
+            f["entry"]["data"][dset],
+            image_index,
+            array_3D,
+            binfactor,
+            correction_factors,
         )
 
     if f.__bool__():
@@ -82,15 +96,20 @@ def read_arina(
     return datacube
 
 
-def _processDataSet(dset, start_index, array_3D, binfactor):
+def _processDataSet(dset, start_index, array_3D, binfactor, correction_factors):
     image_index = start_index
     nimages_dset = dset.shape[0]
 
     for i in range(nimages_dset):
         if binfactor == 1:
-            array_3D[image_index] = dset[i].astype(array_3D.dtype)
+            array_3D[image_index] = np.multiply(
+                dset[i].astype(array_3D.dtype), correction_factors
+            )
         else:
-            array_3D[image_index] = bin2D(dset[i].astype(array_3D.dtype), binfactor)
+            array_3D[image_index] = bin2D(
+                np.multiply(dset[i].astype(array_3D.dtype), correction_factors),
+                binfactor,
+            )
 
         image_index = image_index + 1
     return image_index
