@@ -7,8 +7,8 @@ from scipy.optimize import curve_fit
 
 def fit_amorphous_ring(
     im,
-    center,
-    radial_range,
+    center = None,
+    radial_range = None,
     coefs = None,
     mask_dp = None,
     show_fit_mask = False,
@@ -28,9 +28,11 @@ def fit_amorphous_ring(
     im: np.array
         2D image array to perform fitting on
     center: np.array
-        (x,y) center coordinates for fitting mask
+        (x,y) center coordinates for fitting mask. If not specified 
+        by the user, we will assume the center coordinate is (im.shape-1)/2.
     radial_range: np.array
-        (radius_inner, radius_outer) radial range to perform fitting over
+        (radius_inner, radius_outer) radial range to perform fitting over.
+        If not specified by the user, we will assume (im.shape[0]/4,im.shape[0]/2).
     coefs: np.array (optional)
         Array containing initial fitting coefficients for the amorphous fit.
     mask_dp: np.array
@@ -57,6 +59,14 @@ def fit_amorphous_ring(
     params_ellipse_fit: np.array (optional)
         11 parameter elliptic fit coefficients
     """
+
+    # Default values
+    if center is None:
+        center = np.array((
+            (im.shape[0]-1)/2,
+            (im.shape[1]-1)/2))
+    if radial_range is None:
+        radial_range = (im.shape[0]/4, im.shape[0]/2)
 
     # coordinates
     xa,ya = np.meshgrid(
