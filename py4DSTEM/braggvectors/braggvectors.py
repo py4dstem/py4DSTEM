@@ -226,7 +226,7 @@ class BraggVectors(Custom,BraggVectorMethods,Data):
         if pixel:
             assert(c.get_Q_pixel_size() is not None), "Requested calibration not found"
         if rotate:
-            assert(c.get_RQ_rotflip() is not None), "Requested calibration not found"
+            assert(c.get_QR_rotflip() is not None), "Requested calibration not found"
 
         # set the calibrations
         self._calstate = {
@@ -285,7 +285,13 @@ class BraggVectors(Custom,BraggVectorMethods,Data):
 
     def copy(self, name=None):
         name = name if name is not None else self.name+"_copy"
-        braggvector_copy = BraggVectors(self.Rshape, self.Qshape, name=name)
+        braggvector_copy = BraggVectors(
+            self.Rshape, 
+            self.Qshape, 
+            name=name, 
+            calibration = self.calibration.copy()
+        )
+        
         braggvector_copy._v_uncal = self._v_uncal.copy()
         for k in self.metadata.keys():
             braggvector_copy.metadata = self.metadata[k].copy()
