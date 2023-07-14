@@ -325,7 +325,7 @@ class DataCubeVirtualImager:
         shift_center = None,
         scan_position = None,
         invert = False,
-        color = 'r',
+        color = 'c',
         alpha = 0.7,
         **kwargs
     ):
@@ -382,10 +382,10 @@ class DataCubeVirtualImager:
         # data
         if data is None:
             keys = ['dp_mean','dp_max','dp_median']
+            image = None
             for k in keys:
-                image = None
                 try:
-                    image = data.tree(k)
+                    image = self.tree(k)
                     break
                 except:
                     pass
@@ -393,6 +393,7 @@ class DataCubeVirtualImager:
                     image = self[0,0]
         elif isinstance(data, np.ndarray):
             assert(data.shape == self.Qshape), f"Can't position a detector over an image with a shape that is different from diffraction space.  Diffraction space in this dataset has shape {self.Qshape} but the image passed has shape {data.shape}"
+            image = data
         elif isinstance(data,tuple):
             rx,ry = data[:2]
             image = self[rx,ry]
