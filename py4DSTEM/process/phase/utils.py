@@ -1,7 +1,9 @@
+import functools
 from typing import Mapping, Tuple, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
+from scipy.optimize import curve_fit
 
 try:
     import cupy as cp
@@ -10,50 +12,32 @@ except ImportError:
     cp = None
     from scipy.fft import dstn, idstn
 
+from py4DSTEM.process.utils import get_CoM
 from py4DSTEM.process.utils.cross_correlate import align_and_shift_images
 from py4DSTEM.process.utils.utils import electron_wavelength_angstrom
-from scipy.ndimage import gaussian_filter
+from scipy.ndimage import gaussian_filter, uniform_filter1d
+from skimage.restoration import unwrap_phase
+
+# fmt: off
 
 #: Symbols for the polar representation of all optical aberrations up to the fifth order.
 polar_symbols = (
-    "C10",
-    "C12",
-    "phi12",
-    "C21",
-    "phi21",
-    "C23",
-    "phi23",
-    "C30",
-    "C32",
-    "phi32",
-    "C34",
-    "phi34",
-    "C41",
-    "phi41",
-    "C43",
-    "phi43",
-    "C45",
-    "phi45",
-    "C50",
-    "C52",
-    "phi52",
-    "C54",
-    "phi54",
-    "C56",
-    "phi56",
+        "C10", "C12", "phi12",
+        "C21", "phi21", "C23", "phi23",
+        "C30", "C32", "phi32", "C34", "phi34",
+        "C41", "phi41", "C43", "phi43", "C45", "phi45",
+        "C50", "C52", "phi52", "C54", "phi54", "C56", "phi56",
 )
 
 #: Aliases for the most commonly used optical aberrations.
 polar_aliases = {
-    "defocus": "C10",
-    "astigmatism": "C12",
-    "astigmatism_angle": "phi12",
-    "coma": "C21",
-    "coma_angle": "phi21",
-    "Cs": "C30",
-    "C5": "C50",
+        "defocus": "C10", "astigmatism": "C12", "astigmatism_angle": "phi12",
+        "coma": "C21", "coma_angle": "phi21",
+        "Cs": "C30",
+        "C5": "C50",
 }
 
+# fmt: on
 
 ### Probe functions
 
@@ -80,6 +64,8 @@ class ComplexProbe:
         Device to perform calculations on. Must be either 'cpu' or 'gpu'
     rolloff: float, optional
         Tapers the cutoff edge over the given angular range [mrad].
+    vacuum_probe_intensity: np.ndarray, optional
+        Squared of corner-centered aperture amplitude to use, instead of semiangle_cutoff + rolloff
     focal_spread: float, optional
         The 1/e width of the focal spread due to chromatic aberration and lens current instability [Å].
     angular_spread: float, optional
@@ -179,7 +165,7 @@ class ComplexProbe:
                 self._vacuum_probe_intensity, dtype=xp.float32
             )
             vacuum_probe_amplitude = xp.sqrt(xp.maximum(vacuum_probe_intensity, 0))
-            return xp.fft.ifftshift(vacuum_probe_amplitude)
+            return vacuum_probe_amplitude
 
         if self._semiangle_cutoff == xp.inf:
             return xp.ones_like(alpha)
@@ -431,9 +417,9 @@ class ComplexProbe:
         return alpha, phi
 
     def build(self):
-        """Builds complex probe in the center of the region of interest."""
+        """Builds corner-centered complex probe in the center of the region of interest."""
         xp = self._xp
-        array = xp.fft.fftshift(xp.fft.ifft2(self._evaluate_ctf()))
+        array = xp.fft.ifft2(self._evaluate_ctf())
         array = array / xp.sqrt((xp.abs(array) ** 2).sum())
         self._array = array
         return self
@@ -447,7 +433,7 @@ class ComplexProbe:
         kwargs.pop("cmap", None)
 
         plt.imshow(
-            asnumpy(xp.abs(self._array) ** 2),
+            asnumpy(xp.abs(xp.fft.ifftshift(self._array)) ** 2),
             cmap=cmap,
             **kwargs,
         )
@@ -473,20 +459,6 @@ def spatial_frequencies(gpts: Tuple[int, int], sampling: Tuple[float, float]):
     return tuple(
         np.fft.fftfreq(n, d).astype(np.float32) for n, d in zip(gpts, sampling)
     )
-
-
-def projection(u: np.ndarray, v: np.ndarray, xp):
-    """Projection of vector u onto vector v."""
-    return u * xp.vdot(u, v) / xp.vdot(u, u)
-
-
-def orthogonalize(V: np.ndarray, xp):
-    """Non-normalized QR decomposition using repeated projections."""
-    U = V.copy()
-    for i in range(1, V.shape[0]):
-        for j in range(i):
-            U[i, :] -= projection(U[j, :], V[i, :], xp)
-    return U
 
 
 ### FFT-shift functions
@@ -644,6 +616,8 @@ class AffineTransform:
         x-translation
     t1: float
         y-translation
+    dilation: float
+        Isotropic expansion (multiplies scale0 and scale1)
     """
 
     def __init__(
@@ -654,9 +628,10 @@ class AffineTransform:
         angle: float = 0.0,
         t0: float = 0.0,
         t1: float = 0.0,
+        dilation: float = 1.0,
     ):
-        self.scale0 = scale0
-        self.scale1 = scale1
+        self.scale0 = scale0 * dilation
+        self.scale1 = scale1 * dilation
         self.shear1 = shear1
         self.angle = angle
         self.t0 = t0
@@ -1284,3 +1259,354 @@ def project_vector_field_divergence(vector_field, spacings=(1, 1, 1), xp=np):
     p = preconditioned_poisson_solver(div_v, spacings[0], xp=xp)
     grad_p = compute_gradient(p, spacings, xp=xp)
     return vector_field - grad_p
+
+
+# Nesterov acceleration functions
+# https://blogs.princeton.edu/imabandit/2013/04/01/acceleratedgradientdescent/
+
+
+@functools.cache
+def nesterov_lambda(one_indexed_iter_num):
+    if one_indexed_iter_num == 0:
+        return 0
+    return (1 + np.sqrt(1 + 4 * nesterov_lambda(one_indexed_iter_num - 1) ** 2)) / 2
+
+
+def nesterov_gamma(zero_indexed_iter_num):
+    one_indexed_iter_num = zero_indexed_iter_num + 1
+    return (1 - nesterov_lambda(one_indexed_iter_num)) / nesterov_lambda(
+        one_indexed_iter_num + 1
+    )
+
+
+def cartesian_to_polar_transform_2Ddata(
+    im_cart,
+    xy_center,
+    num_theta_bins=90,
+    radius_max=None,
+    corner_centered=False,
+    xp=np,
+):
+    """
+    Quick cartesian to polar conversion.
+    """
+
+    # coordinates
+    if radius_max is None:
+        if corner_centered:
+            radius_max = np.min(np.array(im_cart.shape) // 2)
+        else:
+            radius_max = np.sqrt(np.sum(np.array(im_cart.shape) ** 2)) // 2
+
+    r = xp.arange(radius_max)
+    t = xp.linspace(
+        0,
+        2.0 * np.pi,
+        num_theta_bins,
+        endpoint=False,
+    )
+    ra, ta = xp.meshgrid(r, t)
+
+    # resampling coordinates
+    x = ra * xp.cos(ta) + xy_center[0]
+    y = ra * xp.sin(ta) + xy_center[1]
+
+    xf = xp.floor(x).astype("int")
+    yf = xp.floor(y).astype("int")
+    dx = x - xf
+    dy = y - yf
+
+    mode = "wrap" if corner_centered else "clip"
+
+    # resample image
+    im_polar = (
+        im_cart.ravel()[
+            xp.ravel_multi_index(
+                (xf, yf),
+                im_cart.shape,
+                mode=mode,
+            )
+        ]
+        * (1 - dx)
+        * (1 - dy)
+        + im_cart.ravel()[
+            xp.ravel_multi_index(
+                (xf + 1, yf),
+                im_cart.shape,
+                mode=mode,
+            )
+        ]
+        * (dx)
+        * (1 - dy)
+        + im_cart.ravel()[
+            xp.ravel_multi_index(
+                (xf, yf + 1),
+                im_cart.shape,
+                mode=mode,
+            )
+        ]
+        * (1 - dx)
+        * (dy)
+        + im_cart.ravel()[
+            xp.ravel_multi_index(
+                (xf + 1, yf + 1),
+                im_cart.shape,
+                mode=mode,
+            )
+        ]
+        * (dx)
+        * (dy)
+    )
+
+    return im_polar
+
+
+def polar_to_cartesian_transform_2Ddata(
+    im_polar,
+    xy_size,
+    xy_center,
+    corner_centered=False,
+    xp=np,
+):
+    """
+    Quick polar to cartesian conversion.
+    """
+
+    # coordinates
+    sx, sy = xy_size
+    cx, cy = xy_center
+
+    if corner_centered:
+        x = xp.fft.fftfreq(sx, d=1 / sx)
+        y = xp.fft.fftfreq(sy, d=1 / sy)
+    else:
+        x = xp.arange(sx)
+        y = xp.arange(sy)
+
+    xa, ya = xp.meshgrid(x, y, indexing="ij")
+    ra = xp.hypot(xa - cx, ya - cy)
+    ta = xp.arctan2(ya - cy, xa - cx)
+
+    t = xp.linspace(0, 2 * np.pi, im_polar.shape[0], endpoint=False)
+    t_step = t[1] - t[0]
+
+    # resampling coordinates
+    t_ind = ta / t_step
+    r_ind = ra.copy()
+    tf = xp.floor(t_ind).astype("int")
+    rf = xp.floor(r_ind).astype("int")
+
+    # resample image
+    im_cart = im_polar.ravel()[
+        xp.ravel_multi_index(
+            (tf, rf),
+            im_polar.shape,
+            mode=("wrap", "clip"),
+        )
+    ]
+
+    return im_cart
+
+
+def regularize_probe_amplitude(
+    probe_init,
+    width_max_pixels=2.0,
+    nearest_angular_neighbor_averaging=5,
+    enforce_constant_intensity=True,
+    corner_centered=False,
+):
+    """
+    Fits sigmoid for each angular direction.
+
+    Parameters
+    --------
+    probe_init: np.array
+        2D complex image of the probe in Fourier space.
+    width_max_pixels: float
+        Maximum edge width of the probe in pixels.
+    nearest_angular_neighbor_averaging: int
+        Number of nearest angular neighbor pixels to average to make aperture less jagged.
+    enforce_constant_intensity: bool
+        Set to true to make intensity inside the aperture constant.
+    corner_centered: bool
+        If True, the probe is assumed to be corner-centered
+
+    Returns
+    --------
+    probe_corr: np.ndarray
+        2D complex image of the corrected probe in Fourier space.
+    coefs_all: np.ndarray
+        coefficients for the sigmoid fits
+    """
+
+    # Get probe intensity
+    probe_amp = np.abs(probe_init)
+    probe_angle = np.angle(probe_init)
+    probe_int = probe_amp**2
+
+    # Center of mass for probe intensity
+    xy_center = get_CoM(probe_int, device="cpu", corner_centered=corner_centered)
+
+    # Convert intensity to polar coordinates
+    polar_int = cartesian_to_polar_transform_2Ddata(
+        probe_int,
+        xy_center=xy_center,
+        corner_centered=corner_centered,
+        xp=np,
+    )
+
+    # Fit corrected probe intensity
+    radius = np.arange(polar_int.shape[1])
+
+    # estimate initial parameters
+    sub = polar_int > (np.max(polar_int) * 0.5)
+    sig_0 = np.mean(polar_int[sub])
+    rad_0 = np.max(np.argwhere(np.sum(sub, axis=0)))
+    width = width_max_pixels * 0.5
+
+    # init
+    def step_model(radius, sig_0, rad_0, width):
+        return sig_0 * np.clip((rad_0 - radius) / width, 0.0, 1.0)
+
+    coefs_all = np.zeros((polar_int.shape[0], 3))
+    coefs_all[:, 0] = sig_0
+    coefs_all[:, 1] = rad_0
+    coefs_all[:, 2] = width
+
+    # bounds
+    lb = (0.0, 0.0, 1e-4)
+    ub = (np.inf, np.inf, width_max_pixels)
+
+    # refine parameters, generate polar image
+    polar_fit = np.zeros_like(polar_int)
+    for a0 in range(polar_int.shape[0]):
+        coefs_all[a0, :] = curve_fit(
+            step_model,
+            radius,
+            polar_int[a0, :],
+            p0=coefs_all[a0, :],
+            xtol=1e-12,
+            bounds=(lb, ub),
+        )[0]
+        polar_fit[a0, :] = step_model(radius, *coefs_all[a0, :])
+
+    # Compute best-fit constant intensity inside probe, update bounds
+    sig_0 = np.median(coefs_all[:, 0])
+    coefs_all[:, 0] = sig_0
+    lb = (sig_0 - 1e-8, 0.0, 1e-4)
+    ub = (sig_0 + 1e-8, np.inf, width_max_pixels)
+
+    # refine parameters, generate polar image
+    polar_int_corr = np.zeros_like(polar_int)
+    for a0 in range(polar_int.shape[0]):
+        coefs_all[a0, :] = curve_fit(
+            step_model,
+            radius,
+            polar_int[a0, :],
+            p0=coefs_all[a0, :],
+            xtol=1e-12,
+            bounds=(lb, ub),
+        )[0]
+        # polar_int_corr[a0, :] = step_model(radius, *coefs_all[a0, :])
+
+    # make aperture less jagged, using moving mean
+    coefs_all = np.apply_along_axis(
+        uniform_filter1d,
+        0,
+        coefs_all,
+        size=nearest_angular_neighbor_averaging,
+        mode="wrap",
+    )
+    for a0 in range(polar_int.shape[0]):
+        polar_int_corr[a0, :] = step_model(radius, *coefs_all[a0, :])
+
+    # Convert back to cartesian coordinates
+    int_corr = polar_to_cartesian_transform_2Ddata(
+        polar_int_corr,
+        xy_size=probe_init.shape,
+        xy_center=xy_center,
+        corner_centered=corner_centered,
+    )
+
+    amp_corr = np.sqrt(np.maximum(int_corr, 0))
+
+    # Assemble output probe
+    if not enforce_constant_intensity:
+        max_coeff = np.sqrt(coefs_all[:, 0]).max()
+        amp_corr = amp_corr / max_coeff * probe_amp
+
+    probe_corr = amp_corr * np.exp(1j * probe_angle)
+
+    return probe_corr, polar_int, polar_int_corr, coefs_all
+
+
+def aberrations_basis_function(
+    probe_size,
+    probe_sampling,
+    max_angular_order,
+    max_radial_order,
+    xp=np,
+):
+    """ """
+    sx, sy = probe_size
+    dx, dy = probe_sampling
+    qx = xp.fft.fftfreq(sx, dx)
+    qy = xp.fft.fftfreq(sy, dy)
+
+    qxa, qya = xp.meshgrid(qx, qy, indexing="ij")
+    q2 = qxa**2 + qya**2
+    theta = xp.arctan2(qya, qxa)
+
+    basis = []
+    index = []
+
+    for n in range(max_angular_order + 1):
+        for m in range((max_radial_order - n) // 2 + 1):
+            basis.append((q2 ** (m + n / 2) * np.cos(n * theta)))
+            index.append((m, n, 0))
+            if n > 0:
+                basis.append((q2 ** (m + n / 2) * np.sin(n * theta)))
+                index.append((m, n, 1))
+
+    basis = xp.array(basis)
+
+    return basis, index
+
+
+def fit_aberration_surface(
+    complex_probe,
+    probe_sampling,
+    max_angular_order,
+    max_radial_order,
+    xp=np,
+):
+    """ """
+    probe_amp = xp.abs(complex_probe)
+    probe_angle = xp.angle(complex_probe)
+
+    if xp is np:
+        probe_angle = probe_angle.astype(np.float64)
+        unwrapped_angle = unwrap_phase(probe_angle, wrap_around=True).astype(xp.float32)
+    else:
+        probe_angle = xp.asnumpy(probe_angle).astype(np.float64)
+        unwrapped_angle = unwrap_phase(probe_angle, wrap_around=True)
+        unwrapped_angle = xp.asarray(unwrapped_angle).astype(xp.float32)
+
+    basis, _ = aberrations_basis_function(
+        complex_probe.shape,
+        probe_sampling,
+        max_angular_order,
+        max_radial_order,
+        xp=xp,
+    )
+
+    raveled_basis = basis.reshape((basis.shape[0], -1))
+    raveled_weights = probe_amp.ravel()
+
+    Aw = raveled_basis.T * raveled_weights[:, None]
+    bw = unwrapped_angle.ravel() * raveled_weights
+    coeff = xp.linalg.lstsq(Aw, bw, rcond=None)[0]
+
+    fitted_angle = xp.tensordot(coeff, basis, axes=1)
+
+    return fitted_angle, coeff

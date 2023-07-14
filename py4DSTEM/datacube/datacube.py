@@ -3,7 +3,7 @@
 import numpy as np
 from scipy.interpolate import interp1d
 from scipy.ndimage import (binary_opening, binary_dilation,
-    distance_transform_edt, binary_fill_holes, gaussian_filter1d)
+    distance_transform_edt, binary_fill_holes, gaussian_filter1d, gaussian_filter)
 from typing import Optional,Union
 
 from emdfile import Array, Metadata, Node, Root, tqdmnd
@@ -657,7 +657,7 @@ class DataCube(
         thresh_lower=0.01,
         thresh_upper=0.99,
         N=100,
-        plot = True,
+        plot = False,
         returncal = True,
         write_to_cal = True,
         **kwargs,
@@ -707,13 +707,13 @@ class DataCube(
         from py4DSTEM.process.calibration import get_probe_size
 
         if dp is None:
-            assert 'dp_mean' in self._branch.keys(), "calculate .get_dp_mean()"
+            assert('dp_mean' in self.treekeys), "calculate .get_dp_mean() or pass a `dp` arg"
             DP = self.tree( 'dp_mean' ).data
         elif type(dp) == str:
-            assert dp in self._branch.keys(), "mode not found"
-            DP = self.attach( dp )
+            assert(dp in self.treekeys), f"mode {dp} not found in the tree"
+            DP = self.tree( dp )
         elif type(dp) == np.ndarray:
-            assert len(dp.shape) == 2, "must be a 2D array"
+            assert(dp.shape == self.Qshape), "must be a diffraction space shape 2D array"
             DP = dp
 
         x = get_probe_size(
@@ -728,8 +728,7 @@ class DataCube(
             try:
                 self.calibration.set_probe_param(x)
             except AttributeError:
-                # should we raise an error here?
-                pass
+                raise Exception('writing to calibrations were requested, but could not be completed')
 
         #plot results 
         if plot:
@@ -1067,6 +1066,7 @@ class DataCube(
             if not "dp_mean" in self._branch.keys():
                 self.get_dp_mean();
             im = self.tree("dp_mean").data.copy()
+
             # if not "dp_mean" in self.tree.keys():
             #     self.get_dp_mean();
             # im = self.tree["dp_mean"].data.astype('float')

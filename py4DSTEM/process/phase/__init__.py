@@ -1,3 +1,5 @@
+# fmt: off
+
 _emd_hook = True
 
 from py4DSTEM.process.phase.iterative_dpc import DPCReconstruction
@@ -20,3 +22,9 @@ from py4DSTEM.process.phase.iterative_simultaneous_ptychography import (
 from py4DSTEM.process.phase.iterative_singleslice_ptychography import (
     SingleslicePtychographicReconstruction,
 )
+from py4DSTEM.process.phase.parameter_optimize import (
+    OptimizationParameter,
+    PtychographyOptimizer,
+)
+
+# fmt: on
