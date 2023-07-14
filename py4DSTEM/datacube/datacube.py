@@ -1061,11 +1061,12 @@ class DataCube(
             # im = self.tree["dp_max"].data.astype('float')
             if not "dp_max" in self._branch.keys():
                 self.get_dp_max();
-            im = self.tree("dp_max").data.astype('float')
+            im = self.tree("dp_max").data.copy().astype('float')
         else:
             if not "dp_mean" in self._branch.keys():
                 self.get_dp_mean();
-            im = self.tree("dp_mean").data
+            im = self.tree("dp_mean").data.copy()
+
             # if not "dp_mean" in self.tree.keys():
             #     self.get_dp_mean();
             # im = self.tree["dp_mean"].data.astype('float')
@@ -1119,7 +1120,7 @@ class DataCube(
         )
 
         # Add to tree
-
+        self.tree(x)
 
         # return
         if returncalc:
