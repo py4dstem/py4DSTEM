@@ -293,17 +293,17 @@ class BraggVectors(Custom,BraggVectorMethods,Data):
     def copy(self, name=None):
         name = name if name is not None else self.name+"_copy"
         braggvector_copy = BraggVectors(
-            self.Rshape, 
-            self.Qshape, 
-            name=name, 
+            self.Rshape,
+            self.Qshape,
+            name=name,
             calibration = self.calibration.copy()
         )
-        
-        braggvector_copy._v_uncal = self._v_uncal.copy()
+
+        braggvector_copy.set_raw_vectors( self._v_uncal.copy() )
         for k in self.metadata.keys():
             braggvector_copy.metadata = self.metadata[k].copy()
-        # TODO - fix this calibration line?
         braggvector_copy.calibration = self.calibration
+        braggvector_copy.setcal()
         return braggvector_copy
 
 
