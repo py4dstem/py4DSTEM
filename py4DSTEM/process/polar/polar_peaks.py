@@ -34,7 +34,8 @@ def find_peaks_single_pattern(
     return_background = False,
     plot_result = True,
     plot_power_scale = 1.0,
-    plot_scale_size = 100.0,
+    plot_scale_size = 10.0,
+    figsize = (6,6),
     returnfig = False,
     ):
     """
@@ -62,9 +63,40 @@ def find_peaks_single_pattern(
     radial_background_thresh: float
         Relative order of sorted values to use as background estimate.
         Setting to 0.5 is equivalent to median, 0.0 is min value.
-    
+    num_peaks_max = 100
+        Max number of peaks to return.
+    threshold_abs: float
+        Absolute image intensity threshold for peaks.
+    threshold_prom_annular: float
+        Threshold for prominance, along annular direction.
+    threshold_prom_radial: float
+        Threshold for prominance, along radial direction.
+    remove_masked_peaks: bool
+        Delete peaks that are in the region masked by "mask"
+    scale_sigma_annular: float
+        Scaling of the estimated annular standard deviation.
+    scale_sigma_radial: float
+        Scaling of the estimated radial standard deviation.
+    return_background: bool
+        Return the background signal.
+    plot_result:
+        Plot the detector peaks
+    plot_power_scale: float
+        Image intensity power law scaling.
+    plot_scale_size: float
+        Marker scaling in the plot.
+    figsize: 2-tuple
+        Size of the result plotting figure.
+    returnfig: bool
+        Return the figure and axes handles.
+
     Returns
     --------
+
+    peaks_polar : pointlist
+        The detected peaks
+    fig, ax : (optional)
+        Figure and axes handles 
 
     """
 
@@ -151,7 +183,7 @@ def find_peaks_single_pattern(
             trace_annular, 
             annular_ind_center,
             )
-        sigma_annular = scale_sigma_annular * np.maximum(
+        sigma_annular = scale_sigma_annular * np.minimum(
             annular_ind_center - p_annular[1],
             p_annular[2] - annular_ind_center)
 
@@ -161,7 +193,7 @@ def find_peaks_single_pattern(
             trace_radial, 
             np.atleast_1d(peaks[a0,1]),
             )
-        sigma_radial = scale_sigma_radial * np.maximum(
+        sigma_radial = scale_sigma_radial * np.minimum(
             peaks[a0,1] - p_radial[1],
             p_radial[2] - peaks[a0,1])
 
