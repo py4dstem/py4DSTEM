@@ -1,13 +1,13 @@
 import h5py
 import hdf5plugin
 import numpy as np
-from py4DSTEM.classes import DataCube
+from py4DSTEM.datacube import DataCube
 from py4DSTEM.preprocess.utils import bin2D
 
 
 def read_arina(
     filename,
-    scan_width,
+    scan_width=1,
     mem="RAM",
     binfactor: int = 1,
     dtype_bin: float = None,

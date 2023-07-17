@@ -1,6 +1,6 @@
 import h5py
-from py4DSTEM.classes import DataCube
-
+from py4DSTEM.data import DiffractionSlice, RealSlice
+from py4DSTEM.datacube import DataCube
 
 def read_abTEM(
     filename,
@@ -8,7 +8,7 @@ def read_abTEM(
     binfactor: int = 1,
 ):
     """
-    File reader for abTEM 4D-STEM datasets
+    File reader for abTEM datasets
     Args:
         filename: str with path to  file
         mem (str):  Must be "RAM" or "MEMMAP". Specifies how the data is
@@ -30,29 +30,52 @@ def read_abTEM(
             datasets[key] = f.get(key)[()]
 
     data = datasets["array"]
-    assert len(data.shape) == 4, "reader is for 4D-STEM datasets only"
-
-    datacube = DataCube(data=data)
 
     sampling = datasets["sampling"]
     units = datasets["units"]
 
-    datacube.calibration.set_R_pixel_size(sampling[0])
-    if sampling[0] != sampling[1]:
-        print(
-            "Warning: py4DSTEM currently only handles uniform x,y sampling. Setting sampling with x calibration"
-        )
-    datacube.calibration.set_Q_pixel_size(sampling[2])
-    if sampling[2] != sampling[3]:
-        print(
-            "Warning: py4DSTEM currently only handles uniform qx,qy sampling. Setting sampling with qx calibration"
-        )
+    assert len(data.shape) in (2, 4), "abtem reader supports only 4D and 2D data"
 
-    if units[0] == b"\xc3\x85":
-        datacube.calibration.set_R_pixel_units("A")
+    if len(data.shape) == 4:
+
+        datacube = DataCube(data=data)
+
+        datacube.calibration.set_R_pixel_size(sampling[0])
+        if sampling[0] != sampling[1]:
+            print(
+                "Warning: py4DSTEM currently only handles uniform x,y sampling. Setting sampling with x calibration"
+            )
+        datacube.calibration.set_Q_pixel_size(sampling[2])
+        if sampling[2] != sampling[3]:
+            print(
+                "Warning: py4DSTEM currently only handles uniform qx,qy sampling. Setting sampling with qx calibration"
+            )
+
+        if units[0] == b"\xc3\x85":
+            datacube.calibration.set_R_pixel_units("A")
+        else:
+            datacube.calibration.set_R_pixel_units(units[0].decode("utf-8"))
+
+        datacube.calibration.set_Q_pixel_units(units[2].decode("utf-8"))
+
+        return datacube
+
     else:
-        datacube.calibration.set_R_pixel_units(units[0].decode("utf-8"))
-
-    datacube.calibration.set_Q_pixel_units(units[2].decode("utf-8"))
-
-    return datacube
+        if units[0] == b"mrad":
+            diffraction = DiffractionSlice(data=data)
+            if sampling[0] != sampling[1]:
+                print(
+                    "Warning: py4DSTEM currently only handles uniform qx,qy sampling. Setting sampling with x calibration"
+                )
+            diffraction.calibration.set_Q_pixel_units(units[0].decode("utf-8"))
+            diffraction.calibration.set_Q_pixel_size(sampling[0])
+            return diffraction
+        else:
+            image = RealSlice(data=data)
+            if sampling[0] != sampling[1]:
+                print(
+                    "Warning: py4DSTEM currently only handles uniform x,y sampling. Setting sampling with x calibration"
+                )
+            image.calibration.set_Q_pixel_units("A")
+            image.calibration.set_Q_pixel_size(sampling[0])
+            return image
