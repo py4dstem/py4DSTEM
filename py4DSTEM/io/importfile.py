@@ -1,18 +1,18 @@
 # Reader functions for non-native file types
 
 import pathlib
-from os.path import exists, splitext
-from typing import Union, Optional
+from os.path import exists
+from typing import Optional, Union
 
-from py4DSTEM.io.parsefiletype import _parse_filetype
 from py4DSTEM.io.filereaders import (
-    read_empad,
+    load_mib,
+    read_abTEM,
+    read_arina,
     read_dm,
+    read_empad,
     read_gatan_K2_bin,
-    load_mib
 )
-
-
+from py4DSTEM.io.parsefiletype import _parse_filetype
 
 
 def import_file(
@@ -37,6 +37,7 @@ def import_file(
             from storage.
         binfactor (int): Diffraction space binning factor for bin-on-load.
         filetype (str): Used to override automatic filetype detection.
+            options include "dm", "empad", "gatan_K2_bin", "mib", "arina", "abTEM"
         **kwargs: any additional kwargs are passed to the downstream reader -
             refer to the individual filetype reader function call signatures
             and docstrings for more details.
@@ -55,9 +56,7 @@ def import_file(
         "RAM",
         "MEMMAP",
     ], 'Error: argument mem must be either "RAM" or "MEMMAP"'
-    assert isinstance(
-        binfactor, int
-    ), "Error: argument binfactor must be an integer"
+    assert isinstance(binfactor, int), "Error: argument binfactor must be an integer"
     assert binfactor >= 1, "Error: binfactor must be >= 1"
     if binfactor > 1:
         assert (
@@ -66,13 +65,17 @@ def import_file(
 
     filetype = _parse_filetype(filepath) if filetype is None else filetype
 
-    if filetype == 'EMD':
-        raise Exception("EMD file detected - use py4DSTEM.read, not py4DSTEM.import_file!")
+    if filetype in ("emd", "legacy"):
+        raise Exception(
+            "EMD file or py4DSTEM detected - use py4DSTEM.read, not py4DSTEM.import_file!"
+        )
     assert filetype in [
         "dm",
         "empad",
         "gatan_K2_bin",
-        "mib"
+        "mib",
+        "arina",
+        "abTEM"
         # "kitware_counted",
     ], "Error: filetype not recognized"
 
@@ -85,10 +88,12 @@ def import_file(
     # elif filetype == "kitware_counted":
     #    data = read_kitware_counted(filepath, mem, binfactor, metadata=metadata, **kwargs)
     elif filetype == "mib":
-        data = load_mib(filepath, mem=mem, binfactor=binfactor,**kwargs)
+        data = load_mib(filepath, mem=mem, binfactor=binfactor, **kwargs)
+    elif filetype == "arina":
+        data = read_arina(filepath, mem=mem, binfactor=binfactor, **kwargs)
+    elif filetype == "abTEM":
+        data = read_abTEM(filepath, mem=mem, binfactor=binfactor, **kwargs)
     else:
         raise Exception("Bad filetype!")
 
     return data
-
-
