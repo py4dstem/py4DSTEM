@@ -265,8 +265,6 @@ def bin_data_diffraction(
     # set dim vectors
     Qpixsize = datacube.calibration.get_Q_pixel_size() * bin_factor
     Qpixunits = datacube.calibration.get_Q_pixel_units()
-    
-    
     datacube.set_dim(
         2,
         [0,Qpixsize],
@@ -282,7 +280,6 @@ def bin_data_diffraction(
 
     # set calibration pixel size
     datacube.calibration.set_Q_pixel_size(Qpixsize)
-
 
     # return
     return datacube
