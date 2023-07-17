@@ -302,8 +302,6 @@ class BraggVectors(Custom,BraggVectorMethods,Data):
         braggvector_copy.set_raw_vectors( self._v_uncal.copy() )
         for k in self.metadata.keys():
             braggvector_copy.metadata = self.metadata[k].copy()
-        braggvector_copy.calibration = self.calibration
-        braggvector_copy.setcal()
         return braggvector_copy
 
 

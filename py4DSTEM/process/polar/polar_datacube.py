@@ -127,9 +127,9 @@ class PolarDatacube:
             self._qmax,
             self._qstep
         )
-        self.qscale = self._qscale
         self._radial_step = self._datacube.calibration.get_Q_pixel_size() * self._qstep
         self.set_polar_shape()
+        self.qscale = self._qscale
 
     @property
     def qmin(self):
