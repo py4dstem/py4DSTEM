@@ -974,7 +974,7 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
                 )
 
             # back-transmit
-            exit_waves *= xp.conj(obj) / xp.abs(obj) ** 2
+            exit_waves *= xp.conj(obj) #/ xp.abs(obj) ** 2
 
             if s > 0:
                 # back-propagate
@@ -1076,7 +1076,7 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
                 )
 
             # back-transmit
-            exit_waves_copy *= xp.conj(obj) / xp.abs(obj) ** 2
+            exit_waves_copy *= xp.conj(obj) # / xp.abs(obj) ** 2
 
             if s > 0:
                 # back-propagate
