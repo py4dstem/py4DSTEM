@@ -65,7 +65,7 @@ class BraggVectors(Custom,BraggVectorMethods,Data):
         Rshape,
         Qshape,
         name = 'braggvectors',
-        verbose = True,
+        verbose = False,
         calibration = None
         ):
         Custom.__init__(self,name=name)
