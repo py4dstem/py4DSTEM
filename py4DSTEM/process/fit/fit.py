@@ -58,12 +58,9 @@ def fit_2D(function, data, data_mask=None, popt=None,
             fitting.
 
     Returns:
-        (3-tuple) A 3-tuple containing:
-
-            * **popt**: optimal fit parameters to function
-            * **pcov**: the covariance matrix
-            * **fit_ar**: optional. If return_ar==True, fit_ar is returned, and is an
-              array of the same shape as data, containing the fit values
+    (popt,pcov,fit_at, mask) : 4-tuple
+        The optimal fit parameters, the fitting covariance matrix, the
+        the fit array with the returned `popt` params, and the mask
     """
     shape = data.shape
     shape1D = [1,np.prod(shape)]
@@ -101,7 +98,7 @@ def fit_2D(function, data, data_mask=None, popt=None,
             p0=popt)
 
     fit_ar = function(xy,*popt).reshape(shape)
-    return popt, pcov, fit_ar
+    return popt, pcov, fit_ar, mask
 
 
 # Functions for fitting
