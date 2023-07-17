@@ -134,14 +134,14 @@ def fit_origin(
 
         # Fit data
         if mask is None:
-            popt_x, pcov_x, qx0_fit = fit_2D(
+            popt_x, pcov_x, qx0_fit, _ = fit_2D(
                 f,
                 qx0_meas,
                 robust=robust,
                 robust_steps=robust_steps,
                 robust_thresh=robust_thresh,
             )
-            popt_y, pcov_y, qy0_fit = fit_2D(
+            popt_y, pcov_y, qy0_fit, _ = fit_2D(
                 f,
                 qy0_meas,
                 robust=robust,
@@ -150,7 +150,7 @@ def fit_origin(
             )
 
         else:
-            popt_x, pcov_x, qx0_fit = fit_2D(
+            popt_x, pcov_x, qx0_fit, _ = fit_2D(
                 f,
                 qx0_meas,
                 robust=robust,
@@ -158,7 +158,7 @@ def fit_origin(
                 robust_thresh=robust_thresh,
                 data_mask=mask == True,
             )
-            popt_y, pcov_y, qy0_fit = fit_2D(
+            popt_y, pcov_y, qy0_fit, _ = fit_2D(
                 f,
                 qy0_meas,
                 robust=robust,
