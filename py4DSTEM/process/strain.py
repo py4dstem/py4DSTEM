@@ -364,7 +364,7 @@ class StrainMap(RealSlice, Data):
 
         bragg_vectors_indexed = add_indices_to_braggvectors(
             self.braggvectors,
-            self.bragg_directions,
+            self.braggdirections,
             maxPeakSpacing=max_peak_spacing,
             qx_shift=self.braggvectors.Qshape[0] / 2,
             qy_shift=self.braggvectors.Qshape[1] / 2,
