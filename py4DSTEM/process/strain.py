@@ -380,7 +380,7 @@ class StrainMap(RealSlice, Data):
         self.g1g2_map = g1g2_map
 
         if returncalc:
-            bragg_directions, bragg_vectors_indexed, g1g2_map
+            braggdirections, bragg_vectors_indexed, g1g2_map
 
     def get_strain(
         self, mask=None, g_reference=None, flip_theta=False, returncalc=False, **kwargs
