@@ -2,7 +2,6 @@ import h5py
 from py4DSTEM.data import DiffractionSlice, RealSlice
 from py4DSTEM.datacube import DataCube
 
-
 def read_abTEM(
     filename,
     mem="RAM",
@@ -31,6 +30,7 @@ def read_abTEM(
             datasets[key] = f.get(key)[()]
 
     data = datasets["array"]
+
     sampling = datasets["sampling"]
     units = datasets["units"]
 
