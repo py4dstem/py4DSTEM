@@ -83,6 +83,50 @@ file_ids = {
         'test_realslice_io.h5',
         '1siH80-eRJwG5R6AnU4vkoqGWByrrEz1y'
     ),
+    'test_arina_master' : (
+        'STO_STEM_bench_20us_master.h5',
+        '1q_4IjFuWRkw5VM84NhxrNTdIq4563BOC'
+    ),
+    'test_arina_01' : (
+        'STO_STEM_bench_20us_data_000001.h5',
+        '1_3Dbm22-hV58iffwK9x-3vqJUsEXZBFQ'
+    ),
+    'test_arina_02' : (
+        'STO_STEM_bench_20us_data_000002.h5',
+        '1x29RzHLnCzP0qthLhA1kdlUQ09ENViR8'
+    ),
+    'test_arina_03' : (
+        'STO_STEM_bench_20us_data_000003.h5',
+        '1qsbzdEVD8gt4DYKnpwjfoS_Mg4ggObAA'
+    ),
+    'test_arina_04' : (
+        'STO_STEM_bench_20us_data_000004.h5',
+        '1Lcswld0Y9fNBk4-__C9iJbc854BuHq-h'
+    ),
+    'test_arina_05' : (
+        'STO_STEM_bench_20us_data_000005.h5',
+        '13YTO2ABsTK5nObEr7RjOZYCV3sEk3gt9'
+    ),
+    'test_arina_06' : (
+        'STO_STEM_bench_20us_data_000006.h5',
+        '1RywPXt6HRbCvjgjSuYFf60QHWlOPYXwy'
+    ),
+    'test_arina_07' : (
+        'STO_STEM_bench_20us_data_000007.h5',
+        '1GRoBecCvAUeSIujzsPywv1vXKSIsNyoT'
+    ),
+    'test_arina_08' : (
+        'STO_STEM_bench_20us_data_000008.h5',
+        '1sTFuuvgKbTjZz1lVUfkZbbTDTQmwqhuU'
+    ),
+    'test_arina_09' : (
+        'STO_STEM_bench_20us_data_000009.h5',
+        '1JmBiMg16iMVfZ5wz8z_QqcNPVRym1Ezh'
+    ),
+    'test_arina_10' : (
+        'STO_STEM_bench_20us_data_000010.h5',
+        '1_90xAfclNVwMWwQ-YKxNNwBbfR1nfHoB'
+    ),
     'test_strain' : (
         'downsample_Si_SiGe_analysis_braggdisks_cal.h5',
         '1bYgDdAlnWHyFmY-SwN3KVpMutWBI5MhP'
@@ -111,6 +155,19 @@ collection_ids = {
         'legacy_v0.13',
         'legacy_v0.14',
         'test_realslice_io',
+    ),
+    'test_arina' : (
+        'test_arina_master',
+        'test_arina_01',
+        'test_arina_02',
+        'test_arina_03',
+        'test_arina_04',
+        'test_arina_05',
+        'test_arina_06',
+        'test_arina_07',
+        'test_arina_08',
+        'test_arina_09',
+        'test_arina_10',
     ),
     'test_braggvectors' : (
         'Au_sim',
