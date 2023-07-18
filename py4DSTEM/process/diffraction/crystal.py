@@ -898,6 +898,12 @@ class Crystal:
         k = np.arange(k_min, k_max + k_step, k_step)
         k_num = k.shape[0]
 
+        # set rotate and ellipse based on their availability
+        rotate = bragg_peaks.calibration.get_QR_rotation_degrees()
+        ellipse = bragg_peaks.calibration.get_ellipse()
+        rotate = False if rotate is None else True
+        ellipse = False if ellipse is None else True
+
         # concatenate all peaks
         bigpl = np.concatenate(
             [
@@ -905,9 +911,9 @@ class Crystal:
                     rx,
                     ry,
                     center = True,
-                    ellipse = True,
+                    ellipse = ellipse,
                     pixel = True,
-                    rotate = True,
+                    rotate = rotate,
                 ).data
                 for rx in range(bragg_peaks.shape[0])
                 for ry in range(bragg_peaks.shape[1])
