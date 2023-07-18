@@ -360,6 +360,12 @@ def plot_scattering_intensity(
     # If Bragg peaks are passed in, compute 1D integral
     if bragg_peaks is not None:
 
+        # set rotate and ellipse based on their availability
+        rotate = bragg_peaks.calibration.get_QR_rotation_degrees()
+        ellipse = bragg_peaks.calibration.get_ellipse()
+        rotate = False if rotate is None else True
+        ellipse = False if ellipse is None else True
+
         # concatenate all peaks
         bigpl = np.concatenate(
             [
@@ -367,9 +373,9 @@ def plot_scattering_intensity(
                     rx,
                     ry,
                     center = True,
-                    ellipse = True,
+                    ellipse = ellipse,
                     pixel = True,
-                    rotate = True,
+                    rotate = rotate,
                 ).data
                 for rx in range(bragg_peaks.shape[0])
                 for ry in range(bragg_peaks.shape[1])
