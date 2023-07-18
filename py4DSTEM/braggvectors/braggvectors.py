@@ -236,8 +236,15 @@ class BraggVectors(Custom,BraggVectorMethods,Data):
             "rotate" : rotate,
         }
         if self.verbose:
-            print('current calstate: ', self.calstate)
+            print('current calibration state: ', self.calstate)
         pass
+
+    def calibrate(self):
+        """
+        Autoupdate the calstate when relevant calibrations are set
+        """
+        self.setcal()
+
 
 
     # vector getter method
@@ -250,7 +257,7 @@ class BraggVectors(Custom,BraggVectorMethods,Data):
         ellipse,
         pixel,
         rotate
-    ):
+        ):
         """
         Returns the bragg vectors at the specified scan position with
         the specified calibration state.
@@ -268,6 +275,7 @@ class BraggVectors(Custom,BraggVectorMethods,Data):
         -------
         vectors : BVects
         """
+
         ans = self._v_uncal[scan_x,scan_y].data
         ans = self.cal._transform(
             data = ans,
@@ -282,7 +290,6 @@ class BraggVectors(Custom,BraggVectorMethods,Data):
 
 
     # copy
-
     def copy(self, name=None):
         name = name if name is not None else self.name+"_copy"
         braggvector_copy = BraggVectors(
@@ -527,5 +534,3 @@ class CalibratedVectorGetter:
 
         # return
         return ans
-
-
