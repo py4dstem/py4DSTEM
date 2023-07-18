@@ -64,8 +64,8 @@ class Calibration(Metadata):
         theta,                                        *
         p_ellipse,                                    *
         ellipse,                                      *
-        QR_rotation_degrees,
-        QR_flip,
+        QR_rotation_degrees,                          *
+        QR_flip,                                      *
         QR_rotflip,                                   *
         probe_semiangle,
         probe_param,
@@ -598,11 +598,13 @@ class Calibration(Metadata):
 
     # Q/R-space rotation and flip
 
+    @call_calibrate
     def set_QR_rotation_degrees(self,x):
         self._params['QR_rotation_degrees'] = x
     def get_QR_rotation_degrees(self):
         return self._get_value('QR_rotation_degrees')
 
+    @call_calibrate
     def set_QR_flip(self,x):
         self._params['QR_flip'] = x
     def get_QR_flip(self):
