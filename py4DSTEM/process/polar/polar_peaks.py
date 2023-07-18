@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 from scipy.ndimage import gaussian_filter, gaussian_filter1d
 from scipy.signal import peak_prominences
 from skimage.feature import peak_local_max
-from scipy.optimize import curve_fit
+from scipy.optimize import curve_fit, leastsq
 import warnings
 
 # from emdfile import tqdmnd, PointList, PointListArray
@@ -34,7 +34,8 @@ def find_peaks_single_pattern(
     return_background = False,
     plot_result = True,
     plot_power_scale = 1.0,
-    plot_scale_size = 100.0,
+    plot_scale_size = 10.0,
+    figsize = (12,6),
     returnfig = False,
     ):
     """
@@ -62,9 +63,40 @@ def find_peaks_single_pattern(
     radial_background_thresh: float
         Relative order of sorted values to use as background estimate.
         Setting to 0.5 is equivalent to median, 0.0 is min value.
-    
+    num_peaks_max = 100
+        Max number of peaks to return.
+    threshold_abs: float
+        Absolute image intensity threshold for peaks.
+    threshold_prom_annular: float
+        Threshold for prominance, along annular direction.
+    threshold_prom_radial: float
+        Threshold for prominance, along radial direction.
+    remove_masked_peaks: bool
+        Delete peaks that are in the region masked by "mask"
+    scale_sigma_annular: float
+        Scaling of the estimated annular standard deviation.
+    scale_sigma_radial: float
+        Scaling of the estimated radial standard deviation.
+    return_background: bool
+        Return the background signal.
+    plot_result:
+        Plot the detector peaks
+    plot_power_scale: float
+        Image intensity power law scaling.
+    plot_scale_size: float
+        Marker scaling in the plot.
+    figsize: 2-tuple
+        Size of the result plotting figure.
+    returnfig: bool
+        Return the figure and axes handles.
+
     Returns
     --------
+
+    peaks_polar : pointlist
+        The detected peaks
+    fig, ax : (optional)
+        Figure and axes handles 
 
     """
 
@@ -151,7 +183,7 @@ def find_peaks_single_pattern(
             trace_annular, 
             annular_ind_center,
             )
-        sigma_annular = scale_sigma_annular * np.maximum(
+        sigma_annular = scale_sigma_annular * np.minimum(
             annular_ind_center - p_annular[1],
             p_annular[2] - annular_ind_center)
 
@@ -161,7 +193,7 @@ def find_peaks_single_pattern(
             trace_radial, 
             np.atleast_1d(peaks[a0,1]),
             )
-        sigma_radial = scale_sigma_radial * np.maximum(
+        sigma_radial = scale_sigma_radial * np.minimum(
             peaks[a0,1] - p_radial[1],
             p_radial[2] - peaks[a0,1])
 
@@ -266,7 +298,7 @@ def find_peaks_single_pattern(
         st = np.sin(t)
 
 
-        fig,ax = plt.subplots(figsize=(12,6))
+        fig,ax = plt.subplots(figsize=figsize)
 
         ax.imshow(
             im_plot,
@@ -751,6 +783,8 @@ def model_radial_background(
         self.background_coefs[3*a0+3] = ring_int[a0]
         self.background_coefs[3*a0+4] = ring_sigma[a0]
         self.background_coefs[3*a0+5] = ring_position[a0]
+    lb = np.zeros_like(self.background_coefs)
+    ub = np.ones_like(self.background_coefs) * np.inf
 
     # Create background model
     def background_model(q, *coefs):
@@ -776,7 +810,7 @@ def model_radial_background(
             self.background_radial_mean[self.background_mask], 
             p0 = self.background_coefs,
             xtol = 1e-12,
-            # bounds = (lb,ub),
+            bounds = (lb,ub),
         )[0]
 
     # plotting
@@ -794,6 +828,7 @@ def refine_peaks(
     # reset_fits_to_init_positions = False,
     scale_sigma_estimate = 0.5,
     min_num_pixels_fit = 10,
+    maxfev = None,
     progress_bar = True,
     ):
     """
@@ -816,6 +851,8 @@ def refine_peaks(
         Factor to reduce sigma of peaks by, to prevent fit from running away.
     min_num_pixels_fit: int
         Minimum number of pixels to perform fitting
+    maxfev: int
+        Maximum number of iterations in fit.  Set to a low number for a fast fit.
     progress_bar: bool
         Enable progress bar
 
@@ -896,6 +933,11 @@ def refine_peaks(
             s_radial * scale_sigma_estimate,
             ))
 
+        # bounds
+        lb = np.zeros_like(coefs_all)
+        ub = np.ones_like(coefs_all) * np.inf
+
+
         # Construct fitting model
         def fit_image(basis, *coefs):
             coefs = np.squeeze(np.array(coefs))
@@ -928,14 +970,25 @@ def refine_peaks(
         try:
             with warnings.catch_warnings():
                 warnings.simplefilter('ignore')
-                coefs_all = curve_fit(
-                    fit_image, 
-                    basis[mask_bool.ravel(),:], 
-                    im_polar[mask_bool], 
-                    p0 = coefs_all,
-                    xtol = 1e-12,
-                    # bounds = (lb,ub),
-                )[0]
+                if maxfev is None:
+                    coefs_all = curve_fit(
+                        fit_image, 
+                        basis[mask_bool.ravel(),:], 
+                        im_polar[mask_bool], 
+                        p0 = coefs_all,
+                        xtol = 1e-12,
+                        bounds = (lb,ub),
+                    )[0]
+                else:
+                    coefs_all = curve_fit(
+                        fit_image, 
+                        basis[mask_bool.ravel(),:], 
+                        im_polar[mask_bool], 
+                        p0 = coefs_all,
+                        xtol = 1e-12,
+                        maxfev = maxfev,
+                        bounds = (lb,ub),
+                    )[0]
 
             # Output refined peak parameters
             coefs_peaks = np.reshape(
@@ -951,9 +1004,24 @@ def refine_peaks(
                 ]),
                 name = 'peaks_polar')
         except:
-            # if fitting has failed, we will output the mean background signal,
-            # but none of the peaks.
-            pass
+            # if fitting has failed, we will still output the last iteration
+            # TODO - add a flag for unconverged fits
+            coefs_peaks = np.reshape(
+                coefs_all[(3*num_rings+3):],
+                (5,num_peaks)).T
+            self.peaks_refine[rx,ry] = PointList(
+                coefs_peaks.ravel().view([
+                    ('qt', float),
+                    ('qr', float),
+                    ('intensity', float),
+                    ('sigma_annular', float),
+                    ('sigma_radial', float),
+                ]),
+                name = 'peaks_polar')
+
+            #  mean background signal,
+            # # but none of the peaks.
+            # pass
 
         # Output refined parameters for background
         coefs_bg = coefs_all[:(3*num_rings+3)]
@@ -1154,6 +1222,9 @@ def make_orientation_histogram(
         v_sigma = np.linspace(-2,2,2*peak_sigma_samples+1)
         w_sigma = np.exp(-v_sigma**2/2)
 
+    if use_refined_peaks is False:
+        warnings.warn("Orientation histogram is using non-refined peak positions")
+
     # Loop over all probe positions
     for a0 in range(num_radii):
         t = "Generating histogram " + str(a0)
@@ -1199,7 +1270,10 @@ def make_orientation_histogram(
 
                 # If needed, expand signal using peak sigma to write into multiple bins
                 if use_peak_sigma:
-                    theta_std = self.peaks_refine[rx,ry]['sigma_annular'][sub] / dtheta
+                    if use_refined_peaks:
+                        theta_std = self.peaks_refine[rx,ry]['sigma_annular'][sub] / dtheta
+                    else:
+                        theta_std = self.peaks[rx,ry]['sigma_annular'][sub] / dtheta                        
                     t = (t[:,None] + theta_std[:,None]*v_sigma[None,:]).ravel()
                     intensity = (intensity[:,None] * w_sigma[None,:]).ravel()
 
