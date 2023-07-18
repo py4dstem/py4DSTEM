@@ -15,7 +15,7 @@ from emdfile import tqdmnd, PointList, PointListArray
 
 
 def make_orientation_histogram(
-    bragg_peaks: PointList = None,
+    bragg_peaks: PointListArray = None,
     radial_ranges: np.ndarray = None,
     orientation_map = None,
     orientation_ind: int = 0,
