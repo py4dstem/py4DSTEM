@@ -717,6 +717,7 @@ def model_radial_background(
     ring_int = None,
     refine_model = True,
     plot_result = True,
+    figsize = (8,4),
     ):
     """
     User provided radial background model, of the form:
@@ -818,6 +819,7 @@ def model_radial_background(
         self.plot_radial_background(
                 q_pixel_units = False,   
                 plot_background_model = True,
+                figsize = figsize,
             )
 
 

@@ -12,6 +12,7 @@ def fit_amorphous_ring(
     coefs = None,
     mask_dp = None,
     show_fit_mask = False,
+    maxfev = None,
     verbose = False,
     plot_result = True,
     plot_log_scale = False,
@@ -39,6 +40,8 @@ def fit_amorphous_ring(
         Dark field mask for fitting, in addition to the radial range specified above.
     show_fit_mask: bool
         Set to true to preview the fitting mask and initial guess for the ellipse params
+    maxfev: int
+        Max number of fitting evaluations for curve_fit.
     verbose: bool
         Print fit results
     plot_result: bool
@@ -159,14 +162,26 @@ def fit_amorphous_ring(
     else:
         # Perform elliptic fitting
         int_mean = np.mean(vals)
-        coefs = curve_fit(
-            amorphous_model, 
-            basis, 
-            vals / int_mean, 
-            p0=coefs,
-            xtol = 1e-12,
-            bounds = (lb,ub),
-        )[0]
+
+        if maxfev is None:
+            coefs = curve_fit(
+                amorphous_model, 
+                basis, 
+                vals / int_mean, 
+                p0=coefs,
+                xtol = 1e-8,
+                bounds = (lb,ub),
+            )[0]
+        else:
+            coefs = curve_fit(
+                amorphous_model, 
+                basis, 
+                vals / int_mean, 
+                p0=coefs,
+                xtol = 1e-8,
+                bounds = (lb,ub),
+                maxfev = maxfev,
+            )[0]
         coefs[4] = np.mod(coefs[4],2*np.pi)
         coefs[5:8] *= int_mean
         # bounds=bounds
