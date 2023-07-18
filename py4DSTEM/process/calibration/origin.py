@@ -359,4 +359,3 @@ def get_origin_beamstop(datacube: DataCube, mask: np.ndarray, **kwargs):
     return qx0, qy0
 
 
-
