@@ -1474,6 +1474,3 @@ class DataCube(
             qr = np.hypot(self.qxx_raw-vects.qx[idx], self.qyy_raw-vects.qy[idx])
             mask = np.logical_and(mask, qr>radius)
         return mask
-
-
-

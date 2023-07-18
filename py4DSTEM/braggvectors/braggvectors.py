@@ -534,5 +534,3 @@ class CalibratedVectorGetter:
 
         # return
         return ans
-
-

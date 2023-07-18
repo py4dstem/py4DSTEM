@@ -589,4 +589,3 @@ class PolarDataGetter:
         string = f"{self.__class__.__name__}( "
         string += "Retrieves the diffraction pattern at scan position (x,y) in polar coordinates when sliced with [x,y]."
         return string
-
