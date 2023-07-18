@@ -186,7 +186,11 @@ class BraggVectorMethods:
         mode = None,
         geometry = None,
         name = 'bragg_virtual_image',
-        returncalc = True
+        returncalc = True,
+        center = True,
+        ellipse = True,
+        pixel = True,
+        rotate = True,
         ):
         '''
         Calculates a virtual image based on the values of the Braggvectors
@@ -204,13 +208,22 @@ class BraggVectorMethods:
               - 'circle', 'circular': nested 2-tuple, ((qx,qy),radius)
               - 'annular' or 'annulus': nested 2-tuple,
                 ((qx,qy),(radius_i,radius_o))
-             All values are in pixels.  Note that (qx,qy) can be skipped, which
-             assumes peaks centered at (0,0)
+             Values can be in pixels or calibrated units. Note that (qx,qy) 
+             can be skipped, which assumes peaks centered at (0,0).
+        center: bool
+            Apply calibration - center coordinate.
+        ellipse: bool
+            Apply calibration - elliptical correction.
+        pixel: bool
+            Apply calibration - pixel size.
+        rotate: bool
+            Apply calibration - QR rotation.
 
         Returns
         -------
         virtual_im : VirtualImage
         '''
+
         # parse inputs
         circle_modes = ['circular','circle']
         annulus_modes = ['annular','annulus']
@@ -220,13 +233,13 @@ class BraggVectorMethods:
         # set geometry
         if mode is None:
             if geometry is None:
-                center = None
+                qxy_center = None
                 radial_range = np.array((0,np.inf))
             else:
                 if len(geometry[0]) == 0:
-                    center = None
+                    qxy_center = None
                 else:
-                    center = np.array(geometry[0])
+                    qxy_center = np.array(geometry[0])
                 if isinstance(geometry[1], int) or isinstance(geometry[1], float):
                     radial_range = np.array((0,geometry[1]))
                 elif len(geometry[1]) == 0:
@@ -236,30 +249,44 @@ class BraggVectorMethods:
         elif mode == 'circular' or mode == 'circle':
             radial_range = np.array((0,geometry[1]))
             if len(geometry[0]) == 0:
-                    center = None
+                    qxy_center = None
             else:
-                center = np.array(geometry[0])
+                qxy_center = np.array(geometry[0])
         elif mode == 'annular' or mode == 'annulus':
             radial_range = np.array(geometry[1])
             if len(geometry[0]) == 0:
-                    center = None
+                    qxy_center = None
             else:
-                center = np.array(geometry[0])
+                qxy_center = np.array(geometry[0])
 
         # allocate space
         im_virtual = np.zeros(self.shape)
 
         # generate image
-        for rx,ry in tqdmnd(self.shape[0],self.shape[1]):
-            p = self.raw[rx,ry]
+        for rx,ry in tqdmnd(
+            self.shape[0],
+            self.shape[1],
+            ):
+            # Get user-specified Bragg vectors
+            p = self.get_vectors(
+                rx,
+                ry,
+                center = center,
+                ellipse = ellipse,
+                pixel = pixel,
+                rotate = rotate,
+                )
+
             if p.data.shape[0] > 0:
                 if radial_range is None:
                     im_virtual[rx,ry] = np.sum(p.I)
                 else:
-                    if center is None:
+                    if qxy_center is None:
                         qr = np.hypot(p.qx,p.qy)
                     else:
-                        qr = np.hypot(p.qx - center[0],p.qy - center[1])
+                        qr = np.hypot(
+                            p.qx - qxy_center[0],
+                            p.qy - qxy_center[1])
                     sub = np.logical_and(
                         qr >= radial_range[0],
                         qr <  radial_range[1])
@@ -284,7 +311,7 @@ class BraggVectorMethods:
             }
         )
         # attach to the tree
-        self.attach( ans)
+        self.attach(ans)
 
         # return
         if returncalc:
@@ -633,192 +660,6 @@ class BraggVectorMethods:
 
         if returncalc:
             return p_ellipse
-
-
-    # Deprecated??
-
-    # def index_bragg_directions(
-    #     self,
-    #     x0 = None,
-    #     y0 = None,
-    #     plot = True,
-    #     bvm_vis_params = {},
-    #     returncalc = False,
-    #     ):
-    #     """
-    #     From an origin (x0,y0), a set of reciprocal lattice vectors gx,gy, and an pair of
-    #     lattice vectors g1=(g1x,g1y), g2=(g2x,g2y), find the indices (h,k) of all the
-    #     reciprocal lattice directions.
-
-    #     Args:
-    #         x0 (float): x-coord of origin
-    #         y0 (float): y-coord of origin
-    #         Plot (bool): plot results
-    #     """
-
-    #     if x0 is None:
-    #         x0 = self.Qshape[0]/2
-    #     if y0 is None:
-    #         y0 = self.Qshape[0]/2
-
-    #     from py4DSTEM.process.latticevectors import index_bragg_directions
-    #     _, _, braggdirections = index_bragg_directions(
-    #         x0,
-    #         y0,
-    #         self.g['x'],
-    #         self.g['y'],
-    #         self.g1,
-    #         self.g2
-    #     )
-
-    #     self.braggdirections = braggdirections
-
-    #     if plot:
-    #         from py4DSTEM.visualize import show_bragg_indexing
-    #         show_bragg_indexing(
-    #             self.bvm_centered,
-    #             **bvm_vis_params,
-    #             braggdirections = braggdirections,
-    #             points = True
-    #         )
-
-    #     if returncalc:
-    #         return braggdirections
-
-
-
-    # def add_indices_to_braggvectors(
-    #     self,
-    #     maxPeakSpacing,
-    #     mask = None,
-    #     returncalc = False,
-    #     ):
-    #     """
-    #     Using the peak positions (qx,qy) and indices (h,k) in the PointList lattice,
-    #     identify the indices for each peak in the PointListArray braggpeaks.
-    #     Return a new braggpeaks_indexed PointListArray, containing a copy of braggpeaks plus
-    #     three additional data columns -- 'h','k', and 'index_mask' -- specifying the peak
-    #     indices with the ints (h,k) and indicating whether the peak was successfully indexed
-    #     or not with the bool index_mask. If `mask` is specified, only the locations where
-    #     mask is True are indexed.
-
-    #     Args:
-    #         maxPeakSpacing (float): Maximum distance from the ideal lattice points
-    #             to include a peak for indexing
-    #         qx_shift,qy_shift (number): the shift of the origin in the `lattice` PointList
-    #             relative to the `braggpeaks` PointListArray
-    #         mask (bool): Boolean mask, same shape as the pointlistarray, indicating which
-    #             locations should be indexed. This can be used to index different regions of
-    #             the scan with different lattices
-    #     """
-    #     from py4DSTEM.process.latticevectors import add_indices_to_braggvectors
-
-    #     bragg_peaks_indexed = add_indices_to_braggvectors(
-    #         self.vectors,
-    #         self.braggdirections,
-    #         maxPeakSpacing = maxPeakSpacing,
-    #         qx_shift = self.Qshape[0]/2,
-    #         qy_shift = self.Qshape[1]/2,
-    #     )
-
-    #     self.bragg_peaks_indexed = bragg_peaks_indexed
-
-    #     if returncalc:
-    #         return bragg_peaks_indexed
-
-
-    # def fit_lattice_vectors_all_DPs(self, returncalc = False):
-    #     """
-    #     Fits lattice vectors g1,g2 to each diffraction pattern in braggpeaks, given some
-    #     known (h,k) indexing.
-
-
-    #     """
-
-    #     from py4DSTEM.process.latticevectors import fit_lattice_vectors_all_DPs
-    #     g1g2_map = fit_lattice_vectors_all_DPs(self.bragg_peaks_indexed)
-    #     self.g1g2_map = g1g2_map
-    #     if returncalc:
-    #         return g1g2_map
-
-    # def get_strain_from_reference_region(self, mask, returncalc = False):
-    #     """
-    #     Gets a strain map from the reference region of real space specified by mask and the
-    #     lattice vector map g1g2_map.
-
-    #     Args:
-    #         mask (ndarray of bools): use lattice vectors from g1g2_map scan positions
-    #             wherever mask==True
-
-    #     """
-    #     from py4DSTEM.process.latticevectors import get_strain_from_reference_region
-
-    #     strainmap_median_g1g2 = get_strain_from_reference_region(
-    #         self.g1g2_map,
-    #         mask = mask,
-    #     )
-
-    #     self.strainmap_median_g1g2 = strainmap_median_g1g2
-
-    #     if returncalc:
-    #         return strainmap_median_g1g2
-
-
-    # def get_strain_from_reference_g1g2(self, mask, returncalc = False):
-    #     """
-    #     Gets a strain map from the reference lattice vectors g1,g2 and lattice vector map
-    #     g1g2_map.
-
-
-    #     Args:
-    #         mask (ndarray of bools): use lattice vectors from g1g2_map scan positions
-    #             wherever mask==True
-
-    #     """
-    #     from py4DSTEM.process.latticevectors import get_reference_g1g2
-    #     g1_ref,g2_ref = get_reference_g1g2(self.g1g2_map, mask)
-
-    #     from py4DSTEM.process.latticevectors import get_strain_from_reference_g1g2
-    #     strainmap_reference_g1g2 = get_strain_from_reference_g1g2(self.g1g2_map, g1_ref, g2_ref)
-
-    #     self.strainmap_reference_g1g2 = strainmap_reference_g1g2
-
-    #     if returncalc:
-    #         return strainmap_reference_g1g2
-
-    # def get_rotated_strain_map(self, mode, g_reference = None, returncalc = True, flip_theta = False):
-    #     """
-    #     Starting from a strain map defined with respect to the xy coordinate system of
-    #     diffraction space, i.e. where exx and eyy are the compression/tension along the Qx
-    #     and Qy directions, respectively, get a strain map defined with respect to some other
-    #     right-handed coordinate system, in which the x-axis is oriented along (xaxis_x,
-    #     xaxis_y).
-
-    #     Args:
-    #         g_referencce (tupe): reference coordinate system for xaxis_x and xaxis_y
-    #     """
-
-    #     assert mode in ("median","reference")
-    #     if g_reference is None:
-    #         g_reference = np.subtract(self.g1, self.g2)
-
-    #     from py4DSTEM.process.latticevectors import get_rotated_strain_map
-
-    #     if mode == "median":
-    #         strainmap_raw = self.strainmap_median_g1g2
-    #     elif mode == "reference":
-    #         strainmap_raw = self.strainmap_reference_g1g2
-
-    #     strainmap = get_rotated_strain_map(
-    #         strainmap_raw,
-    #         xaxis_x = g_reference[0],
-    #         xaxis_y = g_reference[1],
-    #         flip_theta = flip_theta
-    #     )
-
-    #     if returncalc:
-    #         return strainmap
-
 
     def mask_in_Q(
         self,
