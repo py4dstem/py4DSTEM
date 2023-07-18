@@ -73,11 +73,12 @@ def fit_origin(
 ):
     """
     Fits the position of the origin of diffraction space to a plane or parabola,
-    given some 2D arrays (qx0_meas,qy0_meas) of measured center positions, optionally
-    masked by the Boolean array `mask`. The 2D data arrays may be passed directly as
-    a 2-tuple to the arg `data`, or, if `data` is either a DataCube or Calibration
-    instance, they will be retreived automatically. If a DataCube or Calibration are
-    passed, fitted origin and residuals are stored there directly.
+    given some 2D arrays (qx0_meas,qy0_meas) of measured center positions,
+    optionally masked by the Boolean array `mask`. The 2D data arrays may be
+    passed directly as a 2-tuple to the arg `data`, or, if `data` is either a
+    DataCube or Calibration instance, they will be retreived automatically. If a
+    DataCube or Calibration are passed, fitted origin and residuals are stored
+    there directly.
 
     Args:
         data (2-tuple of 2d arrays): the measured origin position (qx0,qy0)
@@ -133,14 +134,14 @@ def fit_origin(
 
         # Fit data
         if mask is None:
-            popt_x, pcov_x, qx0_fit = fit_2D(
+            popt_x, pcov_x, qx0_fit, _ = fit_2D(
                 f,
                 qx0_meas,
                 robust=robust,
                 robust_steps=robust_steps,
                 robust_thresh=robust_thresh,
             )
-            popt_y, pcov_y, qy0_fit = fit_2D(
+            popt_y, pcov_y, qy0_fit, _ = fit_2D(
                 f,
                 qy0_meas,
                 robust=robust,
@@ -149,7 +150,7 @@ def fit_origin(
             )
 
         else:
-            popt_x, pcov_x, qx0_fit = fit_2D(
+            popt_x, pcov_x, qx0_fit, _ = fit_2D(
                 f,
                 qx0_meas,
                 robust=robust,
@@ -157,7 +158,7 @@ def fit_origin(
                 robust_thresh=robust_thresh,
                 data_mask=mask == True,
             )
-            popt_y, pcov_y, qy0_fit = fit_2D(
+            popt_y, pcov_y, qy0_fit, _ = fit_2D(
                 f,
                 qy0_meas,
                 robust=robust,
@@ -356,6 +357,5 @@ def get_origin_beamstop(datacube: DataCube, mask: np.ndarray, **kwargs):
         qy0[rx,ry] = y
 
     return qx0, qy0
-
 
 
