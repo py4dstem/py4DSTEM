@@ -1270,7 +1270,10 @@ def make_orientation_histogram(
 
                 # If needed, expand signal using peak sigma to write into multiple bins
                 if use_peak_sigma:
-                    theta_std = self.peaks_refine[rx,ry]['sigma_annular'][sub] / dtheta
+                    if use_refined_peaks:
+                        theta_std = self.peaks_refine[rx,ry]['sigma_annular'][sub] / dtheta
+                    else:
+                        theta_std = self.peaks[rx,ry]['sigma_annular'][sub] / dtheta                        
                     t = (t[:,None] + theta_std[:,None]*v_sigma[None,:]).ravel()
                     intensity = (intensity[:,None] * w_sigma[None,:]).ravel()
 
