@@ -3,6 +3,7 @@ from py4DSTEM.datacube import DataCube
 from scipy.ndimage import binary_opening,binary_closing, gaussian_filter1d
 
 
+
 class PolarDatacube:
 
     """
@@ -20,7 +21,7 @@ class PolarDatacube:
         mask = None,
         mask_thresh = 0.1,
         ellipse = True,
-        two_fold_rotation = False,
+        two_fold_symmetry = False,
         ):
         """
         Parameters
@@ -28,14 +29,15 @@ class PolarDatacube:
         datacube : DataCube
             The datacube in cartesian coordinates
         qmin : number
-            Minumum radius of the polar transformation
+            Minumum radius of the polar transformation, in pixels
         qmax : number or None
-            Maximum radius of the polar transformation
+            Maximum radius of the polar transformation, in pixels
         qstep : number
-            Width of radial bins
+            Width of radial bins, in pixels
         n_annular : integer
             Number of bins in the annular direction. Bins will each
-            have a width of 360/num_annular_bins, in degrees
+            have a width of 360/n_annular, or 180/n_annular if
+            two_fold_rotation is set to True, in degrees
         qscale : number or None
             Radial scaling power to apply to polar transform
         mask : boolean array
@@ -48,9 +50,10 @@ class PolarDatacube:
             performs an elliptic transform iff elliptic calibrations are
             available.
         two_fold_rotation : bool
-            Setting to True computes the transform mod(theta,pi), i.e. assumes all patterns
-            posess two-fold rotation (Friedel symmetry).  The output angular range in this case
-            becomes [0, pi) as opposed to the default of [0,2*pi).
+            Setting to True computes the transform mod(theta,pi), i.e. assumes
+            all patterns possess two-fold rotation (Friedel symmetry).  The
+            output angular range in this case becomes [0, pi) as opposed to the
+            default of [0,2*pi).
         """
 
         # attach datacube
@@ -67,17 +70,12 @@ class PolarDatacube:
 
         # setup sampling
 
-        # annular range, depending on if polar transform spans pi or 2*pi
-        if two_fold_rotation:
-            self._annular_range = np.pi
-        else:
-            self._annular_range = 2.0 * np.pi
-
         # polar
         self._qscale = qscale
         if qmax is None:
             qmax = np.min(self._datacube.Qshape) / np.sqrt(2)
-        self.set_annular_bins(n_annular)
+        self._n_annular = n_annular
+        self.two_fold_symmetry = two_fold_symmetry #implicitly calls set_annular_bins
         self.set_radial_bins(qmin,qmax,qstep)
 
         # cartesian
@@ -100,6 +98,16 @@ class PolarDatacube:
         calculate_FEM_global,
         plot_FEM_global,
         calculate_FEM_local,
+    )
+    from py4DSTEM.process.polar.polar_peaks import (
+        find_peaks_single_pattern,
+        find_peaks,
+        refine_peaks_local,
+        refine_peaks,
+        plot_radial_peaks,
+        plot_radial_background,
+        model_radial_background,
+        make_orientation_histogram,
     )
 
 
@@ -176,6 +184,18 @@ class PolarDatacube:
     @property
     def annular_step(self):
         return self._annular_step
+    @property
+    def two_fold_symmetry(self):
+        return self._two_fold_symmetry
+    @two_fold_symmetry.setter
+    def two_fold_symmetry(self,x):
+        assert(isinstance(x,bool)), f"two_fold_symmetry must be boolean, not type {type(x)}"
+        self._two_fold_symmetry = x
+        if x:
+            self._annular_range = np.pi
+        else:
+            self._annular_range = 2 * np.pi
+        self.set_annular_bins(self._n_annular)
 
     @property
     def n_annular(self):
@@ -195,7 +215,21 @@ class PolarDatacube:
             # set KDE params
             self._annular_bin_step = 1 / (self._annular_step * (self.radial_bins + self.qstep * 0.5))
             self._sigma_KDE = self._annular_bin_step * 0.5
+            # set array indices
+            self._annular_indices = np.arange(self.polar_shape[0]).astype(int)
+            self._radial_indices = np.arange(self.polar_shape[1]).astype(int)
 
+
+    # coordinate grid properties
+    @property
+    def tt(self):
+        return self._annular_bins
+    @property
+    def tt_deg(self):
+        return self._annular_bins * 180/np.pi
+    @property
+    def qq(self):
+        return self.radial_bins * self.calibration.get_Q_pixel_size()
 
 
 
@@ -442,6 +476,7 @@ class PolarDataGetter:
             )
             return ans
         elif returnval == 'nan':
+            ans[mask_bool] = np.nan
             return ans
         elif returnval == 'all':
             return ans, ans_norm, norm_array, mask_bool
@@ -472,7 +507,7 @@ class PolarDataGetter:
             # get polar coords
             rr = np.sqrt(x**2 + y**2)
             tt = np.mod(
-                np.arctan2(y, x) - np.pi/2,
+                np.arctan2(y, x),
                 self._polarcube._annular_range)
 
         # elliptical
@@ -480,21 +515,12 @@ class PolarDataGetter:
             # unpack ellipse
             a,b,theta = ellipse
 
-            # transformation matrix (elliptic cartesian -> circular cartesian)
-            A = (a/b)*np.cos(theta)
-            B = -np.sin(theta)
-            C = (a/b)*np.sin(theta)
-            D = np.cos(theta)
-            det = 1 / (A*D - B*C)
-
-            # get circular cartesian coords
-            xc =  x*D - y*B
-            yc = -x*C + y*A
-
-            # get polar coords
-            rr = det * np.hypot(xc,yc)
+            # Get polar coords
+            xc = x*np.cos(theta) + y*np.sin(theta)
+            yc = (y*np.cos(theta) - x*np.sin(theta))*(a/b)
+            rr = (b/a) * np.hypot(xc,yc)
             tt = np.mod(
-                np.arctan2(yc,xc) - np.pi/2,
+                np.arctan2(yc,xc) + theta,
                 self._polarcube._annular_range)
 
         # transform to bin sampling
@@ -563,4 +589,3 @@ class PolarDataGetter:
         string = f"{self.__class__.__name__}( "
         string += "Retrieves the diffraction pattern at scan position (x,y) in polar coordinates when sliced with [x,y]."
         return string
-
