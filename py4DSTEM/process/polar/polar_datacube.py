@@ -19,7 +19,7 @@ class PolarDatacube:
         n_annular = 180,
         qscale = None,
         mask = None,
-        mask_thresh = 0.25,
+        mask_thresh = 0.1,
         ellipse = True,
         two_fold_rotation = False,
         ):
@@ -120,8 +120,9 @@ class PolarDatacube:
             self._qmax,
             self._qstep
         )
-        self.qscale = self._qscale
+        self._radial_step = self._datacube.calibration.get_Q_pixel_size() * self._qstep
         self.set_polar_shape()
+        self.qscale = self._qscale
 
     @property
     def qmin(self):
@@ -207,7 +208,7 @@ class PolarDatacube:
     def qscale(self,x):
         self._qscale = x
         if x is not None:
-            self._qscale_ar = np.arange(self.polar_shape[1])**x
+            self._qscale_ar = (self.qq / self.qq[-1])**x
 
 
     # expose raw data
@@ -419,7 +420,7 @@ class PolarDataGetter:
         )
 
         # scale the normalization array by the bin density
-        norm_array = ans_norm*self._polarcube._annular_bin_step[np.newaxis]
+        norm_array = ans_norm * self._polarcube._annular_bin_step[np.newaxis]
         mask_bool = norm_array < mask_thresh
 
         # apply normalization
