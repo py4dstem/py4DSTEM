@@ -3,7 +3,6 @@ from py4DSTEM.datacube import DataCube
 from scipy.ndimage import binary_opening,binary_closing, gaussian_filter1d
 
 
-
 class PolarDatacube:
 
     """
