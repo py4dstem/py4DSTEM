@@ -24,7 +24,6 @@ from py4DSTEM.process.phase.utils import (
     ComplexProbe,
     fft_shift,
     generate_batches,
-    orthogonalize,
     polar_aliases,
     polar_symbols,
 )
@@ -53,7 +52,9 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
     num_probes: int, optional
         Number of mixed-state probes
     semiangle_cutoff: float, optional
-        Semiangle cutoff for the initial probe guess
+        Semiangle cutoff for the initial probe guess in mrad
+    semiangle_cutoff_pixels: float, optional
+        Semiangle cutoff for the initial probe guess in pixels
     rolloff: float, optional
         Semiangle rolloff for the initial probe guess
     vacuum_probe_intensity: np.ndarray, optional
@@ -92,6 +93,7 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
         datacube: DataCube = None,
         num_probes: int = None,
         semiangle_cutoff: float = None,
+        semiangle_cutoff_pixels: float = None,
         rolloff: float = 2.0,
         vacuum_probe_intensity: np.ndarray = None,
         polar_parameters: Mapping[str, float] = None,
@@ -172,6 +174,7 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
         self._scan_positions = initial_scan_positions
         self._energy = energy
         self._semiangle_cutoff = semiangle_cutoff
+        self._semiangle_cutoff_pixels = semiangle_cutoff_pixels
         self._rolloff = rolloff
         self._object_type = object_type
         self._object_padding_px = object_padding_px
@@ -197,6 +200,9 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
         force_com_rotation: float = None,
         force_com_transpose: float = None,
         force_com_shifts: float = None,
+        force_scan_sampling: float = None,
+        force_angular_sampling: float = None,
+        force_reciprocal_sampling: float = None,
         object_fov_mask: np.ndarray = None,
         **kwargs,
     ):
@@ -246,6 +252,12 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
             Amplitudes come from diffraction patterns shifted with
             the CoM in the upper left corner for each probe unless
             shift is overwritten.
+        force_scan_sampling: float, optional
+            Override DataCube real space scan pixel size calibrations, in Angstrom
+        force_angular_sampling: float, optional
+            Override DataCube reciprocal pixel size calibration, in mrad
+        force_reciprocal_sampling: float, optional
+            Override DataCube reciprocal pixel size calibration, in A^-1
         object_fov_mask: np.ndarray (boolean)
             Boolean mask of FOV. Used to calculate additional shrinkage of object
             If None, probe_overlap intensity is thresholded
@@ -290,6 +302,9 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
         self._intensities = self._extract_intensities_and_calibrations_from_datacube(
             self._datacube,
             require_calibrations=True,
+            force_scan_sampling=force_scan_sampling,
+            force_angular_sampling=force_angular_sampling,
+            force_reciprocal_sampling=force_reciprocal_sampling,
         )
 
         (
@@ -345,15 +360,22 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
             self._scan_positions
         )
 
+        # handle semiangle specified in pixels
+        if self._semiangle_cutoff_pixels:
+            self._semiangle_cutoff = (
+                self._semiangle_cutoff_pixels * self._angular_sampling[0]
+            )
+
         # Object Initialization
         if self._object is None:
-            pad_x, pad_y = self._object_padding_px
-            p, q = np.max(self._positions_px, axis=0)
+            pad_x = self._object_padding_px[0][1]
+            pad_y = self._object_padding_px[1][1]
+            p, q = np.round(np.max(self._positions_px, axis=0))
             p = np.max([np.round(p + pad_x), self._region_of_interest_shape[0]]).astype(
-                int
+                "int"
             )
             q = np.max([np.round(q + pad_y), self._region_of_interest_shape[1]]).astype(
-                int
+                "int"
             )
             if self._object_type == "potential":
                 self._object = xp.zeros((p, q), dtype=xp.float32)
@@ -400,12 +422,10 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
                         self._vacuum_probe_intensity,
                         device=self._device,
                     )
-                    shift_x = self._region_of_interest_shape[0] // 2 - probe_x0
-                    shift_y = self._region_of_interest_shape[1] // 2 - probe_y0
                     self._vacuum_probe_intensity = get_shifted_ar(
                         self._vacuum_probe_intensity,
-                        shift_x,
-                        shift_y,
+                        -probe_x0,
+                        -probe_y0,
                         bilinear=True,
                         device=self._device,
                     )
@@ -444,16 +464,10 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
             # Randomly shift phase of other probes
             for i_probe in range(1, self._num_probes):
                 shift_x = xp.exp(
-                    -2j
-                    * np.pi
-                    * (xp.random.rand() - 0.5)
-                    * ((xp.arange(sx) + 0.5) / sx - 0.5)
+                    -2j * np.pi * (xp.random.rand() - 0.5) * xp.fft.fftfreq(sx)
                 )
                 shift_y = xp.exp(
-                    -2j
-                    * np.pi
-                    * (xp.random.rand() - 0.5)
-                    * ((xp.arange(sy) + 0.5) / sy - 0.5)
+                    -2j * np.pi * (xp.random.rand() - 0.5) * xp.fft.fftfreq(sy)
                 )
                 self._probe[i_probe] = (
                     self._probe[i_probe - 1] * shift_x[:, None] * shift_y[None]
@@ -467,6 +481,7 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
             self._probe = xp.asarray(self._probe, dtype=xp.complex64)
 
         self._probe_initial = self._probe.copy()
+        self._probe_initial_aperture = None  # Doesn't really make sense for mixed-state
 
         self._known_aberrations_array = ComplexProbe(
             energy=self._energy,
@@ -475,8 +490,6 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
             parameters=self._polar_parameters,
             device=self._device,
         )._evaluate_ctf()
-
-        self._known_aberrations_array = xp.fft.ifftshift(self._known_aberrations_array)
 
         # overlaps
         shifted_probes = fft_shift(self._probe[0], self._positions_px_fractional, xp)
@@ -491,7 +504,7 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
         self._object_fov_mask_inverse = np.invert(self._object_fov_mask)
 
         if plot_probe_overlaps:
-            figsize = kwargs.pop("figsize", (9, 4))
+            figsize = kwargs.pop("figsize", (4.5 * self._num_probes + 4, 4))
             cmap = kwargs.pop("cmap", "Greys_r")
             vmin = kwargs.pop("vmin", None)
             vmax = kwargs.pop("vmax", None)
@@ -500,7 +513,7 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
 
             # initial probe
             complex_probe_rgb = Complex2RGB(
-                asnumpy(self._probe[0]),
+                self.probe_centered,
                 vmin=vmin,
                 vmax=vmax,
                 hue_start=hue_start,
@@ -521,44 +534,49 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
                 0,
             ]
 
-            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=figsize)
+            fig, axs = plt.subplots(1, self._num_probes + 1, figsize=figsize)
 
-            ax1.imshow(
-                complex_probe_rgb,
-                extent=probe_extent,
-                **kwargs,
-            )
+            for i in range(self._num_probes):
+                axs[i].imshow(
+                    complex_probe_rgb[i],
+                    extent=probe_extent,
+                    **kwargs,
+                )
+                axs[i].set_ylabel("x [A]")
+                axs[i].set_xlabel("y [A]")
+                axs[i].set_title(f"Initial Probe[{i}]")
 
-            divider = make_axes_locatable(ax1)
-            cax1 = divider.append_axes("right", size="5%", pad="2.5%")
-            add_colorbar_arg(
-                cax1, vmin=vmin, vmax=vmax, hue_start=hue_start, invert=invert
-            )
-            ax1.set_ylabel("x [A]")
-            ax1.set_xlabel("y [A]")
-            ax1.set_title("Initial Probe")
+                divider = make_axes_locatable(axs[i])
+                cax = divider.append_axes("right", size="5%", pad="2.5%")
+                add_colorbar_arg(
+                    cax, vmin=vmin, vmax=vmax, hue_start=hue_start, invert=invert
+                )
 
-            ax2.imshow(
+            axs[-1].imshow(
                 asnumpy(probe_overlap),
                 extent=extent,
                 cmap=cmap,
                 **kwargs,
             )
-            ax2.scatter(
+            axs[-1].scatter(
                 self.positions[:, 1],
                 self.positions[:, 0],
                 s=2.5,
                 color=(1, 0, 0, 1),
             )
-            ax2.set_ylabel("x [A]")
-            ax2.set_xlabel("y [A]")
-            ax2.set_xlim((extent[0], extent[1]))
-            ax2.set_ylim((extent[2], extent[3]))
-            ax2.set_title("Object Field of View")
+            axs[-1].set_ylabel("x [A]")
+            axs[-1].set_xlabel("y [A]")
+            axs[-1].set_xlim((extent[0], extent[1]))
+            axs[-1].set_ylim((extent[2], extent[3]))
+            axs[-1].set_title("Object Field of View")
 
             fig.tight_layout()
 
         self._preprocessed = True
+
+        if self._device == "gpu":
+            xp._default_memory_pool.free_all_blocks()
+            xp.clear_memo()
 
         return self
 
@@ -1021,8 +1039,8 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
 
     def _probe_center_of_mass_constraint(self, current_probe):
         """
-        Ptychographic threshold constraint.
-        Used for avoiding the scaling ambiguity between probe and object.
+        Ptychographic center of mass constraint.
+        Used for centering corner-centered probe intensity.
 
         Parameters
         --------
@@ -1035,15 +1053,12 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
             Constrained probe estimate
         """
         xp = self._xp
-        asnumpy = self._asnumpy
+        probe_intensity = xp.abs(current_probe[0]) ** 2
 
-        probe_center = xp.array(self._region_of_interest_shape) / 2
-        probe_intensity = asnumpy(xp.abs(current_probe[0]) ** 2)
-
-        probe_x0, probe_y0 = get_CoM(probe_intensity)
-        shifted_probe = fft_shift(
-            current_probe, probe_center - xp.array([probe_x0, probe_y0]), xp
+        probe_x0, probe_y0 = get_CoM(
+            probe_intensity, device=self._device, corner_centered=True
         )
+        shifted_probe = fft_shift(current_probe, -xp.array([probe_x0, probe_y0]), xp)
 
         return shifted_probe
 
@@ -1051,6 +1066,7 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
         """
         Ptychographic probe-orthogonalization constraint.
         Used to ensure mixed states are orthogonal to each other.
+        Adapted from https://github.com/AdvancedPhotonSource/tike/blob/main/src/tike/ptycho/probe.py#L690
 
         Parameters
         --------
@@ -1063,10 +1079,25 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
             Orthogonalized probe estimate
         """
         xp = self._xp
+        n_probes = self._num_probes
 
-        return orthogonalize(current_probe.reshape((self._num_probes, -1)), xp).reshape(
-            current_probe.shape
-        )
+        # compute upper half of P* @ P
+        pairwise_dot_product = xp.empty((n_probes, n_probes), dtype=current_probe.dtype)
+
+        for i in range(n_probes):
+            for j in range(i, n_probes):
+                pairwise_dot_product[i, j] = xp.sum(
+                    current_probe[i].conj() * current_probe[j]
+                )
+
+        # compute eigenvectors (effectively cheaper way of computing V* from SVD)
+        _, evecs = xp.linalg.eigh(pairwise_dot_product, UPLO="U")
+        current_probe = xp.tensordot(evecs.T, current_probe, axes=1)
+
+        # sort by real-space intensity
+        intensities = xp.sum(xp.abs(current_probe) ** 2, axis=(-2, -1))
+        intensities_order = xp.argsort(intensities, axis=None)[::-1]
+        return current_probe[intensities_order]
 
     def _constraints(
         self,
@@ -1075,15 +1106,17 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
         current_positions,
         pure_phase_object,
         fix_com,
-        symmetrize_probe,
-        probe_gaussian_filter,
-        probe_gaussian_filter_sigma,
-        probe_gaussian_filter_fix_amplitude,
-        fix_probe_amplitude,
-        fix_probe_amplitude_relative_radius,
-        fix_probe_amplitude_relative_width,
-        fix_probe_fourier_amplitude,
-        fix_probe_fourier_amplitude_threshold,
+        fit_probe_aberrations,
+        fit_probe_aberrations_max_angular_order,
+        fit_probe_aberrations_max_radial_order,
+        constrain_probe_amplitude,
+        constrain_probe_amplitude_relative_radius,
+        constrain_probe_amplitude_relative_width,
+        constrain_probe_fourier_amplitude,
+        constrain_probe_fourier_amplitude_max_width_pixels,
+        constrain_probe_fourier_amplitude_constant_intensity,
+        fix_probe_aperture,
+        initial_probe_aperture,
         fix_positions,
         global_affine_transformation,
         gaussian_filter,
@@ -1112,25 +1145,28 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
             If True, object amplitude is set to unity
         fix_com: bool
             If True, probe CoM is fixed to the center
-        probe_gaussian_filter: bool
-            If True, applies reciprocal-space gaussian filtering on residual aberrations
-        probe_gaussian_filter_sigma: float
-            Standard deviation of gaussian kernel in A^-1
-        probe_gaussian_filter_fix_amplitude: bool
-            If True, only the probe phase is smoothed
-        symmetrize_probe: bool
-            If True, the probe is radially-averaged
-        fix_probe_amplitude: bool
+        fit_probe_aberrations: bool
+            If True, fits the probe aberrations to a low-order expansion
+        fit_probe_aberrations_max_angular_order: bool
+            Max angular order of probe aberrations basis functions
+        fit_probe_aberrations_max_radial_order: bool
+            Max radial order of probe aberrations basis functions
+        constrain_probe_amplitude: bool
             If True, probe amplitude is constrained by top hat function
-        fix_probe_amplitude_relative_radius: float
+        constrain_probe_amplitude_relative_radius: float
             Relative location of top-hat inflection point, between 0 and 0.5
-        fix_probe_amplitude_relative_width: float
+        constrain_probe_amplitude_relative_width: float
             Relative width of top-hat sigmoid, between 0 and 0.5
-        fix_probe_fourier_amplitude: bool
-            If True, probe fourier amplitude is constrained by top hat function
-        fix_probe_fourier_amplitude_threshold: float
-            Threshold value for current probe fourier mask. Value should
-            be between 0 and 1, where higher values provide the most masking.
+        constrain_probe_fourier_amplitude: bool
+            If True, probe aperture is constrained by fitting a sigmoid for each angular frequency.
+        constrain_probe_fourier_amplitude_max_width_pixels: float
+            Maximum pixel width of fitted sigmoid functions.
+        constrain_probe_fourier_amplitude_constant_intensity: bool
+            If True, the probe aperture is additionally constrained to a constant intensity.
+        fix_probe_aperture: bool,
+            If True, probe fourier amplitude is replaced by initial probe aperture.
+        initial_probe_aperture: np.ndarray
+            initial probe aperture to use in replacing probe fourier amplitude
         fix_positions: bool
             If True, positions are not updated
         gaussian_filter: bool
@@ -1195,13 +1231,13 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
             current_probe = self._probe_center_of_mass_constraint(current_probe)
 
         # These constraints don't _really_ make sense for mixed-state
-        if probe_gaussian_filter:
+        if fix_probe_aperture:
             raise NotImplementedError()
-        if symmetrize_probe:
+        elif constrain_probe_fourier_amplitude:
             raise NotImplementedError()
-        if fix_probe_amplitude:
+        if fit_probe_aberrations:
             raise NotImplementedError()
-        elif fix_probe_fourier_amplitude:
+        if constrain_probe_amplitude:
             raise NotImplementedError()
 
         if orthogonalize_probe:
@@ -1224,28 +1260,32 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
         max_iter: int = 64,
         reconstruction_method: str = "gradient-descent",
         reconstruction_parameter: float = 1.0,
+        reconstruction_parameter_a: float = None,
+        reconstruction_parameter_b: float = None,
+        reconstruction_parameter_c: float = None,
         max_batch_size: int = None,
         seed_random: int = None,
-        step_size: float = 0.9,
+        step_size: float = 0.5,
         normalization_min: float = 1,
         positions_step_size: float = 0.9,
         pure_phase_object_iter: int = 0,
         fix_com: bool = True,
         orthogonalize_probe: bool = True,
         fix_probe_iter: int = 0,
-        symmetrize_probe_iter: int = 0,
-        fix_probe_amplitude_iter: int = 0,
-        fix_probe_amplitude_relative_radius: float = 0.5,
-        fix_probe_amplitude_relative_width: float = 0.05,
-        fix_probe_fourier_amplitude_iter: int = 0,
-        fix_probe_fourier_amplitude_threshold: float = 0.9,
+        fix_probe_aperture_iter: int = 0,
+        constrain_probe_amplitude_iter: int = 0,
+        constrain_probe_amplitude_relative_radius: float = 0.5,
+        constrain_probe_amplitude_relative_width: float = 0.05,
+        constrain_probe_fourier_amplitude_iter: int = 0,
+        constrain_probe_fourier_amplitude_max_width_pixels: float = 3.0,
+        constrain_probe_fourier_amplitude_constant_intensity: bool = False,
         fix_positions_iter: int = np.inf,
         global_affine_transformation: bool = True,
         gaussian_filter_sigma: float = None,
         gaussian_filter_iter: int = np.inf,
-        probe_gaussian_filter_sigma: float = None,
-        probe_gaussian_filter_residual_aberrations_iter: int = np.inf,
-        probe_gaussian_filter_fix_amplitude: bool = True,
+        fit_probe_aberrations_iter: int = 0,
+        fit_probe_aberrations_max_angular_order: int = 4,
+        fit_probe_aberrations_max_radial_order: int = 4,
         butterworth_filter_iter: int = np.inf,
         q_lowpass: float = None,
         q_highpass: float = None,
@@ -1267,7 +1307,7 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
             Maximum number of iterations to run
         reconstruction_method: str, optional
             Specifies which reconstruction algorithm to use, one of:
-            "generalized-projection",
+            "generalized-projections",
             "DM_AP" (or "difference-map_alternating-projections"),
             "RAAR" (or "relaxed-averaged-alternating-reflections"),
             "RRR" (or "relax-reflect-reflect"),
@@ -1275,6 +1315,12 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
             "GD" (or "gradient_descent")
         reconstruction_parameter: float, optional
             Reconstruction parameter for various reconstruction methods above.
+        reconstruction_parameter_a: float, optional
+            Reconstruction parameter a for reconstruction_method='generalized-projections'.
+        reconstruction_parameter_b: float, optional
+            Reconstruction parameter b for reconstruction_method='generalized-projections'.
+        reconstruction_parameter_c: float, optional
+            Reconstruction parameter c for reconstruction_method='generalized-projections'.
         max_batch_size: int, optional
             Max number of probes to update at once
         seed_random: int, optional
@@ -1291,19 +1337,20 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
             If True, fixes center of mass of probe
         fix_probe_iter: int, optional
             Number of iterations to run with a fixed probe before updating probe estimate
-        symmetrize_probe_iter: int, optional
-            Number of iterations to run before radially-averaging the probe
-        fix_probe_amplitude: bool
-            If True, probe amplitude is constrained by top hat function
-        fix_probe_amplitude_relative_radius: float
+        fix_probe_aperture_iter: int, optional
+            Number of iterations to run with a fixed probe fourier amplitude before updating probe estimate
+        constrain_probe_amplitude_iter: int, optional
+            Number of iterations to run while constraining the real-space probe with a top-hat support.
+        constrain_probe_amplitude_relative_radius: float
             Relative location of top-hat inflection point, between 0 and 0.5
-        fix_probe_amplitude_relative_width: float
+        constrain_probe_amplitude_relative_width: float
             Relative width of top-hat sigmoid, between 0 and 0.5
-        fix_probe_fourier_amplitude: bool
-            If True, probe fourier amplitude is constrained by top hat function
-        fix_probe_fourier_amplitude_threshold: float
-            Threshold value for current probe fourier mask. Value should
-            be between 0 and 1, where higher values provide the most masking.
+        constrain_probe_fourier_amplitude_iter: int, optional
+            Number of iterations to run while constraining the Fourier-space probe by fitting a sigmoid for each angular frequency.
+        constrain_probe_fourier_amplitude_max_width_pixels: float
+            Maximum pixel width of fitted sigmoid functions.
+        constrain_probe_fourier_amplitude_constant_intensity: bool
+            If True, the probe aperture is additionally constrained to a constant intensity.
         fix_positions_iter: int, optional
             Number of iterations to run with fixed positions before updating positions estimate
         global_affine_transformation: bool, optional
@@ -1312,12 +1359,12 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
             Standard deviation of gaussian kernel in A
         gaussian_filter_iter: int, optional
             Number of iterations to run using object smoothness constraint
-        probe_gaussian_filter_sigma: float, optional
-            Standard deviation of probe gaussian kernel in A^-1
-        probe_gaussian_filter_residual_aberrations_iter: int, optional
-            Number of iterations to run using probe smoothing of residual aberrations
-        probe_gaussian_filter_fix_amplitude: bool
-            If True, only the probe phase is smoothed
+        fit_probe_aberrations_iter: int, optional
+            Number of iterations to run while fitting the probe aberrations to a low-order expansion
+        fit_probe_aberrations_max_angular_order: bool
+            Max angular order of probe aberrations basis functions
+        fit_probe_aberrations_max_radial_order: bool
+            Max radial order of probe aberrations basis functions
         butterworth_filter_iter: int, optional
             Number of iterations to run using high-pass butteworth filter
         q_lowpass: float
@@ -1352,17 +1399,23 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
 
         # Reconstruction method
 
-        if reconstruction_method == "generalized-projection":
-            if np.array(reconstruction_parameter).shape != (3,):
+        if reconstruction_method == "generalized-projections":
+            if (
+                reconstruction_parameter_a is None
+                or reconstruction_parameter_b is None
+                or reconstruction_parameter_c is None
+            ):
                 raise ValueError(
                     (
-                        "reconstruction_parameter must be a list of three numbers "
-                        "when using `reconstriction_method`=generalized-projection."
+                        "reconstruction_parameter_a/b/c must all be specified "
+                        "when using reconstruction_method='generalized-projections'."
                     )
                 )
 
             use_projection_scheme = True
-            projection_a, projection_b, projection_c = reconstruction_parameter
+            projection_a = reconstruction_parameter_a
+            projection_b = reconstruction_parameter_b
+            projection_c = reconstruction_parameter_c
             step_size = None
         elif (
             reconstruction_method == "DM_AP"
@@ -1421,7 +1474,8 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
         else:
             raise ValueError(
                 (
-                    "reconstruction_method must be one of 'DM_AP' (or 'difference-map_alternating-projections'), "
+                    "reconstruction_method must be one of 'generalized-projections', "
+                    "'DM_AP' (or 'difference-map_alternating-projections'), "
                     "'RAAR' (or 'relaxed-averaged-alternating-reflections'), "
                     "'RRR' (or 'relax-reflect-reflect'), "
                     "'SUPERFLIP' (or 'charge-flipping'), "
@@ -1627,19 +1681,21 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
                 self._probe,
                 self._positions_px,
                 fix_com=fix_com and a0 >= fix_probe_iter,
-                symmetrize_probe=a0 < symmetrize_probe_iter,
-                probe_gaussian_filter=a0
-                < probe_gaussian_filter_residual_aberrations_iter
-                and probe_gaussian_filter_sigma is not None,
-                probe_gaussian_filter_sigma=probe_gaussian_filter_sigma,
-                probe_gaussian_filter_fix_amplitude=probe_gaussian_filter_fix_amplitude,
-                fix_probe_amplitude=a0 < fix_probe_amplitude_iter
+                constrain_probe_amplitude=a0 < constrain_probe_amplitude_iter
                 and a0 >= fix_probe_iter,
-                fix_probe_amplitude_relative_radius=fix_probe_amplitude_relative_radius,
-                fix_probe_amplitude_relative_width=fix_probe_amplitude_relative_width,
-                fix_probe_fourier_amplitude=a0 < fix_probe_fourier_amplitude_iter
+                constrain_probe_amplitude_relative_radius=constrain_probe_amplitude_relative_radius,
+                constrain_probe_amplitude_relative_width=constrain_probe_amplitude_relative_width,
+                constrain_probe_fourier_amplitude=a0
+                < constrain_probe_fourier_amplitude_iter
                 and a0 >= fix_probe_iter,
-                fix_probe_fourier_amplitude_threshold=fix_probe_fourier_amplitude_threshold,
+                constrain_probe_fourier_amplitude_max_width_pixels=constrain_probe_fourier_amplitude_max_width_pixels,
+                constrain_probe_fourier_amplitude_constant_intensity=constrain_probe_fourier_amplitude_constant_intensity,
+                fit_probe_aberrations=a0 < fit_probe_aberrations_iter
+                and a0 >= fix_probe_iter,
+                fit_probe_aberrations_max_angular_order=fit_probe_aberrations_max_angular_order,
+                fit_probe_aberrations_max_radial_order=fit_probe_aberrations_max_radial_order,
+                fix_probe_aperture=a0 < fix_probe_aperture_iter,
+                initial_probe_aperture=self._probe_initial_aperture,
                 fix_positions=a0 < fix_positions_iter,
                 global_affine_transformation=global_affine_transformation,
                 gaussian_filter=a0 < gaussian_filter_iter
@@ -1663,12 +1719,16 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
             self.error_iterations.append(error.item())
             if store_iterations:
                 self.object_iterations.append(asnumpy(self._object.copy()))
-                self.probe_iterations.append(asnumpy(self._probe.copy()))
+                self.probe_iterations.append(self.probe_centered)
 
         # store result
         self.object = asnumpy(self._object)
-        self.probe = asnumpy(self._probe)
+        self.probe = self.probe_centered
         self.error = error.item()
+
+        if self._device == "gpu":
+            xp._default_memory_pool.free_all_blocks()
+            xp.clear_memo()
 
         return self
 
@@ -1779,12 +1839,20 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
             0,
         ]
 
-        probe_extent = [
-            0,
-            self.sampling[1] * self._region_of_interest_shape[1],
-            self.sampling[0] * self._region_of_interest_shape[0],
-            0,
-        ]
+        if plot_fourier_probe:
+            probe_extent = [
+                -self.angular_sampling[1] * self._region_of_interest_shape[1] / 2,
+                self.angular_sampling[1] * self._region_of_interest_shape[1] / 2,
+                self.angular_sampling[0] * self._region_of_interest_shape[0] / 2,
+                -self.angular_sampling[0] * self._region_of_interest_shape[0] / 2,
+            ]
+        elif plot_probe:
+            probe_extent = [
+                0,
+                self.sampling[1] * self._region_of_interest_shape[1],
+                self.sampling[0] * self._region_of_interest_shape[0],
+                0,
+            ]
 
         if plot_convergence:
             if plot_probe or plot_fourier_probe:
@@ -1849,20 +1917,22 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
                 probe_array = Complex2RGB(
                     self.probe_fourier[0], hue_start=hue_start, invert=invert
                 )
-                ax.set_title("Reconstructed Fourier probe")
+                ax.set_title("Reconstructed Fourier probe[0]")
+                ax.set_ylabel("kx [mrad]")
+                ax.set_xlabel("ky [mrad]")
             else:
                 probe_array = Complex2RGB(
                     self.probe[0], hue_start=hue_start, invert=invert
                 )
-                ax.set_title("Reconstructed probe")
+                ax.set_title("Reconstructed probe[0]")
+                ax.set_ylabel("x [A]")
+                ax.set_xlabel("y [A]")
 
             im = ax.imshow(
                 probe_array,
                 extent=probe_extent,
                 **kwargs,
             )
-            ax.set_ylabel("x [A]")
-            ax.set_xlabel("y [A]")
 
             if cbar:
                 divider = make_axes_locatable(ax)
@@ -2006,12 +2076,20 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
             0,
         ]
 
-        probe_extent = [
-            0,
-            self.sampling[1] * self._region_of_interest_shape[1],
-            self.sampling[0] * self._region_of_interest_shape[0],
-            0,
-        ]
+        if plot_fourier_probe:
+            probe_extent = [
+                -self.angular_sampling[1] * self._region_of_interest_shape[1] / 2,
+                self.angular_sampling[1] * self._region_of_interest_shape[1] / 2,
+                self.angular_sampling[0] * self._region_of_interest_shape[0] / 2,
+                -self.angular_sampling[0] * self._region_of_interest_shape[0] / 2,
+            ]
+        elif plot_probe:
+            probe_extent = [
+                0,
+                self.sampling[1] * self._region_of_interest_shape[1],
+                self.sampling[0] * self._region_of_interest_shape[0],
+                0,
+            ]
 
         if plot_convergence:
             if plot_probe or plot_fourier_probe:
@@ -2066,25 +2144,30 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
             for n, ax in enumerate(grid):
                 if plot_fourier_probe:
                     probe_array = Complex2RGB(
-                        asnumpy(self._return_fourier_probe(probes[grid_range[n]][0])),
+                        asnumpy(
+                            self._return_fourier_probe_from_centered_probe(
+                                probes[grid_range[n]][0]
+                            )
+                        ),
                         hue_start=hue_start,
                         invert=invert,
                     )
-                    ax.set_title(f"Iter: {grid_range[n]} Fourier probe")
+                    ax.set_title(f"Iter: {grid_range[n]} Fourier probe[0]")
+                    ax.set_ylabel("kx [mrad]")
+                    ax.set_xlabel("ky [mrad]")
                 else:
                     probe_array = Complex2RGB(
                         probes[grid_range[n]][0], hue_start=hue_start, invert=invert
                     )
-                    ax.set_title(f"Iter: {grid_range[n]} probe")
+                    ax.set_title(f"Iter: {grid_range[n]} probe[0]")
+                    ax.set_ylabel("x [A]")
+                    ax.set_xlabel("y [A]")
 
                 im = ax.imshow(
                     probe_array,
                     extent=probe_extent,
                     **kwargs,
                 )
-
-                ax.set_ylabel("x [A]")
-                ax.set_xlabel("y [A]")
 
                 if cbar:
                     add_colorbar_arg(

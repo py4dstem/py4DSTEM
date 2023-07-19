@@ -1,146 +1,278 @@
 import gdown
-from typing import Union
-import pathlib
 import os
 
 
-# Built-in sample datasets
+### File IDs
 
 # single files
-sample_file_ids = {
-    'FCU-Net' : '1-KX0saEYfhZ9IJAOwabH38PCVtfXidJi',
-    'sample_diffraction_pattern':'1ymYMnuDC0KV6dqduxe2O1qafgSd0jjnU',
-    'Au_sim':'1PmbCYosA1eYydWmmZebvf6uon9k_5g_S',
-    'carbon_nanotube':'1bHv3u61Cr-y_GkdWHrJGh1lw2VKmt3UM',
-    'Si_SiGe_exp':'1fXNYSGpe6w6E9RBA-Ai_owZwoj3w8PNC',
-    'Si_SiGe_probe':'141Tv0YF7c5a-MCrh3CkY_w4FgWtBih80',
-    'Si_SiGe_EELS_strain':'1klkecq8IuEOYB-bXchO7RqOcgCl4bmDJ',
-    'AuAgPd_wire':'1OQYW0H6VELsmnLTcwicP88vo2V5E3Oyt',
-    'AuAgPd_wire_probe':'17OduUKpxVBDumSK_VHtnc2XKkaFVN8kq',
-    'polycrystal_2D_WS2':'1AWB3-UTPiTR9dgrEkNFD7EJYsKnbEy0y',
-    'WS2cif':'13zBl6aFExtsz_sew-L0-_ALYJfcgHKjo',
-    'polymers':'1lK-TAMXN1MpWG0Q3_4vss_uEZgW2_Xh7',
+file_ids = {
+    'sample_diffraction_pattern' : (
+        'a_diffraction_pattern.h5',
+        '1ymYMnuDC0KV6dqduxe2O1qafgSd0jjnU',
+    ),
+    'Au_sim' : (
+        'Au_sim.h5',
+        '1PmbCYosA1eYydWmmZebvf6uon9k_5g_S',
+    ),
+    'carbon_nanotube' : (
+        'carbon_nanotube.h5',
+        '1bHv3u61Cr-y_GkdWHrJGh1lw2VKmt3UM',
+    ),
+    'Si_SiGe_exp' : (
+        'Si_SiGe_exp.h5',
+        '1fXNYSGpe6w6E9RBA-Ai_owZwoj3w8PNC',
+    ),
+    'Si_SiGe_probe' : (
+        'Si_SiGe_probe.h5',
+        '141Tv0YF7c5a-MCrh3CkY_w4FgWtBih80',
+    ),
+    'Si_SiGe_EELS_strain' : (
+        'Si_SiGe_EELS_strain.h5',
+        '1klkecq8IuEOYB-bXchO7RqOcgCl4bmDJ',
+    ),
+    'AuAgPd_wire' : (
+        'AuAgPd_wire.h5',
+        '1OQYW0H6VELsmnLTcwicP88vo2V5E3Oyt',
+    ),
+    'AuAgPd_wire_probe' : (
+        'AuAgPd_wire_probe.h5',
+        '17OduUKpxVBDumSK_VHtnc2XKkaFVN8kq',
+    ),
+    'polycrystal_2D_WS2' : (
+        'polycrystal_2D_WS2.h5',
+        '1AWB3-UTPiTR9dgrEkNFD7EJYsKnbEy0y',
+    ),
+    'WS2cif' : (
+        'WS2.cif',
+        '13zBl6aFExtsz_sew-L0-_ALYJfcgHKjo',
+    ),
+    'polymers' : (
+        'polymers.h5',
+        '1lK-TAMXN1MpWG0Q3_4vss_uEZgW2_Xh7',
+    ),
+    'vac_probe' : (
+        'vac_probe.h5',
+        '1QTcSKzZjHZd1fDimSI_q9_WsAU25NIXe',
+    ),
+    'small_dm3_3Dstack' : (
+        'small_dm3_3Dstack.dm3',
+        '1B-xX3F65JcWzAg0v7f1aVwnawPIfb5_o'
+    ),
+    'FCU-Net' : (
+        'filename.name',
+        '1-KX0saEYfhZ9IJAOwabH38PCVtfXidJi',
+    ),
+    'small_datacube' : (
+        'small_datacube.dm4',
+        # TODO - change this file to something smaller - ideally e.g. shape (4,8,256,256) ~= 4.2MB'
+        '1QTcSKzZjHZd1fDimSI_q9_WsAU25NIXe'
+    ),
+    'legacy_v0.9' : (
+        'legacy_v0.9_simAuNanoplatelet_bin.h5',
+        '1AIRwpcj87vK3ubLaKGj1UiYXZByD2lpu'
+    ),
+    'legacy_v0.13' : (
+        'legacy_v0.13.h5',
+        '1VEqUy0Gthama7YAVkxwbjQwdciHpx8rA'
+    ),
+    'legacy_v0.14' : (
+        'legacy_v0.14.h5',
+        '1eOTEJrpHnNv9_DPrWgZ4-NTN21UbH4aR',
+    ),
+    'test_realslice_io' : (
+        'test_realslice_io.h5',
+        '1siH80-eRJwG5R6AnU4vkoqGWByrrEz1y'
+    ),
+    'test_arina_master' : (
+        'STO_STEM_bench_20us_master.h5',
+        '1q_4IjFuWRkw5VM84NhxrNTdIq4563BOC'
+    ),
+    'test_arina_01' : (
+        'STO_STEM_bench_20us_data_000001.h5',
+        '1_3Dbm22-hV58iffwK9x-3vqJUsEXZBFQ'
+    ),
+    'test_arina_02' : (
+        'STO_STEM_bench_20us_data_000002.h5',
+        '1x29RzHLnCzP0qthLhA1kdlUQ09ENViR8'
+    ),
+    'test_arina_03' : (
+        'STO_STEM_bench_20us_data_000003.h5',
+        '1qsbzdEVD8gt4DYKnpwjfoS_Mg4ggObAA'
+    ),
+    'test_arina_04' : (
+        'STO_STEM_bench_20us_data_000004.h5',
+        '1Lcswld0Y9fNBk4-__C9iJbc854BuHq-h'
+    ),
+    'test_arina_05' : (
+        'STO_STEM_bench_20us_data_000005.h5',
+        '13YTO2ABsTK5nObEr7RjOZYCV3sEk3gt9'
+    ),
+    'test_arina_06' : (
+        'STO_STEM_bench_20us_data_000006.h5',
+        '1RywPXt6HRbCvjgjSuYFf60QHWlOPYXwy'
+    ),
+    'test_arina_07' : (
+        'STO_STEM_bench_20us_data_000007.h5',
+        '1GRoBecCvAUeSIujzsPywv1vXKSIsNyoT'
+    ),
+    'test_arina_08' : (
+        'STO_STEM_bench_20us_data_000008.h5',
+        '1sTFuuvgKbTjZz1lVUfkZbbTDTQmwqhuU'
+    ),
+    'test_arina_09' : (
+        'STO_STEM_bench_20us_data_000009.h5',
+        '1JmBiMg16iMVfZ5wz8z_QqcNPVRym1Ezh'
+    ),
+    'test_arina_10' : (
+        'STO_STEM_bench_20us_data_000010.h5',
+        '1_90xAfclNVwMWwQ-YKxNNwBbfR1nfHoB'
+    ),
+    'test_strain' : (
+        'downsample_Si_SiGe_analysis_braggdisks_cal.h5',
+        '1bYgDdAlnWHyFmY-SwN3KVpMutWBI5MhP'
+    )
 }
 
 # collections of files
-sample_collection_ids = {
-    'unit_test_data' : (
-        ('dm_test_file.dm3', '1RxI1QY6vYMDqqMVPt5GBN6Q_iCwHFU4B'),
-     ),
+collection_ids = {
     'tutorials' : (
-        ('simulated_Au_single+polyXtal.h5', sample_file_ids['Au_sim']),
-        ('carbon_nanotube.h5', sample_file_ids['carbon_nanotube']),
-        ('Si_SiGe_exp.h5',sample_file_ids['Si_SiGe_exp']),
-        ('Si_SiGe_probe.h5',sample_file_ids['Si_SiGe_probe']),
-        ('Si_SiGe_EELS_strain.h5',sample_file_ids['Si_SiGe_EELS_strain']),
-        ('AuAgPd_wire.h5',sample_file_ids['AuAgPd_wire']),
-        ('AuAgPd_wire_probe.h5',sample_file_ids['AuAgPd_wire_probe']),
-        ('polycrystal_2D_WS2.h5',sample_file_ids['polycrystal_2D_WS2']),
-        ('WS2.cif',sample_file_ids['WS2cif']),
-        ('polymers.h5',sample_file_ids['polymers']),
+        'Au_sim',
+        'carbon_nanotube',
+        'Si_SiGe_exp',
+        'Si_SiGe_probe',
+        'Si_SiGe_EELS_strain',
+        'AuAgPd_wire',
+        'AuAgPd_wire_probe',
+        'polycrystal_2D_WS2',
+        'WS2cif',
+        'polymers',
+        'vac_probe',
     ),
+    'test_io' : (
+        'small_dm3_3Dstack',
+        'vac_probe',
+        'legacy_v0.9',
+        'legacy_v0.13',
+        'legacy_v0.14',
+        'test_realslice_io',
+    ),
+    'test_arina' : (
+        'test_arina_master',
+        'test_arina_01',
+        'test_arina_02',
+        'test_arina_03',
+        'test_arina_04',
+        'test_arina_05',
+        'test_arina_06',
+        'test_arina_07',
+        'test_arina_08',
+        'test_arina_09',
+        'test_arina_10',
+    ),
+    'test_braggvectors' : (
+        'Au_sim',
+    ),
+    'strain' : (
+        'test_strain',
+    )
 }
 
+def get_sample_file_ids():
+    return {
+        'files' : file_ids.keys(),
+        'collections' : collection_ids.keys()
+    }
 
-def download_file_from_google_drive(id_, destination, overwrite=False):
+
+
+### Downloader
+
+def gdrive_download(
+    id_,
+    destination = None,
+    overwrite = False,
+    filename = None,
+    verbose = True,
+    ):
     """
-    Downloads a file or collection of files from google drive to the
-    destination file path.
+    Downloads a file or collection of files from google drive.
 
-    Args:
-        id_ (str): File ID for the desired file.  May be:
-            - the file id, i.e. for
-              https://drive.google.com/file/d/1bHv3u61Cr-y_GkdWHrJGh1lw2VKmt3UM/
-              id='1bHv3u61Cr-y_GkdWHrJGh1lw2VKmt3UM'
-            - the complete URL,
-            - a special string denoting a sample dataset or collection of
-              datasets. For a list of sample datasets and their keys, run
-              get_sample_data_ids().
-        destination (str or Path): path file will be downloaded to. For
-            collections of files, this should point to an existing directory;
-            a subdirectory will be created inside this directory whose name
-            will be given by `id_`, and the colletion of files will be placed
-            inside that subdirectory. If a subdirectory of this name already
-            exists, aborts or deletes and overwrite the entire subdirectory,
-            depending on the value of `overwrite`.
-        overwrite (bool): turn overwrite protection on/off
+    Parameters
+    ----------
+    id_ : str
+        File ID for the desired file.  May be either a key from the list
+        of files and collections of files accessible at get_sample_file_ids(),
+        or a complete url, or the portions of a google drive link specifying
+        it's google file ID, i.e. for the address
+        https://drive.google.com/file/d/1bHv3u61Cr-y_GkdWHrJGh1lw2VKmt3UM/,
+        the id string '1bHv3u61Cr-y_GkdWHrJGh1lw2VKmt3UM'.
+    destination : None or str
+        The location files are downloaded to. If a collection of files has been
+        specified, creates a new directory at the specified destination and
+        downloads the collection there.  If None, downloads to the current
+        working directory. Otherwise must be a string or Path pointint to
+        a valid location on the filesystem.
+    overwrite : bool
+        Turns overwrite protection on/off.
+    filename : None or str
+        Used only if `id_` is a url or gdrive id. In these cases, specifies
+        the name of the output file.  If left as None, saves to
+        'gdrivedownload.file'. If `id_` is a key from the sample file id list,
+        this parameter is ignored.
+    verbose : bool
+        Toggles verbose output
     """
-    # handle paths
+    # parse destination
+    if destination is None:
+        destination = os.getcwd()
+    assert(os.path.exists(destination)), f"`destination` must exist on filesystem. Received {destination}"
 
-    # for collections of files
-    if id_ in sample_collection_ids.keys():
+    # download single files
+    if id_ not in collection_ids:
 
-        # check if directory exists
-        assert os.path.exists(destination), "specified directory does not exist; check filepath"
-
-        # update the path with a new sub-directory name
-        destination = os.path.join(destination, id_)
-
-        # check if it already exists
-        if os.path.exists(destination):
-
-            # check if it contains any files
-            paths = os.listdir(destination)
-            if len(paths) > 0:
-
-                # check `overwrite`
-                if overwrite:
-                    for p in paths:
-                        os.remove(os.path.join(destination, p))
-                else:
-                    raise Exception('a populated directory exists at the specified location. to overwrite set `overwrite=True`.')
-
-        # if it doesn't exist, make a new directory
+        # assign the name and id
+        kwargs = {
+            'fuzzy' : True
+        }
+        if id_ in file_ids:
+            f = file_ids[id_]
+            filename = f[0]
+            kwargs['id'] = f[1]
         else:
+            filename = 'gdrivedownload.file' if filename is None else filename
+            kwargs['url'] = id_
+
+        # download
+        kwargs['output'] = os.path.join(destination, filename)
+        if not(overwrite) and os.path.exists(kwargs['output']):
+            if verbose:
+                print(f"A file already exists at {kwargs['output']}, skipping...")
+        else:
+            gdown.download( **kwargs )
+
+    # download a collections of files
+    else:
+
+        # set destination
+        destination = os.path.join(destination, id_)
+        if not os.path.exists(destination):
             os.mkdir(destination)
 
-        # get the files
-        for file_name,file_id in sample_collection_ids[id_]:
-            if file_id[:4].lower() == 'http':
-                gdown.download(
-                    url = file_id,
-                    output = os.path.join(destination, file_name),
-                    fuzzy = True
-                )
+        # loop
+        for x in collection_ids[id_]:
+            file_name,file_id = file_ids[x]
+            output = os.path.join(destination, file_name)
+            # download
+            if not(overwrite) and os.path.exists(output):
+                if verbose:
+                    print(f"A file already exists at {output}, skipping...")
             else:
                 gdown.download(
                     id = file_id,
-                    output = os.path.join(destination, file_name),
+                    output = output,
                     fuzzy = True
                 )
 
-        return None
-
-
-    # for single files
-
-    # Check and handle if a file at the destination filepath exists
-    if os.path.exists(destination):
-
-        # check `overwrite`
-        if overwrite == True:
-            print(f"File already existed, downloading and overwriting")
-            os.remove(destination)
-        else:
-            raise Exception('File already exists; aborting. To overwrite, use `overwrite=True`.')
-
-    # Check if the id_ is a key pointing to a known sample dataset
-    if id_ in sample_file_ids.keys():
-        id_ = sample_file_ids[id_]
-
-    # Check if `id_` is a file ID or a URL, and download
-    if id_[:4].lower()=='http':
-        gdown.download(url=id_,output=destination,fuzzy=True)
-    else:
-        gdown.download(id=id_,output=destination,fuzzy=True)
-
-    return None
-
-
-
-def get_sample_data_ids():
-    return {'files' : sample_file_ids.keys(),
-            'collections' : sample_collection_ids.keys()}
 
 
 

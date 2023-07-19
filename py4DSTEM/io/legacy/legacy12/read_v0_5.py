@@ -9,11 +9,11 @@ from emdfile import (
     PointList,
     PointListArray
 )
-from py4DSTEM.classes import (
-    DataCube,
+from py4DSTEM.data import (
     DiffractionSlice,
     RealSlice,
 )
+from py4DSTEM.datacube import DataCube
 from emdfile import tqdmnd
 
 def read_v0_5(fp, **kwargs):
