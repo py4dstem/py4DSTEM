@@ -33,4 +33,4 @@ jobs:
                 python -c "import py4DSTEM; print(py4DSTEM.__version__)"
             - name: Check machine arch
               run: |
-                python -c "import os; print(os.uname())"
+                python -c "import platform; print(platform.machine())"
