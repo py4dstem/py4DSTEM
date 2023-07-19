@@ -3,20 +3,20 @@ on: [push, pull_request, workflow_call]
 jobs:
 
     test-python-os-versions:
-        name: Check Python ${{ matrix.python-version }} on ${{ matrix.os }} on ${{ matrix.architecture }}
-        runs-on: ${{ matrix.os }}
-        continue-on-error: ${{ matrix.allow_failure == 'true' }}
+        name: Check Python ${{ matrix.python-version }} on ${{ matrix.runs-on }} on ${{ matrix.architecture }}
+        continue-on-error: ${{ matrix.allow_failure }}
+        runs-on: ${{ matrix.runs-on }}
         strategy:
             fail-fast: false
             matrix:
                 allow_failure: [false]
-                os: [ubuntu-latest, windows-latest, macos-latest]
+                runs-on: [ubuntu-latest, windows-latest, macos-latest]
                 architecture: [x86_64]
                 python-version: ["3.9", "3.10", "3.11"]
                 include:
                     - python-version: "3.10"
-                    - architecture: [arm64]
-                    - runs-on: macos-latest
+                      architecture: [arm64]
+                      runs-on: macos-latest
                       allow_failure: true
         steps:
             - uses: actions/checkout@v3
