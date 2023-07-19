@@ -1,4 +1,4 @@
-name: Install Checker
+name: Install Checker Dev
 on: 
   push:
     branches: [ "dev" ]
