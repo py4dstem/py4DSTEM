@@ -15,7 +15,7 @@ jobs:
                 python-version: ["3.9", "3.10", "3.11"]
                 include:
                     - python-version: "3.10"
-                      architecture: [arm64]
+                      architecture: [aarch64]
                       runs-on: macos-latest
                       allow_failure: true
         steps:
