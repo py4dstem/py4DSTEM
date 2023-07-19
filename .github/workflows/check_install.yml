@@ -12,9 +12,9 @@ jobs:
                 allow_failure: [false]
                 runs-on: [ubuntu-latest, windows-latest, macos-latest]
                 architecture: [x86_64]
-                python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
+                python-version: ["3.9", "3.10", "3.11",]
                 include:
-                    - python-version: "3.12.0-beta.4"
+                    - python-version: ["3.8", "3.12.0-beta.4"]
                       runs-on: ubuntu-latest
                       allow_failure: true
                 # Currently no public runners available for this but this or arm64 should work next time
