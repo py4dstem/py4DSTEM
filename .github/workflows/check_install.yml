@@ -31,3 +31,6 @@ jobs:
             - name: Check installation
               run: |
                 python -c "import py4DSTEM; print(py4DSTEM.__version__)"
+            - name: Check machine arch
+              run: |
+                python -c "import os; print(os.uname())"
