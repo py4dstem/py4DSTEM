@@ -1,5 +1,13 @@
-name: Install Checker
-on: [push, pull_request, workflow_call]
+name: Install Checker Quick
+on: 
+  push:
+    branches-ignore:
+      - main
+      - dev
+  pull_request:
+    branches-ignore:
+      - main
+      - dev
 jobs:
 
     test-python-os-versions:
@@ -10,17 +18,9 @@ jobs:
             fail-fast: false
             matrix:
                 allow_failure: [false]
-                runs-on: [ubuntu-latest, windows-latest, macos-latest]
+                runs-on: [ubuntu-latest] 
                 architecture: [x86_64]
-                python-version: ["3.9", "3.10", "3.11",]
-                include:
-                    - python-version: "3.8" 
-                      runs-on: ubuntu-latest
-                      allow_failure: true
-                    - python-version: "3.12.0-beta.4"
-                      runs-on: ubuntu-latest
-                      allow_failure: true
-                      
+                python-version: ["3.10"]
                 # Currently no public runners available for this but this or arm64 should work next time
                 # include:
                 #     - python-version: "3.10"
@@ -40,6 +40,6 @@ jobs:
             - name: Check installation
               run: |
                 python -c "import py4DSTEM; print(py4DSTEM.__version__)"
-            - name: Check machine arch
-              run: |
-                python -c "import platform; print(platform.machine())"
+            # - name: Check machine arch
+            #   run: |
+            #     python -c "import platform; print(platform.machine())"
