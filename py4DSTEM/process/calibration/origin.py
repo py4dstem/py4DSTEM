@@ -6,55 +6,55 @@ from scipy.ndimage import gaussian_filter
 from scipy.optimize import leastsq
 
 from emdfile import tqdmnd, PointListArray
-from py4DSTEM.classes import DataCube
+from py4DSTEM.datacube import DataCube
 from py4DSTEM.process.calibration.probe import get_probe_size
 from py4DSTEM.process.fit import plane,parabola,bezier_two,fit_2D
 from py4DSTEM.process.utils import get_CoM, add_to_2D_array_from_floats, get_maxima_2D
 
 
-
-# origin setting decorators
-
-def set_measured_origin(fun):
-    """
-    This is intended as a decorator function to wrap other functions which measure
-    the position of the origin.  If some function `get_the_origin` returns the
-    position of the origin as a tuple of two (R_Nx,R_Ny)-shaped arrays, then
-    decorating the function definition like
-
-        >>> @measure_origin
-        >>> def get_the_origin(...):
-
-    will make the function also save those arrays as the measured origin in the
-    calibration associated with the data used for the measurement. Any existing
-    measured origin value will be overwritten.
-
-    For the wrapper to work, the decorated function's first argument must have
-    a .calibration property, and its first two return values must be qx0,qy0.
-    """
-    @functools.wraps(fun)
-    def wrapper(*args,**kwargs):
-        ans = fun(*args,**kwargs)
-        data = args[0]
-        cali = data.calibration
-        cali.set_origin_meas((ans[0],ans[1]))
-        return ans
-    return wrapper
-
-
-def set_fit_origin(fun):
-    """
-    See docstring for `set_measured_origin`
-    """
-    @functools.wraps(fun)
-    def wrapper(*args,**kwargs):
-        ans = fun(*args,**kwargs)
-        data = args[0]
-        cali = data.calibration
-        cali.set_origin((ans[0],ans[1]))
-        return ans
-    return wrapper
-
+# 
+# # origin setting decorators
+# 
+# def set_measured_origin(fun):
+#     """
+#     This is intended as a decorator function to wrap other functions which measure
+#     the position of the origin.  If some function `get_the_origin` returns the
+#     position of the origin as a tuple of two (R_Nx,R_Ny)-shaped arrays, then
+#     decorating the function definition like
+# 
+#         >>> @measure_origin
+#         >>> def get_the_origin(...):
+# 
+#     will make the function also save those arrays as the measured origin in the
+#     calibration associated with the data used for the measurement. Any existing
+#     measured origin value will be overwritten.
+# 
+#     For the wrapper to work, the decorated function's first argument must have
+#     a .calibration property, and its first two return values must be qx0,qy0.
+#     """
+#     @functools.wraps(fun)
+#     def wrapper(*args,**kwargs):
+#         ans = fun(*args,**kwargs)
+#         data = args[0]
+#         cali = data.calibration
+#         cali.set_origin_meas((ans[0],ans[1]))
+#         return ans
+#     return wrapper
+# 
+# 
+# def set_fit_origin(fun):
+#     """
+#     See docstring for `set_measured_origin`
+#     """
+#     @functools.wraps(fun)
+#     def wrapper(*args,**kwargs):
+#         ans = fun(*args,**kwargs)
+#         data = args[0]
+#         cali = data.calibration
+#         cali.set_origin((ans[0],ans[1]))
+#         return ans
+#     return wrapper
+# 
 
 
 
@@ -73,11 +73,12 @@ def fit_origin(
 ):
     """
     Fits the position of the origin of diffraction space to a plane or parabola,
-    given some 2D arrays (qx0_meas,qy0_meas) of measured center positions, optionally
-    masked by the Boolean array `mask`. The 2D data arrays may be passed directly as
-    a 2-tuple to the arg `data`, or, if `data` is either a DataCube or Calibration
-    instance, they will be retreived automatically. If a DataCube or Calibration are
-    passed, fitted origin and residuals are stored there directly.
+    given some 2D arrays (qx0_meas,qy0_meas) of measured center positions,
+    optionally masked by the Boolean array `mask`. The 2D data arrays may be
+    passed directly as a 2-tuple to the arg `data`, or, if `data` is either a
+    DataCube or Calibration instance, they will be retreived automatically. If a
+    DataCube or Calibration are passed, fitted origin and residuals are stored
+    there directly.
 
     Args:
         data (2-tuple of 2d arrays): the measured origin position (qx0,qy0)
@@ -133,14 +134,14 @@ def fit_origin(
 
         # Fit data
         if mask is None:
-            popt_x, pcov_x, qx0_fit = fit_2D(
+            popt_x, pcov_x, qx0_fit, _ = fit_2D(
                 f,
                 qx0_meas,
                 robust=robust,
                 robust_steps=robust_steps,
                 robust_thresh=robust_thresh,
             )
-            popt_y, pcov_y, qy0_fit = fit_2D(
+            popt_y, pcov_y, qy0_fit, _ = fit_2D(
                 f,
                 qy0_meas,
                 robust=robust,
@@ -149,7 +150,7 @@ def fit_origin(
             )
 
         else:
-            popt_x, pcov_x, qx0_fit = fit_2D(
+            popt_x, pcov_x, qx0_fit, _ = fit_2D(
                 f,
                 qx0_meas,
                 robust=robust,
@@ -157,7 +158,7 @@ def fit_origin(
                 robust_thresh=robust_thresh,
                 data_mask=mask == True,
             )
-            popt_y, pcov_y, qy0_fit = fit_2D(
+            popt_y, pcov_y, qy0_fit, _ = fit_2D(
                 f,
                 qy0_meas,
                 robust=robust,
@@ -356,6 +357,5 @@ def get_origin_beamstop(datacube: DataCube, mask: np.ndarray, **kwargs):
         qy0[rx,ry] = y
 
     return qx0, qy0
-
 
 

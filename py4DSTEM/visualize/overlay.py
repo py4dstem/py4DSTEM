@@ -437,7 +437,7 @@ def add_bragg_index_labels(ax,d):
     Adds labels for indexed bragg directions to a plot, using the parameters in dict d.
 
     The dictionary d has required and optional parameters as follows:
-        braggdirections (req'd) (PointList) the Bragg directions. This PointList must have
+        bragg_directions (req'd) (PointList) the Bragg directions. This PointList must have
                         the fields 'qx','qy','h', and 'k', and may optionally have 'l'
         voffset         (number) vertical offset for the labels
         hoffset         (number) horizontal offset for the labels
@@ -450,12 +450,12 @@ def add_bragg_index_labels(ax,d):
     # handle inputs
     assert isinstance(ax,Axes)
     # bragg directions
-    assert('braggdirections' in d.keys())
-    braggdirections = d['braggdirections']
-    assert isinstance(braggdirections,PointList)
+    assert('bragg_directions' in d.keys())
+    bragg_directions = d['bragg_directions']
+    assert isinstance(bragg_directions,PointList)
     for k in ('qx','qy','h','k'):
-        assert k in braggdirections.data.dtype.fields
-    include_l = True if 'l' in braggdirections.data.dtype.fields else False
+        assert k in bragg_directions.data.dtype.fields
+    include_l = True if 'l' in bragg_directions.data.dtype.fields else False
     # offsets
     hoffset = d['hoffset'] if 'hoffset' in d.keys() else 0
     voffset = d['voffset'] if 'voffset' in d.keys() else 5
@@ -474,20 +474,20 @@ def add_bragg_index_labels(ax,d):
 
     # add the points
     if points:
-        ax.scatter(braggdirections.data['qy'],braggdirections.data['qx'],
+        ax.scatter(bragg_directions.data['qy'],bragg_directions.data['qx'],
                    color=pointcolor,s=pointsize)
 
     # add index labels
-    for i in range(braggdirections.length):
-        x,y = braggdirections.data['qx'][i],braggdirections.data['qy'][i]
+    for i in range(bragg_directions.length):
+        x,y = bragg_directions.data['qx'][i],bragg_directions.data['qy'][i]
         x -= voffset
         y += hoffset
-        h,k = braggdirections.data['h'][i],braggdirections.data['k'][i]
+        h,k = bragg_directions.data['h'][i],bragg_directions.data['k'][i]
         h = str(h) if h>=0 else r'$\overline{{{}}}$'.format(np.abs(h))
         k = str(k) if k>=0 else r'$\overline{{{}}}$'.format(np.abs(k))
         s = h+','+k
         if include_l:
-            l = braggdirections.data['l'][i]
+            l = bragg_directions.data['l'][i]
             l = str(l) if l>=0 else r'$\overline{{{}}}$'.format(np.abs(l))
             s += l
         ax.text(y,x,s,color=color,size=size,ha='center',va='bottom')

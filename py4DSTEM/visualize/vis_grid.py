@@ -97,7 +97,7 @@ def show_image_grid(
     H,W,
     axsize=(6,6),
     returnfig=False,
-    figax = None, 
+    figax = None,
     title = None,
     title_index = False,
     suptitle = None,
