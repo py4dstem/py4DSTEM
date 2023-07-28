@@ -6,8 +6,7 @@ from py4DSTEM.io.save import save
 
 
 # google downloader
-from py4DSTEM.io.google_drive_downloader import gdrive_download
-from py4DSTEM.io.sample_file_ids import get_sample_file_ids
+from py4DSTEM.io.google_drive_downloader import gdrive_download, get_sample_file_ids
 
 
 
