@@ -3,7 +3,7 @@ from os.path import join
 from numpy import zeros
 
 # set filepath
-path = join(py4DSTEM._TESTPATH,"simulatedAuNanoplatelet_binned_v0_9.h5")
+path = join(py4DSTEM._TESTPATH,"test_io/legacy_v0.9_simAuNanoplatelet_bin.h5")
 
 
 
@@ -23,7 +23,7 @@ class TestDiskDetectionWithCalibration:
         mask = zeros(datacube.Rshape,dtype=bool)
         mask[28:33,14:19] = 1
         probe = datacube.get_vacuum_probe( ROI=mask )
-        alpha_pr,qx0_pr,qy0_pr = py4DSTEM.process.probe.get_probe_size( probe.probe )
+        alpha_pr,qx0_pr,qy0_pr = py4DSTEM.process.calibration.get_probe_size( probe.probe )
         probe.get_kernel(
             mode='sigmoid',
             origin=(qx0_pr,qy0_pr),
