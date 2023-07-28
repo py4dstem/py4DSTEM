@@ -330,7 +330,7 @@ class WholePatternFit:
             Only perform the fitting on a subset of the probe positions,
             where real_space_mask[rx,ry] == True.
         num_jobs: int (optional)
-            Set to an integer value of threads to parallelize over probe positions.
+            Set to an integer value giving the number of jobs to parallelize over probe positions.
         fit_opts: args (optional)
             args passed to scipy.optimize.least_squares
 
@@ -442,109 +442,6 @@ class WholePatternFit:
             for a0 in range(xy.shape[1]):
                 fit_data[:, xy[0,a0], xy[1,a0]] = results[a0][0]
                 fit_metrics[:, xy[0,a0], xy[1,a0]] = results[a0][1]
-
-
-
-            # print(results[0][0].shape)
-            # print(results[0][1].shape)
-
-            # fit_inputs = xy.tolist() + [[default_opts]*xy.shape[0]]
-            # # fits = xy.tolist()
-
-            # print(str(*default_opts))
-
-
-            # Parallel fitting
-            # def fun_wrapper(dict_args):
-            #     return self.fit_single_pattern(**dict_args)
-
-
-            # pool = Pool(processes=num_jobs)
-            # pool.starmap(
-            #     fun_wrapper, 
-            #     fit_inputs,
-            # )
-            # pool.close()
-            # with Pool(4) as p:
-            #     print(p.map(
-            #         self.fit_single_pattern, 
-            #         **tuple(xy)))
-            # rx,ry = 31,31
-            # fit_coefs, fit_metrics_single = self.fit_single_pattern(
-            #     rx,
-            #     ry,
-            #     **default_opts,
-            # )
-            # fit_data[:, rx, ry] = fit_coefs
-            # fit_metrics[:, rx, ry] = fit_metrics_single
-
-                    # try:
-                    #     fit_coefs, fit_metrics_single = WPF.fit_single_pattern(
-                    #         rx,
-                    #         ry,
-                    #         **fitopts,
-                    #     )
-                    #     fit_data[:, rx, ry] = fit_coefs
-                    #     fit_metrics[:, rx, ry] = fit_metrics_single
-
-                    # # except LinAlgError as err:
-                    # # added so that sending an interupt or keyboard interupt breaks out of the for loop rather than just the probe
-                    # except InterruptedError:
-                    #     break
-                    # except KeyboardInterrupt:
-                    #     break
-                    # except:
-                    #     warnings.warn(f'Fit on position ({rx,ry}) failed with error')
-        # # else:
-        #     # def fit_single_probe(
-        #     #     rx,
-        #     #     ry,
-        #     #     ):
-        #     #     current_pattern = self.datacube.data[rx, ry, :, :].copy() * self.intensity_scale
-        #     #     shared_data = self.static_data.copy()
-        #     #     x0 = self.fit_data.data[rx, ry].copy() if resume else self.x0.copy()
-
-        #     #     try:
-        #     #         if self.hasJacobian & self.use_jacobian:
-        #     #             opt = least_squares(
-        #     #                 self._pattern_error,
-        #     #                 x0,
-        #     #                 jac=self._jacobian,
-        #     #                 bounds=(self.lower_bound, self.upper_bound),
-        #     #                 args=(current_pattern, shared_data),
-        #     #                 **default_opts,
-        #     #                 # **fit_opts,
-        #     #             )
-        #     #         else:
-        #     #             opt = least_squares(
-        #     #                 self._pattern_error,
-        #     #                 x0,
-        #     #                 bounds=(self.lower_bound, self.upper_bound),
-        #     #                 args=(current_pattern, shared_data),
-        #     #                 **default_opts,
-        #     #                 # **fit_opts,
-        #     #             )
-
-        #     #         fit_data_single = opt.x
-        #     #         fit_metrics_single = [
-        #     #             opt.cost,
-        #     #             opt.optimality,
-        #     #             opt.nfev,
-        #     #             opt.status,
-        #     #         ]
-        #     #     except:
-        #     #         fit_data_single = x0
-        #     #         fit_metrics_single = [
-        #     #             0.0,
-        #     #             0.0,
-        #     #             0.0,
-        #     #             0.0,
-        #     #         ]
-
-        #     # with Pool(num_jobs) as p:
-        #     #     print(p.map(fit_single_probe, 
-        #     #         [(0,0), 1,1]))
-
 
         # Convert to RealSlices
         model_names = []
