@@ -38,7 +38,26 @@ def show_model_grid(self, x=None, **plot_kwargs):
         m.func(DP, *x[ind : ind + m.nParams].tolist(), **shared_data)
 
         a.matshow(DP, cmap="turbo")
-        a.text(0.5, 0.92, m.name, transform=a.transAxes, ha="center", va="center")
+
+        # Determine if text color should be white or black
+        int_range = np.array((np.min(DP), np.max(DP)))
+        if int_range[0] != int_range[1]:
+            r = (np.mean(DP[:DP.shape[0]//10,:]) - int_range[0]) / (int_range[1] - int_range[0])
+            if r < 0.5:
+                color = 'w'
+            else:
+                color = 'k'
+        else:
+            color = 'w'
+
+        a.text(
+            0.5, 
+            0.92, 
+            m.name, 
+            transform = a.transAxes, 
+            ha = "center", 
+            va = "center",
+            color = color)
     for a in ax.flat:
         a.axis("off")
 
