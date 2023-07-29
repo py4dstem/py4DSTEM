@@ -403,12 +403,7 @@ class WholePatternFit:
                         ]
                     except:
                         fit_data_single = x0
-                        fit_metrics_single = [
-                            0.0,
-                            0.0,
-                            0.0,
-                            0.0,
-                        ],
+                        fit_metrics_single = [0,0,0,0]
 
                     fit_data[:, rx, ry] = fit_data_single
                     fit_metrics[:, rx, ry] = fit_metrics_single
