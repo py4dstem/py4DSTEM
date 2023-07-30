@@ -1,29 +1,26 @@
-import numpy as np
-import matplotlib.pyplot as plt
 import warnings
-from matplotlib.figure import Figure
-from matplotlib.axes import Axes
-from matplotlib.colors import is_color_like,ListedColormap
-from numpy.ma import MaskedArray
-from numbers import Number
-from math import log
 from copy import copy
+from math import log
+from numbers import Number
 
-from py4DSTEM.data import (
-    Calibration,
-    DiffractionSlice,
-    RealSlice
-)
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.axes import Axes
+from matplotlib.colors import ListedColormap, is_color_like
+from matplotlib.figure import Figure
+from numpy.ma import MaskedArray
+from py4DSTEM.data import Calibration, DiffractionSlice, RealSlice
 from py4DSTEM.visualize.overlay import (
-    add_rectangles,
-    add_circles,
     add_annuli,
-    add_ellipses,
-    add_points,
-    add_grid_overlay,
     add_cartesian_grid,
+    add_circles,
+    add_ellipses,
+    add_grid_overlay,
+    add_points,
     add_polarelliptical_grid,
-    add_rtheta_grid,add_scalebar
+    add_rectangles,
+    add_rtheta_grid,
+    add_scalebar,
 )
 
 
@@ -78,6 +75,7 @@ def show(
     e=None,
     theta=None,
     title=None,
+    show_fft = False,
     **kwargs):
     """
     General visualization function for 2D arrays.
@@ -304,6 +302,7 @@ def show(
             does not add a scalebar.  If a dict is passed, it is propagated to the add_scalebar function 
             which will attempt to use it to overlay a scalebar. If True, uses calibraiton or pixelsize/pixelunits 
             for scalebar. If False, no scalebar is added.
+        show_fft (Bool): if True, plots 2D-fft of array
         **kwargs: any keywords accepted by matplotlib's ax.matshow()
 
     Returns:
@@ -320,8 +319,10 @@ def show(
         if intensity_range is None:
             intensity_range = clipvals
 
-    # plot a grid if `ar` is a list, or use multichannel functionality to make an RGBa image
+    #check if list is of length 1
     ar = ar[0] if (isinstance(ar,list) and len(ar) == 1) else ar
+
+    # plot a grid if `ar` is a list, or use multichannel functionality to make an RGBA image
     if isinstance(ar,list):
         args = locals()
         if 'kwargs' in args.keys():
@@ -359,18 +360,18 @@ def show(
             from py4DSTEM.visualize import show
             for a0 in range(num_images):
                 im = show(
-                        ar[a0],
-                        scaling='none',
-                        intensity_range=intensity_range,
-                        clipvals=clipvals,
-                        vmin=vmin,
-                        vmax=vmax,
-                        power=power,
-                        power_offset=power_offset,
-                        return_ar_scaled = True,
-                        show_image=False,
-                        **kwargs,
-                    )
+                    ar[a0],
+                    scaling='none',
+                    intensity_range=intensity_range,
+                    clipvals=clipvals,
+                    vmin=vmin,
+                    vmax=vmax,
+                    power=power,
+                    power_offset=power_offset,
+                    return_ar_scaled = True,
+                    show_image=False,
+                    **kwargs,
+                )
                 cos_total += np.cos(hue_angles[a0]) * im
                 sin_total += np.sin(hue_angles[a0]) * im
                 # val_max = np.maximum(val_max, im)
@@ -390,9 +391,6 @@ def show(
 
             # Output image for plotting
             ar = ar_rgb
-
-    if scalebar == True: 
-        scalebar = {}
 
     # support for native data types
     elif not isinstance(ar,np.ndarray):
@@ -430,9 +428,14 @@ def show(
                 ar = ar.data
         else:
             raise Exception('input argument "ar" has unsupported type ' + str(type(ar)))
-
+    
     # Otherwise, plot one image
+    if show_fft: 
+        ar = np.abs(np.fft.fftshift(np.fft.fft2(ar)))
 
+    if scalebar == True: 
+        scalebar = {}
+    
     # get image from a masked array
     if mask is not None:
         assert mask.shape == ar.shape
@@ -499,7 +502,8 @@ def show(
 
     # Set the clipvalues
     if intensity_range == 'manual':
-        warnings.warn("Warning - intensity_range='manual' is deprecated, use 'absolute' instead")
+        warnings.warn(
+            "Warning - intensity_range='manual' is deprecated, use 'absolute' instead")
         intensity_range = 'absolute'
     if intensity_range == 'ordered':
         if vmin is None: vmin = 0.02
