@@ -6,9 +6,8 @@ from numbers import Number
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.axes import Axes
-from matplotlib.colors import ListedColormap, is_color_like
+from matplotlib.colors import is_color_like
 from matplotlib.figure import Figure
-from numpy.ma import MaskedArray
 from py4DSTEM.data import Calibration, DiffractionSlice, RealSlice
 from py4DSTEM.visualize.overlay import (
     add_annuli,
@@ -921,7 +920,6 @@ def show_Q(ar,scalebar=True,grid=False,polargrid=False,
         exp_spacing = int(np.round(log(gridspacing,10),6))
         if np.sign(log(gridspacing,10))<0:
             exp_spacing-=1
-        base_spacing = gridspacing/(10**exp_spacing)
         xticklabels = xticklabels/(10**exp_spacing)
         yticklabels = yticklabels/(10**exp_spacing)
         if exp_spacing == 1:
