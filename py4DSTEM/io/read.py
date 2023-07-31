@@ -33,9 +33,10 @@ def read(
     https://github.com/py4dstem/emdfile.
 
     To read file written by older verions of py4DSTEM, different keyword
-    arguments should be passed.  See the docstring for
-    `py4DSTEM.io.native.legacy.read_py4DSTEM_legacy` for further details.
-
+    arguments should be passed. See the docstring for
+    `py4DSTEM.io.native.legacy.read_py4DSTEM_legacy` for a complete list. 
+    For example, `data_id` may need to be specified to select dataset.
+     
     Args:
         filepath (str or Path): the file path
         datapath (str or None): the path within the H5 file to the data
