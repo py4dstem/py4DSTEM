@@ -471,7 +471,20 @@ class Crystal:
             tolerance for removing low-valued structure factors
         return_intensities: bool
             return the intensities and positions of all structure factor peaks.
-        exx 
+        exx: float
+            Strain in the x direction
+        eyy: float
+            Strain in the y direction
+        ezz: float
+            Strain in the z direction
+        exy: float
+            Shear in the x,y direction
+        exz: float
+            Shear in the x,z direction
+        eyz: float
+            Shear in the y,z direction
+        deformation_matrix: np.array
+            3x3 deformation matrix in real space. 
 
         Returns
         --------
