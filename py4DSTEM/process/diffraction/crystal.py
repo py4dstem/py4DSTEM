@@ -4,7 +4,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from fractions import Fraction
 from typing import Union, Optional
-from copy import deepcopy
+# import copy
+# from copy import deepcopy
 from scipy.optimize import curve_fit
 import sys
 
@@ -108,7 +109,16 @@ class Crystal:
         
         # Calculate lattice parameters
         self.calculate_lattice()
-        
+    
+    # TODO check for and copy all important attributes
+    def copy(self):
+        crystal = Crystal(
+            self.positions,
+            self.numbers,
+            self.cell,
+        )
+        return crystal
+
     def calculate_lattice(self):
         # calculate unit cell lattice vectors
         a = self.cell[0]
@@ -439,13 +449,36 @@ class Crystal:
         k_max: float = 2.0,
         tol_structure_factor: float = 1e-4,
         return_intensities: bool = False,
-    ):
+        exx = 0.0,
+        eyy = 0.0,
+        ezz = 0.0,
+        exy = 0.0,
+        exz = 0.0,
+        eyz = 0.0,
+        deformation_matrix = None,
+        ):
+
+
         """
         Calculate structure factors for all hkl indices up to max scattering vector k_max
 
-        Args:
-            k_max (numpy float):                max scattering vector to include (1/Angstroms)
-            tol_structure_factor (numpy float): tolerance for removing low-valued structure factors
+        Parameters
+        --------
+        
+        k_max: float                
+            max scattering vector to include (1/Angstroms)
+        tol_structure_factor: float
+            tolerance for removing low-valued structure factors
+        return_intensities: bool
+            return the intensities and positions of all structure factor peaks.
+        exx 
+
+        Returns
+        --------
+        (q_SF, I_SF)
+            Tuple of the q vectors and intensities of each structure factor.
+        
+
         """
 
         # Store k_max
@@ -479,6 +512,23 @@ class Crystal:
         # g_vec_all = self.lat_inv @ hkl
         g_vec_all =  (hkl.T @ self.lat_inv).T
 
+        # strain
+        if (exx != 0.0 or \
+            eyy != 0.0 or \
+            ezz != 0.0 or \
+            exy != 0.0 or \
+            exz != 0.0 or \
+            eyz != 0.0) and \
+            deformation_matrix is None:
+                deformation_matrix = np.array([
+                    [1+exx,     exy,    exz     ],
+                    [exy,       1+eyy,  eyz     ],
+                    [exz,       eyz,    1+ezz   ],
+                ])
+        if deformation_matrix is not None:
+            # Note that we need to take the matrix inverse, since we're operating in reciprocal space.
+            g_vec_all = np.linalg.inv(deformation_matrix) @ g_vec_all
+                
         # Delete lattice vectors outside of k_max
         keep = np.linalg.norm(g_vec_all, axis=0) <= self.k_max
         self.hkl = hkl[:, keep]
