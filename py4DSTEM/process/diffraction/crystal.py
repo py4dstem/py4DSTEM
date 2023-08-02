@@ -175,6 +175,14 @@ class Crystal:
                 [exz,       eyz,    1+ezz   ],
             ])
 
+        # copy crystal
+        crystal_strained = self.copy()
+        # crystal_strained = Crystal(
+        #     positions = self.positions.copy(),
+        #     numbers = self.numbers.copy(),
+        #     cell = self.cell.copy(),
+        #     )
+
         # new unit cell
         lat_new = self.lat_real @ deformation_matrix
         a_new = np.linalg.norm(lat_new[0,:])
@@ -186,17 +194,17 @@ class Crystal:
             lat_new[0,:]*lat_new[2,:])/a_new/c_new,-1,1)))
         gamma_new = np.rad2deg(np.arccos(np.clip(np.sum(
             lat_new[0,:]*lat_new[1,:])/a_new/b_new,-1,1)))
-        cell_new = np.array(
+        crystal_strained.cell = np.array(
             (a_new,b_new,c_new,alpha_new,beta_new,gamma_new)
         )
 
-        # Make new crystal
-        from py4DSTEM.process.diffraction import Crystal
-        crystal_strained = Crystal(
-            self.positions, 
-            self.numbers, 
-            cell_new,
-        )
+        # Update lattice
+        crystal_strained.lat_real = crystal_strained.lat_real @ deformation_matrix
+
+        # Inverse lattice, metric tensors
+        crystal_strained.metric_real = crystal_strained.lat_real @ crystal_strained.lat_real.T
+        crystal_strained.metric_inv = np.linalg.inv(crystal_strained.metric_real)
+        crystal_strained.lat_inv = crystal_strained.metric_inv @ crystal_strained.lat_real
 
         if return_deformation_matrix:
             return crystal_strained, deformation_matrix
@@ -449,13 +457,6 @@ class Crystal:
         k_max: float = 2.0,
         tol_structure_factor: float = 1e-4,
         return_intensities: bool = False,
-        exx = 0.0,
-        eyy = 0.0,
-        ezz = 0.0,
-        exy = 0.0,
-        exz = 0.0,
-        eyz = 0.0,
-        deformation_matrix = None,
         ):
 
 
@@ -471,21 +472,7 @@ class Crystal:
             tolerance for removing low-valued structure factors
         return_intensities: bool
             return the intensities and positions of all structure factor peaks.
-        exx: float
-            Strain in the x direction
-        eyy: float
-            Strain in the y direction
-        ezz: float
-            Strain in the z direction
-        exy: float
-            Shear in the x,y direction
-        exz: float
-            Shear in the x,z direction
-        eyz: float
-            Shear in the y,z direction
-        deformation_matrix: np.array
-            3x3 deformation matrix in real space. 
-
+        
         Returns
         --------
         (q_SF, I_SF)
@@ -524,23 +511,6 @@ class Crystal:
         hkl = np.vstack([xa.ravel(), ya.ravel(), za.ravel()])
         # g_vec_all = self.lat_inv @ hkl
         g_vec_all =  (hkl.T @ self.lat_inv).T
-
-        # strain
-        if (exx != 0.0 or \
-            eyy != 0.0 or \
-            ezz != 0.0 or \
-            exy != 0.0 or \
-            exz != 0.0 or \
-            eyz != 0.0) and \
-            deformation_matrix is None:
-                deformation_matrix = np.array([
-                    [1+exx,     exy,    exz     ],
-                    [exy,       1+eyy,  eyz     ],
-                    [exz,       eyz,    1+ezz   ],
-                ])
-        if deformation_matrix is not None:
-            # Note that we need to take the matrix inverse, since we're operating in reciprocal space.
-            g_vec_all = np.linalg.inv(deformation_matrix) @ g_vec_all
                 
         # Delete lattice vectors outside of k_max
         keep = np.linalg.norm(g_vec_all, axis=0) <= self.k_max
