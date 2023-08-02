@@ -139,6 +139,59 @@ class Crystal:
             self.pymatgen_available = True            
         else:
             self.pymatgen_available = False
+
+    def get_strained_crystal(
+        self,
+        exx = 0.0,
+        eyy = 0.0,
+        ezz = 0.0,
+        exy = 0.0,
+        exz = 0.0,
+        eyz = 0.0,
+        deformation_matrix = None,
+        return_deformation_matrix = False,
+        ):
+        """
+        This method returns new Crystal class with strain applied. The directions of (x,y,z)
+        are with respect to the default Crystal orientation, which can be checked with
+        print(Crystal.lat_real)
+        """
+
+        # deformation matrix
+        if deformation_matrix is None:
+            deformation_matrix = np.array([
+                [1+exx,     exy,    exz     ],
+                [exy,       1+eyy,  eyz     ],
+                [exz,       eyz,    1+ezz   ],
+            ])
+
+        # new unit cell
+        lat_new = self.lat_real @ deformation_matrix
+        a_new = np.linalg.norm(lat_new[0,:])
+        b_new = np.linalg.norm(lat_new[1,:])
+        c_new = np.linalg.norm(lat_new[2,:])
+        alpha_new = np.rad2deg(np.arccos(np.clip(np.sum(
+            lat_new[1,:]*lat_new[2,:])/b_new/c_new,-1,1)))
+        beta_new  = np.rad2deg(np.arccos(np.clip(np.sum(
+            lat_new[0,:]*lat_new[2,:])/a_new/c_new,-1,1)))
+        gamma_new = np.rad2deg(np.arccos(np.clip(np.sum(
+            lat_new[0,:]*lat_new[1,:])/a_new/b_new,-1,1)))
+        cell_new = np.array(
+            (a_new,b_new,c_new,alpha_new,beta_new,gamma_new)
+        )
+
+        # Make new crystal
+        from py4DSTEM.process.diffraction import Crystal
+        crystal_strained = Crystal(
+            self.positions, 
+            self.numbers, 
+            cell_new,
+        )
+
+        if return_deformation_matrix:
+            return crystal_strained, deformation_matrix
+        else:
+            return crystal_strained
         
 
     def from_CIF(CIF, conventional_standard_structure=True):
