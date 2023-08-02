@@ -28,13 +28,6 @@ def calculate_dynamical_structure_factors(
     recompute_kinematic_structure_factors=True,
     g_vec_precision=None,
     verbose=True,
-    # exx = 0.0,
-    # eyy = 0.0,
-    # ezz = 0.0,
-    # exy = 0.0,
-    # exz = 0.0,
-    # eyz = 0.0,
-    # deformation_matrix = None,
 ):
     """
     Calculate and store the relativistic corrected structure factors used for Bloch computations
@@ -82,20 +75,6 @@ def calculate_dynamical_structure_factors(
 
         See WK_scattering_factors.py for details on the Weickenmeier-Kohl form factors.
 
-    exx: float
-        Strain in the x direction
-    eyy: float
-        Strain in the y direction
-    ezz: float
-        Strain in the z direction
-    exy: float
-        Shear in the x,y direction
-    exz: float
-        Shear in the x,z direction
-    eyz: float
-        Shear in the y,z direction
-    deformation_matrix: np.array
-        3x3 deformation matrix in real space.
 
     """
 
@@ -155,23 +134,6 @@ def calculate_dynamical_structure_factors(
     )
     hkl = np.vstack([xa.ravel(), ya.ravel(), za.ravel()])
     g_vec_all = lat_inv @ hkl
-
-    # # strain
-    # if (exx != 0.0 or \
-    #     eyy != 0.0 or \
-    #     ezz != 0.0 or \
-    #     exy != 0.0 or \
-    #     exz != 0.0 or \
-    #     eyz != 0.0) and \
-    #     deformation_matrix is None:
-    #         deformation_matrix = np.array([
-    #             [1+exx,     exy,    exz     ],
-    #             [exy,       1+eyy,  eyz     ],
-    #             [exz,       eyz,    1+ezz   ],
-    #         ])
-    # if deformation_matrix is not None:
-    #     # Note that we need to take the matrix inverse, since we're operating in reciprocal space.
-    #     g_vec_all = np.linalg.inv(deformation_matrix) @ g_vec_all
 
     # Delete lattice vectors outside of k_max
     keep = np.linalg.norm(g_vec_all, axis=0) <= k_max
