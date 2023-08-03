@@ -74,8 +74,6 @@ def calculate_dynamical_structure_factors(
                                         substantial speedup at the cost of some reduced accuracy
 
         See WK_scattering_factors.py for details on the Weickenmeier-Kohl form factors.
-
-
     """
 
     assert method in (
