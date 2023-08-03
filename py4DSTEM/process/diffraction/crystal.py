@@ -170,9 +170,9 @@ class Crystal:
         # deformation matrix
         if deformation_matrix is None:
             deformation_matrix = np.array([
-                [1+exx,     exy,    exz     ],
-                [exy,       1+eyy,  eyz     ],
-                [exz,       eyz,    1+ezz   ],
+                [1.0+exx,   1.0*exy,    1.0*exz],
+                [1.0*exy,   1.0+eyy,    1.0*eyz],
+                [1.0*exz,   1.0*eyz,    1.0+ezz],
             ])
 
         # copy crystal
