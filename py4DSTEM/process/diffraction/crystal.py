@@ -72,7 +72,7 @@ class Crystal:
         """
         Args:
             positions (np.array): fractional coordinates of each atom in the cell
-            numbers (np.array): Z number for each atom in the cell
+            numbers (np.array): Z number for each atom in the cell, if one number passed it is used for all atom positions
             cell (np.array): specify the unit cell, using a variable number of parameters
                 1 number: the lattice parameter for a cubic cell
                 3 numbers: the three lattice parameters for an orthorhombic cell
@@ -174,6 +174,39 @@ class Crystal:
         print(Crystal.lat_real) applied to the original Crystal.
 
         Strains are given in fractional values, so exx = 0.01 is 1% strain along the x direction.
+        Deformation matrix should be of the form:
+            deformation_matrix = np.array([
+                [1.0+exx,   1.0*exy,    1.0*exz],
+                [1.0*exy,   1.0+eyy,    1.0*eyz],
+                [1.0*exz,   1.0*eyz,    1.0+ezz],
+            ])
+
+        Parameters
+        --------
+        
+        exx (float): 
+            fractional strain along the xx direction
+        eyy (float): 
+            fractional strain along the yy direction
+        ezz (float): 
+            fractional strain along the zz direction
+        exy (float): 
+            fractional strain along the xy direction
+        exz (float): 
+            fractional strain along the xz direction
+        eyz (float): 
+            fractional strain along the yz direction
+        deformation_matrix (np.ndarray): 
+            3x3 array describing deformation matrix
+        return_deformation_matrix (bool): 
+            boolean switch to return deformation matrix              
+
+        Returns
+        --------
+        return_deformation_matrix == False:
+            strained_crystal (py4DSTEM.Crystal)  
+        return_deformation_matrix == True:
+            (strained_crystal, deformation_matrix)
         """
 
         # deformation matrix
@@ -466,8 +499,6 @@ class Crystal:
         --------
         (q_SF, I_SF)
             Tuple of the q vectors and intensities of each structure factor.
-        
-
         """
 
         # Store k_max
