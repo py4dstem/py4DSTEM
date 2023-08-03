@@ -183,6 +183,8 @@ class Crystal:
         This method returns new Crystal class with strain applied. The directions of (x,y,z)
         are with respect to the default Crystal orientation, which can be checked with
         print(Crystal.lat_real) applied to the original Crystal.
+
+        Strains are given in fractional values, so exx = 0.01 is 1% strain along the x direction.
         """
 
         # deformation matrix
