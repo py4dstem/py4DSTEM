@@ -4,8 +4,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 from fractions import Fraction
 from typing import Union, Optional
-# import copy
-# from copy import deepcopy
 from scipy.optimize import curve_fit
 import sys
 
@@ -125,15 +123,6 @@ class Crystal:
         
         # Calculate lattice parameters
         self.calculate_lattice()
-    
-    # TODO check for and copy all important attributes
-    def copy(self):
-        crystal = Crystal(
-            self.positions,
-            self.numbers,
-            self.cell,
-        )
-        return crystal
 
     def calculate_lattice(self):
         
@@ -204,7 +193,7 @@ class Crystal:
             positions = self.positions.copy(),
             numbers = self.numbers.copy(),
             cell = lat_new,
-            )
+        )
 
         if return_deformation_matrix:
             return crystal_strained, deformation_matrix
