@@ -79,6 +79,7 @@ class Crystal:
                 1 number: the lattice parameter for a cubic cell
                 3 numbers: the three lattice parameters for an orthorhombic cell
                 6 numbers: the a,b,c lattice parameters and ɑ,β,ɣ angles for any cell
+                3x3 array: row vectors containing the (u,v,w) lattice vectors.
 
         """
         # Initialize Crystal
@@ -93,7 +94,10 @@ class Crystal:
         else:
             raise Exception("Number of positions and atomic numbers do not match")
 
-        # unit cell, as either [a a a 90 90 90], [a b c 90 90 90], or [a b c alpha beta gamma]
+        # unit cell, as one of:
+        # [a a a 90 90 90]
+        # [a b c 90 90 90]
+        # [a b c alpha beta gamma]
         cell = np.asarray(cell, dtype="float_")
         if np.size(cell) == 1:
             self.cell = np.hstack([cell, cell, cell, 90, 90, 90])
@@ -101,8 +105,20 @@ class Crystal:
             self.cell = np.hstack([cell, 90, 90, 90])
         elif np.size(cell) == 6:
             self.cell = cell
+        elif np.shape(cell)[0] == 3 and np.shape(cell)[1] == 3:
+            self.lat_real = np.array(cell)
+            a = np.linalg.norm(self.lat_real[0,:])
+            b = np.linalg.norm(self.lat_real[1,:])
+            c = np.linalg.norm(self.lat_real[2,:])
+            alpha = np.rad2deg(np.arccos(np.clip(np.sum(
+                self.lat_real[1,:]*self.lat_real[2,:])/b/c,-1,1)))
+            beta  = np.rad2deg(np.arccos(np.clip(np.sum(
+                self.lat_real[0,:]*self.lat_real[2,:])/a/c,-1,1)))
+            gamma = np.rad2deg(np.arccos(np.clip(np.sum(
+                self.lat_real[0,:]*self.lat_real[1,:])/a/b,-1,1)))
+            self.cell = (a,b,c,alpha,beta,gamma)
         else:
-            raise Exception("Cell cannot contain " + np.size(cell) + " elements")
+            raise Exception("Cell cannot contain " + np.size(cell) + " entries")
         
         # pymatgen flag
         self.pymatgen_available = False
@@ -120,24 +136,26 @@ class Crystal:
         return crystal
 
     def calculate_lattice(self):
-        # calculate unit cell lattice vectors
-        a = self.cell[0]
-        b = self.cell[1]
-        c = self.cell[2]
-        alpha = np.deg2rad(self.cell[3])
-        beta = np.deg2rad(self.cell[4])
-        gamma = np.deg2rad(self.cell[5])
-        f = np.cos(beta) * np.cos(gamma) - np.cos(alpha)
-        vol = a*b*c*np.sqrt(1 \
-            + 2*np.cos(alpha)*np.cos(beta)*np.cos(gamma) \
-            - np.cos(alpha)**2 - np.cos(beta)**2 - np.cos(gamma)**2)
-        self.lat_real = np.array(
-            [
-                [a,               0,                 0],
-                [b*np.cos(gamma), b*np.sin(gamma),   0],
-                [c*np.cos(beta), -c*f/np.sin(gamma), vol/(a*b*np.sin(gamma))],
-            ]
-        )
+        
+        if not hasattr(self, 'lat_real'):
+            # calculate unit cell lattice vectors
+            a = self.cell[0]
+            b = self.cell[1]
+            c = self.cell[2]
+            alpha = np.deg2rad(self.cell[3])
+            beta = np.deg2rad(self.cell[4])
+            gamma = np.deg2rad(self.cell[5])
+            f = np.cos(beta) * np.cos(gamma) - np.cos(alpha)
+            vol = a*b*c*np.sqrt(1 \
+                + 2*np.cos(alpha)*np.cos(beta)*np.cos(gamma) \
+                - np.cos(alpha)**2 - np.cos(beta)**2 - np.cos(gamma)**2)
+            self.lat_real = np.array(
+                [
+                    [a,               0,                 0],
+                    [b*np.cos(gamma), b*np.sin(gamma),   0],
+                    [c*np.cos(beta), -c*f/np.sin(gamma), vol/(a*b*np.sin(gamma))],
+                ]
+            )
 
         # Inverse lattice, metric tensors
         self.metric_real = self.lat_real @ self.lat_real.T
@@ -164,7 +182,7 @@ class Crystal:
         """
         This method returns new Crystal class with strain applied. The directions of (x,y,z)
         are with respect to the default Crystal orientation, which can be checked with
-        print(Crystal.lat_real)
+        print(Crystal.lat_real) applied to the original Crystal.
         """
 
         # deformation matrix
@@ -175,38 +193,16 @@ class Crystal:
                 [1.0*exz,   1.0*eyz,    1.0+ezz],
             ])
 
-        # copy crystal
-        crystal_strained = self.copy()
-        # crystal_strained = Crystal(
-        #     positions = self.positions.copy(),
-        #     numbers = self.numbers.copy(),
-        #     cell = self.cell.copy(),
-        #     )
-
         # new unit cell
         lat_new = self.lat_real @ deformation_matrix
 
-        # update cell params
-        a_new = np.linalg.norm(lat_new[0,:])
-        b_new = np.linalg.norm(lat_new[1,:])
-        c_new = np.linalg.norm(lat_new[2,:])
-        alpha_new = np.rad2deg(np.arccos(np.clip(np.sum(
-            lat_new[1,:]*lat_new[2,:])/b_new/c_new,-1,1)))
-        beta_new  = np.rad2deg(np.arccos(np.clip(np.sum(
-            lat_new[0,:]*lat_new[2,:])/a_new/c_new,-1,1)))
-        gamma_new = np.rad2deg(np.arccos(np.clip(np.sum(
-            lat_new[0,:]*lat_new[1,:])/a_new/b_new,-1,1)))
-        crystal_strained.cell = np.array(
-            (a_new,b_new,c_new,alpha_new,beta_new,gamma_new)
-        )
-
-        # Update lattice
-        crystal_strained.lat_real = lat_new
-
-        # Inverse lattice, metric tensors
-        crystal_strained.metric_real = crystal_strained.lat_real @ crystal_strained.lat_real.T
-        crystal_strained.metric_inv = np.linalg.inv(crystal_strained.metric_real)
-        crystal_strained.lat_inv = crystal_strained.metric_inv @ crystal_strained.lat_real
+        # make new crystal class
+        from py4DSTEM.process.diffraction import Crystal
+        crystal_strained = Crystal(
+            positions = self.positions.copy(),
+            numbers = self.numbers.copy(),
+            cell = lat_new,
+            )
 
         if return_deformation_matrix:
             return crystal_strained, deformation_matrix
