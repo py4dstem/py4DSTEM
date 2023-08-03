@@ -119,8 +119,10 @@ class Crystal:
             raise Exception("Cell cannot contain " + np.size(cell) + " entries")
         
         # pymatgen flag
-        self.pymatgen_available = False
-        
+        if 'pymatgen' in sys.modules:
+            self.pymatgen_available = True            
+        else:
+            self.pymatgen_available = False
         # Calculate lattice parameters
         self.calculate_lattice()
 
@@ -151,11 +153,7 @@ class Crystal:
         self.metric_inv = np.linalg.inv(self.metric_real)
         self.lat_inv = self.metric_inv @ self.lat_real
 
-        # pymatgen flag
-        if 'pymatgen' in sys.modules:
-            self.pymatgen_available = True            
-        else:
-            self.pymatgen_available = False
+
 
     def get_strained_crystal(
         self,
