@@ -441,7 +441,7 @@ def show(
 
     # Otherwise, plot one image
     if show_fft:
-        ar = np.abs(np.fft.fftshift(np.fft.fft2(ar)))
+        ar = np.abs(np.fft.fftshift(np.fft.fft2(ar.copy())))
 
     if scalebar == True:
         scalebar = {}
