@@ -185,6 +185,8 @@ class Crystal:
 
         # new unit cell
         lat_new = self.lat_real @ deformation_matrix
+
+        # update cell params
         a_new = np.linalg.norm(lat_new[0,:])
         b_new = np.linalg.norm(lat_new[1,:])
         c_new = np.linalg.norm(lat_new[2,:])
@@ -199,7 +201,7 @@ class Crystal:
         )
 
         # Update lattice
-        crystal_strained.lat_real = crystal_strained.lat_real @ deformation_matrix
+        crystal_strained.lat_real = lat_new
 
         # Inverse lattice, metric tensors
         crystal_strained.metric_real = crystal_strained.lat_real @ crystal_strained.lat_real.T
