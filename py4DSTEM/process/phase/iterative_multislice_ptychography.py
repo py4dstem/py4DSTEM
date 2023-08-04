@@ -29,6 +29,7 @@ from py4DSTEM.process.phase.utils import (
     spatial_frequencies,
 )
 from py4DSTEM.process.utils import electron_wavelength_angstrom, get_CoM, get_shifted_ar
+from scipy.ndimage import rotate
 
 warnings.simplefilter(action="always", category=UserWarning)
 
@@ -974,7 +975,7 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
                 )
 
             # back-transmit
-            exit_waves *= xp.conj(obj) #/ xp.abs(obj) ** 2
+            exit_waves *= xp.conj(obj)  # / xp.abs(obj) ** 2
 
             if s > 0:
                 # back-propagate
@@ -1076,7 +1077,7 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
                 )
 
             # back-transmit
-            exit_waves_copy *= xp.conj(obj) # / xp.abs(obj) ** 2
+            exit_waves_copy *= xp.conj(obj)  # / xp.abs(obj) ** 2
 
             if s > 0:
                 # back-propagate
@@ -2840,6 +2841,67 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
                 ax.set_ylabel("x [A]")
 
         spec.tight_layout(fig)
+
+    def show_depth(
+        self,
+        x1: float,
+        x2: float,
+        y1: float,
+        y2: float,
+        gaussian_filter_sigma: float = None,
+        ms_object=None,
+        cbar: bool = False,
+        aspect: float = None,
+        **kwargs,
+    ):
+        """
+        doc strings go here
+        """
+        ms_obj = self.object_cropped
+        angle = np.arctan((x2 - x1) / (y2 - y1))
+
+        x0 = ms_obj.shape[1] / 2
+        y0 = ms_obj.shape[2] / 2
+
+        from py4DSTEM.process.phase.utils import rotate_point
+
+        x1_0, y1_0 = rotate_point((x0, y0), (x1, y1), angle)
+        x2_0, y2_0 = rotate_point((x0, y0), (x2, y2), angle)
+
+        rotated_object = np.roll(
+            rotate(ms_obj, np.rad2deg(angle), reshape=False, axes=(-1, -2)),
+            int(x1_0),
+            axis=1,
+        )
+
+        if np.iscomplexobj(rotated_object):
+            rotated_object = np.angle(rotated_object)
+        if gaussian_filter_sigma is not None:
+            from scipy.ndimage import gaussian_filter
+
+            rotated_object = gaussian_filter(rotated_object, gaussian_filter_sigma)
+
+        plot_im = rotated_object[:, 0, int(y1_0) : int(y2_0)]
+
+        extent = [
+            0,
+            self.sampling[1] * plot_im.shape[1],
+            self._slice_thicknesses[0] * plot_im.shape[0],
+            0,
+        ]
+
+        fig, ax = plt.subplots()
+        im = ax.imshow(plot_im, cmap="magma", extent=extent)
+        if aspect is not None:
+            ax.set_aspect(aspect)
+        ax.set_xlabel("y [A]")
+        ax.set_ylabel("x [A]")
+        ax.set_title("Multislice depth profile")
+        if cbar:
+            divider = make_axes_locatable(ax)
+            ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
+            fig.add_axes(ax_cb)
+            fig.colorbar(im, cax=ax_cb)
 
     def tune_num_slices_and_thicknesses(
         self,
