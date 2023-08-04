@@ -1610,3 +1610,17 @@ def fit_aberration_surface(
     fitted_angle = xp.tensordot(coeff, basis, axes=1)
 
     return fitted_angle, coeff
+
+
+def rotate_point(origin, point, angle):
+    """
+    Rotate a point counterclockwise by a given angle around a given origin.
+
+    The angle should be given in radians.
+    """
+    ox, oy = origin
+    px, py = point
+
+    qx = ox + np.cos(angle) * (px - ox) - np.sin(angle) * (py - oy)
+    qy = oy + np.sin(angle) * (px - ox) + np.cos(angle) * (py - oy)
+    return qx, qy
