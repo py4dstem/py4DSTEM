@@ -16,7 +16,8 @@ class WPFModelType(Flag):
     AMORPHOUS = auto()
     LATTICE = auto()
 
-    DUMMY = auto()
+    DUMMY = auto() # Model has no direct contribution to pattern
+    META = auto() # Model depends on multiple sub-Models (triggers extra linking on inclusion)
 
 
 class WPFModelPrototype:
@@ -140,6 +141,7 @@ class DCBackground(WPFModelPrototype):
 class GaussianBackground(WPFModelPrototype):
     def __init__(
         self,
+        WPF,
         sigma,
         intensity,
         global_center=True,
@@ -149,6 +151,8 @@ class GaussianBackground(WPFModelPrototype):
     ):
         params = {"sigma": Parameter(sigma), "intensity": Parameter(intensity)}
         if global_center:
+            params['x center'] = WPF.coordinate_model.params['x center']
+            params['y center'] = WPF.coordinate_model.params['y center']
             self.func = self.global_center_func
             self.jacobian = self.global_center_jacobian
         else:
@@ -544,7 +548,6 @@ class SyntheticDiskLattice(WPFModelPrototype):
 
             disk_intensity = args[i + 6]
 
-            # if (x > 0) & (x < kwargs["Q_Nx"]) & (y > 0) & (y < kwargs["Q_Nx"]):
             r_disk = np.maximum(
                 5e-1,
                 np.sqrt((kwargs["xArray"] - x) ** 2 + (kwargs["yArray"] - y) ** 2),
@@ -572,11 +575,6 @@ class SyntheticDiskLattice(WPFModelPrototype):
                 / ((1.0 + top_exp) ** 2 * disk_width * r)
             ).ravel()
 
-            # because... reasons, sometimes we get NaN
-            # very far from the disk center. let's zero those:
-            # dx[np.isnan(dx)] = 0.0
-            # dy[np.isnan(dy)] = 0.0
-
             # insert global positional derivatives
             J[:, 0] += disk_intensity * dx
             J[:, 1] += disk_intensity * dy
@@ -589,7 +587,6 @@ class SyntheticDiskLattice(WPFModelPrototype):
 
             # insert intensity derivative
             dI = (mask * (1.0 / (1.0 + top_exp))).ravel()
-            # dI[np.isnan(dI)] = 0.0
             J[:, offset + i + 4] = dI
 
             # insert disk radius derivative
@@ -597,7 +594,6 @@ class SyntheticDiskLattice(WPFModelPrototype):
                 dR = (
                     4.0 * args[i + 4] * top_exp / (disk_width * (1.0 + top_exp) ** 2)
                 ).ravel()
-                # dR[np.isnan(dR)] = 0.0
                 J[:, offset + len(args) + radius_ind] += dR
 
             if self.refine_width:
@@ -608,11 +604,17 @@ class SyntheticDiskLattice(WPFModelPrototype):
                     * (r_disk - disk_radius)
                     / (disk_width**2 * (1.0 + top_exp) ** 2)
                 ).ravel()
-                # dW[np.isnan(dW)] = 0.0
                 J[:, offset + len(args) - 1] += dW
 
-            # set_trace()
 
+class SyntheticDiskMoire(WPFModelPrototype):
+    def __init__(
+        self, 
+        lattice_a:SyntheticDiskLattice, 
+        lattice_b:SyntheticDiskLattice, 
+        decorated_peaks:list=None
+    ):
+        super().__init__(name, params, model_type=WPFModelType.META | WPFModelType.LATTICE)
 
 class ComplexOverlapKernelDiskLattice(WPFModelPrototype):
     def __init__(

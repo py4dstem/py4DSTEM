@@ -1,6 +1,6 @@
 from py4DSTEM import DataCube, RealSlice
 from emdfile import tqdmnd
-from py4DSTEM.process.wholepatternfit.wp_models import WPFModelPrototype, _BaseModel
+from py4DSTEM.process.wholepatternfit.wp_models import WPFModelPrototype, _BaseModel, WPFModelType
 
 from typing import Optional
 import numpy as np
@@ -80,11 +80,6 @@ class WholePatternFit:
 
         self.mask = mask if mask is not None else np.ones_like(self.meanCBED)
 
-        self.model = []
-        self.model_param_inds = []
-
-        self.nParams = 0
-        self.use_jacobian = use_jacobian
 
         if hasattr(x0, "__iter__") and hasattr(y0, "__iter__"):
             x0 = np.array(x0)
@@ -113,6 +108,11 @@ class WholePatternFit:
         # TODO: remove special cases for global/local center in the Models
         # Needs an efficient way to handle calculation of q_r
 
+        self.model = [self.coordinate_model, ]
+
+        self.nParams = 0
+        self.use_jacobian = use_jacobian
+
         # set up the global arguments
         self._setup_static_data(x0, y0)
 
@@ -127,8 +127,6 @@ class WholePatternFit:
     def add_model(self, model: WPFModelPrototype):
         self.model.append(model)
 
-        # keep track of where each model's parameter list begins
-        self.model_param_inds.append(self.nParams)
         self.nParams += len(model.params.keys())
 
         self._scrape_model_params()
@@ -492,11 +490,12 @@ class WholePatternFit:
         lattices = [
             (i, m)
             for i, m in enumerate(self.model)
-            if "lattice" in type(m).__name__.lower()
+            if WPFModelType.LATTICE in m.model_type
         ]
 
         g_maps = []
         for i, l in lattices:
+            # TODO: use parameter object offsets to get indices
             param_list = list(l.params.keys())
             lattice_offset = param_list.index("ux")
             data_offset = self.model_param_inds[i] + 2 + lattice_offset
@@ -523,8 +522,6 @@ class WholePatternFit:
         self.static_data["Q_Nx"] = self.datacube.Q_Nx
         self.static_data["Q_Ny"] = self.datacube.Q_Ny
 
-        self.static_data["global_x0"] = x0
-        self.static_data["global_y0"] = y0
         self.static_data["global_r"] = np.hypot(
             (self.static_data["xArray"] - x0),
             (self.static_data["yArray"] - y0),
