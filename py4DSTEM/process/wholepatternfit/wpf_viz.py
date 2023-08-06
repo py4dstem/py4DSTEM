@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as mpl_c
 from matplotlib.gridspec import GridSpec
 
+
 def show_model_grid(self, x=None, **plot_kwargs):
     if x is None:
         x = self.mean_CBED_fit.x
@@ -42,37 +43,34 @@ def show_model_grid(self, x=None, **plot_kwargs):
         # Determine if text color should be white or black
         int_range = np.array((np.min(DP), np.max(DP)))
         if int_range[0] != int_range[1]:
-            r = (np.mean(DP[:DP.shape[0]//10,:]) - int_range[0]) / (int_range[1] - int_range[0])
+            r = (np.mean(DP[: DP.shape[0] // 10, :]) - int_range[0]) / (
+                int_range[1] - int_range[0]
+            )
             if r < 0.5:
-                color = 'w'
+                color = "w"
             else:
-                color = 'k'
+                color = "k"
         else:
-            color = 'w'
+            color = "w"
 
         a.text(
-            0.5, 
-            0.92, 
-            m.name, 
-            transform = a.transAxes, 
-            ha = "center", 
-            va = "center",
-            color = color)
+            0.5,
+            0.92,
+            m.name,
+            transform=a.transAxes,
+            ha="center",
+            va="center",
+            color=color,
+        )
     for a in ax.flat:
         a.axis("off")
 
     plt.show()
 
+
 def show_lattice_points(
-    self, 
-    im = None,
-    vmin = None,
-    vmax = None,
-    power = None,
-    returnfig=False, 
-    *args, 
-    **kwargs
-    ):
+    self, im=None, vmin=None, vmax=None, power=None, returnfig=False, *args, **kwargs
+):
     """
     Plotting utility to show the initial lattice points.
     """
@@ -85,16 +83,16 @@ def show_lattice_points(
     fig, ax = plt.subplots(*args, **kwargs)
     if vmin is None and vmax is None:
         ax.matshow(
-            im**power, 
+            im**power,
             cmap="gray",
-            )
+        )
     else:
         ax.matshow(
             im**power,
-            vmin = vmin,
-            vmax = vmax, 
+            vmin=vmin,
+            vmax=vmax,
             cmap="gray",
-            )
+        )
 
     for m in self.model:
         if "Lattice" in m.name:
@@ -109,16 +107,17 @@ def show_lattice_points(
             spots[:, 1] += self.static_data["global_y0"]
 
             ax.scatter(
-                spots[:, 1], 
-                spots[:, 0], 
-                s = 100,
-                marker="x", 
+                spots[:, 1],
+                spots[:, 0],
+                s=100,
+                marker="x",
                 label=m.name,
-                )
+            )
 
     ax.legend()
 
     return (fig, ax) if returnfig else plt.show()
+
 
 def show_fit_metrics(self, returnfig=False, **subplots_kwargs):
     assert hasattr(self, "fit_metrics"), "Please run fitting first!"
