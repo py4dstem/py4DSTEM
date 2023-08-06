@@ -15,8 +15,8 @@ from mpire import WorkerPool
 
 __all__ = ["WholePatternFit"]
 
-class WholePatternFit:
 
+class WholePatternFit:
     from py4DSTEM.process.wholepatternfit.wpf_viz import (
         show_model_grid,
         show_lattice_points,
@@ -76,7 +76,7 @@ class WholePatternFit:
             meanCBED if meanCBED is not None else np.mean(datacube.data, axis=(0, 1))
         )
         # Global scaling parameter
-        self.intensity_scale = 1/np.mean(self.meanCBED)
+        self.intensity_scale = 1 / np.mean(self.meanCBED)
 
         self.mask = mask if mask is not None else np.ones_like(self.meanCBED)
 
@@ -106,15 +106,15 @@ class WholePatternFit:
             global_xy0_ub = np.array([datacube.Q_Nx, datacube.Q_Ny])
 
         # The WPF object holds a special Model that manages the shareable center coordinates
-        self.global_params = _BaseModel(
-            x0 = (x0, global_xy0_lb[0], global_xy0_ub[0]),
-            y0 = (y0, global_xy0_lb[1], global_xy0_ub[1])
+        self.coordinate_model = _BaseModel(
+            x0=(x0, global_xy0_lb[0], global_xy0_ub[0]),
+            y0=(y0, global_xy0_lb[1], global_xy0_ub[1]),
         )
         # TODO: remove special cases for global/local center in the Models
         # Needs an efficient way to handle calculation of q_r
 
         # set up the global arguments
-        self._setup_static_data(x0,y0)
+        self._setup_static_data(x0, y0)
 
         self.fit_power = fit_power
 
@@ -138,13 +138,11 @@ class WholePatternFit:
             self.add_model(m)
 
     def generate_initial_pattern(self):
-
         # update parameters:
         self._scrape_model_params()
         return self._pattern(self.x0, self.static_data.copy()) / self.intensity_scale
 
     def fit_to_mean_CBED(self, **fit_opts):
-
         # first make sure we have the latest parameters
         self._scrape_model_params()
 
@@ -221,14 +219,13 @@ class WholePatternFit:
 
         return opt
 
-
     def fit_single_pattern(
-        self, 
+        self,
         data: np.ndarray,
-        resume:bool = False, 
-        restart_data:np.ndarray = None,
-        **fit_opts
-        ):
+        resume: bool = False,
+        restart_data: np.ndarray = None,
+        **fit_opts,
+    ):
         """
         Apply model fitting to one pattern.
 
@@ -246,7 +243,7 @@ class WholePatternFit:
         Returns
         --------
         fit_coefs: np.array
-            Fitted coefficients 
+            Fitted coefficients
         fit_metrics: np.array
             Fitting metrics
 
@@ -313,19 +310,18 @@ class WholePatternFit:
             ]
         except:
             fit_coefs = x0
-            fit_metrics_single = [0,0,0,0]
+            fit_metrics_single = [0, 0, 0, 0]
 
         return fit_coefs, fit_metrics_single
 
-
     def fit_all_patterns(
-        self, 
-        resume = False, 
-        real_space_mask = None,
-        num_jobs = None,
-        show_fit_metrics = True,
-        **fit_opts
-        ):
+        self,
+        resume=False,
+        real_space_mask=None,
+        num_jobs=None,
+        show_fit_metrics=True,
+        **fit_opts,
+    ):
         """
         Apply model fitting to all patterns.
 
@@ -375,8 +371,10 @@ class WholePatternFit:
         # Loop over probe positions
         if num_jobs is None:
             for rx, ry in tqdmnd(self.datacube.R_Nx, self.datacube.R_Ny):
-                if real_space_mask is not None and real_space_mask[rx,ry] == True:
-                    current_pattern = self.datacube.data[rx, ry, :, :].copy() * self.intensity_scale
+                if real_space_mask is not None and real_space_mask[rx, ry] == True:
+                    current_pattern = (
+                        self.datacube.data[rx, ry, :, :].copy() * self.intensity_scale
+                    )
                     shared_data = self.static_data.copy()
                     x0 = self.fit_data.data[rx, ry].copy() if resume else self.x0.copy()
 
@@ -410,7 +408,7 @@ class WholePatternFit:
                         ]
                     except:
                         fit_data_single = x0
-                        fit_metrics_single = [0,0,0,0]
+                        fit_metrics_single = [0, 0, 0, 0]
 
                     fit_data[:, rx, ry] = fit_data_single
                     fit_metrics[:, rx, ry] = fit_metrics_single
@@ -418,32 +416,32 @@ class WholePatternFit:
         else:
             # Get list of probe positions
             if real_space_mask is not None:
-                xa,ya = np.where(real_space_mask)
+                xa, ya = np.where(real_space_mask)
             else:
-                xa,ya = np.meshgrid(
+                xa, ya = np.meshgrid(
                     np.arange(self.datacube.Rshape[0]),
                     np.arange(self.datacube.Rshape[1]),
-                    indexing = 'ij',                    
-                    )
+                    indexing="ij",
+                )
                 xa = xa.ravel()
                 ya = ya.ravel()
-            xy = np.vstack((xa,ya))
+            xy = np.vstack((xa, ya))
 
-            fit_inputs = [default_opts]*xy.shape[1]
+            fit_inputs = [default_opts] * xy.shape[1]
             for a0 in range(xy.shape[1]):
-                fit_inputs[a0]['rx'] = xy[0,a0]
-                fit_inputs[a0]['ry'] = xy[1,a0]
+                fit_inputs[a0]["rx"] = xy[0, a0]
+                fit_inputs[a0]["ry"] = xy[1, a0]
 
-            with WorkerPool(n_jobs = num_jobs) as pool:
+            with WorkerPool(n_jobs=num_jobs) as pool:
                 results = pool.map(
-                    self.fit_single_pattern, 
+                    self.fit_single_pattern,
                     fit_inputs,
                     progress_bar=True,
-                    )
+                )
 
             for a0 in range(xy.shape[1]):
-                fit_data[:, xy[0,a0], xy[1,a0]] = results[a0][0]
-                fit_metrics[:, xy[0,a0], xy[1,a0]] = results[a0][1]
+                fit_data[:, xy[0, a0], xy[1, a0]] = results[a0][0]
+                fit_metrics[:, xy[0, a0], xy[1, a0]] = results[a0][1]
 
         # Convert to RealSlices
         model_names = []
@@ -498,7 +496,7 @@ class WholePatternFit:
         ]
 
         g_maps = []
-        for (i, l) in lattices:
+        for i, l in lattices:
             param_list = list(l.params.keys())
             lattice_offset = param_list.index("ux")
             data_offset = self.model_param_inds[i] + 2 + lattice_offset
@@ -515,7 +513,7 @@ class WholePatternFit:
 
         return g_maps
 
-    def _setup_static_data(self,x0,y0):
+    def _setup_static_data(self, x0, y0):
         self.static_data = {}
 
         xArray, yArray = np.mgrid[0 : self.datacube.Q_Nx, 0 : self.datacube.Q_Ny]
@@ -533,7 +531,6 @@ class WholePatternFit:
         )
 
     def _pattern_error(self, x, current_pattern, shared_data):
-
         DP = np.zeros((self.datacube.Q_Nx, self.datacube.Q_Ny))
 
         shared_data["global_x0"] = x[0]
@@ -557,7 +554,6 @@ class WholePatternFit:
         return DP.ravel()
 
     def _pattern(self, x, shared_data):
-
         DP = np.zeros((self.datacube.Q_Nx, self.datacube.Q_Ny))
 
         shared_data["global_x0"] = x[0]
@@ -592,7 +588,6 @@ class WholePatternFit:
         return J * self.mask.ravel()[:, np.newaxis]
 
     def _scrape_model_params(self):
-
         self.x0 = np.zeros((self.nParams + 2,))
         self.upper_bound = np.zeros_like(self.x0)
         self.lower_bound = np.zeros_like(self.x0)
