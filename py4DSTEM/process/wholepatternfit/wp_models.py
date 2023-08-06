@@ -16,8 +16,10 @@ class WPFModelType(Flag):
     AMORPHOUS = auto()
     LATTICE = auto()
 
-    DUMMY = auto() # Model has no direct contribution to pattern
-    META = auto() # Model depends on multiple sub-Models (triggers extra linking on inclusion)
+    DUMMY = auto()  # Model has no direct contribution to pattern
+    META = (
+        auto()
+    )  # Model depends on multiple sub-Models (triggers extra linking on inclusion)
 
 
 class WPFModelPrototype:
@@ -151,8 +153,8 @@ class GaussianBackground(WPFModelPrototype):
     ):
         params = {"sigma": Parameter(sigma), "intensity": Parameter(intensity)}
         if global_center:
-            params['x center'] = WPF.coordinate_model.params['x center']
-            params['y center'] = WPF.coordinate_model.params['y center']
+            params["x center"] = WPF.coordinate_model.params["x center"]
+            params["y center"] = WPF.coordinate_model.params["y center"]
             self.func = self.global_center_func
             self.jacobian = self.global_center_jacobian
         else:
@@ -609,12 +611,15 @@ class SyntheticDiskLattice(WPFModelPrototype):
 
 class SyntheticDiskMoire(WPFModelPrototype):
     def __init__(
-        self, 
-        lattice_a:SyntheticDiskLattice, 
-        lattice_b:SyntheticDiskLattice, 
-        decorated_peaks:list=None
+        self,
+        lattice_a: SyntheticDiskLattice,
+        lattice_b: SyntheticDiskLattice,
+        decorated_peaks: list = None,
     ):
-        super().__init__(name, params, model_type=WPFModelType.META | WPFModelType.LATTICE)
+        super().__init__(
+            name, params, model_type=WPFModelType.META | WPFModelType.LATTICE
+        )
+
 
 class ComplexOverlapKernelDiskLattice(WPFModelPrototype):
     def __init__(
