@@ -1,6 +1,10 @@
 from py4DSTEM import DataCube, RealSlice
 from emdfile import tqdmnd
-from py4DSTEM.process.wholepatternfit.wp_models import WPFModelPrototype, _BaseModel, WPFModelType
+from py4DSTEM.process.wholepatternfit.wp_models import (
+    WPFModelPrototype,
+    _BaseModel,
+    WPFModelType,
+)
 
 from typing import Optional
 import numpy as np
@@ -80,7 +84,6 @@ class WholePatternFit:
 
         self.mask = mask if mask is not None else np.ones_like(self.meanCBED)
 
-
         if hasattr(x0, "__iter__") and hasattr(y0, "__iter__"):
             x0 = np.array(x0)
             y0 = np.array(y0)
@@ -108,7 +111,9 @@ class WholePatternFit:
         # TODO: remove special cases for global/local center in the Models
         # Needs an efficient way to handle calculation of q_r
 
-        self.model = [self.coordinate_model, ]
+        self.model = [
+            self.coordinate_model,
+        ]
 
         self.nParams = 0
         self.use_jacobian = use_jacobian
@@ -129,7 +134,7 @@ class WholePatternFit:
 
         self.nParams += len(model.params.keys())
 
-        self._scrape_model_params()
+        self._finalize_model()
 
     def add_model_list(self, model_list):
         for m in model_list:
@@ -140,22 +145,28 @@ class WholePatternFit:
         Link parameters of separate models together. The parameters of
         the child_model are replaced with the parameters of the parent_model.
         Note, this does not add the models to the WPF object, that must
-        be performed separately. 
+        be performed separately.
         """
         # Make sure parameters is iterable
-        parameters = [parameters,] if not hasattr(parameters,"__iter__")
+        parameters = (
+            [
+                parameters,
+            ]
+            if not hasattr(parameters, "__iter__")
+            else parameters
+        )
 
         for par in parameters:
             child_model.params[par] = parent_model.params[par]
 
     def generate_initial_pattern(self):
         # update parameters:
-        self._scrape_model_params()
+        self._finalize_model()
         return self._pattern(self.x0, self.static_data.copy()) / self.intensity_scale
 
     def fit_to_mean_CBED(self, **fit_opts):
         # first make sure we have the latest parameters
-        self._scrape_model_params()
+        self._finalize_model()
 
         # set the current active pattern to the mean CBED:
         current_pattern = self.meanCBED * self.intensity_scale
@@ -261,7 +272,7 @@ class WholePatternFit:
         """
 
         # make sure we have the latest parameters
-        self._scrape_model_params()
+        self._finalize_model()
 
         # set tracking off
         self._track = False
@@ -358,7 +369,7 @@ class WholePatternFit:
         """
 
         # make sure we have the latest parameters
-        self._scrape_model_params()
+        self._finalize_model()
 
         # set tracking off
         self._track = False
@@ -597,23 +608,20 @@ class WholePatternFit:
 
         return J * self.mask.ravel()[:, np.newaxis]
 
-    def _scrape_model_params(self):
-        self.x0 = np.zeros((self.nParams + 2,))
-        self.upper_bound = np.zeros_like(self.x0)
-        self.lower_bound = np.zeros_like(self.x0)
+    def _finalize_model(self):
+        # iterate over all models and assign indices, accumulate list
+        # of unique parameters. then, accumulate initial value and bounds vectors
+        unique_params = []
+        idx = 0
+        for model in self.model:
+            for param in model.params:
+                if param not in unique_params:
+                    unique_params.append(param)
+                    param.offset = idx
+                    idx += 1
 
-        self.x0[0:2] = np.array(
-            [self.static_data["global_x0"], self.static_data["global_y0"]]
-        )
-        self.upper_bound[0:2] = self.global_xy0_ub
-        self.lower_bound[0:2] = self.global_xy0_lb
-
-        for i, m in enumerate(self.model):
-            ind = self.model_param_inds[i] + 2
-
-            for j, v in enumerate(m.params.values()):
-                self.x0[ind + j] = v.initial_value
-                self.upper_bound[ind + j] = v.upper_bound
-                self.lower_bound[ind + j] = v.lower_bound
+        self.x0 = np.array([param.initial_value for param in unique_params])
+        self.upper_bound = np.array([param.upper_bound for param in unique_params])
+        self.lower_bound = np.array([param.lower_bound for param in unique_params])
 
         self.hasJacobian = all([m.hasJacobian for m in self.model])
