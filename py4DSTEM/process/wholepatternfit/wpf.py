@@ -135,6 +135,19 @@ class WholePatternFit:
         for m in model_list:
             self.add_model(m)
 
+    def link_parameters(self, parent_model, child_model, parameters):
+        """
+        Link parameters of separate models together. The parameters of
+        the child_model are replaced with the parameters of the parent_model.
+        Note, this does not add the models to the WPF object, that must
+        be performed separately. 
+        """
+        # Make sure parameters is iterable
+        parameters = [parameters,] if not hasattr(parameters,"__iter__")
+
+        for par in parameters:
+            child_model.params[par] = parent_model.params[par]
+
     def generate_initial_pattern(self):
         # update parameters:
         self._scrape_model_params()
