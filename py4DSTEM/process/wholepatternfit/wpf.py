@@ -1,6 +1,6 @@
 from py4DSTEM import DataCube, RealSlice
 from emdfile import tqdmnd
-from py4DSTEM.process.wholepatternfit.wp_models import WPFModelPrototype
+from py4DSTEM.process.wholepatternfit.wp_models import WPFModelPrototype, _BaseModel
 
 from typing import Optional
 import numpy as np
@@ -11,10 +11,9 @@ import matplotlib.colors as mpl_c
 from matplotlib.gridspec import GridSpec
 import warnings
 
-# from multiprocessing import Pool
-# import multiprocess as mp
 from mpire import WorkerPool
 
+__all__ = ["WholePatternFit"]
 
 class WholePatternFit:
 
@@ -91,20 +90,28 @@ class WholePatternFit:
             x0 = np.array(x0)
             y0 = np.array(y0)
             if x0.size == 2:
-                self.global_xy0_lb = np.array([x0[0] - x0[1], y0[0] - y0[1]])
-                self.global_xy0_ub = np.array([x0[0] + x0[1], y0[0] + y0[1]])
+                global_xy0_lb = np.array([x0[0] - x0[1], y0[0] - y0[1]])
+                global_xy0_ub = np.array([x0[0] + x0[1], y0[0] + y0[1]])
             elif x0.size == 3:
-                self.global_xy0_lb = np.array([x0[1], y0[1]])
-                self.global_xy0_ub = np.array([x0[2], y0[2]])
+                global_xy0_lb = np.array([x0[1], y0[1]])
+                global_xy0_ub = np.array([x0[2], y0[2]])
             else:
-                self.global_xy0_lb = np.array([0.0, 0.0])
-                self.global_xy0_ub = np.array([datacube.Q_Nx, datacube.Q_Ny])
+                global_xy0_lb = np.array([0.0, 0.0])
+                global_xy0_ub = np.array([datacube.Q_Nx, datacube.Q_Ny])
             x0 = x0[0]
             y0 = y0[0]
 
         else:
-            self.global_xy0_lb = np.array([0.0, 0.0])
-            self.global_xy0_ub = np.array([datacube.Q_Nx, datacube.Q_Ny])
+            global_xy0_lb = np.array([0.0, 0.0])
+            global_xy0_ub = np.array([datacube.Q_Nx, datacube.Q_Ny])
+
+        # The WPF object holds a special Model that manages the shareable center coordinates
+        self.global_params = _BaseModel(
+            x0 = (x0, global_xy0_lb[0], global_xy0_ub[0]),
+            y0 = (y0, global_xy0_lb[1], global_xy0_ub[1])
+        )
+        # TODO: remove special cases for global/local center in the Models
+        # Needs an efficient way to handle calculation of q_r
 
         # set up the global arguments
         self._setup_static_data(x0,y0)
@@ -217,9 +224,9 @@ class WholePatternFit:
 
     def fit_single_pattern(
         self, 
-        rx,
-        ry,
-        resume = False, 
+        data: np.ndarray,
+        resume:bool = False, 
+        restart_data:np.ndarray = None,
         **fit_opts
         ):
         """
