@@ -309,6 +309,9 @@ def show(
         if returnfig==False (default), the figure is plotted and nothing is returned.
         if returnfig==True, return the figure and the axis.
     """
+    if scalebar == True:
+        scalebar = {}
+
     # Alias dep
     if min is not None:
         vmin = min
@@ -413,7 +416,7 @@ def show(
             if isinstance(ar, DiffractionSlice):
                 scalebar = {
                     "Nx": ar.data.shape[0],
-                    "Ny": ar.data.shape,
+                    "Ny": ar.data.shape[1],
                     "pixelsize": cal.get_Q_pixel_size(),
                     "pixelunits": cal.get_Q_pixel_units(),
                     "space": "Q",
@@ -424,7 +427,7 @@ def show(
             elif isinstance(ar, RealSlice):
                 scalebar = {
                     "Nx": ar.data.shape[0],
-                    "Ny": ar.data.shape,
+                    "Ny": ar.data.shape[1],
                     "pixelsize": cal.get_R_pixel_size(),
                     "pixelunits": cal.get_R_pixel_units(),
                     "space": "Q",
@@ -442,9 +445,6 @@ def show(
     # Otherwise, plot one image
     if show_fft:
         ar = np.abs(np.fft.fftshift(np.fft.fft2(ar.copy())))
-
-    if scalebar == True:
-        scalebar = {}
 
     # get image from a masked array
     if mask is not None:
@@ -716,7 +716,8 @@ def show(
         # Add a scalebar
         if scalebar is not None and scalebar is not False:
             # Add the grid
-            scalebar["Nx"], scalebar["Ny"] = ar.shape
+            scalebar["Nx"] = ar.shape[0]
+            scalebar["Ny"] = ar.shape[1]
             scalebar["pixelsize"] = pixelsize
             scalebar["pixelunits"] = pixelunits
             scalebar["space"] = space
