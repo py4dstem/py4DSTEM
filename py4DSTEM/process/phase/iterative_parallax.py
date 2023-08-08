@@ -14,6 +14,7 @@ from py4DSTEM import DataCube
 from py4DSTEM.process.phase.iterative_base_class import PhaseReconstruction
 from py4DSTEM.process.utils.cross_correlate import align_images_fourier
 from py4DSTEM.process.utils.utils import electron_wavelength_angstrom
+from py4DSTEM.visualize import show
 from scipy.linalg import polar
 from scipy.special import comb
 
@@ -246,6 +247,7 @@ class ParallaxReconstruction(PhaseReconstruction):
         )
         if normalize_images:
             self._stack_BF = xp.ones(stack_shape)
+            self._stack_BF_no_window = xp.ones(stack_shape)
 
             if normalize_order == 0:
                 all_bfs /= xp.mean(all_bfs, axis=(1, 2))[:, None, None]
@@ -258,6 +260,14 @@ class ParallaxReconstruction(PhaseReconstruction):
                 ] = (
                     self._window_inv[None] + self._window_edge[None] * all_bfs
                 )
+
+                self._stack_BF_no_window[
+                    :,
+                    self._object_padding_px[0] // 2 : self._grid_scan_shape[0]
+                    + self._object_padding_px[0] // 2,
+                    self._object_padding_px[1] // 2 : self._grid_scan_shape[1]
+                    + self._object_padding_px[1] // 2,
+                ] = all_bfs
 
             elif normalize_order == 1:
                 x = xp.linspace(-0.5, 0.5, all_bfs.shape[1])
@@ -285,9 +295,18 @@ class ParallaxReconstruction(PhaseReconstruction):
                         basis @ coefs[0], all_bfs.shape[1:3]
                     )
 
+                    self._stack_BF_no_window[
+                        a0,
+                        self._object_padding_px[0] // 2 : self._grid_scan_shape[0]
+                        + self._object_padding_px[0] // 2,
+                        self._object_padding_px[1] // 2 : self._grid_scan_shape[1]
+                        + self._object_padding_px[1] // 2,
+                    ] = all_bfs[a0] / xp.reshape(basis @ coefs[0], all_bfs.shape[1:3])
+
         else:
             all_means = xp.mean(all_bfs, axis=(1, 2))
             self._stack_BF = xp.full(stack_shape, all_means[:, None, None])
+            self._stack_BF_no_window = xp.full(stack_shape, all_means[:, None, None])
             self._stack_BF[
                 :,
                 self._object_padding_px[0] // 2 : self._grid_scan_shape[0]
@@ -298,6 +317,14 @@ class ParallaxReconstruction(PhaseReconstruction):
                 self._window_inv[None] * all_means[:, None, None]
                 + self._window_edge[None] * all_bfs
             )
+
+            self._stack_BF_no_window[
+                :,
+                self._object_padding_px[0] // 2 : self._grid_scan_shape[0]
+                + self._object_padding_px[0] // 2,
+                self._object_padding_px[1] // 2 : self._grid_scan_shape[1]
+                + self._object_padding_px[1] // 2,
+            ] = all_bfs
 
         # Fourier space operators for image shifts
         qx = xp.fft.fftfreq(self._stack_BF.shape[1], d=1)
@@ -533,9 +560,9 @@ class ParallaxReconstruction(PhaseReconstruction):
 
             divider = make_axes_locatable(ax)
             cax = divider.append_axes("right", size="5%", pad=0.05)
-            plt.colorbar(im, cax=cax)
+            fig.colorbar(im, cax=cax)
 
-            plt.tight_layout()
+            fig.tight_layout()
 
         if return_values:
             convergence = np.array(convergence).reshape(
@@ -548,7 +575,7 @@ class ParallaxReconstruction(PhaseReconstruction):
         max_alignment_bin: int = None,
         min_alignment_bin: int = 1,
         max_iter_at_min_bin: int = 2,
-        upsample_factor: int = 8,
+        cross_correlation_upsample_factor: int = 8,
         regularizer_matrix_size: Tuple[int, int] = (1, 1),
         regularize_shifts: bool = True,
         running_average: bool = True,
@@ -570,7 +597,7 @@ class ParallaxReconstruction(PhaseReconstruction):
             Minimum bin size for bright field alignment
         max_iter_at_min_bin: int, optional
             Number of iterations to run at the smallest bin size
-        upsample_factor: int, optional
+        cross_correlation_upsample_factor: int, optional
             DFT upsample factor for subpixel alignment
         regularizer_matrix_size: Tuple[int,int], optional
             Bernstein basis degree used for regularizing shifts
@@ -730,7 +757,7 @@ class ParallaxReconstruction(PhaseReconstruction):
                 xy_shift = align_images_fourier(
                     G_ref,
                     G,
-                    upsample_factor=upsample_factor,
+                    upsample_factor=cross_correlation_upsample_factor,
                     device=self._device,
                 )
 
@@ -836,6 +863,193 @@ class ParallaxReconstruction(PhaseReconstruction):
             xp.clear_memo()
 
         return self
+
+    def subpixel_alignment(
+        self,
+        kde_upsample_factor=4,
+        kde_sigma=0.125,
+        plot_upsampled_BF_comparison: bool = True,
+        plot_upsampled_FFT_comparison: bool = False,
+        **kwargs,
+    ):
+        """
+        Upsample and subpixel-align BFs using the measured image shifts.
+        Uses kernel density estimation (KDE) to align upsampled BFs.
+
+        Parameters
+        ----------
+        kde_upsample_factor: int, optional
+            Real-space upsampling factor
+        kde_sigma: float, optional
+            KDE gaussian kernel bandwidth
+        plot_upsampled_BF_comparison: bool, optional
+            If True, the pre/post alignment BF images are plotted for comparison
+        plot_upsampled_FFT_comparison: bool, optional
+            If True, the pre/post alignment BF FFTs are plotted for comparison
+
+        """
+        xp = self._xp
+        asnumpy = self._asnumpy
+        gaussian_filter = self._gaussian_filter
+
+        xy_shifts = self._xy_shifts
+        BF_size = np.array(self._stack_BF_no_window.shape[-2:])
+
+        pixel_output = BF_size * kde_upsample_factor
+        pixel_size = pixel_output.prod()
+
+        # shifted coordinates
+        x = xp.arange(BF_size[0])
+        y = xp.arange(BF_size[1])
+
+        xa, ya = xp.meshgrid(x, y, indexing="ij")
+        xa = ((xa + xy_shifts[:, 0, None, None]) * kde_upsample_factor).ravel()
+        ya = ((ya + xy_shifts[:, 1, None, None]) * kde_upsample_factor).ravel()
+
+        # bilinear sampling
+        xF = xp.floor(xa).astype("int")
+        yF = xp.floor(ya).astype("int")
+        dx = xa - xF
+        dy = ya - yF
+
+        # resampling
+        inds_1D = xp.ravel_multi_index(
+            xp.hstack(
+                [
+                    [xF, yF],
+                    [xF + 1, yF],
+                    [xF, yF + 1],
+                    [xF + 1, yF + 1],
+                ]
+            ),
+            pixel_output,
+            mode=["wrap", "wrap"],
+        )
+
+        weights = xp.hstack(
+            (
+                (1 - dx) * (1 - dy),
+                (dx) * (1 - dy),
+                (1 - dx) * (dy),
+                (dx) * (dy),
+            )
+        )
+
+        pix_count = xp.reshape(
+            xp.bincount(inds_1D, weights=weights, minlength=pixel_size), pixel_output
+        )
+        pix_output = xp.reshape(
+            xp.bincount(
+                inds_1D,
+                weights=weights * xp.tile(self._stack_BF_no_window.ravel(), 4),
+                minlength=pixel_size,
+            ),
+            pixel_output,
+        )
+
+        # kernel density estimate
+        sigma = kde_sigma * kde_upsample_factor
+        pix_count = gaussian_filter(pix_count, sigma)
+        pix_count[pix_output == 0.0] = np.inf
+        pix_output = gaussian_filter(pix_output, sigma)
+        pix_output /= pix_count
+
+        self._recon_BF_subpixel_aligned = pix_output
+        self.recon_BF_subpixel_aligned = asnumpy(self._recon_BF_subpixel_aligned)
+
+        # plotting
+        if plot_upsampled_BF_comparison:
+            if plot_upsampled_FFT_comparison:
+                figsize = kwargs.pop("figsize", (8, 8))
+                fig, axs = plt.subplots(2, 2, figsize=figsize)
+            else:
+                figsize = kwargs.pop("figsize", (8, 4))
+                fig, axs = plt.subplots(1, 2, figsize=figsize)
+
+            axs = axs.flat
+            cmap = kwargs.pop("cmap", "magma")
+
+            cropped_object = self._crop_padded_object(self._recon_BF)
+            upsampled_pad_x = self._object_padding_px[0] * kde_upsample_factor // 2
+            upsampled_pad_y = self._object_padding_px[1] * kde_upsample_factor // 2
+            cropped_object_aligned = self.recon_BF_subpixel_aligned[
+                upsampled_pad_x:-upsampled_pad_x,
+                upsampled_pad_y:-upsampled_pad_y,
+            ]
+
+            extent = [
+                0,
+                self._scan_sampling[1] * cropped_object.shape[1],
+                self._scan_sampling[0] * cropped_object.shape[0],
+                0,
+            ]
+
+            axs[0].imshow(
+                cropped_object,
+                extent=extent,
+                cmap=cmap,
+                **kwargs,
+            )
+            axs[0].set_title("Aligned Bright Field")
+
+            axs[1].imshow(
+                cropped_object_aligned,
+                extent=extent,
+                cmap=cmap,
+                **kwargs,
+            )
+            axs[1].set_title("Upsampled Bright Field")
+
+            for ax in axs[:2]:
+                ax.set_ylabel("x [A]")
+                ax.set_xlabel("y [A]")
+
+            if plot_upsampled_FFT_comparison:
+                recon_fft = xp.fft.fft2(self._recon_BF)
+                recon_fft = xp.fft.fftshift(xp.abs(xp.fft.fft2(self._recon_BF)))
+                pad_x = BF_size[0] * (kde_upsample_factor - 1) // 2
+                pad_y = BF_size[1] * (kde_upsample_factor - 1) // 2
+                pad_recon_fft = asnumpy(
+                    xp.pad(recon_fft, ((pad_x, pad_x), (pad_y, pad_y)))
+                )
+
+                upsampled_fft = asnumpy(
+                    xp.fft.fftshift(
+                        xp.abs(xp.fft.fft2(self._recon_BF_subpixel_aligned))
+                    )
+                )
+
+                reciprocal_extent = [
+                    0,
+                    self._reciprocal_sampling[1] * cropped_object_aligned.shape[1],
+                    self._reciprocal_sampling[0] * cropped_object_aligned.shape[0],
+                    0,
+                ]
+
+                show(
+                    pad_recon_fft,
+                    figax=(fig, axs[2]),
+                    extent=reciprocal_extent,
+                    cmap="gray",
+                    title="Aligned Bright Field FFT",
+                    **kwargs,
+                )
+
+                show(
+                    upsampled_fft,
+                    figax=(fig, axs[3]),
+                    extent=reciprocal_extent,
+                    cmap="gray",
+                    title="Upsampled Bright Field FFT",
+                    **kwargs,
+                )
+
+                for ax in axs[2:]:
+                    ax.set_ylabel(r"$k_x$ [$A^{-1}$]")
+                    ax.set_xlabel(r"$k_y$ [$A^{-1}$]")
+                    ax.xaxis.set_ticks_position("bottom")
+
+            fig.tight_layout()
 
     def aberration_fit(
         self,
