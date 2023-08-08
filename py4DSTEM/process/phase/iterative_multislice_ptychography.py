@@ -2860,8 +2860,8 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
 
         Parameters
         --------
-        x1, x2, y1, y2: floats
-            line profile for dpeth seciton runs from (x1,y1) to (x2,y2)
+        x1, x2, y1, y2: floats (pixels)
+            Line profile for depth section runs from (x1,y1) to (x2,y2)
         gaussian_filter_sigma: float (optional)
             Standard deviation of gaussian kernel in A
         ms_object: np.array
@@ -2933,8 +2933,8 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
             fig, ax = plt.subplots(2, 1)
             ax[0].imshow(ms_obj.sum(0), cmap="gray", extent=extent2)
             ax[0].plot(
-                [y1 / self.sampling[0], y2 / self.sampling[1]],
-                [x1 / self.sampling[0], x2 / self.sampling[1]],
+                [y1 * self.sampling[0], y2 * self.sampling[1]],
+                [x1 * self.sampling[0], x2 * self.sampling[1]],
                 color="red",
             )
             ax[0].set_xlabel("y [A]")
@@ -2952,6 +2952,7 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
                 ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
                 fig.add_axes(ax_cb)
                 fig.colorbar(im, cax=ax_cb)
+            plt.tight_layout()
 
     def tune_num_slices_and_thicknesses(
         self,
