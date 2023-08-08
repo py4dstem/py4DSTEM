@@ -1614,9 +1614,21 @@ def fit_aberration_surface(
 
 def rotate_point(origin, point, angle):
     """
-    Rotate a point counterclockwise by a given angle around a given origin.
+    Rotate a point (x1, y1) counterclockwise by a given angle around 
+    a given origin (x0, y0).
+    
+    Parameters
+    --------
+    origin: 2-tuple of floats
+        (x0, y0)
+    point: 2-tuple of floats
+        (x1, y1)
+    angle: float (radians)
 
-    The angle should be given in radians.
+    Returns
+    --------
+    rotated points (2-tuple)
+
     """
     ox, oy = origin
     px, py = point
