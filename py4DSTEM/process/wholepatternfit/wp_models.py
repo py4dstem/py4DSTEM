@@ -17,9 +17,7 @@ class WPFModelType(Flag):
     LATTICE = auto()
 
     DUMMY = auto()  # Model has no direct contribution to pattern
-    META = (
-        auto()
-    )  # Model depends on multiple sub-Models (triggers extra linking on inclusion)
+    META = auto()  # Model depends on multiple sub-Models
 
 
 class WPFModelPrototype:
@@ -55,11 +53,6 @@ class WPFModelPrototype:
         self.hasJacobian = getattr(self, "jacobian", None) is not None
 
         self.model_type = model_type
-
-    #     # check the function obeys the spec
-    #     assert (
-    #         len(signature(self.func).parameters) == len(params) + 2
-    #     ), f"The model function has the wrong number of arguments in its signature. It must be written as func(DP, param1, param2, ..., **kwargs). The current signature is {str(signature(self.func))}"
 
     def func(self, DP: np.ndarray, x, **kwargs) -> None:
         raise NotImplementedError()
@@ -155,100 +148,48 @@ class GaussianBackground(WPFModelPrototype):
         if global_center:
             params["x center"] = WPF.coordinate_model.params["x center"]
             params["y center"] = WPF.coordinate_model.params["y center"]
-            self.func = self.global_center_func
-            self.jacobian = self.global_center_jacobian
         else:
             params["x center"] = Parameter(x0)
             params["y center"] = Parameter(y0)
-            self.func = self.local_center_func
-            self.jacobian = self.local_center_jacobian
 
         super().__init__(name, params, model_type=WPFModelType.BACKGROUND)
 
-    def global_center_func(self, DP: np.ndarray, x: np.ndarray, **kwargs) -> None:
+    def func(self, DP: np.ndarray, x: np.ndarray, **kwargs) -> None:
         sigma = x[self.params["sigma"].offset]
         level = x[self.params["intensity"].offset]
 
-        DP += level * np.exp(kwargs["global_r"] ** 2 / (-2 * sigma**2))
+        r = WPF._get_distance(x, self.params["x center"], self.params["y center"])
 
-    def global_center_jacobian(self, J: np.ndarray, x: np.ndarray, **kwargs) -> None:
-        sigma = x[self.params["sigma"].offset]
-        level = x[self.params["intensity"].offset]
+        DP += level * np.exp(r**2 / (-2 * sigma**2))
 
-        exp_expr = np.exp(kwargs["global_r"] ** 2 / (-2 * sigma**2))
-
-        # dF/d(global_x0)
-        J[:, 0] += (
-            level * (kwargs["xArray"] - kwargs["global_x0"]) * exp_expr / sigma**2
-        ).ravel()
-
-        # dF/d(global_y0)
-        J[:, 1] += (
-            level * (kwargs["yArray"] - kwargs["global_y0"]) * exp_expr / sigma**2
-        ).ravel()
-
-        # dF/s(sigma)
-        J[:, self.params["sigma"].offset] = (
-            level * kwargs["global_r"] ** 2 * exp_expr / sigma**3
-        ).ravel()
-
-        # dF/d(level)
-        J[:, self.params["intensity"].offset] = exp_expr.ravel()
-
-    def local_center_func(self, DP: np.ndarray, x: np.ndarray, **kwargs) -> None:
+    def jacobian(self, J: np.ndarray, x: np.ndarray, **kwargs) -> None:
         sigma = x[self.params["sigma"].offset]
         level = x[self.params["intensity"].offset]
         x0 = x[self.params["x center"].offset]
         y0 = x[self.params["y center"].offset]
-        DP += level * np.exp(
-            ((kwargs["xArray"] - x0) ** 2 + (kwargs["yArray"] - y0) ** 2)
-            / (-2 * sigma**2)
+
+        r = kwargs["parent"]._get_distance(
+            x, self.params["x center"], self.params["y center"]
         )
-
-    def local_center_jacobian(self, J: np.ndarray, x: np.ndarray, **kwargs) -> None:
-        sigma = x[self.params["sigma"].offset]
-        level = x[self.params["intensity"].offset]
-        x0 = x[self.params["x center"].offset]
-        y0 = x[self.params["y center"].offset]
-
-        # dF/s(sigma)
-        J[:, self.params["sigma"].offset] = (
-            level
-            * ((kwargs["xArray"] - x0) ** 2 + (kwargs["yArray"] - y0) ** 2)
-            * np.exp(
-                ((kwargs["xArray"] - x0) ** 2 + (kwargs["yArray"] - y0) ** 2)
-                / (-2 * sigma**2)
-            )
-            / sigma**3
-        ).ravel()
-
-        # dF/d(level)
-        J[:, self.params["intensity"].offset] = np.exp(
-            ((kwargs["xArray"] - x0) ** 2 + (kwargs["yArray"] - y0) ** 2)
-            / (-2 * sigma**2)
-        ).ravel()
+        exp_expr = np.exp(r**2 / (-2 * sigma**2))
 
         # dF/d(x0)
-        J[:, self.params["x center"].offset] = (
-            level
-            * (kwargs["xArray"] - x0)
-            * np.exp(
-                ((kwargs["xArray"] - x0) ** 2 + (kwargs["yArray"] - y0) ** 2)
-                / (-2 * sigma**2)
-            )
-            / sigma**2
+        J[:, self.params["x center"].offset] += (
+            level * (kwargs["xArray"] - x0) * exp_expr / sigma**2
         ).ravel()
 
         # dF/d(y0)
-        J[:, self.params["y center"].offset] = (
-            level
-            * (kwargs["yArray"] - y0)
-            * np.exp(
-                ((kwargs["xArray"] - x0) ** 2 + (kwargs["yArray"] - y0) ** 2)
-                / (-2 * sigma**2)
-            )
-            / sigma**2
+        J[:, self.params["y center"].offset] += (
+            level * (kwargs["yArray"] - y0) * exp_expr / sigma**2
         ).ravel()
+
+        # dF/s(sigma)
+        J[:, self.params["sigma"].offset] += (
+            level * r**2 * exp_expr / sigma**3
+        ).ravel()
+
+        # dF/d(level)
+        J[:, self.params["intensity"].offset] += exp_expr.ravel()
 
 
 class GaussianRing(WPFModelPrototype):
@@ -619,6 +560,12 @@ class SyntheticDiskMoire(WPFModelPrototype):
         super().__init__(
             name, params, model_type=WPFModelType.META | WPFModelType.LATTICE
         )
+
+        # ensure both models share the same center coordinate
+
+        # pick the right pair of lattice vectors for generating the moire reciprocal lattice
+
+        #
 
 
 class ComplexOverlapKernelDiskLattice(WPFModelPrototype):
