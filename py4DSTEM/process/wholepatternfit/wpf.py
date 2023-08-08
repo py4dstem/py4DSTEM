@@ -4,6 +4,7 @@ from py4DSTEM.process.wholepatternfit.wp_models import (
     WPFModelPrototype,
     _BaseModel,
     WPFModelType,
+    Parameter,
 )
 
 from typing import Optional
@@ -546,26 +547,31 @@ class WholePatternFit:
         self.static_data["Q_Nx"] = self.datacube.Q_Nx
         self.static_data["Q_Ny"] = self.datacube.Q_Ny
 
-        self.static_data["global_r"] = np.hypot(
-            (self.static_data["xArray"] - x0),
-            (self.static_data["yArray"] - y0),
+        # todo: does this create a problematic cicular reference?
+        self.static_data["parent"] = self
+
+    def _get_distance(self, params: np.ndarray, x: Parameter, y: Parameter):
+        """
+        Return the distance from a point in pixel coordinates specified
+        by two Parameter objects.
+        This method caches the result from the _BaseModel for performance
+        """
+        if (
+            x is self.model[0].params["x center"]
+            and y is self.model[0].params["y center"]
+        ):
+            # TODO: actually implement caching
+            pass
+
+        return np.hypot(
+            self.static_data["xArray"] - params[x.offset],
+            self.static_data["yArray"] - params[y.offset],
         )
 
     def _pattern_error(self, x, current_pattern, shared_data):
-        DP = np.zeros((self.datacube.Q_Nx, self.datacube.Q_Ny))
+        DP = self._pattern(x, shared_data)
 
-        shared_data["global_x0"] = x[0]
-        shared_data["global_y0"] = x[1]
-        shared_data["global_r"] = np.hypot(
-            (shared_data["xArray"] - x[0]),
-            (shared_data["yArray"] - x[1]),
-        )
-
-        for i, m in enumerate(self.model):
-            ind = self.model_param_inds[i] + 2
-            m.func(DP, *x[ind : ind + m.nParams].tolist(), **shared_data)
-
-        DP = (DP**self.fit_power - current_pattern**self.fit_power) * self.mask
+        DP = (DP - current_pattern**self.fit_power) * self.mask
 
         if self._track:
             self._fevals.append(DP)
