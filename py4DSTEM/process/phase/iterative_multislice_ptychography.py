@@ -2852,12 +2852,31 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
         ms_object=None,
         cbar: bool = False,
         aspect: float = None,
+        plot_line_profile: bool = False,
         **kwargs,
     ):
         """
-        doc strings go here
+        Displays line profile depth section
+
+        Parameters
+        --------
+        x1, x2, y1, y2: floats
+            line profile for dpeth seciton runs from (x1,y1) to (x2,y2)
+        gaussian_filter_sigma: float (optional)
+            Standard deviation of gaussian kernel in A
+        ms_object: np.array
+            Object to plot slices of. If None, uses current object
+        cbar: bool, optional
+            If True, displays a colorbar
+        aspect: float, optional
+            aspect ratio for depth profile plot
+        plot_line_profile: bool
+            If True, also plots line profile showing where depth profile is taken
         """
-        ms_obj = self.object_cropped
+        if ms_object is not None:
+            ms_obj = ms_object
+        else:
+            ms_obj = self.object_cropped
         angle = np.arctan((x2 - x1) / (y2 - y1))
 
         x0 = ms_obj.shape[1] / 2
@@ -2879,6 +2898,7 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
         if gaussian_filter_sigma is not None:
             from scipy.ndimage import gaussian_filter
 
+            gaussian_filter_sigma /= self.sampling[0]
             rotated_object = gaussian_filter(rotated_object, gaussian_filter_sigma)
 
         plot_im = rotated_object[:, 0, int(y1_0) : int(y2_0)]
@@ -2890,18 +2910,48 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
             0,
         ]
 
-        fig, ax = plt.subplots()
-        im = ax.imshow(plot_im, cmap="magma", extent=extent)
-        if aspect is not None:
-            ax.set_aspect(aspect)
-        ax.set_xlabel("y [A]")
-        ax.set_ylabel("x [A]")
-        ax.set_title("Multislice depth profile")
-        if cbar:
-            divider = make_axes_locatable(ax)
-            ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
-            fig.add_axes(ax_cb)
-            fig.colorbar(im, cax=ax_cb)
+        if plot_line_profile == False:
+            fig, ax = plt.subplots()
+            im = ax.imshow(plot_im, cmap="magma", extent=extent)
+            if aspect is not None:
+                ax.set_aspect(aspect)
+            ax.set_xlabel("y [A]")
+            ax.set_ylabel("x [A]")
+            ax.set_title("Multislice depth profile")
+            if cbar:
+                divider = make_axes_locatable(ax)
+                ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
+                fig.add_axes(ax_cb)
+                fig.colorbar(im, cax=ax_cb)
+        else:
+            extent2 = [
+                0,
+                self.sampling[0] * ms_obj.shape[1],
+                self.sampling[1] * ms_obj.shape[2],
+                0,
+            ]
+            fig, ax = plt.subplots(2, 1)
+            ax[0].imshow(ms_obj.sum(0), cmap="gray", extent=extent2)
+            ax[0].plot(
+                [y1 / self.sampling[0], y2 / self.sampling[1]],
+                [x1 / self.sampling[0], x2 / self.sampling[1]],
+                color="red",
+            )
+            ax[0].set_xlabel("y [A]")
+            ax[0].set_ylabel("x [A]")
+            ax[0].set_title("Multislice depth profile location")
+
+            im = ax[1].imshow(plot_im, cmap="magma", extent=extent)
+            if aspect is not None:
+                ax[1].set_aspect(aspect)
+            ax[1].set_xlabel("y [A]")
+            ax[1].set_ylabel("x [A]")
+            ax[1].set_title("Multislice depth profile")
+            if cbar:
+                divider = make_axes_locatable(ax[1])
+                ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
+                fig.add_axes(ax_cb)
+                fig.colorbar(im, cax=ax_cb)
 
     def tune_num_slices_and_thicknesses(
         self,
