@@ -2915,8 +2915,8 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
             im = ax.imshow(plot_im, cmap="magma", extent=extent)
             if aspect is not None:
                 ax.set_aspect(aspect)
-            ax.set_xlabel("y [A]")
-            ax.set_ylabel("x [A]")
+            ax.set_xlabel("r [A]")
+            ax.set_ylabel("z [A]")
             ax.set_title("Multislice depth profile")
             if cbar:
                 divider = make_axes_locatable(ax)
@@ -2944,8 +2944,8 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
             im = ax[1].imshow(plot_im, cmap="magma", extent=extent)
             if aspect is not None:
                 ax[1].set_aspect(aspect)
-            ax[1].set_xlabel("y [A]")
-            ax[1].set_ylabel("x [A]")
+            ax[1].set_xlabel("r [A]")
+            ax[1].set_ylabel("z [A]")
             ax[1].set_title("Multislice depth profile")
             if cbar:
                 divider = make_axes_locatable(ax[1])
