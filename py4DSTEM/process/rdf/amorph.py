@@ -111,7 +111,7 @@ def plot_strains(strains, cmap="RdBu_r", vmin=None, vmax=None, mask=None):
         cmap, vmin, vmax: imshow parameters
         mask: real space mask of values not to show (black)
     """
-    cmap = matplotlib.cm.get_cmap(cmap)
+    cmap = plt.get_cmap(cmap)
     if vmin is None:
         vmin = np.min(strains)
     if vmax is None:

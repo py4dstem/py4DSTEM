@@ -10,7 +10,7 @@ from typing import Optional
 import inspect
 
 from emdfile import tqdmnd,Metadata
-from py4DSTEM.data import Calibration, RealSlice, Data
+from py4DSTEM.data import Calibration, RealSlice, Data, DiffractionSlice
 from py4DSTEM.visualize.show import show
 
 
@@ -322,7 +322,7 @@ class DataCubeVirtualImager:
         data = None,
         centered = None,
         calibrated = None,
-        shift_center = None,
+        shift_center = False,
         scan_position = None,
         invert = False,
         color = 'c',
@@ -381,6 +381,7 @@ class DataCubeVirtualImager:
 
         # data
         if data is None:
+            image = None
             keys = ['dp_mean','dp_max','dp_median']
             image = None
             for k in keys:
@@ -389,11 +390,14 @@ class DataCubeVirtualImager:
                     break
                 except:
                     pass
-                if image is None:
-                    image = self[0,0]
+            if image is None:
+                image = self[0,0]
         elif isinstance(data, np.ndarray):
             assert(data.shape == self.Qshape), f"Can't position a detector over an image with a shape that is different from diffraction space.  Diffraction space in this dataset has shape {self.Qshape} but the image passed has shape {data.shape}"
             image = data
+        elif isinstance(data, DiffractionSlice):
+            assert(data.shape == self.Qshape), f"Can't position a detector over an image with a shape that is different from diffraction space.  Diffraction space in this dataset has shape {self.Qshape} but the image passed has shape {data.shape}"
+            image = data.data
         elif isinstance(data,tuple):
             rx,ry = data[:2]
             image = self[rx,ry]
@@ -402,10 +406,7 @@ class DataCubeVirtualImager:
 
         # shift center
         if shift_center is None:
-            if isinstance(data,tuple):
-                shift_center = True
-            else:
-                shift_center = False
+            shift_center = False
         elif shift_center == True:
             assert(isinstance(data,tuple)), "If shift_center is set to True, `data` should be a 2-tuple (rx,ry). To shift the detector mask while using some other input for `data`, set `shift_center` to a 2-tuple (rx,ry)"
         elif isinstance(shift_center,tuple):

@@ -2,8 +2,8 @@
 
 import numpy as np
 from scipy.interpolate import interp1d
-from scipy.ndimage import (binary_opening, binary_dilation,distance_transform_edt,
-    binary_fill_holes, gaussian_filter1d,gaussian_filter)
+from scipy.ndimage import (binary_opening, binary_dilation,
+    distance_transform_edt, binary_fill_holes, gaussian_filter1d, gaussian_filter)
 from typing import Optional,Union
 
 from emdfile import Array, Metadata, Node, Root, tqdmnd
@@ -125,6 +125,9 @@ class DataCube(
         self._qxx,self._qyy = np.meshgrid( dim_qx,dim_qy )
         self._rxx,self._ryy = np.meshgrid( dim_rx,dim_ry )
 
+        self._qyy_raw,self._qxx_raw = np.meshgrid( np.arange(self.Q_Ny),np.arange(self.Q_Nx) )
+        self._ryy_raw,self._rxx_raw = np.meshgrid( np.arange(self.R_Ny),np.arange(self.R_Nx) )
+
 
 
     # coordinate meshgrids
@@ -140,6 +143,18 @@ class DataCube(
     @property
     def qyy(self):
         return self._qyy
+    @property
+    def rxx_raw(self):
+        return self._rxx_raw
+    @property
+    def ryy_raw(self):
+        return self._ryy_raw
+    @property
+    def qxx_raw(self):
+        return self._qxx_raw
+    @property
+    def qyy_raw(self):
+        return self._qyy_raw
 
     # coordinate meshgrids with shifted origin
     def qxxs(self,rx,ry):
@@ -1061,11 +1076,12 @@ class DataCube(
             # im = self.tree["dp_max"].data.astype('float')
             if not "dp_max" in self._branch.keys():
                 self.get_dp_max();
-            im = self.tree("dp_max").data.astype('float')
+            im = self.tree("dp_max").data.copy().astype('float')
         else:
             if not "dp_mean" in self._branch.keys():
                 self.get_dp_mean();
-            im = self.tree("dp_mean").data
+            im = self.tree("dp_mean").data.copy()
+
             # if not "dp_mean" in self.tree.keys():
             #     self.get_dp_mean();
             # im = self.tree["dp_mean"].data.astype('float')
@@ -1119,7 +1135,7 @@ class DataCube(
         )
 
         # Add to tree
-        self.attach( x )
+        self.tree(x)
 
         # return
         if returncalc:
@@ -1170,7 +1186,7 @@ class DataCube(
         # define the 2D cartesian coordinate system
         origin = self.calibration.get_origin()
         origin = origin[0][rx,ry],origin[1][rx,ry]
-        qxx,qyy = self.qxx-origin[0], self.qyy-origin[1]
+        qxx,qyy = self.qxx_raw-origin[0], self.qyy_raw-origin[1]
 
         # get distance qr in polar-elliptical coords
         ellipse = self.calibration.get_ellipse()
@@ -1455,9 +1471,6 @@ class DataCube(
         vects = braggvectors.raw[rx,ry]
         # loop
         for idx in range(len(vects.data)):
-            qr = np.hypot(self.qxx-vects.qx[idx], self.qyy-vects.qy[idx])
+            qr = np.hypot(self.qxx_raw-vects.qx[idx], self.qyy_raw-vects.qy[idx])
             mask = np.logical_and(mask, qr>radius)
         return mask
-
-
-

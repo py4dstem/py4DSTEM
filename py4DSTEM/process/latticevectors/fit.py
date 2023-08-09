@@ -104,13 +104,22 @@ def fit_lattice_vectors_all_DPs(braggpeaks, x0=0, y0=0, minNumPeaks=5):
 
     # Make RealSlice to contain outputs
     slicelabels = ('x0','y0','g1x','g1y','g2x','g2y','error','mask')
-    g1g2_map = RealSlice(data=np.zeros((braggpeaks.shape[0],braggpeaks.shape[1],8)),
-                       slicelabels=slicelabels, name='g1g2_map')
+    g1g2_map = RealSlice(
+        data=np.zeros(
+            (8, braggpeaks.shape[0],braggpeaks.shape[1])
+            ),
+            slicelabels=slicelabels, name='g1g2_map'
+    )
 
     # Fit lattice vectors
     for (Rx, Ry) in tqdmnd(braggpeaks.shape[0],braggpeaks.shape[1]):
         braggpeaks_curr = braggpeaks.get_pointlist(Rx,Ry)
-        qx0,qy0,g1x,g1y,g2x,g2y,error = fit_lattice_vectors(braggpeaks_curr, x0, y0, minNumPeaks)
+        qx0,qy0,g1x,g1y,g2x,g2y,error = fit_lattice_vectors(
+            braggpeaks_curr, 
+            x0, 
+            y0, 
+            minNumPeaks
+        )
         # Store data
         if g1x is not None:
             g1g2_map.get_slice('x0').data[Rx,Ry] = qx0
