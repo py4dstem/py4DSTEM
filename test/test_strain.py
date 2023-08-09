@@ -27,5 +27,7 @@ class TestStrainMap:
         )
 
         assert(isinstance(strainmap, StrainMap))
+        assert(strainmap.calibration is not None)
+        assert(strainmap.calibration is strainmap.braggvectors.calibration)
 
 
