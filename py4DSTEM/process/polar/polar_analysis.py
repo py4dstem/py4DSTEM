@@ -6,17 +6,10 @@ import matplotlib.pyplot as plt
 from emdfile import tqdmnd
 
 
-<<<<<<< Updated upstream
-def calculate_FEM_global(
-    self,
-    use_median_local = False,
-    use_median_global = False,
-=======
 def calculate_radial_statistics(
     self,
     median_local = False,
     median_global = False,
->>>>>>> Stashed changes
     plot_results = False,
     figsize = (8,4),
     returnval = False,
@@ -49,37 +42,22 @@ def calculate_radial_statistics(
     self.scattering_vector = self.radial_bins * self.qstep * self.calibration.get_Q_pixel_size()
     self.scattering_vector_units = self.calibration.get_Q_pixel_units()
 
-<<<<<<< Updated upstream
-    # init radial data array
-=======
     # init radial data arrays
->>>>>>> Stashed changes
     self.radial_all = np.zeros((
         self._datacube.shape[0],
         self._datacube.shape[1],
         self.polar_shape[1],
     ))
-<<<<<<< Updated upstream
-=======
     self.radial_all_std = np.zeros((
         self._datacube.shape[0],
         self._datacube.shape[1],
         self.polar_shape[1],
     ))
 
->>>>>>> Stashed changes
-
     # Compute the radial mean for each probe position
     for rx, ry in tqdmnd(
         self._datacube.shape[0],
         self._datacube.shape[1],
-<<<<<<< Updated upstream
-        desc="Global FEM",
-        unit=" probe positions",
-        disable=not progress_bar):
-        
-        self.radial_all[rx,ry] = np.mean(self.data[rx,ry],axis=0)
-=======
         desc="Radial statistics",
         unit=" probe positions",
         disable=not progress_bar):
@@ -90,7 +68,6 @@ def calculate_radial_statistics(
         self.radial_all_std[rx,ry] = np.sqrt(np.mean(
             (self.data[rx,ry] - self.radial_all[rx,ry][None])**2, 
             axis=0))
->>>>>>> Stashed changes
 
     self.radial_avg = np.mean(self.radial_all, axis=(0,1))
     self.radial_var = np.mean(
@@ -171,9 +148,7 @@ def calculate_FEM_local(
 
     """
     
-<<<<<<< Updated upstream
-    1+1
-=======
+
     pass
 
 
@@ -182,7 +157,4 @@ def calculate_FEM_local(
 #     figsize = (8,6),
 #     returnfig = False,
 #     ):
-
-
->>>>>>> Stashed changes
 
