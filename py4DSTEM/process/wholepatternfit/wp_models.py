@@ -158,7 +158,7 @@ class GaussianBackground(WPFModelPrototype):
         sigma = x[self.params["sigma"].offset]
         level = x[self.params["intensity"].offset]
 
-        r = WPF._get_distance(x, self.params["x center"], self.params["y center"])
+        r = kwargs['parent']._get_distance(x, self.params["x center"], self.params["y center"])
 
         DP += level * np.exp(r**2 / (-2 * sigma**2))
 
@@ -302,15 +302,14 @@ class SyntheticDiskLattice(WPFModelPrototype):
         params = {}
 
         if global_center:
-            self.func = self.global_center_func
-            self.jacobian = self.global_center_jacobian
-
-            x0 = WPF.static_data["global_x0"]
-            y0 = WPF.static_data["global_y0"]
+            params["x center"] = WPF.coordinate_model.params["x center"]
+            params["y center"] = WPF.coordinate_model.params["y center"]
         else:
             params["x center"] = Parameter(x0)
             params["y center"] = Parameter(y0)
-            self.func = self.local_center_func
+
+        x0 = params["x center"].initial_value
+        y0 = params["y center"].initial_value
 
         params["ux"] = Parameter(ux)
         params["uy"] = Parameter(uy)
@@ -366,41 +365,39 @@ class SyntheticDiskLattice(WPFModelPrototype):
 
         super().__init__(name, params, model_type=WPFModelType.LATTICE)
 
-    def global_center_func(self, DP: np.ndarray, *args, **kwargs) -> None:
-        # copy the global centers in the right place for the local center generator
-        self.local_center_func(
-            DP, kwargs["global_x0"], kwargs["global_y0"], *args, **kwargs
+    def func(self, DP: np.ndarray, x: np.ndarray, **static_data) -> None:
+        x0 = x[self.params["x center"].offset]
+        y0 = x[self.params["y center"].offset]
+        ux = x[self.params["ux"].offset]
+        uy = x[self.params["uy"].offset]
+        vx = x[self.params["vx"].offset]
+        vy = x[self.params["vy"].offset]
+
+        disk_radius = (
+            x[self.params["disk radius"].offset]
+            if self.refine_radius
+            else self.disk_radius
         )
 
-    def local_center_func(self, DP: np.ndarray, *args, **kwargs) -> None:
-        x0 = args[0]
-        y0 = args[1]
-        ux = args[2]
-        uy = args[3]
-        vx = args[4]
-        vy = args[5]
-
-        if self.refine_radius & self.refine_width:
-            disk_radius = args[-2]
-        elif self.refine_radius:
-            disk_radius = args[-1]
-        else:
-            disk_radius = self.disk_radius
-        disk_width = args[-1] if self.refine_width else self.disk_width
+        disk_width = (
+            x[self.params["edge width"].offset]
+            if self.refine_width
+            else self.disk_width
+        )
 
         for i, (u, v) in enumerate(zip(self.u_inds, self.v_inds)):
-            x = x0 + (u * ux) + (v * vx)
-            y = y0 + (u * uy) + (v * vy)
+            x_pos = x0 + (u * ux) + (v * vx)
+            y_pos = y0 + (u * uy) + (v * vy)
 
-            DP += args[i + 6] / (
+            DP += x[self.params[f"[{u},{v}] Intensity"].offset] / (
                 1.0
                 + np.exp(
                     np.minimum(
                         4
                         * (
                             np.sqrt(
-                                (kwargs["xArray"] - x) ** 2
-                                + (kwargs["yArray"] - y) ** 2
+                                (static_data["xArray"] - x_pos) ** 2
+                                + (static_data["yArray"] - y_pos) ** 2
                             )
                             - disk_radius
                         )
@@ -410,108 +407,136 @@ class SyntheticDiskLattice(WPFModelPrototype):
                 )
             )
 
-    def global_center_jacobian(
-        self, J: np.ndarray, *args, offset: int, **kwargs
-    ) -> None:
-        x0 = kwargs["global_x0"]
-        y0 = kwargs["global_y0"]
-        r = np.maximum(5e-1, kwargs["global_r"])
-        ux = args[0]
-        uy = args[1]
-        vx = args[2]
-        vy = args[3]
+    def jacobian(self, J: np.ndarray, x: np.ndarray, **static_data) -> None:
+        x0 = x[self.params["x center"].offset]
+        y0 = x[self.params["y center"].offset]
+        ux = x[self.params["ux"].offset]
+        uy = x[self.params["uy"].offset]
+        vx = x[self.params["vx"].offset]
+        vy = x[self.params["vy"].offset]
+        WPF = static_data['parent']
 
-        if self.refine_radius & self.refine_width:
-            disk_radius = args[-2]
-            radius_ind = -2
-        elif self.refine_radius:
-            disk_radius = args[-1]
-            radius_ind = -1
-        else:
-            disk_radius = self.disk_radius
-        disk_width = args[-1] if self.refine_width else self.disk_width
+        r = np.maximum(
+            5e-1, WPF._get_distance(x, self.params["x center"], self.params["y center"])
+        )
+
+        disk_radius = (
+            x[self.params["disk radius"].offset]
+            if self.refine_radius
+            else self.disk_radius
+        )
+
+        disk_width = (
+            x[self.params["edge width"].offset]
+            if self.refine_width
+            else self.disk_width
+        )
 
         for i, (u, v) in enumerate(zip(self.u_inds, self.v_inds)):
-            x = x0 + (u * ux) + (v * vx)
-            y = y0 + (u * uy) + (v * vy)
+            x_pos = x0 + (u * ux) + (v * vx)
+            y_pos = y0 + (u * uy) + (v * vy)
 
-            disk_intensity = args[i + 6]
+            disk_intensity = x[self.params[f"[{u},{v}] Intensity"].offset]
 
             r_disk = np.maximum(
                 5e-1,
-                np.sqrt((kwargs["xArray"] - x) ** 2 + (kwargs["yArray"] - y) ** 2),
+                np.sqrt(
+                    (static_data["xArray"] - x_pos) ** 2 + (static_data["yArray"] - y_pos) ** 2
+                ),
             )
 
             mask = r_disk < (2 * disk_radius)
 
             top_exp = mask * np.exp(4 * ((mask * r_disk) - disk_radius) / disk_width)
 
-            # dF/d(global_x0)
+            # dF/d(x0)
             dx = (
                 4
-                * args[i + 4]
-                * (kwargs["xArray"] - x)
+                * disk_intensity
+                * (static_data["xArray"] - x_pos)
                 * top_exp
                 / ((1.0 + top_exp) ** 2 * disk_width * r)
             ).ravel()
 
-            # dF/d(global_y0)
+            # dF/d(y0)
             dy = (
                 4
-                * args[i + 4]
-                * (kwargs["yArray"] - y)
+                * disk_intensity
+                * (static_data["yArray"] - y_pos)
                 * top_exp
                 / ((1.0 + top_exp) ** 2 * disk_width * r)
             ).ravel()
 
-            # insert global positional derivatives
-            J[:, 0] += disk_intensity * dx
-            J[:, 1] += disk_intensity * dy
+            # insert center position derivatives
+            J[:, self.params["x center"].offset] += disk_intensity * dx
+            J[:, self.params["y center"].offset] += disk_intensity * dy
 
             # insert lattice vector derivatives
-            J[:, offset] += disk_intensity * u * dx
-            J[:, offset + 1] += disk_intensity * u * dy
-            J[:, offset + 2] += disk_intensity * v * dx
-            J[:, offset + 3] += disk_intensity * v * dy
+            J[:, self.params["ux"].offset] += disk_intensity * u * dx
+            J[:, self.params["uy"].offset] += disk_intensity * u * dy
+            J[:, self.params["vx"].offset] += disk_intensity * v * dx
+            J[:, self.params["vy"].offset] += disk_intensity * v * dy
 
             # insert intensity derivative
             dI = (mask * (1.0 / (1.0 + top_exp))).ravel()
-            J[:, offset + i + 4] = dI
+            J[:, self.params[f"[{u},{v}] Intensity"].offset] += dI
 
             # insert disk radius derivative
             if self.refine_radius:
                 dR = (
-                    4.0 * args[i + 4] * top_exp / (disk_width * (1.0 + top_exp) ** 2)
+                    4.0 * disk_intensity * top_exp / (disk_width * (1.0 + top_exp) ** 2)
                 ).ravel()
-                J[:, offset + len(args) + radius_ind] += dR
+                J[:, self.params["disk radius"].offset] += dR
 
             if self.refine_width:
                 dW = (
                     4.0
-                    * args[i + 4]
+                    * disk_intensity
                     * top_exp
                     * (r_disk - disk_radius)
                     / (disk_width**2 * (1.0 + top_exp) ** 2)
                 ).ravel()
-                J[:, offset + len(args) - 1] += dW
+                J[:, self.params["edge width"].offset] += dW
 
 
 class SyntheticDiskMoire(WPFModelPrototype):
+    """
+    Add Moire peaks arising from two SyntheticDiskLattice lattices.
+    The positions of the Moire peaks are derived from the lattice
+    vectors of the parent lattices. This model object adds only the intensity of
+    each Moire peak as parameters, all other attributes are inherited from the parents
+    """
+
     def __init__(
         self,
         lattice_a: SyntheticDiskLattice,
         lattice_b: SyntheticDiskLattice,
         decorated_peaks: list = None,
+        name: str = "Moire Lattice",
     ):
-        super().__init__(
-            name, params, model_type=WPFModelType.META | WPFModelType.LATTICE
-        )
+        """
+        Parameters
+        ----------
 
+        lattice_a, lattice_b: SyntheticDiskLattice
+        """
         # ensure both models share the same center coordinate
 
         # pick the right pair of lattice vectors for generating the moire reciprocal lattice
 
         #
+
+        super().__init__(
+            name,
+            params,
+            model_type=WPFModelType.META,
+        )
+
+    def func(self, DP, x, **static_data):
+        pass
+
+    def jacobian(self, J, x, **static_data):
+        pass
 
 
 class ComplexOverlapKernelDiskLattice(WPFModelPrototype):

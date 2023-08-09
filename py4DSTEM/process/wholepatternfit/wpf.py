@@ -547,7 +547,6 @@ class WholePatternFit:
         self.static_data["Q_Nx"] = self.datacube.Q_Nx
         self.static_data["Q_Ny"] = self.datacube.Q_Ny
 
-        # todo: does this create a problematic cicular reference?
         self.static_data["parent"] = self
 
     def _get_distance(self, params: np.ndarray, x: Parameter, y: Parameter):
@@ -583,34 +582,18 @@ class WholePatternFit:
     def _pattern(self, x, shared_data):
         DP = np.zeros((self.datacube.Q_Nx, self.datacube.Q_Ny))
 
-        shared_data["global_x0"] = x[0]
-        shared_data["global_y0"] = x[1]
-        shared_data["global_r"] = np.hypot(
-            (shared_data["xArray"] - x[0]),
-            (shared_data["yArray"] - x[1]),
-        )
-
-        for i, m in enumerate(self.model):
-            ind = self.model_param_inds[i] + 2
-            m.func(DP, *x[ind : ind + m.nParams].tolist(), **shared_data)
+        for m in self.model:
+            m.func(DP, x, **shared_data)
 
         return (DP**self.fit_power) * self.mask
 
     def _jacobian(self, x, current_pattern, shared_data):
         # TODO: automatic mixed analytic/finite difference
 
-        J = np.zeros(((self.datacube.Q_Nx * self.datacube.Q_Ny), self.nParams + 2))
+        J = np.zeros(((self.datacube.Q_Nx * self.datacube.Q_Ny), self.nParams))
 
-        shared_data["global_x0"] = x[0]
-        shared_data["global_y0"] = x[1]
-        shared_data["global_r"] = np.hypot(
-            (shared_data["xArray"] - x[0]),
-            (shared_data["yArray"] - x[1]),
-        )
-
-        for i, m in enumerate(self.model):
-            ind = self.model_param_inds[i] + 2
-            m.jacobian(J, *x[ind : ind + m.nParams].tolist(), offset=ind, **shared_data)
+        for m in self.model:
+            m.jacobian(J, x, **shared_data)
 
         return J * self.mask.ravel()[:, np.newaxis]
 
@@ -620,7 +603,7 @@ class WholePatternFit:
         unique_params = []
         idx = 0
         for model in self.model:
-            for param in model.params:
+            for param in model.params.values():
                 if param not in unique_params:
                     unique_params.append(param)
                     param.offset = idx
@@ -631,3 +614,5 @@ class WholePatternFit:
         self.lower_bound = np.array([param.lower_bound for param in unique_params])
 
         self.hasJacobian = all([m.hasJacobian for m in self.model])
+
+        self.nParams = self.x0.shape[0]

@@ -5,6 +5,8 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as mpl_c
 from matplotlib.gridspec import GridSpec
 
+from py4DSTEM.process.wholepatternfit.wp_models import WPFModelType
+
 
 def show_model_grid(self, x=None, **plot_kwargs):
     if x is None:
@@ -94,25 +96,26 @@ def show_lattice_points(
             cmap="gray",
         )
 
-    for m in self.model:
-        if "Lattice" in m.name:
-            ux, uy = m.params["ux"].initial_value, m.params["uy"].initial_value
-            vx, vy = m.params["vx"].initial_value, m.params["vy"].initial_value
+    lattices = [m for m in self.model if WPFModelType.LATTICE in m.model_type]
 
-            lat = np.array([[ux, uy], [vx, vy]])
-            inds = np.stack([m.u_inds, m.v_inds], axis=1)
+    for m in lattices:
+        ux, uy = m.params["ux"].initial_value, m.params["uy"].initial_value
+        vx, vy = m.params["vx"].initial_value, m.params["vy"].initial_value
 
-            spots = inds @ lat
-            spots[:, 0] += self.static_data["global_x0"]
-            spots[:, 1] += self.static_data["global_y0"]
+        lat = np.array([[ux, uy], [vx, vy]])
+        inds = np.stack([m.u_inds, m.v_inds], axis=1)
 
-            ax.scatter(
-                spots[:, 1],
-                spots[:, 0],
-                s=100,
-                marker="x",
-                label=m.name,
-            )
+        spots = inds @ lat
+        spots[:, 0] += self.coordinate_model.params["x center"].initial_value
+        spots[:, 1] += self.coordinate_model.params["y center"].initial_value
+
+        ax.scatter(
+            spots[:, 1],
+            spots[:, 0],
+            s=100,
+            marker="x",
+            label=m.name,
+        )
 
     ax.legend()
 
