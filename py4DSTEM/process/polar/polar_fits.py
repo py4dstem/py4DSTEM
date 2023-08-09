@@ -7,11 +7,12 @@ from scipy.optimize import curve_fit
 
 def fit_amorphous_ring(
     im,
-    center,
-    radial_range,
+    center = None,
+    radial_range = None,
     coefs = None,
     mask_dp = None,
     show_fit_mask = False,
+    maxfev = None,
     verbose = False,
     plot_result = True,
     plot_log_scale = False,
@@ -28,15 +29,19 @@ def fit_amorphous_ring(
     im: np.array
         2D image array to perform fitting on
     center: np.array
-        (x,y) center coordinates for fitting mask
+        (x,y) center coordinates for fitting mask. If not specified 
+        by the user, we will assume the center coordinate is (im.shape-1)/2.
     radial_range: np.array
-        (radius_inner, radius_outer) radial range to perform fitting over
+        (radius_inner, radius_outer) radial range to perform fitting over.
+        If not specified by the user, we will assume (im.shape[0]/4,im.shape[0]/2).
     coefs: np.array (optional)
         Array containing initial fitting coefficients for the amorphous fit.
     mask_dp: np.array
         Dark field mask for fitting, in addition to the radial range specified above.
     show_fit_mask: bool
         Set to true to preview the fitting mask and initial guess for the ellipse params
+    maxfev: int
+        Max number of fitting evaluations for curve_fit.
     verbose: bool
         Print fit results
     plot_result: bool
@@ -57,6 +62,14 @@ def fit_amorphous_ring(
     params_ellipse_fit: np.array (optional)
         11 parameter elliptic fit coefficients
     """
+
+    # Default values
+    if center is None:
+        center = np.array((
+            (im.shape[0]-1)/2,
+            (im.shape[1]-1)/2))
+    if radial_range is None:
+        radial_range = (im.shape[0]/4, im.shape[0]/2)
 
     # coordinates
     xa,ya = np.meshgrid(
@@ -149,14 +162,26 @@ def fit_amorphous_ring(
     else:
         # Perform elliptic fitting
         int_mean = np.mean(vals)
-        coefs = curve_fit(
-            amorphous_model, 
-            basis, 
-            vals / int_mean, 
-            p0=coefs,
-            xtol = 1e-12,
-            bounds = (lb,ub),
-        )[0]
+
+        if maxfev is None:
+            coefs = curve_fit(
+                amorphous_model, 
+                basis, 
+                vals / int_mean, 
+                p0=coefs,
+                xtol = 1e-8,
+                bounds = (lb,ub),
+            )[0]
+        else:
+            coefs = curve_fit(
+                amorphous_model, 
+                basis, 
+                vals / int_mean, 
+                p0=coefs,
+                xtol = 1e-8,
+                bounds = (lb,ub),
+                maxfev = maxfev,
+            )[0]
         coefs[4] = np.mod(coefs[4],2*np.pi)
         coefs[5:8] *= int_mean
         # bounds=bounds
