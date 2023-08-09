@@ -9,25 +9,11 @@ from py4DSTEM.process.wholepatternfit.wp_models import WPFModelType
 
 
 def show_model_grid(self, x=None, **plot_kwargs):
-    if x is None:
-        x = self.mean_CBED_fit.x
+    x = x or self.mean_CBED_fit.x
 
-    shared_data = self.static_data.copy()
-    shared_data["global_x0"] = x[0]
-    shared_data["global_y0"] = x[1]
-    shared_data["global_r"] = np.hypot(
-        (shared_data["xArray"] - x[0]),
-        (shared_data["yArray"] - x[1]),
-    )
+    model = [m for m in self.model if WPFModelType.DUMMY not in m.model_type]
 
-    shared_data["global_x0"] = x[0]
-    shared_data["global_y0"] = x[1]
-    shared_data["global_r"] = np.hypot(
-        (shared_data["xArray"] - x[0]),
-        (shared_data["yArray"] - x[1]),
-    )
-
-    N = len(self.model)
+    N = len(model)
     cols = int(np.ceil(np.sqrt(N)))
     rows = (N + 1) // cols
 
@@ -35,10 +21,9 @@ def show_model_grid(self, x=None, **plot_kwargs):
     kwargs.update(plot_kwargs)
     fig, ax = plt.subplots(rows, cols, **kwargs)
 
-    for i, (a, m) in enumerate(zip(ax.flat, self.model)):
+    for (a, m) in zip(ax.flat, model):
         DP = np.zeros((self.datacube.Q_Nx, self.datacube.Q_Ny))
-        ind = self.model_param_inds[i] + 2
-        m.func(DP, *x[ind : ind + m.nParams].tolist(), **shared_data)
+        m.func(DP, x, **self.static_data)
 
         a.matshow(DP, cmap="turbo")
 
