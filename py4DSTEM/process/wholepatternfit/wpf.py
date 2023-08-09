@@ -148,7 +148,15 @@ class WholePatternFit:
         Note, this does not add the models to the WPF object, that must
         be performed separately.
         """
-        # Make sure parameters is iterable
+        # Make sure child_model and parameters are iterable
+        child_model = (
+            [
+                child_model,
+            ]
+            if not hasattr(child_model, "__iter__")
+            else child_model
+        )
+
         parameters = (
             [
                 parameters,
@@ -157,8 +165,9 @@ class WholePatternFit:
             else parameters
         )
 
-        for par in parameters:
-            child_model.params[par] = parent_model.params[par]
+        for child in child_model:
+            for par in parameters:
+                child.params[par] = parent_model.params[par]
 
     def generate_initial_pattern(self):
         # update parameters:
@@ -497,17 +506,10 @@ class WholePatternFit:
 
     def accept_mean_CBED_fit(self):
         x = self.mean_CBED_fit.x
-        self.static_data["global_x0"] = x[0]
-        self.static_data["global_y0"] = x[1]
 
-        self.static_data["global_r"] = np.hypot(
-            (self.static_data["xArray"] - x[0]), (self.static_data["yArray"] - x[1])
-        )
-
-        for i, m in enumerate(self.model):
-            ind = self.model_param_inds[i] + 2
-            for j, k in enumerate(m.params.keys()):
-                m.params[k].initial_value = x[ind + j]
+        for model in self.model:
+            for param in model.params.values():
+                param.initial_value = x[param.offset]
 
     def get_lattice_maps(self):
         assert hasattr(self, "fit_data"), "Please run fitting first!"
