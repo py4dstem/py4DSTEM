@@ -3,7 +3,6 @@
 import importlib
 from operator import mod
 
-
 # list of modules we expect/may expect to be installed
 #  as part of a standard py4DSTEM installation 
 # this needs to be the import name e.g. import mp_api not mp-api
@@ -16,7 +15,6 @@ modules = [
         'gdown',
         'h5py',
         'ipyparallel',
-        'ipywidgets',
         'jax',
         'matplotlib',
         'mp_api',
@@ -43,7 +41,6 @@ module_depenencies = {
         'matplotlib',
         'skimage',
         'sklearn',
-        'ipywidgets',
         'tqdm',
         'dill',
         'gdown',

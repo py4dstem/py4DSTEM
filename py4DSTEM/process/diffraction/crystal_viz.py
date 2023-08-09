@@ -10,9 +10,8 @@ import warnings
 import numpy as np
 from typing import Union, Optional
 
+from emdfile import tqdmnd, PointList, PointListArray
 from py4DSTEM.process.diffraction.utils import calc_1D_profile
-from py4DSTEM.io.datastructure import PointList, PointListArray
-from py4DSTEM.utils.tqdmnd import tqdmnd
 
 
 def plot_structure(
@@ -297,13 +296,18 @@ def plot_scattering_intensity(
     bragg_k_power=0.0,
     bragg_intensity_power=1.0,
     bragg_k_broadening=0.005,
+<<<<<<< HEAD
     figsize: Union[list, tuple, np.ndarray] = (12, 6),
     title: Optional[str] = None,
+=======
+    figsize: Union[list, tuple, np.ndarray] = (10, 4),
+>>>>>>> dev
     returnfig: bool = False,
 ):
     """
     1D plot of the structure factors
 
+<<<<<<< HEAD
     Args:
         k_min (float):                      min k value for profile range.
         k_max (float):                      max k value for profile range.
@@ -323,6 +327,44 @@ def plot_scattering_intensity(
 
     Returns:
         fig, ax                     (optional) figure and axes handles
+=======
+    Parameters
+    --------
+
+    k_min: float                      
+        min k value for profile range.
+    k_max: float                      
+        max k value for profile range.
+    k_step: float                     
+        Step size of k in profile range.
+    k_broadening: float               
+        Broadening of simulated pattern.
+    k_power_scale: float              
+        Scale SF intensities by k**k_power_scale.
+    int_power_scale: float            
+        Scale SF intensities**int_power_scale.
+    int_scale: float                  
+        Scale output profile by this value.
+    remove_origin: bool               
+        Remove origin from plot.
+    bragg_peaks: BraggVectors         
+        Passed in bragg_peaks for comparison with simulated pattern.
+    bragg_k_power: float              
+        bragg_peaks scaled by k**bragg_k_power.
+    bragg_intensity_power: float      
+        bragg_peaks scaled by intensities**bragg_intensity_power.
+    bragg_k_broadening: float  
+        Broadening applied to bragg_peaks.
+    figsize: list, tuple, np.ndarray
+        Figure size for plot.
+    returnfig (bool):                   
+        Return figure and axes handles if this is True.
+
+    Returns
+    --------
+    fig, ax (optional) 
+        figure and axes handles
+>>>>>>> dev
     """
 
     # k coordinates
@@ -344,15 +386,30 @@ def plot_scattering_intensity(
 
     # If Bragg peaks are passed in, compute 1D integral
     if bragg_peaks is not None:
-        # bigpl = np.concatenate([
-        #     bragg_peaks[i,j].data for i in range(bragg_peaks.shape[0]) for j in range(bragg_peaks.shape[1])])
+
+        # set rotate and ellipse based on their availability
+        rotate = bragg_peaks.calibration.get_QR_rotation_degrees()
+        ellipse = bragg_peaks.calibration.get_ellipse()
+        rotate = False if rotate is None else True
+        ellipse = False if ellipse is None else True
+
+        # concatenate all peaks
         bigpl = np.concatenate(
             [
-                bragg_peaks.vectors[i, j].data
-                for i in range(bragg_peaks.shape[0])
-                for j in range(bragg_peaks.shape[1])
+                bragg_peaks.get_vectors(
+                    rx,
+                    ry,
+                    center = True,
+                    ellipse = ellipse,
+                    pixel = True,
+                    rotate = rotate,
+                ).data
+                for rx in range(bragg_peaks.shape[0])
+                for ry in range(bragg_peaks.shape[1])
             ]
         )
+
+        # get radial positions and intensity
         qr = np.sqrt(bigpl["qx"] ** 2 + bigpl["qy"] ** 2)
         int_meas = bigpl["intensity"]
 
@@ -906,6 +963,9 @@ def plot_diffraction_pattern(
     ax.set_ylabel("$q_x$ [Å$^{-1}$]")
 
     if plot_range_kx_ky is not None:
+        plot_range_kx_ky = np.array(plot_range_kx_ky)
+        if plot_range_kx_ky.ndim == 0:
+            plot_range_kx_ky = np.array((plot_range_kx_ky,plot_range_kx_ky))
         ax.set_xlim((-plot_range_kx_ky[0], plot_range_kx_ky[0]))
         ax.set_ylim((-plot_range_kx_ky[1], plot_range_kx_ky[1]))
     else:

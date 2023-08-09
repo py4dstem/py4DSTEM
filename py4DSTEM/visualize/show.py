@@ -1,7 +1,3 @@
-from py4DSTEM.visualize.overlay import add_rectangles,add_circles,add_annuli,add_ellipses,add_points, add_grid_overlay
-from py4DSTEM.visualize.overlay import add_cartesian_grid,add_polarelliptical_grid,add_rtheta_grid,add_scalebar
-from py4DSTEM.io.datastructure import Calibration, DiffractionSlice, RealSlice
-
 import numpy as np
 import matplotlib.pyplot as plt
 import warnings
@@ -12,6 +8,24 @@ from numpy.ma import MaskedArray
 from numbers import Number
 from math import log
 from copy import copy
+
+from py4DSTEM.data import (
+    Calibration,
+    DiffractionSlice,
+    RealSlice
+)
+from py4DSTEM.visualize.overlay import (
+    add_rectangles,
+    add_circles,
+    add_annuli,
+    add_ellipses,
+    add_points,
+    add_grid_overlay,
+    add_cartesian_grid,
+    add_polarelliptical_grid,
+    add_rtheta_grid,add_scalebar
+)
+
 
 def show(
     ar,
@@ -284,11 +298,12 @@ def show(
             determining the display value range; False indicates that all pixel values
             will be used to determine the intensity range, True indicates only unmasked
             pixels will be used
-        scalebar (None or dict or False): if None, and a DiffractionSlice or RealSlice
-            with calibrations is passed, adds a scalebar.  If None and anything else is
-            passed or if False, does not add a scalebar.  If a dict is passed, it is
-            propagated to the add_scalebar function which will attempt to use it to
-            overlay a scalebar.
+        scalebar (None or dict or Bool): if None, and a DiffractionSlice or RealSlice
+            with calibrations is passed, adds a scalebar.  If scalebar is not displaying the proper
+            calibration, check .calibration pixel_size and pixel_units. If None and an array is passed, 
+            does not add a scalebar.  If a dict is passed, it is propagated to the add_scalebar function 
+            which will attempt to use it to overlay a scalebar. If True, uses calibraiton or pixelsize/pixelunits 
+            for scalebar. If False, no scalebar is added.
         **kwargs: any keywords accepted by matplotlib's ax.matshow()
 
     Returns:
@@ -306,6 +321,7 @@ def show(
             intensity_range = clipvals
 
     # plot a grid if `ar` is a list, or use multichannel functionality to make an RGBa image
+    ar = ar[0] if (isinstance(ar,list) and len(ar) == 1) else ar
     if isinstance(ar,list):
         args = locals()
         if 'kwargs' in args.keys():
@@ -321,17 +337,17 @@ def show(
             # use show_grid to plot grid of images
             from py4DSTEM.visualize.show_extention import _show_grid
             if returnfig:
-                return _show_grid(**args,**kwargs)
+                return _show_grid(
+                    **args,
+                    **kwargs)
             else:
-                _show_grid(**args,**kwargs)
+                _show_grid(
+                    **args,
+                    **kwargs)
                 return
         else:
             # generate a multichannel combined RGB image
-            del args['ar']
-            del args['combine_images']
-            del args['return_ar_scaled']
-            del args['show_image']
-
+            
             # init
             num_images = len(ar)
             hue_angles = np.linspace(0.0,2.0*np.pi,num_images,endpoint=False)
@@ -344,7 +360,13 @@ def show(
             for a0 in range(num_images):
                 im = show(
                         ar[a0],
-                        **args,
+                        scaling='none',
+                        intensity_range=intensity_range,
+                        clipvals=clipvals,
+                        vmin=vmin,
+                        vmax=vmax,
+                        power=power,
+                        power_offset=power_offset,
                         return_ar_scaled = True,
                         show_image=False,
                         **kwargs,
@@ -357,7 +379,7 @@ def show(
             # Assemble final image
             sat_change = np.maximum(val_total - 1.0, 0.0)
             ar_rgb = np.zeros((ar[0].shape[0],ar[0].shape[1],3))
-            ar_rgb[:,:,0] = np.arctan2(sin_total,cos_total) / (2*np.pi)
+            ar_rgb[:,:,0] = np.mod(np.arctan2(sin_total,cos_total) / (2*np.pi), 1.0)
             ar_rgb[:,:,1] = 1 - sat_change
             ar_rgb[:,:,2] = val_total# np.sqrt(cos_total**2 + sin_total**2)
             ar_rgb = np.clip(ar_rgb,0.0,1.0)
@@ -369,10 +391,14 @@ def show(
             # Output image for plotting
             ar = ar_rgb
 
+    if scalebar == True: 
+        scalebar = {}
+
     # support for native data types
     elif not isinstance(ar,np.ndarray):
         # support for calibration/auto-scalebars
-        if hasattr(ar, 'calibration') and scalebar != False:
+        if hasattr(ar, 'calibration') and (ar.calibration is not None) \
+            and (scalebar != False):
             cal = ar.calibration
             er = ".calibration attribute must be a Calibration instance"
             assert isinstance(cal, Calibration), er
@@ -488,6 +514,10 @@ def show(
         ind_vmax = np.min([len(vals)-1,ind_vmax])
         vmin = vals[ind_vmin]
         vmax = vals[ind_vmax]
+        # check if vmin and vmax are the same, defaulting to minmax scaling if needed
+        if vmax == vmin:
+            vmin = vals[0]
+            vmax = vals[-1]
     elif intensity_range == 'minmax':
         vmin,vmax = np.nanmin(_ar),np.nanmax(_ar)
     elif intensity_range == 'absolute':
@@ -523,7 +553,7 @@ def show(
 
 
         # Create colormap with mask_color for bad values
-        cm = copy(plt.cm.get_cmap(cmap))
+        cm = copy(plt.get_cmap(cmap))
         if mask_color=='empty':
             cm.set_bad(alpha=0)
         else:

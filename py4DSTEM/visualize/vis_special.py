@@ -1,17 +1,26 @@
+from matplotlib import cm, colors as mcolors, pyplot as plt
 import numpy as np
-import matplotlib.pyplot as plt
+from matplotlib.colors import hsv_to_rgb
 from matplotlib.patches import Wedge
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.spatial import Voronoi
+
+from emdfile import PointList
 from py4DSTEM.visualize import show
-from py4DSTEM.visualize.overlay import add_pointlabels,add_vector,add_bragg_index_labels,add_ellipses
-from py4DSTEM.visualize.overlay import add_points
+from py4DSTEM.visualize.overlay import (
+    add_pointlabels,
+    add_vector,
+    add_bragg_index_labels,
+    add_ellipses,
+    add_points,
+    add_scalebar,
+)
 from py4DSTEM.visualize.vis_grid import show_image_grid
 from py4DSTEM.visualize.vis_RQ import ax_addaxes,ax_addaxes_QtoR
-from py4DSTEM.io.datastructure import DataCube,Calibration,PointList
-from py4DSTEM.process.utils import get_voronoi_vertices,convert_ellipse_params
-from py4DSTEM.process.calibration import double_sided_gaussian
-from py4DSTEM.process.latticevectors import get_selected_lattice_vectors
+
+
+
+
 
 def show_elliptical_fit(ar,fitradii,p_ellipse,fill=True,
                         color_ann='y',color_ell='r',alpha_ann=0.2,alpha_ell=0.7,
@@ -82,6 +91,8 @@ def show_amorphous_ring_fit(dp,fitradii,p_dsg,N=12,cmap=('gray','gray'),
         ellipse (bool): if True, overlay an ellipse
         returnfig (bool): if True, returns the figure
     """
+    from py4DSTEM.process.calibration import double_sided_gaussian
+    from py4DSTEM.process.utils import convert_ellipse_params
     assert(len(p_dsg)==11)
     assert(isinstance(N,(int,np.integer)))
     if isinstance(cmap,tuple):
@@ -148,7 +159,7 @@ def show_qprofile(
     ylabel='Intensity (A.U.)',  
     labelsize=16,
     ticklabelsize=14,
-    grid='on',
+    grid=True,
     label=None,
     **kwargs):
     """
@@ -162,7 +173,7 @@ def show_qprofile(
         ylabel
         labelsize       size of x and y labels
         ticklabelsize
-        grid            'off' or 'on'
+        grid            True or False
         label           a legend label for the plotted curve
     """
     if ymax is None:
@@ -247,6 +258,7 @@ def show_voronoi(ar,x,y,color_points='r',color_lines='w',max_dist=None,
     """
     words
     """
+    from py4DSTEM.process.utils import get_voronoi_vertices
     Nx,Ny = ar.shape
     points = np.vstack((x,y)).T
     voronoi = Voronoi(points)
@@ -578,100 +590,6 @@ def select_point(ar,x,y,i,color='lightblue',color_selected='r',size=20,returnfig
         return
 
 
-def select_lattice_vectors(ar,gx,gy,i0,i1,i2,
-               c_indices='lightblue',c0='g',c1='r',c2='r',c_vectors='r',c_vectorlabels='w',
-               size_indices=20,width_vectors=1,size_vectorlabels=20,
-               figsize=(12,6),returnfig=False,**kwargs):
-    """
-    This function accepts a set of reciprocal lattice points (gx,gy) and three indices
-    (i0,i1,i2).  Using those indices as, respectively, the origin, the endpoint of g1, and
-    the endpoint of g2, this function computes the basis lattice vectors g1,g2, visualizes
-    them, and returns them.  To compute these vectors without visualizing, use
-    latticevectors.get_selected_lattice_vectors().
-
-    Returns:
-        if returnfig==False:    g1,g2
-        if returnfig==True      g1,g2,fig,ax
-    """
-    # Make the figure
-    fig,(ax1,ax2) = plt.subplots(1,2,figsize=figsize)
-    show(ar,figax=(fig,ax1),**kwargs)
-    show(ar,figax=(fig,ax2),**kwargs)
-
-    # Add indices to left panel
-    d = {'x':gx,'y':gy,'size':size_indices,'color':c_indices}
-    d0 = {'x':gx[i0],'y':gy[i0],'size':size_indices,'color':c0,'fontweight':'bold','labels':[str(i0)]}
-    d1 = {'x':gx[i1],'y':gy[i1],'size':size_indices,'color':c1,'fontweight':'bold','labels':[str(i1)]}
-    d2 = {'x':gx[i2],'y':gy[i2],'size':size_indices,'color':c2,'fontweight':'bold','labels':[str(i2)]}
-    add_pointlabels(ax1,d)
-    add_pointlabels(ax1,d0)
-    add_pointlabels(ax1,d1)
-    add_pointlabels(ax1,d2)
-
-    # Compute vectors
-    g1,g2 = get_selected_lattice_vectors(gx,gy,i0,i1,i2)
-
-    # Add vectors to right panel
-    dg1 = {'x0':gx[i0],'y0':gy[i0],'vx':g1[0],'vy':g1[1],'width':width_vectors,
-           'color':c_vectors,'label':r'$g_1$','labelsize':size_vectorlabels,'labelcolor':c_vectorlabels}
-    dg2 = {'x0':gx[i0],'y0':gy[i0],'vx':g2[0],'vy':g2[1],'width':width_vectors,
-           'color':c_vectors,'label':r'$g_2$','labelsize':size_vectorlabels,'labelcolor':c_vectorlabels}
-    add_vector(ax2,dg1)
-    add_vector(ax2,dg2)
-
-    if returnfig:
-        return g1,g2,fig,(ax1,ax2)
-    else:
-        plt.show()
-        return g1,g2
-
-
-def show_lattice_vectors(ar,x0,y0,g1,g2,color='r',width=1,labelsize=20,labelcolor='w',returnfig=False,**kwargs):
-    """ Adds the vectors g1,g2 to an image, with tail positions at (x0,y0).  g1 and g2 are 2-tuples (gx,gy).
-    """
-    fig,ax = show(ar,returnfig=True,**kwargs)
-
-    # Add vectors
-    dg1 = {'x0':x0,'y0':y0,'vx':g1[0],'vy':g1[1],'width':width,
-           'color':color,'label':r'$g_1$','labelsize':labelsize,'labelcolor':labelcolor}
-    dg2 = {'x0':x0,'y0':y0,'vx':g2[0],'vy':g2[1],'width':width,
-           'color':color,'label':r'$g_2$','labelsize':labelsize,'labelcolor':labelcolor}
-    add_vector(ax,dg1)
-    add_vector(ax,dg2)
-
-    if returnfig:
-        return fig,ax
-    else:
-        plt.show()
-        return
-
-
-def show_bragg_indexing(ar,braggdirections,voffset=5,hoffset=0,color='w',size=20,
-                        points=True,pointcolor='r',pointsize=50,returnfig=False,**kwargs):
-    """
-    Shows an array with an overlay describing the Bragg directions
-
-    Accepts:
-        ar                  (arrray) the image
-        bragg_directions    (PointList) the bragg scattering directions; must have coordinates
-                            'qx','qy','h', and 'k'. Optionally may also have 'l'.
-    """
-    assert isinstance(braggdirections,PointList)
-    for k in ('qx','qy','h','k'):
-        assert k in braggdirections.data.dtype.fields
-
-    fig,ax = show(ar,returnfig=True,**kwargs)
-    d = {'braggdirections':braggdirections,'voffset':voffset,'hoffset':hoffset,'color':color,
-         'size':size,'points':points,'pointsize':pointsize,'pointcolor':pointcolor}
-    add_bragg_index_labels(ax,d)
-
-    if returnfig:
-        return fig,ax
-    else:
-        plt.show()
-        return
-
-
 def show_max_peak_spacing(ar,spacing,braggdirections,color='g',lw=2,returnfig=False,**kwargs):
     """ Show a circle of radius `spacing` about each Bragg direction
     """
@@ -691,6 +609,8 @@ def show_origin_meas(data):
     Args:
         data (DataCube or Calibration or 2-tuple of arrays (qx0,qy0))
     """
+    from py4DSTEM.data import Calibration
+    from py4DSTEM.datacube import DataCube
     if isinstance(data,tuple):
         assert len(data)==2
         qx,qy = data
@@ -711,6 +631,8 @@ def show_origin_fit(data):
         data (DataCube or Calibration or (3,2)-tuple of arrays
             ((qx0_meas,qy0_meas),(qx0_fit,qy0_fit),(qx0_residuals,qy0_residuals))
     """
+    from py4DSTEM.data import Calibration
+    from py4DSTEM.datacube import DataCube
     if isinstance(data,tuple):
         assert len(data)==3
         qx0_meas,qy_meas = data[0]
@@ -753,6 +675,7 @@ def show_selected_dps(datacube,positions,im,bragg_pos=None,
         **kwargs (dict): arguments passed to visualize.show for the
             *diffraction patterns*. Default is `scaling='log'`
     """
+    from py4DSTEM.datacube import DataCube
     assert isinstance(datacube,DataCube)
     N = len(positions)
     assert(all([len(x)==2 for x in positions])), "Improperly formated argument `positions`"
@@ -794,111 +717,202 @@ def show_selected_dps(datacube,positions,im,bragg_pos=None,
                     get_pointcolors=lambda i:colors[i],
                     **kwargs)
 
-def show_complex(
-    ar_complex,
-    vmin = None,
-    vmax = None,
-    cbar = True,
-    returnfig = False,
-    **kwargs
-    ):
-    '''
-    Function to plot complex arrays
-    
-    Args: 
-        ar_complex (2d array)   : complex array to be plotted
-        vmin (float, optional)  : minimum absolute value 
-        vmax (float, optional)  : maximum absolute value 
-        vmin/vmax are set to fractions of the distribution of pixel values in the array, e.g. 
-        vmin=0.02 will set the minumum display value to saturate the lower 2% of pixels
-        cbar (bool)             : if True, include color wheel
-        returnfig (bool)        : if True, the function returns the tuple (figure,axis)
-        
-    Returns:
-        if returnfig==False (default), the figure is plotted and nothing is returned.
-        if returnfig==True, return the figure and the axis.
-    '''
-
-    #define min and max
-    amp = np.abs(ar_complex)  
-    if np.max(amp) == np.min(amp):
-        if vmin is None: vmin = 0 
-        if vmax is None: vmax = np.max(amp)
+def Complex2RGB(complex_data, vmin=None, vmax = None, hue_start = 0, invert=False):
+    """
+    complex_data (array): complex array to plot
+    vmin (float)        : minimum absolute value 
+    vmax (float)        : maximum absolute value 
+    hue_start (float)   : rotational offset for colormap (degrees)
+    inverse (bool)      : if True, uses light color scheme
+    """
+    amp = np.abs(complex_data)
+    if np.isclose(np.max(amp),np.min(amp)):
+        if vmin is None:
+            vmin = 0
+        if vmax is None:
+            vmax = np.max(amp)
     else:
-        if vmin is None: vmin = 0.02
-        if vmax is None: vmax = 0.98
+        if vmin is None:
+            vmin = 0.02
+        if vmax is None:
+            vmax = 0.98
         vals = np.sort(amp[~np.isnan(amp)])
-        ind_vmin = np.round((vals.shape[0]-1)*vmin).astype('int')
-        ind_vmax = np.round((vals.shape[0]-1)*vmax).astype('int')
-        ind_vmin = np.max([0,ind_vmin])
-        ind_vmax = np.min([len(vals)-1,ind_vmax])
+        ind_vmin = np.round((vals.shape[0] - 1) * vmin).astype("int")
+        ind_vmax = np.round((vals.shape[0] - 1) * vmax).astype("int")
+        ind_vmin = np.max([0, ind_vmin])
+        ind_vmax = np.min([len(vals) - 1, ind_vmax])
         vmin = vals[ind_vmin]
         vmax = vals[ind_vmax]
 
-    from matplotlib.colors import hsv_to_rgb
+    amp = np.where(amp < vmin, vmin, amp)
+    amp = np.where(amp > vmax, vmax, amp)
 
-    #function for converting to complex colors
-    def Complex2HSV(z, vmin, vmax, hue_start=90):
-        #based on stack overflow 17044052
-        amp = np.abs(z)
-        amp = np.where(amp < vmin, vmin, amp)
-        amp = np.where(amp > vmax, vmax, amp)
-        
-        ph = np.angle(z, deg=1) + hue_start
-        
-        h = (ph % 360) / 360
-        s = 0.85 * np.ones_like(h)
-        v = (amp -vmin) / (vmax - vmin)
-        
-        return hsv_to_rgb(np.dstack((h,s,v)))
-
-    #convert to complex colors
-    rgb = Complex2HSV(ar_complex, vmin, vmax)
+    phase = np.angle(complex_data) + np.deg2rad(hue_start)
+    amp /= np.max(amp)
+    rgb = np.zeros(phase.shape +(3,))
+    rgb[...,0] = 0.5*(np.sin(phase)+1)*amp
+    rgb[...,1] = 0.5*(np.sin(phase+np.pi/2)+1)*amp
+    rgb[...,2] = 0.5*(-np.sin(phase)+1)*amp
     
-    #plot
-    fig, ax = show(
-        rgb,
-        vmin = 0, 
-        vmax = 1,
-        intensity_range= 'absolute',
-        returnfig = True,
-        **kwargs
+    return 1-rgb if invert else rgb
+
+def add_colorbar_arg(cax, vmin = None, vmax = None, hue_start = 0, invert = False):
+    """
+    cax                 : axis to add cbar too
+    vmin (float)        : minimum absolute value 
+    vmax (float)        : maximum absolute value 
+    hue_start (float)   : rotational offset for colormap (degrees)
+    inverse (bool)      : if True, uses light color scheme
+    """
+    z = np.exp(1j * np.linspace(-np.pi, np.pi, 200))
+    rgb_vals = Complex2RGB(z, vmin=vmin, vmax=vmax, hue_start=hue_start, invert=invert)
+    newcmp = mcolors.ListedColormap(rgb_vals)
+    norm = mcolors.Normalize(vmin=-np.pi, vmax=np.pi)
+
+    cb1 = plt.colorbar(cm.ScalarMappable(norm=norm, cmap=newcmp), cax=cax)
+
+    cb1.set_label("arg", rotation=0, ha="center", va="bottom")
+    cb1.ax.yaxis.set_label_coords(0.5, 1.01)
+    cb1.set_ticks(np.array([-np.pi, -np.pi / 2, 0, np.pi / 2, np.pi]))
+    cb1.set_ticklabels(
+        [r"$-\pi$", r"$-\dfrac{\pi}{2}$", "$0$", r"$\dfrac{\pi}{2}$", r"$\pi$"]
     )
 
-    #add color bar
+def show_complex(
+    ar_complex,
+    vmin=None,
+    vmax=None,
+    cbar=True,
+    scalebar=False,
+    pixelunits="pixels",
+    pixelsize=1,
+    returnfig=False,
+    hue_start = 0,
+    invert=False,
+    **kwargs
+):
+    """
+    Function to plot complex arrays
+
+    Args:
+        ar_complex (2D array)       : complex array to be plotted. If ar_complex is list of complex arrarys
+            such as [array1, array2], then arrays are horizonally plotted in one figure
+        vmin (float, optional)      : minimum absolute value
+        vmax (float, optional)      : maximum absolute value
+            if None, vmin/vmax are set to fractions of the distribution of pixel values in the array, 
+            e.g. vmin=0.02 will set the minumum display value to saturate the lower 2% of pixels
+        cbar (bool, optional)       : if True, include color wheel
+        scalebar (bool, optional)   : if True, adds scale bar
+        pixelunits (str, optional)  : units for scalebar
+        pixelsize (float, optional) : size of one pixel in pixelunits for scalebar
+        returnfig (bool, optional)  : if True, the function returns the tuple (figure,axis)
+        hue_start (float, optional) : rotational offset for colormap (degrees)
+        inverse (bool)              : if True, uses light color scheme
+    
+    Returns:
+        if returnfig==False (default), the figure is plotted and nothing is returned.
+        if returnfig==True, return the figure and the axis.
+    """
+    # convert to complex colors
+    ar_complex = ar_complex[0] if (isinstance(ar_complex,list) and len(ar_complex) == 1) else ar_complex
+    if isinstance(ar_complex, list):
+        if isinstance(ar_complex[0], list):
+            rgb = [Complex2RGB(ar, vmin, vmax, hue_start = hue_start, invert=invert) for sublist in ar_complex for ar in sublist]
+            H = len(ar_complex)
+            W = len(ar_complex[0])
+
+        else:
+            rgb = [Complex2RGB(ar, vmin, vmax, hue_start=hue_start, invert=invert) for ar in ar_complex]
+            if len(rgb[0].shape) == 4:
+                H = len(ar_complex)
+                W = rgb[0].shape[0]
+            else:
+                H = 1
+                W = len(ar_complex)
+        is_grid = True
+    else:
+        rgb = Complex2RGB(ar_complex, vmin, vmax, hue_start=hue_start, invert=invert)
+        if len(rgb.shape) == 4:
+            is_grid = True
+            H = 1
+            W = rgb.shape[0]
+        elif len(rgb.shape) == 5:
+            is_grid = True
+            H = rgb.shape[0]
+            W = rgb.shape[1]
+            rgb = rgb.reshape((-1,)+rgb.shape[-3:])
+        else:
+            is_grid = False
+    # plot
+    if is_grid:
+        from py4DSTEM.visualize import show_image_grid
+
+        fig, ax = show_image_grid(
+            get_ar=lambda i: rgb[i],
+            H=H,
+            W=W,
+            vmin=0,
+            vmax=1,
+            intensity_range="absolute",
+            returnfig=True,
+            **kwargs,
+        )
+        if scalebar is True:
+            scalebar = {
+                "Nx": ar_complex[0].shape[0],
+                "Ny": ar_complex[0].shape[1],
+                "pixelsize": pixelsize,
+                "pixelunits": pixelunits,
+            }
+
+            add_scalebar(ax[0, 0], scalebar)
+    else:
+        fig, ax = show(
+            rgb, vmin=0, vmax=1, intensity_range="absolute", returnfig=True, **kwargs
+        )
+
+        if scalebar is True:
+            scalebar = {
+                "Nx": ar_complex.shape[0],
+                "Ny": ar_complex.shape[1],
+                "pixelsize": pixelsize,
+                "pixelunits": pixelunits,
+            }
+
+            add_scalebar(ax, scalebar)
+
+    # add color bar
     if cbar == True:
         ax0 = fig.add_axes([1, 0.35, 0.3, 0.3])
-        
-        #create wheel
+
+        # create wheel
         AA = 1000
         kx = np.fft.fftshift(np.fft.fftfreq(AA))
         ky = np.fft.fftshift(np.fft.fftfreq(AA))
-        kya,kxa = np.meshgrid(ky,kx)
-        kra = (kya**2+kxa**2)**0.5
-        ktheta = np.arctan2(-kxa,kya)
-        ktheta = kra*np.exp(1j*ktheta)
-        
-        #convert to hsv
-        rgb = Complex2HSV(ktheta, 0, 0.4)
-        ind = kra > 0.4
-        rgb[ind] = [1,1,1]
-        
-        #plot
-        ax0.imshow(
-            rgb
-        )
+        kya, kxa = np.meshgrid(ky, kx)
+        kra = (kya**2 + kxa**2) ** 0.5
+        ktheta = np.arctan2(-kxa, kya)
+        ktheta = kra * np.exp(1j * ktheta)
 
-        #add axes
-        ax0.axhline(AA/2, 0, AA, color = 'k')
-        ax0.axvline(AA/2, 0, AA, color = 'k')
-        ax0.axis('off')
+        # convert to hsv
+        rgb = Complex2RGB(ktheta, 0, 0.4, hue_start = hue_start, invert=invert)
+        ind = kra > 0.4
+        rgb[ind] = [1, 1, 1]
+
+        # plot
+        ax0.imshow(rgb)
+
+        # add axes
+        ax0.axhline(AA / 2, 0, AA, color="k")
+        ax0.axvline(AA / 2, 0, AA, color="k")
+        ax0.axis("off")
 
         label_size = 16
 
-        ax0.text(AA, AA/2, 1, fontsize = label_size)
-        ax0.text(AA/2, 0, 'i', fontsize = label_size)
-        ax0.text(AA/2, AA, '-i', fontsize = label_size)
-        ax0.text(0, AA/2, -1, fontsize = label_size)
+        ax0.text(AA, AA / 2, 1, fontsize=label_size)
+        ax0.text(AA / 2, 0, "i", fontsize=label_size)
+        ax0.text(AA / 2, AA, "-i", fontsize=label_size)
+        ax0.text(0, AA / 2, -1, fontsize=label_size)
 
-    if returnfig == True: 
+    if returnfig == True:
         return fig, ax

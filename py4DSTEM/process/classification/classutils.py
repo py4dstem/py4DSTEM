@@ -1,9 +1,10 @@
 # Utility functions for classification routines
 
 import numpy as np
+
+from emdfile import tqdmnd, PointListArray
+from py4DSTEM.datacube import DataCube
 from py4DSTEM.process.utils import get_shifted_ar
-from py4DSTEM.utils.tqdmnd import tqdmnd
-from py4DSTEM.io import DataCube, PointListArray
 
 def get_class_DP(datacube, class_image, thresh=0.01, xshifts=None, yshifts=None,
                  darkref=None, intshifts=True):

@@ -2,12 +2,16 @@
 import numpy as np
 from typing import Union, Optional
 from scipy.optimize import curve_fit
+
 from py4DSTEM.process.diffraction.utils import Orientation, calc_1D_profile
+
 try:
     from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
     from pymatgen.core.structure import Structure
 except ImportError:
     pass
+
+
 
 def calibrate_pixel_size(
         self,
@@ -20,44 +24,54 @@ def calibrate_pixel_size(
         k_step = 0.002,
         k_broadening = 0.002,
         fit_all_intensities = True,
+        set_calibration_in_place = False,
         verbose = True,
         plot_result = False,
         figsize: Union[list, tuple, np.ndarray] = (12, 6),
         returnfig = False,
 ):
     """
-    Use the calculated structure factor scattering lengths to compute 1D diffraction patterns, 
-    and solve the best-fit relative scaling between them.  Apply to a copy of bragg_peaks.
+    Use the calculated structure factor scattering lengths to compute 1D
+    diffraction patterns, and solve the best-fit relative scaling between them.
+    Returns the fit pixel size in Å^-1.
 
     Args:
-        bragg_peaks (BraggVectors):         Input Bragg vectors.
-        scale_pixel_size (float):           Initial guess for scaling of the existing pixel size
-                                            If the pixel size is currently uncalibrated, this is a
-                                            guess of the pixel size in Å^-1. If the pixel size is already
-                                            (approximately) calibrated, this is the scaling factor to
-                                            correct that existing calibration.
-        bragg_k_power (float):              Input Bragg peak intensities are multiplied by k**bragg_k_power
-                                            to change the weighting of longer scattering vectors
-        bragg_intensity_power (float):      Input Bragg peak intensities are raised power **bragg_intensity_power.
-        k_min (float):                      min k value for fitting range (Å^-1)
-        k_max (float):                      max k value for fitting range (Å^-1)
-        k_step (float):                     step size of k in fitting range (Å^-1)
-        k_broadening (float):               Initial guess for Gaussian broadening of simulated pattern (Å^-1)
-        fit_all_intensities (bool):         Set to true to allow all peak intensities to change independently
-                                            False forces a single intensity scaling.
-        verbose (bool):                     Output the calibrated pixel size.
-        plot_result (bool):                 Plot the resulting fit.
-        figsize (list, tuple, np.ndarray)   Figure size of the plot.
-        returnfig (bool):                   Return handles figure and axis
+        bragg_peaks (BraggVectors): Input Bragg vectors.
+        scale_pixel_size (float): Initial guess for scaling of the existing
+            pixel size If the pixel size is currently uncalibrated, this is a
+            guess of the pixel size in Å^-1. If the pixel size is already
+            (approximately) calibrated, this is the scaling factor to
+            correct that existing calibration.
+        bragg_k_power (float): Input Bragg peak intensities are multiplied by
+            k**bragg_k_power to change the weighting of longer scattering vectors
+        bragg_intensity_power (float): Input Bragg peak intensities are raised
+            power **bragg_intensity_power.
+        k_min (float): min k value for fitting range (Å^-1)
+        k_max (float): max k value for fitting range (Å^-1)
+        k_step (float) step size of k in fitting range (Å^-1)
+        k_broadening (float): Initial guess for Gaussian broadening of simulated
+            pattern (Å^-1)
+        fit_all_intensities (bool): Set to true to allow all peak intensities to
+            change independently False forces a single intensity scaling.
+        set_calibration (bool): if True, set the fit pixel size to the calibration
+            metadata, and calibrate bragg_peaks
+        verbose (bool): Output the calibrated pixel size.
+        plot_result (bool): Plot the resulting fit.
+        figsize (list, tuple, np.ndarray): Figure size of the plot.
+        returnfig (bool): Return handles figure and axis
 
-    Returns:
-        bragg_peaks_cali (BraggVectors):    Bragg vectors after calibration
-        fig, ax (handles):                  Optional figure and axis handles, if returnfig=True.
+    Returns
+    _______
+
+    
+
+    fig, ax: handles, optional 
+        Figure and axis handles, if returnfig=True.
 
     """
 
     assert hasattr(self, "struct_factors"), "Compute structure factors first..."
-    
+
     #Prepare experimental data
     k, int_exp = self.calculate_bragg_peak_histogram(
         bragg_peaks,
@@ -101,20 +115,23 @@ def calibrate_pixel_size(
     k_broadening = popt[1]
     int_scale = np.array(popt[2:])
 
-    # Make a copy of bragg_peaks, apply correction
-    bragg_peaks_cali = bragg_peaks.copy()
-    inv_Ang_per_pixel = bragg_peaks_cali.calibration.get_Q_pixel_size()
-    bragg_peaks_cali.calibration.set_Q_pixel_size(
-        inv_Ang_per_pixel / scale_pixel_size
-    )
-    bragg_peaks_cali.calibration.set_Q_pixel_units("A^-1")
-    bragg_peaks_cali.calibrate()
+    # Get the answer
+    pix_size_prev = bragg_peaks.calibration.get_Q_pixel_size()
+    pixel_size_new = pix_size_prev / scale_pixel_size
 
-    # Output
+    # if requested, apply calibrations in place
+    if set_calibration_in_place:
+        bragg_peaks.calibration.set_Q_pixel_size( pixel_size_new )
+        bragg_peaks.calibration.set_Q_pixel_units('A^-1')
+
+    # Output calibrated Bragg peaks
+    bragg_peaks_cali = bragg_peaks.copy()
+    bragg_peaks_cali.calibration.set_Q_pixel_size( pixel_size_new )
+    bragg_peaks_cali.calibration.set_Q_pixel_units('A^-1')
+
+    # Output pixel size
     if verbose:
-        p = bragg_peaks_cali.calibration.get_Q_pixel_size()
-        u = bragg_peaks_cali.calibration.get_Q_pixel_units()
-        print("Calibrated pixel size = " + str(np.round(p, decimals=8)) + " " + u)
+        print(f"Calibrated pixel size = {np.round(pixel_size_new, decimals=8)} A^-1")
 
     # Plotting
     if plot_result:
@@ -129,7 +146,7 @@ def calibrate_pixel_size(
 
         if returnfig:
             fig, ax = self.plot_scattering_intensity(
-                bragg_peaks=bragg_peaks_cali,
+                bragg_peaks=bragg_peaks,
                 figsize=figsize,
                 k_broadening=k_broadening,
                 int_power_scale=1.0,
@@ -142,7 +159,7 @@ def calibrate_pixel_size(
             )
         else:
             self.plot_scattering_intensity(
-                bragg_peaks=bragg_peaks_cali,
+                bragg_peaks=bragg_peaks,
                 figsize=figsize,
                 k_broadening=k_broadening,
                 int_power_scale=1.0,
@@ -153,10 +170,13 @@ def calibrate_pixel_size(
                 k_max=k_max,
             )
 
+    # return
     if returnfig and plot_result:
-        return bragg_peaks_cali, fig, ax
+        return bragg_peaks_cali, (fig,ax)
     else:
         return bragg_peaks_cali
+
+
 
 def calibrate_unit_cell(
         self,

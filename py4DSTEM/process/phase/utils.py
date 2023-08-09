@@ -1,56 +1,45 @@
+import functools
 from typing import Mapping, Tuple, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
-from mpl_toolkits.axes_grid1 import ImageGrid
+from scipy.optimize import curve_fit
 
 try:
     import cupy as cp
+    from cupyx.scipy.fft import rfft
 except ImportError:
     cp = None
+    from scipy.fft import dstn, idstn
 
-from py4DSTEM.process.calibration import fit_origin
+from py4DSTEM.process.utils import get_CoM
+from py4DSTEM.process.utils.cross_correlate import align_and_shift_images
 from py4DSTEM.process.utils.utils import electron_wavelength_angstrom
+from scipy.ndimage import gaussian_filter, uniform_filter1d
+from skimage.restoration import unwrap_phase
+
+# fmt: off
 
 #: Symbols for the polar representation of all optical aberrations up to the fifth order.
 polar_symbols = (
-    "C10",
-    "C12",
-    "phi12",
-    "C21",
-    "phi21",
-    "C23",
-    "phi23",
-    "C30",
-    "C32",
-    "phi32",
-    "C34",
-    "phi34",
-    "C41",
-    "phi41",
-    "C43",
-    "phi43",
-    "C45",
-    "phi45",
-    "C50",
-    "C52",
-    "phi52",
-    "C54",
-    "phi54",
-    "C56",
-    "phi56",
+        "C10", "C12", "phi12",
+        "C21", "phi21", "C23", "phi23",
+        "C30", "C32", "phi32", "C34", "phi34",
+        "C41", "phi41", "C43", "phi43", "C45", "phi45",
+        "C50", "C52", "phi52", "C54", "phi54", "C56", "phi56",
 )
 
 #: Aliases for the most commonly used optical aberrations.
 polar_aliases = {
-    "defocus": "C10",
-    "astigmatism": "C12",
-    "astigmatism_angle": "phi12",
-    "coma": "C21",
-    "coma_angle": "phi21",
-    "Cs": "C30",
-    "C5": "C50",
+        "defocus": "C10", "astigmatism": "C12", "astigmatism_angle": "phi12",
+        "coma": "C21", "coma_angle": "phi21",
+        "Cs": "C30",
+        "C5": "C50",
 }
+
+# fmt: on
+
+### Probe functions
 
 
 class ComplexProbe:
@@ -75,6 +64,8 @@ class ComplexProbe:
         Device to perform calculations on. Must be either 'cpu' or 'gpu'
     rolloff: float, optional
         Tapers the cutoff edge over the given angular range [mrad].
+    vacuum_probe_intensity: np.ndarray, optional
+        Squared of corner-centered aperture amplitude to use, instead of semiangle_cutoff + rolloff
     focal_spread: float, optional
         The 1/e width of the focal spread due to chromatic aberration and lens current instability [Å].
     angular_spread: float, optional
@@ -96,9 +87,9 @@ class ComplexProbe:
         gpts: Tuple[int, int],
         sampling: Tuple[float, float],
         semiangle_cutoff: float = np.inf,
+        rolloff: float = 2.0,
         vacuum_probe_intensity: np.ndarray = None,
         device: str = "cpu",
-        rolloff: float = 2,
         focal_spread: float = 0.0,
         angular_spread: float = 0.0,
         gaussian_spread: float = 0.0,
@@ -106,9 +97,6 @@ class ComplexProbe:
         parameters: Mapping[str, float] = None,
         **kwargs,
     ):
-
-        # Should probably be abstracted away in a device.py similar to:
-        # https://github.com/abTEM/abTEM/blob/master/abtem/device.py
         if device == "cpu":
             self._xp = np
             self._asnumpy = np.asarray
@@ -169,7 +157,6 @@ class ComplexProbe:
     def evaluate_aperture(
         self, alpha: Union[float, np.ndarray], phi: Union[float, np.ndarray] = None
     ) -> Union[float, np.ndarray]:
-
         xp = self._xp
         semiangle_cutoff = self._semiangle_cutoff / 1000
 
@@ -178,7 +165,7 @@ class ComplexProbe:
                 self._vacuum_probe_intensity, dtype=xp.float32
             )
             vacuum_probe_amplitude = xp.sqrt(xp.maximum(vacuum_probe_intensity, 0))
-            return xp.fft.ifftshift(vacuum_probe_amplitude)
+            return vacuum_probe_amplitude
 
         if self._semiangle_cutoff == xp.inf:
             return xp.ones_like(alpha)
@@ -418,8 +405,8 @@ class ComplexProbe:
     def get_spatial_frequencies(self):
         xp = self._xp
         kx, ky = spatial_frequencies(self._gpts, self._sampling)
-        kx = xp.asarray(kx)
-        ky = xp.asarray(ky)
+        kx = xp.asarray(kx, dtype=xp.float32)
+        ky = xp.asarray(ky, dtype=xp.float32)
         return kx, ky
 
     def polar_coordinates(self, x, y):
@@ -430,16 +417,15 @@ class ComplexProbe:
         return alpha, phi
 
     def build(self):
-        """Builds complex probe in the center of the region of interest."""
+        """Builds corner-centered complex probe in the center of the region of interest."""
         xp = self._xp
-        array = xp.fft.fftshift(xp.fft.ifft2(self._evaluate_ctf()))
-        # if self._vacuum_probe_intensity is not None:
+        array = xp.fft.ifft2(self._evaluate_ctf())
         array = array / xp.sqrt((xp.abs(array) ** 2).sum())
         self._array = array
         return self
 
     def visualize(self, **kwargs):
-        """Plots the probe amplitude."""
+        """Plots the probe intensity."""
         xp = self._xp
         asnumpy = self._asnumpy
 
@@ -447,7 +433,7 @@ class ComplexProbe:
         kwargs.pop("cmap", None)
 
         plt.imshow(
-            asnumpy(xp.abs(self._array) ** 2),
+            asnumpy(xp.abs(xp.fft.ifftshift(self._array)) ** 2),
             cmap=cmap,
             **kwargs,
         )
@@ -473,6 +459,9 @@ def spatial_frequencies(gpts: Tuple[int, int], sampling: Tuple[float, float]):
     return tuple(
         np.fft.fftfreq(n, d).astype(np.float32) for n, d in zip(gpts, sampling)
     )
+
+
+### FFT-shift functions
 
 
 def fourier_translation_operator(
@@ -503,9 +492,9 @@ def fourier_translation_operator(
     kx, ky = spatial_frequencies(shape, (1.0, 1.0))
     kx = kx.reshape((1, -1, 1))
     ky = ky.reshape((1, 1, -1))
-    kx = xp.asarray(kx)
-    ky = xp.asarray(ky)
-    positions = xp.asarray(positions)
+    kx = xp.asarray(kx, dtype=xp.float32)
+    ky = xp.asarray(ky, dtype=xp.float32)
+    positions = xp.asarray(positions, dtype=xp.float32)
     x = positions[:, 0].reshape((-1,) + (1, 1))
     y = positions[:, 1].reshape((-1,) + (1, 1))
 
@@ -534,354 +523,1090 @@ def fft_shift(array, positions, xp=np):
     -------
         Fourier-shifted array
     """
-    return xp.fft.ifft2(
-        xp.fft.fft2(array)
-        * fourier_translation_operator(positions, array.shape[-2:], xp)
-    )
+    translation_operator = fourier_translation_operator(positions, array.shape[-2:], xp)
+    fourier_array = xp.fft.fft2(array)
+
+    if len(translation_operator.shape) == 3 and len(fourier_array.shape) == 3:
+        shifted_fourier_array = fourier_array[None] * translation_operator[:, None]
+    else:
+        shifted_fourier_array = fourier_array * translation_operator
+
+    return xp.fft.ifft2(shifted_fourier_array)
 
 
-def calculate_center_of_mass(
-    intensities: np.ndarray,
-    fit_function: str = "plane",
-    plot_center_of_mass: bool = True,
-    scan_sampling: Tuple[float, float] = (1.0, 1.0),
-    reciprocal_sampling: Tuple[float, float] = (1.0, 1.0),
-    scan_units: Tuple[str, str] = ("pixels", "pixels"),
-    device: str = "cpu",
-    **kwargs,
+### Batching functions
+
+
+def subdivide_into_batches(
+    num_items: int, num_batches: int = None, max_batch: int = None
 ):
     """
-    Common preprocessing function to compute and fit diffraction intensities CoM
+    Split an n integer into m (almost) equal integers, such that the sum of smaller integers equals n.
 
     Parameters
     ----------
-    intensities: (Rx,Ry,Qx,Qy) xp.ndarray
-        Raw intensities array stored on device, with dtype xp.float32
-    fit_function: str, optional
-        2D fitting function for CoM fitting. One of 'plane','parabola','bezier_two'
-    plot_center_of_mass: bool, optional
-        If True, the computed and normalized CoM arrays will be displayed
-    scan_sampling: Tuple[float,float], optional
-        Real-space scan sampling in `scan_units`
-    reciprocal_sampling: Tuple[float,float], optional
-        Reciprocal-space sampling in `A^-1`
-    scan_units: Tuple[str,str], optional
-        Real-space scan sampling units
+    n: int
+        The integer to split.
+    m: int
+        The number integers n will be split into.
+
+    Returns
+    -------
+    list of int
+    """
+    if (num_batches is not None) & (max_batch is not None):
+        raise RuntimeError()
+
+    if num_batches is None:
+        if max_batch is not None:
+            num_batches = (num_items + (-num_items % max_batch)) // max_batch
+        else:
+            raise RuntimeError()
+
+    if num_items < num_batches:
+        raise RuntimeError("num_batches may not be larger than num_items")
+
+    elif num_items % num_batches == 0:
+        return [num_items // num_batches] * num_batches
+    else:
+        v = []
+        zp = num_batches - (num_items % num_batches)
+        pp = num_items // num_batches
+        for i in range(num_batches):
+            if i >= zp:
+                v = [pp + 1] + v
+            else:
+                v = [pp] + v
+        return v
+
+
+def generate_batches(
+    num_items: int, num_batches: int = None, max_batch: int = None, start=0
+):
+    for batch in subdivide_into_batches(num_items, num_batches, max_batch):
+        end = start + batch
+        yield start, end
+
+        start = end
+
+
+#### Affine transformation functions
+
+
+class AffineTransform:
+    """
+    Affine Transform Class.
+
+    Simplified version of AffineTransform from tike:
+    https://github.com/AdvancedPhotonSource/tike/blob/f9004a32fda5e49fa63b987e9ffe3c8447d59950/src/tike/ptycho/position.py
+
+    AffineTransform() -> Identity
+
+    Parameters
+    ----------
+    scale0: float
+        x-scaling
+    scale1: float
+        y-scaling
+    shear1: float
+        \\gamma shear
+    angle: float
+        \\theta rotation angle
+    t0: float
+        x-translation
+    t1: float
+        y-translation
+    dilation: float
+        Isotropic expansion (multiplies scale0 and scale1)
+    """
+
+    def __init__(
+        self,
+        scale0: float = 1.0,
+        scale1: float = 1.0,
+        shear1: float = 0.0,
+        angle: float = 0.0,
+        t0: float = 0.0,
+        t1: float = 0.0,
+        dilation: float = 1.0,
+    ):
+        self.scale0 = scale0 * dilation
+        self.scale1 = scale1 * dilation
+        self.shear1 = shear1
+        self.angle = angle
+        self.t0 = t0
+        self.t1 = t1
+
+    @classmethod
+    def fromarray(self, T: np.ndarray):
+        """
+        Return an Affine Transfrom from a 2x2 matrix.
+        Use decomposition method from Graphics Gems 2 Section 7.1
+        """
+        R = T[:2, :2].copy()
+        scale0 = np.linalg.norm(R[0])
+        if scale0 <= 0:
+            return AffineTransform()
+        R[0] /= scale0
+        shear1 = R[0] @ R[1]
+        R[1] -= shear1 * R[0]
+        scale1 = np.linalg.norm(R[1])
+        if scale1 <= 0:
+            return AffineTransform()
+        R[1] /= scale1
+        shear1 /= scale1
+        angle = np.arccos(R[0, 0])
+
+        if T.shape[0] > 2:
+            t0, t1 = T[2]
+        else:
+            t0 = t1 = 0.0
+
+        return AffineTransform(
+            scale0=float(scale0),
+            scale1=float(scale1),
+            shear1=float(shear1),
+            angle=float(angle),
+            t0=t0,
+            t1=t1,
+        )
+
+    def asarray(self):
+        """
+        Return an 2x2 matrix of scale, shear, rotation.
+        This matrix is scale @ shear @ rotate from left to right.
+        """
+        cosx = np.cos(self.angle)
+        sinx = np.sin(self.angle)
+        return (
+            np.array(
+                [
+                    [self.scale0, 0.0],
+                    [0.0, self.scale1],
+                ],
+                dtype="float32",
+            )
+            @ np.array(
+                [
+                    [1.0, 0.0],
+                    [self.shear1, 1.0],
+                ],
+                dtype="float32",
+            )
+            @ np.array(
+                [
+                    [+cosx, -sinx],
+                    [+sinx, +cosx],
+                ],
+                dtype="float32",
+            )
+        )
+
+    def asarray3(self):
+        """
+        Return an 3x2 matrix of scale, shear, rotation, translation.
+        This matrix is scale @ shear @ rotate from left to right.
+        Expects a homogenous (z) coordinate of 1.
+        """
+        T = np.empty((3, 2), dtype="float32")
+        T[2] = (self.t0, self.t1)
+        T[:2, :2] = self.asarray()
+        return T
+
+    def astuple(self):
+        """Return the constructor parameters in a tuple."""
+        return (
+            self.scale0,
+            self.scale1,
+            self.shear1,
+            self.angle,
+            self.t0,
+            self.t1,
+        )
+
+    def __call__(self, x: np.ndarray, origin=(0, 0), xp=np):
+        origin = xp.asarray(origin, dtype=xp.float32)
+        tf_matrix = self.asarray()
+        tf_matrix = xp.asarray(tf_matrix, dtype=xp.float32)
+        tf_translation = xp.array((self.t0, self.t1)) + origin
+        return ((x - origin) @ tf_matrix) + tf_translation
+
+    def __str__(self):
+        return (
+            "AffineTransform( \n"
+            f"  scale0 = {self.scale0:.4f}, scale1 = {self.scale1:.4f}, \n"
+            f"  shear1 = {self.shear1:.4f}, angle = {self.angle:.4f}, \n"
+            f"  t0 = {self.t0:.4f}, t1 = {self.t1:.4f}, \n"
+            ")"
+        )
+
+
+def estimate_global_transformation(
+    positions0: np.ndarray,
+    positions1: np.ndarray,
+    origin: Tuple[int, int] = (0, 0),
+    translation_allowed: bool = True,
+    xp=np,
+):
+    """Use least squares to estimate the global affine transformation."""
+    origin = xp.asarray(origin, dtype=xp.float32)
+
+    try:
+        if translation_allowed:
+            a = xp.pad(positions0 - origin, ((0, 0), (0, 1)), constant_values=1)
+        else:
+            a = positions0 - origin
+
+        b = positions1 - origin
+        aT = a.conj().swapaxes(-1, -2)
+        x = xp.linalg.inv(aT @ a) @ aT @ b
+
+        tf = AffineTransform.fromarray(x)
+
+    except xp.linalg.LinAlgError:
+        tf = AffineTransform()
+
+    error = xp.linalg.norm(tf(positions0, origin=origin, xp=xp) - positions1)
+
+    return tf, error
+
+
+def estimate_global_transformation_ransac(
+    positions0: np.ndarray,
+    positions1: np.ndarray,
+    origin: Tuple[int, int] = (0, 0),
+    translation_allowed: bool = True,
+    min_sample: int = 64,
+    max_error: float = 16,
+    min_consensus: float = 0.75,
+    max_iter: int = 20,
+    xp=np,
+):
+    """Use RANSAC to estimate the global affine transformation."""
+    best_fitness = np.inf  # small fitness is good
+    transform = AffineTransform()
+
+    # Choose a subset
+    for subset in np.random.choice(
+        a=len(positions0),
+        size=(max_iter, min_sample),
+        replace=True,
+    ):
+        # Fit to subset
+        subset = np.unique(subset)
+        candidate_model, _ = estimate_global_transformation(
+            positions0=positions0[subset],
+            positions1=positions1[subset],
+            origin=origin,
+            translation_allowed=translation_allowed,
+            xp=xp,
+        )
+
+        # Determine inliars and outliars
+        position_error = xp.linalg.norm(
+            candidate_model(positions0, origin=origin, xp=xp) - positions1,
+            axis=-1,
+        )
+        inliars = position_error <= max_error
+
+        # Check if consensus reached
+        if xp.sum(inliars) / len(inliars) >= min_consensus:
+            # Refit with consensus inliars
+            candidate_model, fitness = estimate_global_transformation(
+                positions0=positions0[inliars],
+                positions1=positions1[inliars],
+                origin=origin,
+                translation_allowed=translation_allowed,
+                xp=xp,
+            )
+            if fitness < best_fitness:
+                best_fitness = fitness
+                transform = candidate_model
+
+    return transform, best_fitness
+
+
+def fourier_ring_correlation(
+    image_1,
+    image_2,
+    pixel_size=None,
+    bin_size=None,
+    sigma=None,
+    align_images=False,
+    upsample_factor=8,
+    device="cpu",
+    plot_frc=True,
+    frc_color="red",
+    half_bit_color="blue",
+):
+    """
+    Computes fourier ring correlation (FRC) of 2 arrays.
+    Arrays must bet the same size.
+
+    Parameters
+     ----------
+    image1: ndarray
+        first image for FRC
+    image2: ndarray
+        second image for FRC
+    pixel_size: tuple
+        size of pixels in A (x,y)
+    bin_size: float, optional
+        size of bins for ring profile
+    sigma: float, optional
+        standard deviation for Gaussian kernel
+    align_images: bool
+        if True, aligns images using DFT upsampling of cross correlation.
+    upsample factor: int
+        if align_images, upsampling for correlation. Must be greater than 2.
     device: str, optional
-        Device to perform calculations on. Must be either 'cpu' or 'gpu'
+        calculation device will be perfomed on. Must be 'cpu' or 'gpu'
+    plot_frc: bool, optional
+        if True, plots frc
+    frc_color: str, optional
+        color of FRC line in plot
+    half_bit_color: str, optional
+        color of half-bit line
 
     Returns
     --------
-    com_normalized_x: (Rx,Ry) xp.ndarray
-        Normalized horizontal center of mass gradient
-    com_normalized_y: (Rx,Ry) xp.ndarray
-        Normalized vertical center of mass gradient
-
-    Displays
-    --------
-    com_measured_x/y and com_normalized_x/y, optional
-        Measured and normalized CoM gradients
+    q_frc: ndarray
+        spatial frequencies of FRC
+    frc: ndarray
+        fourier ring correlation
+    half_bit: ndarray
+        half-bit criteria
     """
-
     if device == "cpu":
         xp = np
-        asnumpy = np.asarray
-        if isinstance(intensities, np.ndarray):
-            intensities = asnumpy(intensities)
-        else:
-            intensities = cp.asnumpy(intensities)
     elif device == "gpu":
         xp = cp
-        asnumpy = cp.asnumpy
-        intensities = xp.asarray(intensities)
+
+    if align_images:
+        image_2 = align_and_shift_images(
+            image_1,
+            image_2,
+            upsample_factor=upsample_factor,
+            device=device,
+        )
+
+    fft_image_1 = xp.fft.fft2(image_1)
+    fft_image_2 = xp.fft.fft2(image_2)
+
+    cc_mixed = xp.real(fft_image_1 * xp.conj(fft_image_2))
+    cc_image_1 = xp.abs(fft_image_1) ** 2
+    cc_image_2 = xp.abs(fft_image_2) ** 2
+
+    # take 1D profile
+    q_frc, cc_mixed_1D, n = return_1D_profile(
+        cc_mixed,
+        pixel_size=pixel_size,
+        sigma=sigma,
+        bin_size=bin_size,
+        device=device,
+    )
+    _, cc_image_1_1D, _ = return_1D_profile(
+        cc_image_1, pixel_size=pixel_size, sigma=sigma, bin_size=bin_size, device=device
+    )
+    _, cc_image_2_1D, _ = return_1D_profile(
+        cc_image_2,
+        pixel_size=pixel_size,
+        sigma=sigma,
+        bin_size=bin_size,
+        device=device,
+    )
+
+    frc = cc_mixed_1D / ((cc_image_1_1D * cc_image_2_1D) ** 0.5)
+    half_bit = 2 / xp.sqrt(n / 2)
+
+    ind_max = xp.argmax(n)
+    q_frc = q_frc[1:ind_max]
+    frc = frc[1:ind_max]
+    half_bit = half_bit[1:ind_max]
+
+    if plot_frc:
+        fig, ax = plt.subplots()
+        if device == "gpu":
+            ax.plot(q_frc.get(), frc.get(), label="FRC", color=frc_color)
+            ax.plot(q_frc.get(), half_bit.get(), label="half bit", color=half_bit_color)
+            ax.set_xlim([0, q_frc.get().max()])
+        else:
+            ax.plot(q_frc, frc, label="FRC", color=frc_color)
+            ax.plot(q_frc, half_bit, label="half bit", color=half_bit_color)
+            ax.set_xlim([0, q_frc.max()])
+        ax.legend()
+        ax.set_ylim([0, 1])
+
+        if pixel_size is None:
+            ax.set_xlabel(r"Spatial frequency (pixels)")
+        else:
+            ax.set_xlabel(r"Spatial frequency ($\AA$)")
+        ax.set_ylabel("FRC")
+
+    return q_frc, frc, half_bit
+
+
+def return_1D_profile(
+    intensity, pixel_size=None, bin_size=None, sigma=None, device="cpu"
+):
+    """
+    Return 1D radial profile from corner centered array
+
+    Parameters
+     ----------
+    intensity: ndarray
+        Array for computing 1D profile
+    pixel_size: tuple
+        Size of pixels in A (x,y)
+    bin_size: float, optional
+        Size of bins for ring profile
+    sigma: float, optional
+        standard deviation for Gaussian kernel
+    device: str, optional
+        calculation device will be perfomed on. Must be 'cpu' or 'gpu'
+
+    Returns
+    --------
+    q_bins: ndarray
+        spatial frequencies of bins
+    I_bins: ndarray
+        Intensity of bins
+    n: ndarray
+        Number of pixels in each bin
+    """
+    if device == "cpu":
+        xp = np
+    elif device == "gpu":
+        xp = cp
+
+    if pixel_size is None:
+        pixel_size = (1, 1)
+
+    x = xp.fft.fftfreq(intensity.shape[0], pixel_size[0])
+    y = xp.fft.fftfreq(intensity.shape[1], pixel_size[1])
+    q = xp.sqrt(x[:, None] ** 2 + y[None, :] ** 2)
+    q = q.ravel()
+
+    intensity = intensity.ravel()
+
+    if bin_size is None:
+        bin_size = q[1] - q[0]
+
+    q_bins = xp.arange(0, q.max() + bin_size, bin_size)
+
+    inds = q / bin_size
+    inds_f = xp.floor(inds).astype("int")
+    d_ind = inds - inds_f
+
+    nf = xp.bincount(inds_f, weights=(1 - d_ind), minlength=q_bins.shape[0])
+    nc = xp.bincount(inds_f + 1, weights=(d_ind), minlength=q_bins.shape[0])
+    n = nf + nc
+
+    I_bins0 = xp.bincount(
+        inds_f, weights=intensity * (1 - d_ind), minlength=q_bins.shape[0]
+    )
+    I_bins1 = xp.bincount(
+        inds_f + 1, weights=intensity * (d_ind), minlength=q_bins.shape[0]
+    )
+
+    I_bins = (I_bins0 + I_bins1) / n
+    if sigma is not None:
+        I_bins = gaussian_filter(I_bins, sigma)
+
+    return q_bins, I_bins, n
+
+
+def fourier_rotate_real_volume(array, angle, axes=(0, 1), xp=np):
+    """
+    Rotates a 3D array using three Fourier-based shear operators.
+
+    Parameters
+     ----------
+    array: ndarray
+        3D array to rotate
+    angle: float
+        Angle in deg to rotate array by
+    axes: tuple, Optional
+        Axes defining plane in which to rotate about
+    xp: Callable, optional
+        Array computing module
+
+    Returns
+    --------
+    output_arr: ndarray
+        Fourier-rotated array
+    """
+    input_arr = xp.asarray(array, dtype=array.dtype)
+    array_shape = np.array(input_arr.shape)
+    ndim = input_arr.ndim
+
+    if ndim != 3:
+        raise ValueError("input array should be 3D")
+
+    axes = list(axes)
+
+    if len(axes) != 2:
+        raise ValueError("axes should contain exactly two values")
+
+    if not all([float(ax).is_integer() for ax in axes]):
+        raise ValueError("axes should contain only integer values")
+
+    if axes[0] < 0:
+        axes[0] += ndim
+    if axes[1] < 0:
+        axes[1] += ndim
+    if axes[0] < 0 or axes[1] < 0 or axes[0] >= ndim or axes[1] >= ndim:
+        raise ValueError("invalid rotation plane specified")
+
+    axes.sort()
+    rotation_ax = np.setdiff1d([0, 1, 2], axes)[0]
+    plane_dims = array_shape[axes]
+
+    qx = xp.fft.fftfreq(plane_dims[0], 1)
+    qy = xp.fft.fftfreq(plane_dims[1], 1)
+    qxa, qya = xp.meshgrid(qx, qy, indexing="ij")
+
+    x = xp.arange(plane_dims[0]) - plane_dims[0] / 2
+    y = xp.arange(plane_dims[1]) - plane_dims[1] / 2
+    xa, ya = xp.meshgrid(x, y, indexing="ij")
+
+    theta_90 = round(angle / 90)
+    theta_rest = (angle + 45) % 90 - 45
+
+    theta = np.deg2rad(theta_rest)
+    a = np.tan(-theta / 2)
+    b = np.sin(theta)
+
+    xOp = xp.exp(-2j * np.pi * qxa * ya * a)
+    yOp = xp.exp(-2j * np.pi * qya * xa * b)
+
+    output_arr = input_arr.copy()
+
+    # 90 degree rotation
+    if abs(theta_90) > 0:
+        if plane_dims[0] == plane_dims[1]:
+            output_arr = xp.rot90(output_arr, theta_90, axes=axes)
+        else:
+            if plane_dims[0] > plane_dims[1]:
+                xx = np.arange(plane_dims[1]) + (plane_dims[0] - plane_dims[1]) // 2
+                if rotation_ax == 0:
+                    output_arr[:, xx, :] = xp.rot90(
+                        output_arr[:, xx, :], theta_90, axes=axes
+                    )
+                    output_arr[:, : xx[0], :] = 0
+                    output_arr[:, xx[-1] :, :] = 0
+                else:
+                    output_arr[xx, :, :] = xp.rot90(
+                        output_arr[xx, :, :], theta_90, axes=axes
+                    )
+                    output_arr[: xx[0], :, :] = 0
+                    output_arr[xx[-1] :, :, :] = 0
+            else:
+                yy = np.arange(plane_dims[0]) + (plane_dims[1] - plane_dims[0]) // 2
+                if rotation_ax == 2:
+                    output_arr[:, yy, :] = xp.rot90(
+                        output_arr[:, yy, :], theta_90, axes=axes
+                    )
+                    output_arr[:, : yy[0], :] = 0
+                    output_arr[:, yy[-1] :, :] = 0
+                else:
+                    output_arr[:, :, yy] = xp.rot90(
+                        output_arr[:, :, yy], theta_90, axes=axes
+                    )
+                    output_arr[:, :, : yy[0]] = 0
+                    output_arr[:, :, yy[-1] :] = 0
+
+    # small rotation
+    if rotation_ax == 0:
+        output_arr = xp.fft.ifft(xp.fft.fft(output_arr, axis=1) * xOp[None, :], axis=1)
+        output_arr = xp.fft.ifft(xp.fft.fft(output_arr, axis=2) * yOp[None, :], axis=2)
+        output_arr = xp.fft.ifft(xp.fft.fft(output_arr, axis=1) * xOp[None, :], axis=1)
+        output_arr = xp.real(output_arr)
+
+    elif rotation_ax == 1:
+        output_arr = xp.fft.ifft(
+            xp.fft.fft(output_arr, axis=0) * xOp[:, None, :], axis=0
+        )
+        output_arr = xp.fft.ifft(
+            xp.fft.fft(output_arr, axis=2) * yOp[:, None, :], axis=2
+        )
+        output_arr = xp.fft.ifft(
+            xp.fft.fft(output_arr, axis=0) * xOp[:, None, :], axis=0
+        )
+        output_arr = np.real(output_arr)
+
     else:
-        raise ValueError(f"device must be either 'cpu' or 'gpu', not {device}")
+        output_arr = xp.fft.ifft(
+            xp.fft.fft(output_arr, axis=0) * xOp[:, :, None], axis=0
+        )
+        output_arr = xp.fft.ifft(
+            xp.fft.fft(output_arr, axis=1) * yOp[:, :, None], axis=1
+        )
+        output_arr = xp.fft.ifft(
+            xp.fft.fft(output_arr, axis=0) * xOp[:, :, None], axis=0
+        )
+        output_arr = xp.real(output_arr)
 
-    intensities_shape = np.array(intensities.shape)
-    intensities_sum = xp.sum(intensities, axis=(-2, -1))
+    return output_arr
 
-    # Coordinates
-    kx = xp.arange(intensities_shape[-2], dtype=xp.float32)
-    ky = xp.arange(intensities_shape[-1], dtype=xp.float32)
-    kya, kxa = xp.meshgrid(ky, kx)
 
-    # calculate CoM
-    com_measured_x = (
-        xp.sum(intensities * kxa[None, None], axis=(-2, -1)) / intensities_sum
+### Divergence Projection Functions
+
+
+def compute_divergence(vector_field, spacings, xp=np):
+    """Computes divergence of vector_field"""
+    num_dims = len(spacings)
+    div = xp.zeros_like(vector_field[0])
+
+    for i in range(num_dims):
+        div += xp.gradient(vector_field[i], spacings[i], axis=i)
+
+    return div
+
+
+def compute_gradient(scalar_field, spacings, xp=np):
+    """Computes gradient of scalar_field"""
+    num_dims = len(spacings)
+    grad = xp.zeros((num_dims,) + scalar_field.shape)
+
+    for i in range(num_dims):
+        grad[i] = xp.gradient(scalar_field, spacings[i], axis=i)
+
+    return grad
+
+
+def array_slice(axis, ndim, start, end, step=1):
+    """Returns array slice along dynamic axis"""
+    return (slice(None),) * (axis % ndim) + (slice(start, end, step),)
+
+
+def make_array_rfft_compatible(array_nd, axis=0, xp=np):
+    """Expand array to be rfft compatible"""
+    array_shape = np.array(array_nd.shape)
+    d = array_nd.ndim
+    n = array_shape[axis]
+    array_shape[axis] = (n + 1) * 2
+
+    dtype = array_nd.dtype
+    padded_array = xp.zeros(array_shape, dtype=dtype)
+
+    padded_array[array_slice(axis, d, 1, n + 1)] = -array_nd
+    padded_array[array_slice(axis, d, None, -n - 1, -1)] = array_nd
+
+    return padded_array
+
+
+def dst_I(array_nd, xp=np):
+    """1D rfft-based DST-I"""
+    d = array_nd.ndim
+    for axis in range(d):
+        crop_slice = array_slice(axis, d, 1, -1)
+        array_nd = rfft(
+            make_array_rfft_compatible(array_nd, axis=axis, xp=xp), axis=axis
+        )[crop_slice].imag
+
+    return array_nd
+
+
+def idst_I(array_nd, xp=np):
+    """1D rfft-based iDST-I"""
+    scaling = np.prod((np.array(array_nd.shape) + 1) * 2)
+    return dst_I(array_nd, xp=xp) / scaling
+
+
+def preconditioned_laplacian(num_exterior, spacing=1, xp=np):
+    """DST-I eigenvalues"""
+    n = num_exterior - 1
+    evals_1d = 2 - 2 * xp.cos(np.pi * xp.arange(1, num_exterior) / num_exterior)
+
+    op = (
+        xp.repeat(evals_1d, n**2)
+        + xp.tile(evals_1d, n**2)
+        + xp.tile(xp.repeat(evals_1d, n), n)
     )
-    com_measured_y = (
-        xp.sum(intensities * kya[None, None], axis=(-2, -1)) / intensities_sum
+
+    return -op / spacing**2
+
+
+def preconditioned_poisson_solver(rhs_interior, spacing=1, xp=np):
+    """DST-I based poisson solver"""
+    nx, ny, nz = rhs_interior.shape
+    if nx != ny or nx != nz:
+        raise ValueError()
+
+    op = preconditioned_laplacian(nx + 1, spacing=spacing, xp=xp)
+    if xp is np:
+        dst_rhs = dstn(rhs_interior, type=1).ravel()
+        dst_u = (dst_rhs / op).reshape((nx, ny, nz))
+        sol = idstn(dst_u, type=1)
+    else:
+        dst_rhs = dst_I(rhs_interior, xp=xp).ravel()
+        dst_u = (dst_rhs / op).reshape((nx, ny, nz))
+        sol = idst_I(dst_u, xp=xp)
+
+    return sol
+
+
+def project_vector_field_divergence(vector_field, spacings=(1, 1, 1), xp=np):
+    """
+    Returns solenoidal part of vector field using projection:
+
+    f - \\grad{p}
+    s.t. \\laplacian{p} = \\div{f}
+    """
+
+    div_v = compute_divergence(vector_field, spacings, xp=xp)
+    p = preconditioned_poisson_solver(div_v, spacings[0], xp=xp)
+    grad_p = compute_gradient(p, spacings, xp=xp)
+    return vector_field - grad_p
+
+
+# Nesterov acceleration functions
+# https://blogs.princeton.edu/imabandit/2013/04/01/acceleratedgradientdescent/
+
+
+@functools.cache
+def nesterov_lambda(one_indexed_iter_num):
+    if one_indexed_iter_num == 0:
+        return 0
+    return (1 + np.sqrt(1 + 4 * nesterov_lambda(one_indexed_iter_num - 1) ** 2)) / 2
+
+
+def nesterov_gamma(zero_indexed_iter_num):
+    one_indexed_iter_num = zero_indexed_iter_num + 1
+    return (1 - nesterov_lambda(one_indexed_iter_num)) / nesterov_lambda(
+        one_indexed_iter_num + 1
     )
 
-    # Fit function to center of mass
-    # TO-DO: allow py4DSTEM.process.calibration.fit_origin to accept xp.ndarrays
-    or_fits = fit_origin(
-        (asnumpy(com_measured_x), asnumpy(com_measured_y)),
-        fitfunction=fit_function,
+
+def cartesian_to_polar_transform_2Ddata(
+    im_cart,
+    xy_center,
+    num_theta_bins=90,
+    radius_max=None,
+    corner_centered=False,
+    xp=np,
+):
+    """
+    Quick cartesian to polar conversion.
+    """
+
+    # coordinates
+    if radius_max is None:
+        if corner_centered:
+            radius_max = np.min(np.array(im_cart.shape) // 2)
+        else:
+            radius_max = np.sqrt(np.sum(np.array(im_cart.shape) ** 2)) // 2
+
+    r = xp.arange(radius_max)
+    t = xp.linspace(
+        0,
+        2.0 * np.pi,
+        num_theta_bins,
+        endpoint=False,
     )
-    com_fitted_x = xp.asarray(or_fits[0])
-    com_fitted_y = xp.asarray(or_fits[1])
+    ra, ta = xp.meshgrid(r, t)
 
-    # fix CoM units
-    com_normalized_x = (com_measured_x - com_fitted_x) * reciprocal_sampling[0]
-    com_normalized_y = (com_measured_y - com_fitted_y) * reciprocal_sampling[1]
+    # resampling coordinates
+    x = ra * xp.cos(ta) + xy_center[0]
+    y = ra * xp.sin(ta) + xy_center[1]
 
-    # Optionally, plot
-    if plot_center_of_mass:
+    xf = xp.floor(x).astype("int")
+    yf = xp.floor(y).astype("int")
+    dx = x - xf
+    dy = y - yf
 
-        figsize = kwargs.get("figsize", (8, 8))
-        cmap = kwargs.get("cmap", "RdBu_r")
-        kwargs.pop("cmap", None)
-        kwargs.pop("figsize", None)
+    mode = "wrap" if corner_centered else "clip"
 
-        extent = [
-            0,
-            scan_sampling[1] * intensities_shape[1],
-            scan_sampling[0] * intensities_shape[0],
-            0,
+    # resample image
+    im_polar = (
+        im_cart.ravel()[
+            xp.ravel_multi_index(
+                (xf, yf),
+                im_cart.shape,
+                mode=mode,
+            )
         ]
+        * (1 - dx)
+        * (1 - dy)
+        + im_cart.ravel()[
+            xp.ravel_multi_index(
+                (xf + 1, yf),
+                im_cart.shape,
+                mode=mode,
+            )
+        ]
+        * (dx)
+        * (1 - dy)
+        + im_cart.ravel()[
+            xp.ravel_multi_index(
+                (xf, yf + 1),
+                im_cart.shape,
+                mode=mode,
+            )
+        ]
+        * (1 - dx)
+        * (dy)
+        + im_cart.ravel()[
+            xp.ravel_multi_index(
+                (xf + 1, yf + 1),
+                im_cart.shape,
+                mode=mode,
+            )
+        ]
+        * (dx)
+        * (dy)
+    )
 
-        fig = plt.figure(figsize=figsize)
-        grid = ImageGrid(fig, 111, nrows_ncols=(2, 2), axes_pad=(0.25, 0.5))
-
-        for ax, arr, title in zip(
-            grid,
-            [
-                com_measured_x,
-                com_measured_y,
-                com_normalized_x,
-                com_normalized_y,
-            ],
-            ["CoM_x", "CoM_y", "Normalized CoM_x", "Normalized CoM_y"],
-        ):
-            ax.imshow(asnumpy(arr), extent=extent, cmap=cmap, **kwargs)
-            ax.set_xlabel(f"x [{scan_units[0]}]")
-            ax.set_ylabel(f"y [{scan_units[1]}]")
-            ax.set_title(title)
-
-    return asnumpy(com_normalized_x), asnumpy(com_normalized_y)
+    return im_polar
 
 
-def center_of_mass_relative_rotation(
-    com_normalized_x: np.ndarray,
-    com_normalized_y: np.ndarray,
-    rotation_angles_deg: np.ndarray = np.arange(-89.0, 90.0, 1.0),
-    plot_rotation: bool = True,
-    maximize_divergence: bool = False,
-    device: str = "cpu",
-    **kwargs,
+def polar_to_cartesian_transform_2Ddata(
+    im_polar,
+    xy_size,
+    xy_center,
+    corner_centered=False,
+    xp=np,
 ):
     """
-    Solves for the relative rotation between scan directions
-    and the reciprocal coordinate system. We do this by minimizing the curl of the
-    CoM gradient vector field or, alternatively, maximizing the divergence.
+    Quick polar to cartesian conversion.
+    """
+
+    # coordinates
+    sx, sy = xy_size
+    cx, cy = xy_center
+
+    if corner_centered:
+        x = xp.fft.fftfreq(sx, d=1 / sx)
+        y = xp.fft.fftfreq(sy, d=1 / sy)
+    else:
+        x = xp.arange(sx)
+        y = xp.arange(sy)
+
+    xa, ya = xp.meshgrid(x, y, indexing="ij")
+    ra = xp.hypot(xa - cx, ya - cy)
+    ta = xp.arctan2(ya - cy, xa - cx)
+
+    t = xp.linspace(0, 2 * np.pi, im_polar.shape[0], endpoint=False)
+    t_step = t[1] - t[0]
+
+    # resampling coordinates
+    t_ind = ta / t_step
+    r_ind = ra.copy()
+    tf = xp.floor(t_ind).astype("int")
+    rf = xp.floor(r_ind).astype("int")
+
+    # resample image
+    im_cart = im_polar.ravel()[
+        xp.ravel_multi_index(
+            (tf, rf),
+            im_polar.shape,
+            mode=("wrap", "clip"),
+        )
+    ]
+
+    return im_cart
+
+
+def regularize_probe_amplitude(
+    probe_init,
+    width_max_pixels=2.0,
+    nearest_angular_neighbor_averaging=5,
+    enforce_constant_intensity=True,
+    corner_centered=False,
+):
+    """
+    Fits sigmoid for each angular direction.
 
     Parameters
-    ----------
-    com_normalized_x: (Rx,Ry) xp.ndarray
-        Normalized horizontal center of mass gradient
-    com_normalized_y: (Rx,Ry) xp.ndarray
-        Normalized vertical center of mass gradient
-    rotation_angles_deg: ndarray, optional
-        Array of angles in degrees to perform curl minimization over
-    plot_rotation: bool, optional
-        If True, the CoM curl minimization search result will be displayed
-    maximize_divergence: bool, optional
-        If True, the divergence of the CoM gradient vector field is maximized
-    device: str, optional
-        Device to perform calculations on. Must be either 'cpu' or 'gpu'
+    --------
+    probe_init: np.array
+        2D complex image of the probe in Fourier space.
+    width_max_pixels: float
+        Maximum edge width of the probe in pixels.
+    nearest_angular_neighbor_averaging: int
+        Number of nearest angular neighbor pixels to average to make aperture less jagged.
+    enforce_constant_intensity: bool
+        Set to true to make intensity inside the aperture constant.
+    corner_centered: bool
+        If True, the probe is assumed to be corner-centered
 
     Returns
     --------
-    self.com_x: np.ndarray
-        Corrected horizontal center of mass gradient, as a numpy array
-    self.com_y: np.ndarray
-        Corrected vertical center of mass gradient, as a numpy array
-    rotation_best_deg: float
-        Rotation angle which minimizes CoM curl, in degrees
-    rotation_best_transpose: bool
-        Whether diffraction intensities need to be transposed to minimize CoM curl
-
-    Displays
-    --------
-    rotation_curl/div vs rotation_angles_deg, optional
-        Vector calculus quantity being minimized/maximized
-    rotation_best_deg
-        Summary statistics
+    probe_corr: np.ndarray
+        2D complex image of the corrected probe in Fourier space.
+    coefs_all: np.ndarray
+        coefficients for the sigmoid fits
     """
 
-    if device == "cpu":
-        xp = np
-        asnumpy = np.asarray
-        if isinstance(com_normalized_x, np.ndarray):
-            com_normalized_x = asnumpy(com_normalized_x)
-        else:
-            com_normalized_x = cp.asnumpy(com_normalized_x)
-        if isinstance(com_normalized_y, np.ndarray):
-            com_normalized_y = asnumpy(com_normalized_y)
-        else:
-            com_normalized_y = cp.asnumpy(com_normalized_y)
-    elif device == "gpu":
-        xp = cp
-        asnumpy = cp.asnumpy
-        com_normalized_x = xp.asarray(com_normalized_x)
-        com_normalized_y = xp.asarray(com_normalized_y)
-    else:
-        raise ValueError(f"device must be either 'cpu' or 'gpu', not {device}")
+    # Get probe intensity
+    probe_amp = np.abs(probe_init)
+    probe_angle = np.angle(probe_init)
+    probe_int = probe_amp**2
 
-    rotation_angles_deg = xp.asarray(rotation_angles_deg)
-    rotation_angles_rad = xp.deg2rad(rotation_angles_deg)[:, None, None]
+    # Center of mass for probe intensity
+    xy_center = get_CoM(probe_int, device="cpu", corner_centered=corner_centered)
 
-    # Untransposed
-    com_measured_x = (
-        xp.cos(rotation_angles_rad) * com_normalized_x[None]
-        - xp.sin(rotation_angles_rad) * com_normalized_y[None]
-    )
-    com_measured_y = (
-        xp.sin(rotation_angles_rad) * com_normalized_x[None]
-        + xp.cos(rotation_angles_rad) * com_normalized_y[None]
+    # Convert intensity to polar coordinates
+    polar_int = cartesian_to_polar_transform_2Ddata(
+        probe_int,
+        xy_center=xy_center,
+        corner_centered=corner_centered,
+        xp=np,
     )
 
-    if maximize_divergence:
-        com_grad_x_x = com_measured_x[:, 2:, 1:-1] - com_measured_x[:, :-2, 1:-1]
-        com_grad_y_y = com_measured_y[:, 1:-1, 2:] - com_measured_y[:, 1:-1, :-2]
-        rotation_div = xp.mean(xp.abs(com_grad_x_x + com_grad_y_y), axis=(-2, -1))
-    else:
-        com_grad_x_y = com_measured_x[:, 1:-1, 2:] - com_measured_x[:, 1:-1, :-2]
-        com_grad_y_x = com_measured_y[:, 2:, 1:-1] - com_measured_y[:, :-2, 1:-1]
-        rotation_curl = xp.mean(xp.abs(com_grad_y_x - com_grad_x_y), axis=(-2, -1))
+    # Fit corrected probe intensity
+    radius = np.arange(polar_int.shape[1])
 
-    # Transposed
-    com_measured_x = (
-        xp.cos(rotation_angles_rad) * com_normalized_y[None]
-        - xp.sin(rotation_angles_rad) * com_normalized_x[None]
+    # estimate initial parameters
+    sub = polar_int > (np.max(polar_int) * 0.5)
+    sig_0 = np.mean(polar_int[sub])
+    rad_0 = np.max(np.argwhere(np.sum(sub, axis=0)))
+    width = width_max_pixels * 0.5
+
+    # init
+    def step_model(radius, sig_0, rad_0, width):
+        return sig_0 * np.clip((rad_0 - radius) / width, 0.0, 1.0)
+
+    coefs_all = np.zeros((polar_int.shape[0], 3))
+    coefs_all[:, 0] = sig_0
+    coefs_all[:, 1] = rad_0
+    coefs_all[:, 2] = width
+
+    # bounds
+    lb = (0.0, 0.0, 1e-4)
+    ub = (np.inf, np.inf, width_max_pixels)
+
+    # refine parameters, generate polar image
+    polar_fit = np.zeros_like(polar_int)
+    for a0 in range(polar_int.shape[0]):
+        coefs_all[a0, :] = curve_fit(
+            step_model,
+            radius,
+            polar_int[a0, :],
+            p0=coefs_all[a0, :],
+            xtol=1e-12,
+            bounds=(lb, ub),
+        )[0]
+        polar_fit[a0, :] = step_model(radius, *coefs_all[a0, :])
+
+    # Compute best-fit constant intensity inside probe, update bounds
+    sig_0 = np.median(coefs_all[:, 0])
+    coefs_all[:, 0] = sig_0
+    lb = (sig_0 - 1e-8, 0.0, 1e-4)
+    ub = (sig_0 + 1e-8, np.inf, width_max_pixels)
+
+    # refine parameters, generate polar image
+    polar_int_corr = np.zeros_like(polar_int)
+    for a0 in range(polar_int.shape[0]):
+        coefs_all[a0, :] = curve_fit(
+            step_model,
+            radius,
+            polar_int[a0, :],
+            p0=coefs_all[a0, :],
+            xtol=1e-12,
+            bounds=(lb, ub),
+        )[0]
+        # polar_int_corr[a0, :] = step_model(radius, *coefs_all[a0, :])
+
+    # make aperture less jagged, using moving mean
+    coefs_all = np.apply_along_axis(
+        uniform_filter1d,
+        0,
+        coefs_all,
+        size=nearest_angular_neighbor_averaging,
+        mode="wrap",
     )
-    com_measured_y = (
-        xp.sin(rotation_angles_rad) * com_normalized_y[None]
-        + xp.cos(rotation_angles_rad) * com_normalized_x[None]
+    for a0 in range(polar_int.shape[0]):
+        polar_int_corr[a0, :] = step_model(radius, *coefs_all[a0, :])
+
+    # Convert back to cartesian coordinates
+    int_corr = polar_to_cartesian_transform_2Ddata(
+        polar_int_corr,
+        xy_size=probe_init.shape,
+        xy_center=xy_center,
+        corner_centered=corner_centered,
     )
 
-    if maximize_divergence:
-        com_grad_x_x = com_measured_x[:, 2:, 1:-1] - com_measured_x[:, :-2, 1:-1]
-        com_grad_y_y = com_measured_y[:, 1:-1, 2:] - com_measured_y[:, 1:-1, :-2]
-        rotation_div_transpose = xp.mean(
-            xp.abs(com_grad_x_x + com_grad_y_y), axis=(-2, -1)
-        )
+    amp_corr = np.sqrt(np.maximum(int_corr, 0))
+
+    # Assemble output probe
+    if not enforce_constant_intensity:
+        max_coeff = np.sqrt(coefs_all[:, 0]).max()
+        amp_corr = amp_corr / max_coeff * probe_amp
+
+    probe_corr = amp_corr * np.exp(1j * probe_angle)
+
+    return probe_corr, polar_int, polar_int_corr, coefs_all
+
+
+def aberrations_basis_function(
+    probe_size,
+    probe_sampling,
+    max_angular_order,
+    max_radial_order,
+    xp=np,
+):
+    """ """
+    sx, sy = probe_size
+    dx, dy = probe_sampling
+    qx = xp.fft.fftfreq(sx, dx)
+    qy = xp.fft.fftfreq(sy, dy)
+
+    qxa, qya = xp.meshgrid(qx, qy, indexing="ij")
+    q2 = qxa**2 + qya**2
+    theta = xp.arctan2(qya, qxa)
+
+    basis = []
+    index = []
+
+    for n in range(max_angular_order + 1):
+        for m in range((max_radial_order - n) // 2 + 1):
+            basis.append((q2 ** (m + n / 2) * np.cos(n * theta)))
+            index.append((m, n, 0))
+            if n > 0:
+                basis.append((q2 ** (m + n / 2) * np.sin(n * theta)))
+                index.append((m, n, 1))
+
+    basis = xp.array(basis)
+
+    return basis, index
+
+
+def fit_aberration_surface(
+    complex_probe,
+    probe_sampling,
+    max_angular_order,
+    max_radial_order,
+    xp=np,
+):
+    """ """
+    probe_amp = xp.abs(complex_probe)
+    probe_angle = xp.angle(complex_probe)
+
+    if xp is np:
+        probe_angle = probe_angle.astype(np.float64)
+        unwrapped_angle = unwrap_phase(probe_angle, wrap_around=True).astype(xp.float32)
     else:
-        com_grad_x_y = com_measured_x[:, 1:-1, 2:] - com_measured_x[:, 1:-1, :-2]
-        com_grad_y_x = com_measured_y[:, 2:, 1:-1] - com_measured_y[:, :-2, 1:-1]
-        rotation_curl_transpose = xp.mean(
-            xp.abs(com_grad_y_x - com_grad_x_y), axis=(-2, -1)
-        )
+        probe_angle = xp.asnumpy(probe_angle).astype(np.float64)
+        unwrapped_angle = unwrap_phase(probe_angle, wrap_around=True)
+        unwrapped_angle = xp.asarray(unwrapped_angle).astype(xp.float32)
 
-    rotation_angles_rad = asnumpy(xp.squeeze(rotation_angles_rad))
-    rotation_angles_deg = asnumpy(rotation_angles_deg)
+    basis, _ = aberrations_basis_function(
+        complex_probe.shape,
+        probe_sampling,
+        max_angular_order,
+        max_radial_order,
+        xp=xp,
+    )
 
-    # Find lowest curl/ maximum div value
-    if maximize_divergence:
-        # Maximize Divergence
-        ind_max = xp.argmax(rotation_div).item()
-        ind_trans_max = xp.argmax(rotation_div_transpose).item()
+    raveled_basis = basis.reshape((basis.shape[0], -1))
+    raveled_weights = probe_amp.ravel()
 
-        if rotation_div[ind_max] >= rotation_div_transpose[ind_trans_max]:
-            rotation_best_deg = rotation_angles_deg[ind_max]
-            rotation_best_rad = rotation_angles_rad[ind_max]
-            rotation_best_transpose = False
-        else:
-            rotation_best_deg = rotation_angles_deg[ind_trans_max]
-            rotation_best_rad = rotation_angles_rad[ind_trans_max]
-            rotation_best_transpose = True
-    else:
-        # Minimize Curl
-        ind_min = xp.argmin(rotation_curl).item()
-        ind_trans_min = xp.argmin(rotation_curl_transpose).item()
+    Aw = raveled_basis.T * raveled_weights[:, None]
+    bw = unwrapped_angle.ravel() * raveled_weights
+    coeff = xp.linalg.lstsq(Aw, bw, rcond=None)[0]
 
-        if rotation_curl[ind_min] <= rotation_curl_transpose[ind_trans_min]:
-            rotation_best_deg = rotation_angles_deg[ind_min]
-            rotation_best_rad = rotation_angles_rad[ind_min]
-            rotation_best_transpose = False
-        else:
-            rotation_best_deg = rotation_angles_deg[ind_trans_min]
-            rotation_best_rad = rotation_angles_rad[ind_trans_min]
-            rotation_best_transpose = True
+    fitted_angle = xp.tensordot(coeff, basis, axes=1)
 
-    # Print summary
-    print(("Best fit rotation = " f"{str(np.round(rotation_best_deg))} degrees."))
-    if rotation_best_transpose:
-        print("Diffraction intensities should be transposed.")
-    else:
-        print("No need to transpose diffraction intensities.")
-
-    # Plot Curl/Div rotation
-    if plot_rotation:
-
-        figsize = kwargs.get("figsize", (8, 2))
-        fig, ax = plt.subplots(figsize=figsize)
-
-        ax.plot(
-            rotation_angles_deg,
-            asnumpy(rotation_div) if maximize_divergence else asnumpy(rotation_curl),
-            label="CoM",
-        )
-        ax.plot(
-            rotation_angles_deg,
-            asnumpy(rotation_div_transpose)
-            if maximize_divergence
-            else asnumpy(rotation_curl_transpose),
-            label="CoM after transpose",
-        )
-        y_r = ax.get_ylim()
-        ax.plot(
-            np.ones(2) * rotation_best_deg,
-            y_r,
-            color=(0, 0, 0, 1),
-        )
-
-        ax.legend(loc="best")
-        ax.set_xlabel("Rotation [degrees]")
-        if maximize_divergence:
-            ax.set_ylabel("Mean Absolute Divergence")
-            ax.set_aspect(
-                np.ptp(rotation_angles_deg)
-                / np.maximum(
-                    np.ptp(rotation_div),
-                    np.ptp(rotation_div_transpose),
-                )
-                / 4
-            )
-        else:
-            ax.set_ylabel("Mean Absolute Curl")
-            ax.set_aspect(
-                np.ptp(rotation_angles_deg)
-                / np.maximum(
-                    np.ptp(rotation_curl),
-                    np.ptp(rotation_curl_transpose),
-                )
-                / 4
-            )
-        fig.tight_layout()
-
-    # Calculate corrected CoM
-    if rotation_best_transpose:
-        com_x = (
-            xp.cos(rotation_best_rad) * com_normalized_y
-            - xp.sin(rotation_best_rad) * com_normalized_x
-        )
-        com_y = (
-            xp.sin(rotation_best_rad) * com_normalized_y
-            + xp.cos(rotation_best_rad) * com_normalized_x
-        )
-    else:
-        com_x = (
-            xp.cos(rotation_best_rad) * com_normalized_x
-            - xp.sin(rotation_best_rad) * com_normalized_y
-        )
-        com_y = (
-            xp.sin(rotation_best_rad) * com_normalized_x
-            + xp.cos(rotation_best_rad) * com_normalized_y
-        )
-
-    com_x = asnumpy(com_x)
-    com_y = asnumpy(com_y)
-
-    return com_x, com_y, rotation_best_deg, rotation_best_transpose
+    return fitted_angle, coeff

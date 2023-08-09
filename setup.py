@@ -21,33 +21,32 @@ setup(
     author_email='ben.savitzky@gmail.com',
     license='GNU GPLv3',
     keywords="STEM 4DSTEM",
-    python_requires='>=3.7',
+    python_requires='>=3.9,<3.12',
     install_requires=[
         'numpy >= 1.19',
         'scipy >= 1.5.2',
         'h5py >= 3.2.0',
+        'hdf5plugin >= 4.1.3',
         'ncempy >= 1.8.1',
         'matplotlib >= 3.2.2',
         'scikit-image >= 0.17.2',
         'scikit-learn >= 0.23.2',
-        'ipywidgets >= 7.6.3',
+        'scikit-optimize >= 0.9.0',
         'tqdm >= 4.46.1',
         'dill >= 0.3.3',
         'gdown >= 4.4.0',
         'dask >= 2.3.0',
-        'distributed >= 2.3.0'
+        'distributed >= 2.3.0',
+        'emdfile >= 0.0.10',
         ],
     extras_require={
         'ipyparallel': ['ipyparallel >= 6.2.4', 'dill >= 0.3.3'],
-        'cuda': ['cupy'],
-        'acom': ['pymatgen >= 2022', 'mp-api >= 0.24.1'],
+        'cuda': ['cupy >= 10.0.0'],
+        'acom': ['pymatgen >= 2022', 'mp-api == 0.24.1'],
         'aiml': ['tensorflow == 2.4.1','tensorflow-addons <= 0.14.0','crystal4D'],
         'aiml-cuda': ['tensorflow == 2.4.1','tensorflow-addons <= 0.14.0','crystal4D','cupy'],
         'numba': ['numba >= 0.49.1']
         },
-    entry_points={
-        'console_scripts': ['py4DSTEM=py4DSTEM.gui.runGUI:launch']
-    },
     package_data={
         'py4DSTEM':['process/utils/scattering_factors.txt',
                     'process/diskdetection/multicorr_row_kernel.cu',

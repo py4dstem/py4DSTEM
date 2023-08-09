@@ -11,12 +11,11 @@ from matplotlib.colors import hsv_to_rgb
 from matplotlib.colors import rgb_to_hsv
 from matplotlib.colors import ListedColormap
 
-from py4DSTEM.io.datastructure import PointList, PointListArray
-from py4DSTEM.utils.tqdmnd import tqdmnd
+from emdfile import tqdmnd, PointList, PointListArray
 
 
 def make_orientation_histogram(
-    bragg_peaks: PointList = None,
+    bragg_peaks: PointListArray = None,
     radial_ranges: np.ndarray = None,
     orientation_map = None,
     orientation_ind: int = 0,
@@ -520,6 +519,7 @@ def make_flowline_rainbow_image(
     power_scaling = 1.0,
     sum_radial_bins = False,
     plot_images = True,
+    figsize = None,
     ):
     """
     Generate RGB output images from the flowline arrays.
@@ -536,6 +536,7 @@ def make_flowline_rainbow_image(
         power_scaling (float):      Power law scaling for flowline intensity output.
         sum_radial_bins (bool):     Sum all radial bins (alternative is to output separate images).
         plot_images (bool):         Plot the outputs for quick visualization.
+        figsize (2-tuple):          Size of output figure.
 
     Returns:
         im_flowline (array):        3D or 4D array containing flowline images
@@ -614,7 +615,14 @@ def make_flowline_rainbow_image(
             im_flowline = np.min(im_flowline,axis=0)[None,:,:,:]
 
     if plot_images is True:
-        fig,ax = plt.subplots(im_flowline.shape[0],1,figsize=(10,im_flowline.shape[0]*10))
+        if figsize is None:
+            fig,ax = plt.subplots(
+                im_flowline.shape[0],1,
+                figsize=(10,im_flowline.shape[0]*10))
+        else:
+            fig,ax = plt.subplots(
+                im_flowline.shape[0],1,
+                figsize=figsize)
 
         if im_flowline.shape[0] > 1:
             for a0 in range(im_flowline.shape[0]):
@@ -730,6 +738,7 @@ def make_flowline_combined_image(
     power_scaling = 1.0,
     sum_radial_bins = True,
     plot_images = True,
+    figsize = None,
     ):
     """
     Generate RGB output images from the flowline arrays.
@@ -743,6 +752,7 @@ def make_flowline_combined_image(
         power_scaling (float):      Power law scaling for flowline intensities.
         sum_radial_bins (bool):     Sum outputs over radial bins.
         plot_images (bool):         Plot the output images for quick visualization.
+        figsize (2-tuple):          Size of output figure.
 
     Returns:
         im_flowline (array):        flowline images
@@ -788,7 +798,14 @@ def make_flowline_combined_image(
 
 
     if plot_images is True:
-        fig,ax = plt.subplots(im_flowline.shape[0],1,figsize=(10,im_flowline.shape[0]*10))
+        if figsize is None:
+            fig,ax = plt.subplots(
+                im_flowline.shape[0],1,
+                figsize=(10,im_flowline.shape[0]*10))
+        else:
+            fig,ax = plt.subplots(
+                im_flowline.shape[0],1,
+                figsize=figsize)
 
         if im_flowline.shape[0] > 1:
             for a0 in range(im_flowline.shape[0]):

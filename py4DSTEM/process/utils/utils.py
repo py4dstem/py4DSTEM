@@ -10,14 +10,21 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
 import matplotlib.font_manager as fm
 
+from emdfile import tqdmnd
 from py4DSTEM.process.utils.multicorr import upsampled_correlation
-from py4DSTEM.utils.tqdmnd import tqdmnd
+from py4DSTEM.preprocess.utils import make_Fourier_coords2D
 
 try:
     from IPython.display import clear_output
 except ImportError:
     def clear_output(wait=True):
         pass
+
+try:
+    import cupy as cp
+except ImportError:
+    cp = None
+
 
 def radial_reduction(
     ar,
@@ -52,7 +59,7 @@ def radial_reduction(
 def plot(img, title='Image', savePath=None, cmap='inferno', show=True, vmax=None,
                                                         figsize=(10, 10), scale=None):
     fig, ax = plt.subplots(figsize=figsize)
-    im = ax.imshow(img, interpolation='nearest', cmap=plt.cm.get_cmap(cmap), vmax=vmax)
+    im = ax.imshow(img, interpolation='nearest', cmap=plt.get_cmap(cmap), vmax=vmax)
     divider = make_axes_locatable(ax)
     cax = divider.append_axes("right", size="5%", pad=0.05)
     plt.colorbar(im, cax=cax)
@@ -84,6 +91,14 @@ def electron_wavelength_angstrom(E_eV):
     lam = h / ma.sqrt(2 * m * e * E_eV) / ma.sqrt(1 + e * E_eV / 2 / m / c ** 2) * 10 ** 10
     return lam
 
+def electron_interaction_parameter(E_eV):
+    m = 9.109383 * 10 ** -31
+    e = 1.602177 * 10 ** -19
+    c = 299792458
+    h = 6.62607 * 10 ** -34
+    lam = h / ma.sqrt(2 * m * e * E_eV) / ma.sqrt(1 + e * E_eV / 2 / m / c ** 2) * 10 ** 10
+    sigma = (2*np.pi/lam/E_eV) *(m*c ** 2+ e* E_eV)/(2*m*c**2+e*E_eV)
+    return sigma
 
 def sector_mask(shape, centre, radius, angle_range=(0, 360)):
     """
@@ -159,87 +174,28 @@ def make_Fourier_coords2D(Nx, Ny, pixelSize=1):
     qy, qx = np.meshgrid(qy, qx)
     return qx, qy
 
-
-def get_shifted_ar(
-    ar,
-    xshift,
-    yshift,
-    periodic=True,
-    bilinear=False,
-    ):
-    """
-	Shifts array ar by the shift vector (xshift,yshift), using the either
-    the Fourier shift theorem (i.e. with sinc interpolation), or bilinear
-    resampling. Boundary conditions can be periodic or not.
-
-    Args:
-            ar (float): input array
-            xshift (float): shift along axis 0 (x) in pixels
-            yshift (float): shift along axis 1 (y) in pixels
-            periodic (bool): flag for periodic boundary conditions
-            bilinear (bool): flag for bilinear image shifts
-
-        Returns:
-            (array) the shifted array
-    """
-
-    # Apply image shift
-    if bilinear is False:
-        nx, ny = np.shape(ar)
-        qx, qy = make_Fourier_coords2D(nx, ny, 1)
-        nx, ny = float(nx), float(ny)
-
-        w = np.exp(-(2j * np.pi) * ((yshift * qy) + (xshift * qx)))
-        shifted_ar = np.real(np.fft.ifft2((np.fft.fft2(ar)) * w))
-
-    else:
-        xF = (np.floor(xshift)).astype(int)
-        yF = (np.floor(yshift)).astype(int)
-        wx = xshift - xF
-        wy = yshift - yF
-
-        shifted_ar = \
-            np.roll(ar,(xF  ,yF  ),axis=(0,1)) * ((1-wx)*(1-wy)) + \
-            np.roll(ar,(xF+1,yF  ),axis=(0,1)) * ((  wx)*(1-wy)) + \
-            np.roll(ar,(xF  ,yF+1),axis=(0,1)) * ((1-wx)*(  wy)) + \
-            np.roll(ar,(xF+1,yF+1),axis=(0,1)) * ((  wx)*(  wy))
-
-    if periodic is False:
-        # Rounded coordinates for boundaries
-        xR = (np.round(xshift)).astype(int)
-        yR = (np.round(yshift)).astype(int)
-
-        if xR > 0:
-            shifted_ar[0:xR,:] = 0
-        elif xR < 0:
-            shifted_ar[xR:,:] = 0
-        if yR > 0:
-            shifted_ar[:,0:yR] = 0
-        elif yR < 0:
-            shifted_ar[:,yR:] = 0
-
-    return shifted_ar
-
-
-
-
-
-
-
-
-def get_CoM(ar):
+def get_CoM(ar, device="cpu", corner_centered=False):
     """
     Finds and returns the center of mass of array ar.
+    If corner_centered is True, uses fftfreq for indices.
     """
-    nx, ny = np.shape(ar)
-    ry, rx = np.meshgrid(np.arange(ny), np.arange(nx))
-    tot_intens = np.sum(ar)
-    xCoM = np.sum(rx * ar) / tot_intens
-    yCoM = np.sum(ry * ar) / tot_intens
+    if device == "cpu":
+        xp = np
+    elif device == "gpu":
+        xp = cp
+
+    ar = xp.asarray(ar) 
+    nx, ny = ar.shape
+
+    if corner_centered:
+        ry, rx = xp.meshgrid(xp.fft.fftfreq(ny, 1 / ny), xp.fft.fftfreq(nx, 1 / nx))
+    else:
+        ry, rx = xp.meshgrid(xp.arange(ny), xp.arange(nx))
+    
+    tot_intens = xp.sum(ar)
+    xCoM = xp.sum(rx * ar) / tot_intens
+    yCoM = xp.sum(ry * ar) / tot_intens
     return xCoM, yCoM
-
-
-
 
 def get_maxima_1D(ar, sigma=0, minSpacing=0, minRelativeIntensity=0, relativeToPeak=0):
     """
@@ -323,33 +279,6 @@ def add_to_2D_array_from_floats(ar, x, y, I):
     ar[x1[mask], y0[mask]] += (    dx[mask]) * (1 - dy[mask]) * I[mask]
     ar[x1[mask], y1[mask]] += (    dx[mask]) * (    dy[mask]) * I[mask]
     return ar
-
-def bin2D(array, factor, dtype=np.float64):
-    """
-    Bin a 2D ndarray by binfactor.
-
-    Args:
-        array (2D numpy array):
-        factor (int): the binning factor
-        dtype (numpy dtype): datatype for binned array. default is numpy default for
-            np.zeros()
-
-    Returns:
-        the binned array
-    """
-    x, y = array.shape
-    binx, biny = x // factor, y // factor
-    xx, yy = binx * factor, biny * factor
-
-    # Make a binned array on the device
-    binned_ar = np.zeros((binx, biny), dtype=dtype)
-    array = array.astype(dtype)
-
-    # Collect pixel sums into new bins
-    for ix in range(factor):
-        for iy in range(factor):
-            binned_ar += array[0 + ix:xx + ix:factor, 0 + iy:yy + iy:factor]
-    return binned_ar
 
 
 def get_voronoi_vertices(voronoi, nx, ny, dist=10):
@@ -707,7 +636,7 @@ def fourier_resample(
 #def plot(img, title='Image', savePath=None, cmap='inferno', show=True, vmax=None,
 #                                                        figsize=(10, 10), scale=None):
 #    fig, ax = plt.subplots(figsize=figsize)
-#    im = ax.imshow(img, interpolation='nearest', cmap=plt.cm.get_cmap(cmap), vmax=vmax)
+#    im = ax.imshow(img, interpolation='nearest', cmap=plt.get_cmap(cmap), vmax=vmax)
 #    divider = make_axes_locatable(ax)
 #    cax = divider.append_axes("right", size="5%", pad=0.05)
 #    plt.colorbar(im, cax=cax)
