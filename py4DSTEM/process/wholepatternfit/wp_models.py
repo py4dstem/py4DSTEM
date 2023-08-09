@@ -225,7 +225,7 @@ class GaussianRing(WPFModelPrototype):
         sigma = x[self.params["sigma"].offset]
         level = x[self.params["level"].offset]
 
-        r = WPF._get_distance(x, self.params["x center"], self.params["y center"])
+        r = kwargs['parent']._get_distance(x, self.params["x center"], self.params["y center"])
 
         DP += level * np.exp((r - radius) ** 2 / (-2 * sigma**2))
 
@@ -236,7 +236,7 @@ class GaussianRing(WPFModelPrototype):
 
         x0 = x[self.params["x center"].offset]
         y0 = x[self.params["y center"].offset]
-        r = WPF._get_distance(x, self.params["x center"], self.params["y center"])
+        r = kwargs['parent']._get_distance(x, self.params["x center"], self.params["y center"])
 
         local_r = radius - r
         clipped_r = np.maximum(local_r, 0.1)
@@ -528,6 +528,8 @@ class SyntheticDiskMoire(WPFModelPrototype):
         # pick the right pair of lattice vectors for generating the moire reciprocal lattice
 
         #
+
+        params = {}
 
         super().__init__(
             name,
