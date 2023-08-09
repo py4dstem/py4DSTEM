@@ -4,19 +4,19 @@ from scipy.optimize import nnls
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 
-<<<<<<< HEAD
-from py4DSTEM.utils.tqdmnd import tqdmnd
-from py4DSTEM.visualize import show, show_image_grid
-# from py4DSTEM.io.datastructure.emd.pointlistarray import PointListArray
-# from py4DSTEM.process.diffraction.crystal_viz import plot_diffraction_pattern
-from py4DSTEM.io.datastructure import PointList, PointListArray
+# <<<<<<< HEAD
+# from py4DSTEM.utils.tqdmnd import tqdmnd
+# from py4DSTEM.visualize import show, show_image_grid
+# # from py4DSTEM.io.datastructure.emd.pointlistarray import PointListArray
+# # from py4DSTEM.process.diffraction.crystal_viz import plot_diffraction_pattern
+# from py4DSTEM.io.datastructure import PointList, PointListArray
 
 from dataclasses import dataclass, field
-=======
+# =======
 from emdfile import tqdmnd, PointListArray
 from py4DSTEM.visualize import show, show_image_grid
 from py4DSTEM.process.diffraction.crystal_viz import plot_diffraction_pattern
->>>>>>> dev
+# >>>>>>> dev
 
 @dataclass
 class CrystalPhase:
@@ -66,19 +66,10 @@ class CrystalPhase:
         if names is not None:
             self.names = names
         else:
-<<<<<<< HEAD
             self.names = ['crystal'] * self.num_crystals
 
 
-
     def quantify_single_pattern(
-=======
-            raise TypeError('orientation_maps must be a list of orientation maps.')
-        self.name = name
-        return
-
-    def plot_all_phase_maps(
->>>>>>> dev
         self,
         pointlistarray: PointListArray,
         xy_position = (0,0),
@@ -695,12 +686,3 @@ class CrystalPhase:
             if returnfig:
                 return fig, ax
 
-
-        
-<<<<<<< HEAD
-=======
-    #         fig, (ax1, ax2) = plt.subplots(2,1,figsize = figsize)
-    #         ax1 = plot_diffraction_pattern(pointlist,)
-    #     return
-    
->>>>>>> dev

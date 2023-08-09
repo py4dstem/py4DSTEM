@@ -91,18 +91,18 @@ from py4DSTEM import process
 from py4DSTEM.utils.configuration_checker import check_config
 # TODO - config .toml
 
-<<<<<<< HEAD
+# <<<<<<< HEAD
 
 
 # classes
 
-from py4DSTEM.process.diffraction import Crystal
+# from py4DSTEM.process.diffraction import Crystal
 
-=======
+# =======
 # testing
 from os.path import dirname,join
 _TESTPATH = join(dirname(__file__), "../test/unit_test_data")
->>>>>>> dev
+# >>>>>>> dev
 
 
 

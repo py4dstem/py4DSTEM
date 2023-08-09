@@ -296,12 +296,8 @@ def plot_scattering_intensity(
     bragg_k_power=0.0,
     bragg_intensity_power=1.0,
     bragg_k_broadening=0.005,
-<<<<<<< HEAD
     figsize: Union[list, tuple, np.ndarray] = (12, 6),
     title: Optional[str] = None,
-=======
-    figsize: Union[list, tuple, np.ndarray] = (10, 4),
->>>>>>> dev
     returnfig: bool = False,
 ):
     """
