@@ -567,12 +567,8 @@ def show(
                     ax.matshow(mask_display,cmap=cmap,alpha=mask_alpha,vmin=vmin,vmax=vmax)
         # ...or, plot its histogram
         else:
-            # hist,bin_edges = np.histogram(
-            #     _ar,
-            #     bins=np.linspace(np.min(_ar),np.max(_ar),num=n_bins))
-            hist,bin_edges = np.histogram(
-                _ar,
-                bins=np.linspace(vmin,vmax,num=n_bins))
+            hist,bin_edges = np.histogram(_ar,bins=np.linspace(np.min(_ar),
+                                                    np.max(_ar),num=n_bins))
             w = bin_edges[1]-bin_edges[0]
             x = bin_edges[:-1]+w/2.
             ax.bar(x,hist,width=w)

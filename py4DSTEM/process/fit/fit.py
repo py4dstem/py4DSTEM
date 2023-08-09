@@ -269,7 +269,3 @@ def fit_2D_polar_gaussian(
             robust_steps = robust_steps,
             robust_thresh = robust_thresh
         )
-
-
-
-

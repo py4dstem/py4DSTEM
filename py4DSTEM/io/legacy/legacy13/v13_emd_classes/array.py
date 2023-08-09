@@ -322,8 +322,10 @@ class Array:
         values for the n'th dim vector.
         Accepts:
             n (int): specifies which dim vector
-            dim (list or array): length must be either 2, or equal to the
-                length of the n'th axis of the data array
+            dim (list or array): length must be either 1 or 2, or equal to the
+                length of the n'th axis of the data array. If length is 1 specifies step
+                size of dim vector and starts at 0. If length is 2, specifies start
+                and step of dim vector.
             units (Optional, str):
             name: (Optional, str):
         """
