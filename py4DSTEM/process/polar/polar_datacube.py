@@ -95,12 +95,8 @@ class PolarDatacube:
         pass
 
     from py4DSTEM.process.polar.polar_analysis import (
-<<<<<<< Updated upstream
-        calculate_FEM_global,
-=======
         # calculate_FEM_global,
         calculate_radial_statistics,
->>>>>>> Stashed changes
         plot_FEM_global,
         calculate_FEM_local,
     )
