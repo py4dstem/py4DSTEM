@@ -21,7 +21,7 @@ def show_model_grid(self, x=None, **plot_kwargs):
     kwargs.update(plot_kwargs)
     fig, ax = plt.subplots(rows, cols, **kwargs)
 
-    for (a, m) in zip(ax.flat, model):
+    for a, m in zip(ax.flat, model):
         DP = np.zeros((self.datacube.Q_Nx, self.datacube.Q_Ny))
         m.func(DP, x, **self.static_data)
 

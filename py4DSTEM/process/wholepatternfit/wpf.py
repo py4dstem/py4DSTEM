@@ -16,8 +16,6 @@ import matplotlib.colors as mpl_c
 from matplotlib.gridspec import GridSpec
 import warnings
 
-from mpire import WorkerPool
-
 __all__ = ["WholePatternFit"]
 
 
@@ -251,107 +249,13 @@ class WholePatternFit:
 
         return opt
 
-    def fit_single_pattern(
-        self,
-        data: np.ndarray,
-        resume: bool = False,
-        restart_data: np.ndarray = None,
-        **fit_opts,
-    ):
-        """
-        Apply model fitting to one pattern.
-
-        Parameters
-        ----------
-        resume: bool (optional)
-            Set to true to continue a previous fit with more iterations.
-        rx: int
-            probe x coordinate
-        ry: int
-            probe y coordinate
-        fit_opts: args (optional)
-            args passed to scipy.optimize.least_squares
-
-        Returns
-        --------
-        fit_coefs: np.array
-            Fitted coefficients
-        fit_metrics: np.array
-            Fitting metrics
-
-        """
-
-        # make sure we have the latest parameters
-        self._finalize_model()
-
-        # set tracking off
-        self._track = False
-        self._fevals = []
-
-        if resume:
-            assert hasattr(self, "fit_data"), "No existing data resuming fit!"
-
-        # init
-        fit_coefs = np.zeros(self.x0.shape[0])
-        fit_metric = np.zeros(4)
-
-        # Default fitting options
-        default_opts = {
-            "method": "trf",
-            "verbose": 0,
-            "x_scale": "jac",
-        }
-        default_opts.update(fit_opts)
-
-        # Loop over probe positions
-        current_pattern = self.datacube.data[rx, ry, :, :].copy() * self.intensity_scale
-        shared_data = self.static_data.copy()
-        self._cost_history = (
-            []
-        )  # clear this so it doesn't grow: TODO make this not stupid
-
-        try:
-            x0 = self.fit_data.data[rx, ry].copy() if resume else self.x0
-
-            if self.hasJacobian & self.use_jacobian:
-                opt = least_squares(
-                    self._pattern_error,
-                    x0,
-                    jac=self._jacobian,
-                    bounds=(self.lower_bound, self.upper_bound),
-                    args=(current_pattern, shared_data),
-                    **default_opts,
-                    # **fit_opts,
-                )
-            else:
-                opt = least_squares(
-                    self._pattern_error,
-                    x0,
-                    bounds=(self.lower_bound, self.upper_bound),
-                    args=(current_pattern, shared_data),
-                    **default_opts,
-                    # **fit_opts,
-                )
-
-            fit_coefs = opt.x
-            fit_metrics_single = [
-                opt.cost,
-                opt.optimality,
-                opt.nfev,
-                opt.status,
-            ]
-        except:
-            fit_coefs = x0
-            fit_metrics_single = [0, 0, 0, 0]
-
-        return fit_coefs, fit_metrics_single
-
     def fit_all_patterns(
         self,
         resume=False,
         real_space_mask=None,
-        num_jobs=None,
         show_fit_metrics=True,
+        distributed=True,
+        num_jobs=None,
         **fit_opts,
     ):
         """
@@ -364,6 +268,8 @@ class WholePatternFit:
         real_space_mask: np.array() of bools (optional)
             Only perform the fitting on a subset of the probe positions,
             where real_space_mask[rx,ry] == True.
+        distributed: bool (optional)
+            Whether to evaluate using a pool of worker threads
         num_jobs: int (optional)
             Set to an integer value giving the number of jobs to parallelize over probe positions.
         fit_opts: args (optional)
@@ -401,7 +307,7 @@ class WholePatternFit:
         default_opts.update(fit_opts)
 
         # Loop over probe positions
-        if num_jobs is None:
+        if not distributed:
             for rx, ry in tqdmnd(self.datacube.R_Nx, self.datacube.R_Ny):
                 if real_space_mask is not None and real_space_mask[rx, ry] == True:
                     current_pattern = (
@@ -446,34 +352,14 @@ class WholePatternFit:
                     fit_metrics[:, rx, ry] = fit_metrics_single
 
         else:
-            # Get list of probe positions
-            if real_space_mask is not None:
-                xa, ya = np.where(real_space_mask)
-            else:
-                xa, ya = np.meshgrid(
-                    np.arange(self.datacube.Rshape[0]),
-                    np.arange(self.datacube.Rshape[1]),
-                    indexing="ij",
-                )
-                xa = xa.ravel()
-                ya = ya.ravel()
-            xy = np.vstack((xa, ya))
-
-            fit_inputs = [default_opts] * xy.shape[1]
-            for a0 in range(xy.shape[1]):
-                fit_inputs[a0]["rx"] = xy[0, a0]
-                fit_inputs[a0]["ry"] = xy[1, a0]
-
-            with WorkerPool(n_jobs=num_jobs) as pool:
-                results = pool.map(
-                    self.fit_single_pattern,
-                    fit_inputs,
-                    progress_bar=True,
-                )
-
-            for a0 in range(xy.shape[1]):
-                fit_data[:, xy[0, a0], xy[1, a0]] = results[a0][0]
-                fit_metrics[:, xy[0, a0], xy[1, a0]] = results[a0][1]
+            # distributed evaluation
+            self._fit_distributed(
+                resume=resume,
+                num_jobs=num_jobs,
+                fit_opts=default_opts,
+                fit_data=fit_data,
+                fit_metrics=fit_metrics,
+            )
 
         # Convert to RealSlices
         model_names = []
@@ -486,7 +372,8 @@ class WholePatternFit:
                     i += 1
             model_names.append(n)
 
-        param_names = ["global_x0", "global_y0"] + [
+        # TODO: this produces duplicate entries for linked params- is this good or not?
+        param_names = [
             n + "/" + k
             for m, n in zip(self.model, model_names)
             for k in m.params.keys()
@@ -618,3 +505,115 @@ class WholePatternFit:
         self.hasJacobian = all([m.hasJacobian for m in self.model])
 
         self.nParams = self.x0.shape[0]
+
+    def _fit_single_pattern(
+        self,
+        data: np.ndarray,
+        initial_guess: np.ndarray,
+        fit_opts,
+    ):
+        """
+        Apply model fitting to one pattern.
+
+        Parameters
+        ----------
+        data: np.ndarray
+            Diffraction pattern
+        initial_guess: np.ndarray
+            starting guess for fitting
+        fit_opts:
+            args passed to scipy.optimize.least_squares
+
+        Returns
+        --------
+        fit_coefs: np.array
+            Fitted coefficients
+        fit_metrics: np.array
+            Fitting metrics
+
+        """
+
+        try:
+            if self.hasJacobian & self.use_jacobian:
+                opt = least_squares(
+                    self._pattern_error,
+                    initial_guess,
+                    jac=self._jacobian,
+                    bounds=(self.lower_bound, self.upper_bound),
+                    args=(data, self.static_data),
+                    **fit_opts,
+                )
+            else:
+                opt = least_squares(
+                    self._pattern_error,
+                    initial_guess,
+                    bounds=(self.lower_bound, self.upper_bound),
+                    args=(data, self.static_data),
+                    **fit_opts,
+                )
+
+            fit_coefs = opt.x
+            fit_metrics_single = [
+                opt.cost,
+                opt.optimality,
+                opt.nfev,
+                opt.status,
+            ]
+        except Exception as err:
+            print(err)
+            fit_coefs = initial_guess
+            fit_metrics_single = [0, 0, 0, 0]
+
+        return fit_coefs, fit_metrics_single
+
+    def _fit_distributed(
+        self,
+        fit_opts: dict,
+        fit_data:np.ndarray,
+        fit_metrics:np.ndarray,
+        resume=False,
+        num_jobs=None,
+    ):
+        from mpire import WorkerPool
+        from threadpoolctl import threadpool_limits
+
+        def f(shared_data, args):
+            with threadpool_limits(limits=1):
+                return self._fit_single_pattern(**args, fit_opts=shared_data)
+
+        fit_inputs = [
+            (
+                {
+                    "data": self.datacube[rx, ry],
+                    "initial_guess": self.fit_data[rx, ry] if resume else self.x0,
+                },
+            )
+            for rx in range(self.datacube.R_Nx)
+            for ry in range(self.datacube.R_Ny)
+        ]
+
+        with WorkerPool(
+            n_jobs=num_jobs,
+            shared_objects=fit_opts,
+        ) as pool:
+            results = pool.map(
+                f,
+                fit_inputs,
+                progress_bar=True,
+            )
+
+        for (rx,ry), res in zip(np.ndindex((self.datacube.R_Nx, self.datacube.R_Ny)), results):
+            fit_data[:,rx,ry] = res[0]
+            fit_metrics[:,rx,ry] = res[1]
+
+
+    def __getstate__(self):
+        # Prevent pickling from copying the datacube, so that distributed
+        # evaluation does not balloon memory usage.
+        # Copy the object's state from self.__dict__ which contains
+        # all our instance attributes. Always use the dict.copy()
+        # method to avoid modifying the original state.
+        state = self.__dict__.copy()
+        # Remove the unpicklable entries.
+        del state["datacube"]
+        return state

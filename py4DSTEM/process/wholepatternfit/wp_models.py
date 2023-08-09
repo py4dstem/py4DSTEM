@@ -158,7 +158,9 @@ class GaussianBackground(WPFModelPrototype):
         sigma = x[self.params["sigma"].offset]
         level = x[self.params["intensity"].offset]
 
-        r = kwargs['parent']._get_distance(x, self.params["x center"], self.params["y center"])
+        r = kwargs["parent"]._get_distance(
+            x, self.params["x center"], self.params["y center"]
+        )
 
         DP += level * np.exp(r**2 / (-2 * sigma**2))
 
@@ -414,7 +416,7 @@ class SyntheticDiskLattice(WPFModelPrototype):
         uy = x[self.params["uy"].offset]
         vx = x[self.params["vx"].offset]
         vy = x[self.params["vy"].offset]
-        WPF = static_data['parent']
+        WPF = static_data["parent"]
 
         r = np.maximum(
             5e-1, WPF._get_distance(x, self.params["x center"], self.params["y center"])
@@ -441,7 +443,8 @@ class SyntheticDiskLattice(WPFModelPrototype):
             r_disk = np.maximum(
                 5e-1,
                 np.sqrt(
-                    (static_data["xArray"] - x_pos) ** 2 + (static_data["yArray"] - y_pos) ** 2
+                    (static_data["xArray"] - x_pos) ** 2
+                    + (static_data["yArray"] - y_pos) ** 2
                 ),
             )
 
