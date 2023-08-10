@@ -307,12 +307,14 @@ class WholePatternFit:
         }
         default_opts.update(fit_opts)
 
-        mask = real_space_mask or np.ones((self.datacube.R_Nx, self.datacube.R_Ny), dtype=bool)
+        mask = real_space_mask or np.ones(
+            (self.datacube.R_Nx, self.datacube.R_Ny), dtype=bool
+        )
 
         # Loop over probe positions
         if not distributed:
             for rx, ry in tqdmnd(self.datacube.R_Nx, self.datacube.R_Ny):
-                if mask[rx,ry]:
+                if mask[rx, ry]:
                     current_pattern = (
                         self.datacube.data[rx, ry, :, :] * self.intensity_scale
                     )
@@ -385,22 +387,20 @@ class WholePatternFit:
     def get_lattice_maps(self):
         assert hasattr(self, "fit_data"), "Please run fitting first!"
 
-        lattices = [
-            m
-            for m in self.model
-            if WPFModelType.LATTICE in m.model_type
-        ]
+        lattices = [m for m in self.model if WPFModelType.LATTICE in m.model_type]
 
         g_maps = []
         for lat in lattices:
             data = np.stack(
                 [
-                    self.fit_data.data[lat.params['ux'].offset],
-                    self.fit_data.data[lat.params['uy'].offset],
-                    self.fit_data.data[lat.params['vx'].offset],
-                    self.fit_data.data[lat.params['vy'].offset],
+                    self.fit_data.data[lat.params["ux"].offset],
+                    self.fit_data.data[lat.params["uy"].offset],
+                    self.fit_data.data[lat.params["vx"].offset],
+                    self.fit_data.data[lat.params["vy"].offset],
                     np.ones(self.fit_data.data.shape[1:], dtype=np.bool_),
-                ],axis=0)
+                ],
+                axis=0,
+            )
 
             g_map = RealSlice(
                 data,
@@ -541,7 +541,7 @@ class WholePatternFit:
                     initial_guess,
                     jac=self._jacobian,
                     bounds=(self.lower_bound, self.upper_bound),
-                    args=(data*self.intensity_scale, self.static_data),
+                    args=(data * self.intensity_scale, self.static_data),
                     **fit_opts,
                 )
             else:
@@ -549,7 +549,7 @@ class WholePatternFit:
                     self._pattern_error,
                     initial_guess,
                     bounds=(self.lower_bound, self.upper_bound),
-                    args=(data*self.intensity_scale, self.static_data),
+                    args=(data * self.intensity_scale, self.static_data),
                     **fit_opts,
                 )
 
