@@ -256,6 +256,7 @@ class WholePatternFit:
         show_fit_metrics=True,
         distributed=True,
         num_jobs=None,
+        threads_per_job=1,
         **fit_opts,
     ):
         """
@@ -285,7 +286,7 @@ class WholePatternFit:
         """
 
         # make sure we have the latest parameters
-        self._finalize_model()
+        unique_params, unique_names = self._finalize_model()
 
         # set tracking off
         self._track = False
@@ -306,15 +307,16 @@ class WholePatternFit:
         }
         default_opts.update(fit_opts)
 
+        mask = real_space_mask or np.ones((self.datacube.R_Nx, self.datacube.R_Ny), dtype=bool)
+
         # Loop over probe positions
         if not distributed:
             for rx, ry in tqdmnd(self.datacube.R_Nx, self.datacube.R_Ny):
-                if real_space_mask is not None and real_space_mask[rx, ry] == True:
+                if mask[rx,ry]:
                     current_pattern = (
-                        self.datacube.data[rx, ry, :, :].copy() * self.intensity_scale
+                        self.datacube.data[rx, ry, :, :] * self.intensity_scale
                     )
-                    shared_data = self.static_data.copy()
-                    x0 = self.fit_data.data[rx, ry].copy() if resume else self.x0.copy()
+                    x0 = self.fit_data.data[rx, ry] if resume else self.x0
 
                     try:
                         if self.hasJacobian & self.use_jacobian:
@@ -323,18 +325,16 @@ class WholePatternFit:
                                 x0,
                                 jac=self._jacobian,
                                 bounds=(self.lower_bound, self.upper_bound),
-                                args=(current_pattern, shared_data),
+                                args=(current_pattern, self.static_data),
                                 **default_opts,
-                                # **fit_opts,
                             )
                         else:
                             opt = least_squares(
                                 self._pattern_error,
                                 x0,
                                 bounds=(self.lower_bound, self.upper_bound),
-                                args=(current_pattern, shared_data),
+                                args=(current_pattern, self.static_data),
                                 **default_opts,
-                                # **fit_opts,
                             )
 
                         fit_data_single = opt.x
@@ -344,7 +344,8 @@ class WholePatternFit:
                             opt.nfev,
                             opt.status,
                         ]
-                    except:
+                    except Exception as err:
+                        # print(err)
                         fit_data_single = x0
                         fit_metrics_single = [0, 0, 0, 0]
 
@@ -356,30 +357,13 @@ class WholePatternFit:
             self._fit_distributed(
                 resume=resume,
                 num_jobs=num_jobs,
+                threads_per_job=threads_per_job,
                 fit_opts=default_opts,
                 fit_data=fit_data,
                 fit_metrics=fit_metrics,
             )
 
-        # Convert to RealSlices
-        model_names = []
-        for m in self.model:
-            n = m.name
-            if n in model_names:
-                i = 1
-                while n in model_names:
-                    n = m.name + "_" + str(i)
-                    i += 1
-            model_names.append(n)
-
-        # TODO: this produces duplicate entries for linked params- is this good or not?
-        param_names = [
-            n + "/" + k
-            for m, n in zip(self.model, model_names)
-            for k in m.params.keys()
-        ]
-
-        self.fit_data = RealSlice(fit_data, name="Fit Data", slicelabels=param_names)
+        self.fit_data = RealSlice(fit_data, name="Fit Data", slicelabels=unique_names)
         self.fit_metrics = RealSlice(
             fit_metrics,
             name="Fit Metrics",
@@ -402,25 +386,26 @@ class WholePatternFit:
         assert hasattr(self, "fit_data"), "Please run fitting first!"
 
         lattices = [
-            (i, m)
-            for i, m in enumerate(self.model)
+            m
+            for m in self.model
             if WPFModelType.LATTICE in m.model_type
         ]
 
         g_maps = []
-        for i, l in lattices:
-            # TODO: use parameter object offsets to get indices
-            param_list = list(l.params.keys())
-            lattice_offset = param_list.index("ux")
-            data_offset = self.model_param_inds[i] + 2 + lattice_offset
-
-            # TODO: Use proper RealSlice semantics for access
-            data = self.fit_data.data[:, :, data_offset : data_offset + 4]
+        for lat in lattices:
+            data = np.stack(
+                [
+                    self.fit_data.data[lat.params['ux'].offset],
+                    self.fit_data.data[lat.params['uy'].offset],
+                    self.fit_data.data[lat.params['vx'].offset],
+                    self.fit_data.data[lat.params['vy'].offset],
+                    np.ones(self.fit_data.data.shape[1:], dtype=np.bool_),
+                ],axis=0)
 
             g_map = RealSlice(
-                np.dstack((data, np.ones(data.shape[:2], dtype=np.bool_))),
+                data,
                 slicelabels=["g1x", "g1y", "g2x", "g2y", "mask"],
-                name=l.name,
+                name=lat.name,
             )
             g_maps.append(g_map)
 
@@ -489,12 +474,26 @@ class WholePatternFit:
     def _finalize_model(self):
         # iterate over all models and assign indices, accumulate list
         # of unique parameters. then, accumulate initial value and bounds vectors
+
+        # get unique names for each model
+        model_names = []
+        for m in self.model:
+            n = m.name
+            if n in model_names:
+                i = 1
+                while n in model_names:
+                    n = m.name + "_" + str(i)
+                    i += 1
+            model_names.append(n)
+
         unique_params = []
+        unique_names = []
         idx = 0
-        for model in self.model:
-            for param in model.params.values():
+        for model, model_name in zip(self.model, model_names):
+            for param_name, param in model.params.items():
                 if param not in unique_params:
                     unique_params.append(param)
+                    unique_names.append(model_name + "/" + param_name)
                     param.offset = idx
                     idx += 1
 
@@ -505,6 +504,8 @@ class WholePatternFit:
         self.hasJacobian = all([m.hasJacobian for m in self.model])
 
         self.nParams = self.x0.shape[0]
+
+        return unique_params, unique_names
 
     def _fit_single_pattern(
         self,
@@ -540,7 +541,7 @@ class WholePatternFit:
                     initial_guess,
                     jac=self._jacobian,
                     bounds=(self.lower_bound, self.upper_bound),
-                    args=(data, self.static_data),
+                    args=(data*self.intensity_scale, self.static_data),
                     **fit_opts,
                 )
             else:
@@ -548,7 +549,7 @@ class WholePatternFit:
                     self._pattern_error,
                     initial_guess,
                     bounds=(self.lower_bound, self.upper_bound),
-                    args=(data, self.static_data),
+                    args=(data*self.intensity_scale, self.static_data),
                     **fit_opts,
                 )
 
@@ -569,18 +570,23 @@ class WholePatternFit:
     def _fit_distributed(
         self,
         fit_opts: dict,
-        fit_data:np.ndarray,
-        fit_metrics:np.ndarray,
+        fit_data: np.ndarray,
+        fit_metrics: np.ndarray,
         resume=False,
         num_jobs=None,
+        threads_per_job=1,
     ):
-        from mpire import WorkerPool
+        from mpire import WorkerPool, cpu_count
         from threadpoolctl import threadpool_limits
 
+        # prevent oversubscription when using multiple threads per job
+        num_jobs = num_jobs or cpu_count() // threads_per_job
+
         def f(shared_data, args):
-            with threadpool_limits(limits=1):
+            with threadpool_limits(limits=threads_per_job):
                 return self._fit_single_pattern(**args, fit_opts=shared_data)
 
+        # hopefully the data entries remain as views until dispatch time...
         fit_inputs = [
             (
                 {
@@ -592,6 +598,7 @@ class WholePatternFit:
             for ry in range(self.datacube.R_Ny)
         ]
 
+        # TODO: auto set n_jobs when using multi threads each
         with WorkerPool(
             n_jobs=num_jobs,
             shared_objects=fit_opts,
@@ -602,10 +609,11 @@ class WholePatternFit:
                 progress_bar=True,
             )
 
-        for (rx,ry), res in zip(np.ndindex((self.datacube.R_Nx, self.datacube.R_Ny)), results):
-            fit_data[:,rx,ry] = res[0]
-            fit_metrics[:,rx,ry] = res[1]
-
+        for (rx, ry), res in zip(
+            np.ndindex((self.datacube.R_Nx, self.datacube.R_Ny)), results
+        ):
+            fit_data[:, rx, ry] = res[0]
+            fit_metrics[:, rx, ry] = res[1]
 
     def __getstate__(self):
         # Prevent pickling from copying the datacube, so that distributed
