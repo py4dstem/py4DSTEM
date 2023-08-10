@@ -516,8 +516,10 @@ class SyntheticDiskMoire(WPFModelPrototype):
 
     def __init__(
         self,
+        WPF,
         lattice_a: SyntheticDiskLattice,
         lattice_b: SyntheticDiskLattice,
+        intensity_0: float,
         decorated_peaks: list = None,
         name: str = "Moire Lattice",
     ):
@@ -528,12 +530,140 @@ class SyntheticDiskMoire(WPFModelPrototype):
         lattice_a, lattice_b: SyntheticDiskLattice
         """
         # ensure both models share the same center coordinate
+        if (lattice_a.params["x center"] is not lattice_b.params["x center"]) or (
+            lattice_a.params["y center"] is not lattice_b.params["y center"]
+        ):
+            raise ValueError(
+                "The center coordinates for each model must be linked, "
+                "either by passing global_center=True or linking after instantiation."
+            )
 
-        # pick the right pair of lattice vectors for generating the moire reciprocal lattice
+        self.lattice_a = lattice_a
+        self.lattice_b = lattice_b
 
-        #
+        # construct a 2x4 matrix "M" that transforms the parent lattices into
+        # the moire lattice vectors
+        lat_a = np.array(
+            [
+                [
+                    lattice_a.params["ux"].initial_value,
+                    lattice_a.params["uy"].initial_value,
+                ],
+                [
+                    lattice_a.params["vx"].initial_value,
+                    lattice_a.params["vy"].initial_value,
+                ],
+            ]
+        )
 
-        params = {}
+        lat_b = np.array(
+            [
+                [
+                    lattice_b.params["ux"].initial_value,
+                    lattice_b.params["uy"].initial_value,
+                ],
+                [
+                    lattice_b.params["vx"].initial_value,
+                    lattice_b.params["vy"].initial_value,
+                ],
+            ]
+        )
+
+        lat_ab = np.vstack((lat_a, lat_b))
+
+        # pick the pairing that gives the smallest unit cell
+        M_test = np.hstack((np.eye(2), -np.eye(2)))
+        M_test_flip = np.hstack((np.eye(2), -np.flipud(np.eye(2))))
+
+        M = (
+            M_test
+            if np.max(np.linalg.norm(M_test @ lat_ab, axis=1))
+            < np.max(np.linalg.norm(M_test_flip, axis=1))
+            else M_test_flip
+        )
+
+        # ensure the moire vectors are less 90 deg apart
+        if np.arccos(
+            ((M @ lat_ab)[0] @ (M @ lat_ab)[1])
+            / (np.linalg.norm((M @ lat_ab)[0]) * np.linalg.norm((M @ lat_ab)[1]))
+        ) > np.radians(90):
+            M[1] *= -1.0
+
+        # ensure they are right-handed
+        if np.cross(*(M @ lat_ab)) < 0.0:
+            M = np.flipud(np.eye(2)) @ M
+
+        # store moire construction
+        self.moire_matrix = M
+
+        # generate the indices of each peak, then find unique peaks
+        if decorated_peaks is not None:
+            decorated_peaks = np.array(decorated_peaks)
+            parent_peaks = np.vstack(
+                (
+                    np.concatenate(
+                        (decorated_peaks, np.zeros_like(decorated_peaks)), axis=1
+                    ),
+                    np.concatenate(
+                        (np.zeros_like(decorated_peaks), decorated_peaks), axis=1
+                    ),
+                )
+            )
+        else:
+            parent_peaks = np.vstack(
+                (
+                    np.concatenate(
+                        (
+                            np.stack((lattice_a.u_inds, lattice_a.v_inds), axis=1),
+                            np.zeros((lattice_a.u_inds.shape[0], 2)),
+                        ),
+                        axis=1,
+                    ),
+                    np.concatenate(
+                        (
+                            np.zeros((lattice_b.u_inds.shape[0], 2)),
+                            np.stack((lattice_b.u_inds, lattice_b.v_inds), axis=1),
+                        ),
+                        axis=1,
+                    ),
+                )
+            )
+
+        # trial indices for moire peaks
+        mx, my = np.mgrid[-1:2, -1:2]
+        moire_peaks = np.stack([mx.ravel(), my.ravel()], axis=1)[1:-1]
+
+        # construct a giant index array with columns a_h a_k b_h b_k m_h m_k
+        parent_expanded = np.zeros((parent_peaks.shape[0], 6))
+        parent_expanded[:, :4] = parent_peaks
+        moire_expanded = np.zeros((moire_peaks.shape[0], 6))
+        moire_expanded[:, 4:] = moire_peaks
+
+        all_indices = (
+            parent_expanded[:, None, :] + moire_expanded[None, :, :]
+        ).reshape(-1, 6)
+
+        lat_abm = np.vstack((lat_ab, M @ lat_ab))
+
+        all_peaks = all_indices @ lat_abm
+
+        _, idx_unique = np.unique(all_peaks, axis=0, return_index=True)
+
+        all_indices = all_indices[idx_unique]
+
+        # remove spots that coincide with primary peaks
+        parent_spots = parent_peaks @ lat_ab
+        self.moire_indices_uvm = np.array(
+            [idx for idx in all_indices if (idx @ lat_abm) not in parent_spots]
+        )
+
+        # each order of parent reflection has a separate moire intensity
+        max_order = np.max(np.abs(self.moire_indices_uvm[:, :4]))
+
+        params = {
+            f"Order {n} Moire Intensity": Parameter(intensity_0)
+            for n in range(max_order)
+        }
 
         super().__init__(
             name,
@@ -541,10 +671,41 @@ class SyntheticDiskMoire(WPFModelPrototype):
             model_type=WPFModelType.META,
         )
 
-    def func(self, DP, x, **static_data):
-        pass
+    def func(self, DP: np.ndarray, x: np.ndarray, **static_data):
+        # construct the moire unit cell from the current vectors
+        # of the two parent lattices
+        lat_a = np.array(
+            [
+                [
+                    x[self.lattice_a.params["ux"].offset],
+                    x[self.lattice_a.params["uy"].offset],
+                ],
+                [
+                    x[self.lattice_a.params["vx"].offset],
+                    x[self.lattice_a.params["vy"].offset],
+                ],
+            ]
+        )
 
-    def jacobian(self, J, x, **static_data):
+        lat_b = np.array(
+            [
+                [
+                    x[self.lattice_b.params["ux"].offset],
+                    x[self.lattice_b.params["uy"].offset],
+                ],
+                [
+                    x[self.lattice_b.params["vx"].offset],
+                    x[self.lattice_b.params["vy"].offset],
+                ],
+            ]
+        )
+
+        lat_ab = np.vstack((lat_a, lat_b))
+        lat_abm = np.vstack((lat_ab, self.moire_matrix @ lat_ab))
+
+        # moire = self.moire_matrix @ lat_ab
+
+    def jacobian(self, J: np.ndarray, x: np.ndarray, **static_data):
         pass
 
 
