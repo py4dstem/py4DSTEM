@@ -73,13 +73,16 @@ class CrystalPhase:
         self,
         pointlistarray: PointListArray,
         xy_position = (0,0),
-        corr_kernel_size = 0.04,
+        corr_kernel_size = 0.02,
+        corr_distance_scale = 1.0,
         include_false_positives = True,
+        max_number_phases = 3,
         sigma_excitation_error = 0.02,
         power_experiment = 0.5,
         power_calculated = 0.5,
         plot_result = True,
-        scale_markers_experiment = 4,
+        plot_only_nonzero_phases = True,
+        scale_markers_experiment = 10,
         scale_markers_calculated = 4000,
         crystal_inds_plot = None,
         phase_colors = np.array((
@@ -101,8 +104,26 @@ class CrystalPhase:
         # tolerance
         tol2 = 4e-4
 
+        # calibrations
+        center  = pointlistarray.calstate['center']
+        ellipse = pointlistarray.calstate['ellipse']
+        pixel   = pointlistarray.calstate['pixel']
+        rotate  = pointlistarray.calstate['rotate']
+        if center is False:
+            raise ValueError('Bragg peaks must be center calibration')
+        if pixel is False:
+            raise ValueError('Bragg peaks must have pixel size calibration')
+        # TODO - potentially warn the user if ellipse / rotate calibration not available
+
         # Experimental values
-        bragg_peaks = pointlistarray.get_pointlist(xy_position[0],xy_position[1]).copy()
+        bragg_peaks = pointlistarray.get_vectors(
+            xy_position[0],
+            xy_position[1],
+            center = center,
+            ellipse = ellipse,
+            pixel = pixel,
+            rotate = rotate)
+        # bragg_peaks = pointlistarray.get_pointlist(xy_position[0],xy_position[1]).copy()
         keep = bragg_peaks.data["qx"]**2 + bragg_peaks.data["qy"]**2 > tol2
         # ind_center_beam = np.argmin(
         #     bragg_peaks.data["qx"]**2 + bragg_peaks.data["qy"]**2)
@@ -176,12 +197,14 @@ class CrystalPhase:
                 val_min = dist2[ind_min]
 
                 if val_min < radius_max_2:
-                    weight = 1 - np.sqrt(dist2[ind_min]) / corr_kernel_size
+                    # weight = 1 - np.sqrt(dist2[ind_min]) / corr_kernel_size
+                    weight = 1 + corr_distance_scale * \
+                        np.sqrt(dist2[ind_min]) / corr_kernel_size
                     basis[ind_min,a0] = weight * int_fit[a1]
                     if plot_result:
                         matches[a1] = True
                 elif include_false_positives:
-                    unpaired_peaks.append([a0,int_fit[a1]])
+                    unpaired_peaks.append([a0,int_fit[a1]*(1 + corr_distance_scale)])
 
             if plot_result:
                 library_peaks.append(bragg_peaks_fit)                
@@ -196,15 +219,30 @@ class CrystalPhase:
 
             basis = np.vstack((basis, basis_aug))
             obs = np.hstack((intensity, np.zeros(len(unpaired_peaks))))
+
         else:
             obs = intensity
         
         # Solve for phase coefficients
         try:
-            phase_weights, phase_residual = nnls(
-                basis,
-                obs,
-            )
+            phase_weights = np.zeros(self.num_fits)
+            inds_solve = np.ones(self.num_fits,dtype='bool')
+
+            search = True
+            while search is True:
+                phase_weights_cand, phase_residual_cand = nnls(
+                    basis[:,inds_solve],
+                    obs,
+                )
+
+                if np.count_nonzero(phase_weights_cand > 0.0) <= max_number_phases:
+                    phase_weights[inds_solve] = phase_weights_cand
+                    phase_residual = phase_residual_cand
+                    search = False
+                else:
+                    inds = np.where(inds_solve)[0]
+                    inds_solve[inds[np.argmin(phase_weights_cand)]] = False
+
         except:
             phase_weights = np.zeros(self.num_fits)
             phase_residual = np.sqrt(np.sum(intensity**2))
@@ -303,7 +341,6 @@ class CrystalPhase:
                 **text_params)
 
 
-
             # plot calculated diffraction patterns
             uvals = phase_colors.copy()
             uvals[:,3] = 0.3
@@ -328,59 +365,61 @@ class CrystalPhase:
                     int_fit = library_int[a0]
                     matches_fit = library_matches[a0]
 
-                    if np.mod(m,2) == 0:
-                        ax.scatter(
-                            qy_fit[matches_fit],
-                            qx_fit[matches_fit],
-                            s = scale_markers_calculated * int_fit[matches_fit],
-                            marker = mvals[c],
-                            facecolor = phase_colors[c,:],
-                            )
-                        ax.scatter(
-                            qy_fit[np.logical_not(matches_fit)],
-                            qx_fit[np.logical_not(matches_fit)],
-                            s = scale_markers_calculated * int_fit[np.logical_not(matches_fit)],
-                            marker = mvals[c],
-                            facecolor = phase_colors[c,:],
-                            )
+                    if plot_only_nonzero_phases is False or phase_weights[a0] > 0:
 
-                        # legend
-                        ax_leg.scatter(
-                            0,
-                            dx_leg*(a0+1),
-                            s = 200,
-                            marker = mvals[c],
-                            facecolor = phase_colors[c,:],
-                            )
-                    else:
-                        ax.scatter(
-                            qy_fit[matches_fit],
-                            qx_fit[matches_fit],
-                            s = scale_markers_calculated * int_fit[matches_fit],
-                            marker = mvals[c],
-                            edgecolors = uvals[c,:],
-                            facecolors = (1,1,1,0.5),
-                            linewidth = 2,
-                            )
-                        ax.scatter(
-                            qy_fit[np.logical_not(matches_fit)],
-                            qx_fit[np.logical_not(matches_fit)],
-                            s = scale_markers_calculated * int_fit[np.logical_not(matches_fit)],
-                            marker = mvals[c],
-                            edgecolors = uvals[c,:],
-                            facecolors = (1,1,1,0.5),
-                            linewidth = 2,
-                            )
+                        if np.mod(m,2) == 0:
+                            ax.scatter(
+                                qy_fit[matches_fit],
+                                qx_fit[matches_fit],
+                                s = scale_markers_calculated * int_fit[matches_fit],
+                                marker = mvals[c],
+                                facecolor = phase_colors[c,:],
+                                )
+                            ax.scatter(
+                                qy_fit[np.logical_not(matches_fit)],
+                                qx_fit[np.logical_not(matches_fit)],
+                                s = scale_markers_calculated * int_fit[np.logical_not(matches_fit)],
+                                marker = mvals[c],
+                                facecolor = phase_colors[c,:],
+                                )
 
-                        # legend
-                        ax_leg.scatter(
-                            0,
-                            dx_leg*(a0+1),
-                            s = 200,
-                            marker = mvals[c],
-                            edgecolors = uvals[c,:],
-                            facecolors = (1,1,1,0.5),
-                            )
+                            # legend
+                            ax_leg.scatter(
+                                0,
+                                dx_leg*(a0+1),
+                                s = 200,
+                                marker = mvals[c],
+                                facecolor = phase_colors[c,:],
+                                )
+                        else:
+                            ax.scatter(
+                                qy_fit[matches_fit],
+                                qx_fit[matches_fit],
+                                s = scale_markers_calculated * int_fit[matches_fit],
+                                marker = mvals[c],
+                                edgecolors = uvals[c,:],
+                                facecolors = (1,1,1,0.5),
+                                linewidth = 2,
+                                )
+                            ax.scatter(
+                                qy_fit[np.logical_not(matches_fit)],
+                                qx_fit[np.logical_not(matches_fit)],
+                                s = scale_markers_calculated * int_fit[np.logical_not(matches_fit)],
+                                marker = mvals[c],
+                                edgecolors = uvals[c,:],
+                                facecolors = (1,1,1,0.5),
+                                linewidth = 2,
+                                )
+
+                            # legend
+                            ax_leg.scatter(
+                                0,
+                                dx_leg*(a0+1),
+                                s = 200,
+                                marker = mvals[c],
+                                edgecolors = uvals[c,:],
+                                facecolors = (1,1,1,0.5),
+                                )
 
                     # legend text
                     ax_leg.text(
@@ -407,8 +446,10 @@ class CrystalPhase:
     def quantify_phase(
         self,
         pointlistarray: PointListArray,
-        corr_kernel_size = 0.04,
+        corr_kernel_size = 0.02,
+        corr_distance_scale = 1.0,
         include_false_positives = True,
+        max_number_phases = 3,
         sigma_excitation_error = 0.02,
         power_experiment = 0.5,
         power_calculated = 0.5,
@@ -444,7 +485,9 @@ class CrystalPhase:
                 pointlistarray = pointlistarray,
                 xy_position = (rx,ry),
                 corr_kernel_size = corr_kernel_size,
+                corr_distance_scale = corr_distance_scale,
                 include_false_positives = include_false_positives,
+                max_number_phases = max_number_phases,
                 sigma_excitation_error = sigma_excitation_error,
                 power_experiment = power_experiment,
                 power_calculated = power_calculated,
@@ -459,7 +502,7 @@ class CrystalPhase:
 
     def plot_phase_weights(
         self,
-        weight_range = (0.5,1,0),
+        weight_range = (0.5,1.0),
         weight_normalize = False,
         total_intensity_normalize = True,
         cmap = 'gray',
