@@ -9,7 +9,7 @@ from py4DSTEM.process.wholepatternfit.wp_models import WPFModelType
 
 
 def show_model_grid(self, x=None, **plot_kwargs):
-    x = x or self.mean_CBED_fit.x
+    x = self.mean_CBED_fit.x if x is None else x
 
     model = [m for m in self.model if WPFModelType.DUMMY not in m.model_type]
 
@@ -91,8 +91,8 @@ def show_lattice_points(
         inds = np.stack([m.u_inds, m.v_inds], axis=1)
 
         spots = inds @ lat
-        spots[:, 0] += self.coordinate_model.params["x center"].initial_value
-        spots[:, 1] += self.coordinate_model.params["y center"].initial_value
+        spots[:, 0] += m.params["x center"].initial_value
+        spots[:, 1] += m.params["y center"].initial_value
 
         ax.scatter(
             spots[:, 1],
@@ -102,7 +102,28 @@ def show_lattice_points(
             label=m.name,
         )
 
+    moires = [m for m in self.model if WPFModelType.MOIRE in m.model_type]
+
+    for m in moires:
+        lat_ab = m._get_parent_lattices(m.lattice_a, m.lattice_b)
+        lat_abm = np.vstack((lat_ab, m.moire_matrix @ lat_ab))
+
+        spots = m.moire_indices_uvm @ lat_abm
+        spots[:, 0] += m.params["x center"].initial_value
+        spots[:, 1] += m.params["y center"].initial_value
+
+        ax.scatter(
+            spots[:, 1],
+            spots[:, 0],
+            s=100,
+            marker="+",
+            label=m.name,
+        )
+
     ax.legend()
+
+    ax.set_xlim(0,im.shape[1]-1)
+    ax.set_ylim(im.shape[0]-1,0)
 
     return (fig, ax) if returnfig else plt.show()
 
