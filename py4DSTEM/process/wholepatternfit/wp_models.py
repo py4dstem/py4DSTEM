@@ -15,6 +15,7 @@ class WPFModelType(Flag):
 
     AMORPHOUS = auto()
     LATTICE = auto()
+    MOIRE = auto()
 
     DUMMY = auto()  # Model has no direct contribution to pattern
     META = auto()  # Model depends on multiple sub-Models
@@ -521,6 +522,11 @@ class SyntheticDiskMoire(WPFModelPrototype):
         lattice_b: SyntheticDiskLattice,
         intensity_0: float,
         decorated_peaks: list = None,
+        link_disk_parameters: bool = True,
+        refine_width: bool = True,
+        edge_width: list = None,
+        refine_radius: bool = True,
+        disk_radius: list = None,
         name: str = "Moire Lattice",
     ):
         """
@@ -543,44 +549,23 @@ class SyntheticDiskMoire(WPFModelPrototype):
 
         # construct a 2x4 matrix "M" that transforms the parent lattices into
         # the moire lattice vectors
-        lat_a = np.array(
-            [
-                [
-                    lattice_a.params["ux"].initial_value,
-                    lattice_a.params["uy"].initial_value,
-                ],
-                [
-                    lattice_a.params["vx"].initial_value,
-                    lattice_a.params["vy"].initial_value,
-                ],
-            ]
-        )
 
-        lat_b = np.array(
-            [
-                [
-                    lattice_b.params["ux"].initial_value,
-                    lattice_b.params["uy"].initial_value,
-                ],
-                [
-                    lattice_b.params["vx"].initial_value,
-                    lattice_b.params["vy"].initial_value,
-                ],
-            ]
-        )
-
-        lat_ab = np.vstack((lat_a, lat_b))
-
+        lat_ab = self._get_parent_lattices(lattice_a, lattice_b)
+        
         # pick the pairing that gives the smallest unit cell
-        M_test = np.hstack((np.eye(2), -np.eye(2)))
-        M_test_flip = np.hstack((np.eye(2), -np.flipud(np.eye(2))))
-
-        M = (
-            M_test
-            if np.max(np.linalg.norm(M_test @ lat_ab, axis=1))
-            < np.max(np.linalg.norm(M_test_flip, axis=1))
-            else M_test_flip
+        mx, my = np.mgrid[-1:2, -1:2]
+        test_peaks = np.stack([mx.ravel(), my.ravel()], axis=1)
+        tests = np.stack(
+            [
+                np.hstack((np.eye(2), np.vstack((b1, b2))))
+                for b1 in test_peaks
+                for b2 in test_peaks
+                if not np.allclose(b1, b2)
+            ],
+            axis=0,
         )
+
+        M = tests[np.argmin(np.max(np.linalg.norm(tests @ lat_ab, axis=-1), axis=-1))]
 
         # ensure the moire vectors are less 90 deg apart
         if np.arccos(
@@ -658,31 +643,50 @@ class SyntheticDiskMoire(WPFModelPrototype):
         )
 
         # each order of parent reflection has a separate moire intensity
-        max_order = np.max(np.abs(self.moire_indices_uvm[:, :4]))
+        max_order = int(np.max(np.abs(self.moire_indices_uvm[:, :4])))
 
         params = {
             f"Order {n} Moire Intensity": Parameter(intensity_0)
-            for n in range(max_order)
+            for n in range(max_order + 1)
         }
+
+        params["x center"] = lattice_a.params["x center"]
+        params["y center"] = lattice_a.params["y center"]
+
+        # add disk edge and width parameters if needed
+        if link_disk_parameters:
+            if (lattice_a.refine_width) and (lattice_b.refine_width):
+                self.refine_width = True
+                params["edge width"] = lattice_a.params["edge width"]
+            if (lattice_a.refine_radius) and (lattice_b.refine_radius):
+                self.refine_radius = True
+                params["disk radius"] = lattice_a.params["disk radius"]
+        else:
+            self.refine_width = refine_width
+            if self.refine_width:
+                params["edge width"] = Parameter(edge_width)
+
+            self.refine_radius = refine_radius
+            if self.refine_radius:
+                params["disk radius"] = Parameter(disk_radius)
 
         super().__init__(
             name,
             params,
-            model_type=WPFModelType.META,
+            model_type=WPFModelType.META | WPFModelType.MOIRE,
         )
 
-    def func(self, DP: np.ndarray, x: np.ndarray, **static_data):
-        # construct the moire unit cell from the current vectors
-        # of the two parent lattices
+    def _get_parent_lattices(self, lattice_a, lattice_b):
+
         lat_a = np.array(
             [
                 [
-                    x[self.lattice_a.params["ux"].offset],
-                    x[self.lattice_a.params["uy"].offset],
+                    lattice_a.params["ux"].initial_value,
+                    lattice_a.params["uy"].initial_value,
                 ],
                 [
-                    x[self.lattice_a.params["vx"].offset],
-                    x[self.lattice_a.params["vy"].offset],
+                    lattice_a.params["vx"].initial_value,
+                    lattice_a.params["vy"].initial_value,
                 ],
             ]
         )
@@ -690,23 +694,161 @@ class SyntheticDiskMoire(WPFModelPrototype):
         lat_b = np.array(
             [
                 [
-                    x[self.lattice_b.params["ux"].offset],
-                    x[self.lattice_b.params["uy"].offset],
+                    lattice_b.params["ux"].initial_value,
+                    lattice_b.params["uy"].initial_value,
                 ],
                 [
-                    x[self.lattice_b.params["vx"].offset],
-                    x[self.lattice_b.params["vy"].offset],
+                    lattice_b.params["vx"].initial_value,
+                    lattice_b.params["vy"].initial_value,
                 ],
             ]
         )
 
-        lat_ab = np.vstack((lat_a, lat_b))
+        return np.vstack((lat_a, lat_b))
+
+    def func(self, DP: np.ndarray, x: np.ndarray, **static_data):
+        # construct the moire unit cell from the current vectors
+        # of the two parent lattices
+
+        lat_ab = self._get_parent_lattices(self.lattice_a, self.lattice_b)
         lat_abm = np.vstack((lat_ab, self.moire_matrix @ lat_ab))
 
-        # moire = self.moire_matrix @ lat_ab
+        # grab shared parameters
+        disk_radius = (
+            x[self.params["disk radius"].offset]
+            if self.refine_radius
+            else self.disk_radius
+        )
+
+        disk_width = (
+            x[self.params["edge width"].offset]
+            if self.refine_width
+            else self.disk_width
+        )
+
+        # compute positions of each moire peak
+        positions = self.moire_indices_uvm @ lat_abm
+        positions += np.array(
+            [x[self.params["x center"].offset], x[self.params["y center"].offset]]
+        )
+
+        for (x_pos, y_pos), indices in zip(positions, self.moire_indices_uvm):
+            # Each peak has an intensity based on the max index of parent lattice
+            # which it decorates
+            order = int(np.max(np.abs(indices[:4])))
+            intensity = x[self.params[f"Order {order} Moire Intensity"].offset]
+
+            DP += intensity / (
+                1.0
+                + np.exp(
+                    np.minimum(
+                        4
+                        * (
+                            np.sqrt(
+                                (static_data["xArray"] - x_pos) ** 2
+                                + (static_data["yArray"] - y_pos) ** 2
+                            )
+                            - disk_radius
+                        )
+                        / disk_width,
+                        20,
+                    )
+                )
+            )
 
     def jacobian(self, J: np.ndarray, x: np.ndarray, **static_data):
-        pass
+        # construct the moire unit cell from the current vectors
+        # of the two parent lattices
+        lat_ab = self._get_parent_lattices(self.lattice_a, self.lattice_b)
+        lat_abm = np.vstack((lat_ab, self.moire_matrix @ lat_ab))
+
+        # grab shared parameters
+        disk_radius = (
+            x[self.params["disk radius"].offset]
+            if self.refine_radius
+            else self.disk_radius
+        )
+
+        disk_width = (
+            x[self.params["edge width"].offset]
+            if self.refine_width
+            else self.disk_width
+        )
+
+        # compute positions of each moire peak
+        positions = self.moire_indices_uvm @ lat_abm
+        positions += np.array(
+            [x[self.params["x center"].offset], x[self.params["y center"].offset]]
+        )
+
+        for (x_pos, y_pos), indices in zip(positions, self.moire_indices_uvm):
+            # Each peak has an intensity based on the max index of parent lattice
+            # which it decorates
+            order = int(np.max(np.abs(indices[:4])))
+            intensity_idx = self.params[f"Order {order} Moire Intensity"].offset
+            intensity = x[intensity_idx]
+
+            r_disk = np.maximum(
+                5e-1,
+                np.sqrt(
+                    (static_data["xArray"] - x_pos) ** 2
+                    + (static_data["yArray"] - y_pos) ** 2
+                ),
+            )
+
+            mask = r_disk < (2 * disk_radius)
+
+            top_exp = mask * np.exp(4 * ((mask * r_disk) - disk_radius) / disk_width)
+
+            # dF/d(x0)
+            dx = (
+                4
+                * disk_intensity
+                * (static_data["xArray"] - x_pos)
+                * top_exp
+                / ((1.0 + top_exp) ** 2 * disk_width * r)
+            ).ravel()
+
+            # dF/d(y0)
+            dy = (
+                4
+                * disk_intensity
+                * (static_data["yArray"] - y_pos)
+                * top_exp
+                / ((1.0 + top_exp) ** 2 * disk_width * r)
+            ).ravel()
+
+            # insert center position derivatives
+            J[:, self.params["x center"].offset] += disk_intensity * dx
+            J[:, self.params["y center"].offset] += disk_intensity * dy
+
+            # insert lattice vector derivatives
+            # TODO: these need to be scaled for chain rule!!!
+            J[:, self.params["ux"].offset] += disk_intensity * u * dx
+            J[:, self.params["uy"].offset] += disk_intensity * u * dy
+            J[:, self.params["vx"].offset] += disk_intensity * v * dx
+            J[:, self.params["vy"].offset] += disk_intensity * v * dy
+
+            # insert intensity derivative
+            dI = (mask * (1.0 / (1.0 + top_exp))).ravel()
+            J[:, intensity_idx] += dI
+
+            # insert disk radius derivative
+            if self.refine_radius:
+                dR = (
+                    4.0 * disk_intensity * top_exp / (disk_width * (1.0 + top_exp) ** 2)
+                ).ravel()
+                J[:, self.params["disk radius"].offset] += dR
+
+            if self.refine_width:
+                dW = (
+                    4.0
+                    * disk_intensity
+                    * top_exp
+                    * (r_disk - disk_radius)
+                    / (disk_width**2 * (1.0 + top_exp) ** 2)
+                ).ravel()
+                J[:, self.params["edge width"].offset] += dW
 
 
 class ComplexOverlapKernelDiskLattice(WPFModelPrototype):
