@@ -308,7 +308,7 @@ class WholePatternFit:
         default_opts.update(fit_opts)
 
         # Masking function
-        if mask is None:
+        if real_space_mask is None:
             mask = np.ones(
                 (self.datacube.R_Nx, self.datacube.R_Ny), 
                 dtype=bool,
