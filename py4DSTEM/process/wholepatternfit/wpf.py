@@ -307,9 +307,14 @@ class WholePatternFit:
         }
         default_opts.update(fit_opts)
 
-        mask = real_space_mask or np.ones(
-            (self.datacube.R_Nx, self.datacube.R_Ny), dtype=bool
-        )
+        # Masking function
+        if mask is None:
+            mask = np.ones(
+                (self.datacube.R_Nx, self.datacube.R_Ny), 
+                dtype=bool,
+            )
+        else:
+            mask = real_space_mask
 
         # Loop over probe positions
         if not distributed:
