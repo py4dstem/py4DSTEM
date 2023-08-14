@@ -551,7 +551,7 @@ class SyntheticDiskMoire(WPFModelPrototype):
         # the moire lattice vectors
 
         lat_ab = self._get_parent_lattices(lattice_a, lattice_b)
-        
+
         # pick the pairing that gives the smallest unit cell
         mx, my = np.mgrid[-1:2, -1:2]
         test_peaks = np.stack([mx.ravel(), my.ravel()], axis=1)
@@ -636,6 +636,22 @@ class SyntheticDiskMoire(WPFModelPrototype):
 
         all_indices = all_indices[idx_unique]
 
+        # remove peaks outside of pattern
+        Q_Nx = WPF.static_data["Q_Nx"]
+        Q_Ny = WPF.static_data["Q_Ny"]
+        all_peaks = all_indices @ lat_abm
+        all_peaks[:,0] += lattice_a.params['x center'].initial_value
+        all_peaks[:,1] += lattice_a.params['y center'].initial_value
+        delete_mask = np.logical_or.reduce(
+            [
+                all_peaks[:, 0] < 0.0,
+                all_peaks[:, 0] >= Q_Nx,
+                all_peaks[:, 1] < 0.0,
+                all_peaks[:, 1] >= Q_Ny,
+            ]
+        )
+        all_indices = all_indices[~delete_mask]
+
         # remove spots that coincide with primary peaks
         parent_spots = parent_peaks @ lat_ab
         self.moire_indices_uvm = np.array(
@@ -670,6 +686,22 @@ class SyntheticDiskMoire(WPFModelPrototype):
             if self.refine_radius:
                 params["disk radius"] = Parameter(disk_radius)
 
+        # store some data that helps compute the derivatives
+        selector_matrices = np.eye(8).reshape(-1, 4, 2)
+        selector_parameters = [
+            self.lattice_a.params["ux"],
+            self.lattice_a.params["uy"],
+            self.lattice_a.params["vx"],
+            self.lattice_a.params["vy"],
+            self.lattice_b.params["ux"],
+            self.lattice_b.params["uy"],
+            self.lattice_b.params["vx"],
+            self.lattice_b.params["vy"],
+        ]
+        self.parent_vector_selectors = [
+            (p, m) for p, m in zip(selector_parameters, selector_matrices)
+        ]
+
         super().__init__(
             name,
             params,
@@ -677,7 +709,6 @@ class SyntheticDiskMoire(WPFModelPrototype):
         )
 
     def _get_parent_lattices(self, lattice_a, lattice_b):
-
         lat_a = np.array(
             [
                 [
@@ -775,6 +806,11 @@ class SyntheticDiskMoire(WPFModelPrototype):
             else self.disk_width
         )
 
+        # distance from center coordinate
+        r = np.maximum(
+            5e-1, static_data['parent']._get_distance(x, self.params["x center"], self.params["y center"])
+        )
+
         # compute positions of each moire peak
         positions = self.moire_indices_uvm @ lat_abm
         positions += np.array(
@@ -786,7 +822,7 @@ class SyntheticDiskMoire(WPFModelPrototype):
             # which it decorates
             order = int(np.max(np.abs(indices[:4])))
             intensity_idx = self.params[f"Order {order} Moire Intensity"].offset
-            intensity = x[intensity_idx]
+            disk_intensity = x[intensity_idx]
 
             r_disk = np.maximum(
                 5e-1,
@@ -823,11 +859,12 @@ class SyntheticDiskMoire(WPFModelPrototype):
             J[:, self.params["y center"].offset] += disk_intensity * dy
 
             # insert lattice vector derivatives
-            # TODO: these need to be scaled for chain rule!!!
-            J[:, self.params["ux"].offset] += disk_intensity * u * dx
-            J[:, self.params["uy"].offset] += disk_intensity * u * dy
-            J[:, self.params["vx"].offset] += disk_intensity * v * dx
-            J[:, self.params["vy"].offset] += disk_intensity * v * dy
+            for par, mat in self.parent_vector_selectors:
+                # find the x and y derivatives of the position of this
+                # disk in terms of each of the parent lattice vectors
+                d_abm = np.vstack((mat, self.moire_matrix @ mat))
+                d_param = indices @ d_abm
+                J[:, par.offset] += disk_intensity * (d_param[0] * dx + d_param[1] * dy)
 
             # insert intensity derivative
             dI = (mask * (1.0 / (1.0 + top_exp))).ravel()

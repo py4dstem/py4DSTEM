@@ -56,7 +56,15 @@ def show_model_grid(self, x=None, **plot_kwargs):
 
 
 def show_lattice_points(
-    self, im=None, vmin=None, vmax=None, power=None, returnfig=False, *args, **kwargs
+    self,
+    im=None,
+    vmin=None,
+    vmax=None,
+    power=None,
+    crop_to_pattern=False,
+    returnfig=False,
+    *args,
+    **kwargs,
 ):
     """
     Plotting utility to show the initial lattice points.
@@ -122,8 +130,9 @@ def show_lattice_points(
 
     ax.legend()
 
-    ax.set_xlim(0,im.shape[1]-1)
-    ax.set_ylim(im.shape[0]-1,0)
+    if crop_to_pattern:
+        ax.set_xlim(0, im.shape[1] - 1)
+        ax.set_ylim(im.shape[0] - 1, 0)
 
     return (fig, ax) if returnfig else plt.show()
 
