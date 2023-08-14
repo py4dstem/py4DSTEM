@@ -1176,12 +1176,12 @@ class ComplexOverlapKernelDiskLattice(WPFModel):
         super().__init__(name, params, model_type=WPFModelType.LATTICE)
 
     def func(self, DP: np.ndarray, x_fit, **kwargs) -> None:
-        x0 = x[self.params["x center"].offset]
-        y0 = x[self.params["y center"].offset]
-        ux = x[self.params["ux"].offset]
-        uy = x[self.params["uy"].offset]
-        vx = x[self.params["vx"].offset]
-        vy = x[self.params["vy"].offset]
+        x0 = x_fit[self.params["x center"].offset]
+        y0 = x_fit[self.params["y center"].offset]
+        ux = x_fit[self.params["ux"].offset]
+        uy = x_fit[self.params["uy"].offset]
+        vx = x_fit[self.params["vx"].offset]
+        vy = x_fit[self.params["vy"].offset]
 
         localDP = np.zeros_like(DP, dtype=np.complex64)
 
@@ -1272,12 +1272,12 @@ class KernelDiskLattice(WPFModel):
         super().__init__(name, params, model_type=WPFModelType.LATTICE)
 
     def func(self, DP: np.ndarray, x_fit: np.ndarray, **static_data) -> None:
-        x0 = x[self.params["x center"].offset]
-        y0 = x[self.params["y center"].offset]
-        ux = x[self.params["ux"].offset]
-        uy = x[self.params["uy"].offset]
-        vx = x[self.params["vx"].offset]
-        vy = x[self.params["vy"].offset]
+        x0 = x_fit[self.params["x center"].offset]
+        y0 = x_fit[self.params["y center"].offset]
+        ux = x_fit[self.params["ux"].offset]
+        uy = x_fit[self.params["uy"].offset]
+        vx = x_fit[self.params["vx"].offset]
+        vy = x_fit[self.params["vy"].offset]
 
         for i, (u, v) in enumerate(zip(self.u_inds, self.v_inds)):
             x = x0 + (u * ux) + (v * vx)
