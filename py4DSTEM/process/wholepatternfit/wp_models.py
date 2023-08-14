@@ -21,7 +21,7 @@ class WPFModelType(Flag):
     META = auto()  # Model depends on multiple sub-Models
 
 
-class WPFModelPrototype:
+class WPFModel:
     """
     Prototype class for a compent of a whole-pattern model.
     Holds the following:
@@ -71,6 +71,14 @@ class Parameter:
         lower_bound: Optional[float] = None,
         upper_bound: Optional[float] = None,
     ):
+        """
+        Object representing a fitting parameter with bounds.
+
+        Can be specified three ways:
+        Parameter(initial_value) - Unbounded, with an initial guess
+        Parameter(initial_value, deviation) - Bounded within deviation of initial_guess
+        Parameter(initial_value, lower_bound, upper_bound) - Both bounds specified
+        """
         if hasattr(initial_value, "__iter__"):
             if len(initial_value) == 2:
                 initial_value = (
@@ -104,9 +112,11 @@ class Parameter:
         return f"Value: {self.initial_value} (Range: {self.lower_bound},{self.upper_bound})"
 
 
-class _BaseModel(WPFModelPrototype):
+class _BaseModel(WPFModel):
     """
-    Model object used by the WPF class as a container for the global Parameters
+    Model object used by the WPF class as a container for the global Parameters.
+
+    **This object should not be instantiated directly.**
     """
 
     def __init__(self, x0, y0, name="Globals"):
@@ -121,7 +131,19 @@ class _BaseModel(WPFModelPrototype):
         pass
 
 
-class DCBackground(WPFModelPrototype):
+class DCBackground(WPFModel):
+    """
+    Model representing constant background intensity.
+
+    Parameters
+    ----------
+    background_value
+        Background intensity value.
+        Specified as initial_value, (initial_value, deviation), or
+            (initial_value, lower_bound, upper_bound). See
+            Parameter documentation for details.
+    """
+
     def __init__(self, background_value=0.0, name="DC Background"):
         params = {"DC Level": Parameter(background_value)}
 
@@ -134,7 +156,34 @@ class DCBackground(WPFModelPrototype):
         J[:, self.params["DC Level"].offset] = 1
 
 
-class GaussianBackground(WPFModelPrototype):
+class GaussianBackground(WPFModel):
+    """
+    Model representing a 2D Gaussian intensity distribution
+
+    Parameters
+    ----------
+    WPF: WholePatternFit
+        Parent WPF object
+    sigma
+        parameter specifying width of the Gaussian
+        Specified as initial_value, (initial_value, deviation), or
+            (initial_value, lower_bound, upper_bound). See
+            Parameter documentation for details.
+    intensity
+        parameter specifying intensity of the Gaussian
+        Specified as initial_value, (initial_value, deviation), or
+            (initial_value, lower_bound, upper_bound). See
+            Parameter documentation for details.
+    global_center: bool
+        If True, uses same center coordinate as the global model
+        If False, uses an independent center
+    x0, y0:
+        Center coordinates of model for local origin
+        Specified as initial_value, (initial_value, deviation), or
+            (initial_value, lower_bound, upper_bound). See
+            Parameter documentation for details.
+    """
+
     def __init__(
         self,
         WPF,
@@ -195,7 +244,39 @@ class GaussianBackground(WPFModelPrototype):
         J[:, self.params["intensity"].offset] += exp_expr.ravel()
 
 
-class GaussianRing(WPFModelPrototype):
+class GaussianRing(WPFModel):
+    """
+    Model representing a halo with Gaussian falloff
+
+    Parameters
+    ----------
+    WPF: WholePatternFit
+        parent fitting object
+    radius:
+        radius of halo
+        Specified as initial_value, (initial_value, deviation), or
+            (initial_value, lower_bound, upper_bound). See
+            Parameter documentation for details.
+    sigma:
+        width of Gaussian falloff
+        Specified as initial_value, (initial_value, deviation), or
+            (initial_value, lower_bound, upper_bound). See
+            Parameter documentation for details.
+    intensity:
+        Intensity of the halo
+        Specified as initial_value, (initial_value, deviation), or
+            (initial_value, lower_bound, upper_bound). See
+            Parameter documentation for details.
+    global_center: bool
+        If True, uses same center coordinate as the global model
+        If False, uses an independent center
+    x0, y0:
+        Center coordinates of model for local origin
+        Specified as initial_value, (initial_value, deviation), or
+            (initial_value, lower_bound, upper_bound). See
+            Parameter documentation for details.
+    """
+
     def __init__(
         self,
         WPF,
@@ -280,7 +361,57 @@ class GaussianRing(WPFModelPrototype):
         J[:, self.params["intensity"].offset] += exp_expr.ravel()
 
 
-class SyntheticDiskLattice(WPFModelPrototype):
+class SyntheticDiskLattice(WPFModel):
+    """
+    Model representing a lattice of diffraction disks with a soft edge
+
+    Parameters
+    ----------
+
+    WPF: WholePatternFit
+        parent fitting object
+    ux,uy,vx,vy
+        x and y components of the lattice vectors u and v.
+        Specified as initial_value, (initial_value, deviation), or
+            (initial_value, lower_bound, upper_bound). See
+            Parameter documentation for details.
+    disk_radius
+        Radius of each diffraction disk.
+        Specified as initial_value, (initial_value, deviation), or
+            (initial_value, lower_bound, upper_bound). See
+            Parameter documentation for details.
+    disk_width
+        Width of the smooth falloff at the edge of the disk
+        Specified as initial_value, (initial_value, deviation), or
+            (initial_value, lower_bound, upper_bound). See
+            Parameter documentation for details.
+    u_max, v_max
+        Maximum lattice indices to include in the pattern.
+        Disks outside the pattern are automatically clipped.
+    intensity_0
+        Initial intensity for each diffraction disk.
+        Each disk intensity is an independent fit variable in the final model
+        Specified as initial_value, (initial_value, deviation), or
+            (initial_value, lower_bound, upper_bound). See
+            Parameter documentation for details.
+    refine_radius: bool
+        Flag whether disk radius is made a fitting parameter
+    refine_width: bool
+        Flag whether disk edge width is made a fitting parameter
+    global_center: bool
+        If True, uses same center coordinate as the global model
+        If False, uses an independent center
+    x0, y0:
+        Center coordinates of model for local origin
+        Specified as initial_value, (initial_value, deviation), or
+            (initial_value, lower_bound, upper_bound). See
+            Parameter documentation for details.
+    exclude_indices: list
+        Indices to exclude from the pattern
+    include_indices: list
+        If specified, only the indices in the list are added to the pattern
+    """
+
     def __init__(
         self,
         WPF,
@@ -507,12 +638,48 @@ class SyntheticDiskLattice(WPFModelPrototype):
                 J[:, self.params["edge width"].offset] += dW
 
 
-class SyntheticDiskMoire(WPFModelPrototype):
+class SyntheticDiskMoire(WPFModel):
     """
-    Add Moire peaks arising from two SyntheticDiskLattice lattices.
-    The positions of the Moire peaks are derived from the lattice
-    vectors of the parent lattices. This model object adds only the intensity of
-    each Moire peak as parameters, all other attributes are inherited from the parents
+    Model of diffraction disks arising from interference between two lattices.
+
+    The Moire unit cell is determined automatically using the two input lattices.
+
+    Parameters
+    ----------
+    WPF: WholePatternFit
+        parent fitting object
+    lattice_a, lattice_b: SyntheticDiskLattice
+        parent lattices for the Moire
+    intensity_0
+        Initial guess of Moire disk intensity
+        Specified as initial_value, (initial_value, deviation), or
+            (initial_value, lower_bound, upper_bound). See
+            Parameter documentation for details.
+    decorated_peaks: list
+        When specified, only the reflections in the list are decorated with Moire spots
+        If not specified, all peaks are decorated
+    link_moire_disk_intensities: bool
+        When False, each Moire disk has an independently fit intensity
+        When True, Moire disks arising from the same order of parent reflection share
+        the same intensity
+    link_disk_parameters: bool
+        When True, edge_width and disk_radius are inherited from lattice_a
+    refine_width: bool
+        Flag whether disk edge width is a fit variable
+    edge_width
+        Width of the soft edge of the diffraction disk.
+        Specified as initial_value, (initial_value, deviation), or
+            (initial_value, lower_bound, upper_bound). See
+            Parameter documentation for details.
+    refine_radius: bool
+        Flag whether disk radius is a fit variable
+    disk radius
+        Radius of the diffraction disks
+        Specified as initial_value, (initial_value, deviation), or
+            (initial_value, lower_bound, upper_bound). See
+            Parameter documentation for details.
+    lattice_b_search_range: int
+        Range of index values for lattice_b to test when finding the Moire unit cell.
     """
 
     def __init__(
@@ -922,7 +1089,7 @@ class SyntheticDiskMoire(WPFModelPrototype):
                 J[:, self.params["edge width"].offset] += dW
 
 
-class ComplexOverlapKernelDiskLattice(WPFModelPrototype):
+class ComplexOverlapKernelDiskLattice(WPFModel):
     def __init__(
         self,
         WPF,
@@ -938,18 +1105,11 @@ class ComplexOverlapKernelDiskLattice(WPFModelPrototype):
         name="Complex Overlapped Disk Lattice",
         verbose=False,
     ):
+        return NotImplementedError(
+            "This model type has not been updated for use with the new architecture."
+        )
+
         params = {}
-
-        # if global_center:
-        #     self.func = self.global_center_func
-        #     self.jacobian = self.global_center_jacobian
-
-        #     x0 = WPF.static_data["global_x0"]
-        #     y0 = WPF.static_data["global_y0"]
-        # else:
-        #     params["x center"] = Parameter(x0)
-        #     params["y center"] = Parameter(y0)
-        #     self.func = self.local_center_func
 
         self.probe_kernelFT = np.fft.fft2(probe_kernel)
 
@@ -1038,7 +1198,7 @@ class ComplexOverlapKernelDiskLattice(WPFModelPrototype):
         DP += np.abs(localDP) ** 2
 
 
-class KernelDiskLattice(WPFModelPrototype):
+class KernelDiskLattice(WPFModel):
     def __init__(
         self,
         WPF,
@@ -1054,6 +1214,10 @@ class KernelDiskLattice(WPFModelPrototype):
         name="Custom Kernel Disk Lattice",
         verbose=False,
     ):
+        return NotImplementedError(
+            "This model type has not been updated for use with the new architecture."
+        )
+
         params = {}
 
         # if global_center:
