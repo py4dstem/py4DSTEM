@@ -1284,7 +1284,7 @@ class KernelDiskLattice(WPFModel):
             y = y0 + (u * uy) + (v * vy)
 
             DP += (
-                x_fit[params[f"[{u},{v}] Intensity"].offset]
+                x_fit[self.params[f"[{u},{v}] Intensity"].offset]
                 * np.abs(
                     np.fft.ifft2(
                         self.probe_kernelFT
