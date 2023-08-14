@@ -522,11 +522,13 @@ class SyntheticDiskMoire(WPFModelPrototype):
         lattice_b: SyntheticDiskLattice,
         intensity_0: float,
         decorated_peaks: list = None,
+        link_moire_disk_intensities: bool = False,
         link_disk_parameters: bool = True,
         refine_width: bool = True,
         edge_width: list = None,
         refine_radius: bool = True,
         disk_radius: list = None,
+        lattice_b_search_range: int = 1,
         name: str = "Moire Lattice",
     ):
         """
@@ -553,7 +555,8 @@ class SyntheticDiskMoire(WPFModelPrototype):
         lat_ab = self._get_parent_lattices(lattice_a, lattice_b)
 
         # pick the pairing that gives the smallest unit cell
-        mx, my = np.mgrid[-1:2, -1:2]
+        imax = lattice_b_search_range
+        mx, my = np.mgrid[-imax : imax + 1, -imax : imax + 1]
         test_peaks = np.stack([mx.ravel(), my.ravel()], axis=1)
         tests = np.stack(
             [
@@ -565,6 +568,10 @@ class SyntheticDiskMoire(WPFModelPrototype):
             axis=0,
         )
 
+        # pick the combination that gives the smallest cell
+        # (it might be better to choose the cell that gives the smallest volume
+        # but then we have to handle the case of nearly-parallel vectors in
+        # the search space)
         M = tests[np.argmin(np.max(np.linalg.norm(tests @ lat_ab, axis=-1), axis=-1))]
 
         # ensure the moire vectors are less 90 deg apart
@@ -640,8 +647,8 @@ class SyntheticDiskMoire(WPFModelPrototype):
         Q_Nx = WPF.static_data["Q_Nx"]
         Q_Ny = WPF.static_data["Q_Ny"]
         all_peaks = all_indices @ lat_abm
-        all_peaks[:,0] += lattice_a.params['x center'].initial_value
-        all_peaks[:,1] += lattice_a.params['y center'].initial_value
+        all_peaks[:, 0] += lattice_a.params["x center"].initial_value
+        all_peaks[:, 1] += lattice_a.params["y center"].initial_value
         delete_mask = np.logical_or.reduce(
             [
                 all_peaks[:, 0] < 0.0,
@@ -658,13 +665,22 @@ class SyntheticDiskMoire(WPFModelPrototype):
             [idx for idx in all_indices if (idx @ lat_abm) not in parent_spots]
         )
 
-        # each order of parent reflection has a separate moire intensity
-        max_order = int(np.max(np.abs(self.moire_indices_uvm[:, :4])))
+        self.link_moire_disk_intensities = link_moire_disk_intensities
+        if link_moire_disk_intensities:
+            # each order of parent reflection has a separate moire intensity
+            max_order = int(np.max(np.abs(self.moire_indices_uvm[:, :4])))
 
-        params = {
-            f"Order {n} Moire Intensity": Parameter(intensity_0)
-            for n in range(max_order + 1)
-        }
+            params = {
+                f"Order {n} Moire Intensity": Parameter(intensity_0)
+                for n in range(max_order + 1)
+            }
+        else:
+            params = {
+                f"a ({ax},{ay}), b ({bx},{by}), moire ({mx},{my}) Intensity": Parameter(
+                    intensity_0
+                )
+                for ax, ay, bx, by, mx, my in self.moire_indices_uvm
+            }
 
         params["x center"] = lattice_a.params["x center"]
         params["y center"] = lattice_a.params["y center"]
@@ -767,7 +783,16 @@ class SyntheticDiskMoire(WPFModelPrototype):
             # Each peak has an intensity based on the max index of parent lattice
             # which it decorates
             order = int(np.max(np.abs(indices[:4])))
-            intensity = x[self.params[f"Order {order} Moire Intensity"].offset]
+
+            if self.link_moire_disk_intensities:
+                intensity = x[self.params[f"Order {order} Moire Intensity"].offset]
+            else:
+                ax, ay, bx, by, mx, my = indices
+                intensity = x[
+                    self.params[
+                        f"a ({ax},{ay}), b ({bx},{by}), moire ({mx},{my}) Intensity"
+                    ].offset
+                ]
 
             DP += intensity / (
                 1.0
@@ -808,7 +833,10 @@ class SyntheticDiskMoire(WPFModelPrototype):
 
         # distance from center coordinate
         r = np.maximum(
-            5e-1, static_data['parent']._get_distance(x, self.params["x center"], self.params["y center"])
+            5e-1,
+            static_data["parent"]._get_distance(
+                x, self.params["x center"], self.params["y center"]
+            ),
         )
 
         # compute positions of each moire peak
@@ -820,8 +848,14 @@ class SyntheticDiskMoire(WPFModelPrototype):
         for (x_pos, y_pos), indices in zip(positions, self.moire_indices_uvm):
             # Each peak has an intensity based on the max index of parent lattice
             # which it decorates
-            order = int(np.max(np.abs(indices[:4])))
-            intensity_idx = self.params[f"Order {order} Moire Intensity"].offset
+            if self.link_moire_disk_intensities:
+                order = int(np.max(np.abs(indices[:4])))
+                intensity_idx = self.params[f"Order {order} Moire Intensity"].offset
+            else:
+                ax, ay, bx, by, mx, my = indices
+                intensity_idx = self.params[
+                    f"a ({ax},{ay}), b ({bx},{by}), moire ({mx},{my}) Intensity"
+                ].offset
             disk_intensity = x[intensity_idx]
 
             r_disk = np.maximum(
