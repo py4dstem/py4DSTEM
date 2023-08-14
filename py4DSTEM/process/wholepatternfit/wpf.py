@@ -34,7 +34,6 @@ class WholePatternFit:
         mask: Optional[np.ndarray] = None,
         use_jacobian: bool = True,
         meanCBED: Optional[np.ndarray] = None,
-        fit_power: float = 1,
     ):
         """
         Perform pixelwise fits using composable models and numerical optimization.
@@ -70,8 +69,6 @@ class WholePatternFit:
         meanCBED: Optional np.ndarray, used to specify the diffraction pattern used
             for initial refinement of the parameters. If not specified, the average across
             all scan positions is computed
-        fit_power: float, diffraction patterns are raised to this power, sets the gamma
-            level at which the patterns are compared
 
         """
         self.datacube = datacube
@@ -119,8 +116,6 @@ class WholePatternFit:
 
         # set up the global arguments
         self._setup_static_data(x0, y0)
-
-        self.fit_power = fit_power
 
         # for debugging: tracks all function evals
         self._track = False
@@ -449,7 +444,7 @@ class WholePatternFit:
     def _pattern_error(self, x, current_pattern, shared_data):
         DP = self._pattern(x, shared_data)
 
-        DP = (DP - current_pattern**self.fit_power) * self.mask
+        DP = (DP - current_pattern) * self.mask
 
         if self._track:
             self._fevals.append(DP)
@@ -464,7 +459,7 @@ class WholePatternFit:
         for m in self.model:
             m.func(DP, x, **shared_data)
 
-        return (DP**self.fit_power) * self.mask
+        return DP * self.mask
 
     def _jacobian(self, x, current_pattern, shared_data):
         # TODO: automatic mixed analytic/finite difference
