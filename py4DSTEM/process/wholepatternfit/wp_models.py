@@ -1102,6 +1102,9 @@ class ComplexOverlapKernelDiskLattice(WPFModel):
         v_max: int,
         intensity_0: float,
         exclude_indices: list = [],
+        global_center: bool = True,
+        x0=0.0,
+        y0=0.0,
         name="Complex Overlapped Disk Lattice",
         verbose=False,
     ):
@@ -1112,6 +1115,16 @@ class ComplexOverlapKernelDiskLattice(WPFModel):
         params = {}
 
         self.probe_kernelFT = np.fft.fft2(probe_kernel)
+
+        if global_center:
+            params["x center"] = WPF.coordinate_model.params["x center"]
+            params["y center"] = WPF.coordinate_model.params["y center"]
+        else:
+            params["x center"] = Parameter(x0)
+            params["y center"] = Parameter(y0)
+
+        x0 = params["x center"].initial_value
+        y0 = params["y center"].initial_value
 
         params["ux"] = Parameter(ux)
         params["uy"] = Parameter(uy)
@@ -1160,23 +1173,15 @@ class ComplexOverlapKernelDiskLattice(WPFModel):
         self.u_inds = self.u_inds[~delete_mask]
         self.v_inds = self.v_inds[~delete_mask]
 
-        self.func = self.global_center_func
-
         super().__init__(name, params, model_type=WPFModelType.LATTICE)
 
-    def global_center_func(self, DP: np.ndarray, *args, **kwargs) -> None:
-        # copy the global centers in the right place for the local center generator
-        self.local_center_func(
-            DP, kwargs["global_x0"], kwargs["global_y0"], *args, **kwargs
-        )
-
-    def local_center_func(self, DP: np.ndarray, *args, **kwargs) -> None:
-        x0 = args[0]
-        y0 = args[1]
-        ux = args[2]
-        uy = args[3]
-        vx = args[4]
-        vy = args[5]
+    def func(self, DP: np.ndarray, x_fit, **kwargs) -> None:
+        x0 = x[self.params["x center"].offset]
+        y0 = x[self.params["y center"].offset]
+        ux = x[self.params["ux"].offset]
+        uy = x[self.params["uy"].offset]
+        vx = x[self.params["vx"].offset]
+        vy = x[self.params["vy"].offset]
 
         localDP = np.zeros_like(DP, dtype=np.complex64)
 
@@ -1185,8 +1190,8 @@ class ComplexOverlapKernelDiskLattice(WPFModel):
             y = y0 + (u * uy) + (v * vy)
 
             localDP += (
-                args[2 * i + 6]
-                * np.exp(1j * args[2 * i + 7])
+                x_fit[self.params[f"[{u},{v}] Intensity"].offset]
+                * np.exp(1j * x_fit[self.params[f"[{u},{v}] Phase"].offset])
                 * np.abs(
                     np.fft.ifft2(
                         self.probe_kernelFT
@@ -1211,27 +1216,25 @@ class KernelDiskLattice(WPFModel):
         v_max: int,
         intensity_0: float,
         exclude_indices: list = [],
+        global_center: bool = True,
+        x0=0.0,
+        y0=0.0,
         name="Custom Kernel Disk Lattice",
         verbose=False,
     ):
-        return NotImplementedError(
-            "This model type has not been updated for use with the new architecture."
-        )
-
         params = {}
 
-        # if global_center:
-        #     self.func = self.global_center_func
-        #     self.jacobian = self.global_center_jacobian
-
-        #     x0 = WPF.static_data["global_x0"]
-        #     y0 = WPF.static_data["global_y0"]
-        # else:
-        #     params["x center"] = Parameter(x0)
-        #     params["y center"] = Parameter(y0)
-        #     self.func = self.local_center_func
-
         self.probe_kernelFT = np.fft.fft2(probe_kernel)
+
+        if global_center:
+            params["x center"] = WPF.coordinate_model.params["x center"]
+            params["y center"] = WPF.coordinate_model.params["y center"]
+        else:
+            params["x center"] = Parameter(x0)
+            params["y center"] = Parameter(y0)
+
+        x0 = params["x center"].initial_value
+        y0 = params["y center"].initial_value
 
         params["ux"] = Parameter(ux)
         params["uy"] = Parameter(uy)
@@ -1250,16 +1253,8 @@ class KernelDiskLattice(WPFModel):
         self.xqArray = np.tile(np.fft.fftfreq(Q_Nx)[:, np.newaxis], (1, Q_Ny))
 
         for i, (u, v) in enumerate(zip(u_inds.ravel(), v_inds.ravel())):
-            x = (
-                WPF.static_data["global_x0"]
-                + (u * params["ux"].initial_value)
-                + (v * params["vx"].initial_value)
-            )
-            y = (
-                WPF.static_data["global_y0"]
-                + (u * params["uy"].initial_value)
-                + (v * params["vy"].initial_value)
-            )
+            x = x0 + (u * params["ux"].initial_value) + (v * params["vx"].initial_value)
+            y = y0 + (u * params["uy"].initial_value) + (v * params["vy"].initial_value)
             if [u, v] in exclude_indices:
                 delete_mask[i] = True
             elif (x < 0) or (x > Q_Nx) or (y < 0) or (y > Q_Ny):
@@ -1274,30 +1269,22 @@ class KernelDiskLattice(WPFModel):
         self.u_inds = self.u_inds[~delete_mask]
         self.v_inds = self.v_inds[~delete_mask]
 
-        self.func = self.global_center_func
-
         super().__init__(name, params, model_type=WPFModelType.LATTICE)
 
-    def global_center_func(self, DP: np.ndarray, *args, **kwargs) -> None:
-        # copy the global centers in the right place for the local center generator
-        self.local_center_func(
-            DP, kwargs["global_x0"], kwargs["global_y0"], *args, **kwargs
-        )
-
-    def local_center_func(self, DP: np.ndarray, *args, **kwargs) -> None:
-        x0 = args[0]
-        y0 = args[1]
-        ux = args[2]
-        uy = args[3]
-        vx = args[4]
-        vy = args[5]
+    def func(self, DP: np.ndarray, x_fit: np.ndarray, **static_data) -> None:
+        x0 = x[self.params["x center"].offset]
+        y0 = x[self.params["y center"].offset]
+        ux = x[self.params["ux"].offset]
+        uy = x[self.params["uy"].offset]
+        vx = x[self.params["vx"].offset]
+        vy = x[self.params["vy"].offset]
 
         for i, (u, v) in enumerate(zip(self.u_inds, self.v_inds)):
             x = x0 + (u * ux) + (v * vx)
             y = y0 + (u * uy) + (v * vy)
 
             DP += (
-                args[i + 6]
+                x_fit[params[f"[{u},{v}] Intensity"].offset]
                 * np.abs(
                     np.fft.ifft2(
                         self.probe_kernelFT
