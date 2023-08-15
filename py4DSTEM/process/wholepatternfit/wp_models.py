@@ -678,8 +678,6 @@ class SyntheticDiskMoire(WPFModel):
         Specified as initial_value, (initial_value, deviation), or
             (initial_value, lower_bound, upper_bound). See
             Parameter documentation for details.
-    lattice_b_search_range: int
-        Range of index values for lattice_b to test when finding the Moire unit cell.
     """
 
     def __init__(
@@ -695,15 +693,8 @@ class SyntheticDiskMoire(WPFModel):
         edge_width: list = None,
         refine_radius: bool = True,
         disk_radius: list = None,
-        lattice_b_search_range: int = 1,
         name: str = "Moire Lattice",
     ):
-        """
-        Parameters
-        ----------
-
-        lattice_a, lattice_b: SyntheticDiskLattice
-        """
         # ensure both models share the same center coordinate
         if (lattice_a.params["x center"] is not lattice_b.params["x center"]) or (
             lattice_a.params["y center"] is not lattice_b.params["y center"]
@@ -722,14 +713,14 @@ class SyntheticDiskMoire(WPFModel):
         lat_ab = self._get_parent_lattices(lattice_a, lattice_b)
 
         # pick the pairing that gives the smallest unit cell
-        imax = lattice_b_search_range
-        mx, my = np.mgrid[-imax : imax + 1, -imax : imax + 1]
-        test_peaks = np.stack([mx.ravel(), my.ravel()], axis=1)
+        mx, my = np.mgrid[-1 : 2, -1 : 2]
+        test_peaks_a = np.stack([mx.ravel(), my.ravel()], axis=1)
+        test_peaks_b = np.stack((lattice_b.u_inds, lattice_b.v_inds), axis=1)
         tests = np.stack(
             [
                 np.hstack((np.eye(2), np.vstack((b1, b2))))
-                for b1 in test_peaks
-                for b2 in test_peaks
+                for b1 in test_peaks_a
+                for b2 in test_peaks_b
                 if not np.allclose(b1, b2)
             ],
             axis=0,

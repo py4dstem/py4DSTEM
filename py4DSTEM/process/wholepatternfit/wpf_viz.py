@@ -61,13 +61,40 @@ def show_lattice_points(
     vmin=None,
     vmax=None,
     power=None,
+    show_vectors=True,
     crop_to_pattern=False,
     returnfig=False,
+    moire_origin_idx=[0,0,0,0],
     *args,
     **kwargs,
 ):
     """
     Plotting utility to show the initial lattice points.
+
+    Parameters
+    ----------
+    im: np.ndarray
+        Optional: Image to show, defaults to mean CBED
+    vmin, vmax: float
+        Intensity ranges for plotting im
+    power: float
+        Gamma level for showing im
+    show_vectors: bool
+        Flag to plot the lattice vectors
+    crop_to_pattern: bool
+        Flag to limit the field of view to the pattern area. If False,
+        spots outside the pattern are shown
+    returnfig: bool
+        If True, (fig,ax) are returned and plt.show() is not called
+    moire_origin_idx: list of length 4
+        Indices of peak on which to draw Moire vectors, written as
+        [a_u, a_v, b_u, b_v]
+    args, kwargs
+        Passed to plt.subplots
+
+    Returns
+    -------
+    fig,ax: If returnfig=True
     """
 
     if im is None:
@@ -102,13 +129,34 @@ def show_lattice_points(
         spots[:, 0] += m.params["x center"].initial_value
         spots[:, 1] += m.params["y center"].initial_value
 
-        ax.scatter(
+        axpts = ax.scatter(
             spots[:, 1],
             spots[:, 0],
             s=100,
             marker="x",
             label=m.name,
         )
+
+        if show_vectors:
+            ax.arrow(
+                m.params["y center"].initial_value, 
+                m.params["x center"].initial_value,
+                m.params["uy"].initial_value,
+                m.params["ux"].initial_value,
+                length_includes_head=True,
+                color=axpts.get_facecolor(),
+                width=1., 
+                )
+
+            ax.arrow(
+                m.params["y center"].initial_value, 
+                m.params["x center"].initial_value,
+                m.params["vy"].initial_value,
+                m.params["vx"].initial_value,
+                length_includes_head=True,
+                color=axpts.get_facecolor(),
+                width=1., 
+                )
 
     moires = [m for m in self.model if WPFModelType.MOIRE in m.model_type]
 
@@ -120,13 +168,38 @@ def show_lattice_points(
         spots[:, 0] += m.params["x center"].initial_value
         spots[:, 1] += m.params["y center"].initial_value
 
-        ax.scatter(
+        axpts = ax.scatter(
             spots[:, 1],
             spots[:, 0],
             s=100,
             marker="+",
             label=m.name,
         )
+
+        if show_vectors:
+            arrow_origin = np.array(moire_origin_idx) @ lat_ab
+            arrow_origin[0] += m.params["x center"].initial_value
+            arrow_origin[1] += m.params["y center"].initial_value
+
+            ax.arrow(
+                arrow_origin[1], 
+                arrow_origin[0],
+                lat_abm[4,1],
+                lat_abm[4,0],
+                length_includes_head=True,
+                color=axpts.get_facecolor(),
+                width=1., 
+                )
+
+            ax.arrow(
+                arrow_origin[1], 
+                arrow_origin[0],
+                lat_abm[5,1],
+                lat_abm[5,0],
+                length_includes_head=True,
+                color=axpts.get_facecolor(),
+                width=1., 
+                )
 
     ax.legend()
 
