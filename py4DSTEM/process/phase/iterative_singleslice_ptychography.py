@@ -1023,6 +1023,8 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
         q_lowpass,
         q_highpass,
         butterworth_order,
+        tv_denoise,
+        tv_denoise_weight,
         object_positivity,
         shrinkage_rad,
         object_mask,
@@ -1106,6 +1108,12 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
                 q_lowpass,
                 q_highpass,
                 butterworth_order,
+            )
+
+        if tv_denoise:
+            current_object = self._object_denoise_tv_pylops(
+                current_object,
+                tv_denoise_weight,
             )
 
         if shrinkage_rad > 0.0 or object_mask is not None:
@@ -1198,6 +1206,8 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
         q_lowpass: float = None,
         q_highpass: float = None,
         butterworth_order: float = 2,
+        tv_denoise_iter: int = np.inf,
+        tv_denoise_weight: float = None,
         object_positivity: bool = True,
         shrinkage_rad: float = 0.0,
         fix_potential_baseline: bool = True,
@@ -1618,6 +1628,8 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
                 q_lowpass=q_lowpass,
                 q_highpass=q_highpass,
                 butterworth_order=butterworth_order,
+                tv_denoise=a0 < tv_denoise_iter and tv_denoise_weight is not None,
+                tv_denoise_weight=tv_denoise_weight,
                 object_positivity=object_positivity,
                 shrinkage_rad=shrinkage_rad,
                 object_mask=self._object_fov_mask_inverse

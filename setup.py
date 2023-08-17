@@ -38,6 +38,7 @@ setup(
         'dask >= 2.3.0',
         'distributed >= 2.3.0',
         'emdfile >= 0.0.10',
+        'pylops >= 2.1.0'  
         ],
     extras_require={
         'ipyparallel': ['ipyparallel >= 6.2.4', 'dill >= 0.3.3'],

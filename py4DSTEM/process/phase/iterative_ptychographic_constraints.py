@@ -1,4 +1,5 @@
 import numpy as np
+import pylops
 from py4DSTEM.process.phase.utils import (
     array_slice,
     estimate_global_transformation_ransac,
@@ -7,6 +8,7 @@ from py4DSTEM.process.phase.utils import (
     regularize_probe_amplitude,
 )
 from py4DSTEM.process.utils import get_CoM
+import warnings
 
 
 class PtychographicConstraints:
@@ -182,6 +184,59 @@ class PtychographicConstraints:
             current_object = xp.real(current_object)
 
         return current_object
+
+    def _object_denoise_tv_pylops(self, current_object, weight):
+        """
+        Performs second order TV denoising along x and y
+
+        Parameters
+        ----------
+        current_object: np.ndarray
+            Current object estimate
+        weight : float, optional
+            Denoising weight. The greater `weight`, the more denoising (at
+            the expense of fidelity to `input`).
+        Returns
+        -------
+        constrained_object: np.ndarray
+            Constrained object estimate
+
+        """
+        xp = self._xp
+
+        if xp.iscomplexobj(current_object):
+            current_object_tv = current_object
+            warnings.warn(
+                ("tv_denoise currently for potential objects only"),
+                UserWarning,
+            )
+
+        else:
+            nx, ny = current_object.shape
+            niter_out = 40
+            niter_in = 1
+            Iop = pylops.Identity(nx * ny)
+            xy_laplacian = pylops.Laplacian(
+                (nx, ny), axes=(0, 1), edge=False, kind="backward"
+            )
+
+            l1_regs = [xy_laplacian]
+
+            current_object_tv = pylops.optimization.sparsity.splitbregman(
+                Op=Iop,
+                y=current_object.ravel(),
+                RegsL1=l1_regs,
+                niter_outer=niter_out,
+                niter_inner=niter_in,
+                epsRL1s=[weight],
+                tol=1e-4,
+                tau=1.0,
+                show=False,
+            )[0]
+
+            current_object_tv = current_object_tv.reshape(current_object.shape)
+
+        return current_object_tv
 
     def _object_denoise_tv_chambolle(
         self,
@@ -363,8 +418,8 @@ class PtychographicConstraints:
         xp = self._xp
         erf = self._erf
 
-        probe_intensity = xp.abs(current_probe) ** 2
-        #current_probe_sum = xp.sum(probe_intensity)
+        # probe_intensity = xp.abs(current_probe) ** 2
+        # current_probe_sum = xp.sum(probe_intensity)
 
         X = xp.fft.fftfreq(current_probe.shape[0])[:, None]
         Y = xp.fft.fftfreq(current_probe.shape[1])[None]
@@ -374,10 +429,10 @@ class PtychographicConstraints:
         tophat_mask = 0.5 * (1 - erf(sigma * r / (1 - r**2)))
 
         updated_probe = current_probe * tophat_mask
-        #updated_probe_sum = xp.sum(xp.abs(updated_probe) ** 2)
-        #normalization = xp.sqrt(current_probe_sum / updated_probe_sum)
+        # updated_probe_sum = xp.sum(xp.abs(updated_probe) ** 2)
+        # normalization = xp.sqrt(current_probe_sum / updated_probe_sum)
 
-        return updated_probe #* normalization
+        return updated_probe  # * normalization
 
     def _probe_fourier_amplitude_constraint(
         self,
@@ -406,7 +461,7 @@ class PtychographicConstraints:
         xp = self._xp
         asnumpy = self._asnumpy
 
-        #current_probe_sum = xp.sum(xp.abs(current_probe) ** 2)
+        # current_probe_sum = xp.sum(xp.abs(current_probe) ** 2)
         current_probe_fft = xp.fft.fft2(current_probe)
 
         updated_probe_fft, _, _, _ = regularize_probe_amplitude(
@@ -419,10 +474,10 @@ class PtychographicConstraints:
 
         updated_probe_fft = xp.asarray(updated_probe_fft)
         updated_probe = xp.fft.ifft2(updated_probe_fft)
-        #updated_probe_sum = xp.sum(xp.abs(updated_probe) ** 2)
-        #normalization = xp.sqrt(current_probe_sum / updated_probe_sum)
+        # updated_probe_sum = xp.sum(xp.abs(updated_probe) ** 2)
+        # normalization = xp.sqrt(current_probe_sum / updated_probe_sum)
 
-        return updated_probe #* normalization
+        return updated_probe  # * normalization
 
     def _probe_aperture_constraint(
         self,
@@ -444,16 +499,16 @@ class PtychographicConstraints:
         """
         xp = self._xp
 
-        #current_probe_sum = xp.sum(xp.abs(current_probe) ** 2)
+        # current_probe_sum = xp.sum(xp.abs(current_probe) ** 2)
         current_probe_fft_phase = xp.angle(xp.fft.fft2(current_probe))
 
         updated_probe = xp.fft.ifft2(
             xp.exp(1j * current_probe_fft_phase) * initial_probe_aperture
         )
-        #updated_probe_sum = xp.sum(xp.abs(updated_probe) ** 2)
-        #normalization = xp.sqrt(current_probe_sum / updated_probe_sum)
+        # updated_probe_sum = xp.sum(xp.abs(updated_probe) ** 2)
+        # normalization = xp.sqrt(current_probe_sum / updated_probe_sum)
 
-        return updated_probe #* normalization
+        return updated_probe  # * normalization
 
     def _probe_aberration_fitting_constraint(
         self,
