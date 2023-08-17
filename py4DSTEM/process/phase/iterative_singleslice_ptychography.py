@@ -1080,6 +1080,10 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
             Cut-off frequency in A^-1 for high-pass butterworth filter
         butterworth_order: float
             Butterworth filter order. Smaller gives a smoother filter
+        tv_denoise: bool
+            If True, applies TV denoising on object
+        tv_denoise_weight: float 
+            Denoising weight. The greater `weight`, the more denoising.
         object_positivity: bool
             If True, clips negative potential values
         shrinkage_rad: float
@@ -1294,6 +1298,10 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
             Cut-off frequency in A^-1 for high-pass butterworth filter
         butterworth_order: float
             Butterworth filter order. Smaller gives a smoother filter
+        tv_denoise_iter: int, optional
+            Number of iterations to run using tv denoise filter on object
+        tv_denoise_weight: float 
+            Denoising weight. The greater `weight`, the more denoising.
         object_positivity: bool, optional
             If True, forces object to be positive
         shrinkage_rad: float
