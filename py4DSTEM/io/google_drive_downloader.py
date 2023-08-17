@@ -238,9 +238,16 @@ def gdrive_download(
             f = file_ids[id_]
             filename = f[0]
             kwargs['id'] = f[1]
+        
+        # if its not in the list of files we expect
         else:
             filename = 'gdrivedownload.file' if filename is None else filename
-            kwargs['url'] = id_
+            # check if its a url
+            if id_.startswith('http')
+                kwargs['url'] = id_
+            # if its just a Google Drive string
+            else:
+                kwargs['id'] = id_
 
         # download
         kwargs['output'] = os.path.join(destination, filename)
