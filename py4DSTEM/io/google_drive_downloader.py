@@ -257,7 +257,7 @@ def gdrive_download(
                 # making http/https agnostic
                 elif 'drive.google.com/file/d/' in id_:
                     # warn the user the the url syntax was incorrect and this is making a guess
-                    warnings.warn('URL provided was not provided in the correct format https://drive.google.com/uc?id=<id>, attempting to interpret link and download the file. Most likely a URL format as this was provided in this format https://drive.google.com/file/d/<id>')
+                    warnings.warn('URL provided was not provided in the correct format https://drive.google.com/uc?id=<id>, attempting to interpret link and download the file. Most likely a URL with this format was provided https://drive.google.com/file/d/<id>')
                     # try stripping 
                     stripped_id = id_.split('/')[-1]
                     # Currently the length of the google drive IDs appears to always be 33 characters 
