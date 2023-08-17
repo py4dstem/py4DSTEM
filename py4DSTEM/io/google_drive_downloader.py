@@ -243,7 +243,7 @@ def gdrive_download(
         else:
             filename = 'gdrivedownload.file' if filename is None else filename
             # check if its a url
-            if id_.startswith('http')
+            if id_.startswith('http'):
                 kwargs['url'] = id_
             # if its just a Google Drive string
             else:
