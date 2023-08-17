@@ -8,6 +8,7 @@ from typing import Mapping, Sequence, Tuple, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
+import pylops
 from matplotlib.gridspec import GridSpec
 from mpl_toolkits.axes_grid1 import ImageGrid, make_axes_locatable
 from py4DSTEM.visualize.vis_special import Complex2RGB, add_colorbar_arg, show_complex
@@ -1450,6 +1451,70 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
 
         return current_object
 
+    def _object_denoise_tv_pylops(self, current_object, weights):
+        """
+        Performs second order TV denoising along x and y
+
+        Parameters
+        ----------
+        current_object: np.ndarray
+            Current object estimate
+        weights : [float, float]
+            Denoising weights[z weight, r weight]. The greater `weight`,
+            the more denoising.
+
+        Returns
+        -------
+        constrained_object: np.ndarray
+            Constrained object estimate
+
+        """
+        xp = self._xp
+
+        if xp.iscomplexobj(current_object):
+            current_object_tv = current_object
+            warnings.warn(
+                ("tv_denoise currently for potential objects only"),
+                UserWarning,
+            )
+
+        else:
+            # zero pad at top and bottom slice
+            pad_width = ((1, 1), (0, 0), (0, 0))
+            current_object = xp.pad(
+                current_object, pad_width=pad_width, mode="constant"
+            )
+            # run tv denoising
+            nz, nx, ny = current_object.shape
+            niter_out = 40
+            niter_in = 1
+            Iop = pylops.Identity(nx * ny * nz)
+            z_gradient = pylops.FirstDerivative(
+                (nz, nx, ny), axis=0, edge=False, kind="backward"
+            )
+            xy_laplacian = pylops.Laplacian(
+                (nz, nx, ny), axes=(1, 2), edge=False, kind="backward"
+            )
+            l1_regs = [z_gradient, xy_laplacian]
+
+            current_object_tv = pylops.optimization.sparsity.splitbregman(
+                Op=Iop,
+                y=current_object.ravel(),
+                RegsL1=l1_regs,
+                niter_outer=niter_out,
+                niter_inner=niter_in,
+                epsRL1s=weights,
+                tol=1e-4,
+                tau=1.0,
+                show=False,
+            )[0]
+
+            current_object_tv = current_object_tv.reshape(current_object.shape)
+
+            # remove padding
+
+        return current_object_tv[1:-1]
+
     def _constraints(
         self,
         current_object,
@@ -1482,9 +1547,11 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
         shrinkage_rad,
         object_mask,
         pure_phase_object,
+        tv_denoise_chambolle,
+        tv_denoise_weight_chambolle,
+        tv_denoise_pad_chambolle,
         tv_denoise,
-        tv_denoise_weight,
-        tv_denoise_pad,
+        tv_denoise_weights,
     ):
         """
         Ptychographic constraints operator.
@@ -1549,12 +1616,17 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
             If not None, used to calculate additional shrinkage using masked-mean of object
         pure_phase_object: bool
             If True, object amplitude is set to unity
-        tv_denoise: bool
+        tv_denoise_chambolle: bool
             If True, performs TV denoising along z
-        tv_denoise_weight: float
+        tv_denoise_weight_chambolle: float
             weight of tv denoising constraint
-        tv_denoise_pad: bool
+        tv_denoise_pad_chambolle: bool
             if True, pads object at top and bottom with zeros before applying denoising
+        tv_denoise: bool
+            If True, applies TV denoising on object
+        tv_denoise_weights: [float,float]
+            Denoising weights[z weight, r weight]. The greater `weight`,
+            the more denoising.
 
         Returns
         --------
@@ -1586,13 +1658,16 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
                 current_object, kz_regularization_gamma
             )
         elif tv_denoise:
-            if self._object_type == "complex":
-                raise NotImplementedError()
+            current_object = self._object_denoise_tv_pylops(
+                current_object,
+                tv_denoise_weights,
+            )
+        elif tv_denoise_chambolle:
             current_object = self._object_denoise_tv_chambolle(
                 current_object,
-                tv_denoise_weight,
+                tv_denoise_weight_chambolle,
                 axis=0,
-                pad_object=tv_denoise_pad,
+                pad_object=tv_denoise_pad_chambolle,
             )
 
         if shrinkage_rad > 0.0 or object_mask is not None:
@@ -1691,9 +1766,11 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
         shrinkage_rad: float = 0.0,
         fix_potential_baseline: bool = True,
         pure_phase_object_iter: int = 0,
+        tv_denoise_iter_chambolle=np.inf,
+        tv_denoise_weight_chambolle=None,
+        tv_denoise_pad_chambolle=True,
         tv_denoise_iter=np.inf,
-        tv_denoise_weight=None,
-        tv_denoise_pad=True,
+        tv_denoise_weights=None,
         switch_object_iter: int = np.inf,
         store_iterations: bool = False,
         progress_bar: bool = True,
@@ -1786,12 +1863,17 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
             If true, the potential mean outside the FOV is forced to zero at each iteration
         pure_phase_object_iter: int, optional
             Number of iterations where object amplitude is set to unity
-        tv_denoise_iter: bool
+        tv_denoise_iter_chambolle: bool
             Number of iterations with TV denoisining
-        tv_denoise_weight: float
+        tv_denoise_weight_chambolle: float
             weight of tv denoising constraint
-        tv_denoise_pad: bool
+        tv_denoise_pad_chambolle: bool
             if True, pads object at top and bottom with zeros before applying denoising
+        tv_denoise: bool
+            If True, applies TV denoising on object
+        tv_denoise_weights: [float,float]
+            Denoising weights[z weight, r weight]. The greater `weight`,
+            the more denoising.
         switch_object_iter: int, optional
             Iteration to switch object type between 'complex' and 'potential' or between
             'potential' and 'complex'
@@ -2134,9 +2216,12 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
                 else None,
                 pure_phase_object=a0 < pure_phase_object_iter
                 and self._object_type == "complex",
-                tv_denoise=a0 < tv_denoise_iter and tv_denoise_weight is not None,
-                tv_denoise_weight=tv_denoise_weight,
-                tv_denoise_pad=tv_denoise_pad,
+                tv_denoise_chambolle=a0 < tv_denoise_iter_chambolle
+                and tv_denoise_weight_chambolle is not None,
+                tv_denoise_weight_chambolle=tv_denoise_weight_chambolle,
+                tv_denoise_pad_chambolle=tv_denoise_pad_chambolle,
+                tv_denoise=a0 < tv_denoise_iter and tv_denoise_weights is not None,
+                tv_denoise_weights=tv_denoise_weights,
             )
 
             self.error_iterations.append(error.item())
