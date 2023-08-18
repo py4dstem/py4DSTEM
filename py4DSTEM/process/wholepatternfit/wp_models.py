@@ -1,9 +1,6 @@
-from inspect import signature
 from typing import Optional
 from enum import Flag, auto
 import numpy as np
-
-from pdb import set_trace
 
 
 class WPFModelType(Flag):
@@ -342,7 +339,7 @@ class GaussianRing(WPFModel):
         J[:, self.parans["y center"].offset] += (
             level
             * exp_expr
-            * (kwargs["yArray"] - x0)
+            * (kwargs["yArray"] - y0)
             * local_r
             / (sigma**2 * clipped_r)
         ).ravel()
@@ -713,7 +710,7 @@ class SyntheticDiskMoire(WPFModel):
         lat_ab = self._get_parent_lattices(lattice_a, lattice_b)
 
         # pick the pairing that gives the smallest unit cell
-        mx, my = np.mgrid[-1 : 2, -1 : 2]
+        mx, my = np.mgrid[-1:2, -1:2]
         test_peaks_a = np.stack([mx.ravel(), my.ravel()], axis=1)
         test_peaks_b = np.stack((lattice_b.u_inds, lattice_b.v_inds), axis=1)
         tests = np.stack(

@@ -681,9 +681,6 @@ def show(
             scalebar['space'] = space
             # determine good default scale bar fontsize
             if figax is not None:
-                # print(figax[0].figsize)
-                # size = figax[1].get_size_inches()
-                # ax_h = figax[1].bbox.transformed(figax[0].gca().transAxes).height
                 bbox = figax[1].get_window_extent()
                 dpi = figax[0].dpi
                 size = (
