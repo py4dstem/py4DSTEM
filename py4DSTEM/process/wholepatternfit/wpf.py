@@ -10,11 +10,10 @@ from py4DSTEM.process.wholepatternfit.wp_models import (
 from typing import Optional
 import numpy as np
 
-from scipy.optimize import least_squares, minimize
+from scipy.optimize import least_squares
 import matplotlib.pyplot as plt
 import matplotlib.colors as mpl_c
 from matplotlib.gridspec import GridSpec
-import warnings
 
 __all__ = ["WholePatternFit"]
 
@@ -276,13 +275,12 @@ class WholePatternFit:
         CyRd = mpl_c.LinearSegmentedColormap.from_list(
             "CyRd", ["#00ccff", "#ffffff", "#ff0000"]
         )
-        im = ax.matshow(
+        ax.matshow(
             err_im := -(DP - self.meanCBED),
             cmap=CyRd,
             vmin=-np.abs(err_im).max() / 4,
             vmax=np.abs(err_im).max() / 4,
         )
-        # fig.colorbar(im)
         ax.set_title("Error")
         ax.axis("off")
 
