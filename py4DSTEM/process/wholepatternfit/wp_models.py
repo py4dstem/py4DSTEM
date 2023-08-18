@@ -710,24 +710,38 @@ class SyntheticDiskMoire(WPFModel):
         lat_ab = self._get_parent_lattices(lattice_a, lattice_b)
 
         # pick the pairing that gives the smallest unit cell
-        mx, my = np.mgrid[-1:2, -1:2]
-        test_peaks_a = np.stack([mx.ravel(), my.ravel()], axis=1)
-        test_peaks_b = np.stack((lattice_b.u_inds, lattice_b.v_inds), axis=1)
+        test_peaks = np.stack((lattice_b.u_inds, lattice_b.v_inds), axis=1)
         tests = np.stack(
             [
                 np.hstack((np.eye(2), np.vstack((b1, b2))))
-                for b1 in test_peaks_a
-                for b2 in test_peaks_b
+                for b1 in test_peaks
+                for b2 in test_peaks
                 if not np.allclose(b1, b2)
             ],
             axis=0,
         )
-
-        # pick the combination that gives the smallest cell
-        # (it might be better to choose the cell that gives the smallest volume
-        # but then we have to handle the case of nearly-parallel vectors in
-        # the search space)
-        M = tests[np.argmin(np.max(np.linalg.norm(tests @ lat_ab, axis=-1), axis=-1))]
+        # choose only cells where the two unit vectors are not nearly parallel,
+        # and penalize cells with large discrepancy in lattce vector length
+        lat_m = tests @ lat_ab
+        a_dot_b = (
+            np.sum(lat_m[:, 0] * lat_m[:, 1], axis=1)
+            / np.minimum(
+                np.linalg.norm(lat_m[:, 0], axis=1), np.linalg.norm(lat_m[:, 1], axis=1)
+            )
+            ** 2
+        )
+        tests = tests[np.abs(a_dot_b) < 0.9] # this factor of 0.9 sets the parallel cutoff
+        # with the parallel vectors filtered, pick the cell with the smallest volume
+        lat_m = tests @ lat_ab
+        V = np.sum(
+            lat_m[:, 0]
+            * np.cross(
+                np.hstack((lat_m[:, 1], np.zeros((lat_m.shape[0],))[:, None])),
+                [0, 0, 1],
+            )[:, :2],
+            axis=1,
+        )
+        M = tests[np.argmin(np.abs(V))]
 
         # ensure the moire vectors are less 90 deg apart
         if np.arccos(
