@@ -1126,11 +1126,11 @@ class DataCube(
             name = 'gen_params',
             data = {
                 #'gen_func' : 
-                'threshold' : 0.25,
-                'distance_edge' : 4.0,
-                'include_edges' : True,
+                'threshold' : threshold,
+                'distance_edge' : distance_edge,
+                'include_edges' : include_edges,
                 'name' : "mask_beamstop",
-                'returncalc' : True,
+                'returncalc' : returncalc,
             }
         )
 
