@@ -64,7 +64,7 @@ def show_lattice_points(
     show_vectors=True,
     crop_to_pattern=False,
     returnfig=False,
-    moire_origin_idx=[0,0,0,0],
+    moire_origin_idx=[0, 0, 0, 0],
     *args,
     **kwargs,
 ):
@@ -139,24 +139,24 @@ def show_lattice_points(
 
         if show_vectors:
             ax.arrow(
-                m.params["y center"].initial_value, 
+                m.params["y center"].initial_value,
                 m.params["x center"].initial_value,
                 m.params["uy"].initial_value,
                 m.params["ux"].initial_value,
                 length_includes_head=True,
                 color=axpts.get_facecolor(),
-                width=1., 
-                )
+                width=1.0,
+            )
 
             ax.arrow(
-                m.params["y center"].initial_value, 
+                m.params["y center"].initial_value,
                 m.params["x center"].initial_value,
                 m.params["vy"].initial_value,
                 m.params["vx"].initial_value,
                 length_includes_head=True,
                 color=axpts.get_facecolor(),
-                width=1., 
-                )
+                width=1.0,
+            )
 
     moires = [m for m in self.model if WPFModelType.MOIRE in m.model_type]
 
@@ -182,24 +182,24 @@ def show_lattice_points(
             arrow_origin[1] += m.params["y center"].initial_value
 
             ax.arrow(
-                arrow_origin[1], 
+                arrow_origin[1],
                 arrow_origin[0],
-                lat_abm[4,1],
-                lat_abm[4,0],
+                lat_abm[4, 1],
+                lat_abm[4, 0],
                 length_includes_head=True,
                 color=axpts.get_facecolor(),
-                width=1., 
-                )
+                width=1.0,
+            )
 
             ax.arrow(
-                arrow_origin[1], 
+                arrow_origin[1],
                 arrow_origin[0],
-                lat_abm[5,1],
-                lat_abm[5,0],
+                lat_abm[5, 1],
+                lat_abm[5, 0],
                 length_includes_head=True,
                 color=axpts.get_facecolor(),
-                width=1., 
-                )
+                width=1.0,
+            )
 
     ax.legend()
 
