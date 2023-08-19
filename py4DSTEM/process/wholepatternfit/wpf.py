@@ -1,28 +1,28 @@
-from py4DSTEM import DataCube, RealSlice
-from emdfile import tqdmnd
-from py4DSTEM.process.wholepatternfit.wp_models import (
-    WPFModel,
-    _BaseModel,
-    WPFModelType,
-    Parameter,
-)
-
 from typing import Optional
-import numpy as np
 
-from scipy.optimize import least_squares
-import matplotlib.pyplot as plt
 import matplotlib.colors as mpl_c
+import matplotlib.pyplot as plt
+import numpy as np
+from emdfile import tqdmnd
 from matplotlib.gridspec import GridSpec
+from scipy.optimize import least_squares
+
+from py4DSTEM import DataCube, RealSlice
+from py4DSTEM.process.wholepatternfit.wp_models import (
+    Parameter,
+    WPFModel,
+    WPFModelType,
+    _BaseModel,
+)
 
 __all__ = ["WholePatternFit"]
 
 
 class WholePatternFit:
     from py4DSTEM.process.wholepatternfit.wpf_viz import (
-        show_model_grid,
-        show_lattice_points,
         show_fit_metrics,
+        show_lattice_points,
+        show_model_grid,
     )
 
     def __init__(

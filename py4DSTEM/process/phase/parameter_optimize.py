@@ -4,8 +4,6 @@ from typing import Callable, Union
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.gridspec import GridSpec
-from py4DSTEM.process.phase.iterative_base_class import PhaseReconstruction
-from py4DSTEM.process.phase.utils import AffineTransform
 from skopt import gp_minimize
 from skopt.plots import plot_convergence as skopt_plot_convergence
 from skopt.plots import plot_evaluations as skopt_plot_evaluations
@@ -14,6 +12,9 @@ from skopt.plots import plot_objective as skopt_plot_objective
 from skopt.space import Categorical, Integer, Real
 from skopt.utils import use_named_args
 from tqdm import tqdm
+
+from py4DSTEM.process.phase.iterative_base_class import PhaseReconstruction
+from py4DSTEM.process.phase.utils import AffineTransform
 
 
 class PtychographyOptimizer:

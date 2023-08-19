@@ -1,15 +1,22 @@
 # Defines the DataCube class, which stores 4D-STEM datacubes
 
-import numpy as np
-from scipy.interpolate import interp1d
-from scipy.ndimage import (binary_opening, binary_dilation,
-    distance_transform_edt, binary_fill_holes, gaussian_filter1d, gaussian_filter)
-from typing import Optional,Union
+from typing import Optional, Union
 
+import numpy as np
 from emdfile import Array, Metadata, Node, Root, tqdmnd
-from py4DSTEM.data import Data, Calibration
-from py4DSTEM.datacube.virtualimage import DataCubeVirtualImager
+from scipy.interpolate import interp1d
+from scipy.ndimage import (
+    binary_dilation,
+    binary_fill_holes,
+    binary_opening,
+    distance_transform_edt,
+    gaussian_filter,
+    gaussian_filter1d,
+)
+
+from py4DSTEM.data import Calibration, Data
 from py4DSTEM.datacube.virtualdiffraction import DataCubeVirtualDiffraction
+from py4DSTEM.datacube.virtualimage import DataCubeVirtualImager
 
 
 class DataCube(
@@ -17,7 +24,7 @@ class DataCube(
     Data,
     DataCubeVirtualImager,
     DataCubeVirtualDiffraction,
-    ):
+):
     """
     Storage and processing methods for 4D-STEM datasets.
     """
@@ -25,10 +32,10 @@ class DataCube(
     def __init__(
         self,
         data: np.ndarray,
-        name: Optional[str] = 'datacube',
-        slicelabels: Optional[Union[bool,list]] = None,
-        calibration: Optional[Union[Calibration,None]] = None,
-        ):
+        name: Optional[str] = "datacube",
+        slicelabels: Optional[Union[bool, list]] = None,
+        calibration: Optional[Union[Calibration, None]] = None,
+    ):
         """
         Accepts:
             data (np.ndarray): the data
@@ -45,23 +52,15 @@ class DataCube(
         # initialize as an Array
         Array.__init__(
             self,
-            data = data,
-            name = name,
-            units = 'pixel intensity',
-            dim_names = [
-                'Rx',
-                'Ry',
-                'Qx',
-                'Qy'
-            ],
-            slicelabels = slicelabels
+            data=data,
+            name=name,
+            units="pixel intensity",
+            dim_names=["Rx", "Ry", "Qx", "Qy"],
+            slicelabels=slicelabels,
         )
 
         # initialize as Data
-        Data.__init__(
-            self,
-            calibration
-        )
+        Data.__init__(self, calibration)
 
         # register with calibration
         self.calibration.register_target(self)
@@ -72,9 +71,6 @@ class DataCube(
         # polar coords
         self.polar = None
 
-
-
-
     def calibrate(self):
         """
         Calibrate the coordinate axes of the datacube. Using the calibrations
@@ -82,7 +78,7 @@ class DataCube(
         to the pixel size, units and origin positions, then updates the
         meshgrids representing Q and R space.
         """
-        assert(self.calibration is not None), "No calibration found!"
+        assert self.calibration is not None, "No calibration found!"
 
         # Get calibration values
         rpixsize = self.calibration.get_R_pixel_size()
@@ -90,85 +86,81 @@ class DataCube(
         qpixsize = self.calibration.get_Q_pixel_size()
         qpixunits = self.calibration.get_Q_pixel_units()
         origin = self.calibration.get_origin_mean()
-        if origin is None or origin==(None,None):
-            origin = (0,0)
+        if origin is None or origin == (None, None):
+            origin = (0, 0)
 
         # Calc dim vectors
-        dim_rx = np.arange(self.R_Nx)*rpixsize
-        dim_ry = np.arange(self.R_Ny)*rpixsize
-        dim_qx = -origin[0] + np.arange(self.Q_Nx)*qpixsize
-        dim_qy = -origin[1] + np.arange(self.Q_Ny)*qpixsize
+        dim_rx = np.arange(self.R_Nx) * rpixsize
+        dim_ry = np.arange(self.R_Ny) * rpixsize
+        dim_qx = -origin[0] + np.arange(self.Q_Nx) * qpixsize
+        dim_qy = -origin[1] + np.arange(self.Q_Ny) * qpixsize
 
         # Set dim vectors
-        self.set_dim(
-            0,
-            dim_rx,
-            units = rpixunits
-        )
-        self.set_dim(
-            1,
-            dim_ry,
-            units = rpixunits
-        )
-        self.set_dim(
-            2,
-            dim_qx,
-            units = qpixunits
-        )
-        self.set_dim(
-            3,
-            dim_qy,
-            units = qpixunits
-        )
+        self.set_dim(0, dim_rx, units=rpixunits)
+        self.set_dim(1, dim_ry, units=rpixunits)
+        self.set_dim(2, dim_qx, units=qpixunits)
+        self.set_dim(3, dim_qy, units=qpixunits)
 
         # Set meshgrids
-        self._qxx,self._qyy = np.meshgrid( dim_qx,dim_qy )
-        self._rxx,self._ryy = np.meshgrid( dim_rx,dim_ry )
+        self._qxx, self._qyy = np.meshgrid(dim_qx, dim_qy)
+        self._rxx, self._ryy = np.meshgrid(dim_rx, dim_ry)
 
-        self._qyy_raw,self._qxx_raw = np.meshgrid( np.arange(self.Q_Ny),np.arange(self.Q_Nx) )
-        self._ryy_raw,self._rxx_raw = np.meshgrid( np.arange(self.R_Ny),np.arange(self.R_Nx) )
-
-
+        self._qyy_raw, self._qxx_raw = np.meshgrid(
+            np.arange(self.Q_Ny), np.arange(self.Q_Nx)
+        )
+        self._ryy_raw, self._rxx_raw = np.meshgrid(
+            np.arange(self.R_Ny), np.arange(self.R_Nx)
+        )
 
     # coordinate meshgrids
     @property
     def rxx(self):
         return self._rxx
+
     @property
     def ryy(self):
         return self._ryy
+
     @property
     def qxx(self):
         return self._qxx
+
     @property
     def qyy(self):
         return self._qyy
+
     @property
     def rxx_raw(self):
         return self._rxx_raw
+
     @property
     def ryy_raw(self):
         return self._ryy_raw
+
     @property
     def qxx_raw(self):
         return self._qxx_raw
+
     @property
     def qyy_raw(self):
         return self._qyy_raw
 
     # coordinate meshgrids with shifted origin
-    def qxxs(self,rx,ry):
-        qx0_shift = self.calibration.get_qx0shift(rx,ry)
+    def qxxs(self, rx, ry):
+        qx0_shift = self.calibration.get_qx0shift(rx, ry)
         if qx0_shift is None:
-            raise Exception("Can't compute shifted meshgrid - origin shift is not defined")
+            raise Exception(
+                "Can't compute shifted meshgrid - origin shift is not defined"
+            )
         return self.qxx - qx0_shift
-    def qyys(self,rx,ry):
-        qy0_shift = self.calibration.get_qy0shift(rx,ry)
+
+    def qyys(self, rx, ry):
+        qy0_shift = self.calibration.get_qy0shift(rx, ry)
         if qy0_shift is None:
-            raise Exception("Can't compute shifted meshgrid - origin shift is not defined")
+            raise Exception(
+                "Can't compute shifted meshgrid - origin shift is not defined"
+            )
         return self.qyy - qy0_shift
-
-
 
     # shape properties
 
@@ -178,26 +170,30 @@ class DataCube(
     @property
     def R_Nx(self):
         return self.data.shape[0]
+
     @property
     def R_Ny(self):
         return self.data.shape[1]
+
     @property
     def Q_Nx(self):
         return self.data.shape[2]
+
     @property
     def Q_Ny(self):
         return self.data.shape[3]
 
     @property
     def Rshape(self):
-        return (self.data.shape[0],self.data.shape[1])
+        return (self.data.shape[0], self.data.shape[1])
+
     @property
     def Qshape(self):
-        return (self.data.shape[2],self.data.shape[3])
+        return (self.data.shape[2], self.data.shape[3])
 
     @property
     def R_N(self):
-        return self.R_Nx*self.R_Ny
+        return self.R_Nx * self.R_Ny
 
     # aliases
     qnx = Q_Nx
@@ -208,14 +204,13 @@ class DataCube(
     qshape = Qshape
     rn = R_N
 
-
-
     ## pixel size / units
 
-    # Q 
+    # Q
     @property
     def Q_pixel_size(self):
         return self.calibration.get_Q_pixel_size()
+
     @property
     def Q_pixel_units(self):
         return self.calibration.get_Q_pixel_units()
@@ -224,6 +219,7 @@ class DataCube(
     @property
     def R_pixel_size(self):
         return self.calibration.get_R_pixel_size()
+
     @property
     def R_pixel_units(self):
         return self.calibration.get_R_pixel_units()
@@ -234,62 +230,31 @@ class DataCube(
     rpixsize = R_pixel_size
     rpixunit = R_pixel_units
 
-
-
-
-
-
     def copy(self):
         """
         Copys datacube
         """
         from py4DSTEM import DataCube
+
         new_datacube = DataCube(
-            data = self.data.copy(),
-            name = self.name,
-            calibration = self.calibration.copy(),
-            slicelabels = self.slicelabels,
+            data=self.data.copy(),
+            name=self.name,
+            calibration=self.calibration.copy(),
+            slicelabels=self.slicelabels,
         )
 
-        Qpixsize  = new_datacube.calibration.get_Q_pixel_size()
+        Qpixsize = new_datacube.calibration.get_Q_pixel_size()
         Qpixunits = new_datacube.calibration.get_Q_pixel_units()
-        Rpixsize  = new_datacube.calibration.get_R_pixel_size()
+        Rpixsize = new_datacube.calibration.get_R_pixel_size()
         Rpixunits = new_datacube.calibration.get_R_pixel_units()
 
-        new_datacube.set_dim(
-            0,
-            [0,Rpixsize],
-            units = Rpixunits,
-            name = 'Rx'
-        )
-        new_datacube.set_dim(
-            1,
-            [0,Rpixsize],
-            units = Rpixunits,
-            name = 'Ry'
-        )
+        new_datacube.set_dim(0, [0, Rpixsize], units=Rpixunits, name="Rx")
+        new_datacube.set_dim(1, [0, Rpixsize], units=Rpixunits, name="Ry")
 
-        new_datacube.set_dim(
-            2,
-            [0,Qpixsize],
-            units = Qpixunits,
-            name = 'Qx'
-        )
-        new_datacube.set_dim(
-            3,
-            [0,Qpixsize],
-            units = Qpixunits,
-            name = 'Qy'
-        )
+        new_datacube.set_dim(2, [0, Qpixsize], units=Qpixunits, name="Qx")
+        new_datacube.set_dim(3, [0, Qpixsize], units=Qpixunits, name="Qy")
 
         return new_datacube
-
-
-
-
-
-
-
 
     # I/O
 
@@ -297,9 +262,8 @@ class DataCube(
 
     # read
     @classmethod
-    def _get_constructor_args(cls,group):
-        """ Construct a datacube with no calibration / metadata
-        """
+    def _get_constructor_args(cls, group):
+        """Construct a datacube with no calibration / metadata"""
         # We only need some of the Array constructors;
         # dim vector/units are passed through when Calibration
         # is loaded, and the runtim dim vectors are then set
@@ -307,56 +271,42 @@ class DataCube(
         ar_args = Array._get_constructor_args(group)
 
         args = {
-            'data': ar_args['data'],
-            'name': ar_args['name'],
-            'slicelabels': ar_args['slicelabels'],
-            'calibration': None
+            "data": ar_args["data"],
+            "name": ar_args["name"],
+            "slicelabels": ar_args["slicelabels"],
+            "calibration": None,
         }
 
         return args
 
-
-    def _add_root_links(self,group):
-        """ When reading from file, link to calibration metadata,
+    def _add_root_links(self, group):
+        """When reading from file, link to calibration metadata,
         then use it to populate the datacube dim vectors
         """
         # Link to the datacube
         self.calibration._datacube = self
 
         # Populate dim vectors
-        self.calibration.set_Q_pixel_size( self.calibration.get_Q_pixel_size() )
-        self.calibration.set_R_pixel_size( self.calibration.get_R_pixel_size() )
-        self.calibration.set_Q_pixel_units( self.calibration.get_Q_pixel_units() )
-        self.calibration.set_R_pixel_units( self.calibration.get_R_pixel_units() )
+        self.calibration.set_Q_pixel_size(self.calibration.get_Q_pixel_size())
+        self.calibration.set_R_pixel_size(self.calibration.get_R_pixel_size())
+        self.calibration.set_Q_pixel_units(self.calibration.get_Q_pixel_units())
+        self.calibration.set_R_pixel_units(self.calibration.get_R_pixel_units())
 
         return
 
-
-
-
     # Class methods
 
-    def add(
-        self,
-        data,
-        name = ''
-        ):
+    def add(self, data, name=""):
         """
         Adds a block of data to the DataCube's tree. If `data` is an instance of
         an EMD/py4DSTEM class, add it to the tree.  If it's a numpy array,
         turn it into an Array instance, then save to the tree.
         """
         if isinstance(data, np.ndarray):
-            data = Array(
-                data = data,
-                name = name
-            )
-        self.attach( data )
+            data = Array(data=data, name=name)
+        self.attach(data)
 
-    def set_scan_shape(
-        self,
-        Rshape
-        ):
+    def set_scan_shape(self, Rshape):
         """
         Reshape the data given the real space scan shape.
 
@@ -364,45 +314,39 @@ class DataCube(
             Rshape (2-tuple)
         """
         from py4DSTEM.preprocess import set_scan_shape
-        assert len(Rshape)==2, "Rshape must have a length of 2"
-        d = set_scan_shape(self,Rshape[0],Rshape[1])
+
+        assert len(Rshape) == 2, "Rshape must have a length of 2"
+        d = set_scan_shape(self, Rshape[0], Rshape[1])
         return d
 
-
-    def swap_RQ(
-        self
-        ):
+    def swap_RQ(self):
         """
         Swaps the first and last two dimensions of the 4D datacube.
         """
         from py4DSTEM.preprocess import swap_RQ
+
         d = swap_RQ(self)
         return d
 
-    def swap_Rxy(
-        self
-        ):
+    def swap_Rxy(self):
         """
         Swaps the real space x and y coordinates.
         """
         from py4DSTEM.preprocess import swap_Rxy
+
         d = swap_Rxy(self)
         return d
 
-    def swap_Qxy(
-        self
-        ):
+    def swap_Qxy(self):
         """
         Swaps the diffraction space x and y coordinates.
         """
         from py4DSTEM.preprocess import swap_Qxy
+
         d = swap_Qxy(self)
         return d
 
-    def crop_Q(
-        self,
-        ROI
-        ):
+    def crop_Q(self, ROI):
         """
         Crops the data in diffraction space about the region specified by ROI.
 
@@ -410,14 +354,12 @@ class DataCube(
             ROI (4-tuple): Specifies (Qx_min,Qx_max,Qy_min,Qy_max)
         """
         from py4DSTEM.preprocess import crop_data_diffraction
-        assert len(ROI)==4, "Crop region `ROI` must have length 4"
-        d = crop_data_diffraction(self,ROI[0],ROI[1],ROI[2],ROI[3])
+
+        assert len(ROI) == 4, "Crop region `ROI` must have length 4"
+        d = crop_data_diffraction(self, ROI[0], ROI[1], ROI[2], ROI[3])
         return d
 
-    def crop_R(
-        self,
-        ROI
-        ):
+    def crop_R(self, ROI):
         """
         Crops the data in real space about the region specified by ROI.
 
@@ -425,15 +367,12 @@ class DataCube(
             ROI (4-tuple): Specifies (Rx_min,Rx_max,Ry_min,Ry_max)
         """
         from py4DSTEM.preprocess import crop_data_real
-        assert len(ROI)==4, "Crop region `ROI` must have length 4"
-        d = crop_data_real(self,ROI[0],ROI[1],ROI[2],ROI[3])
+
+        assert len(ROI) == 4, "Crop region `ROI` must have length 4"
+        d = crop_data_real(self, ROI[0], ROI[1], ROI[2], ROI[3])
         return d
 
-    def bin_Q(
-        self,
-        N,
-        dtype = None
-        ):
+    def bin_Q(self, N, dtype=None):
         """
         Bins the data in diffraction space by bin factor N
 
@@ -450,14 +389,11 @@ class DataCube(
         datacube : DataCube
         """
         from py4DSTEM.preprocess import bin_data_diffraction
-        d = bin_data_diffraction(self,N,dtype)
+
+        d = bin_data_diffraction(self, N, dtype)
         return d
 
-    def pad_Q(
-        self,
-        N = None,
-        output_size = None
-        ):
+    def pad_Q(self, N=None, output_size=None):
         """
         Pads the data in diffraction space by pad factor N, or to match output_size.
 
@@ -466,15 +402,11 @@ class DataCube(
             output_size ((int,int)): the padded output size
         """
         from py4DSTEM.preprocess import pad_data_diffraction
-        d = pad_data_diffraction(self,pad_factor=N,output_size=output_size)
+
+        d = pad_data_diffraction(self, pad_factor=N, output_size=output_size)
         return d
 
-    def resample_Q(
-        self,
-        N = None,
-        output_size = None,
-        method='bilinear'
-        ):
+    def resample_Q(self, N=None, output_size=None, method="bilinear"):
         """
         Resamples the data in diffraction space by resampling factor N, or to match output_size,
         using either 'fourier' or 'bilinear' interpolation.
@@ -485,14 +417,13 @@ class DataCube(
             method (str): 'fourier' or 'bilinear' (default)
         """
         from py4DSTEM.preprocess import resample_data_diffraction
-        d = resample_data_diffraction(self,resampling_factor=N,output_size=output_size,method=method)
+
+        d = resample_data_diffraction(
+            self, resampling_factor=N, output_size=output_size, method=method
+        )
         return d
 
-    def bin_Q_mmap(
-        self,
-        N,
-        dtype=np.float32
-        ):
+    def bin_Q_mmap(self, N, dtype=np.float32):
         """
         Bins the data in diffraction space by bin factor N for memory mapped data
 
@@ -501,13 +432,11 @@ class DataCube(
             dtype: the data type
         """
         from py4DSTEM.preprocess import bin_data_mmap
-        d = bin_data_mmap(self,N)
+
+        d = bin_data_mmap(self, N)
         return d
 
-    def bin_R(
-        self,
-        N
-        ):
+    def bin_R(self, N):
         """
         Bins the data in real space by bin factor N
 
@@ -515,13 +444,11 @@ class DataCube(
             N (int): the binning factor
         """
         from py4DSTEM.preprocess import bin_data_real
-        d = bin_data_real(self,N)
+
+        d = bin_data_real(self, N)
         return d
 
-    def thin_R(
-        self,
-        N
-        ):
+    def thin_R(self, N):
         """
         Reduces the data in real space by skipping every N patterns in the x and y directions.
 
@@ -529,15 +456,11 @@ class DataCube(
             N (int): the thinning factor
         """
         from py4DSTEM.preprocess import thin_data_real
-        d = thin_data_real(self,N)
+
+        d = thin_data_real(self, N)
         return d
 
-    def filter_hot_pixels(
-        self,
-        thresh,
-        ind_compare=1,
-        return_mask=False
-        ):
+    def filter_hot_pixels(self, thresh, ind_compare=1, return_mask=False):
         """
         This function performs pixel filtering to remove hot / bright pixels. We first compute a moving local ordering filter,
         applied to the mean diffraction image. This ordering filter will return a single value from the local sorted intensity
@@ -556,6 +479,7 @@ class DataCube(
             mask (optional, boolean Array) the bad pixel mask
         """
         from py4DSTEM.preprocess import filter_hot_pixels
+
         d = filter_hot_pixels(
             self,
             thresh,
@@ -564,21 +488,19 @@ class DataCube(
         )
         return d
 
-
-
     # Probe
 
     def get_vacuum_probe(
         self,
-        ROI = None,
-        align = True,
-        mask = None,
-        threshold = 0.2,
-        expansion = 12,
-        opening = 3,
-        verbose = False,
-        returncalc = True
-        ):
+        ROI=None,
+        align=True,
+        mask=None,
+        threshold=0.2,
+        expansion=12,
+        opening=3,
+        verbose=False,
+        returncalc=True,
+    ):
         """
         Computes a vacuum probe.
 
@@ -620,19 +542,19 @@ class DataCube(
         probe : Probe, optional
             the vacuum probe
         """
-        from py4DSTEM.process.utils import get_shifted_ar, get_shift
         from py4DSTEM.braggvectors import Probe
+        from py4DSTEM.process.utils import get_shift, get_shifted_ar
 
         # parse region to use
         if ROI is None:
-            ROI = np.ones(self.Rshape,dtype=bool)
-        elif isinstance(ROI,tuple):
-            assert(len(ROI)==4), "if ROI is a tuple must be length 4"
-            _ROI = np.ones(self.Rshape,dtype=bool)
-            ROI = _ROI[ROI[0]:ROI[1],ROI[2]:ROI[3]]
+            ROI = np.ones(self.Rshape, dtype=bool)
+        elif isinstance(ROI, tuple):
+            assert len(ROI) == 4, "if ROI is a tuple must be length 4"
+            _ROI = np.ones(self.Rshape, dtype=bool)
+            ROI = _ROI[ROI[0] : ROI[1], ROI[2] : ROI[3]]
         else:
-            assert(isinstance(ROI,np.ndarray))
-            assert(ROI.shape == self.Rshape)
+            assert isinstance(ROI, np.ndarray)
+            assert ROI.shape == self.Rshape
         xy = np.vstack(np.nonzero(ROI))
         length = xy.shape[1]
 
@@ -640,22 +562,30 @@ class DataCube(
         if mask is None:
             mask = 1
         else:
-            assert(mask.shape == self.Qshape)
+            assert mask.shape == self.Qshape
 
         # compute average probe
-        probe = self.data[xy[0,0],xy[1,0],:,:]
-        for n in tqdmnd(range(1,length)):
-            curr_DP = self.data[xy[0,n],xy[1,n],:,:] * mask
+        probe = self.data[xy[0, 0], xy[1, 0], :, :]
+        for n in tqdmnd(range(1, length)):
+            curr_DP = self.data[xy[0, n], xy[1, n], :, :] * mask
             if align:
-                xshift,yshift = get_shift(probe, curr_DP)
+                xshift, yshift = get_shift(probe, curr_DP)
                 curr_DP = get_shifted_ar(curr_DP, xshift, yshift)
-            probe = probe*(n-1)/n + curr_DP/n
+            probe = probe * (n - 1) / n + curr_DP / n
 
         # mask
-        mask = probe > np.max(probe)*threshold
+        mask = probe > np.max(probe) * threshold
         mask = binary_opening(mask, iterations=opening)
         mask = binary_dilation(mask, iterations=1)
-        mask = np.cos((np.pi/2)*np.minimum(distance_transform_edt(np.logical_not(mask)) / expansion, 1))**2
+        mask = (
+            np.cos(
+                (np.pi / 2)
+                * np.minimum(
+                    distance_transform_edt(np.logical_not(mask)) / expansion, 1
+                )
+            )
+            ** 2
+        )
         probe *= mask
 
         # make a probe, add to tree, and return
@@ -664,19 +594,17 @@ class DataCube(
         if returncalc:
             return probe
 
-
-
     def get_probe_size(
         self,
-        dp = None,
+        dp=None,
         thresh_lower=0.01,
         thresh_upper=0.99,
         N=100,
-        plot = False,
-        returncal = True,
-        write_to_cal = True,
+        plot=False,
+        returncal=True,
+        write_to_cal=True,
         **kwargs,
-        ):
+    ):
         """
         Gets the center and radius of the probe in the diffraction plane.
 
@@ -718,24 +646,26 @@ class DataCube(
                 * **x0**: *(float)* the x position of the central disk center
                 * **y0**: *(float)* the y position of the central disk center
         """
-        #perform computation        
+        # perform computation
         from py4DSTEM.process.calibration import get_probe_size
 
         if dp is None:
-            assert('dp_mean' in self.treekeys), "calculate .get_dp_mean() or pass a `dp` arg"
-            DP = self.tree( 'dp_mean' ).data
+            assert (
+                "dp_mean" in self.treekeys
+            ), "calculate .get_dp_mean() or pass a `dp` arg"
+            DP = self.tree("dp_mean").data
         elif type(dp) == str:
-            assert(dp in self.treekeys), f"mode {dp} not found in the tree"
-            DP = self.tree( dp )
+            assert dp in self.treekeys, f"mode {dp} not found in the tree"
+            DP = self.tree(dp)
         elif type(dp) == np.ndarray:
-            assert(dp.shape == self.Qshape), "must be a diffraction space shape 2D array"
+            assert dp.shape == self.Qshape, "must be a diffraction space shape 2D array"
             DP = dp
 
         x = get_probe_size(
             DP,
-            thresh_lower = thresh_lower,
-            thresh_upper = thresh_upper,
-            N = N,
+            thresh_lower=thresh_lower,
+            thresh_upper=thresh_upper,
+            N=N,
         )
 
         # try to add to calibration
@@ -743,62 +673,50 @@ class DataCube(
             try:
                 self.calibration.set_probe_param(x)
             except AttributeError:
-                raise Exception('writing to calibrations were requested, but could not be completed')
+                raise Exception(
+                    "writing to calibrations were requested, but could not be completed"
+                )
 
-        #plot results 
+        # plot results
         if plot:
             from py4DSTEM.visualize import show_circles
-            show_circles(
-                DP,
-                (x[1], x[2]),
-                x[0],
-                vmin = 0,
-                vmax = 1,
-                **kwargs
-            )
+
+            show_circles(DP, (x[1], x[2]), x[0], vmin=0, vmax=1, **kwargs)
 
         # return
         if returncal:
             return x
 
-
     # Bragg disks
 
     def find_Bragg_disks(
         self,
-
         template,
-        data = None,
-
-        radial_bksb = False,
-        filter_function = None,
-
-        corrPower = 1,
-        sigma = None,
-        sigma_dp = 0,
-        sigma_cc = 2,
-        subpixel = 'multicorr',
-        upsample_factor = 16,
-
-        minAbsoluteIntensity = 0,
-        minRelativeIntensity = 0.005,
-        relativeToPeak = 0,
-        minPeakSpacing = 60,
-        edgeBoundary = 20,
-        maxNumPeaks = 70,
-
-        CUDA = False,
-        CUDA_batched = True,
-        distributed = None,
-
-        ML = False,
-        ml_model_path = None,
-        ml_num_attempts = 1,
-        ml_batch_size = 8,
-
-        name = 'braggvectors',
-        returncalc = True,
-        ):
+        data=None,
+        radial_bksb=False,
+        filter_function=None,
+        corrPower=1,
+        sigma=None,
+        sigma_dp=0,
+        sigma_cc=2,
+        subpixel="multicorr",
+        upsample_factor=16,
+        minAbsoluteIntensity=0,
+        minRelativeIntensity=0.005,
+        relativeToPeak=0,
+        minPeakSpacing=60,
+        edgeBoundary=20,
+        maxNumPeaks=70,
+        CUDA=False,
+        CUDA_batched=True,
+        distributed=None,
+        ML=False,
+        ml_model_path=None,
+        ml_num_attempts=1,
+        ml_batch_size=8,
+        name="braggvectors",
+        returncalc=True,
+    ):
         """
         Finds the Bragg disks in the diffraction patterns represented by `data` by
         cross/phase correlatin with `template`.
@@ -946,98 +864,88 @@ class DataCube(
         elif isinstance(data, tuple):
             x = self, data[0], data[1]
         elif isinstance(data, np.ndarray):
-            assert data.dtype == bool, 'array must be boolean'
-            assert data.shape == self.Rshape, 'array must be Rspace shaped'
-            x = self.data[data,:,:]
+            assert data.dtype == bool, "array must be boolean"
+            assert data.shape == self.Rshape, "array must be Rspace shaped"
+            x = self.data[data, :, :]
         else:
-            raise Exception(f'unexpected type for `data` {type(data)}')
-
+            raise Exception(f"unexpected type for `data` {type(data)}")
 
         # compute
         peaks = find_Bragg_disks(
-            data = x,
-            template = template,
-
-            radial_bksb = radial_bksb,
-            filter_function = filter_function,
-
-            corrPower = corrPower,
-            sigma_dp = sigma_dp,
-            sigma_cc = sigma_cc,
-            subpixel = subpixel,
-            upsample_factor = upsample_factor,
-
-            minAbsoluteIntensity = minAbsoluteIntensity,
-            minRelativeIntensity = minRelativeIntensity,
-            relativeToPeak = relativeToPeak,
-            minPeakSpacing = minPeakSpacing,
-            edgeBoundary = edgeBoundary,
-            maxNumPeaks = maxNumPeaks,
-
-            CUDA = CUDA,
-            CUDA_batched = CUDA_batched,
-            distributed = distributed,
-            ML = ML,
-            ml_model_path = ml_model_path,
-            ml_num_attempts = ml_num_attempts,
-            ml_batch_size = ml_batch_size,
+            data=x,
+            template=template,
+            radial_bksb=radial_bksb,
+            filter_function=filter_function,
+            corrPower=corrPower,
+            sigma_dp=sigma_dp,
+            sigma_cc=sigma_cc,
+            subpixel=subpixel,
+            upsample_factor=upsample_factor,
+            minAbsoluteIntensity=minAbsoluteIntensity,
+            minRelativeIntensity=minRelativeIntensity,
+            relativeToPeak=relativeToPeak,
+            minPeakSpacing=minPeakSpacing,
+            edgeBoundary=edgeBoundary,
+            maxNumPeaks=maxNumPeaks,
+            CUDA=CUDA,
+            CUDA_batched=CUDA_batched,
+            distributed=distributed,
+            ML=ML,
+            ml_model_path=ml_model_path,
+            ml_num_attempts=ml_num_attempts,
+            ml_batch_size=ml_batch_size,
         )
 
-        if isinstance(peaks,Node):
+        if isinstance(peaks, Node):
 
             # add metadata
             peaks.name = name
             peaks.metadata = Metadata(
-                name = 'gen_params',
-                data = {
-                    #'gen_func' : 
-                    'template' : template,
-                    'filter_function' : filter_function,
-                    'corrPower' : corrPower,
-                    'sigma_dp' : sigma_dp,
-                    'sigma_cc' : sigma_cc,
-                    'subpixel' : subpixel,
-                    'upsample_factor' : upsample_factor,
-                    'minAbsoluteIntensity' : minAbsoluteIntensity,
-                    'minRelativeIntensity' : minRelativeIntensity,
-                    'relativeToPeak' : relativeToPeak,
-                    'minPeakSpacing' : minPeakSpacing,
-                    'edgeBoundary' : edgeBoundary,
-                    'maxNumPeaks' : maxNumPeaks,
-                    'CUDA' : CUDA,
-                    'CUDA_batched' : CUDA_batched,
-                    'distributed' : distributed,
-                    'ML' : ML,
-                    'ml_model_path' : ml_model_path,
-                    'ml_num_attempts' : ml_num_attempts,
-                    'ml_batch_size' : ml_batch_size,
-
-                }
+                name="gen_params",
+                data={
+                    #'gen_func' :
+                    "template": template,
+                    "filter_function": filter_function,
+                    "corrPower": corrPower,
+                    "sigma_dp": sigma_dp,
+                    "sigma_cc": sigma_cc,
+                    "subpixel": subpixel,
+                    "upsample_factor": upsample_factor,
+                    "minAbsoluteIntensity": minAbsoluteIntensity,
+                    "minRelativeIntensity": minRelativeIntensity,
+                    "relativeToPeak": relativeToPeak,
+                    "minPeakSpacing": minPeakSpacing,
+                    "edgeBoundary": edgeBoundary,
+                    "maxNumPeaks": maxNumPeaks,
+                    "CUDA": CUDA,
+                    "CUDA_batched": CUDA_batched,
+                    "distributed": distributed,
+                    "ML": ML,
+                    "ml_model_path": ml_model_path,
+                    "ml_num_attempts": ml_num_attempts,
+                    "ml_batch_size": ml_batch_size,
+                },
             )
 
             # add to tree
             if data is None:
-                self.attach( peaks )
+                self.attach(peaks)
 
         # return
         if returncalc:
             return peaks
 
-
-
-
-
     def get_beamstop_mask(
         self,
-        threshold = 0.25,
-        distance_edge = 2.0,
-        include_edges = True,
-        sigma = 0,
-        use_max_dp = False,
-        scale_radial = None,
-        name = "mask_beamstop",
-        returncalc = True,
-        ):
+        threshold=0.25,
+        distance_edge=2.0,
+        include_edges=True,
+        sigma=0,
+        use_max_dp=False,
+        scale_radial=None,
+        name="mask_beamstop",
+        returncalc=True,
+    ):
         """
         This function uses the mean diffraction pattern plus a threshold to
         create a beamstop mask.
@@ -1067,7 +975,7 @@ class DataCube(
             x = np.arange(self.data.shape[2]) * 2.0 / self.data.shape[2]
             y = np.arange(self.data.shape[3]) * 2.0 / self.data.shape[3]
             ya, xa = np.meshgrid(y - np.mean(y), x - np.mean(x))
-            im_scale = 1.0 + np.sqrt(xa**2 + ya**2)*scale_radial
+            im_scale = 1.0 + np.sqrt(xa**2 + ya**2) * scale_radial
 
         # Get image for beamstop mask
         if use_max_dp:
@@ -1075,11 +983,11 @@ class DataCube(
             #     self.get_dp_max();
             # im = self.tree["dp_max"].data.astype('float')
             if not "dp_max" in self._branch.keys():
-                self.get_dp_max();
-            im = self.tree("dp_max").data.copy().astype('float')
+                self.get_dp_max()
+            im = self.tree("dp_max").data.copy().astype("float")
         else:
             if not "dp_mean" in self._branch.keys():
-                self.get_dp_mean();
+                self.get_dp_mean()
             im = self.tree("dp_mean").data.copy()
 
             # if not "dp_mean" in self.tree.keys():
@@ -1088,15 +996,15 @@ class DataCube(
 
         # smooth and scale if needed
         if sigma > 0.0:
-            im = gaussian_filter(im, sigma, mode='nearest')
+            im = gaussian_filter(im, sigma, mode="nearest")
         if scale_radial is not None:
             im *= im_scale
 
         # Calculate beamstop mask
         int_sort = np.sort(im.ravel())
-        ind = np.round(np.clip(
-                int_sort.shape[0]*threshold,
-                0,int_sort.shape[0])).astype('int')
+        ind = np.round(
+            np.clip(int_sort.shape[0] * threshold, 0, int_sort.shape[0])
+        ).astype("int")
         intensity_threshold = int_sort[ind]
         mask_beamstop = im >= intensity_threshold
 
@@ -1106,32 +1014,28 @@ class DataCube(
 
         # Edges
         if include_edges:
-            mask_beamstop[0,:] = False
-            mask_beamstop[:,0] = False
-            mask_beamstop[-1,:] = False
-            mask_beamstop[:,-1] = False
-
+            mask_beamstop[0, :] = False
+            mask_beamstop[:, 0] = False
+            mask_beamstop[-1, :] = False
+            mask_beamstop[:, -1] = False
 
         # Expand mask
         mask_beamstop = distance_transform_edt(mask_beamstop) < distance_edge
 
         # Wrap beamstop mask in a class
-        x = Array(
-            data = mask_beamstop,
-            name = name
-        )
+        x = Array(data=mask_beamstop, name=name)
 
         # Add metadata
         x.metadata = Metadata(
-            name = 'gen_params',
-            data = {
-                #'gen_func' : 
-                'threshold' : threshold,
-                'distance_edge' : distance_edge,
-                'include_edges' : include_edges,
-                'name' : "mask_beamstop",
-                'returncalc' : returncalc,
-            }
+            name="gen_params",
+            data={
+                #'gen_func' :
+                "threshold": threshold,
+                "distance_edge": distance_edge,
+                "include_edges": include_edges,
+                "name": "mask_beamstop",
+                "returncalc": returncalc,
+            },
         )
 
         # Add to tree
@@ -1141,14 +1045,7 @@ class DataCube(
         if returncalc:
             return mask_beamstop
 
-
-
-    def get_radial_bkgrnd(
-        self,
-        rx,
-        ry,
-        sigma = 2
-    ):
+    def get_radial_bkgrnd(self, rx, ry, sigma=2):
         """
         Computes and returns a background image for the diffraction
         pattern at (rx,ry), populated by radial rings of constant intensity
@@ -1171,52 +1068,41 @@ class DataCube(
             The radial background
         """
         # ensure a polar cube and origin exist
-        assert(self.polar is not None), "No polar datacube found!"
-        assert(self.calibration.get_origin() is not None), "No origin found!"
+        assert self.polar is not None, "No polar datacube found!"
+        assert self.calibration.get_origin() is not None, "No origin found!"
 
         # get the 1D median background
-        bkgrd_ma_1d = np.ma.median( self.polar.data[rx,ry], axis=0 )
+        bkgrd_ma_1d = np.ma.median(self.polar.data[rx, ry], axis=0)
         bkgrd_1d = bkgrd_ma_1d.data
         bkgrd_1d[bkgrd_ma_1d.mask] = 0
 
         # smooth
-        if sigma>0:
+        if sigma > 0:
             bkgrd_1d = gaussian_filter1d(bkgrd_1d, sigma)
 
         # define the 2D cartesian coordinate system
         origin = self.calibration.get_origin()
-        origin = origin[0][rx,ry],origin[1][rx,ry]
-        qxx,qyy = self.qxx_raw-origin[0], self.qyy_raw-origin[1]
+        origin = origin[0][rx, ry], origin[1][rx, ry]
+        qxx, qyy = self.qxx_raw - origin[0], self.qyy_raw - origin[1]
 
         # get distance qr in polar-elliptical coords
         ellipse = self.calibration.get_ellipse()
-        ellipse = (1,1,0) if ellipse is None else ellipse
-        a,b,theta = ellipse
+        ellipse = (1, 1, 0) if ellipse is None else ellipse
+        a, b, theta = ellipse
 
         qrr = np.sqrt(
-            ( (qxx*np.cos(theta)) + (qyy*np.sin(theta)) )**2 +
-            ( (qxx*np.sin(theta)) - (qyy*np.cos(theta)) )**2 / (b/a)**2
+            ((qxx * np.cos(theta)) + (qyy * np.sin(theta))) ** 2
+            + ((qxx * np.sin(theta)) - (qyy * np.cos(theta))) ** 2 / (b / a) ** 2
         )
 
         # make an interpolation function and get the 2D background
-        f = interp1d(
-            self.polar.radial_bins,
-            bkgrd_1d,
-            fill_value = 'extrapolate'
-        )
+        f = interp1d(self.polar.radial_bins, bkgrd_1d, fill_value="extrapolate")
         background = f(qrr)
 
         # return
         return background
 
-
-
-    def get_radial_bksb_dp(
-        self,
-        rx,
-        ry,
-        sigma = 2
-    ):
+    def get_radial_bksb_dp(self, rx, ry, sigma=2):
         """
         Computes and returns the diffraction pattern at beam position (rx,ry)
         with a radial background subtracted.  See the docstring for
@@ -1238,24 +1124,22 @@ class DataCube(
             The radial background subtracted diffraction image
         """
         # get 2D background
-        background = self.get_radial_bkgrnd( rx,ry,sigma )
+        background = self.get_radial_bkgrnd(rx, ry, sigma)
 
         # subtract, zero negative values, return
-        ans = self.data[rx,ry] - background
-        ans[ans<0] = 0
+        ans = self.data[rx, ry] - background
+        ans[ans < 0] = 0
         return ans
-
-
 
     def get_local_ave_dp(
         self,
         rx,
         ry,
-        radial_bksb = False,
-        sigma = 2,
-        braggmask = False,
-        braggvectors = None,
-        braggmask_radius = None
+        radial_bksb=False,
+        sigma=2,
+        braggmask=False,
+        braggvectors=None,
+        braggmask_radius=None,
     ):
         """
         Computes and returns the diffraction pattern at beam position (rx,ry)
@@ -1289,163 +1173,133 @@ class DataCube(
             The radial background subtracted diffraction image
         """
         # define the kernel
-        kernel = np.array([[1,2,1],
-                           [2,4,2],
-                           [1,2,1]])/16.
+        kernel = np.array([[1, 2, 1], [2, 4, 2], [1, 2, 1]]) / 16.0
 
         # get shape and check for valid inputs
-        nx,ny = self.data.shape[:2]
-        assert(rx>=0 and rx<nx), "rx outside of scan range"
-        assert(ry>=0 and ry<ny), "ry outside of scan range"
+        nx, ny = self.data.shape[:2]
+        assert rx >= 0 and rx < nx, "rx outside of scan range"
+        assert ry >= 0 and ry < ny, "ry outside of scan range"
 
         # get the subcube, checking for edge patterns
         # and modifying the kernel as needed
-        if rx!=0 and rx!=(nx-1) and ry!=0 and ry!=(ny-1):
-            subcube = self.data[rx-1:rx+2,ry-1:ry+2,:,:]
-        elif rx==0 and ry==0:
-            subcube = self.data[:2,:2,:,:]
-            kernel = kernel[1:,1:]
-        elif rx==0 and ry==(ny-1):
-            subcube = self.data[:2,-2:,:,:]
-            kernel = kernel[1:,:-1]
-        elif rx==(nx-1) and ry==0:
-            subcube = self.data[-2:,:2,:,:]
-            kernel = kernel[:-1,1:]
-        elif rx==(nx-1) and ry==(ny-1):
-            subcube = self.data[-2:,-2:,:,:]
-            kernel = kernel[:-1,:-1]
-        elif rx==0:
-            subcube = self.data[:2,ry-1:ry+2,:,:]
-            kernel = kernel[1:,:]
-        elif rx==(nx-1):
-            subcube = self.data[-2:,ry-1:ry+2,:,:]
-            kernel = kernel[:-1,:]
-        elif ry==0:
-            subcube = self.data[rx-1:rx+2,:2,:,:]
-            kernel = kernel[:,1:]
-        elif ry==(ny-1):
-            subcube = self.data[rx-1:rx+2,-2:,:,:]
-            kernel = kernel[:,:-1]
+        if rx != 0 and rx != (nx - 1) and ry != 0 and ry != (ny - 1):
+            subcube = self.data[rx - 1 : rx + 2, ry - 1 : ry + 2, :, :]
+        elif rx == 0 and ry == 0:
+            subcube = self.data[:2, :2, :, :]
+            kernel = kernel[1:, 1:]
+        elif rx == 0 and ry == (ny - 1):
+            subcube = self.data[:2, -2:, :, :]
+            kernel = kernel[1:, :-1]
+        elif rx == (nx - 1) and ry == 0:
+            subcube = self.data[-2:, :2, :, :]
+            kernel = kernel[:-1, 1:]
+        elif rx == (nx - 1) and ry == (ny - 1):
+            subcube = self.data[-2:, -2:, :, :]
+            kernel = kernel[:-1, :-1]
+        elif rx == 0:
+            subcube = self.data[:2, ry - 1 : ry + 2, :, :]
+            kernel = kernel[1:, :]
+        elif rx == (nx - 1):
+            subcube = self.data[-2:, ry - 1 : ry + 2, :, :]
+            kernel = kernel[:-1, :]
+        elif ry == 0:
+            subcube = self.data[rx - 1 : rx + 2, :2, :, :]
+            kernel = kernel[:, 1:]
+        elif ry == (ny - 1):
+            subcube = self.data[rx - 1 : rx + 2, -2:, :, :]
+            kernel = kernel[:, :-1]
         else:
-            raise Exception(f'Invalid (rx,ry) = ({rx},{ry})...')
+            raise Exception(f"Invalid (rx,ry) = ({rx},{ry})...")
 
         # normalize the kernel
         kernel /= np.sum(kernel)
 
-
         # compute...
 
         # ...in the simple case
-        if not(radial_bksb) and not(braggmask):
-            ans = np.tensordot(subcube,kernel,axes=((0,1),(0,1)))
+        if not (radial_bksb) and not (braggmask):
+            ans = np.tensordot(subcube, kernel, axes=((0, 1), (0, 1)))
 
         # ...with radial background subtration
-        elif radial_bksb and not(braggmask):
+        elif radial_bksb and not (braggmask):
             # get position of (rx,ry) relative to kernel
-            _xs = 1 if rx!=0 else 0
-            _ys = 1 if ry!=0 else 0
+            _xs = 1 if rx != 0 else 0
+            _ys = 1 if ry != 0 else 0
             x0 = rx - _xs
             y0 = ry - _ys
             # compute
             ans = np.zeros(self.Qshape)
-            for (i,j),w in np.ndenumerate(kernel):
+            for (i, j), w in np.ndenumerate(kernel):
                 x = x0 + i
                 y = y0 + j
-                ans += self.get_radial_bksb_dp(x,y,sigma) * w
+                ans += self.get_radial_bksb_dp(x, y, sigma) * w
 
         # ...with bragg masking
-        elif not(radial_bksb) and braggmask:
-            assert(braggvectors is not None), "`braggvectors` must be specified or `braggmask` must be turned off!"
-            assert(braggmask_radius is not None), "`braggmask_radius` must be specified or `braggmask` must be turned off!"
+        elif not (radial_bksb) and braggmask:
+            assert (
+                braggvectors is not None
+            ), "`braggvectors` must be specified or `braggmask` must be turned off!"
+            assert (
+                braggmask_radius is not None
+            ), "`braggmask_radius` must be specified or `braggmask` must be turned off!"
             # get position of (rx,ry) relative to kernel
-            _xs = 1 if rx!=0 else 0
-            _ys = 1 if ry!=0 else 0
+            _xs = 1 if rx != 0 else 0
+            _ys = 1 if ry != 0 else 0
             x0 = rx - _xs
             y0 = ry - _ys
             # compute
             ans = np.zeros(self.Qshape)
             weights = np.zeros(self.Qshape)
-            for (i,j),w in np.ndenumerate(kernel):
+            for (i, j), w in np.ndenumerate(kernel):
                 x = x0 + i
                 y = y0 + j
-                mask = self.get_braggmask(
-                    braggvectors,
-                    x,
-                    y,
-                    braggmask_radius
-                )
+                mask = self.get_braggmask(braggvectors, x, y, braggmask_radius)
                 weights_curr = mask * w
-                ans += self.data[x,y] * weights_curr
+                ans += self.data[x, y] * weights_curr
                 weights += weights_curr
             # normalize
             out = np.full_like(ans, np.nan)
-            ans_mask = weights>0
-            ans = np.divide(
-                ans,
-                weights,
-                out = out,
-                where = ans_mask
-            )
+            ans_mask = weights > 0
+            ans = np.divide(ans, weights, out=out, where=ans_mask)
             # make masked array
-            ans = np.ma.array(
-                data = ans,
-                mask = np.logical_not(ans_mask)
-            )
+            ans = np.ma.array(data=ans, mask=np.logical_not(ans_mask))
             pass
 
         # ...with both radial background subtraction and bragg masking
         else:
-            assert(braggvectors is not None), "`braggvectors` must be specified or `braggmask` must be turned off!"
-            assert(braggmask_radius is not None), "`braggmask_radius` must be specified or `braggmask` must be turned off!"
+            assert (
+                braggvectors is not None
+            ), "`braggvectors` must be specified or `braggmask` must be turned off!"
+            assert (
+                braggmask_radius is not None
+            ), "`braggmask_radius` must be specified or `braggmask` must be turned off!"
             # get position of (rx,ry) relative to kernel
-            _xs = 1 if rx!=0 else 0
-            _ys = 1 if ry!=0 else 0
+            _xs = 1 if rx != 0 else 0
+            _ys = 1 if ry != 0 else 0
             x0 = rx - _xs
             y0 = ry - _ys
             # compute
             ans = np.zeros(self.Qshape)
             weights = np.zeros(self.Qshape)
-            for (i,j),w in np.ndenumerate(kernel):
+            for (i, j), w in np.ndenumerate(kernel):
                 x = x0 + i
                 y = y0 + j
-                mask = self.get_braggmask(
-                    braggvectors,
-                    x,
-                    y,
-                    braggmask_radius
-                )
+                mask = self.get_braggmask(braggvectors, x, y, braggmask_radius)
                 weights_curr = mask * w
-                ans += self.get_radial_bksb_dp(x,y,sigma) * weights_curr
+                ans += self.get_radial_bksb_dp(x, y, sigma) * weights_curr
                 weights += weights_curr
             # normalize
             out = np.full_like(ans, np.nan)
-            ans_mask = weights>0
-            ans = np.divide(
-                ans,
-                weights,
-                out = out,
-                where = ans_mask
-            )
+            ans_mask = weights > 0
+            ans = np.divide(ans, weights, out=out, where=ans_mask)
             # make masked array
-            ans = np.ma.array(
-                data = ans,
-                mask = np.logical_not(ans_mask)
-            )
+            ans = np.ma.array(data=ans, mask=np.logical_not(ans_mask))
             pass
 
         # return
         return ans
 
-
-
-
-    def get_braggmask(
-        self,
-        braggvectors,
-        rx,
-        ry,
-        radius
-    ):
+    def get_braggmask(self, braggvectors, rx, ry, radius):
         """
         Returns a boolean mask which is False in a radius of `radius` around
         each bragg scattering vector at scan position (rx,ry).
@@ -1466,11 +1320,11 @@ class DataCube(
         mask : boolean ndarray
         """
         # allocate space
-        mask = np.ones( self.Qshape, dtype=bool )
+        mask = np.ones(self.Qshape, dtype=bool)
         # get the vectors
-        vects = braggvectors.raw[rx,ry]
+        vects = braggvectors.raw[rx, ry]
         # loop
         for idx in range(len(vects.data)):
-            qr = np.hypot(self.qxx_raw-vects.qx[idx], self.qyy_raw-vects.qy[idx])
-            mask = np.logical_and(mask, qr>radius)
+            qr = np.hypot(self.qxx_raw - vects.qx[idx], self.qyy_raw - vects.qy[idx])
+            mask = np.logical_and(mask, qr > radius)
         return mask

@@ -12,11 +12,12 @@ except ImportError:
     cp = None
     from scipy.fft import dstn, idstn
 
+from scipy.ndimage import gaussian_filter, uniform_filter1d
+from skimage.restoration import unwrap_phase
+
 from py4DSTEM.process.utils import get_CoM
 from py4DSTEM.process.utils.cross_correlate import align_and_shift_images
 from py4DSTEM.process.utils.utils import electron_wavelength_angstrom
-from scipy.ndimage import gaussian_filter, uniform_filter1d
-from skimage.restoration import unwrap_phase
 
 # fmt: off
 

@@ -1,8 +1,8 @@
 # Rotational calibrations
 
-import numpy as np
 from typing import Optional
 
+import numpy as np
 
 
 def get_Qvector_from_Rvector(vx, vy, QR_rotation):

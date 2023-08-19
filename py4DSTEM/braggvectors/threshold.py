@@ -1,19 +1,12 @@
 # Bragg peaks thresholding fns
 
 import numpy as np
-
-from emdfile import tqdmnd, PointListArray
-
-
+from emdfile import PointListArray, tqdmnd
 
 
 def threshold_Braggpeaks(
-    pointlistarray,
-    minRelativeIntensity,
-    relativeToPeak,
-    minPeakSpacing,
-    maxNumPeaks
-    ):
+    pointlistarray, minRelativeIntensity, relativeToPeak, minPeakSpacing, maxNumPeaks
+):
     """
     Takes a PointListArray of detected Bragg peaks and applies additional
     thresholding, returning the thresholded PointListArray. To skip a threshold,
@@ -31,16 +24,26 @@ def threshold_Braggpeaks(
         maxNumPeaks (int): maximum number of allowed peaks per diffraction
             pattern
     """
-    assert all([item in pointlistarray.dtype.fields for item in ['qx','qy','intensity']]), (
-                "pointlistarray must include the coordinates 'qx', 'qy', and 'intensity'.")
-    for (Rx, Ry) in tqdmnd(pointlistarray.shape[0],pointlistarray.shape[1],desc='Thresholding Bragg disks',unit='DP',unit_scale=True):
-        pointlist = pointlistarray.get_pointlist(Rx,Ry)
-        pointlist.sort(coordinate='intensity', order='descending')
+    assert all(
+        [item in pointlistarray.dtype.fields for item in ["qx", "qy", "intensity"]]
+    ), "pointlistarray must include the coordinates 'qx', 'qy', and 'intensity'."
+    for (Rx, Ry) in tqdmnd(
+        pointlistarray.shape[0],
+        pointlistarray.shape[1],
+        desc="Thresholding Bragg disks",
+        unit="DP",
+        unit_scale=True,
+    ):
+        pointlist = pointlistarray.get_pointlist(Rx, Ry)
+        pointlist.sort(coordinate="intensity", order="descending")
 
         # Remove peaks below minRelativeIntensity threshold
         if minRelativeIntensity is not False:
-            deletemask = pointlist.data['intensity']/pointlist.data['intensity'][relativeToPeak] < \
-                                                                           minRelativeIntensity
+            deletemask = (
+                pointlist.data["intensity"]
+                / pointlist.data["intensity"][relativeToPeak]
+                < minRelativeIntensity
+            )
             pointlist.remove_points(deletemask)
 
         # Remove peaks that are too close together
@@ -49,9 +52,11 @@ def threshold_Braggpeaks(
             deletemask = np.zeros(pointlist.length, dtype=bool)
             for i in range(pointlist.length):
                 if deletemask[i] == False:
-                    tooClose = ( (pointlist.data['qx']-pointlist.data['qx'][i])**2 + \
-                                 (pointlist.data['qy']-pointlist.data['qy'][i])**2 ) < r2
-                    tooClose[:i+1] = False
+                    tooClose = (
+                        (pointlist.data["qx"] - pointlist.data["qx"][i]) ** 2
+                        + (pointlist.data["qy"] - pointlist.data["qy"][i]) ** 2
+                    ) < r2
+                    tooClose[: i + 1] = False
                     deletemask[tooClose] = True
             pointlist.remove_points(deletemask)
 
@@ -68,11 +73,11 @@ def threshold_Braggpeaks(
 def universal_threshold(
     pointlistarray,
     thresh,
-    metric='maximum',
+    metric="maximum",
     minPeakSpacing=False,
     maxNumPeaks=False,
-    name=None
-    ):
+    name=None,
+):
     """
     Takes a PointListArray of detected Bragg peaks and applies universal
     thresholding, returning the thresholded PointListArray. To skip a threshold,
@@ -104,56 +109,71 @@ def universal_threshold(
     Returns:
         (PointListArray): Bragg peaks thresholded by intensity.
     """
-    assert isinstance(pointlistarray,PointListArray)
-    assert metric in ('maximum','average','median','manual')
-    assert all([item in pointlistarray.dtype.fields for item in ['qx','qy','intensity']]), (
-                "pointlistarray must include the coordinates 'qx', 'qy', and 'intensity'.")
+    assert isinstance(pointlistarray, PointListArray)
+    assert metric in ("maximum", "average", "median", "manual")
+    assert all(
+        [item in pointlistarray.dtype.fields for item in ["qx", "qy", "intensity"]]
+    ), "pointlistarray must include the coordinates 'qx', 'qy', and 'intensity'."
     _pointlistarray = pointlistarray.copy()
     if name is None:
-        _pointlistarray.name = pointlistarray.name+"_unithresh"
+        _pointlistarray.name = pointlistarray.name + "_unithresh"
 
-    HI_array = np.zeros( (_pointlistarray.shape[0], _pointlistarray.shape[1]) )
-    for (Rx, Ry) in tqdmnd(_pointlistarray.shape[0],_pointlistarray.shape[1],desc='Thresholding Bragg disks',unit='DP',unit_scale=True):
-            pointlist = _pointlistarray.get_pointlist(Rx,Ry)
-            if pointlist.data.shape[0] == 0:
-                top_value = np.nan
-            else:
-                HI_array[Rx, Ry] = np.max(pointlist.data['intensity'])
+    HI_array = np.zeros((_pointlistarray.shape[0], _pointlistarray.shape[1]))
+    for (Rx, Ry) in tqdmnd(
+        _pointlistarray.shape[0],
+        _pointlistarray.shape[1],
+        desc="Thresholding Bragg disks",
+        unit="DP",
+        unit_scale=True,
+    ):
+        pointlist = _pointlistarray.get_pointlist(Rx, Ry)
+        if pointlist.data.shape[0] == 0:
+            top_value = np.nan
+        else:
+            HI_array[Rx, Ry] = np.max(pointlist.data["intensity"])
 
-    if metric=='maximum':
-        _thresh = np.max(HI_array)*thresh
-    elif metric=='average':
-        _thresh = np.nanmean(HI_array)*thresh
-    elif metric=='median':
-        _thresh = np.median(HI_array)*thresh
+    if metric == "maximum":
+        _thresh = np.max(HI_array) * thresh
+    elif metric == "average":
+        _thresh = np.nanmean(HI_array) * thresh
+    elif metric == "median":
+        _thresh = np.median(HI_array) * thresh
     else:
         _thresh = thresh
 
-    for (Rx, Ry) in tqdmnd(_pointlistarray.shape[0],_pointlistarray.shape[1],desc='Thresholding Bragg disks',unit='DP',unit_scale=True):
-            pointlist = _pointlistarray.get_pointlist(Rx,Ry)
+    for (Rx, Ry) in tqdmnd(
+        _pointlistarray.shape[0],
+        _pointlistarray.shape[1],
+        desc="Thresholding Bragg disks",
+        unit="DP",
+        unit_scale=True,
+    ):
+        pointlist = _pointlistarray.get_pointlist(Rx, Ry)
 
-            # Remove peaks below minRelativeIntensity threshold
-            deletemask = pointlist.data['intensity'] < _thresh
-            pointlist.remove(deletemask)
+        # Remove peaks below minRelativeIntensity threshold
+        deletemask = pointlist.data["intensity"] < _thresh
+        pointlist.remove(deletemask)
 
-            # Remove peaks that are too close together
-            if maxNumPeaks is not False:
-                r2 = minPeakSpacing**2
+        # Remove peaks that are too close together
+        if maxNumPeaks is not False:
+            r2 = minPeakSpacing**2
+            deletemask = np.zeros(pointlist.length, dtype=bool)
+            for i in range(pointlist.length):
+                if deletemask[i] == False:
+                    tooClose = (
+                        (pointlist.data["qx"] - pointlist.data["qx"][i]) ** 2
+                        + (pointlist.data["qy"] - pointlist.data["qy"][i]) ** 2
+                    ) < r2
+                    tooClose[: i + 1] = False
+                    deletemask[tooClose] = True
+            pointlist.remove_points(deletemask)
+
+        # Keep only up to maxNumPeaks
+        if maxNumPeaks is not False:
+            if maxNumPeaks < pointlist.length:
                 deletemask = np.zeros(pointlist.length, dtype=bool)
-                for i in range(pointlist.length):
-                    if deletemask[i] == False:
-                        tooClose = ( (pointlist.data['qx']-pointlist.data['qx'][i])**2 + \
-                                     (pointlist.data['qy']-pointlist.data['qy'][i])**2 ) < r2
-                        tooClose[:i+1] = False
-                        deletemask[tooClose] = True
+                deletemask[maxNumPeaks:] = True
                 pointlist.remove_points(deletemask)
-
-            # Keep only up to maxNumPeaks
-            if maxNumPeaks is not False:
-                if maxNumPeaks < pointlist.length:
-                    deletemask = np.zeros(pointlist.length, dtype=bool)
-                    deletemask[maxNumPeaks:] = True
-                    pointlist.remove_points(deletemask)
     return _pointlistarray
 
 
@@ -170,15 +190,28 @@ def get_pointlistarray_intensities(pointlistarray):
     Returns:
         (ndarray): all detected peak intensities
     """
-    assert np.all([name in pointlistarray.dtype.names for name in ['qx','qy','intensity']]), (
-        "pointlistarray coords must include coordinates: 'qx', 'qy', 'intensity'.")
-    assert 'qx' in pointlistarray.dtype.names, "pointlistarray coords must include 'qx' and 'qy'"
-    assert 'qy' in pointlistarray.dtype.names, "pointlistarray coords must include 'qx' and 'qy'"
-    assert 'intensity' in pointlistarray.dtype.names, "pointlistarray coords must include 'intensity'"
+    assert np.all(
+        [name in pointlistarray.dtype.names for name in ["qx", "qy", "intensity"]]
+    ), "pointlistarray coords must include coordinates: 'qx', 'qy', 'intensity'."
+    assert (
+        "qx" in pointlistarray.dtype.names
+    ), "pointlistarray coords must include 'qx' and 'qy'"
+    assert (
+        "qy" in pointlistarray.dtype.names
+    ), "pointlistarray coords must include 'qx' and 'qy'"
+    assert (
+        "intensity" in pointlistarray.dtype.names
+    ), "pointlistarray coords must include 'intensity'"
 
     first_pass = True
-    for (Rx, Ry) in tqdmnd(pointlistarray.shape[0],pointlistarray.shape[1],desc='Getting disk intensities',unit='DP',unit_scale=True):
-        pointlist = pointlistarray.get_pointlist(Rx,Ry)
+    for (Rx, Ry) in tqdmnd(
+        pointlistarray.shape[0],
+        pointlistarray.shape[1],
+        desc="Getting disk intensities",
+        unit="DP",
+        unit_scale=True,
+    ):
+        pointlist = pointlistarray.get_pointlist(Rx, Ry)
         for i in range(pointlist.length):
             if first_pass:
                 peak_intensities = np.array(pointlist.data[i][2])
@@ -189,10 +222,3 @@ def get_pointlistarray_intensities(pointlistarray):
                 temp_array = np.reshape(temp_array, 1)
                 peak_intensities = np.append(peak_intensities, temp_array)
     return peak_intensities
-
-
-
-
-
-
-

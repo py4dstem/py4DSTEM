@@ -1,15 +1,16 @@
 import warnings
+from dataclasses import dataclass
+from time import time
+from typing import Dict, List, Optional, Tuple, Union
+
 import numpy as np
 import numpy.lib.recfunctions as rfn
-from scipy import linalg
-from typing import Union, Optional, Dict, Tuple, List
-from time import time
-from tqdm import tqdm
-from dataclasses import dataclass
-
 from emdfile import PointList
-from py4DSTEM.process.utils import electron_wavelength_angstrom, single_atom_scatter
+from scipy import linalg
+from tqdm import tqdm
+
 from py4DSTEM.process.diffraction.WK_scattering_factors import compute_WK_factor
+from py4DSTEM.process.utils import electron_wavelength_angstrom, single_atom_scatter
 
 
 @dataclass

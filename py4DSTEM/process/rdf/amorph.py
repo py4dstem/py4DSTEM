@@ -1,12 +1,13 @@
-import numpy as np
-import matplotlib.pyplot as plt
-from py4DSTEM.process.utils.elliptical_coords import * ## What else is used here? These fns have
-                                                      ## moved around some. In general, specifying
-                                                      ## the fns is better practice. TODO: change
-                                                      ## this import
-from py4DSTEM.process.calibration import fit_ellipse_amorphous_ring
 import matplotlib
+import matplotlib.pyplot as plt
+import numpy as np
 from tqdm import tqdm
+
+## moved around some. In general, specifying
+## the fns is better practice. TODO: change
+## this import
+from py4DSTEM.process.calibration import fit_ellipse_amorphous_ring
+from py4DSTEM.process.utils.elliptical_coords import *  # # What else is used here? These fns have
 
 # this fixes figure sizes on HiDPI screens
 matplotlib.rcParams["figure.dpi"] = 200
@@ -76,9 +77,9 @@ def calculate_coef_strain(coef_cube, r_ref):
         R / r_ref
     )  # this is a correction factor for what defines 0 strain, and must be applied to A, B and C. This has been found _experimentally_! TODO have someone else read this
 
-    A = 1 / r_ratio ** 2
-    B = coef_cube[:, :, 9] / r_ratio ** 2
-    C = coef_cube[:, :, 10] / r_ratio ** 2
+    A = 1 / r_ratio**2
+    B = coef_cube[:, :, 9] / r_ratio**2
+    C = coef_cube[:, :, 10] / r_ratio**2
 
     exx, eyy, exy = np.empty_like(A), np.empty_like(C), np.empty_like(B)
 

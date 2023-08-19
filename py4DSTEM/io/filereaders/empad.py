@@ -5,9 +5,11 @@
 # Edited on 20190409 by bsavitzky and rdhall
 # Edited on 20210628 by sez
 
-import numpy as np
 from pathlib import Path
+
+import numpy as np
 from emdfile import tqdmnd
+
 from py4DSTEM.datacube import DataCube
 from py4DSTEM.preprocess.utils import bin2D
 
@@ -49,6 +51,7 @@ def read_empad(filename, mem="RAM", binfactor=1, metadata=False, **kwargs):
         data_shape = kwargs["EMPAD_shape"]
     else:
         import os
+
         filesize = os.path.getsize(fPath)
         pattern_size = row * col * 4  # 4 bytes per pixel
         N_patterns = filesize / pattern_size

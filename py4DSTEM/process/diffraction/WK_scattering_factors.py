@@ -1,9 +1,10 @@
 import numpy as np
 from scipy.special import expi
 
+from py4DSTEM.process.utils import electron_wavelength_angstrom
+
 # from functools import lru_cache
 
-from py4DSTEM.process.utils import electron_wavelength_angstrom
 
 """
 Weickenmeier-Kohl absorptive scattering factors, adapted by SE Zeltmann from EMsoftLib/others.f90
@@ -64,7 +65,7 @@ def compute_WK_factor(
 
     if thermal_sigma is not None:
         UL = thermal_sigma
-        DWF = np.exp(-0.5 * UL ** 2 * G ** 2)
+        DWF = np.exp(-0.5 * UL**2 * G**2)
     else:
         UL = 0.0
         DWF = 1.0
@@ -82,7 +83,7 @@ def compute_WK_factor(
     # WEKO(A,B,S)
     WK = np.zeros_like(S)
     for i in range(4):
-        argu = B[i] * S ** 2
+        argu = B[i] * S**2
         sub = argu < 1.0
         WK[sub] += A[i] * B[i] * (1.0 - 0.5 * argu[sub])
         sub = np.logical_and(argu >= 1.0, argu <= 20.0)
@@ -168,7 +169,7 @@ def compute_WK_factor(
     # calculate phonon contribution, following FPHON(G,UL,A,B)
     Fphon = 0.0
     if include_phonon:
-        U2 = UL ** 2
+        U2 = UL**2
 
         A1 = A * (4.0 * np.pi) ** 2
         B1 = B / (4.0 * np.pi) ** 2
@@ -197,7 +198,7 @@ def compute_WK_factor(
     if verbose:
         print(f"gamma:{gamma}")
 
-    Fscatt = np.complex128((Freal * gamma) + (1.0j * (Fimag * gamma ** 2 / k0)))
+    Fscatt = np.complex128((Freal * gamma) + (1.0j * (Fimag * gamma**2 / k0)))
 
     if verbose:
         print(f"Fscatt:{Fscatt}")
@@ -213,7 +214,7 @@ def compute_WK_factor(
 
 def RI1(BI, BJ, G):
     # "ERSTES INTEGRAL FUER DIE ABSORPTIONSPOTENTIALE"
-    eps = np.max([BI, BJ]) * G ** 2
+    eps = np.max([BI, BJ]) * G**2
 
     ri1 = np.zeros_like(G)
 
@@ -221,10 +222,10 @@ def RI1(BI, BJ, G):
     ri1[sub] = np.pi * (BI * np.log((BI + BJ) / BI) + BJ * np.log((BI + BJ) / BJ))
 
     sub = np.logical_and(eps <= 0.1, G > 0.0)
-    temp = 0.5 * BI ** 2 * np.log(BI / (BI + BJ)) + 0.5 * BJ ** 2 * np.log(
+    temp = 0.5 * BI**2 * np.log(BI / (BI + BJ)) + 0.5 * BJ**2 * np.log(
         BJ / (BI + BJ)
     )
-    temp += 0.75 * (BI ** 2 + BJ ** 2) - 0.25 * (BI + BJ) ** 2
+    temp += 0.75 * (BI**2 + BJ**2) - 0.25 * (BI + BJ) ** 2
     temp -= 0.5 * (BI - BJ) ** 2
     ri1[sub] += np.pi * G[sub] ** 2 * temp
 
@@ -250,9 +251,9 @@ def RI1(BI, BJ, G):
 
 def RI2(BI, BJ, G, U):
     # "ZWEITES INTEGRAL FUER DIE ABSORPTIONSPOTENTIALE"
-    U2 = U ** 2
+    U2 = U**2
     U22 = 0.5 * U2
-    G2 = G ** 2
+    G2 = G**2
     BIUH = BI + 0.5 * U2
     BJUH = BJ + 0.5 * U2
     BIU = BI + U2

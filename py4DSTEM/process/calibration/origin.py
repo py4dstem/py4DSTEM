@@ -1,34 +1,34 @@
 # Find the origin of diffraction space
 
 import functools
+
 import numpy as np
+from emdfile import PointListArray, tqdmnd
 from scipy.ndimage import gaussian_filter
 from scipy.optimize import leastsq
 
-from emdfile import tqdmnd, PointListArray
 from py4DSTEM.datacube import DataCube
 from py4DSTEM.process.calibration.probe import get_probe_size
-from py4DSTEM.process.fit import plane,parabola,bezier_two,fit_2D
-from py4DSTEM.process.utils import get_CoM, add_to_2D_array_from_floats, get_maxima_2D
+from py4DSTEM.process.fit import bezier_two, fit_2D, parabola, plane
+from py4DSTEM.process.utils import add_to_2D_array_from_floats, get_CoM, get_maxima_2D
 
-
-# 
+#
 # # origin setting decorators
-# 
+#
 # def set_measured_origin(fun):
 #     """
 #     This is intended as a decorator function to wrap other functions which measure
 #     the position of the origin.  If some function `get_the_origin` returns the
 #     position of the origin as a tuple of two (R_Nx,R_Ny)-shaped arrays, then
 #     decorating the function definition like
-# 
+#
 #         >>> @measure_origin
 #         >>> def get_the_origin(...):
-# 
+#
 #     will make the function also save those arrays as the measured origin in the
 #     calibration associated with the data used for the measurement. Any existing
 #     measured origin value will be overwritten.
-# 
+#
 #     For the wrapper to work, the decorated function's first argument must have
 #     a .calibration property, and its first two return values must be qx0,qy0.
 #     """
@@ -40,8 +40,8 @@ from py4DSTEM.process.utils import get_CoM, add_to_2D_array_from_floats, get_max
 #         cali.set_origin_meas((ans[0],ans[1]))
 #         return ans
 #     return wrapper
-# 
-# 
+#
+#
 # def set_fit_origin(fun):
 #     """
 #     See docstring for `set_measured_origin`
@@ -54,13 +54,11 @@ from py4DSTEM.process.utils import get_CoM, add_to_2D_array_from_floats, get_max
 #         cali.set_origin((ans[0],ans[1]))
 #         return ans
 #     return wrapper
-# 
-
-
-
+#
 
 
 # fit the origin
+
 
 def fit_origin(
     data,
@@ -108,16 +106,16 @@ def fit_origin(
         giving fit parameters and covariance matrices with respect to the chosen
         fitting function.
     """
-    assert isinstance(data,tuple) and len(data)==2
-    qx0_meas,qy0_meas = data
+    assert isinstance(data, tuple) and len(data) == 2
+    qx0_meas, qy0_meas = data
     assert isinstance(qx0_meas, np.ndarray) and len(qx0_meas.shape) == 2
     assert isinstance(qx0_meas, np.ndarray) and len(qy0_meas.shape) == 2
     assert qx0_meas.shape == qy0_meas.shape
     assert mask is None or mask.shape == qx0_meas.shape and mask.dtype == bool
     assert fitfunction in ("plane", "parabola", "bezier_two", "constant")
     if fitfunction == "constant":
-        qx0_fit = np.mean(qx0_meas)*np.ones_like(qx0_meas)
-        qy0_fit = np.mean(qy0_meas)*np.ones_like(qy0_meas)
+        qx0_fit = np.mean(qx0_meas) * np.ones_like(qx0_meas)
+        qy0_fit = np.mean(qy0_meas) * np.ones_like(qy0_meas)
     else:
         if fitfunction == "plane":
             f = plane
@@ -174,18 +172,15 @@ def fit_origin(
     # Return
     ans = (qx0_fit, qy0_fit, qx0_residuals, qy0_residuals)
     if returnfitp:
-        return ans,(popt_x, popt_y, pcov_x, pcov_y)
+        return ans, (popt_x, popt_y, pcov_x, pcov_y)
     else:
         return ans
-
-
-
-
 
 
 ### Functions for finding the origin
 
 # for a diffraction pattern
+
 
 def get_origin_single_dp(dp, r, rscale=1.2):
     """
@@ -210,14 +205,15 @@ def get_origin_single_dp(dp, r, rscale=1.2):
 
 # for a datacube
 
+
 def get_origin(
     datacube,
-    r = None,
-    rscale = 1.2,
-    dp_max = None,
-    mask = None,
-    fast_center = False,
-    ):
+    r=None,
+    rscale=1.2,
+    dp_max=None,
+    mask=None,
+    fast_center=False,
+):
     """
     Find the origin for all diffraction patterns in a datacube, assuming (a) there is no
     beam stop, and (b) the center beam contains the highest intensity. Stores the origin
@@ -269,7 +265,8 @@ def get_origin(
         ):
             dp = datacube.data[rx, ry, :, :]
             _qx0, _qy0 = np.unravel_index(
-                np.argmax(gaussian_filter(dp, r, mode='nearest')), (datacube.Q_Nx, datacube.Q_Ny)
+                np.argmax(gaussian_filter(dp, r, mode="nearest")),
+                (datacube.Q_Nx, datacube.Q_Ny),
             )
             if fast_center:
                 qx0[rx, ry], qy0[rx, ry] = _qx0, _qy0
@@ -296,7 +293,8 @@ def get_origin(
             if mask[rx, ry]:
                 dp = datacube.data[rx, ry, :, :]
                 _qx0, _qy0 = np.unravel_index(
-                    np.argmax(gaussian_filter(dp, r, mode='nearest')), (datacube.Q_Nx, datacube.Q_Ny)
+                    np.argmax(gaussian_filter(dp, r, mode="nearest")),
+                    (datacube.Q_Nx, datacube.Q_Ny),
                 )
                 if fast_center:
                     qx0[rx, ry], qy0[rx, ry] = _qx0, _qy0
@@ -311,7 +309,7 @@ def get_origin(
     return qx0, qy0, mask
 
 
-def get_origin_single_dp_beamstop(DP: np.ndarray,mask: np.ndarray, **kwargs):
+def get_origin_single_dp_beamstop(DP: np.ndarray, mask: np.ndarray, **kwargs):
     """
     Find the origin for a single diffraction pattern, assuming there is a beam stop.
 
@@ -362,9 +360,7 @@ def get_origin_beamstop(datacube: DataCube, mask: np.ndarray, **kwargs):
     for rx, ry in tqdmnd(datacube.R_Nx, datacube.R_Ny):
         x, y = get_origin_single_dp_beamstop(datacube.data[rx, ry, :, :], mask)
 
-        qx0[rx,ry] = x
-        qy0[rx,ry] = y
+        qx0[rx, ry] = x
+        qy0[rx, ry] = y
 
     return qx0, qy0
-
-

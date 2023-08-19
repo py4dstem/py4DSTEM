@@ -8,6 +8,7 @@ import numpy as np
 from matplotlib.axes import Axes
 from matplotlib.colors import is_color_like
 from matplotlib.figure import Figure
+
 from py4DSTEM.data import Calibration, DiffractionSlice, RealSlice
 from py4DSTEM.visualize.overlay import (
     add_annuli,

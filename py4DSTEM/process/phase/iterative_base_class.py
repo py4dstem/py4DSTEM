@@ -8,8 +8,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.gridspec import GridSpec
 from mpl_toolkits.axes_grid1 import ImageGrid
-from py4DSTEM.visualize import show, show_complex
 from scipy.ndimage import rotate
+
+from py4DSTEM.visualize import show, show_complex
 
 try:
     import cupy as cp
@@ -17,6 +18,7 @@ except ImportError:
     cp = None
 
 from emdfile import Array, Custom, Metadata, _read_metadata, tqdmnd
+
 from py4DSTEM.data import Calibration
 from py4DSTEM.datacube import DataCube
 from py4DSTEM.process.calibration import fit_origin

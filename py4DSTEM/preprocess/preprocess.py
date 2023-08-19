@@ -8,10 +8,12 @@
 #       datacube.preprocess_function(*args)
 
 import warnings
+
 import numpy as np
-from py4DSTEM.preprocess.utils import bin2D, get_shifted_ar
 from emdfile import tqdmnd
 from scipy.ndimage import median_filter
+
+from py4DSTEM.preprocess.utils import bin2D, get_shifted_ar
 
 ### Editing datacube shape ###
 
@@ -29,14 +31,8 @@ def set_scan_shape(datacube, R_Nx, R_Ny):
         # set dim vectors
         Rpixsize = datacube.calibration.get_R_pixel_size()
         Rpixunits = datacube.calibration.get_R_pixel_units()
-        datacube.set_dim(
-            0,
-            [0,Rpixsize],
-            units = Rpixunits)
-        datacube.set_dim(
-            1,
-            [0,Rpixsize],
-            units = Rpixunits)
+        datacube.set_dim(0, [0, Rpixsize], units=Rpixunits)
+        datacube.set_dim(1, [0, Rpixsize], units=Rpixunits)
 
         # return
         return datacube
@@ -73,30 +69,10 @@ def swap_RQ(datacube):
     Rpixunits = datacube.calibration.get_R_pixel_units()
     Qpixsize = datacube.calibration.get_Q_pixel_size()
     Qpixunits = datacube.calibration.get_Q_pixel_units()
-    datacube.set_dim(
-        0,
-        [0,Rpixsize],
-        units = Rpixunits,
-        name = 'Rx'
-    )
-    datacube.set_dim(
-        1,
-        [0,Rpixsize],
-        units = Rpixunits,
-        name = 'Ry'
-    )
-    datacube.set_dim(
-        2,
-        [0,Qpixsize],
-        units = Qpixunits,
-        name = 'Qx'
-    )
-    datacube.set_dim(
-        3,
-        [0,Qpixsize],
-        units = Qpixunits,
-        name = 'Qy'
-    )
+    datacube.set_dim(0, [0, Rpixsize], units=Rpixunits, name="Rx")
+    datacube.set_dim(1, [0, Rpixsize], units=Rpixunits, name="Ry")
+    datacube.set_dim(2, [0, Qpixsize], units=Qpixunits, name="Qx")
+    datacube.set_dim(3, [0, Qpixsize], units=Qpixunits, name="Qy")
 
     # return
     return datacube
@@ -120,18 +96,8 @@ def swap_Rxy(datacube):
     # set dim vectors
     Rpixsize = datacube.calibration.get_R_pixel_size()
     Rpixunits = datacube.calibration.get_R_pixel_units()
-    datacube.set_dim(
-        0,
-        [0,Rpixsize],
-        units = Rpixunits,
-        name = 'Rx'
-    )
-    datacube.set_dim(
-        1,
-        [0,Rpixsize],
-        units = Rpixunits,
-        name = 'Ry'
-    )
+    datacube.set_dim(0, [0, Rpixsize], units=Rpixunits, name="Rx")
+    datacube.set_dim(1, [0, Rpixsize], units=Rpixunits, name="Ry")
 
     # return
     return datacube
@@ -165,18 +131,8 @@ def crop_data_diffraction(datacube, crop_Qx_min, crop_Qx_max, crop_Qy_min, crop_
     # set dim vectors
     Qpixsize = datacube.calibration.get_Q_pixel_size()
     Qpixunits = datacube.calibration.get_Q_pixel_units()
-    datacube.set_dim(
-        2,
-        [0,Qpixsize],
-        units = Qpixunits,
-        name = 'Qx'
-    )
-    datacube.set_dim(
-        3,
-        [0,Qpixsize],
-        units = Qpixunits,
-        name = 'Qy'
-    )
+    datacube.set_dim(2, [0, Qpixsize], units=Qpixunits, name="Qx")
+    datacube.set_dim(3, [0, Qpixsize], units=Qpixunits, name="Qy")
 
     # return
     return datacube
@@ -191,28 +147,14 @@ def crop_data_real(datacube, crop_Rx_min, crop_Rx_max, crop_Ry_min, crop_Ry_max)
     # set dim vectors
     Rpixsize = datacube.calibration.get_R_pixel_size()
     Rpixunits = datacube.calibration.get_R_pixel_units()
-    datacube.set_dim(
-        0,
-        [0,Rpixsize],
-        units = Rpixunits,
-        name = 'Rx'
-    )
-    datacube.set_dim(
-        1,
-        [0,Rpixsize],
-        units = Rpixunits,
-        name = 'Ry'
-    )
+    datacube.set_dim(0, [0, Rpixsize], units=Rpixunits, name="Rx")
+    datacube.set_dim(1, [0, Rpixsize], units=Rpixunits, name="Ry")
 
     # return
     return datacube
 
 
-def bin_data_diffraction(
-    datacube,
-    bin_factor,
-    dtype=None
-    ):
+def bin_data_diffraction(datacube, bin_factor, dtype=None):
     """
     Performs diffraction space binning of data by bin_factor.
 
@@ -226,8 +168,7 @@ def bin_data_diffraction(
 
     """
     # validate inputs
-    assert(type(bin_factor) is int
-        ), f"Error: binning factor {bin_factor} is not an int."
+    assert type(bin_factor) is int, f"Error: binning factor {bin_factor} is not an int."
     if bin_factor == 1:
         return datacube
     if dtype is None:
@@ -253,36 +194,28 @@ def bin_data_diffraction(
         ]
 
     # bin
-    datacube.data = datacube.data.reshape(
-        R_Nx,
-        R_Ny,
-        int(Q_Nx / bin_factor),
-        bin_factor,
-        int(Q_Ny / bin_factor),
-        bin_factor,
-    ).sum(axis=(3, 5)).astype(dtype)
+    datacube.data = (
+        datacube.data.reshape(
+            R_Nx,
+            R_Ny,
+            int(Q_Nx / bin_factor),
+            bin_factor,
+            int(Q_Ny / bin_factor),
+            bin_factor,
+        )
+        .sum(axis=(3, 5))
+        .astype(dtype)
+    )
 
     # set dim vectors
     Qpixsize = datacube.calibration.get_Q_pixel_size() * bin_factor
     Qpixunits = datacube.calibration.get_Q_pixel_units()
-    
-    
-    datacube.set_dim(
-        2,
-        [0,Qpixsize],
-        units = Qpixunits,
-        name = 'Qx'
-    )
-    datacube.set_dim(
-        3,
-        [0,Qpixsize],
-        units = Qpixunits,
-        name = 'Qy'
-    )
+
+    datacube.set_dim(2, [0, Qpixsize], units=Qpixunits, name="Qx")
+    datacube.set_dim(3, [0, Qpixsize], units=Qpixunits, name="Qy")
 
     # set calibration pixel size
     datacube.calibration.set_Q_pixel_size(Qpixsize)
-
 
     # return
     return datacube
@@ -300,7 +233,11 @@ def bin_data_mmap(datacube, bin_factor, dtype=np.float32):
 
     # get shape
     R_Nx, R_Ny, Q_Nx, Q_Ny = (
-        datacube.R_Nx, datacube.R_Ny, datacube.Q_Nx, datacube.Q_Ny)
+        datacube.R_Nx,
+        datacube.R_Ny,
+        datacube.Q_Nx,
+        datacube.Q_Ny,
+    )
     # allocate space
     data = np.zeros(
         (
@@ -319,18 +256,8 @@ def bin_data_mmap(datacube, bin_factor, dtype=np.float32):
     # set dim vectors
     Qpixsize = datacube.calibration.get_Q_pixel_size() * bin_factor
     Qpixunits = datacube.calibration.get_Q_pixel_units()
-    datacube.set_dim(
-        2,
-        [0,Qpixsize],
-        units = Qpixunits,
-        name = 'Qx'
-    )
-    datacube.set_dim(
-        3,
-        [0,Qpixsize],
-        units = Qpixunits,
-        name = 'Qy'
-    )
+    datacube.set_dim(2, [0, Qpixsize], units=Qpixunits, name="Qx")
+    datacube.set_dim(3, [0, Qpixsize], units=Qpixunits, name="Qy")
     # set calibration pixel size
     datacube.calibration.set_Q_pixel_size(Qpixsize)
 
@@ -343,8 +270,7 @@ def bin_data_real(datacube, bin_factor):
     Performs diffraction space binning of data by bin_factor.
     """
     # validate inputs
-    assert(type(bin_factor) is int
-        ), f"Bin factor {bin_factor} is not an int."
+    assert type(bin_factor) is int, f"Bin factor {bin_factor} is not an int."
     if bin_factor <= 1:
         return datacube
 
@@ -379,18 +305,8 @@ def bin_data_real(datacube, bin_factor):
     # set dim vectors
     Rpixsize = datacube.calibration.get_R_pixel_size() * bin_factor
     Rpixunits = datacube.calibration.get_R_pixel_units()
-    datacube.set_dim(
-        0,
-        [0,Rpixsize],
-        units = Rpixunits,
-        name = 'Rx'
-    )
-    datacube.set_dim(
-        1,
-        [0,Rpixsize],
-        units = Rpixunits,
-        name = 'Ry'
-    )
+    datacube.set_dim(0, [0, Rpixsize], units=Rpixunits, name="Rx")
+    datacube.set_dim(1, [0, Rpixsize], units=Rpixunits, name="Ry")
     # set calibration pixel size
     datacube.calibration.set_R_pixel_size(Rpixsize)
 
@@ -424,18 +340,8 @@ def thin_data_real(datacube, thinning_factor):
     # set dim vectors
     Rpixsize = datacube.calibration.get_R_pixel_size() * thinning_factor
     Rpixunits = datacube.calibration.get_R_pixel_units()
-    datacube.set_dim(
-        0,
-        [0,Rpixsize],
-        units = Rpixunits,
-        name = 'Rx'
-    )
-    datacube.set_dim(
-        1,
-        [0,Rpixsize],
-        units = Rpixunits,
-        name = 'Ry'
-    )
+    datacube.set_dim(0, [0, Rpixsize], units=Rpixunits, name="Rx")
+    datacube.set_dim(1, [0, Rpixsize], units=Rpixunits, name="Ry")
     # set calibration pixel size
     datacube.calibration.set_R_pixel_size(Rpixsize)
 
@@ -516,10 +422,7 @@ def filter_hot_pixels(datacube, thresh, ind_compare=1, return_mask=False):
         axis=0,
     )
     # arry of the ind_compare'th pixel intensity
-    diff_compare = np.reshape(
-        diff_local_med[-ind_compare - 1, :],
-        shape
-    )
+    diff_compare = np.reshape(diff_local_med[-ind_compare - 1, :], shape)
 
     # Generate mask
     mask = diff_mean - diff_compare > thresh
@@ -535,20 +438,20 @@ def filter_hot_pixels(datacube, thresh, ind_compare=1, return_mask=False):
     # Otherwise, apply filtering
 
     # Get masked indices
-    x_ma,y_ma = np.nonzero(mask)
+    x_ma, y_ma = np.nonzero(mask)
 
     # Get local windows for each masked pixel
-    xslices,yslices = [],[]
-    for xm,ym in zip(x_ma,y_ma):
-        xslice,yslice = slice(xm-1,xm+2),slice(ym-1,ym+2)
-        if xslice.start<0:
-            xslice = slice(0,xslice.stop)
-        elif xslice.stop>shape[0]:
-            xslice = slice(xslice.start,shape[0])
-        if yslice.start<0:
-            yslice = slice(0,yslice.stop)
-        elif yslice.stop>shape[1]:
-            yslice = slice(yslice.start,shape[1])
+    xslices, yslices = [], []
+    for xm, ym in zip(x_ma, y_ma):
+        xslice, yslice = slice(xm - 1, xm + 2), slice(ym - 1, ym + 2)
+        if xslice.start < 0:
+            xslice = slice(0, xslice.stop)
+        elif xslice.stop > shape[0]:
+            xslice = slice(xslice.start, shape[0])
+        if yslice.start < 0:
+            yslice = slice(0, yslice.stop)
+        elif yslice.stop > shape[1]:
+            yslice = slice(yslice.start, shape[1])
         xslices.append(xslice)
         yslices.append(yslice)
 
@@ -556,19 +459,12 @@ def filter_hot_pixels(datacube, thresh, ind_compare=1, return_mask=False):
     for ax, ay in tqdmnd(
         *(datacube.R_Nx, datacube.R_Ny), desc="Cleaning pixels", unit=" images"
     ):
-        for xm,ym,xs,ys in zip(
-            x_ma,
-            y_ma,
-            xslices,
-            yslices
-            ):
-            datacube.data[ax, ay, xm, ym] = np.median(
-                datacube.data[ax, ay, xs, ys]
-            )
+        for xm, ym, xs, ys in zip(x_ma, y_ma, xslices, yslices):
+            datacube.data[ax, ay, xm, ym] = np.median(datacube.data[ax, ay, xs, ys])
 
         # Calculate local 3x3 median images
-        #im_med = median_filter(datacube.data[ax, ay, :, :], size=3, mode="nearest")
-        #datacube.data[ax, ay, :, :][mask] = im_med[mask]
+        # im_med = median_filter(datacube.data[ax, ay, :, :], size=3, mode="nearest")
+        # datacube.data[ax, ay, :, :][mask] = im_med[mask]
 
     # Return
     if return_mask is True:
@@ -652,7 +548,9 @@ def resample_data_diffraction(
         if not resampling_factor:
             resampling_factor = output_size[0] / old_size[2]
         if datacube.calibration.get_Q_pixel_size() is not None:
-            datacube.calibration.set_Q_pixel_size(datacube.calibration.get_Q_pixel_size() / resampling_factor)
+            datacube.calibration.set_Q_pixel_size(
+                datacube.calibration.get_Q_pixel_size() / resampling_factor
+            )
 
     elif method == "bilinear":
         from scipy.ndimage import zoom
@@ -684,7 +582,9 @@ def resample_data_diffraction(
 
         resampling_factor = np.concatenate(((1, 1), resampling_factor))
         datacube.data = zoom(datacube.data, resampling_factor, order=1)
-        datacube.calibration.set_Q_pixel_size(datacube.calibration.get_Q_pixel_size() / resampling_factor[2])
+        datacube.calibration.set_Q_pixel_size(
+            datacube.calibration.get_Q_pixel_size() / resampling_factor[2]
+        )
 
     else:
         raise ValueError(
@@ -751,32 +651,12 @@ def pad_data_diffraction(datacube, pad_factor=None, output_size=None):
 
     datacube.data = np.pad(datacube.data, pad_width=pad_width, mode="constant")
 
-    Qpixsize  = datacube.calibration.get_Q_pixel_size()
+    Qpixsize = datacube.calibration.get_Q_pixel_size()
     Qpixunits = datacube.calibration.get_Q_pixel_units()
 
-    datacube.set_dim(
-        2,
-        [0,Qpixsize],
-        units = Qpixunits,
-        name = 'Qx'
-    )
-    datacube.set_dim(
-        3,
-        [0,Qpixsize],
-        units = Qpixunits,
-        name = 'Qy'
-    )
+    datacube.set_dim(2, [0, Qpixsize], units=Qpixunits, name="Qx")
+    datacube.set_dim(3, [0, Qpixsize], units=Qpixunits, name="Qy")
 
     datacube.calibrate()
 
     return datacube
-
-
-
-
-
-
-
-
-
-

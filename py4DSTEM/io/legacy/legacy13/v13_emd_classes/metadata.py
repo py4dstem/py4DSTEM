@@ -1,7 +1,8 @@
-import numpy as np
 from numbers import Number
 from typing import Optional
+
 import h5py
+import numpy as np
 
 from py4DSTEM.io.legacy.legacy13.v13_emd_classes.tree import Tree
 
@@ -17,13 +18,11 @@ class Metadata:
         >>> val = meta['param']
     If the parameter has not been set, the getter methods return None.
     """
-    def __init__(
-        self,
-        name: Optional[str] ='metadata'
-        ):
+
+    def __init__(self, name: Optional[str] = "metadata"):
         """
-         Args:
-            name (Optional, string):
+        Args:
+           name (Optional, string):
         """
         self.name = name
         self.tree = Tree()
@@ -31,59 +30,53 @@ class Metadata:
         # create parameter dictionary
         self._params = {}
 
-
-
     ### __get/setitem__
 
-    def __getitem__(self,x):
+    def __getitem__(self, x):
         return self._params[x]
-    def __setitem__(self,k,v):
-        self._params[k] = v
 
+    def __setitem__(self, k, v):
+        self._params[k] = v
 
     @property
     def keys(self):
         return self._params.keys()
 
-
-    def copy(self,name=None):
-        """
-        """
-        if name is None: name = self.name+"_copy"
+    def copy(self, name=None):
+        """ """
+        if name is None:
+            name = self.name + "_copy"
         md = Metadata(name=name)
         md._params.update(self._params)
         return md
 
-
-
     def __repr__(self):
 
-        space = ' '*len(self.__class__.__name__)+'  '
+        space = " " * len(self.__class__.__name__) + "  "
         string = f"{self.__class__.__name__}( A Metadata instance called '{self.name}', containing the following fields:"
         string += "\n"
 
         maxlen = 0
         for k in self._params.keys():
-            if len(k)>maxlen: maxlen=len(k)
+            if len(k) > maxlen:
+                maxlen = len(k)
 
-        for k,v in self._params.items():
-            if isinstance(v,np.ndarray):
+        for k, v in self._params.items():
+            if isinstance(v, np.ndarray):
                 v = f"{v.ndim}D-array"
-            string += "\n"+space+f"{k}:{(maxlen-len(k)+3)*' '}{str(v)}"
+            string += "\n" + space + f"{k}:{(maxlen-len(k)+3)*' '}{str(v)}"
         string += "\n)"
 
         return string
 
-
-
     # HDF5 read/write
 
-    def to_h5(self,group):
+    def to_h5(self, group):
         from py4DSTEM.io.legacy.legacy13.v13_emd_classes.io import Metadata_to_h5
-        Metadata_to_h5(self,group)
+
+        Metadata_to_h5(self, group)
 
     def from_h5(group):
         from py4DSTEM.io.legacy.legacy13.v13_emd_classes.io import Metadata_from_h5
+
         return Metadata_from_h5(group)
-
-

@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.gridspec import GridSpec
 from mpl_toolkits.axes_grid1 import ImageGrid, make_axes_locatable
+
 from py4DSTEM.visualize.vis_special import Complex2RGB, add_colorbar_arg, show_complex
 
 try:
@@ -18,6 +19,7 @@ except ImportError:
     cp = None
 
 from emdfile import Custom, tqdmnd
+
 from py4DSTEM import DataCube
 from py4DSTEM.process.phase.iterative_base_class import PtychographicReconstruction
 from py4DSTEM.process.phase.utils import (
@@ -974,7 +976,7 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
                 )
 
             # back-transmit
-            exit_waves *= xp.conj(obj) #/ xp.abs(obj) ** 2
+            exit_waves *= xp.conj(obj)  # / xp.abs(obj) ** 2
 
             if s > 0:
                 # back-propagate
@@ -1076,7 +1078,7 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
                 )
 
             # back-transmit
-            exit_waves_copy *= xp.conj(obj) # / xp.abs(obj) ** 2
+            exit_waves_copy *= xp.conj(obj)  # / xp.abs(obj) ** 2
 
             if s > 0:
                 # back-propagate

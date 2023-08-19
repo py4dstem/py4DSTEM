@@ -10,12 +10,13 @@ import matplotlib.pyplot as plt
 import numpy as np
 from emdfile import Custom, tqdmnd
 from matplotlib.gridspec import GridSpec
+from scipy.linalg import polar
+from scipy.special import comb
+
 from py4DSTEM import DataCube
 from py4DSTEM.process.phase.iterative_base_class import PhaseReconstruction
 from py4DSTEM.process.utils.cross_correlate import align_images_fourier
 from py4DSTEM.process.utils.utils import electron_wavelength_angstrom
-from scipy.linalg import polar
-from scipy.special import comb
 
 try:
     import cupy as cp

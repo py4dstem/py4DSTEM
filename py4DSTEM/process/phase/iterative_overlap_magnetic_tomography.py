@@ -10,9 +10,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.gridspec import GridSpec
 from mpl_toolkits.axes_grid1 import make_axes_locatable
+from scipy.ndimage import rotate as rotate_np
+
 from py4DSTEM.visualize import show
 from py4DSTEM.visualize.vis_special import Complex2RGB, add_colorbar_arg
-from scipy.ndimage import rotate as rotate_np
 
 try:
     import cupy as cp
@@ -20,6 +21,7 @@ except ImportError:
     cp = None
 
 from emdfile import Custom, tqdmnd
+
 from py4DSTEM import DataCube
 from py4DSTEM.process.phase.iterative_base_class import PtychographicReconstruction
 from py4DSTEM.process.phase.utils import (
@@ -2487,11 +2489,7 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
             if collective_tilt_updates:
                 self._object += collective_object / self._num_tilts
 
-                (
-                    self._object,
-                    self._probe,
-                    _,
-                ) = self._constraints(
+                (self._object, self._probe, _,) = self._constraints(
                     self._object,
                     self._probe,
                     None,

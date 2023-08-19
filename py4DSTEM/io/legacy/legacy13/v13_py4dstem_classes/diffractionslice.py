@@ -1,22 +1,25 @@
 # Defines the DiffractionSlice class, which stores 2(+1)D,
 # diffraction-shaped data
 
+from typing import Optional, Union
+
+import h5py
+import numpy as np
+
 from py4DSTEM.io.legacy.legacy13.v13_emd_classes.array import Array
 
-from typing import Optional,Union
-import numpy as np
-import h5py
 
 class DiffractionSlice(Array):
     """
     Stores a diffraction-space shaped 2D data array.
     """
+
     def __init__(
         self,
         data: np.ndarray,
-        name: Optional[str] = 'diffractionslice',
-        slicelabels: Optional[Union[bool,list]] = None
-        ):
+        name: Optional[str] = "diffractionslice",
+        slicelabels: Optional[Union[bool, list]] = None,
+    ):
         """
         Accepts:
             data (np.ndarray): the data
@@ -28,14 +31,8 @@ class DiffractionSlice(Array):
 
         # initialize as an Array
         Array.__init__(
-            self,
-            data = data,
-            name = name,
-            units = 'intensity',
-            slicelabels = slicelabels
+            self, data=data, name=name, units="intensity", slicelabels=slicelabels
         )
-
-
 
     # HDF5 read/write
 
@@ -43,15 +40,11 @@ class DiffractionSlice(Array):
 
     # read
     def from_h5(group):
-        from py4DSTEM.io.legacy.legacy13.v13_py4dstem_classes.io import DiffractionSlice_from_h5
+        from py4DSTEM.io.legacy.legacy13.v13_py4dstem_classes.io import (
+            DiffractionSlice_from_h5,
+        )
+
         return DiffractionSlice_from_h5(group)
 
 
-
-
-
-
 ############ END OF CLASS ###########
-
-
-

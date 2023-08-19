@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Optional, Union
 
 import emdfile as emd
+
 import py4DSTEM.io.legacy as legacy
 from py4DSTEM.data import Data
 from py4DSTEM.io.parsefiletype import _parse_filetype
@@ -34,9 +35,9 @@ def read(
 
     To read file written by older verions of py4DSTEM, different keyword
     arguments should be passed. See the docstring for
-    `py4DSTEM.io.native.legacy.read_py4DSTEM_legacy` for a complete list. 
+    `py4DSTEM.io.native.legacy.read_py4DSTEM_legacy` for a complete list.
     For example, `data_id` may need to be specified to select dataset.
-     
+
     Args:
         filepath (str or Path): the file path
         datapath (str or None): the path within the H5 file to the data

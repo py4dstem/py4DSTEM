@@ -4,6 +4,7 @@ from typing import Optional
 
 import matplotlib.pyplot as plt
 import numpy as np
+
 from py4DSTEM import PointList
 from py4DSTEM.braggvectors import BraggVectors
 from py4DSTEM.data import Data, RealSlice

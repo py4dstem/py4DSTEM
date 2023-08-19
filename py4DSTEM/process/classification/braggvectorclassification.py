@@ -1,15 +1,20 @@
 # Functions for classification using a method which initially classifies the detected bragg
 # vectors, then uses these labels to classify real space scan positions
 
-import numpy as np
-from numpy.linalg import lstsq
 from itertools import permutations
-from scipy.ndimage import gaussian_filter
-from scipy.ndimage import binary_opening, binary_closing, binary_dilation, binary_erosion
+
+import numpy as np
+from emdfile import PointListArray
+from numpy.linalg import lstsq
+from scipy.ndimage import (
+    binary_closing,
+    binary_dilation,
+    binary_erosion,
+    binary_opening,
+    gaussian_filter,
+)
 from skimage.measure import label
 from sklearn.decomposition import NMF
-
-from emdfile import PointListArray
 
 
 class BraggVectorClassification(object):
@@ -106,44 +111,58 @@ class BraggVectorClassification(object):
             max_dist (None or number): maximum distance from a given voronoi point a peak
                 can be and still be associated with this label
         """
-        assert isinstance(braggpeaks,PointListArray), "braggpeaks must be a PointListArray"
-        assert np.all([name in braggpeaks.dtype.names for name in ('qx','qy')]), "braggpeaks must contain coords 'qx' and 'qy'"
-        assert len(Qx)==len(Qy), "Qx and Qy must have same length"
+        assert isinstance(
+            braggpeaks, PointListArray
+        ), "braggpeaks must be a PointListArray"
+        assert np.all(
+            [name in braggpeaks.dtype.names for name in ("qx", "qy")]
+        ), "braggpeaks must contain coords 'qx' and 'qy'"
+        assert len(Qx) == len(Qy), "Qx and Qy must have same length"
         self.braggpeaks = braggpeaks
         self.R_Nx = braggpeaks.shape[0]  #: shape of real space (x)
         self.R_Ny = braggpeaks.shape[1]  #: shape of real space (y)
         self.Qx = Qx  #: x-coordinates of the voronoi points
-        self.Qy = Qy  #: y-coordinates of the voronoi points 
+        self.Qy = Qy  #: y-coordinates of the voronoi points
 
         #: the sets of Bragg peaks present at each scan position
-        self.braggpeak_labels = get_braggpeak_labels_by_scan_position(braggpeaks, Qx, Qy, max_dist)
+        self.braggpeak_labels = get_braggpeak_labels_by_scan_position(
+            braggpeaks, Qx, Qy, max_dist
+        )
 
         # Construct X matrix
         #: first dimension of the data matrix; the number of bragg peaks
         self.N_feat = len(self.Qx)
         #: second dimension of the data matrix; the number of scan positions
-        self.N_meas = self.R_Nx*self.R_Ny
+        self.N_meas = self.R_Nx * self.R_Ny
 
-        self.X = np.zeros((self.N_feat,self.N_meas))  #: the data matrix
+        self.X = np.zeros((self.N_feat, self.N_meas))  #: the data matrix
         for Rx in range(self.R_Nx):
             for Ry in range(self.R_Ny):
-                R = Rx*self.R_Ny + Ry
+                R = Rx * self.R_Ny + Ry
                 s = self.braggpeak_labels[Rx][Ry]
-                pointlist = self.braggpeaks.get_pointlist(Rx,Ry)
+                pointlist = self.braggpeaks.get_pointlist(Rx, Ry)
                 for i in s:
                     if X_is_boolean:
-                        self.X[i,R] = True
+                        self.X[i, R] = True
                     else:
-                        ind = np.argmin(np.hypot(pointlist.data['qx']-Qx[i],
-                                                 pointlist.data['qy']-Qy[i]))
-                        self.X[i,R] = pointlist.data['intensity'][ind]
+                        ind = np.argmin(
+                            np.hypot(
+                                pointlist.data["qx"] - Qx[i],
+                                pointlist.data["qy"] - Qy[i],
+                            )
+                        )
+                        self.X[i, R] = pointlist.data["intensity"][ind]
 
         return
 
-    def get_initial_classes_by_cooccurrence(self, thresh=0.3, BP_fraction_thresh=0.1,
-                                                              max_iterations=200,
-                                                              X_is_boolean=True,
-                                                              n_corr_init=2):
+    def get_initial_classes_by_cooccurrence(
+        self,
+        thresh=0.3,
+        BP_fraction_thresh=0.1,
+        max_iterations=200,
+        X_is_boolean=True,
+        n_corr_init=2,
+    ):
         """
         Populate the initial classes by finding sets of Bragg peaks that tend to co-occur
         in the
@@ -164,28 +183,32 @@ class BraggVectorClassification(object):
                 probability function.  Must be 2 or 3.
         """
         assert isinstance(X_is_boolean, bool)
-        assert isinstance(max_iterations, (int,np.integer))
-        assert n_corr_init in (2,3)
+        assert isinstance(max_iterations, (int, np.integer))
+        assert n_corr_init in (2, 3)
 
         # Get sets of integers representing the initial classes
-        BP_sets = get_initial_classes(self.braggpeak_labels, N=len(self.Qx), thresh=thresh,
-                                      BP_fraction_thresh=BP_fraction_thresh,
-                                      max_iterations=max_iterations,
-                                      n_corr_init=n_corr_init)
+        BP_sets = get_initial_classes(
+            self.braggpeak_labels,
+            N=len(self.Qx),
+            thresh=thresh,
+            BP_fraction_thresh=BP_fraction_thresh,
+            max_iterations=max_iterations,
+            n_corr_init=n_corr_init,
+        )
 
         # Construct W, H matrices
         self.N_c = len(BP_sets)
 
         # W
-        self.W = np.zeros((self.N_feat,self.N_c))
+        self.W = np.zeros((self.N_feat, self.N_c))
         for i in range(self.N_c):
             BP_set = BP_sets[i]
             for j in BP_set:
-                self.W[j,i] = 1
+                self.W[j, i] = 1
 
         # H
-        self.H = lstsq(self.W,self.X,rcond=None)[0]
-        self.H = np.where(self.H<0,0,self.H)
+        self.H = lstsq(self.W, self.X, rcond=None)[0]
+        self.H = np.where(self.H < 0, 0, self.H)
 
         self.W_next = None
         self.H_next = None
@@ -201,22 +224,22 @@ class BraggVectorClassification(object):
             class_images (ndarray): must have shape (R_Nx,R_Ny,N_c), where N_c is the
                 number of classes, and class_images[:,:,i] is the image of class i.
         """
-        assert class_images.shape[0]==self.R_Nx
-        assert class_images.shape[1]==self.R_Ny
+        assert class_images.shape[0] == self.R_Nx
+        assert class_images.shape[1] == self.R_Ny
 
         # Construct W, H matrices
         self.N_c = class_images.shape[2]
 
         # H
-        H = np.zeros((self.N_c,self.N_meas))
+        H = np.zeros((self.N_c, self.N_meas))
         for i in range(self.N_c):
-            H[i,:] = class_images[:,:,i].ravel()
-        self.H = np.copy(H, order='C')
+            H[i, :] = class_images[:, :, i].ravel()
+        self.H = np.copy(H, order="C")
 
         # W
-        W = lstsq(self.H.T, self.X.T,rcond=None)[0].T
-        W = np.where(W<0,0,W)
-        self.W = np.copy(W, order='C')
+        W = lstsq(self.H.T, self.X.T, rcond=None)[0].T
+        W = np.where(W < 0, 0, W)
+        self.W = np.copy(W, order="C")
 
         self.W_next = None
         self.H_next = None
@@ -269,7 +292,7 @@ class BraggVectorClassification(object):
         Args:
             max_iterations (int): the maximum number of NMF steps to take
         """
-        sklearn_nmf = NMF(n_components=self.N_c, init='custom', max_iter=max_iterations)
+        sklearn_nmf = NMF(n_components=self.N_c, init="custom", max_iter=max_iterations)
         self.W_next = sklearn_nmf.fit_transform(self.X, W=self.W, H=self.H)
         self.H_next = sklearn_nmf.components_
         self.N_c_next = self.W_next.shape[1]
@@ -306,18 +329,18 @@ class BraggVectorClassification(object):
             minimum_pixels (int): if, after splitting, a potential new class contains fewer than
                 this number of pixels, ignore it
         """
-        assert isinstance(expand_mask,(int,np.integer))
-        assert isinstance(minimum_pixels,(int,np.integer))
+        assert isinstance(expand_mask, (int, np.integer))
+        assert isinstance(minimum_pixels, (int, np.integer))
 
-        W_next = np.zeros((self.N_feat,1))
-        H_next = np.zeros((1,self.N_meas))
+        W_next = np.zeros((self.N_feat, 1))
+        H_next = np.zeros((1, self.N_meas))
         for i in range(self.N_c):
             # Get the class in real space
             class_image = self.get_class_image(i)
 
             # Turn into a binary mask
-            class_image = gaussian_filter(class_image,sigma)
-            mask = class_image > (np.max(class_image)*threshold_split)
+            class_image = gaussian_filter(class_image, sigma)
+            mask = class_image > (np.max(class_image) * threshold_split)
             mask = binary_opening(mask, iterations=1)
             mask = binary_closing(mask, iterations=1)
             mask = binary_dilation(mask, iterations=expand_mask)
@@ -327,21 +350,21 @@ class BraggVectorClassification(object):
 
             # Add each region to the new W and H matrices
             for j in range(nlabels):
-                mask = (labels == (j+1))
+                mask = labels == (j + 1)
                 mask = binary_erosion(mask, iterations=expand_mask)
 
                 if np.sum(mask) >= minimum_pixels:
 
                     # Leave the Bragg peak weightings the same
-                    W_next = np.hstack((W_next,self.W[:,i,np.newaxis]))
+                    W_next = np.hstack((W_next, self.W[:, i, np.newaxis]))
 
                     # Use the existing real space pixel weightings
                     h_i = np.zeros(self.N_meas)
-                    h_i[mask.ravel()] = self.H[i,:][mask.ravel()]
-                    H_next = np.vstack((H_next,h_i[np.newaxis,:]))
+                    h_i[mask.ravel()] = self.H[i, :][mask.ravel()]
+                    H_next = np.vstack((H_next, h_i[np.newaxis, :]))
 
-        self.W_next = W_next[:,1:]
-        self.H_next = H_next[1:,:]
+        self.W_next = W_next[:, 1:]
+        self.H_next = H_next[1:, :]
         self.N_c_next = self.W_next.shape[1]
 
         return
@@ -400,25 +423,30 @@ class BraggVectorClassification(object):
             i (int): index of the first class to merge
             j (int): index of the second class to merge
         """
-        assert np.all([isinstance(ind,(int,np.integer)) for ind in [i,j]]), "i and j must be ints"
+        assert np.all(
+            [isinstance(ind, (int, np.integer)) for ind in [i, j]]
+        ), "i and j must be ints"
 
         # Get merged class
-        weight_i = np.sum(self.H[i,:])
-        weight_j = np.sum(self.H[j,:])
-        W_new = (self.W[:,i]*weight_i + self.W[:,j]*weight_j)/(weight_i+weight_j)
-        H_new = self.H[i,:] + self.H[j,:]
+        weight_i = np.sum(self.H[i, :])
+        weight_j = np.sum(self.H[j, :])
+        W_new = (self.W[:, i] * weight_i + self.W[:, j] * weight_j) / (
+            weight_i + weight_j
+        )
+        H_new = self.H[i, :] + self.H[j, :]
 
         # Remove old classes and add in new class
-        self.W_next = np.delete(self.W,j,axis=1)
-        self.H_next = np.delete(self.H,j,axis=0)
-        self.W_next[:,i] = W_new
-        self.H_next[i,:] = H_new
-        self.N_c_next = self.N_c-1
+        self.W_next = np.delete(self.W, j, axis=1)
+        self.H_next = np.delete(self.H, j, axis=0)
+        self.W_next[:, i] = W_new
+        self.H_next[i, :] = H_new
+        self.N_c_next = self.N_c - 1
 
         return
 
-    def split_by_class_index(self, i, sigma=2, threshold_split=0.25, expand_mask=1,
-                                                                     minimum_pixels=1):
+    def split_by_class_index(
+        self, i, sigma=2, threshold_split=0.25, expand_mask=1, minimum_pixels=1
+    ):
         """
         If class i contains multiple non-contiguous segments in real space, divide these
         regions into distinct classes.
@@ -436,18 +464,18 @@ class BraggVectorClassification(object):
             minimum_pixels (int): if, after splitting, a potential new class contains
                 fewer than this number of pixels, ignore it
         """
-        assert isinstance(i,(int,np.integer))
-        assert isinstance(expand_mask,(int,np.integer))
-        assert isinstance(minimum_pixels,(int,np.integer))
-        W_next = np.zeros((self.N_feat,1))
-        H_next = np.zeros((1,self.N_meas))
+        assert isinstance(i, (int, np.integer))
+        assert isinstance(expand_mask, (int, np.integer))
+        assert isinstance(minimum_pixels, (int, np.integer))
+        W_next = np.zeros((self.N_feat, 1))
+        H_next = np.zeros((1, self.N_meas))
 
         # Get the class in real space
         class_image = self.get_class_image(i)
 
         # Turn into a binary mask
-        class_image = gaussian_filter(class_image,sigma)
-        mask = class_image > (np.max(class_image)*threshold_split)
+        class_image = gaussian_filter(class_image, sigma)
+        mask = class_image > (np.max(class_image) * threshold_split)
         mask = binary_opening(mask, iterations=1)
         mask = binary_closing(mask, iterations=1)
         mask = binary_dilation(mask, iterations=expand_mask)
@@ -457,23 +485,23 @@ class BraggVectorClassification(object):
 
         # Add each region to the new W and H matrices
         for j in range(nlabels):
-            mask = (labels == (j+1))
+            mask = labels == (j + 1)
             mask = binary_erosion(mask, iterations=expand_mask)
 
             if np.sum(mask) >= minimum_pixels:
 
                 # Leave the Bragg peak weightings the same
-                W_next = np.hstack((W_next,self.W[:,i,np.newaxis]))
+                W_next = np.hstack((W_next, self.W[:, i, np.newaxis]))
 
                 # Use the existing real space pixel weightings
                 h_i = np.zeros(self.N_meas)
-                h_i[mask.ravel()] = self.H[i,:][mask.ravel()]
-                H_next = np.vstack((H_next,h_i[np.newaxis,:]))
+                h_i[mask.ravel()] = self.H[i, :][mask.ravel()]
+                H_next = np.vstack((H_next, h_i[np.newaxis, :]))
 
-        W_prev = np.delete(self.W,i,axis=1)
-        H_prev = np.delete(self.H,i,axis=0)
-        self.W_next = np.concatenate((W_next[:,1:],W_prev),axis=1)
-        self.H_next = np.concatenate((H_next[1:,:],H_prev),axis=0)
+        W_prev = np.delete(self.W, i, axis=1)
+        H_prev = np.delete(self.H, i, axis=0)
+        self.W_next = np.concatenate((W_next[:, 1:], W_prev), axis=1)
+        self.H_next = np.concatenate((H_next[1:, :], H_prev), axis=0)
         self.N_c_next = self.W_next.shape[1]
 
         return
@@ -485,10 +513,10 @@ class BraggVectorClassification(object):
         Args:
             i (int): index of the class to remove
         """
-        assert isinstance(i,(int,np.integer))
+        assert isinstance(i, (int, np.integer))
 
-        self.W_next = np.delete(self.W,i,axis=1)
-        self.H_next = np.delete(self.H,i,axis=0)
+        self.W_next = np.delete(self.W, i, axis=1)
+        self.H_next = np.delete(self.H, i, axis=0)
         self.N_c_next = self.W_next.shape[1]
 
         return
@@ -522,46 +550,58 @@ class BraggVectorClassification(object):
             # Get merge candidate pairs
             mask_BPs = W_corr > threshBPs
             mask_ScanPosition = H_corr > threshScanPosition
-            mask_upperright = np.zeros((Nc_,Nc_),dtype=bool)
+            mask_upperright = np.zeros((Nc_, Nc_), dtype=bool)
             for i in range(Nc_):
-                mask_upperright[i,i+1:] = 1
+                mask_upperright[i, i + 1 :] = 1
             merge_mask = mask_BPs * mask_ScanPosition * mask_upperright
-            merge_i,merge_j = np.nonzero(merge_mask)
+            merge_i, merge_j = np.nonzero(merge_mask)
 
             # Sort merge candidate pairs
-            merge_candidates = np.zeros(len(merge_i),dtype=[('i',int),('j',int),('cc_w',float),
-                                                            ('cc_h',float),('score',float)])
-            merge_candidates['i'] = merge_i
-            merge_candidates['j'] = merge_j
-            merge_candidates['cc_w'] = W_corr[merge_i,merge_j]
-            merge_candidates['cc_h'] = H_corr[merge_i,merge_j]
-            merge_candidates['score'] = W_corr[merge_i,merge_j]*H_corr[merge_i,merge_j]
-            merge_candidates = np.sort(merge_candidates,order='score')[::-1]
+            merge_candidates = np.zeros(
+                len(merge_i),
+                dtype=[
+                    ("i", int),
+                    ("j", int),
+                    ("cc_w", float),
+                    ("cc_h", float),
+                    ("score", float),
+                ],
+            )
+            merge_candidates["i"] = merge_i
+            merge_candidates["j"] = merge_j
+            merge_candidates["cc_w"] = W_corr[merge_i, merge_j]
+            merge_candidates["cc_h"] = H_corr[merge_i, merge_j]
+            merge_candidates["score"] = (
+                W_corr[merge_i, merge_j] * H_corr[merge_i, merge_j]
+            )
+            merge_candidates = np.sort(merge_candidates, order="score")[::-1]
 
             # Perform merging
-            merged = np.zeros(Nc_,dtype=bool)
-            W_merge = np.zeros((self.N_feat,1))
-            H_merge = np.zeros((1,self.N_meas))
+            merged = np.zeros(Nc_, dtype=bool)
+            W_merge = np.zeros((self.N_feat, 1))
+            H_merge = np.zeros((1, self.N_meas))
             for index in range(len(merge_candidates)):
-                i = merge_candidates['i'][index]
-                j = merge_candidates['j'][index]
+                i = merge_candidates["i"][index]
+                j = merge_candidates["j"][index]
                 if not (merged[i] or merged[j]):
-                    weight_i = np.sum(H_[i,:])
-                    weight_j = np.sum(H_[j,:])
-                    W_new = (W_[:,i]*weight_i + W_[:,j]*weight_j)/(weight_i+weight_j)
-                    H_new = H_[i,:] + H_[j,:]
-                    W_merge = np.hstack((W_merge,W_new[:,np.newaxis]))
-                    H_merge = np.vstack((H_merge,H_new[np.newaxis,:]))
+                    weight_i = np.sum(H_[i, :])
+                    weight_j = np.sum(H_[j, :])
+                    W_new = (W_[:, i] * weight_i + W_[:, j] * weight_j) / (
+                        weight_i + weight_j
+                    )
+                    H_new = H_[i, :] + H_[j, :]
+                    W_merge = np.hstack((W_merge, W_new[:, np.newaxis]))
+                    H_merge = np.vstack((H_merge, H_new[np.newaxis, :]))
                 merged[i] = True
                 merged[j] = True
-            W_merge = W_merge[:,1:]
-            H_merge = H_merge[1:,:]
+            W_merge = W_merge[:, 1:]
+            H_merge = H_merge[1:, :]
 
-            W_ = np.hstack((W_[:,merged==False],W_merge))
-            H_ = np.vstack((H_[merged==False,:],H_merge))
+            W_ = np.hstack((W_[:, merged == False], W_merge))
+            H_ = np.vstack((H_[merged == False, :], H_merge))
             Nc_ = W_.shape[1]
 
-            if len(merge_candidates)==0:
+            if len(merge_candidates) == 0:
                 proceed = False
 
         self.W_next = W_
@@ -607,8 +647,8 @@ class BraggVectorClassification(object):
                 * **class_image**: *(shape (R_Nx,R_Ny) array of floats)* the weights of
                   each scan position in this class
         """
-        class_BPs = self.W[:,i]
-        class_image = self.H[i,:].reshape((self.R_Nx,self.R_Ny))
+        class_BPs = self.W[:, i]
+        class_image = self.H[i, :].reshape((self.R_Nx, self.R_Ny))
         return class_BPs, class_image
 
     def get_class_BPs(self, i):
@@ -622,7 +662,7 @@ class BraggVectorClassification(object):
             (length N_feat array of floats): the weights of the N_feat Bragg peaks for
             this class
         """
-        return self.W[:,i]
+        return self.W[:, i]
 
     def get_class_image(self, i):
         """
@@ -635,7 +675,7 @@ class BraggVectorClassification(object):
             (shape (R_Nx,R_Ny) array of floats): the weights of each scan position in
             this class
         """
-        return self.H[i,:].reshape((self.R_Nx,self.R_Ny))
+        return self.H[i, :].reshape((self.R_Nx, self.R_Ny))
 
     def get_candidate_class(self, i):
         """
@@ -655,8 +695,8 @@ class BraggVectorClassification(object):
         assert self.W_next is not None, "W_next is not assigned."
         assert self.H_next is not None, "H_next is not assigned."
 
-        class_BPs = self.W_next[:,i]
-        class_image = self.H_next[i,:].reshape((self.R_Nx,self.R_Ny))
+        class_BPs = self.W_next[:, i]
+        class_image = self.H_next[i, :].reshape((self.R_Nx, self.R_Ny))
         return class_BPs, class_image
 
     def get_candidate_class_BPs(self, i):
@@ -672,7 +712,7 @@ class BraggVectorClassification(object):
         """
         assert self.W_next is not None, "W_next is not assigned."
 
-        return self.W_next[:,i]
+        return self.W_next[:, i]
 
     def get_candidate_class_image(self, i):
         """
@@ -687,10 +727,11 @@ class BraggVectorClassification(object):
         """
         assert self.H_next is not None, "H_next is not assigned."
 
-        return self.H_next[i,:].reshape((self.R_Nx,self.R_Ny))
+        return self.H_next[i, :].reshape((self.R_Nx, self.R_Ny))
 
 
 ### Functions for initial class determination ###
+
 
 def get_braggpeak_labels_by_scan_position(braggpeaks, Qx, Qy, max_dist=None):
     """
@@ -718,18 +759,30 @@ def get_braggpeak_labels_by_scan_position(braggpeaks, Qx, Qy, max_dist=None):
         (list of lists of sets) the labels found at each scan position. Scan position
         (Rx,Ry) is accessed via braggpeak_labels[Rx][Ry]
     """
-    assert isinstance(braggpeaks,PointListArray), "braggpeaks must be a PointListArray"
-    assert np.all([name in braggpeaks.dtype.names for name in ('qx','qy')]), "braggpeaks must contain coords 'qx' and 'qy'"
+    assert isinstance(braggpeaks, PointListArray), "braggpeaks must be a PointListArray"
+    assert np.all(
+        [name in braggpeaks.dtype.names for name in ("qx", "qy")]
+    ), "braggpeaks must contain coords 'qx' and 'qy'"
 
-    braggpeak_labels = [[set() for i in range(braggpeaks.shape[1])] for j in range(braggpeaks.shape[0])]
+    braggpeak_labels = [
+        [set() for i in range(braggpeaks.shape[1])] for j in range(braggpeaks.shape[0])
+    ]
     for Rx in range(braggpeaks.shape[0]):
         for Ry in range(braggpeaks.shape[1]):
             s = braggpeak_labels[Rx][Ry]
-            pointlist = braggpeaks.get_pointlist(Rx,Ry)
+            pointlist = braggpeaks.get_pointlist(Rx, Ry)
             for i in range(len(pointlist.data)):
-                label = np.argmin(np.hypot(Qx-pointlist.data['qx'][i],Qy-pointlist.data['qy'][i]))
+                label = np.argmin(
+                    np.hypot(Qx - pointlist.data["qx"][i], Qy - pointlist.data["qy"][i])
+                )
                 if max_dist is not None:
-                    if np.hypot(Qx[label]-pointlist.data['qx'][i],Qy[label]-pointlist.data['qy'][i]) < max_dist:
+                    if (
+                        np.hypot(
+                            Qx[label] - pointlist.data["qx"][i],
+                            Qy[label] - pointlist.data["qy"][i],
+                        )
+                        < max_dist
+                    ):
                         s.add(label)
                 else:
                     s.add(label)
@@ -737,8 +790,14 @@ def get_braggpeak_labels_by_scan_position(braggpeaks, Qx, Qy, max_dist=None):
     return braggpeak_labels
 
 
-def get_initial_classes(braggpeak_labels, N, thresh=0.3, BP_fraction_thresh=0.1,
-                        max_iterations=200, n_corr_init=2):
+def get_initial_classes(
+    braggpeak_labels,
+    N,
+    thresh=0.3,
+    BP_fraction_thresh=0.1,
+    max_iterations=200,
+    n_corr_init=2,
+):
     """
     From the sets of Bragg peaks present at each scan position, get an initial guess
     classes at which Bragg peaks should be grouped together into classes.
@@ -774,33 +833,33 @@ def get_initial_classes(braggpeak_labels, N, thresh=0.3, BP_fraction_thresh=0.1,
     Returns:
         (list of sets): the sets of Bragg peaks constituting the classes
     """
-    assert isinstance(braggpeak_labels[0][0],set)
+    assert isinstance(braggpeak_labels[0][0], set)
     assert thresh >= 0 and thresh <= 1
     assert BP_fraction_thresh >= 0 and BP_fraction_thresh <= 1
-    assert isinstance(max_iterations,(int,np.integer))
-    assert n_corr_init in (2,3)
+    assert isinstance(max_iterations, (int, np.integer))
+    assert n_corr_init in (2, 3)
     R_Nx = len(braggpeak_labels)
     R_Ny = len(braggpeak_labels[0])
 
     if n_corr_init == 2:
         # Get two-point function
-        n_point_function = np.zeros((N,N))
+        n_point_function = np.zeros((N, N))
         for Rx in range(R_Nx):
             for Ry in range(R_Ny):
                 s = braggpeak_labels[Rx][Ry]
-                perms = permutations(s,2)
+                perms = permutations(s, 2)
                 for perm in perms:
-                    n_point_function[perm[0],perm[1]] += 1
-        n_point_function /= R_Nx*R_Ny
+                    n_point_function[perm[0], perm[1]] += 1
+        n_point_function /= R_Nx * R_Ny
 
         # Main loop
         BP_sets = []
         iteration = 0
-        unused_BPs = np.ones(N,dtype=bool)
+        unused_BPs = np.ones(N, dtype=bool)
         seed_new_class = True
         while seed_new_class:
-            ind1,ind2 = np.unravel_index(np.argmax(n_point_function),(N,N))
-            BP_set = set([ind1,ind2])
+            ind1, ind2 = np.unravel_index(np.argmax(n_point_function), (N, N))
+            BP_set = set([ind1, ind2])
             grow_class = True
             while grow_class:
                 frequencies = np.zeros(N)
@@ -823,8 +882,8 @@ def get_initial_classes(braggpeak_labels, N, thresh=0.3, BP_fraction_thresh=0.1,
 
             # Modify 2-point function, add new BP set to list, and decide to continue or stop
             for i in BP_set:
-                n_point_function[i,:] = 0
-                n_point_function[:,i] = 0
+                n_point_function[i, :] = 0
+                n_point_function[:, i] = 0
                 unused_BPs[i] = 0
             for s in BP_sets:
                 if len(s) == len(s.union(BP_set)):
@@ -833,28 +892,28 @@ def get_initial_classes(braggpeak_labels, N, thresh=0.3, BP_fraction_thresh=0.1,
                 BP_sets.append(BP_set)
             iteration += 1
             N_unused_BPs = np.sum(unused_BPs)
-            if iteration > max_iterations or N_unused_BPs < N*BP_fraction_thresh:
+            if iteration > max_iterations or N_unused_BPs < N * BP_fraction_thresh:
                 seed_new_class = False
 
     else:
         # Get three-point function
-        n_point_function = np.zeros((N,N,N))
+        n_point_function = np.zeros((N, N, N))
         for Rx in range(R_Nx):
             for Ry in range(R_Ny):
                 s = braggpeak_labels[Rx][Ry]
-                perms = permutations(s,3)
+                perms = permutations(s, 3)
                 for perm in perms:
-                    n_point_function[perm[0],perm[1],perm[2]] += 1
-        n_point_function /= R_Nx*R_Ny
+                    n_point_function[perm[0], perm[1], perm[2]] += 1
+        n_point_function /= R_Nx * R_Ny
 
         # Main loop
         BP_sets = []
         iteration = 0
-        unused_BPs = np.ones(N,dtype=bool)
+        unused_BPs = np.ones(N, dtype=bool)
         seed_new_class = True
         while seed_new_class:
-            ind1,ind2,ind3 = np.unravel_index(np.argmax(n_point_function),(N,N,N))
-            BP_set = set([ind1,ind2,ind3])
+            ind1, ind2, ind3 = np.unravel_index(np.argmax(n_point_function), (N, N, N))
+            BP_set = set([ind1, ind2, ind3])
             grow_class = True
             while grow_class:
                 frequencies = np.zeros(N)
@@ -877,9 +936,9 @@ def get_initial_classes(braggpeak_labels, N, thresh=0.3, BP_fraction_thresh=0.1,
 
             # Modify 3-point function, add new BP set to list, and decide to continue or stop
             for i in BP_set:
-                n_point_function[i,:,:] = 0
-                n_point_function[:,i,:] = 0
-                n_point_function[:,:,i] = 0
+                n_point_function[i, :, :] = 0
+                n_point_function[:, i, :] = 0
+                n_point_function[:, :, i] = 0
                 unused_BPs[i] = 0
             for s in BP_sets:
                 if len(s) == len(s.union(BP_set)):
@@ -888,16 +947,7 @@ def get_initial_classes(braggpeak_labels, N, thresh=0.3, BP_fraction_thresh=0.1,
                 BP_sets.append(BP_set)
             iteration += 1
             N_unused_BPs = np.sum(unused_BPs)
-            if iteration > max_iterations or N_unused_BPs < N*BP_fraction_thresh:
+            if iteration > max_iterations or N_unused_BPs < N * BP_fraction_thresh:
                 seed_new_class = False
 
     return BP_sets
-
-
-
-
-
-
-
-
-

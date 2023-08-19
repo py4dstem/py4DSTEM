@@ -1,11 +1,11 @@
 # Functions for indexing the Bragg directions
 
 import numpy as np
+from emdfile import PointList, PointListArray, tqdmnd
 from numpy.linalg import lstsq
 
-from emdfile import tqdmnd, PointList, PointListArray
 
-def get_selected_lattice_vectors(gx,gy,i0,i1,i2):
+def get_selected_lattice_vectors(gx, gy, i0, i1, i2):
     """
     From a set of reciprocal lattice points (gx,gy), and indices in those arrays which
     specify the center beam, the first basis lattice vector, and the second basis lattice
@@ -24,13 +24,14 @@ def get_selected_lattice_vectors(gx,gy,i0,i1,i2):
             * **g1**: *(2-tuple)* the first lattice vector, (g1x,g1y)
             * **g2**: *(2-tuple)* the second lattice vector, (g2x,g2y)
     """
-    for i in (i0,i1,i2):
-        assert isinstance(i,(int,np.integer))
+    for i in (i0, i1, i2):
+        assert isinstance(i, (int, np.integer))
     g1x = gx[i1] - gx[i0]
     g1y = gy[i1] - gy[i0]
     g2x = gx[i2] - gx[i0]
     g2y = gy[i2] - gy[i0]
-    return (g1x,g1y),(g2x,g2y)
+    return (g1x, g1y), (g2x, g2y)
+
 
 def index_bragg_directions(x0, y0, gx, gy, g1, g2):
     """
@@ -62,31 +63,32 @@ def index_bragg_directions(x0, y0, gx, gy, g1, g2):
               coords 'h' and 'k' contain h and k.
     """
     # Get beta, the matrix of lattice vectors
-    beta = np.array([[g1[0],g2[0]],[g1[1],g2[1]]])
+    beta = np.array([[g1[0], g2[0]], [g1[1], g2[1]]])
 
     # Get alpha, the matrix of measured bragg angles
-    alpha = np.vstack([gx-x0,gy-y0])
+    alpha = np.vstack([gx - x0, gy - y0])
 
     # Calculate M, the matrix of peak positions
     M = lstsq(beta, alpha, rcond=None)[0].T
     M = np.round(M).astype(int)
 
     # Get h,k
-    h = M[:,0]
-    k = M[:,1]
+    h = M[:, 0]
+    k = M[:, 1]
 
     # Store in a PointList
-    coords = [('qx',float),('qy',float),('h',int),('k',int)]
-    temp_array = np.zeros([], dtype = coords)
-    bragg_directions = PointList(data = temp_array)
-    bragg_directions.add_data_by_field((gx,gy,h,k))
-    mask = np.zeros(bragg_directions['qx'].shape[0])
+    coords = [("qx", float), ("qy", float), ("h", int), ("k", int)]
+    temp_array = np.zeros([], dtype=coords)
+    bragg_directions = PointList(data=temp_array)
+    bragg_directions.add_data_by_field((gx, gy, h, k))
+    mask = np.zeros(bragg_directions["qx"].shape[0])
     mask[0] = 1
     bragg_directions.remove(mask)
 
-    return h,k, bragg_directions
+    return h, k, bragg_directions
 
-def generate_lattice(ux,uy,vx,vy,x0,y0,Q_Nx,Q_Ny,h_max=None,k_max=None):
+
+def generate_lattice(ux, uy, vx, vy, x0, y0, Q_Nx, Q_Ny, h_max=None, k_max=None):
     """
     Returns a full reciprocal lattice stretching to the limits of the diffraction pattern
     by making linear combinations of the lattice vectors up to (±h_max,±k_max).
@@ -117,52 +119,52 @@ def generate_lattice(ux,uy,vx,vy,x0,y0,Q_Nx,Q_Ny,h_max=None,k_max=None):
     """
 
     # Matrix of lattice vectors
-    beta = np.array([[ux,uy],[vx,vy]])
+    beta = np.array([[ux, uy], [vx, vy]])
 
     # If no max index is specified, (over)estimate based on image size
     if (h_max is None) or (k_max is None):
-        (y,x) = np.mgrid[0:Q_Ny,0:Q_Nx]
+        (y, x) = np.mgrid[0:Q_Ny, 0:Q_Nx]
         x = x - x0
         y = y - y0
-        h_max = np.max(np.ceil(np.abs((x/ux,y/uy))))
-        k_max = np.max(np.ceil(np.abs((x/vx,y/vy))))
+        h_max = np.max(np.ceil(np.abs((x / ux, y / uy))))
+        k_max = np.max(np.ceil(np.abs((x / vx, y / vy))))
 
-    (hlist,klist) = np.meshgrid(np.arange(-h_max,h_max+1),np.arange(-k_max,k_max+1))
+    (hlist, klist) = np.meshgrid(
+        np.arange(-h_max, h_max + 1), np.arange(-k_max, k_max + 1)
+    )
 
-    M_ideal = np.vstack((hlist.ravel(),klist.ravel())).T
-    ideal_peaks = np.matmul(M_ideal,beta)
+    M_ideal = np.vstack((hlist.ravel(), klist.ravel())).T
+    ideal_peaks = np.matmul(M_ideal, beta)
 
-    coords = [('qx',float),('qy',float),('h',int),('k',int)]
+    coords = [("qx", float), ("qy", float), ("h", int), ("k", int)]
 
-    ideal_data = np.zeros(len(ideal_peaks[:,0]),dtype=coords)
-    ideal_data['qx'] = ideal_peaks[:,0]
-    ideal_data['qy'] = ideal_peaks[:,1]
-    ideal_data['h'] = M_ideal[:,0]
-    ideal_data['k'] = M_ideal[:,1]
+    ideal_data = np.zeros(len(ideal_peaks[:, 0]), dtype=coords)
+    ideal_data["qx"] = ideal_peaks[:, 0]
+    ideal_data["qy"] = ideal_peaks[:, 1]
+    ideal_data["h"] = M_ideal[:, 0]
+    ideal_data["k"] = M_ideal[:, 1]
 
     ideal_lattice = PointList(data=ideal_data)
 
-    #shift to the DP center
-    ideal_lattice.data['qx'] += x0
-    ideal_lattice.data['qy'] += y0
+    # shift to the DP center
+    ideal_lattice.data["qx"] += x0
+    ideal_lattice.data["qy"] += y0
 
     # trim peaks outside the image
-    deletePeaks = (ideal_lattice.data['qx'] > Q_Nx) | \
-            (ideal_lattice.data['qx'] < 0) | \
-            (ideal_lattice.data['qy'] > Q_Ny) | \
-            (ideal_lattice.data['qy'] < 0)
+    deletePeaks = (
+        (ideal_lattice.data["qx"] > Q_Nx)
+        | (ideal_lattice.data["qx"] < 0)
+        | (ideal_lattice.data["qy"] > Q_Ny)
+        | (ideal_lattice.data["qy"] < 0)
+    )
     ideal_lattice.remove(deletePeaks)
 
     return ideal_lattice
 
+
 def add_indices_to_braggvectors(
-    braggpeaks, 
-    lattice, 
-    maxPeakSpacing, 
-    qx_shift=0,
-    qy_shift=0, 
-    mask=None
-    ):
+    braggpeaks, lattice, maxPeakSpacing, qx_shift=0, qy_shift=0, mask=None
+):
     """
     Using the peak positions (qx,qy) and indices (h,k) in the PointList lattice,
     identify the indices for each peak in the PointListArray braggpeaks.
@@ -195,40 +197,50 @@ def add_indices_to_braggvectors(
     # assert np.all([name in lattice.dtype.names for name in ('qx','qy','h','k')])
 
     if mask is None:
-        mask = np.ones(braggpeaks.Rshape,dtype=bool)
+        mask = np.ones(braggpeaks.Rshape, dtype=bool)
 
-    assert mask.shape == braggpeaks.Rshape, 'mask must have same shape as pointlistarray'
-    assert mask.dtype == bool, 'mask must be boolean'
+    assert (
+        mask.shape == braggpeaks.Rshape
+    ), "mask must have same shape as pointlistarray"
+    assert mask.dtype == bool, "mask must be boolean"
 
+    coords = [
+        ("qx", float),
+        ("qy", float),
+        ("intensity", float),
+        ("h", int),
+        ("k", int),
+    ]
 
-    coords = [('qx',float),('qy',float),('intensity',float),('h',int),('k',int)]
-
-    indexed_braggpeaks = PointListArray(    
-        dtype = coords,
-        shape = braggpeaks.Rshape,
+    indexed_braggpeaks = PointListArray(
+        dtype=coords,
+        shape=braggpeaks.Rshape,
     )
 
     # loop over all the scan positions
-    for Rx, Ry in tqdmnd(mask.shape[0],mask.shape[1]):
-        if mask[Rx,Ry]: 
-            pl = braggpeaks.cal[Rx,Ry]
+    for Rx, Ry in tqdmnd(mask.shape[0], mask.shape[1]):
+        if mask[Rx, Ry]:
+            pl = braggpeaks.cal[Rx, Ry]
             for i in range(pl.data.shape[0]):
-                r2 = (pl.data['qx'][i]-lattice.data['qx'] + qx_shift)**2 + \
-                     (pl.data['qy'][i]-lattice.data['qy'] + qy_shift)**2
+                r2 = (pl.data["qx"][i] - lattice.data["qx"] + qx_shift) ** 2 + (
+                    pl.data["qy"][i] - lattice.data["qy"] + qy_shift
+                ) ** 2
                 ind = np.argmin(r2)
                 if r2[ind] <= maxPeakSpacing**2:
-                    indexed_braggpeaks[Rx,Ry].add_data_by_field((
-                        pl.data['qx'][i],
-                        pl.data['qy'][i],
-                        pl.data['intensity'][i],
-                        lattice.data['h'][ind],
-                        lattice.data['k'][ind]
-                        ))
+                    indexed_braggpeaks[Rx, Ry].add_data_by_field(
+                        (
+                            pl.data["qx"][i],
+                            pl.data["qy"][i],
+                            pl.data["intensity"][i],
+                            lattice.data["h"][ind],
+                            lattice.data["k"][ind],
+                        )
+                    )
 
     return indexed_braggpeaks
 
 
-def bragg_vector_intensity_map_by_index(braggpeaks,h,k, symmetric=False):
+def bragg_vector_intensity_map_by_index(braggpeaks, h, k, symmetric=False):
     """
     Returns a correlation intensity map for an indexed (h,k) Bragg vector
     Used to obtain a darkfield image corresponding to the (h,k) reflection
@@ -245,22 +257,23 @@ def bragg_vector_intensity_map_by_index(braggpeaks,h,k, symmetric=False):
         (numpy array): a map of the intensity of the (h,k) Bragg vector correlation.
         Same shape as the pointlistarray.
     """
-    assert isinstance(braggpeaks,PointListArray), "braggpeaks must be a PointListArray"
-    assert np.all([name in braggpeaks.dtype.names for name in ('h','k','intensity')])
-    intensity_map = np.zeros(braggpeaks.shape,dtype=float)
+    assert isinstance(braggpeaks, PointListArray), "braggpeaks must be a PointListArray"
+    assert np.all([name in braggpeaks.dtype.names for name in ("h", "k", "intensity")])
+    intensity_map = np.zeros(braggpeaks.shape, dtype=float)
 
     for Rx in range(braggpeaks.shape[0]):
         for Ry in range(braggpeaks.shape[1]):
-            pl = braggpeaks.get_pointlist(Rx,Ry)
+            pl = braggpeaks.get_pointlist(Rx, Ry)
             if pl.length > 0:
                 if symmetric:
-                    matches = np.logical_and(np.abs(pl.data['h']) == np.abs(h), np.abs(pl.data['k']) == np.abs(k))
+                    matches = np.logical_and(
+                        np.abs(pl.data["h"]) == np.abs(h),
+                        np.abs(pl.data["k"]) == np.abs(k),
+                    )
                 else:
-                    matches = np.logical_and(pl.data['h'] == h, pl.data['k'] == k)
+                    matches = np.logical_and(pl.data["h"] == h, pl.data["k"] == k)
 
-                if len(matches)>0:
-                    intensity_map[Rx,Ry] = np.sum(pl.data['intensity'][matches])
+                if len(matches) > 0:
+                    intensity_map[Rx, Ry] = np.sum(pl.data["intensity"][matches])
 
     return intensity_map
-
-
