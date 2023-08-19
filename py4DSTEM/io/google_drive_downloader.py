@@ -1,5 +1,6 @@
 import gdown
 import os
+import warnings
 
 
 ### File IDs
@@ -238,9 +239,34 @@ def gdrive_download(
             f = file_ids[id_]
             filename = f[0]
             kwargs['id'] = f[1]
+        
+        # if its not in the list of files we expect
+        
+        #TODO simplify the logic here
         else:
             filename = 'gdrivedownload.file' if filename is None else filename
-            kwargs['url'] = id_
+            # check if its a url
+            if id_.startswith('http'):
+                # check the url is the correct format i.e. https://drive.google.com/uc?id=<id>
+                # and not https://drive.google.com/file/d/<id>
+                # if correct format
+                if 'uc?id=' in id_:
+                    kwargs['url'] = id_
+                # if incorrect format, strip the google ID from the URL 
+                # making http/https agnostic
+                elif 'drive.google.com/file/d/' in id_:
+                    # warn the user the the url syntax was incorrect and this is making a guess
+                    warnings.warn(f'URL provided {id_} was not in the correct format https://drive.google.com/uc?id=<id>, attempting to interpret link and download the file. Most likely a URL with this format was provided https://drive.google.com/file/d/<id>')
+                    # try stripping 
+                    stripped_id = id_.split('/')[-1]
+                    # Currently the length of the google drive IDs appears to always be 33 characters 
+                    # check for length and warn if it appears malformed, if so raise warning and the ID it guessed
+                    if len(stripped_id) != 33:
+                        warnings.warn(f'Guessed ID {stripped_id}: appears to be in the wrong length (not 33 characters), attempting download')
+                    kwargs['id'] = stripped_id
+            # if its just a Google Drive string
+            else:
+                kwargs['id'] = id_
 
         # download
         kwargs['output'] = os.path.join(destination, filename)
