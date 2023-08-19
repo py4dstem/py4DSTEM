@@ -716,12 +716,24 @@ def show(
         # Add a scalebar
         if scalebar is not None and scalebar is not False:
             # Add the grid
-            scalebar["Nx"] = ar.shape[0]
-            scalebar["Ny"] = ar.shape[1]
-            scalebar["pixelsize"] = pixelsize
-            scalebar["pixelunits"] = pixelunits
-            scalebar["space"] = space
-            add_scalebar(ax, scalebar)
+            scalebar['Nx'] = ar.shape[0]
+            scalebar['Ny'] = ar.shape[1]
+            scalebar['pixelsize'] = pixelsize
+            scalebar['pixelunits'] = pixelunits
+            scalebar['space'] = space
+            # determine good default scale bar fontsize
+            if figax is not None:
+                bbox = figax[1].get_window_extent()
+                dpi = figax[0].dpi
+                size = (
+                    bbox.width / dpi , 
+                    bbox.height / dpi 
+                    )
+                scalebar['labelsize'] = np.min(np.array(size)) * 3.0
+            if 'labelsize' not in scalebar.keys():
+                scalebar['labelsize'] = np.min(np.array(figsize)) * 2.0
+            add_scalebar(ax,scalebar)
+
 
         # Add cartesian grid
         if cartesian_grid is not None:

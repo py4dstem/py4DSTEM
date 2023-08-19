@@ -5,26 +5,15 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as mpl_c
 from matplotlib.gridspec import GridSpec
 
+from py4DSTEM.process.wholepatternfit.wp_models import WPFModelType
+
+
 def show_model_grid(self, x=None, **plot_kwargs):
-    if x is None:
-        x = self.mean_CBED_fit.x
+    x = self.mean_CBED_fit.x if x is None else x
 
-    shared_data = self.static_data.copy()
-    shared_data["global_x0"] = x[0]
-    shared_data["global_y0"] = x[1]
-    shared_data["global_r"] = np.hypot(
-        (shared_data["xArray"] - x[0]),
-        (shared_data["yArray"] - x[1]),
-    )
+    model = [m for m in self.model if WPFModelType.DUMMY not in m.model_type]
 
-    shared_data["global_x0"] = x[0]
-    shared_data["global_y0"] = x[1]
-    shared_data["global_r"] = np.hypot(
-        (shared_data["xArray"] - x[0]),
-        (shared_data["yArray"] - x[1]),
-    )
-
-    N = len(self.model)
+    N = len(model)
     cols = int(np.ceil(np.sqrt(N)))
     rows = (N + 1) // cols
 
@@ -32,30 +21,80 @@ def show_model_grid(self, x=None, **plot_kwargs):
     kwargs.update(plot_kwargs)
     fig, ax = plt.subplots(rows, cols, **kwargs)
 
-    for i, (a, m) in enumerate(zip(ax.flat, self.model)):
+    for a, m in zip(ax.flat, model):
         DP = np.zeros((self.datacube.Q_Nx, self.datacube.Q_Ny))
-        ind = self.model_param_inds[i] + 2
-        m.func(DP, *x[ind : ind + m.nParams].tolist(), **shared_data)
+        m.func(DP, x, **self.static_data)
 
         a.matshow(DP, cmap="turbo")
-        a.text(0.5, 0.92, m.name, transform=a.transAxes, ha="center", va="center")
+
+        # Determine if text color should be white or black
+        int_range = np.array((np.min(DP), np.max(DP)))
+        if int_range[0] != int_range[1]:
+            r = (np.mean(DP[: DP.shape[0] // 10, :]) - int_range[0]) / (
+                int_range[1] - int_range[0]
+            )
+            if r < 0.5:
+                color = "w"
+            else:
+                color = "k"
+        else:
+            color = "w"
+
+        a.text(
+            0.5,
+            0.92,
+            m.name,
+            transform=a.transAxes,
+            ha="center",
+            va="center",
+            color=color,
+        )
     for a in ax.flat:
         a.axis("off")
 
     plt.show()
 
+
 def show_lattice_points(
-    self, 
-    im = None,
-    vmin = None,
-    vmax = None,
-    power = None,
-    returnfig=False, 
-    *args, 
-    **kwargs
-    ):
+    self,
+    im=None,
+    vmin=None,
+    vmax=None,
+    power=None,
+    show_vectors=True,
+    crop_to_pattern=False,
+    returnfig=False,
+    moire_origin_idx=[0, 0, 0, 0],
+    *args,
+    **kwargs,
+):
     """
     Plotting utility to show the initial lattice points.
+
+    Parameters
+    ----------
+    im: np.ndarray
+        Optional: Image to show, defaults to mean CBED
+    vmin, vmax: float
+        Intensity ranges for plotting im
+    power: float
+        Gamma level for showing im
+    show_vectors: bool
+        Flag to plot the lattice vectors
+    crop_to_pattern: bool
+        Flag to limit the field of view to the pattern area. If False,
+        spots outside the pattern are shown
+    returnfig: bool
+        If True, (fig,ax) are returned and plt.show() is not called
+    moire_origin_idx: list of length 4
+        Indices of peak on which to draw Moire vectors, written as
+        [a_u, a_v, b_u, b_v]
+    args, kwargs
+        Passed to plt.subplots
+
+    Returns
+    -------
+    fig,ax: If returnfig=True
     """
 
     if im is None:
@@ -66,40 +105,110 @@ def show_lattice_points(
     fig, ax = plt.subplots(*args, **kwargs)
     if vmin is None and vmax is None:
         ax.matshow(
-            im**power, 
+            im**power,
             cmap="gray",
-            )
+        )
     else:
         ax.matshow(
             im**power,
-            vmin = vmin,
-            vmax = vmax, 
+            vmin=vmin,
+            vmax=vmax,
             cmap="gray",
+        )
+
+    lattices = [m for m in self.model if WPFModelType.LATTICE in m.model_type]
+
+    for m in lattices:
+        ux, uy = m.params["ux"].initial_value, m.params["uy"].initial_value
+        vx, vy = m.params["vx"].initial_value, m.params["vy"].initial_value
+
+        lat = np.array([[ux, uy], [vx, vy]])
+        inds = np.stack([m.u_inds, m.v_inds], axis=1)
+
+        spots = inds @ lat
+        spots[:, 0] += m.params["x center"].initial_value
+        spots[:, 1] += m.params["y center"].initial_value
+
+        axpts = ax.scatter(
+            spots[:, 1],
+            spots[:, 0],
+            s=100,
+            marker="x",
+            label=m.name,
+        )
+
+        if show_vectors:
+            ax.arrow(
+                m.params["y center"].initial_value,
+                m.params["x center"].initial_value,
+                m.params["uy"].initial_value,
+                m.params["ux"].initial_value,
+                length_includes_head=True,
+                color=axpts.get_facecolor(),
+                width=1.0,
             )
 
-    for m in self.model:
-        if "Lattice" in m.name:
-            ux, uy = m.params["ux"].initial_value, m.params["uy"].initial_value
-            vx, vy = m.params["vx"].initial_value, m.params["vy"].initial_value
+            ax.arrow(
+                m.params["y center"].initial_value,
+                m.params["x center"].initial_value,
+                m.params["vy"].initial_value,
+                m.params["vx"].initial_value,
+                length_includes_head=True,
+                color=axpts.get_facecolor(),
+                width=1.0,
+            )
 
-            lat = np.array([[ux, uy], [vx, vy]])
-            inds = np.stack([m.u_inds, m.v_inds], axis=1)
+    moires = [m for m in self.model if WPFModelType.MOIRE in m.model_type]
 
-            spots = inds @ lat
-            spots[:, 0] += self.static_data["global_x0"]
-            spots[:, 1] += self.static_data["global_y0"]
+    for m in moires:
+        lat_ab = m._get_parent_lattices(m.lattice_a, m.lattice_b)
+        lat_abm = np.vstack((lat_ab, m.moire_matrix @ lat_ab))
 
-            ax.scatter(
-                spots[:, 1], 
-                spots[:, 0], 
-                s = 100,
-                marker="x", 
-                label=m.name,
-                )
+        spots = m.moire_indices_uvm @ lat_abm
+        spots[:, 0] += m.params["x center"].initial_value
+        spots[:, 1] += m.params["y center"].initial_value
+
+        axpts = ax.scatter(
+            spots[:, 1],
+            spots[:, 0],
+            s=100,
+            marker="+",
+            label=m.name,
+        )
+
+        if show_vectors:
+            arrow_origin = np.array(moire_origin_idx) @ lat_ab
+            arrow_origin[0] += m.params["x center"].initial_value
+            arrow_origin[1] += m.params["y center"].initial_value
+
+            ax.arrow(
+                arrow_origin[1],
+                arrow_origin[0],
+                lat_abm[4, 1],
+                lat_abm[4, 0],
+                length_includes_head=True,
+                color=axpts.get_facecolor(),
+                width=1.0,
+            )
+
+            ax.arrow(
+                arrow_origin[1],
+                arrow_origin[0],
+                lat_abm[5, 1],
+                lat_abm[5, 0],
+                length_includes_head=True,
+                color=axpts.get_facecolor(),
+                width=1.0,
+            )
 
     ax.legend()
 
+    if crop_to_pattern:
+        ax.set_xlim(0, im.shape[1] - 1)
+        ax.set_ylim(im.shape[0] - 1, 0)
+
     return (fig, ax) if returnfig else plt.show()
+
 
 def show_fit_metrics(self, returnfig=False, **subplots_kwargs):
     assert hasattr(self, "fit_metrics"), "Please run fitting first!"
