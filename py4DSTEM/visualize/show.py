@@ -365,6 +365,8 @@ def show(
             # loop over images
             from py4DSTEM.visualize import show
 
+            if show_fft:
+                ar = np.abs(np.fft.fftshift(np.fft.fft2(ar.copy())))
             for a0 in range(num_images):
                 im = show(
                     ar[a0],
@@ -386,18 +388,18 @@ def show(
 
             # Assemble final image
             sat_change = np.maximum(val_total - 1.0, 0.0)
-            ar_rgb = np.zeros((ar[0].shape[0], ar[0].shape[1], 3))
-            ar_rgb[:, :, 0] = np.mod(
+            ar_hsv = np.zeros((ar[0].shape[0], ar[0].shape[1], 3))
+            ar_hsv[:, :, 0] = np.mod(
                 np.arctan2(sin_total, cos_total) / (2 * np.pi), 1.0
             )
-            ar_rgb[:, :, 1] = 1 - sat_change
-            ar_rgb[:, :, 2] = val_total  # np.sqrt(cos_total**2 + sin_total**2)
-            ar_rgb = np.clip(ar_rgb, 0.0, 1.0)
+            ar_hsv[:, :, 1] = 1 - sat_change
+            ar_hsv[:, :, 2] = val_total  # np.sqrt(cos_total**2 + sin_total**2)
+            ar_hsv = np.clip(ar_hsv, 0.0, 1.0)
 
             # Convert to RGB
             from matplotlib.colors import hsv_to_rgb
 
-            ar_rgb = hsv_to_rgb(ar_rgb)
+            ar_rgb = hsv_to_rgb(ar_hsv)
 
             # Output image for plotting
             ar = ar_rgb
@@ -441,10 +443,10 @@ def show(
                 ar = ar.data
         else:
             raise Exception('input argument "ar" has unsupported type ' + str(type(ar)))
-
     # Otherwise, plot one image
     if show_fft:
-        ar = np.abs(np.fft.fftshift(np.fft.fft2(ar.copy())))
+        if combine_images is False:
+            ar = np.abs(np.fft.fftshift(np.fft.fft2(ar.copy())))
 
     # get image from a masked array
     if mask is not None:
