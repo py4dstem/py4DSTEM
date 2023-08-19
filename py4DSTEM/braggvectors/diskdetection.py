@@ -591,8 +591,12 @@ def _find_Bragg_disks_CUDA_unbatched(
         batching=False)
 
     # Populate a BraggVectors instance and return
-    braggvectors = BraggVectors( datacube.Rshape, datacube.Qshape )
-    braggvectors._v_uncal = peaks
+    braggvectors = BraggVectors(
+        datacube.Rshape,
+        datacube.Qshape,
+        name = peaks.name)
+    braggvectors.set_raw_vectors(peaks)
+
     return braggvectors
 
 
@@ -637,12 +641,13 @@ def _find_Bragg_disks_CUDA_batched(
         batching=True)
 
     # Populate a BraggVectors instance and return
-    braggvectors = BraggVectors( datacube.Rshape, datacube.Qshape )
-    braggvectors._v_uncal = peaks
+    braggvectors = BraggVectors(
+        datacube.Rshape,
+        datacube.Qshape,
+        name = peaks.name)
+    braggvectors.set_raw_vectors(peaks)
+
     return braggvectors
-
-
-
 
 
 # Distributed - ipyparallel

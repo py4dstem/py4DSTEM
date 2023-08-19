@@ -12,11 +12,9 @@ import matplotlib.pyplot as plt
 # from py4DSTEM.io.datastructure import PointList, PointListArray
 
 from dataclasses import dataclass, field
-# =======
 from emdfile import tqdmnd, PointListArray
 from py4DSTEM.visualize import show, show_image_grid
 from py4DSTEM.process.diffraction.crystal_viz import plot_diffraction_pattern
-# >>>>>>> dev
 
 @dataclass
 class CrystalPhase:
