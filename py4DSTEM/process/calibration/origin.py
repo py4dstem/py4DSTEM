@@ -212,10 +212,11 @@ def get_origin_single_dp(dp, r, rscale=1.2):
 
 def get_origin(
     datacube,
-    r=None,
-    rscale=1.2,
-    dp_max=None,
-    mask=None
+    r = None,
+    rscale = 1.2,
+    dp_max = None,
+    mask = None,
+    fast_center = False,
     ):
     """
     Find the origin for all diffraction patterns in a datacube, assuming (a) there is no
@@ -241,6 +242,8 @@ def get_origin(
         mask (ndarray or None): if not None, should be an (R_Nx,R_Ny) shaped
                     boolean array. Origin is found only where mask==True, and masked
                     arrays are returned for qx0,qy0
+        fast_center: (bool)
+            Skip the center of mass refinement step.
 
     Returns:
         (2-tuple of (R_Nx,R_Ny)-shaped ndarrays): the origin, (x,y) at each scan position
@@ -266,10 +269,13 @@ def get_origin(
         ):
             dp = datacube.data[rx, ry, :, :]
             _qx0, _qy0 = np.unravel_index(
-                np.argmax(gaussian_filter(dp, r)), (datacube.Q_Nx, datacube.Q_Ny)
+                np.argmax(gaussian_filter(dp, r, mode='nearest')), (datacube.Q_Nx, datacube.Q_Ny)
             )
-            _mask = np.hypot(qxx - _qx0, qyy - _qy0) < r * rscale
-            qx0[rx, ry], qy0[rx, ry] = get_CoM(dp * _mask)
+            if fast_center:
+                qx0[rx, ry], qy0[rx, ry] = _qx0, _qy0
+            else:
+                _mask = np.hypot(qxx - _qx0, qyy - _qy0) < r * rscale
+                qx0[rx, ry], qy0[rx, ry] = get_CoM(dp * _mask)
 
     else:
         assert mask.shape == (datacube.R_Nx, datacube.R_Ny)
@@ -290,10 +296,13 @@ def get_origin(
             if mask[rx, ry]:
                 dp = datacube.data[rx, ry, :, :]
                 _qx0, _qy0 = np.unravel_index(
-                    np.argmax(gaussian_filter(dp, r)), (datacube.Q_Nx, datacube.Q_Ny)
+                    np.argmax(gaussian_filter(dp, r, mode='nearest')), (datacube.Q_Nx, datacube.Q_Ny)
                 )
-                _mask = np.hypot(qxx - _qx0, qyy - _qy0) < r * rscale
-                qx0.data[rx, ry], qy0.data[rx, ry] = get_CoM(dp * _mask)
+                if fast_center:
+                    qx0[rx, ry], qy0[rx, ry] = _qx0, _qy0
+                else:
+                    _mask = np.hypot(qxx - _qx0, qyy - _qy0) < r * rscale
+                    qx0.data[rx, ry], qy0.data[rx, ry] = get_CoM(dp * _mask)
             else:
                 qx0.mask, qy0.mask = True, True
 
