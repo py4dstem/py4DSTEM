@@ -147,21 +147,32 @@ def add_annuli(ax,d):
     """
     Adds one or more annuli to Axis ax using the parameters in dictionary d.
     """
-    # Handle inputs
+    
+    # Check that all required inputs are present
     assert isinstance(ax,Axes)
-    # center
     assert('center' in d.keys())
+    assert('radii' in d.keys())
+
+    # Get user-provided center and radii
     center = d['center']
+    radii = d['radii']
+
+    # Determine number of annuli being plotted
+    if isinstance(center,list):
+        N = len(center)
+    elif isinstance(radii,list):
+        N = len(radii)
+    else:
+        N = 1
+
+    # center
     if isinstance(center,tuple):
         assert(len(center)==2)
-        center = [center]
-    assert(isinstance(center,list))
-    N = len(center)
+        center = [center]*N
+    # assert(isinstance(center,list))
     assert(all([isinstance(x,tuple) for x in center]))
     assert(all([len(x)==2 for x in center]))
     # radii
-    assert('radii' in d.keys())
-    radii = d['radii']
     if isinstance(radii,tuple):
         assert(len(radii)==2)
         ri = [radii[0] for i in range(N)]
@@ -183,7 +194,7 @@ def add_annuli(ax,d):
         assert is_color_like(color)
         color = [color for i in range(N)]
     # fill
-    fill = d['fill'] if 'fill' in d.keys() else False
+    fill = d['fill'] if 'fill' in d.keys() else True
     if isinstance(fill,bool):
         fill = [fill for i in range(N)]
     else:
@@ -694,8 +705,15 @@ def add_scalebar(ax,d):
         labeltext = f'{np.round(length_units,3)}'+' '+pixelunits
         if xshiftdir>0: va='top'
         else: va='bottom'
-        ax.text(labelpos_y,labelpos_x,labeltext,size=labelsize,
-                color=labelcolor,alpha=alpha,ha='center',va=va)
+        ax.text(
+            labelpos_y,
+            labelpos_x,
+            labeltext,
+            size = labelsize,
+            color = labelcolor,
+            alpha = alpha,
+            ha = 'center',
+            va = va)
 
     # if not ticks:
     #     ax.set_xticks([])
