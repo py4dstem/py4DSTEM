@@ -18,11 +18,11 @@ class BraggVectorMethods:
 
     def histogram(
         self,
-        mode = 'cal',
-        sampling = 1,
-        weights = None,
-        weights_thresh = 0.005,
-        ):
+        mode="cal",
+        sampling=1,
+        weights=None,
+        weights_thresh=0.005,
+    ):
         """
         Returns a 2D histogram of Bragg vector intensities in diffraction space,
         aka a Bragg vector map.
@@ -52,8 +52,8 @@ class BraggVectorMethods:
             representing the sampling grid.
         """
         # get vectors
-        assert(mode in ('cal','raw')), f"Invalid mode {mode}!"
-        if mode == 'cal':
+        assert mode in ("cal", "raw"), f"Invalid mode {mode}!"
+        if mode == "cal":
             v = self.cal
         else:
             v = self.raw
@@ -62,30 +62,34 @@ class BraggVectorMethods:
         # handling any weight factors
         if weights is None:
             vects = np.concatenate(
-                [v[i,j].data for i in range(self.Rshape[0]) for j in range(self.Rshape[1])])
+                [
+                    v[i, j].data
+                    for i in range(self.Rshape[0])
+                    for j in range(self.Rshape[1])
+                ]
+            )
         elif weights.dtype == bool:
-            x,y = np.nonzero(weights)
-            vects = np.concatenate(
-                [v[i,j].data for i,j in zip(x,y)])
+            x, y = np.nonzero(weights)
+            vects = np.concatenate([v[i, j].data for i, j in zip(x, y)])
         else:
             l = []
-            x,y = np.nonzero(weights>weights_thresh)
-            for i,j in zip(x,y):
-                d = v[i,j].data
-                d['intensity'] *= weights[i,j]
+            x, y = np.nonzero(weights > weights_thresh)
+            for i, j in zip(x, y):
+                d = v[i, j].data
+                d["intensity"] *= weights[i, j]
                 l.append(d)
             vects = np.concatenate(l)
         # get the vectors
-        qx = vects['qx']
-        qy = vects['qy']
-        I = vects['intensity']
+        qx = vects["qx"]
+        qy = vects["qy"]
+        I = vects["intensity"]
 
         # Set up bin grid
-        Q_Nx = np.round(self.Qshape[0]*sampling).astype(int)
-        Q_Ny = np.round(self.Qshape[1]*sampling).astype(int)
+        Q_Nx = np.round(self.Qshape[0] * sampling).astype(int)
+        Q_Ny = np.round(self.Qshape[1] * sampling).astype(int)
 
         # transform vects onto bin grid
-        if mode == 'raw':
+        if mode == "raw":
             qx *= sampling
             qy *= sampling
         # calibrated vects
@@ -93,12 +97,12 @@ class BraggVectorMethods:
         # then scale by the sampling factor
         else:
             # get pixel calibration
-            if self.calstate['pixel']==True:
+            if self.calstate["pixel"] == True:
                 qpix = self.calibration.get_Q_pixel_size()
                 qx /= qpix
                 qy /= qpix
             # origin calibration
-            if self.calstate['center']==True:
+            if self.calstate["center"] == True:
                 origin = self.calibration.get_origin_mean()
                 qx += origin[0]
                 qy += origin[1]
@@ -114,7 +118,8 @@ class BraggVectorMethods:
 
         # Remove any points outside the bin grid
         mask = np.logical_and.reduce(
-            ((floorx>=0),(floory>=0),(ceilx<Q_Nx),(ceily<Q_Ny)))
+            ((floorx >= 0), (floory >= 0), (ceilx < Q_Nx), (ceily < Q_Ny))
+        )
         qx = qx[mask]
         qy = qy[mask]
         I = I[mask]
@@ -128,47 +133,47 @@ class BraggVectorMethods:
         dy = qy - floory
         # Compute indices of the 4 neighbors to (qx,qy)
         # floor x, floor y
-        inds00 = np.ravel_multi_index([floorx,floory],(Q_Nx,Q_Ny))
+        inds00 = np.ravel_multi_index([floorx, floory], (Q_Nx, Q_Ny))
         # floor x, ceil y
-        inds01 = np.ravel_multi_index([floorx,ceily],(Q_Nx,Q_Ny))
+        inds01 = np.ravel_multi_index([floorx, ceily], (Q_Nx, Q_Ny))
         # ceil x, floor y
-        inds10 = np.ravel_multi_index([ceilx,floory],(Q_Nx,Q_Ny))
+        inds10 = np.ravel_multi_index([ceilx, floory], (Q_Nx, Q_Ny))
         # ceil x, ceil y
-        inds11 = np.ravel_multi_index([ceilx,ceily],(Q_Nx,Q_Ny))
+        inds11 = np.ravel_multi_index([ceilx, ceily], (Q_Nx, Q_Ny))
 
         # Compute the histogram by accumulating intensity in each
         # neighbor weighted by linear interpolation
         hist = (
-            np.bincount(inds00, I * (1.-dx) * (1.-dy), minlength=Q_Nx*Q_Ny) \
-            + np.bincount(inds01, I * (1.-dx) * dy, minlength=Q_Nx*Q_Ny) \
-            + np.bincount(inds10, I * dx * (1.-dy), minlength=Q_Nx*Q_Ny) \
-            + np.bincount(inds11, I * dx * dy, minlength=Q_Nx*Q_Ny)
-        ).reshape(Q_Nx,Q_Ny)
+            np.bincount(inds00, I * (1.0 - dx) * (1.0 - dy), minlength=Q_Nx * Q_Ny)
+            + np.bincount(inds01, I * (1.0 - dx) * dy, minlength=Q_Nx * Q_Ny)
+            + np.bincount(inds10, I * dx * (1.0 - dy), minlength=Q_Nx * Q_Ny)
+            + np.bincount(inds11, I * dx * dy, minlength=Q_Nx * Q_Ny)
+        ).reshape(Q_Nx, Q_Ny)
 
         # determine the resampled grid center and pixel size
-        if mode == 'cal' and self.calstate['center']==True:
-            x0 = sampling*origin[0]
-            y0 = sampling*origin[1]
+        if mode == "cal" and self.calstate["center"] == True:
+            x0 = sampling * origin[0]
+            y0 = sampling * origin[1]
         else:
-            x0,y0 = 0,0
-        if mode == 'cal' and self.calstate['pixel']==True:
-            pixelsize = qpix/sampling
+            x0, y0 = 0, 0
+        if mode == "cal" and self.calstate["pixel"] == True:
+            pixelsize = qpix / sampling
         else:
-            pixelsize = 1/sampling
+            pixelsize = 1 / sampling
         # find the dim vectors
-        dimx = (np.arange(Q_Nx)-x0)*pixelsize
-        dimy = (np.arange(Q_Ny)-y0)*pixelsize
+        dimx = (np.arange(Q_Nx) - x0) * pixelsize
+        dimy = (np.arange(Q_Ny) - y0) * pixelsize
         dim_units = self.calibration.get_Q_pixel_units()
 
         # wrap in a class
         ans = BraggVectorMap(
-            name = f'2Dhist_{self.name}_{mode}_s={sampling}',
-            data = hist,
-            weights = weights,
-            dims = [dimx,dimy],
-            dim_units = dim_units,
-            origin = (x0,y0),
-            pixelsize = pixelsize
+            name=f"2Dhist_{self.name}_{mode}_s={sampling}",
+            data=hist,
+            weights=weights,
+            dims=[dimx, dimy],
+            dim_units=dim_units,
+            origin=(x0, y0),
+            pixelsize=pixelsize,
         )
 
         # return
@@ -177,22 +182,20 @@ class BraggVectorMethods:
     # aliases
     get_bvm = get_bragg_vector_map = histogram
 
-
-
     # bragg virtual imaging
 
     def get_virtual_image(
         self,
-        mode = None,
-        geometry = None,
-        name = 'bragg_virtual_image',
-        returncalc = True,
-        center = True,
-        ellipse = True,
-        pixel = True,
-        rotate = True,
-        ):
-        '''
+        mode=None,
+        geometry=None,
+        name="bragg_virtual_image",
+        returncalc=True,
+        center=True,
+        ellipse=True,
+        pixel=True,
+        rotate=True,
+    ):
+        """
         Calculates a virtual image based on the values of the Braggvectors
         integrated over some detector function determined by `mode` and
         `geometry`.
@@ -208,7 +211,7 @@ class BraggVectorMethods:
               - 'circle', 'circular': nested 2-tuple, ((qx,qy),radius)
               - 'annular' or 'annulus': nested 2-tuple,
                 ((qx,qy),(radius_i,radius_o))
-             Values can be in pixels or calibrated units. Note that (qx,qy) 
+             Values can be in pixels or calibrated units. Note that (qx,qy)
              can be skipped, which assumes peaks centered at (0,0).
         center: bool
             Apply calibration - center coordinate.
@@ -222,40 +225,40 @@ class BraggVectorMethods:
         Returns
         -------
         virtual_im : VirtualImage
-        '''
+        """
 
         # parse inputs
-        circle_modes = ['circular','circle']
-        annulus_modes = ['annular','annulus']
+        circle_modes = ["circular", "circle"]
+        annulus_modes = ["annular", "annulus"]
         modes = circle_modes + annulus_modes + [None]
-        assert(mode in modes), f"Unrecognized mode {mode}"
+        assert mode in modes, f"Unrecognized mode {mode}"
 
         # set geometry
         if mode is None:
             if geometry is None:
                 qxy_center = None
-                radial_range = np.array((0,np.inf))
+                radial_range = np.array((0, np.inf))
             else:
                 if len(geometry[0]) == 0:
                     qxy_center = None
                 else:
                     qxy_center = np.array(geometry[0])
                 if isinstance(geometry[1], int) or isinstance(geometry[1], float):
-                    radial_range = np.array((0,geometry[1]))
+                    radial_range = np.array((0, geometry[1]))
                 elif len(geometry[1]) == 0:
                     radial_range = None
                 else:
                     radial_range = np.array(geometry[1])
-        elif mode == 'circular' or mode == 'circle':
-            radial_range = np.array((0,geometry[1]))
+        elif mode == "circular" or mode == "circle":
+            radial_range = np.array((0, geometry[1]))
             if len(geometry[0]) == 0:
-                    qxy_center = None
+                qxy_center = None
             else:
                 qxy_center = np.array(geometry[0])
-        elif mode == 'annular' or mode == 'annulus':
+        elif mode == "annular" or mode == "annulus":
             radial_range = np.array(geometry[1])
             if len(geometry[0]) == 0:
-                    qxy_center = None
+                qxy_center = None
             else:
                 qxy_center = np.array(geometry[0])
 
@@ -263,52 +266,45 @@ class BraggVectorMethods:
         im_virtual = np.zeros(self.shape)
 
         # generate image
-        for rx,ry in tqdmnd(
+        for rx, ry in tqdmnd(
             self.shape[0],
             self.shape[1],
-            ):
+        ):
             # Get user-specified Bragg vectors
             p = self.get_vectors(
                 rx,
                 ry,
-                center = center,
-                ellipse = ellipse,
-                pixel = pixel,
-                rotate = rotate,
-                )
+                center=center,
+                ellipse=ellipse,
+                pixel=pixel,
+                rotate=rotate,
+            )
 
             if p.data.shape[0] > 0:
                 if radial_range is None:
-                    im_virtual[rx,ry] = np.sum(p.I)
+                    im_virtual[rx, ry] = np.sum(p.I)
                 else:
                     if qxy_center is None:
-                        qr = np.hypot(p.qx,p.qy)
+                        qr = np.hypot(p.qx, p.qy)
                     else:
-                        qr = np.hypot(
-                            p.qx - qxy_center[0],
-                            p.qy - qxy_center[1])
-                    sub = np.logical_and(
-                        qr >= radial_range[0],
-                        qr <  radial_range[1])
+                        qr = np.hypot(p.qx - qxy_center[0], p.qy - qxy_center[1])
+                    sub = np.logical_and(qr >= radial_range[0], qr < radial_range[1])
                     if np.sum(sub) > 0:
-                        im_virtual[rx,ry] = np.sum(p.I[sub])
+                        im_virtual[rx, ry] = np.sum(p.I[sub])
 
         # wrap in Virtual Image class
-        ans = VirtualImage(
-            data = im_virtual,
-            name = name
-        )
+        ans = VirtualImage(data=im_virtual, name=name)
         # add generating params as metadta
         ans.metadata = Metadata(
-            name = 'gen_params',
-            data = {
-                '_calling_method' : inspect.stack()[0][3],
-                '_calling_class' : __class__.__name__,
-                'mode' : mode,
-                'geometry' : geometry,
-                'name' : name,
-                'returncalc' : returncalc
-            }
+            name="gen_params",
+            data={
+                "_calling_method": inspect.stack()[0][3],
+                "_calling_class": __class__.__name__,
+                "mode": mode,
+                "geometry": geometry,
+                "name": name,
+                "returncalc": returncalc,
+            },
         )
         # attach to the tree
         self.attach(ans)
@@ -317,15 +313,12 @@ class BraggVectorMethods:
         if returncalc:
             return ans
 
-
-
-
     # calibration measurements
 
     def measure_origin(
         self,
-        center_guess = None,
-        score_method = None,
+        center_guess=None,
+        score_method=None,
         findcenter="max",
     ):
         """
@@ -363,11 +356,16 @@ class BraggVectorMethods:
                   the Bragg peaks identified with the unscattered beam. Useful for diagnostic
                   purposes.
         """
-        assert(findcenter in ["CoM", "max"]), "center must be either 'CoM' or 'max'"
-        assert score_method in ["distance", "intensity", "intensity weighted distance", None], "center must be either 'distance' or 'intensity weighted distance'"
+        assert findcenter in ["CoM", "max"], "center must be either 'CoM' or 'max'"
+        assert score_method in [
+            "distance",
+            "intensity",
+            "intensity weighted distance",
+            None,
+        ], "center must be either 'distance' or 'intensity weighted distance'"
 
-        R_Nx,R_Ny = self.Rshape
-        Q_Nx,Q_Ny = self.Qshape
+        R_Nx, R_Ny = self.Rshape
+        Q_Nx, Q_Ny = self.Qshape
 
         # Default scoring method
         if score_method is None:
@@ -378,13 +376,14 @@ class BraggVectorMethods:
 
         # Get guess at position of unscattered beam (x0,y0)
         if center_guess is None:
-            bvm = self.histogram( mode='raw' )
+            bvm = self.histogram(mode="raw")
             if findcenter == "max":
                 x0, y0 = np.unravel_index(
                     np.argmax(gaussian_filter(bvm, 10)), (Q_Nx, Q_Ny)
                 )
             else:
                 from py4DSTEM.process.utils import get_CoM
+
                 x0, y0 = get_CoM(bvm)
         else:
             x0, y0 = center_guess
@@ -395,7 +394,7 @@ class BraggVectorMethods:
         mask = np.ones(self.Rshape, dtype=bool)
         for Rx in range(R_Nx):
             for Ry in range(R_Ny):
-                vects = self.raw[Rx,Ry].data
+                vects = self.raw[Rx, Ry].data
                 if len(vects) > 0:
                     if score_method == "distance":
                         r2 = (vects["qx"] - x0) ** 2 + (vects["qy"] - y0) ** 2
@@ -403,7 +402,9 @@ class BraggVectorMethods:
                     elif score_method == "intensity":
                         index = np.argmax(vects["intensity"])
                     elif score_method == "intensity weighted distance":
-                        r2 = vects["intensity"]/(1+((vects["qx"] - x0) ** 2 + (vects["qy"] - y0) ** 2))
+                        r2 = vects["intensity"] / (
+                            1 + ((vects["qx"] - x0) ** 2 + (vects["qy"] - y0) ** 2)
+                        )
                         index = np.argmax(r2)
                     qx0[Rx, Ry] = vects["qx"][index]
                     qy0[Rx, Ry] = vects["qy"][index]
@@ -413,21 +414,15 @@ class BraggVectorMethods:
                     qy0[Rx, Ry] = y0
 
         # set calibration metadata
-        self.calibration.set_origin_meas((qx0,qy0))
+        self.calibration.set_origin_meas((qx0, qy0))
         self.calibration.set_origin_meas_mask(mask)
 
         # return
         return qx0, qy0, mask
 
-
     def measure_origin_beamstop(
-        self,
-        center_guess,
-        radii,
-        max_dist=2,
-        max_iter=1,
-        **kwargs
-        ):
+        self, center_guess, radii, max_dist=2, max_iter=1, **kwargs
+    ):
         """
         Find the origin from a set of braggpeaks assuming there is a beamstop, by identifying
         pairs of conjugate peaks inside an annular region and finding their centers of mass.
@@ -442,74 +437,74 @@ class BraggVectorMethods:
         Returns:
             (2d masked array): the origins
         """
-        R_Nx,R_Ny = self.Rshape
+        R_Nx, R_Ny = self.Rshape
         braggpeaks = self._v_uncal
 
         # remove peaks outside the annulus
         braggpeaks_masked = braggpeaks.copy()
         for rx in range(R_Nx):
             for ry in range(R_Ny):
-                pl = braggpeaks_masked[rx,ry]
-                qr = np.hypot(pl.data['qx']-center_guess[0],
-                              pl.data['qy']-center_guess[1])
-                rm = np.logical_not(np.logical_and(qr>=radii[0],qr<=radii[1]))
+                pl = braggpeaks_masked[rx, ry]
+                qr = np.hypot(
+                    pl.data["qx"] - center_guess[0], pl.data["qy"] - center_guess[1]
+                )
+                rm = np.logical_not(np.logical_and(qr >= radii[0], qr <= radii[1]))
                 pl.remove(rm)
 
         # Find all matching conjugate pairs of peaks
         center_curr = center_guess
         for ii in range(max_iter):
-            centers = np.zeros((R_Nx,R_Ny,2))
-            found_center = np.zeros((R_Nx,R_Ny),dtype=bool)
+            centers = np.zeros((R_Nx, R_Ny, 2))
+            found_center = np.zeros((R_Nx, R_Ny), dtype=bool)
             for rx in range(R_Nx):
                 for ry in range(R_Ny):
 
                     # Get data
-                    pl = braggpeaks_masked[rx,ry]
-                    is_paired = np.zeros(len(pl.data),dtype=bool)
+                    pl = braggpeaks_masked[rx, ry]
+                    is_paired = np.zeros(len(pl.data), dtype=bool)
                     matches = []
 
                     # Find matching pairs
                     for i in range(len(pl.data)):
                         if not is_paired[i]:
-                            x,y = pl.data['qx'][i],pl.data['qy'][i]
-                            x_r = -x+2*center_curr[0]
-                            y_r = -y+2*center_curr[1]
-                            dists = np.hypot(x_r-pl.data['qx'],y_r-pl.data['qy'])
-                            dists[is_paired] = 2*max_dist
-                            matched = dists<=max_dist
-                            if(any(matched)):
+                            x, y = pl.data["qx"][i], pl.data["qy"][i]
+                            x_r = -x + 2 * center_curr[0]
+                            y_r = -y + 2 * center_curr[1]
+                            dists = np.hypot(x_r - pl.data["qx"], y_r - pl.data["qy"])
+                            dists[is_paired] = 2 * max_dist
+                            matched = dists <= max_dist
+                            if any(matched):
                                 match = np.argmin(dists)
-                                matches.append((i,match))
-                                is_paired[i],is_paired[match] = True,True
+                                matches.append((i, match))
+                                is_paired[i], is_paired[match] = True, True
 
                     # Find the center
-                    if len(matches)>0:
-                        x0,y0 = [],[]
+                    if len(matches) > 0:
+                        x0, y0 = [], []
                         for i in range(len(matches)):
-                            x0.append(np.mean(pl.data['qx'][list(matches[i])]))
-                            y0.append(np.mean(pl.data['qy'][list(matches[i])]))
-                        x0,y0 = np.mean(x0),np.mean(y0)
-                        centers[rx,ry,:] = x0,y0
-                        found_center[rx,ry] = True
+                            x0.append(np.mean(pl.data["qx"][list(matches[i])]))
+                            y0.append(np.mean(pl.data["qy"][list(matches[i])]))
+                        x0, y0 = np.mean(x0), np.mean(y0)
+                        centers[rx, ry, :] = x0, y0
+                        found_center[rx, ry] = True
                     else:
-                        found_center[rx,ry] = False
+                        found_center[rx, ry] = False
 
             # Update current center guess
-            x0_curr = np.mean(centers[found_center,0])
-            y0_curr = np.mean(centers[found_center,1])
-            center_curr = x0_curr,y0_curr
+            x0_curr = np.mean(centers[found_center, 0])
+            y0_curr = np.mean(centers[found_center, 1])
+            center_curr = x0_curr, y0_curr
 
         # collect answers
         mask = found_center
-        qx0,qy0 = centers[:,:,0],centers[:,:,1]
+        qx0, qy0 = centers[:, :, 0], centers[:, :, 1]
 
         # set calibration metadata
-        self.calibration.set_origin_meas((qx0,qy0))
+        self.calibration.set_origin_meas((qx0, qy0))
         self.calibration.set_origin_meas_mask(mask)
 
         # return
-        return qx0,qy0,mask
-
+        return qx0, qy0, mask
 
     def fit_origin(
         self,
@@ -518,12 +513,12 @@ class BraggVectorMethods:
         robust=False,
         robust_steps=3,
         robust_thresh=2,
-        mask_check_data = True,
-        plot = True,
-        plot_range = None,
-        returncalc = True,
-        **kwargs
-        ):
+        mask_check_data=True,
+        plot=True,
+        plot_range=None,
+        returncalc=True,
+        **kwargs,
+    ):
         """
         Fit origin of bragg vectors.
 
@@ -553,79 +548,89 @@ class BraggVectorMethods:
         q_meas = self.calibration.get_origin_meas()
 
         from py4DSTEM.process.calibration import fit_origin
+
         if mask_check_data is True:
             # TODO - replace this bad hack for the mask for the origin fit
-            mask = np.logical_not(q_meas[0]==0)
-            qx0_fit,qy0_fit,qx0_residuals,qy0_residuals = fit_origin(
+            mask = np.logical_not(q_meas[0] == 0)
+            qx0_fit, qy0_fit, qx0_residuals, qy0_residuals = fit_origin(
                 tuple(q_meas),
-                mask = mask,
-                )
+                mask=mask,
+            )
         else:
-            qx0_fit,qy0_fit,qx0_residuals,qy0_residuals = fit_origin(
-                tuple(q_meas))
+            qx0_fit, qy0_fit, qx0_residuals, qy0_residuals = fit_origin(tuple(q_meas))
 
         # try to add to calibration
         try:
-            self.calibration.set_origin([qx0_fit,qy0_fit])
+            self.calibration.set_origin([qx0_fit, qy0_fit])
         except AttributeError:
-            warn("No calibration found on this datacube - fit values are not being stored")
+            warn(
+                "No calibration found on this datacube - fit values are not being stored"
+            )
             pass
         if plot:
             from py4DSTEM.visualize import show_image_grid
+
             if mask is None:
-                qx0_meas,qy0_meas = q_meas
+                qx0_meas, qy0_meas = q_meas
                 qx0_res_plot = qx0_residuals
                 qy0_res_plot = qy0_residuals
             else:
-                qx0_meas = np.ma.masked_array(q_meas[0], mask = np.logical_not(mask))
-                qy0_meas = np.ma.masked_array(q_meas[1], mask = np.logical_not(mask))
-                qx0_res_plot = np.ma.masked_array(qx0_residuals, mask = np.logical_not(mask))
-                qy0_res_plot = np.ma.masked_array(qy0_residuals, mask = np.logical_not(mask))
+                qx0_meas = np.ma.masked_array(q_meas[0], mask=np.logical_not(mask))
+                qy0_meas = np.ma.masked_array(q_meas[1], mask=np.logical_not(mask))
+                qx0_res_plot = np.ma.masked_array(
+                    qx0_residuals, mask=np.logical_not(mask)
+                )
+                qy0_res_plot = np.ma.masked_array(
+                    qy0_residuals, mask=np.logical_not(mask)
+                )
             qx0_mean = np.mean(qx0_fit)
             qy0_mean = np.mean(qy0_fit)
 
-
             if plot_range is None:
-                plot_range = 2*np.max(qx0_fit - qx0_mean)
+                plot_range = 2 * np.max(qx0_fit - qx0_mean)
 
             cmap = kwargs.get("cmap", "RdBu_r")
             kwargs.pop("cmap", None)
-            axsize = kwargs.get("axsize", (6,2))
+            axsize = kwargs.get("axsize", (6, 2))
             kwargs.pop("axsize", None)
 
             show_image_grid(
-                lambda i:[qx0_meas-qx0_mean,qx0_fit-qx0_mean,qx0_res_plot,
-                          qy0_meas-qy0_mean,qy0_fit-qy0_mean,qy0_res_plot][i],
-                H = 2,
-                W = 3,
-                cmap = cmap,
-                axsize = axsize,
-                title = [
-                    'measured origin, x', 'fitorigin, x', 'residuals, x',
-                    'measured origin, y', 'fitorigin, y', 'residuals, y'
+                lambda i: [
+                    qx0_meas - qx0_mean,
+                    qx0_fit - qx0_mean,
+                    qx0_res_plot,
+                    qy0_meas - qy0_mean,
+                    qy0_fit - qy0_mean,
+                    qy0_res_plot,
+                ][i],
+                H=2,
+                W=3,
+                cmap=cmap,
+                axsize=axsize,
+                title=[
+                    "measured origin, x",
+                    "fitorigin, x",
+                    "residuals, x",
+                    "measured origin, y",
+                    "fitorigin, y",
+                    "residuals, y",
                 ],
-                vmin = -1*plot_range,
-                vmax = 1*plot_range,
-                intensity_range = "absolute",
+                vmin=-1 * plot_range,
+                vmax=1 * plot_range,
+                intensity_range="absolute",
                 **kwargs,
             )
 
         # update calibration metadata
-        self.calibration.set_origin((qx0_fit,qy0_fit))
+        self.calibration.set_origin((qx0_fit, qy0_fit))
         self.setcal()
 
         if returncalc:
-            return qx0_fit,qy0_fit,qx0_residuals,qy0_residuals
+            return qx0_fit, qy0_fit, qx0_residuals, qy0_residuals
 
     def fit_p_ellipse(
-        self,
-        bvm,
-        center,
-        fitradii,
-        mask=None,
-        returncalc = False,
-        **kwargs
-        ):
+        self, bvm, center, fitradii, mask=None, returncalc=False, **kwargs
+    ):
         """
         Args:
             bvm (BraggVectorMap): a 2D array used for ellipse fitting
@@ -637,23 +642,14 @@ class BraggVectorMethods:
             p_ellipse if returncal is True
         """
         from py4DSTEM.process.calibration import fit_ellipse_1D
-        p_ellipse = fit_ellipse_1D(
-            bvm,
-            center,
-            fitradii,
-            mask
-        )
+
+        p_ellipse = fit_ellipse_1D(bvm, center, fitradii, mask)
 
         scaling = kwargs.get("scaling", "log")
         kwargs.pop("scaling", None)
         from py4DSTEM.visualize import show_elliptical_fit
-        show_elliptical_fit(
-            bvm,
-            fitradii,
-            p_ellipse,
-            scaling = scaling,
-            **kwargs
-        )
+
+        show_elliptical_fit(bvm, fitradii, p_ellipse, scaling=scaling, **kwargs)
 
         self.calibration.set_p_ellipse(p_ellipse)
         self.setcal()
@@ -661,12 +657,7 @@ class BraggVectorMethods:
         if returncalc:
             return p_ellipse
 
-    def mask_in_Q(
-        self,
-        mask,
-        update_inplace = False,
-        returncalc = True
-        ):
+    def mask_in_Q(self, mask, update_inplace=False, returncalc=True):
         """
         Remove peaks which fall inside the diffraction shaped boolean array
         `mask`, in raw (uncalibrated) peak positions.
@@ -690,23 +681,23 @@ class BraggVectorMethods:
         if update_inplace:
             v = self._v_uncal
         else:
-            v = self._v_uncal.copy( name='_v_uncal' )
+            v = self._v_uncal.copy(name="_v_uncal")
 
         # Loop and remove masked peaks
         for rx in range(v.shape[0]):
             for ry in range(v.shape[1]):
-                p = v[rx,ry]
+                p = v[rx, ry]
                 xs = np.round(p.data["qx"]).astype(int)
                 ys = np.round(p.data["qy"]).astype(int)
-                sub = mask[xs,ys]
+                sub = mask[xs, ys]
                 p.remove(sub)
 
         # assign the return value
         if update_inplace:
             ans = self
         else:
-            ans = self.copy( name=self.name+'_masked' )
-            ans.set_raw_vectors( v )
+            ans = self.copy(name=self.name + "_masked")
+            ans.set_raw_vectors(v)
 
         # return
         if returncalc:
@@ -715,27 +706,18 @@ class BraggVectorMethods:
             return
 
     # alias
-    def get_masked_peaks(
-        self,
-        mask,
-        update_inplace = False,
-        returncalc = True):
+    def get_masked_peaks(self, mask, update_inplace=False, returncalc=True):
         """
         Alias for `mask_in_Q`.
         """
-        warn("`.get_masked_peaks` is deprecated and will be removed in a future version. Use `.mask_in_Q`")
+        warn(
+            "`.get_masked_peaks` is deprecated and will be removed in a future version. Use `.mask_in_Q`"
+        )
         return self.mask_in_Q(
-            mask = mask,
-            update_inplace = update_inplace,
-            returncalc = returncalc
+            mask=mask, update_inplace=update_inplace, returncalc=returncalc
         )
 
-    def mask_in_R(
-        self,
-        mask,
-        update_inplace = False,
-        returncalc = True
-        ):
+    def mask_in_R(self, mask, update_inplace=False, returncalc=True):
         """
         Remove peaks which fall inside the real space shaped boolean array
         `mask`.
@@ -759,21 +741,21 @@ class BraggVectorMethods:
         if update_inplace:
             v = self._v_uncal
         else:
-            v = self._v_uncal.copy( name='_v_uncal' )
+            v = self._v_uncal.copy(name="_v_uncal")
 
         # Loop and remove masked peaks
         for rx in range(v.shape[0]):
             for ry in range(v.shape[1]):
-                if mask[rx,ry]:
-                    p = v[rx,ry]
-                    p.remove(np.ones(len(p),dtype=bool))
+                if mask[rx, ry]:
+                    p = v[rx, ry]
+                    p.remove(np.ones(len(p), dtype=bool))
 
         # assign the return value
         if update_inplace:
             ans = self
         else:
-            ans = self.copy( name=self.name+'_masked' )
-            ans.set_raw_vectors( v )
+            ans = self.copy(name=self.name + "_masked")
+            ans.set_raw_vectors(v)
 
         # return
         if returncalc:
@@ -782,73 +764,54 @@ class BraggVectorMethods:
             return
 
 
-
-
-
 ######### END BraggVectorMethods CLASS ########
 
 
-
 class BraggVectorMap(Array):
-
-    def __init__(
-        self,
-        name,
-        data,
-        weights,
-        dims,
-        dim_units,
-        origin,
-        pixelsize
-    ):
+    def __init__(self, name, data, weights, dims, dim_units, origin, pixelsize):
         Array.__init__(
             self,
-            name = name,
-            data = data,
-            dims = dims,
-            dim_units = [dim_units,dim_units],
+            name=name,
+            data=data,
+            dims=dims,
+            dim_units=[dim_units, dim_units],
         )
         self.metadata = Metadata(
-            name = 'grid',
-            data = {
-                'origin' : origin,
-                'pixelsize' : pixelsize,
-                'weights' : weights
-            }
+            name="grid",
+            data={"origin": origin, "pixelsize": pixelsize, "weights": weights},
         )
 
     @property
     def origin(self):
-        return self.metadata['grid']['origin']
+        return self.metadata["grid"]["origin"]
+
     @property
     def pixelsize(self):
-        return self.metadata['grid']['pixelsize']
+        return self.metadata["grid"]["pixelsize"]
+
     @property
     def pixelunits(self):
         return self.dim_units[0]
+
     @property
     def weights(self):
-        return self.metadata['grid']['weights']
-
+        return self.metadata["grid"]["weights"]
 
     # read
     @classmethod
-    def _get_constructor_args(cls,group):
+    def _get_constructor_args(cls, group):
         """
         Returns a dictionary of args/values to pass to the class constructor
         """
         constr_args = Array._get_constructor_args(group)
-        metadata = _read_metadata(group,'grid')
+        metadata = _read_metadata(group, "grid")
         args = {
-            'name' : constr_args['name'],
-            'data' : constr_args['data'],
-            'weights' : metadata['weights'],
-            'dims' : constr_args['dims'],
-            'dim_units' : constr_args['dim_units'],
-            'origin' : metadata['origin'],
-            'pixelsize' : metadata['pixelsize']
+            "name": constr_args["name"],
+            "data": constr_args["data"],
+            "weights": metadata["weights"],
+            "dims": constr_args["dims"],
+            "dim_units": constr_args["dim_units"],
+            "origin": metadata["origin"],
+            "pixelsize": metadata["pixelsize"],
         }
         return args
-
-
-
