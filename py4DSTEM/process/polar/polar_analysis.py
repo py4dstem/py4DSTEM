@@ -6,10 +6,10 @@ import matplotlib.pyplot as plt
 from emdfile import tqdmnd
 
 
-def calculate_FEM_global(
+def calculate_radial_statistics(
     self,
-    use_median_local = False,
-    use_median_global = False,
+    median_local = False,
+    median_global = False,
     plot_results = False,
     figsize = (8,4),
     returnval = False,
@@ -42,8 +42,13 @@ def calculate_FEM_global(
     self.scattering_vector = self.radial_bins * self.qstep * self.calibration.get_Q_pixel_size()
     self.scattering_vector_units = self.calibration.get_Q_pixel_units()
 
-    # init radial data array
+    # init radial data arrays
     self.radial_all = np.zeros((
+        self._datacube.shape[0],
+        self._datacube.shape[1],
+        self.polar_shape[1],
+    ))
+    self.radial_all_std = np.zeros((
         self._datacube.shape[0],
         self._datacube.shape[1],
         self.polar_shape[1],
@@ -53,11 +58,16 @@ def calculate_FEM_global(
     for rx, ry in tqdmnd(
         self._datacube.shape[0],
         self._datacube.shape[1],
-        desc="Global FEM",
+        desc="Radial statistics",
         unit=" probe positions",
         disable=not progress_bar):
         
-        self.radial_all[rx,ry] = np.mean(self.data[rx,ry],axis=0)
+        self.radial_all[rx,ry] = np.mean(
+            self.data[rx,ry],
+            axis=0)
+        self.radial_all_std[rx,ry] = np.sqrt(np.mean(
+            (self.data[rx,ry] - self.radial_all[rx,ry][None])**2, 
+            axis=0))
 
     self.radial_avg = np.mean(self.radial_all, axis=(0,1))
     self.radial_var = np.mean(
@@ -138,5 +148,13 @@ def calculate_FEM_local(
 
     """
     
-    1+1
+
+    pass
+
+
+# def radial_average(
+#     self,
+#     figsize = (8,6),
+#     returnfig = False,
+#     ):
 
