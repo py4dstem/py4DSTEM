@@ -406,7 +406,7 @@ class WholePatternFit:
                     except Exception as err:
                         # print(err)
                         fit_data_single = x0
-                        fit_metrics_single = [0, 0, 0, 0]
+                        fit_metrics_single = [0, 0, 0, -2]
 
                     fit_data[:, rx, ry] = fit_data_single
                     fit_metrics[:, rx, ry] = fit_metrics_single
@@ -639,7 +639,7 @@ class WholePatternFit:
             except Exception as err:
                 # print(err)
                 fit_coefs = initial_guess
-                fit_metrics_single = [0, 0, 0, 0]
+                fit_metrics_single = [0, 0, 0, -2]
 
             return fit_coefs, fit_metrics_single
         else:
