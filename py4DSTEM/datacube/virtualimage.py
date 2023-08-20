@@ -325,7 +325,7 @@ class DataCubeVirtualImager:
         shift_center = False,
         scan_position = None,
         invert = False,
-        color = 'r',
+        color = 'c',
         alpha = 0.7,
         **kwargs
     ):
@@ -383,6 +383,7 @@ class DataCubeVirtualImager:
         if data is None:
             image = None
             keys = ['dp_mean','dp_max','dp_median']
+            image = None
             for k in keys:
                 try:
                     image = self.tree(k)

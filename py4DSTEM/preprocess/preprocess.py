@@ -257,16 +257,16 @@ def bin_data_diffraction(
         R_Nx,
         R_Ny,
         int(Q_Nx / bin_factor),
-        bin_factor,
-        int(Q_Ny / bin_factor),
+    bin_factor,
+    int(Q_Ny / bin_factor),
         bin_factor,
     ).sum(axis=(3, 5)).astype(dtype)
 
     # set dim vectors
     Qpixsize = datacube.calibration.get_Q_pixel_size() * bin_factor
     Qpixunits = datacube.calibration.get_Q_pixel_units()
-    
-    
+
+    # set dims
     datacube.set_dim(
         2,
         [0,Qpixsize],
