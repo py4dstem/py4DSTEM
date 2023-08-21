@@ -3,7 +3,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
-from scipy.special import comb
+from scipy.special import comb, erf
 from scipy.ndimage import gaussian_filter
 
 from emdfile import tqdmnd
@@ -177,9 +177,11 @@ def calculate_pair_dist_function(
     # poly_background_order = 2,
     # iterative_pdf_refine = True,
     # num_iter = 10,
+    dens = None,
     plot_fits = False,
     plot_sf_estimate = False,
-    plot_pdf = True,
+    plot_reduced_pdf = True,
+    plot_pdf = False,
     figsize = (8,4),
     maxfev = None,
     ):
@@ -203,14 +205,8 @@ def calculate_pair_dist_function(
     coefs = [const_bg, int0, sigma0, int0, sigma0]
     lb = [0,0,0,0,0]
     ub = [np.inf, np.inf, np.inf, np.inf, np.inf]
-    # noise_est = 1/k
-    # noise_est = np.divide(1.0, k, out=np.zeros_like(k), where=k!=0)
+    # Weight the fit towards high k values
     noise_est = k[-1] - k + dk
-
-    # print(
-    #     np.round(coefs[0],3),
-    #     np.round(coefs[1],3),
-    #     np.round(coefs[3],3))
 
     # Estimate the mean atomic form factor + background
     if maxfev is None:
@@ -235,10 +231,6 @@ def calculate_pair_dist_function(
             maxfev = maxfev,
         )[0]
 
-    # print(
-    #     np.round(coefs[0],3),
-    #     np.round(coefs[1],3),
-    #     np.round(coefs[3],3))
     coefs[0] *= int_mean
     coefs[1] *= int_mean
     coefs[3] *= int_mean
@@ -252,11 +244,15 @@ def calculate_pair_dist_function(
     # mask for structure factor estimate
     if k_max is None:
         k_max = np.max(k)
+    # mask = np.clip(np.minimum(
+    #     (k - k_min) / k_width,
+    #     (k_max - k) / k_width,
+    #     ),0,1)
     mask = np.clip(np.minimum(
-        (k - k_min) / k_width,
+        (k - 0.0) / k_width,
         (k_max - k) / k_width,
         ),0,1)
-    mask = np.sin(mask*(np.pi/2))**2
+    mask = np.sin(mask*(np.pi/2))
 
     # Estimate the reduced structure factor S(k)
     Sk = (Ik - bg) * k / fk
@@ -265,6 +261,7 @@ def calculate_pair_dist_function(
     mask_sum = np.sum(mask)
     Sk = (Sk - np.sum(Sk*mask)/mask_sum) * mask
 
+    # Filtering of S(k)
     if k_lowpass is not None and k_lowpass > 0.0:
         Sk = gaussian_filter(
             Sk, 
@@ -277,44 +274,68 @@ def calculate_pair_dist_function(
             mode = 'nearest')
         Sk -= Sk_lowpass
 
-
     # Calculate the real space PDF
-    # dr = 1/(2*k_pad[-1])
     r = np.arange(r_min, r_max, r_step)
     ra,ka = np.meshgrid(r,k)
-    pdf = (2/np.pi)*np.pi*dk*np.sum(
+    pdf_reduced = (2/np.pi)*dk*np.sum(
         np.sin(
             2*np.pi*ra*ka
         ) * Sk[:,None],
         axis=0,
     )
 
+    # Damp the unphysical fluctuations at the PDF origin
     if damp_origin_fluctuations:
-        ind_max = np.argmax(pdf)
+        ind_max = np.argmax(pdf_reduced)
         r_ind_max = r[ind_max]
         r_mask = np.minimum(r / r_ind_max, 1.0)
         r_mask = np.sin(r_mask*np.pi/2)**2
-        pdf *= r_mask
+        pdf_reduced *= r_mask
 
-    # invert
-    ind_max = np.argmax(pdf * np.sqrt(r))
-    r_ind_max = r[ind_max-1]
-    r_mask = np.minimum(r / (r_ind_max), 1.0)
-    r_mask = np.sin(r_mask*np.pi/2)**2
+    # Store results
+    self.pdf_r = r
+    self.pdf_reduced = pdf_reduced
 
-    Sk_back_proj = (2*r_step)*np.sum(
-        np.sin(
-            2*np.pi*ra*ka
-        ) * pdf[None,:] * r_mask[None,:],
-        axis=1,
-    )
+    # if density is provided, we can estimate the full PDF
+    if dens is not None:
+        pdf = pdf_reduced.copy()
+        pdf[1:] /= (4*np.pi*dens*r[1:]*(r[1]-r[0]))
+        pdf += 1
 
+        if damp_origin_fluctuations:
+            pdf *= r_mask
+
+        pdf = np.maximum(pdf, 0.0)
+    # fig,ax = plt.subplots(figsize=figsize)
+    # ax.plot(
+    #     k,
+    #     mask,
+    #     color = 'r',
+    #     )
+    # # invert
+    # ind_max = np.argmax(pdf_reduced* np.sqrt(r))
+    # r_ind_max = r[ind_max-1]
+    # r_mask = np.minimum(r / (r_ind_max), 1.0)
+    # r_mask = np.sin(r_mask*np.pi/2)**2
+
+    # pdf_corr = np.maximum(pdf*6 + erf((r - 1.5)/0.5)*0.5 + 0.5, 0.0)
     # fig,ax = plt.subplots(figsize=figsize)
     # ax.plot(
     #     r,
-    #     pdf*np.sqrt(r),
-    #     color = 'r',
+    #     pdf_corr,
+    #     color = 'k',
     #     )
+
+
+    # Sk_back_proj = (0.5*r_step)*np.sum(
+    #     np.sin(
+    #         2*np.pi*ra*ka
+    #     ) * pdf_corr[None,:],# * r_mask[None,:],
+    #     # ) * pdf_corr[None,:],# * r_mask[None,:],
+    #     axis=1,
+    # )
+
+    # fig,ax = plt.subplots(figsize=figsize)
     # ax.plot(
     #     k,
     #     Sk,
@@ -355,14 +376,14 @@ def calculate_pair_dist_function(
 
     # # iterative refinement of the PDF
     # if iterative_pdf_refine:
-    #     # pdf = np.maximum(pdf + (r/r[-1]), 0.0)
+    #     # pdf_reduced= np.maximum(pdf_reduced+ (r/r[-1]), 0.0)
 
     #     ind_max = np.argmax(pdf)
     #     r_ind_max = r[ind_max]
     #     r_mask = np.minimum(r / r_ind_max, 1.0)
     #     r_mask = np.sin(r_mask*np.pi/2)**2
 
-    #     pdf = np.maximum(pdf * r_mask + (r/r[-1]), 0.0)
+    #     pdf_reduced= np.maximum(pdf_reduced* r_mask + (r/r[-1]), 0.0)
     #     r_weight = r_mask * (1 - r / r[-1])**2
 
 
@@ -391,7 +412,7 @@ def calculate_pair_dist_function(
     #             axis=0,
     #         ) * r_weight
 
-    #         pdf = np.maximum(pdf + 0.5*pdf_update, 0.0)
+    #         pdf_reduced= np.maximum(pdf_reduced+ 0.5*pdf_update, 0.0)
 
     #     fig,ax = plt.subplots(figsize=figsize)
     #     ax.plot(
@@ -407,7 +428,7 @@ def calculate_pair_dist_function(
 
     #     # ax.plot(
     #     #     r,
-    #     #     pdf + pdf_update,
+    #     #     pdf_reduced+ pdf_update,
     #     #     color = 'r',
     #     #     )
 
@@ -435,11 +456,6 @@ def calculate_pair_dist_function(
             self.radial_mean,
             color = 'k',
             )
-        # ax.plot(
-        #     k,
-        #     np.ones(k.size)*coefs[0],
-        #     color = 'r',
-        #     )
         ax.plot(
             k,
             bg,
@@ -455,10 +471,6 @@ def calculate_pair_dist_function(
         ax.set_ylim((np.min(self.radial_mean[self.radial_mean>0])*0.8,
             np.max(self.radial_mean*mask)*1.25))
         ax.set_yscale('log')
-        # print(np.min(self.radial_mean)*0.8)
-        # print(np.min(self.radial_mean)*0.8)
-
-
 
     if plot_sf_estimate:
         fig,ax = plt.subplots(figsize=figsize)
@@ -473,7 +485,17 @@ def calculate_pair_dist_function(
             yr[1]+0.05*(yr[1]-yr[0]),
             ))
         ax.set_xlabel('Scattering Vector [A^-1]')
-        ax.set_ylabel('Structure Factor')
+        ax.set_ylabel('Reduced Structure Factor')
+
+    if plot_reduced_pdf:
+        fig,ax = plt.subplots(figsize=figsize)
+        ax.plot(
+            r,
+            pdf_reduced,
+            color = 'r',
+            )
+        ax.set_xlabel('Radius [A]')
+        ax.set_ylabel('Reduced Pair Distribution Function')
 
     if plot_pdf:
         fig,ax = plt.subplots(figsize=figsize)
@@ -484,6 +506,8 @@ def calculate_pair_dist_function(
             )
         ax.set_xlabel('Radius [A]')
         ax.set_ylabel('Pair Distribution Function')
+
+
         # r = (np.min(Sk),np.max(Sk))
         # ax.set_ylim((
         #     r[0]-0.05*(r[1]-r[0]),
