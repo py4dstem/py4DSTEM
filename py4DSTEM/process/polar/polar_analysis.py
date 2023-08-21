@@ -13,7 +13,8 @@ def calculate_radial_statistics(
     self,
     median_local = False,
     median_global = False,
-    plot_results = False,
+    plot_results_mean = False,
+    plot_results_var = False,
     figsize = (8,4),
     returnval = False,
     returnfig = False,
@@ -82,15 +83,27 @@ def calculate_radial_statistics(
     self.radial_var_norm[sub] /= self.radial_mean[sub]**2
 
     # plot results
-    if plot_results:
+    if plot_results_mean:
         if returnfig:
-            fig,ax = plot_FEM_global(
+            fig,ax = plot_radial_mean(
                 self,
                 figsize = figsize,
                 returnfig = True,
                 )
         else:
-            plot_FEM_global(
+            plot_radial_mean(
+                self,
+                figsize = figsize,
+                )
+    elif plot_results_var:
+        if returnfig:
+            fig,ax = plot_radial_var_norm(
+                self,
+                figsize = figsize,
+                returnfig = True,
+                )
+        else:
+            plot_radial_var_norm(
                 self,
                 figsize = figsize,
                 )
