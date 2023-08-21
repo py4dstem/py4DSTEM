@@ -404,7 +404,6 @@ class WholePatternFit:
                             opt.status,
                         ]
                     except Exception as err:
-                        # print(err)
                         fit_data_single = x0
                         fit_metrics_single = [0, 0, 0, -2]
 
