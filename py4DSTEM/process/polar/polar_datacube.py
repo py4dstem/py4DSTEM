@@ -95,7 +95,6 @@ class PolarDatacube:
         pass
 
     from py4DSTEM.process.polar.polar_analysis import (
-        # calculate_FEM_global,
         calculate_radial_statistics,
         plot_radial_mean,
         plot_radial_var_norm,
