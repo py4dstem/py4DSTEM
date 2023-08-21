@@ -307,146 +307,7 @@ def calculate_pair_dist_function(
             pdf *= r_mask
 
         pdf = np.maximum(pdf, 0.0)
-    # fig,ax = plt.subplots(figsize=figsize)
-    # ax.plot(
-    #     k,
-    #     mask,
-    #     color = 'r',
-    #     )
-    # # invert
-    # ind_max = np.argmax(pdf_reduced* np.sqrt(r))
-    # r_ind_max = r[ind_max-1]
-    # r_mask = np.minimum(r / (r_ind_max), 1.0)
-    # r_mask = np.sin(r_mask*np.pi/2)**2
 
-    # pdf_corr = np.maximum(pdf*6 + erf((r - 1.5)/0.5)*0.5 + 0.5, 0.0)
-    # fig,ax = plt.subplots(figsize=figsize)
-    # ax.plot(
-    #     r,
-    #     pdf_corr,
-    #     color = 'k',
-    #     )
-
-
-    # Sk_back_proj = (0.5*r_step)*np.sum(
-    #     np.sin(
-    #         2*np.pi*ra*ka
-    #     ) * pdf_corr[None,:],# * r_mask[None,:],
-    #     # ) * pdf_corr[None,:],# * r_mask[None,:],
-    #     axis=1,
-    # )
-
-    # fig,ax = plt.subplots(figsize=figsize)
-    # ax.plot(
-    #     k,
-    #     Sk,
-    #     color = 'k',
-    #     )
-    # ax.plot(
-    #     k,
-    #     Sk_back_proj,
-    #     color = 'r',
-    #     )
-
-
-    # # polynomial high pass filtering
-    # if poly_background_order is not None:
-    #     u = np.linspace(0,1,k.size)
-    #     basis = np.zeros((k.size,poly_background_order+1))
-    #     for ii in range(poly_background_order+1):
-    #         basis[:,ii] = comb(poly_background_order,ii) * \
-    #             ((1-u)**(poly_background_order-ii)) * (u**ii)
-    #     coefs = np.linalg.lstsq(
-    #         basis[sub_fit,:],
-    #         Sk[sub_fit],
-    #         rcond=None)[0]
-    #     bg_poly = basis @ coefs
-    #     Sk -= bg_poly
-
-
-    # # pad or crop S(k) to 0 and k_pad_max
-    # k_pad = np.arange(0, k_pad_max, dk)
-    # Sk_pad = np.zeros_like(k_pad)
-    # ind_0 = np.argmin(np.abs(k_pad-k[0]))
-    # ind_max = ind_0 + k.size
-    # if ind_max > k_pad.size:
-    #     Sk_pad[ind_0:] = Sk[ind_0:k_pad.size]
-    # else:
-    #     Sk_pad[ind_0:ind_max] = Sk
-
-
-    # # iterative refinement of the PDF
-    # if iterative_pdf_refine:
-    #     # pdf_reduced= np.maximum(pdf_reduced+ (r/r[-1]), 0.0)
-
-    #     ind_max = np.argmax(pdf)
-    #     r_ind_max = r[ind_max]
-    #     r_mask = np.minimum(r / r_ind_max, 1.0)
-    #     r_mask = np.sin(r_mask*np.pi/2)**2
-
-    #     pdf_reduced= np.maximum(pdf_reduced* r_mask + (r/r[-1]), 0.0)
-    #     r_weight = r_mask * (1 - r / r[-1])**2
-
-
-
-    #     # basis = np.vstack((np.ones_like(r),r)).T
-    #     # coefs_lin = np.linalg.lstsq(basis, pdf, rcond=None)[0]
-    #     # pdf_lin = basis * coefs_lin
-    #     # print(coefs_lin)
-
-
-    #     for a0 in range(10):
-    #         Sk_back_proj = (1*np.pi/r.size)*np.sum(
-    #             np.sin(
-    #                 2*np.pi*ra*ka
-    #             ) * pdf[None,:],
-    #             axis=1,
-    #         )
-
-    #         Sk_diff = Sk - Sk_back_proj
-    #         Sk_diff = (Sk_diff - np.mean(Sk_diff*mask)/mask_sum) * mask
-
-    #         pdf_update = 4*np.pi*dk*np.sum(
-    #             np.sin(
-    #                 8*np.pi*ra*ka
-    #             ) * Sk_diff[:,None],
-    #             axis=0,
-    #         ) * r_weight
-
-    #         pdf_reduced= np.maximum(pdf_reduced+ 0.5*pdf_update, 0.0)
-
-    #     fig,ax = plt.subplots(figsize=figsize)
-    #     ax.plot(
-    #         r,
-    #         pdf,
-    #         color = 'k',
-    #         )
-    #     # ax.plot(
-    #     #     r,
-    #     #     pdf_lin,
-    #     #     color = 'r',
-    #     #     )
-
-    #     # ax.plot(
-    #     #     r,
-    #     #     pdf_reduced+ pdf_update,
-    #     #     color = 'r',
-    #     #     )
-
-    #     # ax.plot(
-    #     #     k,
-    #     #     Sk,
-    #     #     color = 'k',
-    #     #     )
-    #     # ax.plot(
-    #     #     k,
-    #     #     Sk_back_proj,
-    #     #     color = 'r',
-    #     #     )
-    #     # ax.plot(
-    #     #     Sk_diff,
-    #     #     color = 'r',
-    #     #     )
 
 
     # Plots
@@ -509,17 +370,22 @@ def calculate_pair_dist_function(
         ax.set_ylabel('Pair Distribution Function')
 
 
-        # r = (np.min(Sk),np.max(Sk))
-        # ax.set_ylim((
-        #     r[0]-0.05*(r[1]-r[0]),
-        #     r[1]+0.05*(r[1]-r[0]),
-        #     ))
 
+    # functions for inverting from reduced PDF back to S(k)
 
-        # ax.set_yscale('log')
+    # # invert
+    # ind_max = np.argmax(pdf_reduced* np.sqrt(r))
+    # r_ind_max = r[ind_max-1]
+    # r_mask = np.minimum(r / (r_ind_max), 1.0)
+    # r_mask = np.sin(r_mask*np.pi/2)**2
 
-
-
+    # Sk_back_proj = (0.5*r_step)*np.sum(
+    #     np.sin(
+    #         2*np.pi*ra*ka
+    #     ) * pdf_corr[None,:],# * r_mask[None,:],
+    #     # ) * pdf_corr[None,:],# * r_mask[None,:],
+    #     axis=1,
+    # )
 
 
 
