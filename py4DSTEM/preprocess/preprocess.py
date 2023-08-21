@@ -257,8 +257,8 @@ def bin_data_diffraction(
         R_Nx,
         R_Ny,
         int(Q_Nx / bin_factor),
-    bin_factor,
-    int(Q_Ny / bin_factor),
+        bin_factor,
+        int(Q_Ny / bin_factor),
         bin_factor,
     ).sum(axis=(3, 5)).astype(dtype)
 
