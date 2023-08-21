@@ -466,7 +466,7 @@ class WholePatternFit:
                     self.fit_data.data[lat.params["uy"].offset],
                     self.fit_data.data[lat.params["vx"].offset],
                     self.fit_data.data[lat.params["vy"].offset],
-                    np.ones(self.fit_data.data.shape[1:], dtype=np.bool_),
+                    self.fit_metrics["status"] >= 0, # negative status indicates fit error
                 ],
                 axis=0,
             )
