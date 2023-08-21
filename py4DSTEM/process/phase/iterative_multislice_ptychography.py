@@ -1474,7 +1474,7 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
         if xp.iscomplexobj(current_object):
             current_object_tv = current_object
             warnings.warn(
-                ("tv_denoise currently for potential objects only"),
+                ("TV denoising is currently only supported for potential objects."),
                 UserWarning,
             )
 
@@ -1484,6 +1484,7 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
             current_object = xp.pad(
                 current_object, pad_width=pad_width, mode="constant"
             )
+
             # run tv denoising
             nz, nx, ny = current_object.shape
             niter_out = 40
@@ -1509,11 +1510,10 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
                 show=False,
             )[0]
 
-            current_object_tv = current_object_tv.reshape(current_object.shape)
-
             # remove padding
+            current_object_tv = current_object_tv.reshape(current_object.shape)[1:-1]
 
-        return current_object_tv[1:-1]
+        return current_object_tv
 
     def _constraints(
         self,

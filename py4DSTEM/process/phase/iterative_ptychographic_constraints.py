@@ -207,7 +207,7 @@ class PtychographicConstraints:
         if xp.iscomplexobj(current_object):
             current_object_tv = current_object
             warnings.warn(
-                ("tv_denoise currently for potential objects only"),
+                ("TV denoising is currently only supported for potential objects."),
                 UserWarning,
             )
 
@@ -287,11 +287,10 @@ class PtychographicConstraints:
         if xp.iscomplexobj(current_object):
             updated_object = current_object
             warnings.warn(
-                ("tv_denoise currently for potential objects only"),
+                ("TV denoising is currently only supported for potential objects."),
                 UserWarning,
             )
         else:
-
             current_object_sum = xp.sum(current_object)
             if axis is None:
                 ndim = xp.arange(current_object.ndim).tolist()
