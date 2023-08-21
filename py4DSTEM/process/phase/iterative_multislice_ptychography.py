@@ -2933,6 +2933,7 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
         x2: float,
         y1: float,
         y2: float,
+        specify_calibrated: bool = False,
         gaussian_filter_sigma: float = None,
         ms_object=None,
         cbar: bool = False,
@@ -2947,6 +2948,9 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
         --------
         x1, x2, y1, y2: floats (pixels)
             Line profile for depth section runs from (x1,y1) to (x2,y2)
+            Specified in pixels unless specify_calibrated is True
+        specify_calibrated: bool (optional)
+            If True, specify x1, x2, y1, y2 in A values instead of pixels
         gaussian_filter_sigma: float (optional)
             Standard deviation of gaussian kernel in A
         ms_object: np.array
@@ -2962,10 +2966,30 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
             ms_obj = ms_object
         else:
             ms_obj = self.object_cropped
-        angle = np.arctan((x2 - x1) / (y2 - y1))
+
+        if specify_calibrated:
+            x1 /= self.sampling[0]
+            x2 /= self.sampling[0]
+            y1 /= self.sampling[1]
+            y2 /= self.sampling[1]
+
+        if x2 == x1:
+            angle = 0
+        elif y2 == y1:
+            angle = np.pi / 2
+        else:
+            angle = np.arctan((x2 - x1) / (y2 - y1))
 
         x0 = ms_obj.shape[1] / 2
         y0 = ms_obj.shape[2] / 2
+
+        if (
+            x1 > ms_obj.shape[1]
+            or x2 > ms_obj.shape[1]
+            or y1 > ms_obj.shape[2]
+            or y2 > ms_obj.shape[2]
+        ):
+            raise ValueError("depth section must be in field of view of object")
 
         from py4DSTEM.process.phase.utils import rotate_point
 
