@@ -300,6 +300,7 @@ def calculate_pair_dist_function(
     if dens is not None:
         pdf = pdf_reduced.copy()
         pdf[1:] /= (4*np.pi*dens*r[1:]*(r[1]-r[0]))
+        pdf *= (2/np.pi)
         pdf += 1
 
         if damp_origin_fluctuations:
