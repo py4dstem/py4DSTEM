@@ -1025,6 +1025,7 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
         butterworth_order,
         tv_denoise,
         tv_denoise_weight,
+        tv_denoise_inner_iter,
         object_positivity,
         shrinkage_rad,
         object_mask,
@@ -1082,8 +1083,10 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
             Butterworth filter order. Smaller gives a smoother filter
         tv_denoise: bool
             If True, applies TV denoising on object
-        tv_denoise_weight: float 
+        tv_denoise_weight: float
             Denoising weight. The greater `weight`, the more denoising.
+        tv_denoise_inner_iter: float
+            Number of iterations to run in inner loop of TV denoising
         object_positivity: bool
             If True, clips negative potential values
         shrinkage_rad: float
@@ -1116,8 +1119,7 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
 
         if tv_denoise:
             current_object = self._object_denoise_tv_pylops(
-                current_object,
-                tv_denoise_weight,
+                current_object, tv_denoise_weight, tv_denoise_inner_iter
             )
 
         if shrinkage_rad > 0.0 or object_mask is not None:
@@ -1212,6 +1214,7 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
         butterworth_order: float = 2,
         tv_denoise_iter: int = np.inf,
         tv_denoise_weight: float = None,
+        tv_denoise_inner_iter: float = 40,
         object_positivity: bool = True,
         shrinkage_rad: float = 0.0,
         fix_potential_baseline: bool = True,
@@ -1300,8 +1303,10 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
             Butterworth filter order. Smaller gives a smoother filter
         tv_denoise_iter: int, optional
             Number of iterations to run using tv denoise filter on object
-        tv_denoise_weight: float 
+        tv_denoise_weight: float
             Denoising weight. The greater `weight`, the more denoising.
+        tv_denoise_inner_iter: float
+            Number of iterations to run in inner loop of TV denoising
         object_positivity: bool, optional
             If True, forces object to be positive
         shrinkage_rad: float
@@ -1638,6 +1643,7 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
                 butterworth_order=butterworth_order,
                 tv_denoise=a0 < tv_denoise_iter and tv_denoise_weight is not None,
                 tv_denoise_weight=tv_denoise_weight,
+                tv_denoise_inner_iter=tv_denoise_inner_iter,
                 object_positivity=object_positivity,
                 shrinkage_rad=shrinkage_rad,
                 object_mask=self._object_fov_mask_inverse

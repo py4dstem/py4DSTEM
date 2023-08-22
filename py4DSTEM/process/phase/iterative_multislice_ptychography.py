@@ -1451,7 +1451,7 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
 
         return current_object
 
-    def _object_denoise_tv_pylops(self, current_object, weights):
+    def _object_denoise_tv_pylops(self, current_object, weights, iterations):
         """
         Performs second order TV denoising along x and y
 
@@ -1462,6 +1462,9 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
         weights : [float, float]
             Denoising weights[z weight, r weight]. The greater `weight`,
             the more denoising.
+        iterations: float
+            Number of iterations to run in denoising algorithm.
+            `niter_out` in pylops
 
         Returns
         -------
@@ -1487,28 +1490,66 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
 
             # run tv denoising
             nz, nx, ny = current_object.shape
-            niter_out = 40
+            niter_out = iterations
             niter_in = 1
             Iop = pylops.Identity(nx * ny * nz)
-            z_gradient = pylops.FirstDerivative(
-                (nz, nx, ny), axis=0, edge=False, kind="backward"
-            )
-            xy_laplacian = pylops.Laplacian(
-                (nz, nx, ny), axes=(1, 2), edge=False, kind="backward"
-            )
-            l1_regs = [z_gradient, xy_laplacian]
 
-            current_object_tv = pylops.optimization.sparsity.splitbregman(
-                Op=Iop,
-                y=current_object.ravel(),
-                RegsL1=l1_regs,
-                niter_outer=niter_out,
-                niter_inner=niter_in,
-                epsRL1s=weights,
-                tol=1e-4,
-                tau=1.0,
-                show=False,
-            )[0]
+            if weights[0] == 0:
+                xy_laplacian = pylops.Laplacian(
+                    (nz, nx, ny), axes=(1, 2), edge=False, kind="backward"
+                )
+                l1_regs = [xy_laplacian]
+
+                current_object_tv = pylops.optimization.sparsity.splitbregman(
+                    Op=Iop,
+                    y=current_object.ravel(),
+                    RegsL1=l1_regs,
+                    niter_outer=niter_out,
+                    niter_inner=niter_in,
+                    epsRL1s=[weights[1]],
+                    tol=1e-4,
+                    tau=1.0,
+                    show=False,
+                )[0]
+
+            elif weights[1] == 0:
+                z_gradient = pylops.FirstDerivative(
+                    (nz, nx, ny), axis=0, edge=False, kind="backward"
+                )
+                l1_regs = [z_gradient]
+
+                current_object_tv = pylops.optimization.sparsity.splitbregman(
+                    Op=Iop,
+                    y=current_object.ravel(),
+                    RegsL1=l1_regs,
+                    niter_outer=niter_out,
+                    niter_inner=niter_in,
+                    epsRL1s=[weights[0]],
+                    tol=1e-4,
+                    tau=1.0,
+                    show=False,
+                )[0]
+
+            else:
+                z_gradient = pylops.FirstDerivative(
+                    (nz, nx, ny), axis=0, edge=False, kind="backward"
+                )
+                xy_laplacian = pylops.Laplacian(
+                    (nz, nx, ny), axes=(1, 2), edge=False, kind="backward"
+                )
+                l1_regs = [z_gradient, xy_laplacian]
+
+                current_object_tv = pylops.optimization.sparsity.splitbregman(
+                    Op=Iop,
+                    y=current_object.ravel(),
+                    RegsL1=l1_regs,
+                    niter_outer=niter_out,
+                    niter_inner=niter_in,
+                    epsRL1s=weights,
+                    tol=1e-4,
+                    tau=1.0,
+                    show=False,
+                )[0]
 
             # remove padding
             current_object_tv = current_object_tv.reshape(current_object.shape)[1:-1]
@@ -1552,6 +1593,7 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
         tv_denoise_pad_chambolle,
         tv_denoise,
         tv_denoise_weights,
+        tv_denoise_inner_iter,
     ):
         """
         Ptychographic constraints operator.
@@ -1627,6 +1669,8 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
         tv_denoise_weights: [float,float]
             Denoising weights[z weight, r weight]. The greater `weight`,
             the more denoising.
+        tv_denoise_inner_iter: float
+            Number of iterations to run in inner loop of TV denoising
 
         Returns
         --------
@@ -1661,6 +1705,7 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
             current_object = self._object_denoise_tv_pylops(
                 current_object,
                 tv_denoise_weights,
+                tv_denoise_inner_iter,
             )
         elif tv_denoise_chambolle:
             current_object = self._object_denoise_tv_chambolle(
@@ -1771,6 +1816,7 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
         tv_denoise_pad_chambolle=True,
         tv_denoise_iter=np.inf,
         tv_denoise_weights=None,
+        tv_denoise_inner_iter=40,
         switch_object_iter: int = np.inf,
         store_iterations: bool = False,
         progress_bar: bool = True,
@@ -1874,6 +1920,8 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
         tv_denoise_weights: [float,float]
             Denoising weights[z weight, r weight]. The greater `weight`,
             the more denoising.
+        tv_denoise_inner_iter: float
+            Number of iterations to run in inner loop of TV denoising
         switch_object_iter: int, optional
             Iteration to switch object type between 'complex' and 'potential' or between
             'potential' and 'complex'
@@ -2222,6 +2270,7 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
                 tv_denoise_pad_chambolle=tv_denoise_pad_chambolle,
                 tv_denoise=a0 < tv_denoise_iter and tv_denoise_weights is not None,
                 tv_denoise_weights=tv_denoise_weights,
+                tv_denoise_inner_iter=tv_denoise_inner_iter,
             )
 
             self.error_iterations.append(error.item())
