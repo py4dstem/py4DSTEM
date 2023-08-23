@@ -37,7 +37,7 @@ setup(
         'gdown >= 4.4.0',
         'dask >= 2.3.0',
         'distributed >= 2.3.0',
-        'emdfile >= 0.0.10',
+        'emdfile >= 0.0.12',
         ],
     extras_require={
         'ipyparallel': ['ipyparallel >= 6.2.4', 'dill >= 0.3.3'],
