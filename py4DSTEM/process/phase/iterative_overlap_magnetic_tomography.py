@@ -8,6 +8,7 @@ from typing import Mapping, Sequence, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
+import pylops
 from matplotlib.gridspec import GridSpec
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from py4DSTEM.visualize import show
@@ -1679,6 +1680,111 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
 
         return vector_field
 
+    def _object_denoise_tv_pylops(self, current_object, weights, iterations):
+        """
+        Performs second order TV denoising along x and y
+
+        Parameters
+        ----------
+        current_object: np.ndarray
+            Current object estimate
+        weights : [float, float]
+            Denoising weights[z weight, r weight]. The greater `weight`,
+            the more denoising.
+        iterations: float
+            Number of iterations to run in denoising algorithm.
+            `niter_out` in pylops
+
+        Returns
+        -------
+        constrained_object: np.ndarray
+            Constrained object estimate
+
+        """
+        xp = self._xp
+
+        if xp.iscomplexobj(current_object):
+            current_object_tv = current_object
+            warnings.warn(
+                ("TV denoising is currently only supported for potential objects."),
+                UserWarning,
+            )
+
+        else:
+            # zero pad at top and bottom slice
+            pad_width = ((1, 1), (0, 0), (0, 0))
+            current_object = xp.pad(
+                current_object, pad_width=pad_width, mode="constant"
+            )
+
+            # run tv denoising
+            nz, nx, ny = current_object.shape
+            niter_out = iterations
+            niter_in = 1
+            Iop = pylops.Identity(nx * ny * nz)
+
+            if weights[0] == 0:
+                xy_laplacian = pylops.Laplacian(
+                    (nz, nx, ny), axes=(1, 2), edge=False, kind="backward"
+                )
+                l1_regs = [xy_laplacian]
+
+                current_object_tv = pylops.optimization.sparsity.splitbregman(
+                    Op=Iop,
+                    y=current_object.ravel(),
+                    RegsL1=l1_regs,
+                    niter_outer=niter_out,
+                    niter_inner=niter_in,
+                    epsRL1s=[weights[1]],
+                    tol=1e-4,
+                    tau=1.0,
+                    show=False,
+                )[0]
+
+            elif weights[1] == 0:
+                z_gradient = pylops.FirstDerivative(
+                    (nz, nx, ny), axis=0, edge=False, kind="backward"
+                )
+                l1_regs = [z_gradient]
+
+                current_object_tv = pylops.optimization.sparsity.splitbregman(
+                    Op=Iop,
+                    y=current_object.ravel(),
+                    RegsL1=l1_regs,
+                    niter_outer=niter_out,
+                    niter_inner=niter_in,
+                    epsRL1s=[weights[0]],
+                    tol=1e-4,
+                    tau=1.0,
+                    show=False,
+                )[0]
+
+            else:
+                z_gradient = pylops.FirstDerivative(
+                    (nz, nx, ny), axis=0, edge=False, kind="backward"
+                )
+                xy_laplacian = pylops.Laplacian(
+                    (nz, nx, ny), axes=(1, 2), edge=False, kind="backward"
+                )
+                l1_regs = [z_gradient, xy_laplacian]
+
+                current_object_tv = pylops.optimization.sparsity.splitbregman(
+                    Op=Iop,
+                    y=current_object.ravel(),
+                    RegsL1=l1_regs,
+                    niter_outer=niter_out,
+                    niter_inner=niter_in,
+                    epsRL1s=weights,
+                    tol=1e-4,
+                    tau=1.0,
+                    show=False,
+                )[0]
+
+            # remove padding
+            current_object_tv = current_object_tv.reshape(current_object.shape)[1:-1]
+
+        return current_object_tv
+
     def _constraints(
         self,
         current_object,
@@ -1710,6 +1816,9 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
         object_positivity,
         shrinkage_rad,
         object_mask,
+        tv_denoise,
+        tv_denoise_weights,
+        tv_denoise_inner_iter,
     ):
         """
         Ptychographic constraints operator.
@@ -1771,6 +1880,15 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
             If True, forces object to be positive
         shrinkage_rad: float
             Phase shift in radians to be subtracted from the potential at each iteration
+        object_mask: np.ndarray (boolean)
+            If not None, used to calculate additional shrinkage using masked-mean of object
+        tv_denoise: bool
+            If True, applies TV denoising on object
+        tv_denoise_weights: [float,float]
+            Denoising weights[z weight, r weight]. The greater `weight`,
+            the more denoising.
+        tv_denoise_inner_iter: float
+            Number of iterations to run in inner loop of TV denoising
 
         Returns
         --------
@@ -1820,6 +1938,31 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
                 q_lowpass_m,
                 q_highpass_m,
                 butterworth_order,
+            )
+
+        elif tv_denoise:
+            current_object[0] = self._object_denoise_tv_pylops(
+                current_object[0],
+                tv_denoise_weights,
+                tv_denoise_inner_iter,
+            )
+
+            current_object[1] = self._object_denoise_tv_pylops(
+                current_object[1],
+                tv_denoise_weights,
+                tv_denoise_inner_iter,
+            )
+
+            current_object[2] = self._object_denoise_tv_pylops(
+                current_object[2],
+                tv_denoise_weights,
+                tv_denoise_inner_iter,
+            )
+
+            current_object[3] = self._object_denoise_tv_pylops(
+                current_object[3],
+                tv_denoise_weights,
+                tv_denoise_inner_iter,
             )
 
         if shrinkage_rad > 0.0 or object_mask is not None:
@@ -1913,6 +2056,9 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
         object_positivity: bool = True,
         shrinkage_rad: float = 0.0,
         fix_potential_baseline: bool = True,
+        tv_denoise_iter=np.inf,
+        tv_denoise_weights=None,
+        tv_denoise_inner_iter=40,
         collective_tilt_updates: bool = False,
         store_iterations: bool = False,
         progress_bar: bool = True,
@@ -1998,6 +2144,15 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
             Butterworth filter order. Smaller gives a smoother filter
         object_positivity: bool, optional
             If True, forces object to be positive
+        tv_denoise: bool
+            If True, applies TV denoising on object
+        tv_denoise_weights: [float,float]
+            Denoising weights[z weight, r weight]. The greater `weight`,
+            the more denoising.
+        tv_denoise_inner_iter: float
+            Number of iterations to run in inner loop of TV denoising
+        collective_tilt_updates: bool
+            if True perform collective tilt updates
         shrinkage_rad: float
             Phase shift in radians to be subtracted from the potential at each iteration
         store_iterations: bool, optional
@@ -2477,6 +2632,10 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
                         if fix_potential_baseline
                         and self._object_fov_mask_inverse.sum() > 0
                         else None,
+                        tv_denoise=a0 < tv_denoise_iter
+                        and tv_denoise_weights is not None,
+                        tv_denoise_weights=tv_denoise_weights,
+                        tv_denoise_inner_iter=tv_denoise_inner_iter,
                     )
 
             # Normalize Error Over Tilts
@@ -2487,11 +2646,7 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
             if collective_tilt_updates:
                 self._object += collective_object / self._num_tilts
 
-                (
-                    self._object,
-                    self._probe,
-                    _,
-                ) = self._constraints(
+                (self._object, self._probe, _,) = self._constraints(
                     self._object,
                     self._probe,
                     None,
@@ -2530,6 +2685,9 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
                     if fix_potential_baseline
                     and self._object_fov_mask_inverse.sum() > 0
                     else None,
+                    tv_denoise=a0 < tv_denoise_iter and tv_denoise_weights is not None,
+                    tv_denoise_weights=tv_denoise_weights,
+                    v_denoise_inner_iter=tv_denoise_inner_iter,
                 )
 
             self.error_iterations.append(error.item())
