@@ -256,7 +256,7 @@ def get_origin(
     qyy, qxx = np.meshgrid(np.arange(datacube.Q_Ny), np.arange(datacube.Q_Nx))
 
     if mask is None:
-        for (rx, ry) in tqdmnd(
+        for rx, ry in tqdmnd(
             datacube.R_Nx,
             datacube.R_Ny,
             desc="Finding origins",
@@ -283,7 +283,7 @@ def get_origin(
         qy0 = np.ma.array(
             data=qy0, mask=np.zeros((datacube.R_Nx, datacube.R_Ny), dtype=bool)
         )
-        for (rx, ry) in tqdmnd(
+        for rx, ry in tqdmnd(
             datacube.R_Nx,
             datacube.R_Ny,
             desc="Finding origins",

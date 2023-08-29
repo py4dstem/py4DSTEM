@@ -144,7 +144,6 @@ class Crystal:
         self.calculate_lattice()
 
     def calculate_lattice(self):
-
         if not hasattr(self, "lat_real"):
             # calculate unit cell lattice vectors
             a = self.cell[0]
@@ -406,7 +405,6 @@ class Crystal:
         from_cartesian=False,
         conventional_standard_structure=True,
     ):
-
         """
         Create a Crystal using pymatgen to generate unit cell manually from user inputs
 
@@ -512,7 +510,6 @@ class Crystal:
         tol_structure_factor: float = 1e-4,
         return_intensities: bool = False,
     ):
-
         """
         Calculate structure factors for all hkl indices up to max scattering vector k_max
 

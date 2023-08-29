@@ -116,7 +116,6 @@ class DataCubeVirtualDiffraction:
 
         # ...with no center shifting
         if shift_center == False:
-
             # ...for the whole pattern
             if mask is None:
                 if method == "mean":
@@ -187,7 +186,6 @@ class DataCubeVirtualDiffraction:
 
             # ...for integer shifts
             if not subpixel:
-
                 # round shifts -> int
                 qx_shift = qx_shift.round().astype(int)
                 qy_shift = qy_shift.round().astype(int)

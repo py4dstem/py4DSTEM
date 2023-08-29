@@ -328,7 +328,6 @@ def thin_data_real(datacube, thinning_factor):
 
     # populate data
     for rx, ry in tqdmnd(Rshapef[0], Rshapef[1]):
-
         rx0 = rx * thinning_factor
         ry0 = ry * thinning_factor
         data[rx, ry, :, :] = datacube[rx0, ry0, :, :]
@@ -554,7 +553,6 @@ def resample_data_diffraction(
         from scipy.ndimage import zoom
 
         if resampling_factor is not None:
-
             if output_size is not None:
                 raise ValueError(
                     "Only one of 'resampling_factor' or 'output_size' can be specified."
@@ -565,7 +563,6 @@ def resample_data_diffraction(
                 resampling_factor = np.tile(resampling_factor, 2)
 
         else:
-
             if output_size is None:
                 raise ValueError(
                     "At-least one of 'resampling_factor' or 'output_size' must be specified."
@@ -599,7 +596,6 @@ def pad_data_diffraction(datacube, pad_factor=None, output_size=None):
     Qx, Qy = datacube.shape[-2:]
 
     if pad_factor is not None:
-
         if output_size is not None:
             raise ValueError(
                 "Only one of 'pad_factor' or 'output_size' can be specified."
@@ -618,7 +614,6 @@ def pad_data_diffraction(datacube, pad_factor=None, output_size=None):
         pad_ky = (pad_ky, pad_ky)
 
     else:
-
         if output_size is None:
             raise ValueError(
                 "At-least one of 'pad_factor' or 'output_size' must be specified."

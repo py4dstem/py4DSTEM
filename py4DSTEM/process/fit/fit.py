@@ -91,7 +91,6 @@ def fit_2D(
 
     # least squares fitting
     for k in range(robust_steps + 1):
-
         # in 1st iteration, set up params and mask
         if k == 0:
             if popt is None:
@@ -141,7 +140,6 @@ def parabola(xy, c0, cx1, cx2, cy1, cy2, cxy):
 
 
 def bezier_two(xy, c00, c01, c02, c10, c11, c12, c20, c21, c22):
-
     return (
         c00 * ((1 - xy[0]) ** 2) * ((1 - xy[1]) ** 2)
         + c10 * 2 * (1 - xy[0]) * xy[0] * ((1 - xy[1]) ** 2)
@@ -184,7 +182,6 @@ def polar_twofold_gaussian_2D(
     sigma_t,
     sigma_q,
 ):
-
     # unpack position
     t, q = tq
 
@@ -206,7 +203,6 @@ def polar_twofold_gaussian_2D_background(
     sigma_q,
     C,
 ):
-
     # unpack position
     t, q = tq
 

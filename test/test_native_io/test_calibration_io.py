@@ -3,14 +3,13 @@ import numpy as np
 from os.path import join
 
 # set filepath
-#path = join(py4DSTEM._TESTPATH, "filename")
-
+# path = join(py4DSTEM._TESTPATH, "filename")
 
 
 # class TestCalibrationIO:
-# 
-# 
-# 
+#
+#
+#
 #     def test_datacube_cal_io(self):
 #         # TODO
 #         # make a datacube
@@ -20,8 +19,8 @@ from os.path import join
 #         # check its calibration
 #         assert 0
 #         pass
-# 
-# 
+#
+#
 #     def test_datacube_child_node(self):
 #         # TODO
 #         # make a datacube
@@ -35,10 +34,3 @@ from os.path import join
 #         # check its calibration
 #         assert 0
 #         pass
-
-
-
-
-
-
-

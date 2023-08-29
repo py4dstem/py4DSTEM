@@ -235,7 +235,7 @@ class K2DataArray(Sequence):
         # handle average DP
         if axis == (0, 1):
             avgDP = np.zeros((self.shape[2], self.shape[3]))
-            for (Ry, Rx) in tqdmnd(self.shape[1], self.shape[0]):
+            for Ry, Rx in tqdmnd(self.shape[1], self.shape[0]):
                 avgDP += self[Rx, Ry, :, :]
 
             return avgDP / (self.shape[0] * self.shape[1])
@@ -243,7 +243,7 @@ class K2DataArray(Sequence):
         # handle average image
         if axis == (2, 3):
             avgImg = np.zeros((self.shape[0], self.shape[1]))
-            for (Ry, Rx) in tqdmnd(self.shape[1], self.shape[0]):
+            for Ry, Rx in tqdmnd(self.shape[1], self.shape[0]):
                 avgImg[Rx, Ry] = np.mean(self[Rx, Ry, :, :])
             return avgImg
 
@@ -253,7 +253,7 @@ class K2DataArray(Sequence):
         # handle average DP
         if axis == (0, 1):
             sumDP = np.zeros((self.shape[2], self.shape[3]))
-            for (Ry, Rx) in tqdmnd(self.shape[1], self.shape[0]):
+            for Ry, Rx in tqdmnd(self.shape[1], self.shape[0]):
                 sumDP += self[Rx, Ry, :, :]
 
             return sumDP
@@ -261,7 +261,7 @@ class K2DataArray(Sequence):
         # handle average image
         if axis == (2, 3):
             sumImg = np.zeros((self.shape[0], self.shape[1]))
-            for (Ry, Rx) in tqdmnd(self.shape[1], self.shape[0]):
+            for Ry, Rx in tqdmnd(self.shape[1], self.shape[0]):
                 sumImg[Rx, Ry] = np.sum(self[Rx, Ry, :, :])
             return sumImg
 
@@ -271,7 +271,7 @@ class K2DataArray(Sequence):
         # handle average DP
         if axis == (0, 1):
             maxDP = np.zeros((self.shape[2], self.shape[3]))
-            for (Ry, Rx) in tqdmnd(self.shape[1], self.shape[0]):
+            for Ry, Rx in tqdmnd(self.shape[1], self.shape[0]):
                 maxDP = np.maximum(maxDP, self[Rx, Ry, :, :])
 
             return maxDP
@@ -279,7 +279,7 @@ class K2DataArray(Sequence):
         # handle average image
         if axis == (2, 3):
             maxImg = np.zeros((self.shape[0], self.shape[1]))
-            for (Ry, Rx) in tqdmnd(self.shape[1], self.shape[0]):
+            for Ry, Rx in tqdmnd(self.shape[1], self.shape[0]):
                 maxImg[Rx, Ry] = np.max(self[Rx, Ry, :, :])
             return maxImg
 

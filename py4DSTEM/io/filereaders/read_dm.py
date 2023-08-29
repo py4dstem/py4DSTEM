@@ -32,7 +32,6 @@ def read_dm(filepath, name="dm_dataset", mem="RAM", binfactor=1, **kwargs):
 
     # open the file
     with dm.fileDM(filepath, on_memory=False) as dmFile:
-
         # loop through datasets looking for one with more than 2D
         # This is needed because:
         #   NCEM TitanX files store 4D data in a 3D array

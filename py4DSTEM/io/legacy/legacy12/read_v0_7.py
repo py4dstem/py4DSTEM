@@ -384,7 +384,7 @@ def get_pointlistarray_from_grp(g):
     coord_types = [ar[0, 0].dtype.fields[i][0] for i in coord_names]
     coordinates = [(coord_names[i], coord_types[i]) for i in range(N)]
     pla = PointListArray(dtype=coordinates, shape=shape, name=name)
-    for (i, j) in tqdmnd(
+    for i, j in tqdmnd(
         range(shape[0]),
         range(shape[1]),
         desc="Reading PointListArray",

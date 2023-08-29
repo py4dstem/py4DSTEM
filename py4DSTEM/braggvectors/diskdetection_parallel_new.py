@@ -64,6 +64,7 @@ def register_dill_serializer():
 
 #### DASK WRAPPER FUNCTION ####
 
+
 # Each delayed objected is passed a 4D array, currently implementing only on 2D slices.
 # TODO add batching with fancy indexing  - needs to run a for loop over the batch of arrays
 # TODO add cuda accelerated version
@@ -138,7 +139,6 @@ def beta_parallel_disk_detection(
 
     if dask_client == None:
         if dask_client_params != None:
-
             dask.config.set(
                 {
                     "distributed.worker.memory.spill": False,
@@ -247,7 +247,7 @@ def beta_parallel_disk_detection(
     # temp_peaks[0][0]
 
     # operating over a list so we need the size (0->count) and re-create the probe positions (0->rx,0->ry),
-    for (count, (rx, ry)) in zip(
+    for count, (rx, ry) in zip(
         [i for i in range(dataset.data[..., 0, 0].size)],
         np.ndindex(dataset.data.shape[:-2]),
     ):

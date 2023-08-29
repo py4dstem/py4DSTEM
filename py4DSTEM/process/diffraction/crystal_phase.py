@@ -145,7 +145,6 @@ class Crystal_Phase:
         Details:
         """
         if isinstance(pointlistarray, PointListArray):
-
             phase_weights = np.zeros(
                 (
                     pointlistarray.shape[0],

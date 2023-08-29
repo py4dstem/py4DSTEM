@@ -81,7 +81,6 @@ def read(
 
     # EMD 1.0 formatted files (py4DSTEM v0.14+)
     if filetype == "emd":
-
         # check version
         version = emd._get_EMD_version(filepath)
         if verbose:
@@ -140,7 +139,6 @@ def read(
 
         # read v13
         if legacy.is_py4DSTEM_version13(filepath):
-
             # load the data
             if verbose:
                 print("Legacy py4DSTEM version 13 file detected. Reading...")
@@ -156,7 +154,6 @@ def read(
 
         # read <= v12
         else:
-
             # parse the root/data_id from the datapath arg
             if datapath is not None:
                 datapath = datapath.split("/")

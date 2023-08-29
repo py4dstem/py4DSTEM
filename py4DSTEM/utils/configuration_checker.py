@@ -180,7 +180,6 @@ def get_module_states(state_dict: dict) -> dict:
     # val is a list of its dependencies
     # module_dependencies comes from the namespace
     for key, val in module_depenencies.items():
-
         # create a list to store the status of the depencies
         temp_lst = []
 
@@ -329,7 +328,6 @@ def check_module_functionality(state_dict: dict) -> None:
     # key is the name of the module e.g. ACOM
     # val is a list of its dependencies
     for key, val in module_depenencies.items():
-
         # create a list to store the status of the depencies
         temp_lst = []
 
