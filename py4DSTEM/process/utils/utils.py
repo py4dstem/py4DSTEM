@@ -59,7 +59,7 @@ def radial_reduction(
 def plot(img, title='Image', savePath=None, cmap='inferno', show=True, vmax=None,
                                                         figsize=(10, 10), scale=None):
     fig, ax = plt.subplots(figsize=figsize)
-    im = ax.imshow(img, interpolation='nearest', cmap=plt.cm.get_cmap(cmap), vmax=vmax)
+    im = ax.imshow(img, interpolation='nearest', cmap=plt.get_cmap(cmap), vmax=vmax)
     divider = make_axes_locatable(ax)
     cax = divider.append_axes("right", size="5%", pad=0.05)
     plt.colorbar(im, cax=cax)
@@ -636,7 +636,7 @@ def fourier_resample(
 #def plot(img, title='Image', savePath=None, cmap='inferno', show=True, vmax=None,
 #                                                        figsize=(10, 10), scale=None):
 #    fig, ax = plt.subplots(figsize=figsize)
-#    im = ax.imshow(img, interpolation='nearest', cmap=plt.cm.get_cmap(cmap), vmax=vmax)
+#    im = ax.imshow(img, interpolation='nearest', cmap=plt.get_cmap(cmap), vmax=vmax)
 #    divider = make_axes_locatable(ax)
 #    cax = divider.append_axes("right", size="5%", pad=0.05)
 #    plt.colorbar(im, cax=cax)

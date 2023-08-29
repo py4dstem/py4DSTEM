@@ -4,7 +4,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 from fractions import Fraction
 from typing import Union, Optional
-from copy import deepcopy
 from scipy.optimize import curve_fit
 import sys
 
@@ -73,11 +72,12 @@ class Crystal:
         """
         Args:
             positions (np.array): fractional coordinates of each atom in the cell
-            numbers (np.array): Z number for each atom in the cell
+            numbers (np.array): Z number for each atom in the cell, if one number passed it is used for all atom positions
             cell (np.array): specify the unit cell, using a variable number of parameters
                 1 number: the lattice parameter for a cubic cell
                 3 numbers: the three lattice parameters for an orthorhombic cell
                 6 numbers: the a,b,c lattice parameters and ɑ,β,ɣ angles for any cell
+                3x3 array: row vectors containing the (u,v,w) lattice vectors.
 
         """
         # Initialize Crystal
@@ -92,7 +92,10 @@ class Crystal:
         else:
             raise Exception("Number of positions and atomic numbers do not match")
 
-        # unit cell, as either [a a a 90 90 90], [a b c 90 90 90], or [a b c alpha beta gamma]
+        # unit cell, as one of:
+        # [a a a 90 90 90]
+        # [a b c 90 90 90]
+        # [a b c alpha beta gamma]
         cell = np.asarray(cell, dtype="float_")
         if np.size(cell) == 1:
             self.cell = np.hstack([cell, cell, cell, 90, 90, 90])
@@ -100,45 +103,133 @@ class Crystal:
             self.cell = np.hstack([cell, 90, 90, 90])
         elif np.size(cell) == 6:
             self.cell = cell
+        elif np.shape(cell)[0] == 3 and np.shape(cell)[1] == 3:
+            self.lat_real = np.array(cell)
+            a = np.linalg.norm(self.lat_real[0,:])
+            b = np.linalg.norm(self.lat_real[1,:])
+            c = np.linalg.norm(self.lat_real[2,:])
+            alpha = np.rad2deg(np.arccos(np.clip(np.sum(
+                self.lat_real[1,:]*self.lat_real[2,:])/b/c,-1,1)))
+            beta  = np.rad2deg(np.arccos(np.clip(np.sum(
+                self.lat_real[0,:]*self.lat_real[2,:])/a/c,-1,1)))
+            gamma = np.rad2deg(np.arccos(np.clip(np.sum(
+                self.lat_real[0,:]*self.lat_real[1,:])/a/b,-1,1)))
+            self.cell = (a,b,c,alpha,beta,gamma)
         else:
-            raise Exception("Cell cannot contain " + np.size(cell) + " elements")
+            raise Exception("Cell cannot contain " + np.size(cell) + " entries")
         
         # pymatgen flag
-        self.pymatgen_available = False
-        
+        if 'pymatgen' in sys.modules:
+            self.pymatgen_available = True            
+        else:
+            self.pymatgen_available = False
         # Calculate lattice parameters
         self.calculate_lattice()
-        
+
     def calculate_lattice(self):
-        # calculate unit cell lattice vectors
-        a = self.cell[0]
-        b = self.cell[1]
-        c = self.cell[2]
-        alpha = np.deg2rad(self.cell[3])
-        beta = np.deg2rad(self.cell[4])
-        gamma = np.deg2rad(self.cell[5])
-        f = np.cos(beta) * np.cos(gamma) - np.cos(alpha)
-        vol = a*b*c*np.sqrt(1 \
-            + 2*np.cos(alpha)*np.cos(beta)*np.cos(gamma) \
-            - np.cos(alpha)**2 - np.cos(beta)**2 - np.cos(gamma)**2)
-        self.lat_real = np.array(
-            [
-                [a,               0,                 0],
-                [b*np.cos(gamma), b*np.sin(gamma),   0],
-                [c*np.cos(beta), -c*f/np.sin(gamma), vol/(a*b*np.sin(gamma))],
-            ]
-        )
+        
+        if not hasattr(self, 'lat_real'):
+            # calculate unit cell lattice vectors
+            a = self.cell[0]
+            b = self.cell[1]
+            c = self.cell[2]
+            alpha = np.deg2rad(self.cell[3])
+            beta = np.deg2rad(self.cell[4])
+            gamma = np.deg2rad(self.cell[5])
+            f = np.cos(beta) * np.cos(gamma) - np.cos(alpha)
+            vol = a*b*c*np.sqrt(1 \
+                + 2*np.cos(alpha)*np.cos(beta)*np.cos(gamma) \
+                - np.cos(alpha)**2 - np.cos(beta)**2 - np.cos(gamma)**2)
+            self.lat_real = np.array(
+                [
+                    [a,               0,                 0],
+                    [b*np.cos(gamma), b*np.sin(gamma),   0],
+                    [c*np.cos(beta), -c*f/np.sin(gamma), vol/(a*b*np.sin(gamma))],
+                ]
+            )
 
         # Inverse lattice, metric tensors
         self.metric_real = self.lat_real @ self.lat_real.T
         self.metric_inv = np.linalg.inv(self.metric_real)
         self.lat_inv = self.metric_inv @ self.lat_real
 
-        # pymatgen flag
-        if 'pymatgen' in sys.modules:
-            self.pymatgen_available = True            
+
+
+    def get_strained_crystal(
+        self,
+        exx = 0.0,
+        eyy = 0.0,
+        ezz = 0.0,
+        exy = 0.0,
+        exz = 0.0,
+        eyz = 0.0,
+        deformation_matrix = None,
+        return_deformation_matrix = False,
+        ):
+        """
+        This method returns new Crystal class with strain applied. The directions of (x,y,z)
+        are with respect to the default Crystal orientation, which can be checked with
+        print(Crystal.lat_real) applied to the original Crystal.
+
+        Strains are given in fractional values, so exx = 0.01 is 1% strain along the x direction.
+        Deformation matrix should be of the form:
+            deformation_matrix = np.array([
+                [1.0+exx,   1.0*exy,    1.0*exz],
+                [1.0*exy,   1.0+eyy,    1.0*eyz],
+                [1.0*exz,   1.0*eyz,    1.0+ezz],
+            ])
+
+        Parameters
+        --------
+        
+        exx (float): 
+            fractional strain along the xx direction
+        eyy (float): 
+            fractional strain along the yy direction
+        ezz (float): 
+            fractional strain along the zz direction
+        exy (float): 
+            fractional strain along the xy direction
+        exz (float): 
+            fractional strain along the xz direction
+        eyz (float): 
+            fractional strain along the yz direction
+        deformation_matrix (np.ndarray): 
+            3x3 array describing deformation matrix
+        return_deformation_matrix (bool): 
+            boolean switch to return deformation matrix              
+
+        Returns
+        --------
+        return_deformation_matrix == False:
+            strained_crystal (py4DSTEM.Crystal)  
+        return_deformation_matrix == True:
+            (strained_crystal, deformation_matrix)
+        """
+
+        # deformation matrix
+        if deformation_matrix is None:
+            deformation_matrix = np.array([
+                [1.0+exx,   1.0*exy,    1.0*exz],
+                [1.0*exy,   1.0+eyy,    1.0*eyz],
+                [1.0*exz,   1.0*eyz,    1.0+ezz],
+            ])
+
+        # new unit cell
+        lat_new = self.lat_real @ deformation_matrix
+
+        # make new crystal class
+        from py4DSTEM.process.diffraction import Crystal
+        crystal_strained = Crystal(
+            positions = self.positions.copy(),
+            numbers = self.numbers.copy(),
+            cell = lat_new,
+        )
+
+        if return_deformation_matrix:
+            return crystal_strained, deformation_matrix
         else:
-            self.pymatgen_available = False
+            return crystal_strained
         
 
     def from_CIF(CIF, conventional_standard_structure=True):
@@ -386,13 +477,26 @@ class Crystal:
         k_max: float = 2.0,
         tol_structure_factor: float = 1e-4,
         return_intensities: bool = False,
-    ):
+        ):
+
+
         """
         Calculate structure factors for all hkl indices up to max scattering vector k_max
 
-        Args:
-            k_max (numpy float):                max scattering vector to include (1/Angstroms)
-            tol_structure_factor (numpy float): tolerance for removing low-valued structure factors
+        Parameters
+        --------
+        
+        k_max: float                
+            max scattering vector to include (1/Angstroms)
+        tol_structure_factor: float
+            tolerance for removing low-valued structure factors
+        return_intensities: bool
+            return the intensities and positions of all structure factor peaks.
+        
+        Returns
+        --------
+        (q_SF, I_SF)
+            Tuple of the q vectors and intensities of each structure factor.
         """
 
         # Store k_max
@@ -425,7 +529,7 @@ class Crystal:
         hkl = np.vstack([xa.ravel(), ya.ravel(), za.ravel()])
         # g_vec_all = self.lat_inv @ hkl
         g_vec_all =  (hkl.T @ self.lat_inv).T
-
+                
         # Delete lattice vectors outside of k_max
         keep = np.linalg.norm(g_vec_all, axis=0) <= self.k_max
         self.hkl = hkl[:, keep]
