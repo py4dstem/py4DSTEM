@@ -16,13 +16,14 @@ class PointList:
     A wrapper around structured numpy arrays, with read/write functionality in/out of
     py4DSTEM formatted HDF5 files.
     """
+
     def __init__(
         self,
         data: np.ndarray,
-        name: Optional[str] = 'pointlist',
-        ):
+        name: Optional[str] = "pointlist",
+    ):
         """
-		Instantiate a PointList.
+                Instantiate a PointList.
         Args:
             data (structured numpy ndarray): the data; the dtype of this array will
                 specify the fields of the PointList.
@@ -41,11 +42,11 @@ class PointList:
         if not hasattr(self, "_metadata"):
             self._metadata = {}
 
-
     # properties
     @property
     def dtype(self):
         return self._dtype
+
     @dtype.setter
     def dtype(self, dtype):
         self._dtype = dtype
@@ -53,6 +54,7 @@ class PointList:
     @property
     def fields(self):
         return self._fields
+
     @fields.setter
     def fields(self, x):
         self.data.dtype.names = x
@@ -66,8 +68,6 @@ class PointList:
     def length(self):
         return np.atleast_1d(self.data).shape[0]
 
-
-
     ## Add, remove, sort data
 
     def add(self, data):
@@ -78,43 +78,40 @@ class PointList:
         self.data = np.append(self.data, data)
 
     def remove(self, mask):
-        """ Removes points wherever mask==True
-        """
-        assert np.atleast_1d(mask).shape[0] == self.length, "deletemask must be same length as the data"
+        """Removes points wherever mask==True"""
+        assert (
+            np.atleast_1d(mask).shape[0] == self.length
+        ), "deletemask must be same length as the data"
         inds = mask.nonzero()[0]
         self.data = np.delete(self.data, inds)
 
-    def sort(self, field, order='descending'):
+    def sort(self, field, order="descending"):
         """
         Sorts the point list according to field,
         which must be a field in self.dtype.
         order should be 'descending' or 'ascending'.
         """
         assert field in self.fields
-        assert (order=='descending') or (order=='ascending')
-        if order=='ascending':
+        assert (order == "descending") or (order == "ascending")
+        if order == "ascending":
             self.data = np.sort(self.data, order=field)
         else:
             self.data = np.sort(self.data, order=field)[::-1]
 
-
     ## Copy, copy+modify PointList
 
     def copy(self, name=None):
-        """ Returns a copy of the PointList. If name=None, sets to `{name}_copy`
-        """
-        name = name if name is not None else self.name+"_copy"
+        """Returns a copy of the PointList. If name=None, sets to `{name}_copy`"""
+        name = name if name is not None else self.name + "_copy"
 
-        pl = PointList(
-            data = np.copy(self.data),
-            name = name)
+        pl = PointList(data=np.copy(self.data), name=name)
 
-        for k,v in self.metadata.items():
+        for k, v in self.metadata.items():
             pl.metadata = v.copy(name=k)
 
         return pl
 
-    def add_fields(self, new_fields, name=''):
+    def add_fields(self, new_fields, name=""):
         """
         Creates a copy of the PointList, but with additional fields given by new_fields.
         Args:
@@ -122,10 +119,10 @@ class PointList:
             name: a name for the new pointlist
         """
         dtype = []
-        for f,t in zip(self.fields,self.types):
-            dtype.append((f,t))
-        for f,t in new_fields:
-            dtype.append((f,t))
+        for f, t in zip(self.fields, self.types):
+            dtype.append((f, t))
+        for f, t in new_fields:
+            dtype.append((f, t))
 
         data = np.zeros(self.length, dtype=dtype)
         for f in self.fields:
@@ -143,61 +140,55 @@ class PointList:
         """
 
         if data[0].ndim == 0:
-            L = 1,
+            L = (1,)
         else:
             L = data[0].shape[0]
-        newdata = np.zeros(L,dtype=self.dtype)
+        newdata = np.zeros(L, dtype=self.dtype)
 
         _fields = self.fields if fields is None else fields
 
-        for d,f in zip(data, _fields):
+        for d, f in zip(data, _fields):
             newdata[f] = d
 
-        self.data = np.append(self.data,newdata)
-
+        self.data = np.append(self.data, newdata)
 
     # set up metadata property
 
     @property
     def metadata(self):
         return self._metadata
+
     @metadata.setter
-    def metadata(self,x):
-        assert(isinstance(x,Metadata))
+    def metadata(self, x):
+        assert isinstance(x, Metadata)
         self._metadata[x.name] = x
-
-
 
     ## Representation to standard output
     def __repr__(self):
 
-        space = ' '*len(self.__class__.__name__)+'  '
+        space = " " * len(self.__class__.__name__) + "  "
         string = f"{self.__class__.__name__}( A length {self.length} PointList called '{self.name}',"
-        string += "\n"+space+f"with {len(self.fields)} fields:"
+        string += "\n" + space + f"with {len(self.fields)} fields:"
         string += "\n"
-        space2 = max([len(field) for field in self.fields])+3
-        for f,t in zip(self.fields,self.types):
-            string += "\n"+space+f"{f}{(space2-len(f))*' '}({str(t)})"
+        space2 = max([len(field) for field in self.fields]) + 3
+        for f, t in zip(self.fields, self.types):
+            string += "\n" + space + f"{f}{(space2-len(f))*' '}({str(t)})"
         string += "\n)"
 
         return string
-
 
     # Slicing
     def __getitem__(self, v):
         return self.data[v]
 
-
-
     # HDF5 read/write
 
-    def to_h5(self,group):
+    def to_h5(self, group):
         from py4DSTEM.io.legacy.legacy13.v13_emd_classes.io import PointList_to_h5
-        PointList_to_h5(self,group)
+
+        PointList_to_h5(self, group)
 
     def from_h5(group):
         from py4DSTEM.io.legacy.legacy13.v13_emd_classes.io import PointList_from_h5
+
         return PointList_from_h5(group)
-
-
-

@@ -12,20 +12,23 @@ import py4DSTEM
 from emdfile import PointListArray
 
 
-def _find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
-                                   corrPower=1,
-                                   sigma=2,
-                                   edgeBoundary=20,
-                                   minRelativeIntensity=0.005,
-                                   minAbsoluteIntensity=0,
-                                   relativeToPeak=0,
-                                   minPeakSpacing=60,
-                                   maxNumPeaks=70,
-                                   subpixel='multicorr',
-                                   upsample_factor=16,
-                                   filter_function=None,
-                                   return_cc=False,
-                                   peaks=None):
+def _find_Bragg_disks_single_DP_FK(
+    DP,
+    probe_kernel_FT,
+    corrPower=1,
+    sigma=2,
+    edgeBoundary=20,
+    minRelativeIntensity=0.005,
+    minAbsoluteIntensity=0,
+    relativeToPeak=0,
+    minPeakSpacing=60,
+    maxNumPeaks=70,
+    subpixel="multicorr",
+    upsample_factor=16,
+    filter_function=None,
+    return_cc=False,
+    peaks=None,
+):
     """
     Mirror of diskdetection.find_Bragg_disks_single_DP_FK with explicit imports for
     remote execution.
@@ -92,8 +95,13 @@ def _find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
     Returns:
         (PointList) the Bragg peak positions and correlation intensities
     """
-    assert subpixel in ['none', 'poly', 'multicorr'], \
-        "Unrecognized subpixel option {}, subpixel must be 'none', 'poly', or 'multicorr'".format(subpixel)
+    assert subpixel in [
+        "none",
+        "poly",
+        "multicorr",
+    ], "Unrecognized subpixel option {}, subpixel must be 'none', 'poly', or 'multicorr'".format(
+        subpixel
+    )
 
     import numpy
     import scipy.ndimage.filters
@@ -102,8 +110,10 @@ def _find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
     # apply filter function:
     DP = DP if filter_function is None else filter_function(DP)
 
-    if subpixel == 'none':
-        cc = py4DSTEM.process.utils.get_cross_correlation_fk(DP, probe_kernel_FT, corrPower)
+    if subpixel == "none":
+        cc = py4DSTEM.process.utils.get_cross_correlation_fk(
+            DP, probe_kernel_FT, corrPower
+        )
         cc = numpy.maximum(cc, 0)
         maxima_x, maxima_y, maxima_int = py4DSTEM.process.utils.get_maxima_2D(
             cc,
@@ -114,19 +124,24 @@ def _find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
             relativeToPeak=relativeToPeak,
             minSpacing=minPeakSpacing,
             maxNumPeaks=maxNumPeaks,
-            subpixel=False)
-    elif subpixel == 'poly':
-        cc = py4DSTEM.process.utils.get_cross_correlation_fk(DP, probe_kernel_FT, corrPower)
+            subpixel=False,
+        )
+    elif subpixel == "poly":
+        cc = py4DSTEM.process.utils.get_cross_correlation_fk(
+            DP, probe_kernel_FT, corrPower
+        )
         cc = numpy.maximum(cc, 0)
         maxima_x, maxima_y, maxima_int = py4DSTEM.process.utils.get_maxima_2D(
-            cc, sigma=sigma,
+            cc,
+            sigma=sigma,
             edgeBoundary=edgeBoundary,
             minRelativeIntensity=minRelativeIntensity,
             minAbsoluteIntensity=minAbsoluteIntensity,
             relativeToPeak=relativeToPeak,
             minSpacing=minPeakSpacing,
             maxNumPeaks=maxNumPeaks,
-            subpixel=True)
+            subpixel=True,
+        )
     else:
         # Multicorr subpixel:
         m = numpy.fft.fft2(DP) * probe_kernel_FT
@@ -135,14 +150,16 @@ def _find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
         cc = numpy.maximum(numpy.real(numpy.fft.ifft2(ccc)), 0)
 
         maxima_x, maxima_y, maxima_int = py4DSTEM.process.utils.get_maxima_2D(
-            cc, sigma=sigma,
+            cc,
+            sigma=sigma,
             edgeBoundary=edgeBoundary,
             minRelativeIntensity=minRelativeIntensity,
             minAbsoluteIntensity=minAbsoluteIntensity,
             relativeToPeak=relativeToPeak,
             minSpacing=minPeakSpacing,
             maxNumPeaks=maxNumPeaks,
-            subpixel=True)
+            subpixel=True,
+        )
 
         # Use the DFT upsample to refine the detected peaks (but not the intensity)
         for ipeak in range(len(maxima_x)):
@@ -153,16 +170,18 @@ def _find_Bragg_disks_single_DP_FK(DP, probe_kernel_FT,
             xyShift[0] = numpy.round(xyShift[0] * 2) / 2
             xyShift[1] = numpy.round(xyShift[1] * 2) / 2
 
-            subShift = py4DSTEM.process.utils.multicorr.upsampled_correlation(ccc, upsample_factor, xyShift)
+            subShift = py4DSTEM.process.utils.multicorr.upsampled_correlation(
+                ccc, upsample_factor, xyShift
+            )
             maxima_x[ipeak] = subShift[0]
             maxima_y[ipeak] = subShift[1]
 
     # Make peaks PointList
     if peaks is None:
-        coords = [('qx', float), ('qy', float), ('intensity', float)]
+        coords = [("qx", float), ("qy", float), ("intensity", float)]
         peaks = py4DSTEM.PointList(coordinates=coords)
     else:
-        assert (isinstance(peaks, py4DSTEM.PointList))
+        assert isinstance(peaks, py4DSTEM.PointList)
     peaks.add_tuple_of_nparrays((maxima_x, maxima_y, maxima_int))
 
     if return_cc:
@@ -175,14 +194,14 @@ def _process_chunk(_f, start, end, path_to_static, coords, path_to_data, cluster
     import os
     import dill
 
-    with open(path_to_static, 'rb') as infile:
+    with open(path_to_static, "rb") as infile:
         inputs = dill.load(infile)
 
     # Always try to memory map the data file, if possible
-    if path_to_data.rsplit('.', 1)[-1].startswith('dm'):
-        datacube = py4DSTEM.read(path_to_data, load='dmmmap')
-    elif path_to_data.rsplit('.',1)[-1].startswith('gt'):
-        datacube = py4DSTEM.read(path_to_data, load='gatan_bin')
+    if path_to_data.rsplit(".", 1)[-1].startswith("dm"):
+        datacube = py4DSTEM.read(path_to_data, load="dmmmap")
+    elif path_to_data.rsplit(".", 1)[-1].startswith("gt"):
+        datacube = py4DSTEM.read(path_to_data, load="gatan_bin")
     else:
         datacube = py4DSTEM.read(path_to_data)
 
@@ -194,27 +213,30 @@ def _process_chunk(_f, start, end, path_to_static, coords, path_to_data, cluster
     datacube = None
 
     path_to_output = os.path.join(cluster_path, "{}_{}.data".format(start, end))
-    with open(path_to_output, 'wb') as data_file:
+    with open(path_to_output, "wb") as data_file:
         dill.dump(results, data_file)
 
     return path_to_output
 
 
-def find_Bragg_disks_ipp(DP, probe,
-                         corrPower=1,
-                         sigma=2,
-                         edgeBoundary=20,
-                         minRelativeIntensity=0.005,
-                         minAbsoluteIntensity=0,
-                         relativeToPeak=0,
-                         minPeakSpacing=60,
-                         maxNumPeaks=70,
-                         subpixel='poly',
-                         upsample_factor=4,
-                         filter_function=None,
-                         ipyparallel_client_file=None,
-                         data_file=None,
-                         cluster_path=None):
+def find_Bragg_disks_ipp(
+    DP,
+    probe,
+    corrPower=1,
+    sigma=2,
+    edgeBoundary=20,
+    minRelativeIntensity=0.005,
+    minAbsoluteIntensity=0,
+    relativeToPeak=0,
+    minPeakSpacing=60,
+    maxNumPeaks=70,
+    subpixel="poly",
+    upsample_factor=4,
+    filter_function=None,
+    ipyparallel_client_file=None,
+    data_file=None,
+    cluster_path=None,
+):
     """
     Distributed compute using IPyParallel.
 
@@ -268,7 +290,7 @@ def find_Bragg_disks_ipp(DP, probe,
     DP = None
 
     # Make the peaks PointListArray
-    coords = [('qx', float), ('qy', float), ('intensity', float)]
+    coords = [("qx", float), ("qy", float), ("intensity", float)]
     peaks = PointListArray(coordinates=coords, shape=(R_Nx, R_Ny))
 
     # Get the probe kernel FT
@@ -294,8 +316,8 @@ def find_Bragg_disks_ipp(DP, probe,
         maxNumPeaks,
         subpixel,
         upsample_factor,
-        filter_function
-        ]
+        filter_function,
+    ]
 
     if cluster_path is None:
         cluster_path = os.getcwd()
@@ -305,7 +327,7 @@ def find_Bragg_disks_ipp(DP, probe,
     t_00 = time()
     # write out static inputs
     path_to_inputs = os.path.join(tmpdir.name, "inputs")
-    with open(path_to_inputs, 'wb') as inputs_file:
+    with open(path_to_inputs, "wb") as inputs_file:
         dill.dump(inputs_list, inputs_file)
     t_inputs_save = time() - t_00
     print("Serialize input values : {}".format(t_inputs_save))
@@ -336,7 +358,9 @@ def find_Bragg_disks_ipp(DP, probe,
                 path_to_inputs,
                 indices[start:end],
                 data_file,
-                tmpdir.name))
+                tmpdir.name,
+            )
+        )
 
         if end == total:
             break
@@ -352,7 +376,7 @@ def find_Bragg_disks_ipp(DP, probe,
 
     t3 = time()
     for i in range(len(results)):
-        with open(results[i].get(), 'rb') as f:
+        with open(results[i].get(), "rb") as f:
             data_chunk = dill.load(f)
 
         for Rx, Ry, data in data_chunk:
@@ -367,27 +391,33 @@ def find_Bragg_disks_ipp(DP, probe,
         print("Error when cleaning up temporary files: {}".format(e))
 
     t = time() - t0
-    print("Analyzed {} diffraction patterns in {}h {}m {}s".format(
-        R_N, int(t / 3600), int(t / 60), int(t % 60)))
+    print(
+        "Analyzed {} diffraction patterns in {}h {}m {}s".format(
+            R_N, int(t / 3600), int(t / 60), int(t % 60)
+        )
+    )
 
     return peaks
 
 
-def find_Bragg_disks_dask(DP, probe,
-                          corrPower=1,
-                          sigma=2,
-                          edgeBoundary=20,
-                          minRelativeIntensity=0.005,
-                          minAbsoluteIntensity=0,
-                          relativeToPeak=0,
-                          minPeakSpacing=60,
-                          maxNumPeaks=70,
-                          subpixel='poly',
-                          upsample_factor=4,
-                          filter_function=None,
-                          dask_client=None,
-                          data_file=None,
-                          cluster_path=None):
+def find_Bragg_disks_dask(
+    DP,
+    probe,
+    corrPower=1,
+    sigma=2,
+    edgeBoundary=20,
+    minRelativeIntensity=0.005,
+    minAbsoluteIntensity=0,
+    relativeToPeak=0,
+    minPeakSpacing=60,
+    maxNumPeaks=70,
+    subpixel="poly",
+    upsample_factor=4,
+    filter_function=None,
+    dask_client=None,
+    data_file=None,
+    cluster_path=None,
+):
     """
     Distributed compute using Dask.
 
@@ -440,7 +470,7 @@ def find_Bragg_disks_dask(DP, probe,
     DP = None
 
     # Make the peaks PointListArray
-    coords = [('qx', float), ('qy', float), ('intensity', float)]
+    coords = [("qx", float), ("qy", float), ("intensity", float)]
     peaks = PointListArray(coordinates=coords, shape=(R_Nx, R_Ny))
 
     # Get the probe kernel FT
@@ -465,8 +495,8 @@ def find_Bragg_disks_dask(DP, probe,
         maxNumPeaks,
         subpixel,
         upsample_factor,
-        filter_function
-        ]
+        filter_function,
+    ]
 
     if cluster_path is None:
         cluster_path = os.getcwd()
@@ -475,7 +505,7 @@ def find_Bragg_disks_dask(DP, probe,
 
     # write out static inputs
     path_to_inputs = os.path.join(tmpdir.name, "{}.inputs".format(dask_client.id))
-    with open(path_to_inputs, 'wb') as inputs_file:
+    with open(path_to_inputs, "wb") as inputs_file:
         dill.dump(inputs_list, inputs_file)
     t_inputs_save = time() - t0
     print("Serialize input values : {}".format(t_inputs_save))
@@ -508,7 +538,9 @@ def find_Bragg_disks_dask(DP, probe,
                 path_to_inputs,
                 indices[start:end],
                 data_file,
-                tmpdir.name))
+                tmpdir.name,
+            )
+        )
 
         if end == total:
             break
@@ -521,7 +553,7 @@ def find_Bragg_disks_dask(DP, probe,
     # collect results
     for batch in distributed.as_completed(submits, with_results=True).batches():
         for future, result in batch:
-            with open(result, 'rb') as f:
+            with open(result, "rb") as f:
                 data_chunk = dill.load(f)
 
             for Rx, Ry, data in data_chunk:
@@ -536,7 +568,10 @@ def find_Bragg_disks_dask(DP, probe,
         print("Error when cleaning up temporary files: {}".format(e))
 
     t = time() - t0
-    print("Analyzed {} diffraction patterns in {}h {}m {}s".format(
-        R_N, int(t / 3600), int(t / 60), int(t % 60)))
+    print(
+        "Analyzed {} diffraction patterns in {}h {}m {}s".format(
+            R_N, int(t / 3600), int(t / 60), int(t % 60)
+        )
+    )
 
     return peaks

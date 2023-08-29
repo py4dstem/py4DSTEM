@@ -6,8 +6,15 @@ from skimage.transform import radon
 
 from py4DSTEM.process.utils import get_maxima_1D
 
-def get_radon_scores(braggvectormap, mask=None, N_angles=200, sigma=2, minSpacing=2,
-                                                           minRelativeIntensity=0.05):
+
+def get_radon_scores(
+    braggvectormap,
+    mask=None,
+    N_angles=200,
+    sigma=2,
+    minSpacing=2,
+    minRelativeIntensity=0.05,
+):
     """
     Calculates a score function, score(angle), representing the likelihood that angle is
     a principle lattice direction of the lattice in braggvectormap.
@@ -42,9 +49,9 @@ def get_radon_scores(braggvectormap, mask=None, N_angles=200, sigma=2, minSpacin
             * **sinogram**: *(ndarray)* the radon transform of braggvectormap*mask
     """
     # Get sinogram
-    thetas = np.linspace(0,180,N_angles)
+    thetas = np.linspace(0, 180, N_angles)
     if mask is not None:
-        sinogram = radon(braggvectormap*mask, theta=thetas, circle=False)
+        sinogram = radon(braggvectormap * mask, theta=thetas, circle=False)
     else:
         sinogram = radon(braggvectormap, theta=thetas, circle=False)
 
@@ -55,22 +62,24 @@ def get_radon_scores(braggvectormap, mask=None, N_angles=200, sigma=2, minSpacin
         theta = thetas[i]
 
         # Get radon transform slice
-        ind = np.argmin(np.abs(thetas-theta))
-        sinogram_theta = sinogram[:,ind]
-        sinogram_theta = gaussian_filter(sinogram_theta,2)
+        ind = np.argmin(np.abs(thetas - theta))
+        sinogram_theta = sinogram[:, ind]
+        sinogram_theta = gaussian_filter(sinogram_theta, 2)
 
         # Get maxima
-        maxima = get_maxima_1D(sinogram_theta,sigma,minSpacing,minRelativeIntensity)
+        maxima = get_maxima_1D(sinogram_theta, sigma, minSpacing, minRelativeIntensity)
 
         # Calculate metrics
         N_maxima[i] = len(maxima)
         total_intensity[i] = np.sum(sinogram_theta[maxima])
-    scores = total_intensity/N_maxima
+    scores = total_intensity / N_maxima
 
     return scores, np.radians(thetas), sinogram
 
-def get_lattice_directions_from_scores(thetas, scores, sigma=2, minSpacing=2,
-                                       minRelativeIntensity=0.05, index1=0, index2=0):
+
+def get_lattice_directions_from_scores(
+    thetas, scores, sigma=2, minSpacing=2, minRelativeIntensity=0.05, index1=0, index2=0
+):
     """
     Get the lattice directions from the scores of the radon transform slices.
 
@@ -91,37 +100,54 @@ def get_lattice_directions_from_scores(thetas, scores, sigma=2, minSpacing=2,
             * **theta1**: *(float)* the first lattice direction, in radians
             * **theta2**: *(float)* the second lattice direction, in radians
     """
-    assert len(thetas)==len(scores), "Size of thetas and scores must match"
+    assert len(thetas) == len(scores), "Size of thetas and scores must match"
 
     # Get first lattice direction
-    maxima1 = get_maxima_1D(scores, sigma, minSpacing, minRelativeIntensity) # Get maxima
+    maxima1 = get_maxima_1D(
+        scores, sigma, minSpacing, minRelativeIntensity
+    )  # Get maxima
     thetas_max1 = thetas[maxima1]
     scores_max1 = scores[maxima1]
-    dtype = np.dtype([('thetas',thetas.dtype),('scores',scores.dtype)]) # Sort by intensity
-    ar_structured = np.empty(len(thetas_max1),dtype=dtype)
-    ar_structured['thetas'] = thetas_max1
-    ar_structured['scores'] = scores_max1
-    ar_structured = np.sort(ar_structured, order='scores')[::-1]
-    theta1 = ar_structured['thetas'][index1]                            # Get direction 1
+    dtype = np.dtype(
+        [("thetas", thetas.dtype), ("scores", scores.dtype)]
+    )  # Sort by intensity
+    ar_structured = np.empty(len(thetas_max1), dtype=dtype)
+    ar_structured["thetas"] = thetas_max1
+    ar_structured["scores"] = scores_max1
+    ar_structured = np.sort(ar_structured, order="scores")[::-1]
+    theta1 = ar_structured["thetas"][index1]  # Get direction 1
 
     # Apply sin**2 damping
-    scores_damped = scores*np.sin(thetas-theta1)**2
+    scores_damped = scores * np.sin(thetas - theta1) ** 2
 
     # Get second lattice direction
-    maxima2 = get_maxima_1D(scores_damped, sigma, minSpacing, minRelativeIntensity) # Get maxima
+    maxima2 = get_maxima_1D(
+        scores_damped, sigma, minSpacing, minRelativeIntensity
+    )  # Get maxima
     thetas_max2 = thetas[maxima2]
     scores_max2 = scores[maxima2]
-    dtype = np.dtype([('thetas',thetas.dtype),('scores',scores.dtype)]) # Sort by intensity
-    ar_structured = np.empty(len(thetas_max2),dtype=dtype)
-    ar_structured['thetas'] = thetas_max2
-    ar_structured['scores'] = scores_max2
-    ar_structured = np.sort(ar_structured, order='scores')[::-1]
-    theta2 = ar_structured['thetas'][index2]                            # Get direction 2
+    dtype = np.dtype(
+        [("thetas", thetas.dtype), ("scores", scores.dtype)]
+    )  # Sort by intensity
+    ar_structured = np.empty(len(thetas_max2), dtype=dtype)
+    ar_structured["thetas"] = thetas_max2
+    ar_structured["scores"] = scores_max2
+    ar_structured = np.sort(ar_structured, order="scores")[::-1]
+    theta2 = ar_structured["thetas"][index2]  # Get direction 2
 
     return theta1, theta2
 
-def get_lattice_vector_lengths(u_theta, v_theta, thetas, sinogram, spacing_thresh=1.5,
-                                        sigma=1, minSpacing=2, minRelativeIntensity=0.1):
+
+def get_lattice_vector_lengths(
+    u_theta,
+    v_theta,
+    thetas,
+    sinogram,
+    spacing_thresh=1.5,
+    sigma=1,
+    minSpacing=2,
+    minRelativeIntensity=0.1,
+):
     """
     Gets the lengths of the two lattice vectors from their angles and the sinogram.
 
@@ -155,34 +181,49 @@ def get_lattice_vector_lengths(u_theta, v_theta, thetas, sinogram, spacing_thres
             * **u_length**: *(float)* the length of u, in pixels
             * **v_length**: *(float)* the length of v, in pixels
     """
-    assert len(thetas)==sinogram.shape[1], "thetas must corresponding to the number of sinogram projection directions."
+    assert (
+        len(thetas) == sinogram.shape[1]
+    ), "thetas must corresponding to the number of sinogram projection directions."
 
     # Get u projected spacing
-    ind = np.argmin(np.abs(thetas-u_theta))
-    sinogram_slice = sinogram[:,ind]
+    ind = np.argmin(np.abs(thetas - u_theta))
+    sinogram_slice = sinogram[:, ind]
     maxima = get_maxima_1D(sinogram_slice, sigma, minSpacing, minRelativeIntensity)
     spacings = np.sort(np.arange(sinogram_slice.shape[0])[maxima])
     spacings = spacings[1:] - spacings[:-1]
-    mask = np.array([max(i,np.median(spacings))/min(i,np.median(spacings)) for i in spacings]) < spacing_thresh
+    mask = (
+        np.array(
+            [
+                max(i, np.median(spacings)) / min(i, np.median(spacings))
+                for i in spacings
+            ]
+        )
+        < spacing_thresh
+    )
     spacings = spacings[mask]
     u_projected_spacing = np.mean(spacings)
 
     # Get v projected spacing
-    ind = np.argmin(np.abs(thetas-v_theta))
-    sinogram_slice = sinogram[:,ind]
+    ind = np.argmin(np.abs(thetas - v_theta))
+    sinogram_slice = sinogram[:, ind]
     maxima = get_maxima_1D(sinogram_slice, sigma, minSpacing, minRelativeIntensity)
     spacings = np.sort(np.arange(sinogram_slice.shape[0])[maxima])
     spacings = spacings[1:] - spacings[:-1]
-    mask = np.array([max(i,np.median(spacings))/min(i,np.median(spacings)) for i in spacings]) < spacing_thresh
+    mask = (
+        np.array(
+            [
+                max(i, np.median(spacings)) / min(i, np.median(spacings))
+                for i in spacings
+            ]
+        )
+        < spacing_thresh
+    )
     spacings = spacings[mask]
     v_projected_spacing = np.mean(spacings)
 
     # Get u and v lengths
-    sin_uv = np.sin(np.abs(u_theta-v_theta))
+    sin_uv = np.sin(np.abs(u_theta - v_theta))
     u_length = v_projected_spacing / sin_uv
     v_length = u_projected_spacing / sin_uv
 
     return u_length, v_length
-
-
-

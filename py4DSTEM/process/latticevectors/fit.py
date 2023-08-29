@@ -6,6 +6,7 @@ from numpy.linalg import lstsq
 from emdfile import tqdmnd, PointList, PointListArray
 from py4DSTEM.data import RealSlice
 
+
 def fit_lattice_vectors(braggpeaks, x0=0, y0=0, minNumPeaks=5):
     """
     Fits lattice vectors g1,g2 to braggpeaks given some known (h,k) indexing.
@@ -33,42 +34,45 @@ def fit_lattice_vectors(braggpeaks, x0=0, y0=0, minNumPeaks=5):
             * **error**: *(float)* the fit error
     """
     assert isinstance(braggpeaks, PointList)
-    assert np.all([name in braggpeaks.dtype.names for name in ('qx','qy','intensity','h','k')])
+    assert np.all(
+        [name in braggpeaks.dtype.names for name in ("qx", "qy", "intensity", "h", "k")]
+    )
     braggpeaks = braggpeaks.copy()
 
     # Remove unindexed peaks
-    if 'index_mask' in braggpeaks.dtype.names:
-        deletemask = braggpeaks.data['index_mask'] == False
+    if "index_mask" in braggpeaks.dtype.names:
+        deletemask = braggpeaks.data["index_mask"] == False
         braggpeaks.remove(deletemask)
 
     # Check to ensure enough peaks are present
     if braggpeaks.length < minNumPeaks:
-        return None,None,None,None,None,None,None
+        return None, None, None, None, None, None, None
 
     # Get M, the matrix of (h,k) indices
-    h,k = braggpeaks.data['h'],braggpeaks.data['k']
-    M = np.vstack((np.ones_like(h,dtype=int),h,k)).T
+    h, k = braggpeaks.data["h"], braggpeaks.data["k"]
+    M = np.vstack((np.ones_like(h, dtype=int), h, k)).T
 
     # Get alpha, the matrix of measured Bragg peak positions
-    alpha = np.vstack((braggpeaks.data['qx']-x0, braggpeaks.data['qy']-y0)).T
+    alpha = np.vstack((braggpeaks.data["qx"] - x0, braggpeaks.data["qy"] - y0)).T
 
     # Get weighted matrices
-    weights = braggpeaks.data['intensity']
-    weighted_M = M*weights[:,np.newaxis]
-    weighted_alpha = alpha*weights[:,np.newaxis]
+    weights = braggpeaks.data["intensity"]
+    weighted_M = M * weights[:, np.newaxis]
+    weighted_alpha = alpha * weights[:, np.newaxis]
 
     # Solve for lattice vectors
     beta = lstsq(weighted_M, weighted_alpha, rcond=None)[0]
-    x0,y0 = beta[0,0],beta[0,1]
-    g1x,g1y = beta[1,0],beta[1,1]
-    g2x,g2y = beta[2,0],beta[2,1]
+    x0, y0 = beta[0, 0], beta[0, 1]
+    g1x, g1y = beta[1, 0], beta[1, 1]
+    g2x, g2y = beta[2, 0], beta[2, 1]
 
     # Calculate the error
-    alpha_calculated = np.matmul(M,beta)
-    error = np.sqrt(np.sum((alpha-alpha_calculated)**2,axis=1))
-    error = np.sum(error*weights)/np.sum(weights)
+    alpha_calculated = np.matmul(M, beta)
+    error = np.sqrt(np.sum((alpha - alpha_calculated) ** 2, axis=1))
+    error = np.sum(error * weights) / np.sum(weights)
 
-    return x0,y0,g1x,g1y,g2x,g2y,error
+    return x0, y0, g1x, g1y, g2x, g2y, error
+
 
 def fit_lattice_vectors_all_DPs(braggpeaks, x0=0, y0=0, minNumPeaks=5):
     """
@@ -100,38 +104,37 @@ def fit_lattice_vectors_all_DPs(braggpeaks, x0=0, y0=0, minNumPeaks=5):
               fits
     """
     assert isinstance(braggpeaks, PointListArray)
-    assert np.all([name in braggpeaks.dtype.names for name in ('qx','qy','intensity','h','k')])
+    assert np.all(
+        [name in braggpeaks.dtype.names for name in ("qx", "qy", "intensity", "h", "k")]
+    )
 
     # Make RealSlice to contain outputs
-    slicelabels = ('x0','y0','g1x','g1y','g2x','g2y','error','mask')
+    slicelabels = ("x0", "y0", "g1x", "g1y", "g2x", "g2y", "error", "mask")
     g1g2_map = RealSlice(
-        data=np.zeros(
-            (8, braggpeaks.shape[0],braggpeaks.shape[1])
-            ),
-            slicelabels=slicelabels, name='g1g2_map'
+        data=np.zeros((8, braggpeaks.shape[0], braggpeaks.shape[1])),
+        slicelabels=slicelabels,
+        name="g1g2_map",
     )
 
     # Fit lattice vectors
-    for (Rx, Ry) in tqdmnd(braggpeaks.shape[0],braggpeaks.shape[1]):
-        braggpeaks_curr = braggpeaks.get_pointlist(Rx,Ry)
-        qx0,qy0,g1x,g1y,g2x,g2y,error = fit_lattice_vectors(
-            braggpeaks_curr, 
-            x0, 
-            y0, 
-            minNumPeaks
+    for (Rx, Ry) in tqdmnd(braggpeaks.shape[0], braggpeaks.shape[1]):
+        braggpeaks_curr = braggpeaks.get_pointlist(Rx, Ry)
+        qx0, qy0, g1x, g1y, g2x, g2y, error = fit_lattice_vectors(
+            braggpeaks_curr, x0, y0, minNumPeaks
         )
         # Store data
         if g1x is not None:
-            g1g2_map.get_slice('x0').data[Rx,Ry] = qx0
-            g1g2_map.get_slice('y0').data[Rx,Ry] = qx0
-            g1g2_map.get_slice('g1x').data[Rx,Ry] = g1x
-            g1g2_map.get_slice('g1y').data[Rx,Ry] = g1y
-            g1g2_map.get_slice('g2x').data[Rx,Ry] = g2x
-            g1g2_map.get_slice('g2y').data[Rx,Ry] = g2y
-            g1g2_map.get_slice('error').data[Rx,Ry] = error
-            g1g2_map.get_slice('mask').data[Rx,Ry] = 1
+            g1g2_map.get_slice("x0").data[Rx, Ry] = qx0
+            g1g2_map.get_slice("y0").data[Rx, Ry] = qx0
+            g1g2_map.get_slice("g1x").data[Rx, Ry] = g1x
+            g1g2_map.get_slice("g1y").data[Rx, Ry] = g1y
+            g1g2_map.get_slice("g2x").data[Rx, Ry] = g2x
+            g1g2_map.get_slice("g2y").data[Rx, Ry] = g2y
+            g1g2_map.get_slice("error").data[Rx, Ry] = error
+            g1g2_map.get_slice("mask").data[Rx, Ry] = 1
 
     return g1g2_map
+
 
 def fit_lattice_vectors_masked(braggpeaks, mask, x0=0, y0=0, minNumPeaks=5):
     """
@@ -165,27 +168,33 @@ def fit_lattice_vectors_masked(braggpeaks, mask, x0=0, y0=0, minNumPeaks=5):
               fits
     """
     assert isinstance(braggpeaks, PointListArray)
-    assert np.all([name in braggpeaks.dtype.names for name in ('qx','qy','intensity')])
+    assert np.all(
+        [name in braggpeaks.dtype.names for name in ("qx", "qy", "intensity")]
+    )
 
     # Make RealSlice to contain outputs
-    slicelabels = ('x0','y0','g1x','g1y','g2x','g2y','error','mask')
-    g1g2_map = RealSlice(data=np.zeros((braggpeaks.shape[0],braggpeaks.shape[1],8)),
-                         slicelabels=slicelabels, name='g1g2_map')
+    slicelabels = ("x0", "y0", "g1x", "g1y", "g2x", "g2y", "error", "mask")
+    g1g2_map = RealSlice(
+        data=np.zeros((braggpeaks.shape[0], braggpeaks.shape[1], 8)),
+        slicelabels=slicelabels,
+        name="g1g2_map",
+    )
 
     # Fit lattice vectors
-    for (Rx, Ry) in tqdmnd(braggpeaks.shape[0],braggpeaks.shape[1]):
-        if mask[Rx,Ry]:
-            braggpeaks_curr = braggpeaks.get_pointlist(Rx,Ry)
-            qx0,qy0,g1x,g1y,g2x,g2y,error = fit_lattice_vectors(braggpeaks_curr, x0, y0, minNumPeaks)
+    for (Rx, Ry) in tqdmnd(braggpeaks.shape[0], braggpeaks.shape[1]):
+        if mask[Rx, Ry]:
+            braggpeaks_curr = braggpeaks.get_pointlist(Rx, Ry)
+            qx0, qy0, g1x, g1y, g2x, g2y, error = fit_lattice_vectors(
+                braggpeaks_curr, x0, y0, minNumPeaks
+            )
             # Store data
             if g1x is not None:
-                g1g2_map.get_slice('x0').data[Rx,Ry] = qx0
-                g1g2_map.get_slice('y0').data[Rx,Ry] = qx0
-                g1g2_map.get_slice('g1x').data[Rx,Ry] = g1x
-                g1g2_map.get_slice('g1y').data[Rx,Ry] = g1y
-                g1g2_map.get_slice('g2x').data[Rx,Ry] = g2x
-                g1g2_map.get_slice('g2y').data[Rx,Ry] = g2y
-                g1g2_map.get_slice('error').data[Rx,Ry] = error
-                g1g2_map.get_slice('mask').data[Rx,Ry] = 1
+                g1g2_map.get_slice("x0").data[Rx, Ry] = qx0
+                g1g2_map.get_slice("y0").data[Rx, Ry] = qx0
+                g1g2_map.get_slice("g1x").data[Rx, Ry] = g1x
+                g1g2_map.get_slice("g1y").data[Rx, Ry] = g1y
+                g1g2_map.get_slice("g2x").data[Rx, Ry] = g2x
+                g1g2_map.get_slice("g2y").data[Rx, Ry] = g2y
+                g1g2_map.get_slice("error").data[Rx, Ry] = error
+                g1g2_map.get_slice("mask").data[Rx, Ry] = 1
     return g1g2_map
-
