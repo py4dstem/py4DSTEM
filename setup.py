@@ -21,7 +21,7 @@ setup(
     author_email="ben.savitzky@gmail.com",
     license="GNU GPLv3",
     keywords="STEM 4DSTEM",
-    python_requires=">=3.10,<3.12",
+    python_requires=">=3.9,<3.12",
     install_requires=[
         "numpy >= 1.19",
         "scipy >= 1.5.2",
@@ -50,7 +50,7 @@ setup(
             "tensorflow == 2.4.1",
             "tensorflow-addons <= 0.14.0",
             "crystal4D",
-            "cupy",
+            "cupy >= 10.0.0",
         ],
         "numba": ["numba >= 0.49.1"],
     },
