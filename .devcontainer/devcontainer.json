@@ -1,0 +1,61 @@
+// For format details, see https://aka.ms/devcontainer.json. For config options, see the
+// README at: https://github.com/devcontainers/templates/tree/main/src/miniconda
+{
+	"name": "py4dstem-dev",
+	"image": "mcr.microsoft.com/vscode/devcontainers/miniconda:0-3",
+	// "build": { 
+	// 	"context": "..",
+	// 	"dockerfile": "Dockerfile"
+	// },
+
+	// Features to add to the dev container. More info: https://containers.dev/features.
+	// "features": {},
+
+	// Use 'forwardPorts' to make a list of ports inside the container available locally.
+	// "forwardPorts": []
+
+	// Use 'postCreateCommand' to run commands after the container is created.
+	"postCreateCommand": "/opt/conda/bin/conda init && /opt/conda/bin/pip install -e /workspaces/py4DSTEM/ && /opt/conda/bin/pip install ipython ipykernel jupyter",
+	
+	// Configure tool-specific properties.
+	"customizations": {
+		"vscode": {
+			"settings": {
+				"python.defaultInterpreterPath": "/opt/conda/bin/python",
+				"python.analysis.autoFormatStrings": true,
+				"python.analysis.completeFunctionParens": true,
+				"ruff.showNotifications": "onWarning",
+				"workbench.colorTheme": "Monokai",
+				// "editor.defaultFormatter": "ms-python.black-formatter",
+				"editor.fontFamily": "Menlo, Monaco, 'Courier New', monospace",
+				"editor.bracketPairColorization.enabled": true,
+				"editor.guides.bracketPairs": "active",
+				"editor.minimap.renderCharacters": false,
+				"editor.minimap.autohide": true,
+				"editor.minimap.scale": 2,
+				"[python]": {
+					"editor.defaultFormatter": "ms-python.black-formatter",
+					"editor.codeActionsOnSave": {
+						"source.organizeImports": false
+					}
+				}
+			},
+			"extensions": [
+				"ms-python.python",
+				"donjayamanne.python-extension-pack",
+				"ms-python.vscode-pylance",
+				"ms-toolsai.jupyter",
+				"GitHub.codespaces",
+				"ms-azuretools.vscode-docker",
+				"DavidAnson.vscode-markdownlint",
+                "ms-vsliveshare.vsliveshare",
+				"charliermarsh.ruff",
+				"eamodio.gitlens",
+				"ms-python.black-formatter"
+			]
+		}
+	}
+
+	// Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
+	// "remoteUser": "root"
+}
