@@ -1,17 +1,18 @@
 import cupy as cp
 
-__all__ = ['kernels']
+__all__ = ["kernels"]
 
 kernels = {}
 
 ############################# multicorr kernels #################################
 
 import os
-with open(os.path.join(os.path.dirname(__file__), "multicorr_row_kernel.cu"), 'r') as f:
-    kernels['multicorr_row_kernel'] = cp.RawKernel(f.read(), 'multicorr_row_kernel')
 
-with open(os.path.join(os.path.dirname(__file__), "multicorr_col_kernel.cu"), 'r') as f:
-    kernels['multicorr_col_kernel'] = cp.RawKernel(f.read(), 'multicorr_col_kernel')
+with open(os.path.join(os.path.dirname(__file__), "multicorr_row_kernel.cu"), "r") as f:
+    kernels["multicorr_row_kernel"] = cp.RawKernel(f.read(), "multicorr_row_kernel")
+
+with open(os.path.join(os.path.dirname(__file__), "multicorr_col_kernel.cu"), "r") as f:
+    kernels["multicorr_col_kernel"] = cp.RawKernel(f.read(), "multicorr_col_kernel")
 
 
 ############################# get_maximal_points ################################
@@ -25,7 +26,7 @@ detection application an edgeBoundary is always applied in the case of subpixel 
 this is not considered a problem.
 """
 
-maximal_pts_float32 = r'''
+maximal_pts_float32 = r"""
 extern "C" __global__
 void maximal_pts(const float *ar, bool *out, const double minAbsoluteIntensity, const long long sizex, const long long sizey, const long long N){
     int tid = blockDim.x * blockIdx.x + threadIdx.x;
@@ -46,11 +47,11 @@ void maximal_pts(const float *ar, bool *out, const double minAbsoluteIntensity, 
                     (val >= minAbsoluteIntensity));
     }
 }
-'''
+"""
 
-kernels['maximal_pts_float32'] = cp.RawKernel(maximal_pts_float32,'maximal_pts')
+kernels["maximal_pts_float32"] = cp.RawKernel(maximal_pts_float32, "maximal_pts")
 
-maximal_pts_float64 = r'''
+maximal_pts_float64 = r"""
 extern "C" __global__
 void maximal_pts(const double *ar, bool *out, const double minAbsoluteIntensity, const long long sizex, const long long sizey, const long long N){
     int tid = blockDim.x * blockIdx.x + threadIdx.x;
@@ -71,15 +72,14 @@ void maximal_pts(const double *ar, bool *out, const double minAbsoluteIntensity,
                     (val >= minAbsoluteIntensity));
     }
 }
-'''
+"""
 
-kernels['maximal_pts_float64'] = cp.RawKernel(maximal_pts_float64,'maximal_pts')
-
+kernels["maximal_pts_float64"] = cp.RawKernel(maximal_pts_float64, "maximal_pts")
 
 
 ################################ edge_boundary ######################################
 
-edge_boundary = r'''
+edge_boundary = r"""
 extern "C" __global__
 void edge_boundary(bool *ar, const long long edgeBoundary,
                 const long long sizex, const long long sizey, const long long N){
@@ -92,6 +92,6 @@ void edge_boundary(bool *ar, const long long edgeBoundary,
         }
     }
 }
-'''
+"""
 
-kernels['edge_boundary'] = cp.RawKernel(edge_boundary,'edge_boundary')
+kernels["edge_boundary"] = cp.RawKernel(edge_boundary, "edge_boundary")

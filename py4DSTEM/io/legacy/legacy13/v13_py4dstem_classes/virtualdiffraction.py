@@ -1,28 +1,32 @@
 # Defines the VirtualDiffraction class, which stores 2D, diffraction-shaped data
 # with metadata about how it was created
 
-from py4DSTEM.io.legacy.legacy13.v13_py4dstem_classes.diffractionslice import DiffractionSlice
+from py4DSTEM.io.legacy.legacy13.v13_py4dstem_classes.diffractionslice import (
+    DiffractionSlice,
+)
 from py4DSTEM.io.legacy.legacy13.v13_emd_classes.metadata import Metadata
 
-from typing import Optional,Union
+from typing import Optional, Union
 import numpy as np
 import h5py
+
 
 class VirtualDiffraction(DiffractionSlice):
     """
     Stores a diffraction-space shaped 2D image with metadata
     indicating how this image was generated from a datacube.
     """
+
     def __init__(
         self,
         data: np.ndarray,
-        name: Optional[str] = 'diffractionimage',
+        name: Optional[str] = "diffractionimage",
         method: Optional[str] = None,
         mode: Optional[str] = None,
-        geometry: Optional[Union[tuple,np.ndarray]] = None,
+        geometry: Optional[Union[tuple, np.ndarray]] = None,
         calibrated: Optional[bool] = False,
-        shift_center: bool = False
-        ):
+        shift_center: bool = False,
+    ):
         """
         Args:
             data (np.ndarray) : the 2D data
@@ -63,19 +67,17 @@ class VirtualDiffraction(DiffractionSlice):
         # initialize as a DiffractionSlice
         DiffractionSlice.__init__(
             self,
-            data = data,
-            name = name,
+            data=data,
+            name=name,
         )
 
         # Set metadata
-        md = Metadata(name='virtualdiffraction')
-        md['method'] = method
-        md['mode'] = mode
-        md['geometry'] = geometry
-        md['shift_center'] = shift_center
+        md = Metadata(name="virtualdiffraction")
+        md["method"] = method
+        md["mode"] = mode
+        md["geometry"] = geometry
+        md["shift_center"] = shift_center
         self.metadata = md
-
-
 
     # HDF5 read/write
 
@@ -83,16 +85,11 @@ class VirtualDiffraction(DiffractionSlice):
 
     # read
     def from_h5(group):
-        from py4DSTEM.io.legacy.legacy13.v13_py4dstem_classes.io import VirtualDiffraction_from_h5
+        from py4DSTEM.io.legacy.legacy13.v13_py4dstem_classes.io import (
+            VirtualDiffraction_from_h5,
+        )
+
         return VirtualDiffraction_from_h5(group)
 
 
-
-
-
-
 ############ END OF CLASS ###########
-
-
-
-

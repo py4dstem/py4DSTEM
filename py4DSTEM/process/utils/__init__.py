@@ -11,6 +11,5 @@ from py4DSTEM.preprocess.utils import (
     get_maxima_2D,
     get_shifted_ar,
     filter_2D_maxima,
-    linear_interpolation_2D
+    linear_interpolation_2D,
 )
-

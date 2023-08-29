@@ -42,7 +42,7 @@ class single_atom_scatter(object):
 
         # Result can be returned in units of Volt Angstrom³ ('VA') or Angstrom ('A')
         if units == "VA":
-            return h ** 2 / (2 * np.pi * me * qe) * 1e18 * fe
+            return h**2 / (2 * np.pi * me * qe) * 1e18 * fe
         elif units == "A":
             return fe
 
