@@ -4,6 +4,7 @@ from scipy.optimize import nnls
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 
+from dataclasses import dataclass, field
 from emdfile import tqdmnd, PointListArray
 from py4DSTEM.visualize import show, show_image_grid
 from py4DSTEM.process.diffraction.crystal_viz import plot_diffraction_pattern
