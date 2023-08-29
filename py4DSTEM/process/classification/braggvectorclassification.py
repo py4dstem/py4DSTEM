@@ -354,7 +354,6 @@ class BraggVectorClassification(object):
                 mask = binary_erosion(mask, iterations=expand_mask)
 
                 if np.sum(mask) >= minimum_pixels:
-
                     # Leave the Bragg peak weightings the same
                     W_next = np.hstack((W_next, self.W[:, i, np.newaxis]))
 
@@ -489,7 +488,6 @@ class BraggVectorClassification(object):
             mask = binary_erosion(mask, iterations=expand_mask)
 
             if np.sum(mask) >= minimum_pixels:
-
                 # Leave the Bragg peak weightings the same
                 W_next = np.hstack((W_next, self.W[:, i, np.newaxis]))
 
@@ -542,7 +540,6 @@ class BraggVectorClassification(object):
         Nc_ = W_.shape[1]
 
         while proceed:
-
             # Get correlation coefficients
             W_corr = np.corrcoef(W_.T)
             H_corr = np.corrcoef(H_)

@@ -180,7 +180,6 @@ def find_peaks_single_pattern(
         np.array(im_polar_sm.shape[0] // 2).astype("int")
     )
     for a0 in range(peaks.shape[0]):
-
         # annular
         trace_annular = np.roll(
             np.squeeze(im_polar_sm[:, peaks[a0, 1]]), annular_ind_center - peaks[a0, 0]
@@ -441,7 +440,6 @@ def find_peaks(
         unit=" images",
         disable=not progress_bar,
     ):
-
         polar_peaks, sig_bg, sig_bg_mask = self.find_peaks_single_pattern(
             rx,
             ry,
@@ -568,7 +566,6 @@ def refine_peaks_local(
 
         # loop over peaks
         for a0 in range(p.data.shape[0]):
-
             if radial_background_subtract:
                 # initial parameters
                 p0 = [
@@ -942,7 +939,6 @@ def refine_peaks(
         unit=" probe positions",
         disable=not progress_bar,
     ):
-
         # Get transformed image and normalization array
         im_polar, im_polar_norm, norm_array, mask_bool = self.transform(
             self._datacube.data[rx, ry],

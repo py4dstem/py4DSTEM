@@ -1141,7 +1141,6 @@ def plot_orientation_correlation(
     size_fig=[8, 6],
     return_fig=False,
 ):
-
     """
     Plot the distance-angle (auto)correlations in orient_corr.
 

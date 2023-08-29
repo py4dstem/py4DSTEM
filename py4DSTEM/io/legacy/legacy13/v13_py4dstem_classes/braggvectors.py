@@ -26,7 +26,6 @@ class BraggVectors:
     """
 
     def __init__(self, Rshape, Qshape, name="braggvectors"):
-
         self.name = name
         self.Rshape = Rshape
         self.shape = self.Rshape
@@ -69,7 +68,6 @@ class BraggVectors:
     ## Representation to standard output
 
     def __repr__(self):
-
         space = " " * len(self.__class__.__name__) + "  "
         string = f"{self.__class__.__name__}( "
         string += f"A {self.shape}-shaped array of lists of bragg vectors )"

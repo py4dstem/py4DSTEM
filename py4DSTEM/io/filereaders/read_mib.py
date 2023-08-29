@@ -87,7 +87,6 @@ def manageHeader(fname):
         Header += str(aByte.decode("ascii"))
         # This gets rid of the header
         while aByte and ord(aByte) != 0:
-
             aByte = input.read(1)
             Header += str(aByte.decode("ascii"))
 
@@ -296,7 +295,6 @@ def get_mib_depth(hdr_info, fp):
 
     file_size = os.path.getsize(fp[:-3] + "mib")
     if hdr_info["raw"] == "R64":
-
         single_frame = mib_file_size_dict.get(str(hdr_info["Counter Depth (number)"]))
         depth = int(file_size / single_frame)
     elif hdr_info["raw"] == "MIB":

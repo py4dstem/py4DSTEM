@@ -201,10 +201,8 @@ class DataCubeVirtualImager:
 
         # no center shifting
         if shift_center == False:
-
             # single CPU
             if not dask:
-
                 # allocate space
                 if mask.dtype == "complex":
                     virtual_image = np.zeros(self.Rshape, dtype="complex")
@@ -220,7 +218,6 @@ class DataCubeVirtualImager:
 
             # dask
             if dask == True:
-
                 # set up a generalized universal function for dask distribution
                 def _apply_mask_dask(self, mask):
                     virtual_image = np.sum(
@@ -240,7 +237,6 @@ class DataCubeVirtualImager:
 
         # with center shifting
         else:
-
             # get shifts
             assert (
                 self.calibration.get_origin_shift() is not None

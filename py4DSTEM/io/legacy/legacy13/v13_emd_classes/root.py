@@ -32,7 +32,6 @@ class Root:
         return self.tree.keys()
 
     def __repr__(self):
-
         space = " " * len(self.__class__.__name__) + "  "
         string = f"{self.__class__.__name__}( A Root instance called '{self.name}', containing the following top-level object instances:"
         string += "\n"

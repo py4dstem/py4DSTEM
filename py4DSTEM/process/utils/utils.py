@@ -643,7 +643,7 @@ def fourier_resample(
         array_fft = np.zeros(input__size, dtype=np.complex64)
         array_output = np.zeros(output_size, dtype=np.complex64)
 
-        for (Rx, Ry) in tqdmnd(
+        for Rx, Ry in tqdmnd(
             array.shape[0],
             array.shape[1],
             desc="Resampling 4D datacube",

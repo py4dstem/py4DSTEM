@@ -599,7 +599,7 @@ def show_strain(
         cbax12 = divider12.append_axes(layout_p[1], size="4%", pad=0.15)
         cbax21 = divider21.append_axes(layout_p[2], size="4%", pad=0.15)
         cbax22 = divider22.append_axes(layout_p[3], size="4%", pad=0.15)
-        for (ind, show_cbar, cax, cbax, vmin, vmax, tickside, tickunits) in zip(
+        for ind, show_cbar, cax, cbax, vmin, vmax, tickside, tickunits in zip(
             range(4),
             show_cbars,
             (cax11, cax12, cax21, cax22),

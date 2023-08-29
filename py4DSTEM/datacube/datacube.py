@@ -896,7 +896,6 @@ class DataCube(
         )
 
         if isinstance(peaks, Node):
-
             # add metadata
             peaks.name = name
             peaks.metadata = Metadata(
