@@ -50,7 +50,7 @@ setup(
             "tensorflow == 2.4.1",
             "tensorflow-addons <= 0.14.0",
             "crystal4D",
-            "cupy",
+            "cupy >= 10.0.0",
         ],
         "numba": ["numba >= 0.49.1"],
     },
