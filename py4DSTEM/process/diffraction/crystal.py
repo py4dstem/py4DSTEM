@@ -2,6 +2,7 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.patches import Circle
 from fractions import Fraction
 from typing import Union, Optional
 from scipy.optimize import curve_fit
@@ -718,13 +719,12 @@ class Crystal:
                 np.array([],dtype=pl_dtype)
             )
             if np.any(keep_int):
-                bragg_peaks.add_data_by_field(
-                                              [
-                                              gx_proj,
-                                              gy_proj,
-                                              gz_proj,
-                                              g_int[keep_int],
-                                              h,k,l])
+                bragg_peaks.add_data_by_field([
+                    gx_proj,
+                    gy_proj,
+                    gz_proj,
+                    g_int[keep_int],
+                    h,k,l])
         else:
             pl_dtype = np.dtype([
                     ("qx", "float64"),
@@ -1048,3 +1048,443 @@ class Crystal:
         int_exp /= np.max(int_exp)
         return k, int_exp
     
+
+
+def generate_moire(
+    bragg_peaks_0,
+    bragg_peaks_1,
+    thresh_0 = 0.0002,
+    thresh_1 = 0.0002,
+    int_range = (0,5e-3),
+    exx_1 = 0.0,
+    eyy_1 = 0.0,
+    exy_1 = 0.0,
+    phi_1 = 0.0,
+    power = 2.0,
+    k_max = 1.0,
+    plot_result = True,
+    plot_subpixel = True,
+    labels = None,
+    marker_size_parent = 16,
+    marker_size_moire = 4,
+    text_size_parent = 10,
+    text_size_moire = 6,
+    add_labels_parent = False,
+    add_labels_moire = False,
+    dist_labels = 0.03,
+    dist_check = 0.06,
+    sep_labels = 0.03,
+    figsize = (8,6),
+    return_moire = False,
+    returnfig = False,
+    ):
+    """
+    Calculate a Moire lattice from 2 parent diffraction patterns.
+
+    Parameters
+    --------
+    bragg_peaks_0: BraggVector
+        Bragg vectors for parent lattice 0.
+    bragg_peaks_1: BraggVector
+        Bragg vectors for parent lattice 1.
+    thresh_0: float
+    thresh_1: float
+    int_range: (float, float)
+    exx_1: float
+    eyy_1: float
+    exy_1: float
+    phi_1: float
+    power: float
+    k_max: float
+    plot_result: bool
+    plot_subpixel: bool
+    labels: list
+        List of text labels for parent lattices
+    marker_size_parent: float
+    marker_size_moire: float
+    text_size_parent: float
+    text_size_moire: float
+    add_labels_parent: bool
+    add_labels_moire: bool
+    dist_labels: float
+    dist_check: float
+    sep_labels: float
+    figsize: (float,float)
+    return_moire: bool
+    returnfig: bool
+    
+    Returns
+    --------
+    bragg_peaksMoire: BraggVector (optjonal)
+        Bragg vectors for moire lattice.
+    fig, ax: matplotlib handles (optional)
+        Figure and axes handles for the moire plot.
+
+    """
+
+    # peak labels
+    if labels is None:
+        labels = ('crystal 0', 'crystal 1')
+
+    # get intenties of all peaks
+    int0 = bragg_peaks_0['intensity']**(power/2.0)
+    int1 = bragg_peaks_1['intensity']**(power/2.0)
+    
+    # peaks above threshold
+    sub0 = int0 >= thresh_0
+    sub1 = int1 >= thresh_1
+    
+    # Remove origin (assuming brightest peak)
+    ind0_or = np.argmax(bragg_peaks_0['intensity'])
+    ind1_or = np.argmax(bragg_peaks_1['intensity'])
+    sub0[ind0_or] = False
+    sub1[ind1_or] = False
+    int0_sub = int0[sub0]
+    int1_sub = int1[sub1]
+    
+    # Get peaks
+    qx0 = bragg_peaks_0['qx'][sub0]
+    qy0 = bragg_peaks_0['qy'][sub0]
+    qx1_init = bragg_peaks_1['qx'][sub1]
+    qy1_init = bragg_peaks_1['qy'][sub1]
+    
+    # peak labels
+    if add_labels_parent or add_labels_moire or return_moire:
+        def overline(x):
+            return str(x) if x >= 0 else (r"\overline{" + str(np.abs(x)) + "}")
+
+        h0 = bragg_peaks_0['h'][sub0]
+        k0 = bragg_peaks_0['k'][sub0]
+        l0 = bragg_peaks_0['l'][sub0]
+        h1 = bragg_peaks_1['h'][sub1]
+        k1 = bragg_peaks_1['k'][sub1]
+        l1 = bragg_peaks_1['l'][sub1]
+    
+    # apply strain tensor to lattice 1
+    # infinitesimal
+    # m = np.array([
+    #     [1 + exx_1, (exy_1 - phi_1)*0.5],
+    #     [(exy_1 _ phi_1)*0.5, 1 + eyy_1],
+    # ])
+    # finite rotation
+    m = np.array([
+        [np.cos(phi_1), -np.sin(phi_1)],
+        [np.sin(phi_1),  np.cos(phi_1)],
+    ]) @ np.array([
+        [1 + exx_1, exy_1*0.5],
+        [exy_1*0.5, 1 + eyy_1],
+    ]) 
+    qx1 = m[0,0] * qx1_init + m[0,1] * qy1_init
+    qy1 = m[1,0] * qx1_init + m[1,1] * qy1_init
+    
+    # Generate moire lattice
+    ind0, ind1 = np.meshgrid(
+        np.arange(np.sum(sub0)),
+        np.arange(np.sum(sub1)),
+        indexing = 'ij',
+    )
+    # ind0 = ind0.ravel()
+    # ind1 = ind1.ravel()
+    qx = qx0[ind0] + qx1[ind1]
+    qy = qy0[ind0] + qy1[ind1]
+    # int_moire = int0_sub[ind0] + int1_sub[ind1]
+    int_moire = (int0_sub[ind0] * int1_sub[ind1]) ** 0.5
+
+    # moire labels
+    if add_labels_moire or return_moire:
+        m_h0 = h0[ind0]
+        m_k0 = k0[ind0]
+        m_l0 = l0[ind0]
+        m_h1 = h1[ind1]
+        m_k1 = k1[ind1]
+        m_l1 = l1[ind1]
+
+    # If needed, convert moire peaks to BraggVector class
+    if return_moire:
+        pl_dtype = np.dtype([
+            ("qx", "float"),
+            ("qy", "float"),
+            ("intensity", "float"),
+            ("h0", "int"),
+            ("k0", "int"),
+            ("l0", "int"),
+            ("h1", "int"),
+            ("k1", "int"),
+            ("l1", "int"),
+        ])
+        bragg_moire = PointList(
+            np.array([],dtype=pl_dtype)
+        )
+        bragg_moire.add_data_by_field([
+            qx.ravel(),
+            qy.ravel(),
+            int_moire.ravel(),
+            m_h0.ravel(),m_k0.ravel(),m_l0.ravel(),
+            m_h1.ravel(),m_k1.ravel(),m_l1.ravel(),
+        ])
+        
+    
+    # plot outputs
+    if plot_result:
+        fig = plt.figure(figsize = figsize)
+        ax = fig.add_axes([0.09,0.09,0.65,0.9])
+        ax_labels = fig.add_axes([0.75,0,0.25,1])
+        
+        
+        text_params_parent = {
+            "ha": "center",
+            "va": "center",
+            "family": "sans-serif",
+            "fontweight": "normal",
+            "size": text_size_parent,
+        }
+        text_params_moire = {
+            "ha": "center",
+            "va": "center",
+            "family": "sans-serif",
+            "fontweight": "normal",
+            "size": text_size_moire,
+        }
+
+        
+        if plot_subpixel is False:
+        
+            # moire
+            ax.scatter(
+                qy,
+                qx,
+                # color = (0,0,0,1),
+                c = int_moire,
+                s = marker_size_moire,
+                cmap = 'gray_r',
+                vmin = int_range[0],
+                vmax = int_range[1],
+                antialiased=True,
+            )
+
+            # parent lattices
+            ax.scatter(
+                qy0,
+                qx0,
+                color = (1,0,0,1),
+                s = marker_size_parent,
+                antialiased=True,
+            )
+            ax.scatter(
+                qy1,
+                qx1,
+                color = (0,0.7,1,1),
+                s = marker_size_parent,
+                antialiased=True,
+            )
+
+            # origin
+            ax.scatter(
+                0,
+                0,
+                color = (0,0,0,1),
+                s = marker_size_parent,
+                antialiased=True,
+            )
+            
+        else:
+            # moire peaks
+            int_all = np.clip(
+                (int_moire - int_range[0]) / (int_range[1] - int_range[0]),
+                0,1)
+            keep = np.logical_and.reduce((
+                qx >= -k_max,
+                qx <=  k_max,
+                qy >= -k_max,
+                qy <= k_max
+            ))
+            for x, y, int_marker in zip(qx[keep], qy[keep], int_all[keep]):
+                ax.add_artist(Circle(
+                    xy=(y, x), 
+                    radius = np.sqrt(marker_size_moire)/800.0,
+                    color = (1-int_marker,1-int_marker,1-int_marker),
+                ))
+            if add_labels_moire:
+                for a0 in range(qx.size):
+                    if keep.ravel()[a0]:
+                        x0 = qx.ravel()[a0]
+                        y0 = qy.ravel()[a0]
+                        d2 = (qx.ravel()-x0)**2 + (qy.ravel()-y0)**2
+                        sub = d2 < dist_check**2
+                        xc = np.mean(qx.ravel()[sub])
+                        yc = np.mean(qy.ravel()[sub])
+                        xp = x0 - xc
+                        yp = y0 - yc
+                        if xp == 0 and yp == 0.0:
+                            xp = x0 - dist_labels
+                            yp = y0
+                        else:
+                            leng = np.linalg.norm((xp,yp))
+                            xp = x0 + xp * dist_labels / leng
+                            yp = y0 + yp * dist_labels / leng
+
+                        ax.text(
+                            yp,
+                            xp - sep_labels,
+                            "$" + overline(m_h0.ravel()[a0]) \
+                                + overline(m_k0.ravel()[a0]) \
+                                + overline(m_l0.ravel()[a0]) + "$",
+                            c = 'r',
+                            **text_params_moire,
+                        )
+                        ax.text(
+                            yp,
+                            xp,
+                            "$" + overline(m_h1.ravel()[a0]) \
+                                + overline(m_k1.ravel()[a0]) \
+                                + overline(m_l1.ravel()[a0]) + "$",
+                            c = (0,0.7,1.0),
+                            **text_params_moire,
+                        )
+                      
+                    
+            keep = np.logical_and.reduce((
+                qx0 >= -k_max,
+                qx0 <=  k_max,
+                qy0 >= -k_max,
+                qy0 <= k_max
+            ))
+            for x, y in zip(qx0[keep], qy0[keep]):
+                ax.add_artist(Circle(
+                    xy=(y, x), 
+                    radius = np.sqrt(marker_size_parent)/800.0,
+                    color = (1,0,0),
+                ))
+            if add_labels_parent:
+                for a0 in range(qx0.size):
+                    if keep.ravel()[a0]:
+                        xp = qx0.ravel()[a0] - dist_labels
+                        yp = qy0.ravel()[a0]
+                        ax.text(
+                            yp,
+                            xp,
+                            "$" + overline(h0.ravel()[a0]) \
+                                + overline(k0.ravel()[a0]) \
+                                + overline(l0.ravel()[a0]) + "$",
+                            c = 'k',
+                            **text_params_parent,
+                        )
+                
+            keep = np.logical_and.reduce((
+                qx1 >= -k_max,
+                qx1 <=  k_max,
+                qy1 >= -k_max,
+                qy1 <= k_max
+            ))
+            for x, y in zip(qx1[keep], qy1[keep]):
+                ax.add_artist(Circle(
+                    xy=(y, x), 
+                    radius = np.sqrt(marker_size_parent)/800.0,
+                    color = (0,0.7,1),
+                ))
+            if add_labels_parent:
+                for a0 in range(qx1.size):
+                    if keep.ravel()[a0]:
+                        xp = qx1.ravel()[a0] - dist_labels
+                        yp = qy1.ravel()[a0]
+                        ax.text(
+                            yp,
+                            xp,
+                            "$" + overline(h1.ravel()[a0]) \
+                                + overline(k1.ravel()[a0]) \
+                                + overline(l1.ravel()[a0]) + "$",
+                            c = 'k',
+                            **text_params_parent,
+                        )
+                
+            # origin
+            ax.add_artist(Circle(
+                    xy=(0, 0), 
+                    radius = np.sqrt(marker_size_parent)/800.0,
+                    color = (0,0,0),
+                ))
+            
+        ax.set_xlim((-k_max,k_max))
+        ax.set_ylim((-k_max,k_max))
+        ax.set_ylabel('$q_x$ (1/A)')
+        ax.set_xlabel('$q_y$ (1/A)')
+        ax.invert_yaxis()
+
+        # labels
+        ax_labels.scatter(
+            0,
+            0,
+            color = (1,0,0,1),
+            s = marker_size_parent,
+        )
+        ax_labels.scatter(
+            0,
+            -1,
+            color = (0,0.7,1,1),
+            s = marker_size_parent,
+        )
+        ax_labels.scatter(
+            0,
+            -2,
+            color = (0,0,0,1),
+            s = marker_size_moire,
+        )
+        ax_labels.text(
+            0.4,
+            -0.2,
+            labels[0],
+            fontsize = 14,
+        )
+        ax_labels.text(
+            0.4,
+            -1.2,
+            labels[1],
+            fontsize = 14,
+        )
+        ax_labels.text(
+            0.4,
+            -2.2,
+            'Moiré lattice',
+            fontsize = 14,
+        )
+        
+        ax_labels.text(
+            0,
+            -4.2,
+            labels[1] + ' $\epsilon_{xx}$ = ' + str(np.round(exx_1*100,2)) + '%',
+            fontsize = 14,
+        )
+        ax_labels.text(
+            0,
+            -5.2,
+            labels[1] + ' $\epsilon_{yy}$ = ' + str(np.round(eyy_1*100,2)) + '%',
+            fontsize = 14,
+        )
+        ax_labels.text(
+            0,
+            -6.2,
+            labels[1] + ' $\epsilon_{xy}$ = ' + str(np.round(exy_1*100,2)) + '%',
+            fontsize = 14,
+        )
+        ax_labels.text(
+            0,
+            -7.2,
+            labels[1] + ' $\phi$ = ' + str(np.round(phi_1*180/np.pi,2)) + '$^\circ$',
+            fontsize = 14,
+
+        )
+            
+        ax_labels.set_xlim((-1,4))
+        ax_labels.set_ylim((-21,1))
+        
+        ax_labels.axis('off')
+        
+    if return_moire:
+        if returnfig:
+            return bragg_moire, fig, ax
+        else:
+            return bragg_moire
+    if returnfig:
+            return fig, ax
+
+
