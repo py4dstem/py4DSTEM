@@ -170,7 +170,6 @@ def _v13_to_14_cls(obj):
         x._params.update(obj._params)
 
     elif isinstance(obj, Array13):
-
         # prepare arguments
         if obj.is_stack:
             data = np.rollaxis(obj.data, axis=2)

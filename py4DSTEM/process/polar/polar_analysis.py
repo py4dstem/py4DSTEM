@@ -61,7 +61,6 @@ def calculate_FEM_global(
         unit=" probe positions",
         disable=not progress_bar,
     ):
-
         self.radial_all[rx, ry] = np.mean(self.data[rx, ry], axis=0)
 
     self.radial_avg = np.mean(self.radial_all, axis=(0, 1))

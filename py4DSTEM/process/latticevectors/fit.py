@@ -117,7 +117,7 @@ def fit_lattice_vectors_all_DPs(braggpeaks, x0=0, y0=0, minNumPeaks=5):
     )
 
     # Fit lattice vectors
-    for (Rx, Ry) in tqdmnd(braggpeaks.shape[0], braggpeaks.shape[1]):
+    for Rx, Ry in tqdmnd(braggpeaks.shape[0], braggpeaks.shape[1]):
         braggpeaks_curr = braggpeaks.get_pointlist(Rx, Ry)
         qx0, qy0, g1x, g1y, g2x, g2y, error = fit_lattice_vectors(
             braggpeaks_curr, x0, y0, minNumPeaks
@@ -181,7 +181,7 @@ def fit_lattice_vectors_masked(braggpeaks, mask, x0=0, y0=0, minNumPeaks=5):
     )
 
     # Fit lattice vectors
-    for (Rx, Ry) in tqdmnd(braggpeaks.shape[0], braggpeaks.shape[1]):
+    for Rx, Ry in tqdmnd(braggpeaks.shape[0], braggpeaks.shape[1]):
         if mask[Rx, Ry]:
             braggpeaks_curr = braggpeaks.get_pointlist(Rx, Ry)
             qx0, qy0, g1x, g1y, g2x, g2y, error = fit_lattice_vectors(

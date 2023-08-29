@@ -217,7 +217,6 @@ def gdrive_download(
 
     # download single files
     if id_ not in collection_ids:
-
         # assign the name and id
         kwargs = {"fuzzy": True}
         if id_ in file_ids:
@@ -267,7 +266,6 @@ def gdrive_download(
 
     # download a collections of files
     else:
-
         # set destination
         destination = os.path.join(destination, id_)
         if not os.path.exists(destination):

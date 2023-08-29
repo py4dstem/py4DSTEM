@@ -395,7 +395,7 @@ def get_pointlistarray_from_grp(g):
     shape = g["data"].shape
     coordinates = g["data"][0, 0].dtype
     pla = PointListArray(dtype=coordinates, shape=shape, name=name)
-    for (i, j) in tqdmnd(
+    for i, j in tqdmnd(
         shape[0], shape[1], desc="Reading PointListArray", unit="PointList"
     ):
         pla.get_pointlist(i, j).data = dset[i, j]

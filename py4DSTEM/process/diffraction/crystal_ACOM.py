@@ -37,7 +37,6 @@ def orientation_plan(
     CUDA: bool = False,
     progress_bar: bool = True,
 ):
-
     """
     Calculate the rotation basis arrays for an SO(3) rotation correlogram.
 
@@ -172,7 +171,6 @@ def orientation_plan(
                     (self.orientation_fiber_axis, v2, v3)
                 ).astype("float")
             else:
-
                 if self.orientation_fiber_angles[0] == 180:
                     theta = np.pi / 2.0
                 else:
@@ -1104,7 +1102,6 @@ def match_single_pattern(
         corr_value[:] = 0
         for a0 in range(self.orientation_num_zones):
             if (self.orientation_refine is False) or self.orientation_sieve[a0]:
-
                 # Correlation score
                 if inversion_symmetry:
                     if corr_full_inv[a0, ind_phi_inv[a0]] > corr_full[a0, ind_phi[a0]]:

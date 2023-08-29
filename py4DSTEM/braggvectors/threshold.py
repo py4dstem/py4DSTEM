@@ -28,7 +28,7 @@ def threshold_Braggpeaks(
     assert all(
         [item in pointlistarray.dtype.fields for item in ["qx", "qy", "intensity"]]
     ), "pointlistarray must include the coordinates 'qx', 'qy', and 'intensity'."
-    for (Rx, Ry) in tqdmnd(
+    for Rx, Ry in tqdmnd(
         pointlistarray.shape[0],
         pointlistarray.shape[1],
         desc="Thresholding Bragg disks",
@@ -120,7 +120,7 @@ def universal_threshold(
         _pointlistarray.name = pointlistarray.name + "_unithresh"
 
     HI_array = np.zeros((_pointlistarray.shape[0], _pointlistarray.shape[1]))
-    for (Rx, Ry) in tqdmnd(
+    for Rx, Ry in tqdmnd(
         _pointlistarray.shape[0],
         _pointlistarray.shape[1],
         desc="Thresholding Bragg disks",
@@ -142,7 +142,7 @@ def universal_threshold(
     else:
         _thresh = thresh
 
-    for (Rx, Ry) in tqdmnd(
+    for Rx, Ry in tqdmnd(
         _pointlistarray.shape[0],
         _pointlistarray.shape[1],
         desc="Thresholding Bragg disks",
@@ -205,7 +205,7 @@ def get_pointlistarray_intensities(pointlistarray):
     ), "pointlistarray coords must include 'intensity'"
 
     first_pass = True
-    for (Rx, Ry) in tqdmnd(
+    for Rx, Ry in tqdmnd(
         pointlistarray.shape[0],
         pointlistarray.shape[1],
         desc="Getting disk intensities",

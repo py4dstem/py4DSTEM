@@ -458,7 +458,6 @@ class BraggVectorMethods:
             found_center = np.zeros((R_Nx, R_Ny), dtype=bool)
             for rx in range(R_Nx):
                 for ry in range(R_Ny):
-
                     # Get data
                     pl = braggpeaks_masked[rx, ry]
                     is_paired = np.zeros(len(pl.data), dtype=bool)

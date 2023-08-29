@@ -359,7 +359,6 @@ def plot_scattering_intensity(
 
     # If Bragg peaks are passed in, compute 1D integral
     if bragg_peaks is not None:
-
         # set rotate and ellipse based on their availability
         rotate = bragg_peaks.calibration.get_QR_rotation_degrees()
         ellipse = bragg_peaks.calibration.get_ellipse()
@@ -1110,7 +1109,6 @@ def plot_orientation_maps(
         unit=" PointList",
         disable=not progress_bar,
     ):
-
         if self.pymatgen_available:
             basis_x[rx, ry, :] = (
                 A @ orientation_map.family[rx, ry, orientation_ind, :, 0]

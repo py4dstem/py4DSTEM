@@ -204,7 +204,7 @@ def find_Bragg_disks_CUDA(
 
     else:
         # Loop over all diffraction patterns
-        for (Rx, Ry) in tqdmnd(
+        for Rx, Ry in tqdmnd(
             datacube.R_Nx,
             datacube.R_Ny,
             desc="Finding Bragg Disks",

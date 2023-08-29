@@ -316,7 +316,6 @@ class PolarDataGetter:
         self._polarcube = polarcube
 
     def __getitem__(self, pos):
-
         # unpack scan position
         x, y = pos
         # get the data
@@ -464,14 +463,12 @@ class PolarDataGetter:
         origin,
         ellipse,
     ):
-
         # set origin
         x = self._polarcube._xa - origin[0]
         y = self._polarcube._ya - origin[1]
 
         # circular
         if (ellipse is None) or (self._polarcube.ellipse) is False:
-
             # get polar coords
             rr = np.sqrt(x**2 + y**2)
             tt = np.mod(np.arctan2(y, x), self._polarcube._annular_range)

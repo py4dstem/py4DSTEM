@@ -418,7 +418,7 @@ def get_pointlistarray_from_grp(g):
     shape = dset.shape
     coordinates = h5py.check_vlen_dtype(dset.dtype)
     pla = PointListArray(dtype=coordinates, shape=shape, name=name)
-    for (i, j) in tqdmnd(
+    for i, j in tqdmnd(
         shape[0], shape[1], desc="Reading PointListArray", unit="PointList"
     ):
         try:
