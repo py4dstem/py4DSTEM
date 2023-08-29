@@ -1,3 +1,4 @@
+from __future__ import annotations
 from py4DSTEM import DataCube, RealSlice
 from emdfile import tqdmnd
 from py4DSTEM.process.wholepatternfit.wp_models import (
