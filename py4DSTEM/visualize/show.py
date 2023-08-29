@@ -485,7 +485,9 @@ def show(
         _ar = np.zeros_like(ar.data, dtype=float)
         _ar[_mask] = np.log(ar.data[_mask])
         _ar[~_mask] = np.nan
-        if clipvals == "absolute":
+        if np.all(np.isnan(_ar)):
+            _ar[:,:] = 0
+        if intensity_range == "absolute":
             if vmin != None:
                 if vmin > 0.0:
                     vmin = np.log(vmin)
@@ -536,7 +538,7 @@ def show(
         if vmax is None:
             vmax = 0.98
         if masked_intensity_range:
-            vals = np.sort(_ar[np.logical_and(~np.isnan(_ar), _ar.mask == False)])
+            vals = np.sort(_ar[np.logical_and(~np.isnan(_ar), np.logical_not(_ar.mask))])
         else:
             vals = np.sort(_ar.data[~np.isnan(_ar)])
         ind_vmin = np.round((vals.shape[0] - 1) * vmin).astype("int")
