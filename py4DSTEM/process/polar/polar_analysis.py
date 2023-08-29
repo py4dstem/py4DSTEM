@@ -27,7 +27,7 @@ def calculate_radial_statistics(
     --------
     self: PolarDatacube
         Polar datacube used for measuring FEM properties.
-    
+
     Returns
     --------
     radial_avg: np.array
@@ -39,7 +39,9 @@ def calculate_radial_statistics(
     """
 
     # Get the dimensioned radial bins
-    self.scattering_vector = self.radial_bins * self.qstep * self.calibration.get_Q_pixel_size()
+    self.scattering_vector = (
+        self.radial_bins * self.qstep * self.calibration.get_Q_pixel_size()
+    )
     self.scattering_vector_units = self.calibration.get_Q_pixel_units()
 
     # init radial data arrays
@@ -69,25 +71,25 @@ def calculate_radial_statistics(
             (self.data[rx,ry] - self.radial_all[rx,ry][None])**2, 
             axis=0))
 
-    self.radial_avg = np.mean(self.radial_all, axis=(0,1))
+    self.radial_avg = np.mean(self.radial_all, axis=(0, 1))
     self.radial_var = np.mean(
-        (self.radial_all - self.radial_avg[None,None])**2,
-        axis=(0,1))
+        (self.radial_all - self.radial_avg[None, None]) ** 2, axis=(0, 1)
+    )
     self.radial_var_norm = self.radial_var / self.radial_avg**2
 
     # plot results
     if plot_results:
         if returnfig:
-            fig,ax = plot_FEM_global(
+            fig, ax = plot_FEM_global(
                 self,
-                figsize = figsize,
-                returnfig = True,
-                )
+                figsize=figsize,
+                returnfig=True,
+            )
         else:
             plot_FEM_global(
                 self,
-                figsize = figsize,
-                )
+                figsize=figsize,
+            )
 
     # Return values
     if returnval:
@@ -101,23 +103,24 @@ def calculate_radial_statistics(
         else:
             pass
 
+
 def plot_FEM_global(
     self,
-    figsize = (8,4),
-    returnfig = False,
-    ):
+    figsize=(8, 4),
+    returnfig=False,
+):
     """
     Plotting function for the global FEM.
     """
-    fig,ax = plt.subplots(figsize=figsize)
+    fig, ax = plt.subplots(figsize=figsize)
     ax.plot(
         self.scattering_vector,
         self.radial_var_norm,
-        )
+    )
 
-    ax.set_xlabel('Scattering Vector (' + self.scattering_vector_units + ')')
-    ax.set_ylabel('Normalized Variance')
-    ax.set_xlim((self.scattering_vector[0],self.scattering_vector[-1]))
+    ax.set_xlabel("Scattering Vector (" + self.scattering_vector_units + ")")
+    ax.set_ylabel("Normalized Variance")
+    ax.set_xlim((self.scattering_vector[0], self.scattering_vector[-1]))
 
     if returnfig:
         return fig, ax
@@ -125,9 +128,9 @@ def plot_FEM_global(
 
 def calculate_FEM_local(
     self,
-    figsize = (8,6),
-    returnfig = False,
-    ):
+    figsize=(8, 6),
+    returnfig=False,
+):
     """
     Calculate fluctuation electron microscopy (FEM) statistics, including radial mean,
     variance, and normalized variance. This function computes the radial average and variance
@@ -137,7 +140,7 @@ def calculate_FEM_local(
     --------
     self: PolarDatacube
         Polar datacube used for measuring FEM properties.
-    
+
     Returns
     --------
     radial_avg: np.array

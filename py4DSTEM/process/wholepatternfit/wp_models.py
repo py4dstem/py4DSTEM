@@ -730,7 +730,9 @@ class SyntheticDiskMoire(WPFModel):
             )
             ** 2
         )
-        tests = tests[np.abs(a_dot_b) < 0.9] # this factor of 0.9 sets the parallel cutoff
+        tests = tests[
+            np.abs(a_dot_b) < 0.9
+        ]  # this factor of 0.9 sets the parallel cutoff
         # with the parallel vectors filtered, pick the cell with the smallest volume
         lat_m = tests @ lat_ab
         V = np.sum(

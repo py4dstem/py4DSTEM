@@ -13,7 +13,6 @@ path_out = join(path_out_dir, "test_calibration.h5")
 
 
 class TestCalibration:
-
     # setup
 
     def setup_class(cls):
@@ -28,47 +27,33 @@ class TestCalibration:
         if exists(path_out):
             remove(path_out)
 
-
     # test
 
     def test_imported_datacube_calibration(self):
-
         datacube = py4DSTEM.import_file(path_datacube)
 
-        assert(hasattr(datacube,'calibration'))
-        assert(isinstance(datacube.calibration,Calibration))
-        assert(hasattr(datacube,'root'))
-        assert(isinstance(datacube.root,py4DSTEM.Root))
-
+        assert hasattr(datacube, "calibration")
+        assert isinstance(datacube.calibration, Calibration)
+        assert hasattr(datacube, "root")
+        assert isinstance(datacube.root, py4DSTEM.Root)
 
     def test_instantiated_datacube_calibration(self):
+        datacube = py4DSTEM.DataCube(data=np.ones((4, 8, 128, 128)))
 
-        datacube = py4DSTEM.DataCube(
-            data = np.ones((4,8,128,128))
-        )
-
-        assert(hasattr(datacube,'calibration'))
-        assert(isinstance(datacube.calibration,Calibration))
-        assert(hasattr(datacube,'root'))
-        assert(isinstance(datacube.root,py4DSTEM.Root))
+        assert hasattr(datacube, "calibration")
+        assert isinstance(datacube.calibration, Calibration)
+        assert hasattr(datacube, "root")
+        assert isinstance(datacube.root, py4DSTEM.Root)
 
         datacube.calibration.set_Q_pixel_size(10)
 
-        py4DSTEM.save(
-            path_out,
-            datacube
-        )
+        py4DSTEM.save(path_out, datacube)
 
         new_datacube = py4DSTEM.read(path_out)
 
-        assert(hasattr(new_datacube,'calibration'))
-        assert(isinstance(new_datacube.calibration,Calibration))
-        assert(hasattr(new_datacube,'root'))
-        assert(isinstance(new_datacube.root,py4DSTEM.Root))
+        assert hasattr(new_datacube, "calibration")
+        assert isinstance(new_datacube.calibration, Calibration)
+        assert hasattr(new_datacube, "root")
+        assert isinstance(new_datacube.root, py4DSTEM.Root)
 
-        assert(new_datacube.calibration.get_Q_pixel_size() == 10)
-
-
-
-
-
+        assert new_datacube.calibration.get_Q_pixel_size() == 10
