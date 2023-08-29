@@ -1403,7 +1403,6 @@ class ParallaxReconstruction(PhaseReconstruction):
 
             # apply correction to mean reconstructed BF image
             im_fft_corr = xp.fft.fft2(self._recon_BF_subpixel_aligned) * CTF_corr
-            print(self._recon_BF_subpixel_aligned.shape)
             # if needed, add low pass filter output image
             if k_info_limit is not None:
                 im_fft_corr /= 1 + (kra2**k_info_power) / (
