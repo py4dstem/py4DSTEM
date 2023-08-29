@@ -8,7 +8,6 @@ from scipy.ndimage import gaussian_filter
 from emdfile import tqdmnd
 
 
-
 @dataclass
 class Orientation:
     """
@@ -76,9 +75,9 @@ class OrientationMap:
 
 def sort_orientation_maps(
     orientation_map,
-    sort = "intensity",
-    cluster_thresh = 0.1,
-    ):
+    sort="intensity",
+    cluster_thresh=0.1,
+):
     """
     Sort the orientation maps along the ind_match direction, either by intensity
     or by clustering similar angles (greedily, in order of intensity).
@@ -102,15 +101,21 @@ def sort_orientation_maps(
             desc="Sorting orientations",
             unit=" probe positions",
             # disable=not progress_bar,
-            ):
-            inds = np.argsort(orientation_map.corr[rx,ry])[::-1]
+        ):
+            inds = np.argsort(orientation_map.corr[rx, ry])[::-1]
 
-            orientation_sort.matrix[rx,ry,:,:,:] = orientation_sort.matrix[rx,ry,inds,:,:]        
-            orientation_sort.family[rx,ry,:,:,:] = orientation_sort.family[rx,ry,inds,:,:]        
-            orientation_sort.corr[rx,ry,:] = orientation_sort.corr[rx,ry,inds]        
-            orientation_sort.inds[rx,ry,:,:] = orientation_sort.inds[rx,ry,inds,:]        
-            orientation_sort.mirror[rx,ry,:] = orientation_sort.mirror[rx,ry,inds]        
-            orientation_sort.angles[rx,ry,:,:] = orientation_sort.angles[rx,ry,inds,:]        
+            orientation_sort.matrix[rx, ry, :, :, :] = orientation_sort.matrix[
+                rx, ry, inds, :, :
+            ]
+            orientation_sort.family[rx, ry, :, :, :] = orientation_sort.family[
+                rx, ry, inds, :, :
+            ]
+            orientation_sort.corr[rx, ry, :] = orientation_sort.corr[rx, ry, inds]
+            orientation_sort.inds[rx, ry, :, :] = orientation_sort.inds[rx, ry, inds, :]
+            orientation_sort.mirror[rx, ry, :] = orientation_sort.mirror[rx, ry, inds]
+            orientation_sort.angles[rx, ry, :, :] = orientation_sort.angles[
+                rx, ry, inds, :
+            ]
 
         # elif sort == "cluster":
         #     mask = np.zeros_like(orientation_map.corr, dtype='bool')
@@ -118,26 +123,23 @@ def sort_orientation_maps(
 
     else:
         err_msg = "Invalid sorting method: " + sort
-        raise Exception(err_msg) 
-
+        raise Exception(err_msg)
 
     return orientation_sort
-
-
 
 
 def calc_1D_profile(
     k,
     g_coords,
     g_int,
-    remove_origin = True,
-    k_broadening = 0.0,
-    int_scale = None,
-    normalize_intensity = True,
-    ):
+    remove_origin=True,
+    k_broadening=0.0,
+    int_scale=None,
+    normalize_intensity=True,
+):
     """
     Utility function to calculate a 1D histogram from the diffraction vector lengths
-    stored in a Crystal class. 
+    stored in a Crystal class.
 
     Args:
             k (np.array):                       k coordinates.
@@ -162,39 +164,45 @@ def calc_1D_profile(
 
     # get discrete plot from structure factor amplitudes
     int_profile = np.zeros_like(k)
-    k_px = (g_coords - k_min) / k_step;
-    kf = np.floor(k_px).astype('int')
-    dk = k_px - kf;
+    k_px = (g_coords - k_min) / k_step
+    kf = np.floor(k_px).astype("int")
+    dk = k_px - kf
 
     sub = np.logical_and(kf >= 0, kf < k_num)
     if int_scale.shape[0] > 1:
         int_profile = np.bincount(
-            np.floor(k_px[sub]).astype('int'), 
-            weights = (1-dk[sub])*g_int[sub]*int_scale[sub], 
-            minlength = k_num)
+            np.floor(k_px[sub]).astype("int"),
+            weights=(1 - dk[sub]) * g_int[sub] * int_scale[sub],
+            minlength=k_num,
+        )
     else:
         int_profile = np.bincount(
-            np.floor(k_px[sub]).astype('int'), 
-            weights = (1-dk[sub])*g_int[sub], 
-            minlength = k_num)
-    sub = np.logical_and(k_px >= -1, k_px < k_num-1)
+            np.floor(k_px[sub]).astype("int"),
+            weights=(1 - dk[sub]) * g_int[sub],
+            minlength=k_num,
+        )
+    sub = np.logical_and(k_px >= -1, k_px < k_num - 1)
     if int_scale.shape[0] > 1:
         int_profile += np.bincount(
-            np.floor(k_px[sub] + 1).astype('int'), 
-            weights = dk[sub]*g_int[sub]*int_scale[sub], 
-            minlength = k_num)
+            np.floor(k_px[sub] + 1).astype("int"),
+            weights=dk[sub] * g_int[sub] * int_scale[sub],
+            minlength=k_num,
+        )
     else:
         int_profile += np.bincount(
-            np.floor(k_px[sub] + 1).astype('int'), 
-            weights = dk[sub]*g_int[sub], 
-            minlength = k_num)
+            np.floor(k_px[sub] + 1).astype("int"),
+            weights=dk[sub] * g_int[sub],
+            minlength=k_num,
+        )
 
     if remove_origin is True:
         int_profile[0:2] = 0
 
     # Apply broadening if needed
     if k_broadening > 0.0:
-        int_profile = gaussian_filter(int_profile, k_broadening/k_step, mode='constant')
+        int_profile = gaussian_filter(
+            int_profile, k_broadening / k_step, mode="constant"
+        )
 
     if normalize_intensity:
         int_profile /= np.max(int_profile)
