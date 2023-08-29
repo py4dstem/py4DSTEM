@@ -134,7 +134,6 @@ class PointListArray:
 
     ## Representation to standard output
     def __repr__(self):
-
         space = " " * len(self.__class__.__name__) + "  "
         string = f"{self.__class__.__name__}( A shape {self.shape} PointListArray called '{self.name}',"
         string += "\n" + space + f"with {len(self.fields)} fields:"

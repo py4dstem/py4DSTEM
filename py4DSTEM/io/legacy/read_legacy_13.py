@@ -89,7 +89,6 @@ def read_legacy13(
 
     # Open file
     with h5py.File(filepath, "r") as f:
-
         # open the selected group
         try:
             group_data = f[root]
@@ -123,7 +122,6 @@ def read_legacy13(
 
 
 def _read_without_tree(grp):
-
     # handle empty datasets
     if grp.attrs["emd_group_type"] == "root":
         data = Root(
@@ -218,7 +216,6 @@ def print_v13h5pyFile_tree(f, tablevel=0, linelevels=[], show_metadata=False):
 
 
 def _get_v13_class(grp):
-
     lookup = {
         "Metadata": Metadata,
         "Array": Array,

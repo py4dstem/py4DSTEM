@@ -323,7 +323,6 @@ def _find_Bragg_disks_single(
     _return_cc=False,
     _template_space="real",
 ):
-
     # apply filter function
     er = "filter_function must be callable"
     if filter_function:
@@ -334,7 +333,6 @@ def _find_Bragg_disks_single(
     if template is None:
         cc = DP
     else:
-
         # fourier transform the template
         assert _template_space in ("real", "fourier")
         if _template_space == "real":
@@ -417,11 +415,9 @@ def _find_Bragg_disks_stack(
     maxNumPeaks=100,
     _template_space="real",
 ):
-
     ans = []
 
     for idx in range(dp_stack.shape[0]):
-
         dp = dp_stack[idx, :, :]
         peaks = _find_Bragg_disks_single(
             dp,
@@ -466,7 +462,6 @@ def _find_Bragg_disks_CPU(
     maxNumPeaks=70,
     radial_bksb=False,
 ):
-
     # Make the BraggVectors instance
     braggvectors = BraggVectors(datacube.Rshape, datacube.Qshape)
 
@@ -475,14 +470,13 @@ def _find_Bragg_disks_CPU(
 
     # Loop over all diffraction patterns
     # Compute and populate BraggVectors data
-    for (rx, ry) in tqdmnd(
+    for rx, ry in tqdmnd(
         datacube.R_Nx,
         datacube.R_Ny,
         desc="Finding Bragg Disks",
         unit="DP",
         unit_scale=True,
     ):
-
         # Get a diffraction pattern
 
         # without background subtraction
@@ -538,7 +532,6 @@ def _find_Bragg_disks_CUDA_unbatched(
     edgeBoundary=20,
     maxNumPeaks=70,
 ):
-
     # compute
     from py4DSTEM.braggvectors.diskdetection_cuda import find_Bragg_disks_CUDA
 
@@ -584,7 +577,6 @@ def _find_Bragg_disks_CUDA_batched(
     edgeBoundary=20,
     maxNumPeaks=70,
 ):
-
     # compute
     from py4DSTEM.braggvectors.diskdetection_cuda import find_Bragg_disks_CUDA
 
@@ -633,7 +625,6 @@ def _find_Bragg_disks_ipp(
     edgeBoundary=20,
     maxNumPeaks=70,
 ):
-
     # compute
     from py4DSTEM.braggvectors.diskdetection_parallel import find_Bragg_disks_ipp
 
@@ -684,7 +675,6 @@ def _find_Bragg_disks_dask(
     edgeBoundary=20,
     maxNumPeaks=70,
 ):
-
     # compute
     from py4DSTEM.braggvectors.diskdetection_parallel import find_Bragg_disks_dask
 

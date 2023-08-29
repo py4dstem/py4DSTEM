@@ -164,7 +164,7 @@ class Featurization(object):
         peak_data = np.zeros((pointlistarray.shape[0], pointlistarray.shape[1], n_bins))
 
         # Create Bragg Disk Features
-        for (Rx, Ry) in tqdmnd(pointlistarray.shape[0], pointlistarray.shape[1]):
+        for Rx, Ry in tqdmnd(pointlistarray.shape[0], pointlistarray.shape[1]):
             pointlist = pointlistarray.get_pointlist(Rx, Ry)
             if pointlist.data.shape[0] == 0:
                 continue

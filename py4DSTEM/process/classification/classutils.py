@@ -47,7 +47,7 @@ def get_class_DP(
     assert isinstance(intshifts, bool)
 
     class_DP = np.zeros((datacube.Q_Nx, datacube.Q_Ny))
-    for (Rx, Ry) in tqdmnd(
+    for Rx, Ry in tqdmnd(
         datacube.R_Nx,
         datacube.R_Ny,
         desc="Computing class diffraction pattern",
@@ -135,7 +135,7 @@ def get_class_DP_without_Bragg_scattering(
     class_DP = np.zeros((datacube.Q_Nx, datacube.Q_Ny))
     mask_weights = np.zeros((datacube.Q_Nx, datacube.Q_Ny))
     yy, xx = np.meshgrid(np.arange(datacube.Q_Ny), np.arange(datacube.Q_Nx))
-    for (Rx, Ry) in tqdmnd(
+    for Rx, Ry in tqdmnd(
         datacube.R_Nx,
         datacube.R_Ny,
         desc="Computing class diffraction pattern",

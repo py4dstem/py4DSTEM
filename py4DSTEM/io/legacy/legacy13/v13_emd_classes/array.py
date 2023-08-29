@@ -412,7 +412,6 @@ class Array:
     ## Representation to standard output
 
     def __repr__(self):
-
         if not self.is_stack:
             space = " " * len(self.__class__.__name__) + "  "
             string = f"{self.__class__.__name__}( A {self.rank}-dimensional array of shape {self.shape} called '{self.name}',"

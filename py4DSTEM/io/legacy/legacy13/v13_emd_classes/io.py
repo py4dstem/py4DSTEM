@@ -62,6 +62,7 @@ def EMD_group_exists(group: h5py.Group, emd_group_type, name: str):
 
 ## ROOT
 
+
 # write
 def Root_to_h5(root, group):
     """
@@ -104,6 +105,7 @@ def Root_from_h5(group: h5py.Group):
 
 ## METADATA
 
+
 # write
 def Metadata_to_h5(metadata, group):
     """
@@ -122,7 +124,6 @@ def Metadata_to_h5(metadata, group):
 
     # Save data
     for k, v in metadata._params.items():
-
         # None
         if v is None:
             v = "_None"
@@ -153,7 +154,6 @@ def Metadata_to_h5(metadata, group):
 
         # tuples
         elif isinstance(v, tuple):
-
             # of numbers
             if isinstance(v[0], Number):
                 dset = grp.create_dataset(k, data=v)
@@ -189,7 +189,6 @@ def Metadata_to_h5(metadata, group):
 
         # lists
         elif isinstance(v, list):
-
             # of numbers
             if isinstance(v[0], Number):
                 dset = grp.create_dataset(k, data=v)
@@ -242,7 +241,6 @@ def Metadata_from_h5(group: h5py.Group):
     # Get data
     data = {}
     for k, v in group.items():
-
         # get type
         try:
             t = group[k].attrs["type"].decode("utf-8")
@@ -372,7 +370,6 @@ def Array_to_h5(array, group):
 
     # Add the normal dim vectors
     for n in range(array.rank):
-
         # unpack info
         dim = array.dims[n]
         name = array.dim_names[n]
@@ -572,7 +569,7 @@ def PointListArray_to_h5(pointlistarray, group):
     dset = grp.create_dataset("data", pointlistarray.shape, dtype)
 
     # Add data
-    for (i, j) in tqdmnd(dset.shape[0], dset.shape[1]):
+    for i, j in tqdmnd(dset.shape[0], dset.shape[1]):
         dset[i, j] = pointlistarray[i, j].data
 
     # Add additional metadata
@@ -610,7 +607,7 @@ def PointListArray_from_h5(group: h5py.Group):
     pla = PointListArray(dtype=dtype, shape=shape, name=basename(group.name))
 
     # Add data
-    for (i, j) in tqdmnd(
+    for i, j in tqdmnd(
         shape[0], shape[1], desc="Reading PointListArray", unit="PointList"
     ):
         try:
