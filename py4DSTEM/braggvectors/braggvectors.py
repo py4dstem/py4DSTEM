@@ -285,6 +285,7 @@ class BraggVectors(Custom, BraggVectorMethods, Data):
         md["Qshape"] = self.Qshape
         self.metadata = md
         grp = Custom.to_h5(self, group)
+        return grp
 
     # read
 
