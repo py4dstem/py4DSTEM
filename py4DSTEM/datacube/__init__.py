@@ -1,3 +1,4 @@
+#fmt: off
 _emd_hook = True
 
 from py4DSTEM.datacube.datacube import DataCube
