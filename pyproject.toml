@@ -1,0 +1,4 @@
+[tool.black]
+target-version = ['py39', 'py310', 'py311']
+# line-length = 88
+exclude = '__init__.py'
