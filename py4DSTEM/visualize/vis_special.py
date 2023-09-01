@@ -31,7 +31,7 @@ def show_elliptical_fit(
     linewidth_ann=2,
     linewidth_ell=2,
     returnfig=False,
-    **kwargs
+    **kwargs,
 ):
     """
     Plots an elliptical curve over its annular fit region.
@@ -97,7 +97,7 @@ def show_amorphous_ring_fit(
     ellipse_alpha=0.7,
     ellipse_lw=2,
     returnfig=False,
-    **kwargs
+    **kwargs,
 ):
     """
     Display a diffraction pattern with a fit to its amorphous ring, interleaving
@@ -225,7 +225,7 @@ def show_qprofile(
     ticklabelsize=14,
     grid=True,
     label=None,
-    **kwargs
+    **kwargs,
 ):
     """
     Plots a diffraction space radial profile.
@@ -302,7 +302,7 @@ def show_voronoi(
     color_lines="w",
     max_dist=None,
     returnfig=False,
-    **kwargs
+    **kwargs,
 ):
     """
     words
@@ -375,7 +375,7 @@ def show_class_BPs_grid(
     axsize=(6, 6),
     titlesize=0,
     get_bordercolor=None,
-    **kwargs
+    **kwargs,
 ):
     """
     words
@@ -732,7 +732,7 @@ def select_point(
     color_selected="r",
     size=20,
     returnfig=False,
-    **kwargs
+    **kwargs,
 ):
     """
     Show enumerated index labels for a set of points, with one selected point highlighted
@@ -857,7 +857,7 @@ def show_selected_dps(
     HW=None,
     figsize_im=(6, 6),
     figsize_dp=(4, 4),
-    **kwargs
+    **kwargs,
 ):
     """
     Shows two plots: first, a real space image overlaid with colored dots
@@ -1011,7 +1011,7 @@ def show_complex(
     returnfig=False,
     hue_start=0,
     invert=False,
-    **kwargs
+    **kwargs,
 ):
     """
     Function to plot complex arrays
