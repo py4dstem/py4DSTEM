@@ -100,7 +100,7 @@ def beta_parallel_disk_detection(
     close_dask_client=False,
     return_dask_client=True,
     *args,
-    **kwargs
+    **kwargs,
 ):
     """
     This is not fully validated currently so may not work, please report bugs on the py4DSTEM github page.
@@ -225,7 +225,7 @@ def beta_parallel_disk_detection(
             probe_kernel_FT=dask_probe_delayed[0, 0],
             # probe_kernel_FT=delayed_probe_kernel_FT,
             *args,
-            **kwargs
+            **kwargs,
         )  # passing through args from earlier or should I use
         # corrPower=corrPower,
         # sigma=sigma_gaussianFilter,
