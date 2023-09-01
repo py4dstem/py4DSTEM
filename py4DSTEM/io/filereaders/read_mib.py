@@ -14,7 +14,7 @@ def load_mib(
     reshape=True,
     flip=True,
     scan=(256, 256),
-    **kwargs
+    **kwargs,
 ):
     """
     Read a MIB file and return as py4DSTEM DataCube.

@@ -75,7 +75,7 @@ def show(
     theta=None,
     title=None,
     show_fft=False,
-    **kwargs
+    **kwargs,
 ):
     """
     General visualization function for 2D arrays.
@@ -895,7 +895,7 @@ def show_Q(
     gridlabelsize=12,
     gridlabelcolor="k",
     alpha=0.35,
-    **kwargs
+    **kwargs,
 ):
     """
     Shows a diffraction space image with options for several overlays to define the scale,
@@ -1135,7 +1135,7 @@ def show_rectangles(
     alpha=0.25,
     linewidth=2,
     returnfig=False,
-    **kwargs
+    **kwargs,
 ):
     """
     Visualization function which plots a 2D array with one or more overlayed rectangles.
@@ -1188,7 +1188,7 @@ def show_circles(
     alpha=0.3,
     linewidth=2,
     returnfig=False,
-    **kwargs
+    **kwargs,
 ):
     """
     Visualization function which plots a 2D array with one or more overlayed circles.
@@ -1243,7 +1243,7 @@ def show_ellipses(
     alpha=0.3,
     linewidth=2,
     returnfig=False,
-    **kwargs
+    **kwargs,
 ):
     """
     Visualization function which plots a 2D array with one or more overlayed ellipses.
@@ -1299,7 +1299,7 @@ def show_annuli(
     alpha=0.3,
     linewidth=2,
     returnfig=False,
-    **kwargs
+    **kwargs,
 ):
     """
     Visualization function which plots a 2D array with one or more overlayed annuli.
@@ -1351,7 +1351,7 @@ def show_points(
     open_circles=False,
     title=None,
     returnfig=False,
-    **kwargs
+    **kwargs,
 ):
     """
     Plots a 2D array with one or more points.
