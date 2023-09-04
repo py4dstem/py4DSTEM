@@ -699,6 +699,7 @@ class DataCube(
             'corrPower' : 1,
             'sigma' : 2,
             'subpixel' : 'poly',
+            'upsample_factor' : 16,
         },
         thresh = {
             'minAbsoluteIntensity' : 0,
@@ -923,8 +924,9 @@ class DataCube(
             maxmimum detection - in this case, `corrPower` is ignored, but all
             parameters in this dictionary are used.
             Note also that if this dictionary is specified (i.e. is not None)
-            but corrPower or sigma or subpixel are not specified, their default
-            values (corrPower=1, sigma=2, subpixel='poly') are used.
+            but corrPower or sigma or subpixel or upsample_factor are not
+            specified, their default values (corrPower=1, sigma=2,
+            subpixel='poly', upsample_factor=16) are used.
         thresh : None or dict
             If None, no thresholding is performed (not recommended!).  Otherwise,
             should be a dictionary with valid keys:
