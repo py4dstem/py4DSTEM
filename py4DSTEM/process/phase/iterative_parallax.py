@@ -1428,7 +1428,9 @@ class ParallaxReconstruction(PhaseReconstruction):
 
             fig, ax = plt.subplots(figsize=figsize)
 
-            cropped_object = self._crop_padded_object(self._recon_phase_corrected)
+            cropped_object = self._crop_padded_object(
+                self._recon_BF_subpixel_aligned, upsampled=True
+            )
 
             extent = [
                 0,
@@ -1594,6 +1596,7 @@ class ParallaxReconstruction(PhaseReconstruction):
         self,
         padded_object: np.ndarray,
         remaining_padding: int = 0,
+        upsampled: bool = False,
     ):
         """
         Utility function to crop padded object
@@ -1616,6 +1619,10 @@ class ParallaxReconstruction(PhaseReconstruction):
 
         pad_x = self._object_padding_px[0] // 2 - remaining_padding
         pad_y = self._object_padding_px[1] // 2 - remaining_padding
+
+        if upsampled == True:
+            pad_x *= self._kde_upsample_factor
+            pad_y *= self._kde_upsample_factor
 
         return asnumpy(padded_object[pad_x:-pad_x, pad_y:-pad_y])
 
