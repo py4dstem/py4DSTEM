@@ -1,5 +1,5 @@
 from py4DSTEM.process.polar import PolarDatacube
-from py4DSTEM.process.strain import StrainMap
+from py4DSTEM.process.strain.strain import StrainMap
 
 from py4DSTEM.process import latticevectors
 from py4DSTEM.process import phase
