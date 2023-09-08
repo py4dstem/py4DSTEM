@@ -1,5 +1,6 @@
 # Defines the Strain class
 
+import warnings
 from typing import Optional
 
 import matplotlib.pyplot as plt
@@ -8,20 +9,33 @@ from py4DSTEM import PointList
 from py4DSTEM.braggvectors import BraggVectors
 from py4DSTEM.data import Data, RealSlice
 from py4DSTEM.preprocess.utils import get_maxima_2D
+from py4DSTEM.process.strain.latticevectors import (
+    add_indices_to_braggvectors,
+    fit_lattice_vectors_all_DPs,
+    get_reference_g1g2,
+    get_rotated_strain_map,
+    get_strain_from_reference_g1g2,
+    index_bragg_directions,
+)
 from py4DSTEM.visualize import add_bragg_index_labels, add_pointlabels, add_vector, show
+
+warnings.simplefilter(action="always", category=UserWarning)
 
 
 class StrainMap(RealSlice, Data):
     """
-    Stores strain map.
-
-    TODO add docs
-
+    Storage and processing methods for 4D-STEM datasets.
+    
     """
 
     def __init__(self, braggvectors: BraggVectors, name: Optional[str] = "strainmap"):
+        
         """
-        TODO
+        Accepts:
+            braggvectors (BraggVectors): BraggVectors for Strain Map
+            name (str): the name of the strainmap
+        Returns:
+            A new StrainMap instance.
         """
         assert isinstance(
             braggvectors, BraggVectors
@@ -58,6 +72,12 @@ class StrainMap(RealSlice, Data):
         # re-calibration are issued
         self.calstate = self.braggvectors.calstate
         assert self.calstate["center"], "braggvectors must be centered"
+        if self.calstate["rotate"] == False:
+            warnings.warn(
+                ("Real to reciprocal space rotaiton not calibrated"),
+                UserWarning,
+            )
+
         # get the BVM
         # a new BVM using the current calstate is computed
         self.bvm = self.braggvectors.histogram(mode="cal")
@@ -110,16 +130,18 @@ class StrainMap(RealSlice, Data):
         minSpacing=0,
         edgeBoundary=1,
         maxNumPeaks=10,
-        figsize=(12, 6),
+        x0=None,
+        y0=None,
+        figsize=(14, 9),
         c_indices="lightblue",
         c0="g",
         c1="r",
         c2="r",
         c_vectors="r",
         c_vectorlabels="w",
-        size_indices=20,
+        size_indices=15,
         width_vectors=1,
-        size_vectorlabels=20,
+        size_vectorlabels=15,
         vis_params={},
         returncalc=False,
         returnfig=False,
@@ -198,6 +220,7 @@ class StrainMap(RealSlice, Data):
         ), "The calibration state has changed! To resync the calibration state, use `.reset_calstate`."
 
         # find the maxima
+
         g = get_maxima_2D(
             self.bvm.data,
             subpixel=subpixel,
@@ -220,10 +243,34 @@ class StrainMap(RealSlice, Data):
         g2y = gy[index_g2] - g0[1]
         g1, g2 = (g1x, g1y), (g2x, g2y)
 
+        # if x0 is None:
+        #     x0 = self.braggvectors.Qshape[0] / 2
+        # if y0 is None:
+        #     y0 = self.braggvectors.Qshape[0] / 2
+
+        # index braggvectors
+        # _, _, braggdirections = index_bragg_directions(
+        #     x0, y0, g["x"], g["y"], g1, g2
+        # )
+
+        _, _, braggdirections = index_bragg_directions(
+            g0[0], g0[1], g["x"], g["y"], g1, g2
+        )
+
+        self.braggdirections = braggdirections
+
         # make the figure
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=figsize)
-        show(self.bvm.data, figax=(fig, ax1), **vis_params)
-        show(self.bvm.data, figax=(fig, ax2), **vis_params)
+        fig, ax = plt.subplots(1, 3, figsize=figsize)
+        show(self.bvm.data, figax=(fig, ax[0]), **vis_params)
+        show(self.bvm.data, figax=(fig, ax[1]), **vis_params)
+        self.show_bragg_indexing(
+            self.bvm.data,
+            bragg_directions=braggdirections,
+            points=True,
+            figax=(fig, ax[2]),
+            size=size_indices,
+            **vis_params,
+        )
 
         # Add indices to left panel
         d = {"x": gx, "y": gy, "size": size_indices, "color": c_indices}
@@ -251,10 +298,10 @@ class StrainMap(RealSlice, Data):
             "fontweight": "bold",
             "labels": [str(index_g2)],
         }
-        add_pointlabels(ax1, d)
-        add_pointlabels(ax1, d0)
-        add_pointlabels(ax1, d1)
-        add_pointlabels(ax1, d2)
+        add_pointlabels(ax[0], d)
+        add_pointlabels(ax[0], d0)
+        add_pointlabels(ax[0], d1)
+        add_pointlabels(ax[0], d2)
 
         # Add vectors to right panel
         dg1 = {
@@ -279,8 +326,8 @@ class StrainMap(RealSlice, Data):
             "labelsize": size_vectorlabels,
             "labelcolor": c_vectorlabels,
         }
-        add_vector(ax2, dg1)
-        add_vector(ax2, dg2)
+        add_vector(ax[1], dg1)
+        add_vector(ax[1], dg2)
 
         # store vectors
         self.g = g
@@ -290,18 +337,16 @@ class StrainMap(RealSlice, Data):
 
         # return
         if returncalc and returnfig:
-            return (g0, g1, g2), (fig, (ax1, ax2))
+            return (g0, g1, g2), (fig, ax)
         elif returncalc:
             return (g0, g1, g2)
         elif returnfig:
-            return (fig, (ax1, ax2))
+            return (fig, ax)
         else:
             return
 
     def fit_lattice_vectors(
         self,
-        x0=None,
-        y0=None,
         max_peak_spacing=2,
         mask=None,
         plot=True,
@@ -337,31 +382,6 @@ class StrainMap(RealSlice, Data):
             self.calstate == self.braggvectors.calstate
         ), "The calibration state has changed! To resync the calibration state, use `.reset_calstate`."
 
-        if x0 is None:
-            x0 = self.braggvectors.Qshape[0] / 2
-        if y0 is None:
-            y0 = self.braggvectors.Qshape[0] / 2
-
-        # index braggvectors
-        from py4DSTEM.process.latticevectors import index_bragg_directions
-
-        _, _, braggdirections = index_bragg_directions(
-            x0, y0, self.g["x"], self.g["y"], self.g1, self.g2
-        )
-
-        self.braggdirections = braggdirections
-
-        if plot:
-            self.show_bragg_indexing(
-                self.bvm,
-                bragg_directions=braggdirections,
-                points=True,
-                **vis_params,
-            )
-
-        # add indicies to braggvectors
-        from py4DSTEM.process.latticevectors import add_indices_to_braggvectors
-
         bragg_vectors_indexed = add_indices_to_braggvectors(
             self.braggvectors,
             self.braggdirections,
@@ -374,13 +394,11 @@ class StrainMap(RealSlice, Data):
         self.bragg_vectors_indexed = bragg_vectors_indexed
 
         # fit bragg vectors
-        from py4DSTEM.process.latticevectors import fit_lattice_vectors_all_DPs
-
         g1g2_map = fit_lattice_vectors_all_DPs(self.bragg_vectors_indexed)
         self.g1g2_map = g1g2_map
 
         if returncalc:
-            braggdirections, bragg_vectors_indexed, g1g2_map
+            self.braggdirections, self.bragg_vectors_indexed, self.g1g2_map
 
     def get_strain(
         self, mask=None, g_reference=None, flip_theta=False, returncalc=False, **kwargs
@@ -407,29 +425,23 @@ class StrainMap(RealSlice, Data):
         if mask is None:
             mask = np.ones(self.g1g2_map.shape, dtype="bool")
 
-            from py4DSTEM.process.latticevectors import get_strain_from_reference_region
+            # strainmap_g1g2 = get_strain_from_reference_region(
+            #     self.g1g2_map,
+            #     mask=mask,
+            # )
 
-            strainmap_g1g2 = get_strain_from_reference_region(
-                self.g1g2_map,
-                mask=mask,
-            )
-        else:
-            from py4DSTEM.process.latticevectors import get_reference_g1g2
+        #     g1_ref, g2_ref = get_reference_g1g2(self.g1g2_map, mask)
+        #     strain_map = get_strain_from_reference_g1g2(self.g1g2_map, g1_ref, g2_ref)
+        # else:
 
-            g1_ref, g2_ref = get_reference_g1g2(self.g1g2_map, mask)
+        g1_ref, g2_ref = get_reference_g1g2(self.g1g2_map, mask)
 
-            from py4DSTEM.process.latticevectors import get_strain_from_reference_g1g2
-
-            strainmap_g1g2 = get_strain_from_reference_g1g2(
-                self.g1g2_map, g1_ref, g2_ref
-            )
+        strainmap_g1g2 = get_strain_from_reference_g1g2(self.g1g2_map, g1_ref, g2_ref)
 
         self.strainmap_g1g2 = strainmap_g1g2
 
         if g_reference is None:
             g_reference = np.subtract(self.g1, self.g2)
-
-        from py4DSTEM.process.latticevectors import get_rotated_strain_map
 
         strainmap_rotated = get_rotated_strain_map(
             self.strainmap_g1g2,
@@ -529,6 +541,7 @@ class StrainMap(RealSlice, Data):
         points=True,
         pointcolor="r",
         pointsize=50,
+        figax=None,
         returnfig=False,
         **kwargs,
     ):
@@ -544,7 +557,13 @@ class StrainMap(RealSlice, Data):
         for k in ("qx", "qy", "h", "k"):
             assert k in bragg_directions.data.dtype.fields
 
-        fig, ax = show(ar, returnfig=True, **kwargs)
+        if figax is None:
+            fig, ax = show(ar, returnfig=True, **kwargs)
+        else:
+            fig = figax[0]
+            ax = figax[1]
+            show(ar, figax=figax, **kwargs)
+
         d = {
             "bragg_directions": bragg_directions,
             "voffset": voffset,
@@ -560,7 +579,6 @@ class StrainMap(RealSlice, Data):
         if returnfig:
             return fig, ax
         else:
-            plt.show()
             return
 
     def copy(self, name=None):
@@ -585,7 +603,7 @@ class StrainMap(RealSlice, Data):
             strainmap_copy.metadata = self.metadata[k].copy()
         return strainmap_copy
 
-    # IO methods
+    # TODO IO methods
 
     # read
     @classmethod
