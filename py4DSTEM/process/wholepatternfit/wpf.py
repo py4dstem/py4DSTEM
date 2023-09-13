@@ -405,9 +405,8 @@ class WholePatternFit:
                             opt.status,
                         ]
                     except Exception as err:
-                        # print(err)
                         fit_data_single = x0
-                        fit_metrics_single = [0, 0, 0, 0]
+                        fit_metrics_single = [0, 0, 0, -2]
 
                     fit_data[:, rx, ry] = fit_data_single
                     fit_metrics[:, rx, ry] = fit_metrics_single
@@ -468,7 +467,7 @@ class WholePatternFit:
                     self.fit_data.data[lat.params["uy"].offset],
                     self.fit_data.data[lat.params["vx"].offset],
                     self.fit_data.data[lat.params["vy"].offset],
-                    np.ones(self.fit_data.data.shape[1:], dtype=np.bool_),
+                    self.fit_metrics["status"].data >= 0, # negative status indicates fit error
                 ],
                 axis=0,
             )
@@ -640,7 +639,7 @@ class WholePatternFit:
             except Exception as err:
                 # print(err)
                 fit_coefs = initial_guess
-                fit_metrics_single = [0, 0, 0, 0]
+                fit_metrics_single = [0, 0, 0, -2]
 
             return fit_coefs, fit_metrics_single
         else:
