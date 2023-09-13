@@ -583,7 +583,9 @@ class SyntheticDiskLattice(WPFModel):
 
             mask = r_disk < (2 * disk_radius)
 
-            top_exp = mask * np.exp(4 * ((mask * r_disk) - disk_radius) / disk_width)
+            top_exp = mask * np.exp(
+                np.minimum(30, 4 * ((mask * r_disk) - disk_radius) / disk_width)
+            )
 
             # dF/d(x0)
             dx = (
@@ -1039,7 +1041,10 @@ class SyntheticDiskMoire(WPFModel):
 
             mask = r_disk < (2 * disk_radius)
 
-            top_exp = mask * np.exp(4 * ((mask * r_disk) - disk_radius) / disk_width)
+            # clamp the argument of the exponent at a very large finite value
+            top_exp = mask * np.exp(
+                np.minimum(30, 4 * ((mask * r_disk) - disk_radius) / disk_width)
+            )
 
             # dF/d(x0)
             dx = (

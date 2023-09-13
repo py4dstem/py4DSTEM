@@ -222,6 +222,7 @@ def show_fit_metrics(self, returnfig=False, **subplots_kwargs):
 
     opt_cmap = mpl_c.ListedColormap(
         (
+            (0.6, 0.05, 0.05),
             (0.8941176470588236, 0.10196078431372549, 0.10980392156862745),
             (0.21568627450980393, 0.49411764705882355, 0.7215686274509804),
             (0.30196078431372547, 0.6862745098039216, 0.2901960784313726),
@@ -231,11 +232,12 @@ def show_fit_metrics(self, returnfig=False, **subplots_kwargs):
         )
     )
     im = ax[0, 1].matshow(
-        self.fit_metrics["status"].data, cmap=opt_cmap, vmin=-1.5, vmax=4.5
+        self.fit_metrics["status"].data, cmap=opt_cmap, vmin=-2.5, vmax=4.5
     )
-    cbar = fig.colorbar(im, ax=ax[0, 1], ticks=[-1, 0, 1, 2, 3, 4])
+    cbar = fig.colorbar(im, ax=ax[0, 1], ticks=[-2, -1, 0, 1, 2, 3, 4])
     cbar.ax.set_yticklabels(
         [
+            "Unknown Error",
             "MINPACK Error",
             "Max f evals exceeded",
             "$gtol$ satisfied",
