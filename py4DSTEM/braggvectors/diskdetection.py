@@ -555,6 +555,8 @@ def _find_Bragg_disks_CUDA_unbatched(
     # Populate a BraggVectors instance and return
     braggvectors = BraggVectors(datacube.Rshape, datacube.Qshape)
     braggvectors._v_uncal = peaks
+    braggvectors._set_raw_vector_getter()
+    braggvectors._set_cal_vector_getter()
     return braggvectors
 
 
@@ -600,6 +602,8 @@ def _find_Bragg_disks_CUDA_batched(
     # Populate a BraggVectors instance and return
     braggvectors = BraggVectors(datacube.Rshape, datacube.Qshape)
     braggvectors._v_uncal = peaks
+    braggvectors._set_raw_vector_getter()
+    braggvectors._set_cal_vector_getter()
     return braggvectors
 
 
@@ -650,6 +654,8 @@ def _find_Bragg_disks_ipp(
     # Populate a BraggVectors instance and return
     braggvectors = BraggVectors(datacube.Rshape, datacube.Qshape)
     braggvectors._v_uncal = peaks
+    braggvectors._set_raw_vector_getter()
+    braggvectors._set_cal_vector_getter()
     return braggvectors
 
 
@@ -700,6 +706,8 @@ def _find_Bragg_disks_dask(
     # Populate a BraggVectors instance and return
     braggvectors = BraggVectors(datacube.Rshape, datacube.Qshape)
     braggvectors._v_uncal = peaks
+    braggvectors._set_raw_vector_getter()
+    braggvectors._set_cal_vector_getter()
     return braggvectors
 
 
