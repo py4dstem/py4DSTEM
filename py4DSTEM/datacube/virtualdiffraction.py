@@ -3,13 +3,12 @@
 #  * DataCubeVirtualDiffraction - methods inherited by DataCube for virt diffraction
 
 import numpy as np
-import dask.array as da
 from typing import Optional
 import inspect
 
 from emdfile import tqdmnd, Metadata
-from py4DSTEM.data import Calibration, DiffractionSlice, Data
-from py4DSTEM.visualize.show import show
+from py4DSTEM.data import DiffractionSlice, Data
+from py4DSTEM.preprocess import get_shifted_ar
 
 # Virtual diffraction container class
 
@@ -184,55 +183,33 @@ class DataCubeVirtualDiffraction:
             qx_shift = x0_mean - x0
             qy_shift = y0_mean - y0
 
-            # ...for integer shifts
-            if not subpixel:
+            if subpixel is False:
                 # round shifts -> int
                 qx_shift = qx_shift.round().astype(int)
                 qy_shift = qy_shift.round().astype(int)
 
-                # ...for boolean masks and unmasked
-                if mask is None or mask.dtype == bool:
-                    # get scan points
-                    mask = np.ones(self.Rshape, dtype=bool) if mask is None else mask
-                    mask_indices = np.nonzero(mask)
-                    # allocate space
-                    virtual_diffraction = np.zeros(self.Qshape)
-                    # loop
-                    for rx, ry in zip(mask_indices[0], mask_indices[1]):
-                        # get shifted DP
-                        DP = np.roll(
+            # ...for boolean masks and unmasked
+            if mask is None or mask.dtype == bool:
+                # get scan points
+                mask = np.ones(self.Rshape, dtype=bool) if mask is None else mask
+                mask_indices = np.nonzero(mask)
+                # allocate space
+                virtual_diffraction = np.zeros(self.Qshape)
+                # loop
+                for rx, ry in zip(mask_indices[0], mask_indices[1]):
+                    # get shifted DP
+                    if subpixel:
+                        DP = get_shifted_ar(
                             self.data[
                                 rx,
                                 ry,
                                 :,
                                 :,
                             ],
-                            (qx_shift[rx, ry], qy_shift[rx, ry]),
-                            axis=(0, 1),
+                            qx_shift[rx, ry],
+                            qy_shift[rx, ry],
                         )
-                        # compute
-                        if method == "mean":
-                            virtual_diffraction += DP
-                        elif method == "max":
-                            virtual_diffraction = np.maximum(virtual_diffraction, DP)
-                    # normalize means
-                    if method == "mean":
-                        virtual_diffraction /= len(mask_indices[0])
-
-                # ...for floating point and complex masks
-                else:
-                    # allocate space
-                    if mask.dtype == "complex":
-                        virtual_diffraction = np.zeros(self.Qshape, dtype="complex")
                     else:
-                        virtual_diffraction = np.zeros(self.Qshape)
-                    # loop
-                    for rx, ry in tqdmnd(
-                        self.R_Nx,
-                        self.R_Ny,
-                        disable=not verbose,
-                    ):
-                        # get shifted DP
                         DP = np.roll(
                             self.data[
                                 rx,
@@ -243,21 +220,60 @@ class DataCubeVirtualDiffraction:
                             (qx_shift[rx, ry], qy_shift[rx, ry]),
                             axis=(0, 1),
                         )
-                        # compute
-                        w = mask[rx, ry]
-                        if method == "mean":
-                            virtual_diffraction += DP * w
-                        elif method == "max":
-                            virtual_diffraction = np.maximum(
-                                virtual_diffraction, DP * w
-                            )
+                    # compute
                     if method == "mean":
-                        virtual_diffraction /= np.sum(mask)
+                        virtual_diffraction += DP
+                    elif method == "max":
+                        virtual_diffraction = np.maximum(virtual_diffraction, DP)
+                # normalize means
+                if method == "mean":
+                    virtual_diffraction /= len(mask_indices[0])
 
-            # TODO subpixel shifting
+            # ...for floating point and complex masks
             else:
-                raise Exception("subpixel shifting has not been implemented yet!")
-                pass
+                # allocate space
+                if mask.dtype == "complex":
+                    virtual_diffraction = np.zeros(self.Qshape, dtype="complex")
+                else:
+                    virtual_diffraction = np.zeros(self.Qshape)
+                # loop
+                for rx, ry in tqdmnd(
+                    self.R_Nx,
+                    self.R_Ny,
+                    disable=not verbose,
+                ):
+                    # get shifted DP
+                    if subpixel:
+                        DP = get_shifted_ar(
+                            self.data[
+                                rx,
+                                ry,
+                                :,
+                                :,
+                            ],
+                            qx_shift[rx, ry],
+                            qy_shift[rx, ry],
+                        )
+                    else:
+                        DP = np.roll(
+                            self.data[
+                                rx,
+                                ry,
+                                :,
+                                :,
+                            ],
+                            (qx_shift[rx, ry], qy_shift[rx, ry]),
+                            axis=(0, 1),
+                        )
+
+                    # compute
+                    w = mask[rx, ry]
+                    if method == "mean":
+                        virtual_diffraction += DP * w
+                    elif method == "max":
+                        virtual_diffraction = np.maximum(virtual_diffraction, DP * w)
+                if method == "mean":
+                    virtual_diffraction /= np.sum(mask)
 
         # wrap, add to tree, and return
 
