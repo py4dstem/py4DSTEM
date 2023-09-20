@@ -185,7 +185,7 @@ class PtychographicConstraints:
 
         return current_object
 
-    def _object_denoise_tv_pylops(self, current_object, weight):
+    def _object_denoise_tv_pylops(self, current_object, weight, iterations):
         """
         Performs second order TV denoising along x and y
 
@@ -196,6 +196,10 @@ class PtychographicConstraints:
         weight : float
             Denoising weight. The greater `weight`, the more denoising (at
             the expense of fidelity to `input`).
+        iterations: float
+            Number of iterations to run in denoising algorithm. 
+            `niter_out` in pylops
+
         Returns
         -------
         constrained_object: np.ndarray
@@ -213,7 +217,7 @@ class PtychographicConstraints:
 
         else:
             nx, ny = current_object.shape
-            niter_out = 40
+            niter_out = iterations
             niter_in = 1
             Iop = pylops.Identity(nx * ny)
             xy_laplacian = pylops.Laplacian(
