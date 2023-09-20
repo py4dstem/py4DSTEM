@@ -1,6 +1,5 @@
 # Action to check the version of the package and upload it to PyPI
 # if the version is higher than the one on PyPI
-# Author: @quantumstud
 name: PyPI Upload
 
 on:
