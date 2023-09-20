@@ -26,6 +26,11 @@ jobs:
         with:
           files: |
             py4DSTEM/version.py
+      - name: Debug version file change checker
+        run: |
+          echo "Checking variable..."
+          echo $steps.changed-files-specific.outputs.any_changed
+          echo "Done"
       - name: Running if py4DSTEM/version.py file is not changed
         if: steps.changed-files-specific.outputs.any_changed == 'false'
         run: |
