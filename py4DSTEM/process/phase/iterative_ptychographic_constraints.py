@@ -197,7 +197,7 @@ class PtychographicConstraints:
             Denoising weight. The greater `weight`, the more denoising (at
             the expense of fidelity to `input`).
         iterations: float
-            Number of iterations to run in denoising algorithm. 
+            Number of iterations to run in denoising algorithm.
             `niter_out` in pylops
 
         Returns
