@@ -55,8 +55,8 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
         The electron energy of the wave functions in eV
     num_slices: int
         Number of slices to use in the forward model
-    tilt_angles_deg: Sequence[float]
-        List of tilt angles in degrees,
+    tilt_orientation_matrices: Sequence[np.ndarray]
+        List of orientation matrices for each tilt
     semiangle_cutoff: float, optional
         Semiangle cutoff for the initial probe guess in mrad
     semiangle_cutoff_pixels: float, optional
@@ -94,13 +94,18 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
     """
 
     # Class-specific Metadata
-    _class_specific_metadata = ("_num_slices", "_tilt_angles_deg")
+    _class_specific_metadata = ("_num_slices", "_tilt_orientation_matrices")
+    _swap_zxy_to_xyz = np.array([
+        [0,1,0],
+        [0,0,1],
+        [1,0,0]
+    ])
 
     def __init__(
         self,
         energy: float,
         num_slices: int,
-        tilt_angles_deg: Sequence[float],
+        tilt_orientation_matrices: Sequence[np.ndarray],
         datacube: Sequence[DataCube] = None,
         semiangle_cutoff: float = None,
         semiangle_cutoff_pixels: float = None,
@@ -122,22 +127,24 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
         if device == "cpu":
             self._xp = np
             self._asnumpy = np.asarray
-            from scipy.ndimage import gaussian_filter, rotate, zoom
+            from scipy.ndimage import gaussian_filter, rotate, zoom, affine_transform
 
             self._gaussian_filter = gaussian_filter
             self._zoom = zoom
             self._rotate = rotate
+            self._affine_transform = affine_transform
             from scipy.special import erf
 
             self._erf = erf
         elif device == "gpu":
             self._xp = cp
             self._asnumpy = cp.asnumpy
-            from cupyx.scipy.ndimage import gaussian_filter, rotate, zoom
+            from cupyx.scipy.ndimage import gaussian_filter, rotate, zoom, affine_transform
 
             self._gaussian_filter = gaussian_filter
             self._zoom = zoom
             self._rotate = rotate
+            self._affine_transform = affine_transform
             from cupyx.scipy.special import erf
 
             self._erf = erf
@@ -156,7 +163,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
         polar_parameters.update(kwargs)
         self._set_polar_parameters(polar_parameters)
 
-        num_tilts = len(tilt_angles_deg)
+        num_tilts = len(tilt_orientation_matrices)
         if initial_scan_positions is None:
             initial_scan_positions = [None] * num_tilts
 
@@ -185,7 +192,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
 
         # Class-specific Metadata
         self._num_slices = num_slices
-        self._tilt_angles_deg = tuple(tilt_angles_deg)
+        self._tilt_orientation_matrices = tuple(tilt_orientation_matrices)
         self._num_tilts = num_tilts
 
     def _precompute_propagator_arrays(
@@ -322,6 +329,30 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
 
         normalized_array = array / xp.asarray(voxels_in_slice)[:, None, None]
         return xp.repeat(normalized_array, voxels_per_slice, axis=0)[:output_z]
+
+    def _rotate_zxy_volume(
+        self,
+        volume_array,
+        rot_matrix,
+        ):
+        """
+        """
+        
+        xp = self._xp
+        affine_transform = self._affine_transform
+        swap_zxy_to_xyz = self._swap_zxy_to_xyz
+        
+        volume = volume_array.copy()
+        volume_shape = xp.asarray(volume.shape)
+        tf = xp.asarray(swap_zxy_to_xyz.T@rot_matrix.T@swap_zxy_to_xyz)
+        
+        in_center = (volume_shape - 1) / 2
+        out_center = tf @ in_center
+        offset = in_center - out_center
+        
+        volume = affine_transform(volume,tf,offset=offset,order=3)
+        
+        return volume
 
     def preprocess(
         self,
@@ -663,15 +694,15 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
         # overlaps
         if object_fov_mask is None:
             probe_overlap_3D = xp.zeros_like(self._object)
+            old_rot_matrix = np.eye(3) # identity
 
             for tilt_index in np.arange(self._num_tilts):
-                current_angle_deg = self._tilt_angles_deg[tilt_index]
-                probe_overlap_3D = self._rotate(
+                
+                rot_matrix = self._tilt_orientation_matrices[tilt_index]
+
+                probe_overlap_3D = self._rotate_zxy_volume(
                     probe_overlap_3D,
-                    current_angle_deg,
-                    axes=(0, 2),
-                    reshape=False,
-                    order=2,
+                    rot_matrix@old_rot_matrix.T,
                 )
 
                 self._positions_px = self._positions_px_all[
@@ -691,14 +722,12 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                 )
 
                 probe_overlap_3D += probe_overlap[None]
-
-                probe_overlap_3D = self._rotate(
-                    probe_overlap_3D,
-                    -current_angle_deg,
-                    axes=(0, 2),
-                    reshape=False,
-                    order=2,
-                )
+                old_rot_matrix = rot_matrix
+                
+            probe_overlap_3D = self._rotate_zxy_volume(
+                probe_overlap_3D,
+                old_rot_matrix.T,
+            )
 
             probe_overlap_3D = self._gaussian_filter(probe_overlap_3D, 1.0)
             self._object_fov_mask = asnumpy(
@@ -2018,17 +2047,17 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
             tilt_indices = np.arange(self._num_tilts)
             np.random.shuffle(tilt_indices)
 
+            old_rot_matrix = np.eye(3) # identity
+            
             for tilt_index in tilt_indices:
                 self._active_tilt_index = tilt_index
 
                 tilt_error = 0.0
 
-                self._object = self._rotate(
+                rot_matrix = self._tilt_orientation_matrices[self._active_tilt_index]
+                self._object = self._rotate_zxy_volume(
                     self._object,
-                    self._tilt_angles_deg[self._active_tilt_index],
-                    axes=(0, 2),
-                    reshape=False,
-                    order=3,
+                    rot_matrix @ old_rot_matrix.T,
                 )
 
                 object_sliced = self._project_sliced_object(
@@ -2132,24 +2161,15 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                 )
 
                 if collective_tilt_updates:
-                    collective_object += self._rotate(
+                    collective_object += self._rotate_zxy_volume(
                         object_update,
-                        -self._tilt_angles_deg[self._active_tilt_index],
-                        axes=(0, 2),
-                        reshape=False,
-                        order=3,
+                        rot_matrix.T
                     )
                 else:
                     self._object += object_update
-
-                self._object = self._rotate(
-                    self._object,
-                    -self._tilt_angles_deg[self._active_tilt_index],
-                    axes=(0, 2),
-                    reshape=False,
-                    order=3,
-                )
-
+                
+                old_rot_matrix = rot_matrix
+            
                 # Normalize Error
                 tilt_error /= (
                     self._mean_diffraction_intensity[self._active_tilt_index]
@@ -2204,6 +2224,11 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                         and self._object_fov_mask_inverse.sum() > 0
                         else None,
                     )
+
+            self._object = self._rotate_zxy_volume(
+                self._object,
+                old_rot_matrix.T
+                )
 
             # Normalize Error Over Tilts
             error /= self._num_tilts
