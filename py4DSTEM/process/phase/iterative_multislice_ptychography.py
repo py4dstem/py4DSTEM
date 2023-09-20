@@ -2254,7 +2254,7 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
                 and kz_regularization_gamma is not None,
                 kz_regularization_gamma=kz_regularization_gamma[a0]
                 if kz_regularization_gamma is not None
-                and type(kz_regularization_gamma) == np.ndarray
+                and isinstance(kz_regularization_gamma, np.ndarray)
                 else kz_regularization_gamma,
                 identical_slices=a0 < identical_slices_iter,
                 object_positivity=object_positivity,
@@ -3068,7 +3068,7 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
             0,
         ]
 
-        if plot_line_profile == False:
+        if not plot_line_profile:
             fig, ax = plt.subplots()
             im = ax.imshow(plot_im, cmap="magma", extent=extent)
             if aspect is not None:
