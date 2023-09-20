@@ -96,11 +96,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
 
     # Class-specific Metadata
     _class_specific_metadata = ("_num_slices", "_tilt_orientation_matrices")
-    _swap_zxy_to_xyz = np.array([
-        [0,1,0],
-        [0,0,1],
-        [1,0,0]
-    ])
+    _swap_zxy_to_xyz = np.array([[0, 1, 0], [0, 0, 1], [1, 0, 0]])
 
     def __init__(
         self,
@@ -140,7 +136,12 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
         elif device == "gpu":
             self._xp = cp
             self._asnumpy = cp.asnumpy
-            from cupyx.scipy.ndimage import gaussian_filter, rotate, zoom, affine_transform
+            from cupyx.scipy.ndimage import (
+                gaussian_filter,
+                rotate,
+                zoom,
+                affine_transform,
+            )
 
             self._gaussian_filter = gaussian_filter
             self._zoom = zoom
@@ -335,24 +336,23 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
         self,
         volume_array,
         rot_matrix,
-        ):
-        """
-        """
-        
+    ):
+        """ """
+
         xp = self._xp
         affine_transform = self._affine_transform
         swap_zxy_to_xyz = self._swap_zxy_to_xyz
-        
+
         volume = volume_array.copy()
         volume_shape = xp.asarray(volume.shape)
-        tf = xp.asarray(swap_zxy_to_xyz.T@rot_matrix.T@swap_zxy_to_xyz)
-        
+        tf = xp.asarray(swap_zxy_to_xyz.T @ rot_matrix.T @ swap_zxy_to_xyz)
+
         in_center = (volume_shape - 1) / 2
         out_center = tf @ in_center
         offset = in_center - out_center
-        
-        volume = affine_transform(volume,tf,offset=offset,order=3)
-        
+
+        volume = affine_transform(volume, tf, offset=offset, order=3)
+
         return volume
 
     def preprocess(
@@ -695,15 +695,14 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
         # overlaps
         if object_fov_mask is None:
             probe_overlap_3D = xp.zeros_like(self._object)
-            old_rot_matrix = np.eye(3) # identity
+            old_rot_matrix = np.eye(3)  # identity
 
             for tilt_index in np.arange(self._num_tilts):
-                
                 rot_matrix = self._tilt_orientation_matrices[tilt_index]
 
                 probe_overlap_3D = self._rotate_zxy_volume(
                     probe_overlap_3D,
-                    rot_matrix@old_rot_matrix.T,
+                    rot_matrix @ old_rot_matrix.T,
                 )
 
                 self._positions_px = self._positions_px_all[
@@ -724,7 +723,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
 
                 probe_overlap_3D += probe_overlap[None]
                 old_rot_matrix = rot_matrix
-                
+
             probe_overlap_3D = self._rotate_zxy_volume(
                 probe_overlap_3D,
                 old_rot_matrix.T,
@@ -2181,8 +2180,8 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
             tilt_indices = np.arange(self._num_tilts)
             np.random.shuffle(tilt_indices)
 
-            old_rot_matrix = np.eye(3) # identity
-            
+            old_rot_matrix = np.eye(3)  # identity
+
             for tilt_index in tilt_indices:
                 self._active_tilt_index = tilt_index
 
@@ -2296,14 +2295,13 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
 
                 if collective_tilt_updates:
                     collective_object += self._rotate_zxy_volume(
-                        object_update,
-                        rot_matrix.T
+                        object_update, rot_matrix.T
                     )
                 else:
                     self._object += object_update
-                
+
                 old_rot_matrix = rot_matrix
-            
+
                 # Normalize Error
                 tilt_error /= (
                     self._mean_diffraction_intensity[self._active_tilt_index]
@@ -2363,10 +2361,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                         tv_denoise_inner_iter=tv_denoise_inner_iter,
                     )
 
-            self._object = self._rotate_zxy_volume(
-                self._object,
-                old_rot_matrix.T
-                )
+            self._object = self._rotate_zxy_volume(self._object, old_rot_matrix.T)
 
             # Normalize Error Over Tilts
             error /= self._num_tilts
@@ -2374,7 +2369,11 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
             if collective_tilt_updates:
                 self._object += collective_object / self._num_tilts
 
-                (self._object, self._probe, _,) = self._constraints(
+                (
+                    self._object,
+                    self._probe,
+                    _,
+                ) = self._constraints(
                     self._object,
                     self._probe,
                     None,
