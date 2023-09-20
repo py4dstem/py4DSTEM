@@ -29,11 +29,10 @@ jobs:
       - name: Debug version file change checker
         run: |
           echo "Checking variable..."
-          x = steps.changed-files-specific.outputs.any_changed
-          echo $x
+          echo ${{ steps.changed-files-specific.outputs.any_changed }}
           echo "Done"
       - name: Running if py4DSTEM/version.py file is not changed
-        if: steps.changed-files-specific.outputs.any_changed != 'true'
+        if: ${{ steps.changed-files-specific.outputs.any_changed }} == 'false'
         run: |
           echo "Version file not changed, running script to change the version file."
           #git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
