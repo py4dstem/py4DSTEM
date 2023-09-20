@@ -124,7 +124,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
         if device == "cpu":
             self._xp = np
             self._asnumpy = np.asarray
-            from scipy.ndimage import gaussian_filter, rotate, zoom, affine_transform
+            from scipy.ndimage import affine_transform, gaussian_filter, rotate, zoom
 
             self._gaussian_filter = gaussian_filter
             self._zoom = zoom
@@ -137,10 +137,10 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
             self._xp = cp
             self._asnumpy = cp.asnumpy
             from cupyx.scipy.ndimage import (
+                affine_transform,
                 gaussian_filter,
                 rotate,
                 zoom,
-                affine_transform,
             )
 
             self._gaussian_filter = gaussian_filter

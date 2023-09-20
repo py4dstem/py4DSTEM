@@ -1,3 +1,5 @@
+import warnings
+
 import numpy as np
 import pylops
 from py4DSTEM.process.phase.utils import (
@@ -8,7 +10,6 @@ from py4DSTEM.process.phase.utils import (
     regularize_probe_amplitude,
 )
 from py4DSTEM.process.utils import get_CoM
-import warnings
 
 
 class PtychographicConstraints:

@@ -1620,7 +1620,7 @@ class ParallaxReconstruction(PhaseReconstruction):
         pad_x = self._object_padding_px[0] // 2 - remaining_padding
         pad_y = self._object_padding_px[1] // 2 - remaining_padding
 
-        if upsampled == True:
+        if upsampled:
             pad_x *= self._kde_upsample_factor
             pad_y *= self._kde_upsample_factor
 
