@@ -1,0 +1,45 @@
+name: Install Checker Dev
+on: 
+  push:
+    branches: [ "dev" ]
+  pull_request:
+    branches: [ "dev" ]
+jobs:
+
+    test-python-os-versions:
+        name: Check Python ${{ matrix.python-version }} on ${{ matrix.runs-on }} on ${{ matrix.architecture }}
+        continue-on-error: ${{ matrix.allow_failure }}
+        runs-on: ${{ matrix.runs-on }}
+        strategy:
+            fail-fast: false
+            matrix:
+                allow_failure: [false]
+                runs-on: [ubuntu-latest]
+                architecture: [x86_64]
+                python-version: ["3.9", "3.10", "3.11",]
+                include:
+                    - python-version: "3.12.0-beta.4"
+                      runs-on: ubuntu-latest
+                      allow_failure: true
+                # Currently no public runners available for this but this or arm64 should work next time
+                # include:
+                #     - python-version: "3.10"
+                #       architecture: [aarch64]
+                #       runs-on: macos-latest
+                #       allow_failure: true
+        steps:
+            - uses: actions/checkout@v3
+            
+            - name: Setup Python ${{ matrix.python-version }}
+              uses: actions/setup-python@v4
+              with:
+                python-version: ${{ matrix.python-version }}
+            - name: Install repo
+              run: |
+                python -m pip install .
+            - name: Check installation
+              run: |
+                python -c "import py4DSTEM; print(py4DSTEM.__version__)"
+            # - name: Check machine arch
+            #   run: |
+            #     python -c "import platform; print(platform.machine())"
