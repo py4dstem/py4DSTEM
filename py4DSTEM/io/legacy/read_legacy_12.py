@@ -10,11 +10,8 @@ from py4DSTEM.io.legacy.legacy12 import (
     read_v0_9,
     read_v0_7,
     read_v0_6,
-    read_v0_5
+    read_v0_5,
 )
-
-
-
 
 
 def read_legacy12(filepath, **kwargs):
@@ -55,18 +52,19 @@ def read_legacy12(filepath, **kwargs):
             * Otherwise, a single DataObject or list of DataObjects are returned, based
               on the value of the argument data_id.
     """
-    assert(exists(filepath)), "Error: specified filepath does not exist"
-    assert(is_py4DSTEM_file(filepath)), "Error: {} isn't recognized as a py4DSTEM file.".format(filepath)
-
+    assert exists(filepath), "Error: specified filepath does not exist"
+    assert is_py4DSTEM_file(
+        filepath
+    ), "Error: {} isn't recognized as a py4DSTEM file.".format(filepath)
 
     # For HDF5 files containing multiple valid EMD type 2 files (i.e. py4DSTEM files),
     # disambiguate desired data
     tgs = get_py4DSTEM_topgroups(filepath)
-    if 'topgroup' in kwargs.keys():
-        tg = kwargs['topgroup']
-        #assert(tg in tgs), "Error: specified topgroup, {}, not found.".format(tg)
+    if "topgroup" in kwargs.keys():
+        tg = kwargs["topgroup"]
+        # assert(tg in tgs), "Error: specified topgroup, {}, not found.".format(tg)
     else:
-        if len(tgs)==1:
+        if len(tgs) == 1:
             tg = tgs[0]
         else:
             print("Multiple topgroups were found -- please specify one:")
@@ -75,17 +73,21 @@ def read_legacy12(filepath, **kwargs):
                 print(tg)
             return
 
-
     # Get py4DSTEM version and call the appropriate read function
     version = get_py4DSTEM_version(filepath, tg)
-    if version_is_geq(version,(0,12,0)): return read_v0_12(filepath, **kwargs)
-    elif version_is_geq(version,(0,9,0)): return read_v0_9(filepath, **kwargs)
-    elif version_is_geq(version,(0,7,0)): return read_v0_7(filepath, **kwargs)
-    elif version_is_geq(version,(0,6,0)): return read_v0_6(filepath, **kwargs)
-    elif version_is_geq(version,(0,5,0)): return read_v0_5(filepath, **kwargs)
+    if version_is_geq(version, (0, 12, 0)):
+        return read_v0_12(filepath, **kwargs)
+    elif version_is_geq(version, (0, 9, 0)):
+        return read_v0_9(filepath, **kwargs)
+    elif version_is_geq(version, (0, 7, 0)):
+        return read_v0_7(filepath, **kwargs)
+    elif version_is_geq(version, (0, 6, 0)):
+        return read_v0_6(filepath, **kwargs)
+    elif version_is_geq(version, (0, 5, 0)):
+        return read_v0_5(filepath, **kwargs)
     else:
-        raise Exception('Support for legacy v{}.{}.{} files is no longer available.'.format(version[0],version[1],version[2]))
-
-
-
-
+        raise Exception(
+            "Support for legacy v{}.{}.{} files is no longer available.".format(
+                version[0], version[1], version[2]
+            )
+        )

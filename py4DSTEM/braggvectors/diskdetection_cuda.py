@@ -129,7 +129,7 @@ def find_Bragg_disks_CUDA(
         # compute the batch size based on available VRAM:
         max_num_bytes = cp.cuda.Device().mem_info[0]
         # use a fudge factor to leave room for the fourier transformed data
-        # I have set this at 10, which results in underutilization of 
+        # I have set this at 10, which results in underutilization of
         # VRAM, because this yielded better performance in my testing
         batch_size = max_num_bytes // (bytes_per_pattern * 10)
         num_batches = datacube.R_N // batch_size + 1
@@ -202,10 +202,9 @@ def find_Bragg_disks_CUDA(
         del batched_subcube, batched_crosscorr, subFFT, cc, ccc
         cp.get_default_memory_pool().free_all_blocks()
 
-
     else:
         # Loop over all diffraction patterns
-        for (Rx, Ry) in tqdmnd(
+        for Rx, Ry in tqdmnd(
             datacube.R_Nx,
             datacube.R_Ny,
             desc="Finding Bragg Disks",
@@ -449,7 +448,9 @@ def get_maxima_2D(
     sizex = ar.shape[0]
     sizey = ar.shape[1]
     N = sizex * sizey
-    get_maximal_points(blocks, threads, (ar, maxima_bool, minAbsoluteIntensity, sizex, sizey, N))
+    get_maximal_points(
+        blocks, threads, (ar, maxima_bool, minAbsoluteIntensity, sizex, sizey, N)
+    )
 
     # Remove edges
     if edgeBoundary > 0:
@@ -485,7 +486,7 @@ def get_maxima_2D(
                     tooClose = (
                         (maxima["x"] - maxima["x"][i]) ** 2
                         + (maxima["y"] - maxima["y"][i]) ** 2
-                    ) < minSpacing ** 2
+                    ) < minSpacing**2
                     tooClose[: i + 1] = False
                     deletemask[tooClose] = True
             maxima = np.delete(maxima, np.nonzero(deletemask)[0])
@@ -520,8 +521,8 @@ def get_maxima_2D(
                 Iy1 = ar[int(maxima["x"][i]), int(maxima["y"][i]) + 1]
                 deltax = (Ix1 - Ix1_) / (4 * Ix0 - 2 * Ix1 - 2 * Ix1_)
                 deltay = (Iy1 - Iy1_) / (4 * Iy0 - 2 * Iy1 - 2 * Iy1_)
-                maxima["x"][i] += deltax if np.abs(deltax) <= 1. else 0.
-                maxima["y"][i] += deltay if np.abs(deltay) <= 1. else 0.
+                maxima["x"][i] += deltax if np.abs(deltax) <= 1.0 else 0.0
+                maxima["y"][i] += deltay if np.abs(deltay) <= 1.0 else 0.0
                 maxima["intensity"][i] = linear_interpolation_2D(
                     ar, maxima["x"][i], maxima["y"][i]
                 )
@@ -533,11 +534,11 @@ def get_maxima_2D(
             # we actually have to lose some precision and go down to half-pixel
             # accuracy. this could also be done by a single upsampling at factor 2
             # instead of get_maxima_2D.
-            xyShift = cp.array(np.round(xyShift * 2.) / 2)
+            xyShift = cp.array(np.round(xyShift * 2.0) / 2)
 
             subShift = upsampled_correlation(ar_FT, upsample_factor, xyShift).get()
-            maxima["x"] = subShift[:,0]
-            maxima["y"] = subShift[:,1]
+            maxima["x"] = subShift[:, 0]
+            maxima["y"] = subShift[:, 1]
 
     return maxima["x"], maxima["y"], maxima["intensity"]
 
@@ -596,9 +597,12 @@ def upsampled_correlation(imageCorr, upsampleFactor, xyShift):
 
     imageCorrUpsample = dftUpsample(imageCorr, upsampleFactor, upsampleCenter).get()
 
-    xSubShift, ySubShift = np.unravel_index(imageCorrUpsample.reshape(imageCorrUpsample.shape[0],-1).argmax(axis=1), imageCorrUpsample.shape[1:3])
+    xSubShift, ySubShift = np.unravel_index(
+        imageCorrUpsample.reshape(imageCorrUpsample.shape[0], -1).argmax(axis=1),
+        imageCorrUpsample.shape[1:3],
+    )
 
-    # add a subpixel shift via parabolic fitting, serially for each peak 
+    # add a subpixel shift via parabolic fitting, serially for each peak
     for idx in range(xSubShift.shape[0]):
         try:
             icc = np.real(
@@ -608,15 +612,23 @@ def upsampled_correlation(imageCorr, upsampleFactor, xyShift):
                     ySubShift[idx] - 1 : ySubShift[idx] + 2,
                 ]
             )
-            dx = (icc[2, 1] - icc[0, 1]) / (4 * icc[1, 1] - 2 * icc[2, 1] - 2 * icc[0, 1])
-            dy = (icc[1, 2] - icc[1, 0]) / (4 * icc[1, 1] - 2 * icc[1, 2] - 2 * icc[1, 0])
+            dx = (icc[2, 1] - icc[0, 1]) / (
+                4 * icc[1, 1] - 2 * icc[2, 1] - 2 * icc[0, 1]
+            )
+            dy = (icc[1, 2] - icc[1, 0]) / (
+                4 * icc[1, 1] - 2 * icc[1, 2] - 2 * icc[1, 0]
+            )
         except:
             dx, dy = (
                 0,
                 0,
             )  # this is the case when the peak is near the edge and one of the above values does not exist
 
-        xyShift[idx] = xyShift[idx] + (cp.array([xSubShift[idx] + dx, ySubShift[idx] + dy]) - globalShift) / upsampleFactor
+        xyShift[idx] = (
+            xyShift[idx]
+            + (cp.array([xSubShift[idx] + dx, ySubShift[idx] + dy]) - globalShift)
+            / upsampleFactor
+        )
 
     return xyShift
 
@@ -654,23 +666,36 @@ def dftUpsample(imageCorr, upsampleFactor, xyShift):
     pixelRadius = 1.5
     kernel_size = int(np.ceil(pixelRadius * upsampleFactor))
 
-    colKern = cp.zeros((N_pts, imageSize[1], kernel_size),dtype=cp.complex64) # N_pts * image_size[1] * kernel_size
-    rowKern = cp.zeros((N_pts, kernel_size, imageSize[0]),dtype=cp.complex64) # N_pts * kernel_size * image_size[0]
+    colKern = cp.zeros(
+        (N_pts, imageSize[1], kernel_size), dtype=cp.complex64
+    )  # N_pts * image_size[1] * kernel_size
+    rowKern = cp.zeros(
+        (N_pts, kernel_size, imageSize[0]), dtype=cp.complex64
+    )  # N_pts * kernel_size * image_size[0]
 
     # Fill in the DFT arrays using the CUDA kernels
     multicorr_col_kernel = kernels["multicorr_col_kernel"]
-    blocks = ((np.prod(colKern.shape) // multicorr_col_kernel.max_threads_per_block + 1),)
+    blocks = (
+        (np.prod(colKern.shape) // multicorr_col_kernel.max_threads_per_block + 1),
+    )
     threads = (multicorr_col_kernel.max_threads_per_block,)
-    multicorr_col_kernel(blocks,threads,(colKern, xyShift, N_pts, *imageSize, upsampleFactor))
+    multicorr_col_kernel(
+        blocks, threads, (colKern, xyShift, N_pts, *imageSize, upsampleFactor)
+    )
 
     multicorr_row_kernel = kernels["multicorr_row_kernel"]
-    blocks = ((np.prod(rowKern.shape) // multicorr_row_kernel.max_threads_per_block + 1),)
+    blocks = (
+        (np.prod(rowKern.shape) // multicorr_row_kernel.max_threads_per_block + 1),
+    )
     threads = (multicorr_row_kernel.max_threads_per_block,)
-    multicorr_row_kernel(blocks,threads,(rowKern, xyShift, N_pts, *imageSize, upsampleFactor))
+    multicorr_row_kernel(
+        blocks, threads, (rowKern, xyShift, N_pts, *imageSize, upsampleFactor)
+    )
 
     # Apply the DFT arrays to the correlation image
     imageUpsample = cp.real(rowKern @ imageCorr @ colKern)
     return imageUpsample
+
 
 @numba.jit(nopython=True)
 def linear_interpolation_2D(ar, x, y):
