@@ -484,9 +484,14 @@ class PhaseReconstruction(Custom):
             )
 
         if com_shifts is None:
+            com_measured_x_np = asnumpy(com_measured_x)
+            com_measured_y_np = asnumpy(com_measured_y)
+            finite_mask = np.isfinite(com_measured_x_np)
+
             com_shifts = fit_origin(
-                (asnumpy(com_measured_x), asnumpy(com_measured_y)),
+                (com_measured_x_np, com_measured_y_np),
                 fitfunction=fit_function,
+                mask=finite_mask,
             )
 
         # Fit function to center of mass
@@ -494,12 +499,12 @@ class PhaseReconstruction(Custom):
         com_fitted_y = xp.asarray(com_shifts[1], dtype=xp.float32)
 
         # fix CoM units
-        com_normalized_x = (com_measured_x - com_fitted_x) * self._reciprocal_sampling[
-            0
-        ]
-        com_normalized_y = (com_measured_y - com_fitted_y) * self._reciprocal_sampling[
-            1
-        ]
+        com_normalized_x = (
+            xp.nan_to_num(com_measured_x - com_fitted_x) * self._reciprocal_sampling[0]
+        )
+        com_normalized_y = (
+            xp.nan_to_num(com_measured_y - com_fitted_y) * self._reciprocal_sampling[1]
+        )
 
         return (
             com_measured_x,
