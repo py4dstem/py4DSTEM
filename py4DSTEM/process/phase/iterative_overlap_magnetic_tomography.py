@@ -2326,12 +2326,13 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
             self.error_iterations = []
             self._probe = self._probe_initial.copy()
             self._positions_px_all = self._positions_px_initial_all.copy()
+            if hasattr(self, "_tf"):
+                del self._tf
 
             if use_projection_scheme:
                 self._exit_waves = [None] * self._num_tilts
             else:
                 self._exit_waves = None
-
         elif reset is None:
             if hasattr(self, "error"):
                 warnings.warn(
