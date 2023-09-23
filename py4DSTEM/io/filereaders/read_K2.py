@@ -4,12 +4,13 @@
 
 from collections.abc import Sequence
 import numpy as np
+
 try:
     import numba as nb
 except ImportError:
     pass
 from emdfile import tqdmnd
-from py4DSTEM.classes import DataCube
+from py4DSTEM.datacube import DataCube
 
 
 def read_gatan_K2_bin(fp, mem="MEMMAP", binfactor=1, metadata=False, **kwargs):
@@ -44,8 +45,12 @@ def read_gatan_K2_bin(fp, mem="MEMMAP", binfactor=1, metadata=False, **kwargs):
         return None
 
     block_sync = kwargs.get("K2_sync_block_IDs", True)
-    NR = kwargs.get("K2_hidden_stripe_noise_reduction",True)
-    return DataCube(data=K2DataArray(fp,sync_block_IDs=block_sync, hidden_stripe_noise_reduction=NR))
+    NR = kwargs.get("K2_hidden_stripe_noise_reduction", True)
+    return DataCube(
+        data=K2DataArray(
+            fp, sync_block_IDs=block_sync, hidden_stripe_noise_reduction=NR
+        )
+    )
 
 
 class K2DataArray(Sequence):
@@ -78,7 +83,9 @@ class K2DataArray(Sequence):
         into memory. To reduce RAM pressure, only call small slices or loop over each diffraction pattern.
     """
 
-    def __init__(self, filepath, sync_block_IDs = True, hidden_stripe_noise_reduction=True):
+    def __init__(
+        self, filepath, sync_block_IDs=True, hidden_stripe_noise_reduction=True
+    ):
         from ncempy.io import dm
         import os
         import glob
@@ -133,7 +140,10 @@ class K2DataArray(Sequence):
                 ("pad1", np.void, 5),
                 ("shutter", ">u1"),
                 ("pad2", np.void, 6),
-                ("block", ">u4",),
+                (
+                    "block",
+                    ">u4",
+                ),
                 ("pad4", np.void, 4),
                 ("frame", ">u4"),
                 ("coords", ">u2", (4,)),
@@ -225,7 +235,7 @@ class K2DataArray(Sequence):
         # handle average DP
         if axis == (0, 1):
             avgDP = np.zeros((self.shape[2], self.shape[3]))
-            for (Ry, Rx) in tqdmnd(self.shape[1], self.shape[0]):
+            for Ry, Rx in tqdmnd(self.shape[1], self.shape[0]):
                 avgDP += self[Rx, Ry, :, :]
 
             return avgDP / (self.shape[0] * self.shape[1])
@@ -233,7 +243,7 @@ class K2DataArray(Sequence):
         # handle average image
         if axis == (2, 3):
             avgImg = np.zeros((self.shape[0], self.shape[1]))
-            for (Ry, Rx) in tqdmnd(self.shape[1], self.shape[0]):
+            for Ry, Rx in tqdmnd(self.shape[1], self.shape[0]):
                 avgImg[Rx, Ry] = np.mean(self[Rx, Ry, :, :])
             return avgImg
 
@@ -243,7 +253,7 @@ class K2DataArray(Sequence):
         # handle average DP
         if axis == (0, 1):
             sumDP = np.zeros((self.shape[2], self.shape[3]))
-            for (Ry, Rx) in tqdmnd(self.shape[1], self.shape[0]):
+            for Ry, Rx in tqdmnd(self.shape[1], self.shape[0]):
                 sumDP += self[Rx, Ry, :, :]
 
             return sumDP
@@ -251,7 +261,7 @@ class K2DataArray(Sequence):
         # handle average image
         if axis == (2, 3):
             sumImg = np.zeros((self.shape[0], self.shape[1]))
-            for (Ry, Rx) in tqdmnd(self.shape[1], self.shape[0]):
+            for Ry, Rx in tqdmnd(self.shape[1], self.shape[0]):
                 sumImg[Rx, Ry] = np.sum(self[Rx, Ry, :, :])
             return sumImg
 
@@ -261,7 +271,7 @@ class K2DataArray(Sequence):
         # handle average DP
         if axis == (0, 1):
             maxDP = np.zeros((self.shape[2], self.shape[3]))
-            for (Ry, Rx) in tqdmnd(self.shape[1], self.shape[0]):
+            for Ry, Rx in tqdmnd(self.shape[1], self.shape[0]):
                 maxDP = np.maximum(maxDP, self[Rx, Ry, :, :])
 
             return maxDP
@@ -269,7 +279,7 @@ class K2DataArray(Sequence):
         # handle average image
         if axis == (2, 3):
             maxImg = np.zeros((self.shape[0], self.shape[1]))
-            for (Ry, Rx) in tqdmnd(self.shape[1], self.shape[0]):
+            for Ry, Rx in tqdmnd(self.shape[1], self.shape[0]):
                 maxImg[Rx, Ry] = np.max(self[Rx, Ry, :, :])
             return maxImg
 
@@ -281,13 +291,15 @@ class K2DataArray(Sequence):
 
             # Synchronize to the magic sync word
             # First, open the file in binary mode and read ~1 MB
-            with open(binName, 'rb') as f:
+            with open(binName, "rb") as f:
                 s = f.read(1_000_000)
 
             # Scan the chunk and find everywhere the sync word appears
-            sync = [s.find(b'\xff\xff\x00\x55'),]
+            sync = [
+                s.find(b"\xff\xff\x00\x55"),
+            ]
             while sync[-1] >= 0:
-                sync.append(s.find(b'\xff\xff\x00\x55',sync[-1]+1))
+                sync.append(s.find(b"\xff\xff\x00\x55", sync[-1] + 1))
 
             # Since the sync word can conceivably occur within the data region,
             # check that there is another sync word 22360 bytes away
@@ -296,7 +308,9 @@ class K2DataArray(Sequence):
                 sync_idx += 1
 
             if sync_idx > 0:
-                print(f"Beginning file {i} at offset {sync[sync_idx]} due to incomplete data block!")
+                print(
+                    f"Beginning file {i} at offset {sync[sync_idx]} due to incomplete data block!"
+                )
 
             # Start the memmap at the offset of the sync byte
             self._bin_files[i] = np.memmap(
@@ -505,7 +519,9 @@ class K2DataArray(Sequence):
 
 # ======= UTILITIES OUTSIDE THE CLASS ======#
 import sys
-if 'numba' in sys.modules:
+
+if "numba" in sys.modules:
+
     @nb.njit(nb.int16[::1](nb.uint8[::1]), fastmath=False, parallel=False)
     def _convert_uint12(data_chunk):
         """
@@ -532,7 +548,9 @@ if 'numba' in sys.modules:
 
         DP = out.astype(np.int16)
         return DP
+
 else:
+
     def _convert_uint12(data_chunk):
         """
         data_chunk is a contigous 1D array of uint8 data)
@@ -558,6 +576,3 @@ else:
 
         DP = out.astype(np.int16)
         return DP
-
-
-

@@ -5,17 +5,11 @@ from pathlib import Path
 from ncempy.io import dm
 from emdfile import tqdmnd, Array
 
-from py4DSTEM.classes import DataCube
+from py4DSTEM.datacube import DataCube
 from py4DSTEM.preprocess.utils import bin2D
 
 
-def read_dm(
-    filepath,
-    name="dm_dataset",
-    mem="RAM",
-    binfactor=1,
-    **kwargs
-    ):
+def read_dm(filepath, name="dm_dataset", mem="RAM", binfactor=1, **kwargs):
     """
     Read a digital micrograph 4D-STEM file.
 
@@ -30,7 +24,7 @@ def read_dm(
             Metadata instance.
         kwargs:
             "dtype": a numpy dtype specifier to use for data binned on load,
-                defaults to np.float32
+                defaults to the data's current dtype
 
     Returns:
        DataCube if a 4D dataset is found, else an ND Array
@@ -38,7 +32,6 @@ def read_dm(
 
     # open the file
     with dm.fileDM(filepath, on_memory=False) as dmFile:
-
         # loop through datasets looking for one with more than 2D
         # This is needed because:
         #   NCEM TitanX files store 4D data in a 3D array
@@ -96,7 +89,7 @@ def read_dm(
                 elif Q_pixel_units == "1/nm":
                     Q_pixel_units = "A^-1"
                     Q_pixel_size /= 10
-                    
+
                 pixel_size_found = True
             except Exception as err:
                 pass
@@ -108,10 +101,12 @@ def read_dm(
             if binfactor == 1:
                 _data = dmFile.getDataset(dataset_index)["data"]
             else:
-                # get the dtype for the binned data
-                dtype = kwargs.get("dtype", np.float32)
-
+                # get a memory map
                 _mmap = dmFile.getMemmap(dataset_index)
+
+                # get the dtype for the binned data
+                dtype = kwargs.get("dtype", _mmap[0, 0].dtype)
+
                 if titan_shape is not None:
                     # NCEM TitanX tags were found
                     _mmap = np.reshape(_mmap, titan_shape + _mmap.shape[-2:])
@@ -120,7 +115,7 @@ def read_dm(
                     _mmap.shape[2] // binfactor,
                     _mmap.shape[3] // binfactor,
                 )
-                _data = np.zeros(new_shape)
+                _data = np.zeros(new_shape, dtype=dtype)
 
                 for rx, ry in tqdmnd(*_data.shape[:2]):
                     _data[rx, ry] = bin2D(_mmap[rx, ry], binfactor, dtype=dtype)

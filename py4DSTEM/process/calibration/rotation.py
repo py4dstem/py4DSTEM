@@ -4,7 +4,6 @@ import numpy as np
 from typing import Optional
 
 
-
 def get_Qvector_from_Rvector(vx, vy, QR_rotation):
     """
     For some vector (vx,vy) in real space, and some rotation QR between real and

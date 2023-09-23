@@ -2,20 +2,22 @@
 
 from py4DSTEM.io.legacy.legacy13.v13_emd_classes.pointlist import PointList
 
-from typing import Optional,Union
+from typing import Optional, Union
 import numpy as np
 import h5py
+
 
 class QPoints(PointList):
     """
     Stores a set of diffraction space points,
     with fields 'qx', 'qy' and 'intensity'
     """
+
     def __init__(
         self,
         data: np.ndarray,
-        name: Optional[str] = 'qpoints',
-        ):
+        name: Optional[str] = "qpoints",
+    ):
         """
         Accepts:
             data (structured numpy ndarray): should have three fields, which
@@ -28,25 +30,24 @@ class QPoints(PointList):
         # initialize as a PointList
         PointList.__init__(
             self,
-            data = data,
-            name = name,
+            data=data,
+            name=name,
         )
 
         # rename fields
-        self.fields = 'qx','qy','intensity'
-
+        self.fields = "qx", "qy", "intensity"
 
     @property
     def qx(self):
-        return self.data['qx']
+        return self.data["qx"]
+
     @property
     def qy(self):
-        return self.data['qy']
+        return self.data["qy"]
+
     @property
     def intensity(self):
-        return self.data['intensity']
-
-
+        return self.data["intensity"]
 
     # HDF5 read/write
 
@@ -55,15 +56,8 @@ class QPoints(PointList):
     # read
     def from_h5(group):
         from py4DSTEM.io.legacy.legacy13.v13_py4dstem_classes.io import QPoints_from_h5
+
         return QPoints_from_h5(group)
 
 
-
-
-
-
 ############ END OF CLASS ###########
-
-
-
-

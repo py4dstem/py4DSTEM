@@ -1,56 +1,43 @@
+import functools
 from typing import Mapping, Tuple, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
+from scipy.optimize import curve_fit
 
 try:
     import cupy as cp
+    from cupyx.scipy.fft import rfft
 except ImportError:
     cp = None
+    from scipy.fft import dstn, idstn
 
+from py4DSTEM.process.utils import get_CoM
+from py4DSTEM.process.utils.cross_correlate import align_and_shift_images
 from py4DSTEM.process.utils.utils import electron_wavelength_angstrom
-from scipy.ndimage import gaussian_filter
+from scipy.ndimage import gaussian_filter, uniform_filter1d
+from skimage.restoration import unwrap_phase
+
+# fmt: off
 
 #: Symbols for the polar representation of all optical aberrations up to the fifth order.
 polar_symbols = (
-    "C10",
-    "C12",
-    "phi12",
-    "C21",
-    "phi21",
-    "C23",
-    "phi23",
-    "C30",
-    "C32",
-    "phi32",
-    "C34",
-    "phi34",
-    "C41",
-    "phi41",
-    "C43",
-    "phi43",
-    "C45",
-    "phi45",
-    "C50",
-    "C52",
-    "phi52",
-    "C54",
-    "phi54",
-    "C56",
-    "phi56",
+        "C10", "C12", "phi12",
+        "C21", "phi21", "C23", "phi23",
+        "C30", "C32", "phi32", "C34", "phi34",
+        "C41", "phi41", "C43", "phi43", "C45", "phi45",
+        "C50", "C52", "phi52", "C54", "phi54", "C56", "phi56",
 )
 
 #: Aliases for the most commonly used optical aberrations.
 polar_aliases = {
-    "defocus": "C10",
-    "astigmatism": "C12",
-    "astigmatism_angle": "phi12",
-    "coma": "C21",
-    "coma_angle": "phi21",
-    "Cs": "C30",
-    "C5": "C50",
+        "defocus": "C10", "astigmatism": "C12", "astigmatism_angle": "phi12",
+        "coma": "C21", "coma_angle": "phi21",
+        "Cs": "C30",
+        "C5": "C50",
 }
 
+# fmt: on
 
 ### Probe functions
 
@@ -77,6 +64,8 @@ class ComplexProbe:
         Device to perform calculations on. Must be either 'cpu' or 'gpu'
     rolloff: float, optional
         Tapers the cutoff edge over the given angular range [mrad].
+    vacuum_probe_intensity: np.ndarray, optional
+        Squared of corner-centered aperture amplitude to use, instead of semiangle_cutoff + rolloff
     focal_spread: float, optional
         The 1/e width of the focal spread due to chromatic aberration and lens current instability [Å].
     angular_spread: float, optional
@@ -108,9 +97,6 @@ class ComplexProbe:
         parameters: Mapping[str, float] = None,
         **kwargs,
     ):
-
-        # Should probably be abstracted away in a device.py similar to:
-        # https://github.com/abTEM/abTEM/blob/master/abtem/device.py
         if device == "cpu":
             self._xp = np
             self._asnumpy = np.asarray
@@ -171,7 +157,6 @@ class ComplexProbe:
     def evaluate_aperture(
         self, alpha: Union[float, np.ndarray], phi: Union[float, np.ndarray] = None
     ) -> Union[float, np.ndarray]:
-
         xp = self._xp
         semiangle_cutoff = self._semiangle_cutoff / 1000
 
@@ -180,7 +165,7 @@ class ComplexProbe:
                 self._vacuum_probe_intensity, dtype=xp.float32
             )
             vacuum_probe_amplitude = xp.sqrt(xp.maximum(vacuum_probe_intensity, 0))
-            return xp.fft.ifftshift(vacuum_probe_amplitude)
+            return vacuum_probe_amplitude
 
         if self._semiangle_cutoff == xp.inf:
             return xp.ones_like(alpha)
@@ -420,8 +405,8 @@ class ComplexProbe:
     def get_spatial_frequencies(self):
         xp = self._xp
         kx, ky = spatial_frequencies(self._gpts, self._sampling)
-        kx = xp.asarray(kx)
-        ky = xp.asarray(ky)
+        kx = xp.asarray(kx, dtype=xp.float32)
+        ky = xp.asarray(ky, dtype=xp.float32)
         return kx, ky
 
     def polar_coordinates(self, x, y):
@@ -432,16 +417,15 @@ class ComplexProbe:
         return alpha, phi
 
     def build(self):
-        """Builds complex probe in the center of the region of interest."""
+        """Builds corner-centered complex probe in the center of the region of interest."""
         xp = self._xp
-        array = xp.fft.fftshift(xp.fft.ifft2(self._evaluate_ctf()))
-        # if self._vacuum_probe_intensity is not None:
+        array = xp.fft.ifft2(self._evaluate_ctf())
         array = array / xp.sqrt((xp.abs(array) ** 2).sum())
         self._array = array
         return self
 
     def visualize(self, **kwargs):
-        """Plots the probe amplitude."""
+        """Plots the probe intensity."""
         xp = self._xp
         asnumpy = self._asnumpy
 
@@ -449,7 +433,7 @@ class ComplexProbe:
         kwargs.pop("cmap", None)
 
         plt.imshow(
-            asnumpy(xp.abs(self._array) ** 2),
+            asnumpy(xp.abs(xp.fft.ifftshift(self._array)) ** 2),
             cmap=cmap,
             **kwargs,
         )
@@ -475,20 +459,6 @@ def spatial_frequencies(gpts: Tuple[int, int], sampling: Tuple[float, float]):
     return tuple(
         np.fft.fftfreq(n, d).astype(np.float32) for n, d in zip(gpts, sampling)
     )
-
-
-def projection(u: np.ndarray, v: np.ndarray, xp):
-    """Projection of vector u onto vector v."""
-    return u * xp.vdot(u, v) / xp.vdot(u, u)
-
-
-def orthogonalize(V: np.ndarray, xp):
-    """Non-normalized QR decomposition using repeated projections."""
-    U = V.copy()
-    for i in range(1, V.shape[0]):
-        for j in range(i):
-            U[i, :] -= projection(U[j, :], V[i, :], xp)
-    return U
 
 
 ### FFT-shift functions
@@ -522,9 +492,9 @@ def fourier_translation_operator(
     kx, ky = spatial_frequencies(shape, (1.0, 1.0))
     kx = kx.reshape((1, -1, 1))
     ky = ky.reshape((1, 1, -1))
-    kx = xp.asarray(kx)
-    ky = xp.asarray(ky)
-    positions = xp.asarray(positions)
+    kx = xp.asarray(kx, dtype=xp.float32)
+    ky = xp.asarray(ky, dtype=xp.float32)
+    positions = xp.asarray(positions, dtype=xp.float32)
     x = positions[:, 0].reshape((-1,) + (1, 1))
     y = positions[:, 1].reshape((-1,) + (1, 1))
 
@@ -621,7 +591,6 @@ def generate_batches(
 
 
 #### Affine transformation functions
-# Adapted from https://github.com/AdvancedPhotonSource/tike/blob/f9004a32fda5e49fa63b987e9ffe3c8447d59950/src/tike/ptycho/position.py
 
 
 class AffineTransform:
@@ -640,13 +609,15 @@ class AffineTransform:
     scale1: float
         y-scaling
     shear1: float
-        \gamma shear
+        \\gamma shear
     angle: float
-        \theta rotation angle
+        \\theta rotation angle
     t0: float
         x-translation
     t1: float
         y-translation
+    dilation: float
+        Isotropic expansion (multiplies scale0 and scale1)
     """
 
     def __init__(
@@ -657,10 +628,10 @@ class AffineTransform:
         angle: float = 0.0,
         t0: float = 0.0,
         t1: float = 0.0,
+        dilation: float = 1.0,
     ):
-
-        self.scale0 = scale0
-        self.scale1 = scale1
+        self.scale0 = scale0 * dilation
+        self.scale1 = scale1 * dilation
         self.shear1 = shear1
         self.angle = angle
         self.t0 = t0
@@ -668,7 +639,8 @@ class AffineTransform:
 
     @classmethod
     def fromarray(self, T: np.ndarray):
-        """Return an Affine Transfrom from a 2x2 matrix.
+        """
+        Return an Affine Transfrom from a 2x2 matrix.
         Use decomposition method from Graphics Gems 2 Section 7.1
         """
         R = T[:2, :2].copy()
@@ -700,7 +672,8 @@ class AffineTransform:
         )
 
     def asarray(self):
-        """Return an 2x2 matrix of scale, shear, rotation.
+        """
+        Return an 2x2 matrix of scale, shear, rotation.
         This matrix is scale @ shear @ rotate from left to right.
         """
         cosx = np.cos(self.angle)
@@ -730,9 +703,10 @@ class AffineTransform:
         )
 
     def asarray3(self):
-        """Return an 3x2 matrix of scale, shear, rotation, translation.
-        This matrix is scale @ shear @ rotate from left to right. Expects a
-        homogenous (z) coordinate of 1.
+        """
+        Return an 3x2 matrix of scale, shear, rotation, translation.
+        This matrix is scale @ shear @ rotate from left to right.
+        Expects a homogenous (z) coordinate of 1.
         """
         T = np.empty((3, 2), dtype="float32")
         T[2] = (self.t0, self.t1)
@@ -751,9 +725,9 @@ class AffineTransform:
         )
 
     def __call__(self, x: np.ndarray, origin=(0, 0), xp=np):
-        origin = xp.asarray(origin)
+        origin = xp.asarray(origin, dtype=xp.float32)
         tf_matrix = self.asarray()
-        tf_matrix = xp.asarray(tf_matrix)
+        tf_matrix = xp.asarray(tf_matrix, dtype=xp.float32)
         tf_translation = xp.array((self.t0, self.t1)) + origin
         return ((x - origin) @ tf_matrix) + tf_translation
 
@@ -775,8 +749,7 @@ def estimate_global_transformation(
     xp=np,
 ):
     """Use least squares to estimate the global affine transformation."""
-
-    origin = xp.asarray(origin)
+    origin = xp.asarray(origin, dtype=xp.float32)
 
     try:
         if translation_allowed:
@@ -904,22 +877,18 @@ def fourier_ring_correlation(
     half_bit: ndarray
         half-bit criteria
     """
+    if device == "cpu":
+        xp = np
+    elif device == "gpu":
+        xp = cp
 
     if align_images:
-        from py4DSTEM.process.utils.cross_correlate import align_and_shift_images
-
         image_2 = align_and_shift_images(
             image_1,
             image_2,
             upsample_factor=upsample_factor,
             device=device,
         )
-
-    if device == "cpu":
-        xp = np
-
-    elif device == "gpu":
-        xp = cp
 
     fft_image_1 = xp.fft.fft2(image_1)
     fft_image_2 = xp.fft.fft2(image_2)
@@ -1005,14 +974,13 @@ def return_1D_profile(
     n: ndarray
         Number of pixels in each bin
     """
-    if pixel_size is None:
-        pixel_size = (1, 1)
-
     if device == "cpu":
         xp = np
-
     elif device == "gpu":
         xp = cp
+
+    if pixel_size is None:
+        pixel_size = (1, 1)
 
     x = xp.fft.fftfreq(intensity.shape[0], pixel_size[0])
     y = xp.fft.fftfreq(intensity.shape[1], pixel_size[1])
@@ -1047,97 +1015,598 @@ def return_1D_profile(
 
     return q_bins, I_bins, n
 
-def fourier_rotate_real_volume(array, angle, axes = (0,1), xp = np):
 
-    input_arr = xp.asarray(array)
+def fourier_rotate_real_volume(array, angle, axes=(0, 1), xp=np):
+    """
+    Rotates a 3D array using three Fourier-based shear operators.
+
+    Parameters
+     ----------
+    array: ndarray
+        3D array to rotate
+    angle: float
+        Angle in deg to rotate array by
+    axes: tuple, Optional
+        Axes defining plane in which to rotate about
+    xp: Callable, optional
+        Array computing module
+
+    Returns
+    --------
+    output_arr: ndarray
+        Fourier-rotated array
+    """
+    input_arr = xp.asarray(array, dtype=array.dtype)
     array_shape = np.array(input_arr.shape)
     ndim = input_arr.ndim
 
     if ndim != 3:
-        raise ValueError('input array should be 3D')
+        raise ValueError("input array should be 3D")
 
     axes = list(axes)
 
     if len(axes) != 2:
-        raise ValueError('axes should contain exactly two values')
+        raise ValueError("axes should contain exactly two values")
 
     if not all([float(ax).is_integer() for ax in axes]):
-        raise ValueError('axes should contain only integer values')
+        raise ValueError("axes should contain only integer values")
 
     if axes[0] < 0:
         axes[0] += ndim
     if axes[1] < 0:
         axes[1] += ndim
     if axes[0] < 0 or axes[1] < 0 or axes[0] >= ndim or axes[1] >= ndim:
-        raise ValueError('invalid rotation plane specified')
+        raise ValueError("invalid rotation plane specified")
 
     axes.sort()
-    rotation_ax = np.setdiff1d([0,1,2],axes)[0]
+    rotation_ax = np.setdiff1d([0, 1, 2], axes)[0]
     plane_dims = array_shape[axes]
 
-    qx = xp.fft.fftfreq(plane_dims[0],1)
-    qy = xp.fft.fftfreq(plane_dims[1],1)
-    qxa, qya = xp.meshgrid(qx, qy, indexing='ij')
+    qx = xp.fft.fftfreq(plane_dims[0], 1)
+    qy = xp.fft.fftfreq(plane_dims[1], 1)
+    qxa, qya = xp.meshgrid(qx, qy, indexing="ij")
 
-    x = xp.arange(plane_dims[0]) - plane_dims[0]/2
-    y = xp.arange(plane_dims[1]) - plane_dims[1]/2
-    xa, ya = xp.meshgrid(x, y, indexing='ij')
+    x = xp.arange(plane_dims[0]) - plane_dims[0] / 2
+    y = xp.arange(plane_dims[1]) - plane_dims[1] / 2
+    xa, ya = xp.meshgrid(x, y, indexing="ij")
 
-    theta_90   = round(angle / 90)
+    theta_90 = round(angle / 90)
     theta_rest = (angle + 45) % 90 - 45
 
     theta = np.deg2rad(theta_rest)
-    a = np.tan(-theta/2)
+    a = np.tan(-theta / 2)
     b = np.sin(theta)
 
-    xOp = xp.exp(-2j*np.pi*qxa*ya*a)
-    yOp = xp.exp(-2j*np.pi*qya*xa*b)
+    xOp = xp.exp(-2j * np.pi * qxa * ya * a)
+    yOp = xp.exp(-2j * np.pi * qya * xa * b)
 
     output_arr = input_arr.copy()
 
     # 90 degree rotation
     if abs(theta_90) > 0:
         if plane_dims[0] == plane_dims[1]:
-            output_arr = xp.rot90(output_arr,theta_90, axes= axes)
+            output_arr = xp.rot90(output_arr, theta_90, axes=axes)
         else:
             if plane_dims[0] > plane_dims[1]:
-                xx = np.arange(plane_dims[1]) + (plane_dims[0]-plane_dims[1])//2
+                xx = np.arange(plane_dims[1]) + (plane_dims[0] - plane_dims[1]) // 2
                 if rotation_ax == 0:
-                    output_arr[:,xx,:] = xp.rot90(output_arr[:,xx,:],theta_90, axes= axes)
-                    output_arr[:,:xx[0],:] = 0
-                    output_arr[:,xx[-1]:,:] = 0
+                    output_arr[:, xx, :] = xp.rot90(
+                        output_arr[:, xx, :], theta_90, axes=axes
+                    )
+                    output_arr[:, : xx[0], :] = 0
+                    output_arr[:, xx[-1] :, :] = 0
                 else:
-                    output_arr[xx,:,:] = xp.rot90(output_arr[xx,:,:],theta_90, axes= axes)
-                    output_arr[:xx[0],:,:] = 0
-                    output_arr[xx[-1]:,:,:] = 0
+                    output_arr[xx, :, :] = xp.rot90(
+                        output_arr[xx, :, :], theta_90, axes=axes
+                    )
+                    output_arr[: xx[0], :, :] = 0
+                    output_arr[xx[-1] :, :, :] = 0
             else:
-                yy = np.arange(plane_dims[0]) + (plane_dims[1]-plane_dims[0])//2
+                yy = np.arange(plane_dims[0]) + (plane_dims[1] - plane_dims[0]) // 2
                 if rotation_ax == 2:
-                    output_arr[:,yy,:] = xp.rot90(output_arr[:,yy,:],theta_90, axes= axes)
-                    output_arr[:,:yy[0],:] = 0
-                    output_arr[:,yy[-1]:,:] = 0
+                    output_arr[:, yy, :] = xp.rot90(
+                        output_arr[:, yy, :], theta_90, axes=axes
+                    )
+                    output_arr[:, : yy[0], :] = 0
+                    output_arr[:, yy[-1] :, :] = 0
                 else:
-                    output_arr[:,:,yy] = xp.rot90(output_arr[:,:,yy],theta_90, axes= axes)
-                    output_arr[:,:,:yy[0]] = 0
-                    output_arr[:,:,yy[-1]:] = 0
+                    output_arr[:, :, yy] = xp.rot90(
+                        output_arr[:, :, yy], theta_90, axes=axes
+                    )
+                    output_arr[:, :, : yy[0]] = 0
+                    output_arr[:, :, yy[-1] :] = 0
 
     # small rotation
     if rotation_ax == 0:
-        output_arr = xp.fft.ifft(xp.fft.fft(output_arr,axis=1)*xOp[None,:],axis=1)
-        output_arr = xp.fft.ifft(xp.fft.fft(output_arr,axis=2)*yOp[None,:],axis=2)
-        output_arr = xp.fft.ifft(xp.fft.fft(output_arr,axis=1)*xOp[None,:],axis=1)
+        output_arr = xp.fft.ifft(xp.fft.fft(output_arr, axis=1) * xOp[None, :], axis=1)
+        output_arr = xp.fft.ifft(xp.fft.fft(output_arr, axis=2) * yOp[None, :], axis=2)
+        output_arr = xp.fft.ifft(xp.fft.fft(output_arr, axis=1) * xOp[None, :], axis=1)
         output_arr = xp.real(output_arr)
 
     elif rotation_ax == 1:
-        output_arr = xp.fft.ifft(xp.fft.fft(output_arr,axis=0)*xOp[:,None,:],axis=0)
-        output_arr = xp.fft.ifft(xp.fft.fft(output_arr,axis=2)*yOp[:,None,:],axis=2)
-        output_arr = xp.fft.ifft(xp.fft.fft(output_arr,axis=0)*xOp[:,None,:],axis=0)
+        output_arr = xp.fft.ifft(
+            xp.fft.fft(output_arr, axis=0) * xOp[:, None, :], axis=0
+        )
+        output_arr = xp.fft.ifft(
+            xp.fft.fft(output_arr, axis=2) * yOp[:, None, :], axis=2
+        )
+        output_arr = xp.fft.ifft(
+            xp.fft.fft(output_arr, axis=0) * xOp[:, None, :], axis=0
+        )
         output_arr = np.real(output_arr)
 
     else:
-        output_arr = xp.fft.ifft(xp.fft.fft(output_arr,axis=0)*xOp[:,:,None],axis=0)
-        output_arr = xp.fft.ifft(xp.fft.fft(output_arr,axis=1)*yOp[:,:,None],axis=1)
-        output_arr = xp.fft.ifft(xp.fft.fft(output_arr,axis=0)*xOp[:,:,None],axis=0)
+        output_arr = xp.fft.ifft(
+            xp.fft.fft(output_arr, axis=0) * xOp[:, :, None], axis=0
+        )
+        output_arr = xp.fft.ifft(
+            xp.fft.fft(output_arr, axis=1) * yOp[:, :, None], axis=1
+        )
+        output_arr = xp.fft.ifft(
+            xp.fft.fft(output_arr, axis=0) * xOp[:, :, None], axis=0
+        )
         output_arr = xp.real(output_arr)
 
     return output_arr
+
+
+### Divergence Projection Functions
+
+
+def compute_divergence(vector_field, spacings, xp=np):
+    """Computes divergence of vector_field"""
+    num_dims = len(spacings)
+    div = xp.zeros_like(vector_field[0])
+
+    for i in range(num_dims):
+        div += xp.gradient(vector_field[i], spacings[i], axis=i)
+
+    return div
+
+
+def compute_gradient(scalar_field, spacings, xp=np):
+    """Computes gradient of scalar_field"""
+    num_dims = len(spacings)
+    grad = xp.zeros((num_dims,) + scalar_field.shape)
+
+    for i in range(num_dims):
+        grad[i] = xp.gradient(scalar_field, spacings[i], axis=i)
+
+    return grad
+
+
+def array_slice(axis, ndim, start, end, step=1):
+    """Returns array slice along dynamic axis"""
+    return (slice(None),) * (axis % ndim) + (slice(start, end, step),)
+
+
+def make_array_rfft_compatible(array_nd, axis=0, xp=np):
+    """Expand array to be rfft compatible"""
+    array_shape = np.array(array_nd.shape)
+    d = array_nd.ndim
+    n = array_shape[axis]
+    array_shape[axis] = (n + 1) * 2
+
+    dtype = array_nd.dtype
+    padded_array = xp.zeros(array_shape, dtype=dtype)
+
+    padded_array[array_slice(axis, d, 1, n + 1)] = -array_nd
+    padded_array[array_slice(axis, d, None, -n - 1, -1)] = array_nd
+
+    return padded_array
+
+
+def dst_I(array_nd, xp=np):
+    """1D rfft-based DST-I"""
+    d = array_nd.ndim
+    for axis in range(d):
+        crop_slice = array_slice(axis, d, 1, -1)
+        array_nd = rfft(
+            make_array_rfft_compatible(array_nd, axis=axis, xp=xp), axis=axis
+        )[crop_slice].imag
+
+    return array_nd
+
+
+def idst_I(array_nd, xp=np):
+    """1D rfft-based iDST-I"""
+    scaling = np.prod((np.array(array_nd.shape) + 1) * 2)
+    return dst_I(array_nd, xp=xp) / scaling
+
+
+def preconditioned_laplacian(num_exterior, spacing=1, xp=np):
+    """DST-I eigenvalues"""
+    n = num_exterior - 1
+    evals_1d = 2 - 2 * xp.cos(np.pi * xp.arange(1, num_exterior) / num_exterior)
+
+    op = (
+        xp.repeat(evals_1d, n**2)
+        + xp.tile(evals_1d, n**2)
+        + xp.tile(xp.repeat(evals_1d, n), n)
+    )
+
+    return -op / spacing**2
+
+
+def preconditioned_poisson_solver(rhs_interior, spacing=1, xp=np):
+    """DST-I based poisson solver"""
+    nx, ny, nz = rhs_interior.shape
+    if nx != ny or nx != nz:
+        raise ValueError()
+
+    op = preconditioned_laplacian(nx + 1, spacing=spacing, xp=xp)
+    if xp is np:
+        dst_rhs = dstn(rhs_interior, type=1).ravel()
+        dst_u = (dst_rhs / op).reshape((nx, ny, nz))
+        sol = idstn(dst_u, type=1)
+    else:
+        dst_rhs = dst_I(rhs_interior, xp=xp).ravel()
+        dst_u = (dst_rhs / op).reshape((nx, ny, nz))
+        sol = idst_I(dst_u, xp=xp)
+
+    return sol
+
+
+def project_vector_field_divergence(vector_field, spacings=(1, 1, 1), xp=np):
+    """
+    Returns solenoidal part of vector field using projection:
+
+    f - \\grad{p}
+    s.t. \\laplacian{p} = \\div{f}
+    """
+
+    div_v = compute_divergence(vector_field, spacings, xp=xp)
+    p = preconditioned_poisson_solver(div_v, spacings[0], xp=xp)
+    grad_p = compute_gradient(p, spacings, xp=xp)
+    return vector_field - grad_p
+
+
+# Nesterov acceleration functions
+# https://blogs.princeton.edu/imabandit/2013/04/01/acceleratedgradientdescent/
+
+
+@functools.cache
+def nesterov_lambda(one_indexed_iter_num):
+    if one_indexed_iter_num == 0:
+        return 0
+    return (1 + np.sqrt(1 + 4 * nesterov_lambda(one_indexed_iter_num - 1) ** 2)) / 2
+
+
+def nesterov_gamma(zero_indexed_iter_num):
+    one_indexed_iter_num = zero_indexed_iter_num + 1
+    return (1 - nesterov_lambda(one_indexed_iter_num)) / nesterov_lambda(
+        one_indexed_iter_num + 1
+    )
+
+
+def cartesian_to_polar_transform_2Ddata(
+    im_cart,
+    xy_center,
+    num_theta_bins=90,
+    radius_max=None,
+    corner_centered=False,
+    xp=np,
+):
+    """
+    Quick cartesian to polar conversion.
+    """
+
+    # coordinates
+    if radius_max is None:
+        if corner_centered:
+            radius_max = np.min(np.array(im_cart.shape) // 2)
+        else:
+            radius_max = np.sqrt(np.sum(np.array(im_cart.shape) ** 2)) // 2
+
+    r = xp.arange(radius_max)
+    t = xp.linspace(
+        0,
+        2.0 * np.pi,
+        num_theta_bins,
+        endpoint=False,
+    )
+    ra, ta = xp.meshgrid(r, t)
+
+    # resampling coordinates
+    x = ra * xp.cos(ta) + xy_center[0]
+    y = ra * xp.sin(ta) + xy_center[1]
+
+    xf = xp.floor(x).astype("int")
+    yf = xp.floor(y).astype("int")
+    dx = x - xf
+    dy = y - yf
+
+    mode = "wrap" if corner_centered else "clip"
+
+    # resample image
+    im_polar = (
+        im_cart.ravel()[
+            xp.ravel_multi_index(
+                (xf, yf),
+                im_cart.shape,
+                mode=mode,
+            )
+        ]
+        * (1 - dx)
+        * (1 - dy)
+        + im_cart.ravel()[
+            xp.ravel_multi_index(
+                (xf + 1, yf),
+                im_cart.shape,
+                mode=mode,
+            )
+        ]
+        * (dx)
+        * (1 - dy)
+        + im_cart.ravel()[
+            xp.ravel_multi_index(
+                (xf, yf + 1),
+                im_cart.shape,
+                mode=mode,
+            )
+        ]
+        * (1 - dx)
+        * (dy)
+        + im_cart.ravel()[
+            xp.ravel_multi_index(
+                (xf + 1, yf + 1),
+                im_cart.shape,
+                mode=mode,
+            )
+        ]
+        * (dx)
+        * (dy)
+    )
+
+    return im_polar
+
+
+def polar_to_cartesian_transform_2Ddata(
+    im_polar,
+    xy_size,
+    xy_center,
+    corner_centered=False,
+    xp=np,
+):
+    """
+    Quick polar to cartesian conversion.
+    """
+
+    # coordinates
+    sx, sy = xy_size
+    cx, cy = xy_center
+
+    if corner_centered:
+        x = xp.fft.fftfreq(sx, d=1 / sx)
+        y = xp.fft.fftfreq(sy, d=1 / sy)
+    else:
+        x = xp.arange(sx)
+        y = xp.arange(sy)
+
+    xa, ya = xp.meshgrid(x, y, indexing="ij")
+    ra = xp.hypot(xa - cx, ya - cy)
+    ta = xp.arctan2(ya - cy, xa - cx)
+
+    t = xp.linspace(0, 2 * np.pi, im_polar.shape[0], endpoint=False)
+    t_step = t[1] - t[0]
+
+    # resampling coordinates
+    t_ind = ta / t_step
+    r_ind = ra.copy()
+    tf = xp.floor(t_ind).astype("int")
+    rf = xp.floor(r_ind).astype("int")
+
+    # resample image
+    im_cart = im_polar.ravel()[
+        xp.ravel_multi_index(
+            (tf, rf),
+            im_polar.shape,
+            mode=("wrap", "clip"),
+        )
+    ]
+
+    return im_cart
+
+
+def regularize_probe_amplitude(
+    probe_init,
+    width_max_pixels=2.0,
+    nearest_angular_neighbor_averaging=5,
+    enforce_constant_intensity=True,
+    corner_centered=False,
+):
+    """
+    Fits sigmoid for each angular direction.
+
+    Parameters
+    --------
+    probe_init: np.array
+        2D complex image of the probe in Fourier space.
+    width_max_pixels: float
+        Maximum edge width of the probe in pixels.
+    nearest_angular_neighbor_averaging: int
+        Number of nearest angular neighbor pixels to average to make aperture less jagged.
+    enforce_constant_intensity: bool
+        Set to true to make intensity inside the aperture constant.
+    corner_centered: bool
+        If True, the probe is assumed to be corner-centered
+
+    Returns
+    --------
+    probe_corr: np.ndarray
+        2D complex image of the corrected probe in Fourier space.
+    coefs_all: np.ndarray
+        coefficients for the sigmoid fits
+    """
+
+    # Get probe intensity
+    probe_amp = np.abs(probe_init)
+    probe_angle = np.angle(probe_init)
+    probe_int = probe_amp**2
+
+    # Center of mass for probe intensity
+    xy_center = get_CoM(probe_int, device="cpu", corner_centered=corner_centered)
+
+    # Convert intensity to polar coordinates
+    polar_int = cartesian_to_polar_transform_2Ddata(
+        probe_int,
+        xy_center=xy_center,
+        corner_centered=corner_centered,
+        xp=np,
+    )
+
+    # Fit corrected probe intensity
+    radius = np.arange(polar_int.shape[1])
+
+    # estimate initial parameters
+    sub = polar_int > (np.max(polar_int) * 0.5)
+    sig_0 = np.mean(polar_int[sub])
+    rad_0 = np.max(np.argwhere(np.sum(sub, axis=0)))
+    width = width_max_pixels * 0.5
+
+    # init
+    def step_model(radius, sig_0, rad_0, width):
+        return sig_0 * np.clip((rad_0 - radius) / width, 0.0, 1.0)
+
+    coefs_all = np.zeros((polar_int.shape[0], 3))
+    coefs_all[:, 0] = sig_0
+    coefs_all[:, 1] = rad_0
+    coefs_all[:, 2] = width
+
+    # bounds
+    lb = (0.0, 0.0, 1e-4)
+    ub = (np.inf, np.inf, width_max_pixels)
+
+    # refine parameters, generate polar image
+    polar_fit = np.zeros_like(polar_int)
+    for a0 in range(polar_int.shape[0]):
+        coefs_all[a0, :] = curve_fit(
+            step_model,
+            radius,
+            polar_int[a0, :],
+            p0=coefs_all[a0, :],
+            xtol=1e-12,
+            bounds=(lb, ub),
+        )[0]
+        polar_fit[a0, :] = step_model(radius, *coefs_all[a0, :])
+
+    # Compute best-fit constant intensity inside probe, update bounds
+    sig_0 = np.median(coefs_all[:, 0])
+    coefs_all[:, 0] = sig_0
+    lb = (sig_0 - 1e-8, 0.0, 1e-4)
+    ub = (sig_0 + 1e-8, np.inf, width_max_pixels)
+
+    # refine parameters, generate polar image
+    polar_int_corr = np.zeros_like(polar_int)
+    for a0 in range(polar_int.shape[0]):
+        coefs_all[a0, :] = curve_fit(
+            step_model,
+            radius,
+            polar_int[a0, :],
+            p0=coefs_all[a0, :],
+            xtol=1e-12,
+            bounds=(lb, ub),
+        )[0]
+        # polar_int_corr[a0, :] = step_model(radius, *coefs_all[a0, :])
+
+    # make aperture less jagged, using moving mean
+    coefs_all = np.apply_along_axis(
+        uniform_filter1d,
+        0,
+        coefs_all,
+        size=nearest_angular_neighbor_averaging,
+        mode="wrap",
+    )
+    for a0 in range(polar_int.shape[0]):
+        polar_int_corr[a0, :] = step_model(radius, *coefs_all[a0, :])
+
+    # Convert back to cartesian coordinates
+    int_corr = polar_to_cartesian_transform_2Ddata(
+        polar_int_corr,
+        xy_size=probe_init.shape,
+        xy_center=xy_center,
+        corner_centered=corner_centered,
+    )
+
+    amp_corr = np.sqrt(np.maximum(int_corr, 0))
+
+    # Assemble output probe
+    if not enforce_constant_intensity:
+        max_coeff = np.sqrt(coefs_all[:, 0]).max()
+        amp_corr = amp_corr / max_coeff * probe_amp
+
+    probe_corr = amp_corr * np.exp(1j * probe_angle)
+
+    return probe_corr, polar_int, polar_int_corr, coefs_all
+
+
+def aberrations_basis_function(
+    probe_size,
+    probe_sampling,
+    max_angular_order,
+    max_radial_order,
+    xp=np,
+):
+    """ """
+    sx, sy = probe_size
+    dx, dy = probe_sampling
+    qx = xp.fft.fftfreq(sx, dx)
+    qy = xp.fft.fftfreq(sy, dy)
+
+    qxa, qya = xp.meshgrid(qx, qy, indexing="ij")
+    q2 = qxa**2 + qya**2
+    theta = xp.arctan2(qya, qxa)
+
+    basis = []
+    index = []
+
+    for n in range(max_angular_order + 1):
+        for m in range((max_radial_order - n) // 2 + 1):
+            basis.append((q2 ** (m + n / 2) * np.cos(n * theta)))
+            index.append((m, n, 0))
+            if n > 0:
+                basis.append((q2 ** (m + n / 2) * np.sin(n * theta)))
+                index.append((m, n, 1))
+
+    basis = xp.array(basis)
+
+    return basis, index
+
+
+def fit_aberration_surface(
+    complex_probe,
+    probe_sampling,
+    max_angular_order,
+    max_radial_order,
+    xp=np,
+):
+    """ """
+    probe_amp = xp.abs(complex_probe)
+    probe_angle = xp.angle(complex_probe)
+
+    if xp is np:
+        probe_angle = probe_angle.astype(np.float64)
+        unwrapped_angle = unwrap_phase(probe_angle, wrap_around=True).astype(xp.float32)
+    else:
+        probe_angle = xp.asnumpy(probe_angle).astype(np.float64)
+        unwrapped_angle = unwrap_phase(probe_angle, wrap_around=True)
+        unwrapped_angle = xp.asarray(unwrapped_angle).astype(xp.float32)
+
+    basis, _ = aberrations_basis_function(
+        complex_probe.shape,
+        probe_sampling,
+        max_angular_order,
+        max_radial_order,
+        xp=xp,
+    )
+
+    raveled_basis = basis.reshape((basis.shape[0], -1))
+    raveled_weights = probe_amp.ravel()
+
+    Aw = raveled_basis.T * raveled_weights[:, None]
+    bw = unwrapped_angle.ravel() * raveled_weights
+    coeff = xp.linalg.lstsq(Aw, bw, rcond=None)[0]
+
+    fitted_angle = xp.tensordot(coeff, basis, axes=1)
+
+    return fitted_angle, coeff

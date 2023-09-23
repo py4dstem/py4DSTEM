@@ -5,17 +5,11 @@
 
 
 from py4DSTEM import _TESTPATH
+
 filepath = _TESTPATH
 
 
-if __name__ == '__main__':
-
+if __name__ == "__main__":
     from py4DSTEM.io import download_file_from_google_drive as download
 
-    download(
-        id_ = 'unit_test_data',
-        destination = filepath,
-        overwrite = True
-    )
-
-
+    download(id_="unit_test_data", destination=filepath, overwrite=True)

@@ -1,13 +1,14 @@
 # Defines the Array class, which stores any N-dimensional array-like data.
 # Implements the EMD file standard - https://emdatasets.com/format
 
-from typing import Optional,Union
+from typing import Optional, Union
 import numpy as np
 import h5py
 from numbers import Number
 
 from py4DSTEM.io.legacy.legacy13.v13_emd_classes.tree import Tree
 from py4DSTEM.io.legacy.legacy13.v13_emd_classes.metadata import Metadata
+
 
 class Array:
     """
@@ -96,16 +97,17 @@ class Array:
     number of dimensions for a non-stack-like Array, and is equal to N-1
     for stack-like arrays.
     """
+
     def __init__(
         self,
         data: np.ndarray,
-        name: Optional[str] = 'array',
-        units: Optional[str] = '',
+        name: Optional[str] = "array",
+        units: Optional[str] = "",
         dims: Optional[list] = None,
         dim_names: Optional[list] = None,
         dim_units: Optional[list] = None,
-        slicelabels = None
-        ):
+        slicelabels=None,
+    ):
         """
         Accepts:
             data (np.ndarray): the data
@@ -164,7 +166,6 @@ class Array:
         if not hasattr(self, "_metadata"):
             self._metadata = {}
 
-
         ## Handle array stacks
 
         if slicelabels is None:
@@ -175,49 +176,55 @@ class Array:
 
             # Populate labels
             if slicelabels is True:
-                slicelabels = [f'array{i}' for i in range(self.depth)]
+                slicelabels = [f"array{i}" for i in range(self.depth)]
             elif len(slicelabels) < self.depth:
-                slicelabels = np.concatenate((slicelabels,
-                    [f'array{i}' for i in range(len(slicelabels),self.depth)]))
+                slicelabels = np.concatenate(
+                    (
+                        slicelabels,
+                        [f"array{i}" for i in range(len(slicelabels), self.depth)],
+                    )
+                )
             else:
-                slicelabels = slicelabels[:self.depth]
+                slicelabels = slicelabels[: self.depth]
             slicelabels = Labels(slicelabels)
 
         self.slicelabels = slicelabels
 
-
         ## Set dim vectors
 
-        dim_in_pixels = np.zeros(self.rank, dtype=bool) # flag to help assign dim names and units
+        dim_in_pixels = np.zeros(
+            self.rank, dtype=bool
+        )  # flag to help assign dim names and units
         # if none were passed
         if self.dims is None:
-            self.dims = [self._unpack_dim(1,self.shape[n]) for n in range(self.rank)]
+            self.dims = [self._unpack_dim(1, self.shape[n]) for n in range(self.rank)]
             dim_in_pixels[:] = True
 
         # if some but not all were passed
-        elif len(self.dims)<self.rank:
+        elif len(self.dims) < self.rank:
             _dims = self.dims
             N = len(_dims)
             self.dims = []
             for n in range(N):
-                dim = self._unpack_dim(_dims[n],self.shape[n])
+                dim = self._unpack_dim(_dims[n], self.shape[n])
                 self.dims.append(dim)
-            for n in range(N,self.rank):
-                self.dims.append(self._unpack_dim(1,self.shape[n]))
+            for n in range(N, self.rank):
+                self.dims.append(self._unpack_dim(1, self.shape[n]))
                 dim_in_pixels[n] = True
 
         # if all were passed
-        elif len(self.dims)==self.rank:
+        elif len(self.dims) == self.rank:
             _dims = self.dims
             self.dims = []
             for n in range(self.rank):
-                dim = self._unpack_dim(_dims[n],self.shape[n])
+                dim = self._unpack_dim(_dims[n], self.shape[n])
                 self.dims.append(dim)
 
         # otherwise
         else:
-            raise Exception(f"too many dim vectors were passed - expected {self.rank}, received {len(self.dims)}")
-
+            raise Exception(
+                f"too many dim vectors were passed - expected {self.rank}, received {len(self.dims)}"
+            )
 
         ## set dim vector names
 
@@ -226,40 +233,45 @@ class Array:
             self.dim_names = [f"dim{n}" for n in range(self.rank)]
 
         # if some but not all were passed
-        elif len(self.dim_names)<self.rank:
+        elif len(self.dim_names) < self.rank:
             N = len(self.dim_names)
-            self.dim_names = [name for name in self.dim_names] + \
-                             [f"dim{n}" for n in range(N,self.rank)]
+            self.dim_names = [name for name in self.dim_names] + [
+                f"dim{n}" for n in range(N, self.rank)
+            ]
 
         # if all were passed
-        elif len(self.dim_names)==self.rank:
+        elif len(self.dim_names) == self.rank:
             pass
 
         # otherwise
         else:
-            raise Exception(f"too many dim names were passed - expected {self.rank}, received {len(self.dim_names)}")
-
+            raise Exception(
+                f"too many dim names were passed - expected {self.rank}, received {len(self.dim_names)}"
+            )
 
         ## set dim vector units
 
         # if none were passed
         if self.dim_units is None:
-            self.dim_units = [['unknown','pixels'][int(i)] for i in dim_in_pixels]
+            self.dim_units = [["unknown", "pixels"][int(i)] for i in dim_in_pixels]
 
         # if some but not all were passed
-        elif len(self.dim_units)<self.rank:
+        elif len(self.dim_units) < self.rank:
             N = len(self.dim_units)
-            self.dim_units = [units for units in self.dim_units] + \
-                             [['unknown','pixels'][int(dim_in_pixels[i])] for i in range(N,self.rank)]
+            self.dim_units = [units for units in self.dim_units] + [
+                ["unknown", "pixels"][int(dim_in_pixels[i])]
+                for i in range(N, self.rank)
+            ]
 
         # if all were passed
-        elif len(self.dim_units)==self.rank:
+        elif len(self.dim_units) == self.rank:
             pass
 
         # otherwise
         else:
-            raise Exception(f"too many dim units were passed - expected {self.rank}, received {len(self.dim_units)}")
-
+            raise Exception(
+                f"too many dim units were passed - expected {self.rank}, received {len(self.dim_units)}"
+            )
 
     # Shape properties
 
@@ -284,59 +296,59 @@ class Array:
         else:
             return self.data.ndim - 1
 
-
     ## Slicing
 
-    def get_slice(self,label,name=None):
+    def get_slice(self, label, name=None):
         idx = self.slicelabels._dict[label]
         return Array(
-            data = self.data[..., idx],
-            name = name if name is not None else self.name+'_'+label,
-            units = self.units[:-1],
-            dims = self.dims[:-1],
-            dim_units = self.dim_units[:-1],
-            dim_names = self.dim_names[:-1]
+            data=self.data[..., idx],
+            name=name if name is not None else self.name + "_" + label,
+            units=self.units[:-1],
+            dims=self.dims[:-1],
+            dim_units=self.dim_units[:-1],
+            dim_names=self.dim_names[:-1],
         )
 
-    def __getitem__(self,x):
-        if isinstance(x,str):
+    def __getitem__(self, x):
+        if isinstance(x, str):
             return self.get_slice(x)
-        elif isinstance(x,tuple) and isinstance(x[0],str):
+        elif isinstance(x, tuple) and isinstance(x[0], str):
             return self.get_slice(x[0])[x[1:]]
         else:
             return self.data[x]
-
 
     ## Dim vectors
 
     def set_dim(
         self,
-        n:int,
-        dim:Union[list,np.ndarray],
-        units:Optional[str]=None,
-        name:Optional[str]=None
-        ):
+        n: int,
+        dim: Union[list, np.ndarray],
+        units: Optional[str] = None,
+        name: Optional[str] = None,
+    ):
         """
         Sets the n'th dim vector, using `dim` as described in the Array
         documentation. If `units` and/or `name` are passed, sets these
         values for the n'th dim vector.
         Accepts:
             n (int): specifies which dim vector
-            dim (list or array): length must be either 2, or equal to the
-                length of the n'th axis of the data array
+            dim (list or array): length must be either 1 or 2, or equal to the
+                length of the n'th axis of the data array. If length is 1 specifies step
+                size of dim vector and starts at 0. If length is 2, specifies start
+                and step of dim vector.
             units (Optional, str):
             name: (Optional, str):
         """
         length = self.shape[n]
-        _dim = self._unpack_dim(dim,length)
+        _dim = self._unpack_dim(dim, length)
         self.dims[n] = _dim
-        if units is not None: self.dim_units[n] = units
-        if name is not None: self.dim_names[n] = name
-
-
+        if units is not None:
+            self.dim_units[n] = units
+        if name is not None:
+            self.dim_names[n] = name
 
     @staticmethod
-    def _unpack_dim(dim,length):
+    def _unpack_dim(dim, length):
         """
         Given a dim vector as passed at instantiation and the expected length
         of this dimension of the array, this function checks the passed dim
@@ -356,70 +368,76 @@ class Array:
             the unpacked dim vector
         """
         # Expand single numbers
-        if isinstance(dim,Number):
-            dim = [0,dim]
+        if isinstance(dim, Number):
+            dim = [0, dim]
 
         N = len(dim)
 
         # for string dimensions:
-        if not isinstance(dim[0],Number):
-            assert(N == length), f"For non-numerical dims, the dim vector length must match the array dimension length. Recieved a dim vector of length {N} for an array dimension length of {length}."
+        if not isinstance(dim[0], Number):
+            assert (
+                N == length
+            ), f"For non-numerical dims, the dim vector length must match the array dimension length. Recieved a dim vector of length {N} for an array dimension length of {length}."
 
         # For number-like dimensions:
         if N == length:
             return dim
         elif N == 2:
-            start,step = dim[0],dim[1]-dim[0]
-            stop = start + step*length
-            return np.arange(start,stop,step)
+            start, step = dim[0], dim[1] - dim[0]
+            stop = start + step * length
+            return np.arange(start, stop, step)
         else:
-            raise Exception(f"dim vector length must be either 2 or equal to the length of the corresponding array dimension; dim vector length was {dim} and the array dimension length was {length}")
+            raise Exception(
+                f"dim vector length must be either 2 or equal to the length of the corresponding array dimension; dim vector length was {dim} and the array dimension length was {length}"
+            )
 
-
-    def _dim_is_linear(self,dim,length):
+    def _dim_is_linear(self, dim, length):
         """
         Returns True if a dim is linear, else returns False
         """
-        dim_expanded = self._unpack_dim(dim[:2],length)
-        return np.array_equal(dim,dim_expanded)
-
-
+        dim_expanded = self._unpack_dim(dim[:2], length)
+        return np.array_equal(dim, dim_expanded)
 
     # set up metadata property
 
     @property
     def metadata(self):
         return self._metadata
+
     @metadata.setter
-    def metadata(self,x):
-        assert(isinstance(x,Metadata))
+    def metadata(self, x):
+        assert isinstance(x, Metadata)
         self._metadata[x.name] = x
-
-
-
 
     ## Representation to standard output
 
     def __repr__(self):
-
         if not self.is_stack:
-            space = ' '*len(self.__class__.__name__)+'  '
+            space = " " * len(self.__class__.__name__) + "  "
             string = f"{self.__class__.__name__}( A {self.rank}-dimensional array of shape {self.shape} called '{self.name}',"
-            string += "\n"+space+"with dimensions:"
+            string += "\n" + space + "with dimensions:"
             string += "\n"
             for n in range(self.rank):
                 # need to handle the edge case of only single value in dims i.e.line scans, 1,512,256,256
                 # check there is more than a single probe poistion
-                if self.dims[n].size < 2: 
-                    string += "\n"+space+f"    {self.dim_names[n]} = [{self.dims[n][0]}] {self.dim_units[n]}"
+                if self.dims[n].size < 2:
+                    string += (
+                        "\n"
+                        + space
+                        + f"    {self.dim_names[n]} = [{self.dims[n][0]}] {self.dim_units[n]}"
+                    )
                 else:
-                    string += "\n"+space+f"    {self.dim_names[n]} = [{self.dims[n][0]},{self.dims[n][1]},...] {self.dim_units[n]}"
+                    string += (
+                        "\n"
+                        + space
+                        + f"    {self.dim_names[n]} = [{self.dims[n][0]},{self.dims[n][1]},...] {self.dim_units[n]}"
+                    )
 
         else:
-            space = ' '*len(self.__class__.__name__)+'  '
+            space = " " * len(self.__class__.__name__) + "  "
             string = f"{self.__class__.__name__}( A stack of {self.depth} Arrays with {self.rank}-dimensions and shape {self.shape}, called '{self.name}'"
             string += "\n"
-            string += "\n" +space + "The labels are:"
+            string += "\n" + space + "The labels are:"
             for label in self.slicelabels:
                 string += "\n" + space + f"    {label}"
             string += "\n"
@@ -428,30 +446,35 @@ class Array:
             for n in range(self.rank):
                 # need to handle the edge case of only single value in dims i.e.line scans, 1,512,256,256
                 # check there is more than a single probe poistion
-                if self.dims[n].size < 2: 
-                    string += "\n"+space+f"    {self.dim_names[n]} = [{self.dims[n][0]}] {self.dim_units[n]}"
+                if self.dims[n].size < 2:
+                    string += (
+                        "\n"
+                        + space
+                        + f"    {self.dim_names[n]} = [{self.dims[n][0]}] {self.dim_units[n]}"
+                    )
                 else:
-                    string += "\n"+space+f"    {self.dim_names[n]} = [{self.dims[n][0]},{self.dims[n][1]},...] {self.dim_units[n]}"
-                if not self._dim_is_linear(self.dims[n],self.shape[n]):
+                    string += (
+                        "\n"
+                        + space
+                        + f"    {self.dim_names[n]} = [{self.dims[n][0]},{self.dims[n][1]},...] {self.dim_units[n]}"
+                    )
+                if not self._dim_is_linear(self.dims[n], self.shape[n]):
                     string += "  (*non-linear*)"
             string += "\n)"
 
         return string
 
-
-
     # HDF5 read/write
 
-    def to_h5(self,group):
+    def to_h5(self, group):
         from py4DSTEM.io.legacy.legacy13.v13_emd_classes.io import Array_to_h5
-        Array_to_h5(self,group)
+
+        Array_to_h5(self, group)
 
     def from_h5(group):
         from py4DSTEM.io.legacy.legacy13.v13_emd_classes.io import Array_from_h5
+
         return Array_from_h5(group)
-
-
-
 
 
 ########### END OF CLASS ###########
@@ -459,20 +482,17 @@ class Array:
 
 # List subclass for accessing data slices with a dict
 class Labels(list):
-
-    def __init__(self,x=[]):
-        list.__init__(self,x)
+    def __init__(self, x=[]):
+        list.__init__(self, x)
         self.setup_labels_dict()
 
-    def __setitem__(self,idx,label):
+    def __setitem__(self, idx, label):
         label_old = self[idx]
-        del(self._dict[label_old])
-        list.__setitem__(self,idx,label)
+        del self._dict[label_old]
+        list.__setitem__(self, idx, label)
         self._dict[label] = idx
 
     def setup_labels_dict(self):
         self._dict = {}
-        for idx,label in enumerate(self):
+        for idx, label in enumerate(self):
             self._dict[label] = idx
-
-
