@@ -10,6 +10,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.gridspec import GridSpec
 from mpl_toolkits.axes_grid1 import ImageGrid, make_axes_locatable
+from py4DSTEM.visualize import show
+from py4DSTEM.visualize.vis_special import Complex2RGB, add_colorbar_arg
 from scipy.ndimage import rotate as rotate_np
 
 try:
@@ -17,8 +19,9 @@ try:
 except ImportError:
     cp = None
 
+from emdfile import Custom, tqdmnd
 from py4DSTEM import DataCube
-from py4DSTEM.process.phase.iterative_base_class import PhaseReconstruction
+from py4DSTEM.process.phase.iterative_base_class import PtychographicReconstruction
 from py4DSTEM.process.phase.utils import (
     ComplexProbe,
     fft_shift,
@@ -26,19 +29,13 @@ from py4DSTEM.process.phase.utils import (
     polar_aliases,
     polar_symbols,
     spatial_frequencies,
-    # fourier_rotate_real_volume,
 )
-from py4DSTEM.process.utils import (
-    electron_wavelength_angstrom,
-    get_CoM,
-    get_shifted_ar,
-)
-from emdfile import tqdmnd
+from py4DSTEM.process.utils import electron_wavelength_angstrom, get_CoM, get_shifted_ar
 
 warnings.simplefilter(action="always", category=UserWarning)
 
 
-class OverlapTomographicReconstruction(PhaseReconstruction):
+class OverlapTomographicReconstruction(PtychographicReconstruction):
     """
     Overlap Tomographic Reconstruction Class.
 
@@ -61,7 +58,9 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
     tilt_angles_deg: Sequence[float]
         List of tilt angles in degrees,
     semiangle_cutoff: float, optional
-        Semiangle cutoff for the initial probe guess
+        Semiangle cutoff for the initial probe guess in mrad
+    semiangle_cutoff_pixels: float, optional
+        Semiangle cutoff for the initial probe guess in pixels
     rolloff: float, optional
         Semiangle rolloff for the initial probe guess
     vacuum_probe_intensity: np.ndarray, optional
@@ -69,19 +68,9 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
     polar_parameters: dict, optional
         Mapping from aberration symbols to their corresponding values. All aberration
         magnitudes should be given in Å and angles should be given in radians.
-    diffraction_intensities_shape: Tuple[int,int], optional
-        Pixel dimensions (Qx',Qy') of the resampled diffraction intensities
-        If None, no resampling of diffraction intenstities is performed
-    reshaping_method: str, optional
-        Method to use for reshaping, either 'bin, 'bilinear', or 'fourier' (default)
-    probe_roi_shape, (int,int), optional
-            Padded diffraction intensities shape.
-            If None, no padding is performed
     object_padding_px: Tuple[int,int], optional
         Pixel dimensions to pad object with
         If None, the padding is set to half the probe ROI dimensions
-    dp_mask: ndarray, optional
-        Mask for datacube intensities (Qx,Qy)
     initial_object_guess: np.ndarray, optional
         Initial guess for complex-valued object of dimensions (Px,Py,Py)
         If None, initialized to 1.0
@@ -95,48 +84,63 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         If True, class methods will inherit this and print additional information
     device: str, optional
         Calculation device will be perfomed on. Must be 'cpu' or 'gpu'
+    object_type: str, optional
+        The object can be reconstructed as a real potential ('potential') or a complex
+        object ('complex')
+    name: str, optional
+        Class name
     kwargs:
         Provide the aberration coefficients as keyword arguments.
     """
 
+    # Class-specific Metadata
+    _class_specific_metadata = ("_num_slices", "_tilt_angles_deg")
+
     def __init__(
         self,
-        datacube: Sequence[DataCube],
         energy: float,
         num_slices: int,
-        tilt_angles_degrees: Sequence[float],
+        tilt_angles_deg: Sequence[float],
+        datacube: Sequence[DataCube] = None,
         semiangle_cutoff: float = None,
+        semiangle_cutoff_pixels: float = None,
         rolloff: float = 2.0,
         vacuum_probe_intensity: np.ndarray = None,
         polar_parameters: Mapping[str, float] = None,
-        diffraction_intensities_shape: Tuple[int, int] = None,
-        reshaping_method: str = "fourier",
-        probe_roi_shape: Tuple[int, int] = None,
         object_padding_px: Tuple[int, int] = None,
-        dp_mask: np.ndarray = None,
+        object_type: str = "potential",
         initial_object_guess: np.ndarray = None,
         initial_probe_guess: np.ndarray = None,
         initial_scan_positions: Sequence[np.ndarray] = None,
         verbose: bool = True,
         device: str = "cpu",
+        name: str = "overlap-tomographic_reconstruction",
         **kwargs,
     ):
+        Custom.__init__(self, name=name)
+
         if device == "cpu":
             self._xp = np
             self._asnumpy = np.asarray
-            from scipy.ndimage import gaussian_filter, zoom, rotate
+            from scipy.ndimage import gaussian_filter, rotate, zoom
 
             self._gaussian_filter = gaussian_filter
             self._zoom = zoom
             self._rotate = rotate
+            from scipy.special import erf
+
+            self._erf = erf
         elif device == "gpu":
             self._xp = cp
             self._asnumpy = cp.asnumpy
-            from cupyx.scipy.ndimage import gaussian_filter, zoom, rotate
+            from cupyx.scipy.ndimage import gaussian_filter, rotate, zoom
 
             self._gaussian_filter = gaussian_filter
             self._zoom = zoom
             self._rotate = rotate
+            from cupyx.scipy.special import erf
+
+            self._erf = erf
         else:
             raise ValueError(f"device must be either 'cpu' or 'gpu', not {device}")
 
@@ -152,28 +156,37 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         polar_parameters.update(kwargs)
         self._set_polar_parameters(polar_parameters)
 
-        num_tilts = len(tilt_angles_degrees)
+        num_tilts = len(tilt_angles_deg)
         if initial_scan_positions is None:
             initial_scan_positions = [None] * num_tilts
 
-        self._energy = energy
-        self._num_slices = num_slices
-        self._tilt_angles_deg = tilt_angles_degrees
-        self._num_tilts = num_tilts
-        self._semiangle_cutoff = semiangle_cutoff
-        self._rolloff = rolloff
-        self._vacuum_probe_intensity = vacuum_probe_intensity
-        self._diffraction_intensities_shape = diffraction_intensities_shape
-        self._reshaping_method = reshaping_method
-        self._probe_roi_shape = probe_roi_shape
+        if object_type != "potential":
+            raise NotImplementedError()
+
+        self.set_save_defaults()
+
+        # Data
+        self._datacube = datacube
         self._object = initial_object_guess
         self._probe = initial_probe_guess
+
+        # Common Metadata
+        self._vacuum_probe_intensity = vacuum_probe_intensity
         self._scan_positions = initial_scan_positions
-        self._datacube = datacube
-        self._dp_mask = dp_mask
-        self._verbose = verbose
+        self._energy = energy
+        self._semiangle_cutoff = semiangle_cutoff
+        self._semiangle_cutoff_pixels = semiangle_cutoff_pixels
+        self._rolloff = rolloff
+        self._object_type = object_type
         self._object_padding_px = object_padding_px
+        self._verbose = verbose
+        self._device = device
         self._preprocessed = False
+
+        # Class-specific Metadata
+        self._num_slices = num_slices
+        self._tilt_angles_deg = tuple(tilt_angles_deg)
+        self._num_tilts = num_tilts
 
     def _precompute_propagator_arrays(
         self,
@@ -206,22 +219,15 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
 
         # Frequencies
         kx, ky = spatial_frequencies(gpts, sampling)
-        kx = xp.asarray(kx)
-        ky = xp.asarray(ky)
-
-        # Antialias masks
-        k = xp.sqrt(kx[:, None] ** 2 + ky[None] ** 2)
-        kcut = 1 / max(sampling) / 2 * 2 / 3.0  # 2/3 cutoff
-        antialias_mask = 0.5 * (
-            1 + xp.cos(np.pi * (k - kcut + 0.1) / 0.1)
-        )  # 0.1 rolloff
-        antialias_mask[k > kcut] = 0.0
-        antialias_mask = xp.where(k > kcut - 0.1, antialias_mask, xp.ones_like(k))
+        kx = xp.asarray(kx, dtype=xp.float32)
+        ky = xp.asarray(ky, dtype=xp.float32)
 
         # Propagators
         wavelength = electron_wavelength_angstrom(energy)
         num_slices = slice_thicknesses.shape[0]
-        propagators = xp.empty((num_slices,) + k.shape, dtype=xp.complex64)
+        propagators = xp.empty(
+            (num_slices, kx.shape[0], ky.shape[0]), dtype=xp.complex64
+        )
         for i, dz in enumerate(slice_thicknesses):
             propagators[i] = xp.exp(
                 1.0j * (-(kx**2)[:, None] * np.pi * wavelength * dz)
@@ -230,7 +236,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                 1.0j * (-(ky**2)[None] * np.pi * wavelength * dz)
             )
 
-        return propagators * antialias_mask
+        return propagators
 
     def _propagate_array(self, array: np.ndarray, propagator_array: np.ndarray):
         """
@@ -251,40 +257,6 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         xp = self._xp
 
         return xp.fft.ifft2(xp.fft.fft2(array) * propagator_array)
-
-    def _expand_or_project_sliced_object(self, array: np.ndarray, output_z):
-        """
-        OLD Version
-
-        Expands supersliced object or projects voxel-sliced object.
-
-        Parameters
-        ----------
-        array: np.ndarray
-            3D array to expand/project
-        output_z: int
-            Output_dimension to expand/project array to.
-            If output_z > array.shape[0] array is expanded, else it's projected
-
-        Returns
-        -------
-        expanded_or_projected_array: np.ndarray
-            expanded or projected array
-        """
-        zoom = self._zoom
-        input_z = array.shape[0]
-
-        return (
-            zoom(
-                array,
-                (output_z / input_z, 1, 1),
-                order=0,
-                mode="nearest",
-                grid_mode=True,
-            )
-            * input_z
-            / output_z
-        )
 
     def _project_sliced_object(self, array: np.ndarray, output_z):
         """
@@ -353,13 +325,21 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
 
     def preprocess(
         self,
+        diffraction_intensities_shape: Tuple[int, int] = None,
+        reshaping_method: str = "fourier",
+        probe_roi_shape: Tuple[int, int] = None,
+        dp_mask: np.ndarray = None,
         fit_function: str = "plane",
         plot_probe_overlaps: bool = True,
         rotation_real_space_degrees: float = None,
         diffraction_patterns_rotate_degrees: float = None,
         diffraction_patterns_transpose: bool = None,
         force_com_shifts: Sequence[float] = None,
+        force_scan_sampling: float = None,
+        force_angular_sampling: float = None,
+        force_reciprocal_sampling: float = None,
         progress_bar: bool = True,
+        object_fov_mask: np.ndarray = None,
         **kwargs,
     ):
         """
@@ -370,6 +350,16 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
 
         Parameters
         ----------
+        diffraction_intensities_shape: Tuple[int,int], optional
+            Pixel dimensions (Qx',Qy') of the resampled diffraction intensities
+            If None, no resampling of diffraction intenstities is performed
+        reshaping_method: str, optional
+            Method to use for reshaping, either 'bin, 'bilinear', or 'fourier' (default)
+        probe_roi_shape, (int,int), optional
+            Padded diffraction intensities shape.
+            If None, no padding is performed
+        dp_mask: ndarray, optional
+            Mask for datacube intensities (Qx,Qy)
         fit_function: str, optional
             2D fitting function for CoM fitting. One of 'plane','parabola','bezier_two'
         plot_probe_overlaps: bool, optional
@@ -385,6 +375,15 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
             Amplitudes come from diffraction patterns shifted with
             the CoM in the upper left corner for each probe unless
             shift is overwritten. One tuple per tilt.
+        force_scan_sampling: float, optional
+            Override DataCube real space scan pixel size calibrations, in Angstrom
+        force_angular_sampling: float, optional
+            Override DataCube reciprocal pixel size calibration, in mrad
+        force_reciprocal_sampling: float, optional
+            Override DataCube reciprocal pixel size calibration, in A^-1
+        object_fov_mask: np.ndarray (boolean)
+            Boolean mask of FOV. Used to calculate additional shrinkage of object
+            If None, probe_overlap intensity is thresholded
 
         Returns
         --------
@@ -393,6 +392,20 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         """
         xp = self._xp
         asnumpy = self._asnumpy
+
+        # set additional metadata
+        self._diffraction_intensities_shape = diffraction_intensities_shape
+        self._reshaping_method = reshaping_method
+        self._probe_roi_shape = probe_roi_shape
+        self._dp_mask = dp_mask
+
+        if self._datacube is None:
+            raise ValueError(
+                (
+                    "The preprocess() method requires a DataCube. "
+                    "Please run ptycho.attach_datacube(DataCube) first."
+                )
+            )
 
         # Prepopulate various arrays
         num_probes_per_tilt = [0]
@@ -460,6 +473,9 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
             intensities = self._extract_intensities_and_calibrations_from_datacube(
                 self._datacube[tilt_index],
                 require_calibrations=True,
+                force_scan_sampling=force_scan_sampling,
+                force_angular_sampling=force_angular_sampling,
+                force_reciprocal_sampling=force_reciprocal_sampling,
             )
 
             (
@@ -509,10 +525,17 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                 self._scan_positions[tilt_index]
             )
 
+        # handle semiangle specified in pixels
+        if self._semiangle_cutoff_pixels:
+            self._semiangle_cutoff = (
+                self._semiangle_cutoff_pixels * self._angular_sampling[0]
+            )
+
         # Object Initialization
         if self._object is None:
-            pad_x, pad_y = self._object_padding_px
-            p, q = np.max(self._positions_px_all, axis=0)
+            pad_x = self._object_padding_px[0][1]
+            pad_y = self._object_padding_px[1][1]
+            p, q = np.round(np.max(self._positions_px_all, axis=0))
             p = np.max([np.round(p + pad_x), self._region_of_interest_shape[0]]).astype(
                 "int"
             )
@@ -524,6 +547,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
             self._object = xp.asarray(self._object, dtype=xp.float32)
 
         self._object_initial = self._object.copy()
+        self._object_type_initial = self._object_type
         self._object_shape = self._object.shape[-2:]
         self._num_voxels = self._object.shape[0]
 
@@ -556,18 +580,18 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         if self._probe is None:
             if self._vacuum_probe_intensity is not None:
                 self._semiangle_cutoff = np.inf
-                self._vacuum_probe_intensity = xp.asarray(self._vacuum_probe_intensity)
-                probe_x0, probe_y0 = get_CoM(
-                    self._vacuum_probe_intensity, device="cpu" if xp is np else "gpu"
+                self._vacuum_probe_intensity = xp.asarray(
+                    self._vacuum_probe_intensity, dtype=xp.float32
                 )
-                shift_x = self._region_of_interest_shape[0] // 2 - probe_x0
-                shift_y = self._region_of_interest_shape[1] // 2 - probe_y0
+                probe_x0, probe_y0 = get_CoM(
+                    self._vacuum_probe_intensity, device=self._device
+                )
                 self._vacuum_probe_intensity = get_shifted_ar(
                     self._vacuum_probe_intensity,
-                    shift_x,
-                    shift_y,
+                    -probe_x0,
+                    -probe_y0,
                     bilinear=True,
-                    device="cpu" if xp is np else "gpu",
+                    device=self._device,
                 )
 
             self._probe = (
@@ -579,10 +603,18 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                     rolloff=self._rolloff,
                     vacuum_probe_intensity=self._vacuum_probe_intensity,
                     parameters=self._polar_parameters,
-                    device="cpu" if xp is np else "gpu",
+                    device=self._device,
                 )
                 .build()
                 ._array
+            )
+
+            # Normalize probe to match mean diffraction intensity
+            probe_intensity = xp.sum(xp.abs(xp.fft.fft2(self._probe)) ** 2)
+            self._probe *= xp.sqrt(
+                sum(self._mean_diffraction_intensity)
+                / self._num_tilts
+                / probe_intensity
             )
 
         else:
@@ -594,17 +626,27 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                 else:
                     self._probe._xp = xp
                     self._probe = self._probe.build()._array
+
+                # Normalize probe to match mean diffraction intensity
+                probe_intensity = xp.sum(xp.abs(xp.fft.fft2(self._probe)) ** 2)
+                self._probe *= xp.sqrt(
+                    sum(self._mean_diffraction_intensity)
+                    / self._num_tilts
+                    / probe_intensity
+                )
             else:
                 self._probe = xp.asarray(self._probe, dtype=xp.complex64)
 
-        # Normalize probe to match mean diffraction intensity
-        probe_intensity = xp.sum(xp.abs(xp.fft.fft2(self._probe)) ** 2)
-        self._probe *= np.sqrt(
-            sum(self._mean_diffraction_intensity) / self._num_tilts / probe_intensity
-        )
-
         self._probe_initial = self._probe.copy()
-        self._probe_initial_fft_amplitude = xp.abs(xp.fft.fft2(self._probe_initial))
+        self._probe_initial_aperture = xp.abs(xp.fft.fft2(self._probe))
+
+        self._known_aberrations_array = ComplexProbe(
+            energy=self._energy,
+            gpts=self._region_of_interest_shape,
+            sampling=self.sampling,
+            parameters=self._polar_parameters,
+            device=self._device,
+        )._evaluate_ctf()
 
         # Precomputed propagator arrays
         self._slice_thicknesses = np.tile(
@@ -618,7 +660,52 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
             self._slice_thicknesses,
         )
 
-        if plot_probe_overlaps:
+        # overlaps
+        if object_fov_mask is None:
+            probe_overlap_3D = xp.zeros_like(self._object)
+
+            for tilt_index in np.arange(self._num_tilts):
+                current_angle_deg = self._tilt_angles_deg[tilt_index]
+                probe_overlap_3D = self._rotate(
+                    probe_overlap_3D,
+                    current_angle_deg,
+                    axes=(0, 2),
+                    reshape=False,
+                    order=2,
+                )
+
+                self._positions_px = self._positions_px_all[
+                    self._cum_probes_per_tilt[tilt_index] : self._cum_probes_per_tilt[
+                        tilt_index + 1
+                    ]
+                ]
+                self._positions_px_fractional = self._positions_px - xp.round(
+                    self._positions_px
+                )
+                shifted_probes = fft_shift(
+                    self._probe, self._positions_px_fractional, xp
+                )
+                probe_intensities = xp.abs(shifted_probes) ** 2
+                probe_overlap = self._sum_overlapping_patches_bincounts(
+                    probe_intensities
+                )
+
+                probe_overlap_3D += probe_overlap[None]
+
+                probe_overlap_3D = self._rotate(
+                    probe_overlap_3D,
+                    -current_angle_deg,
+                    axes=(0, 2),
+                    reshape=False,
+                    order=2,
+                )
+
+            probe_overlap_3D = self._gaussian_filter(probe_overlap_3D, 1.0)
+            self._object_fov_mask = asnumpy(
+                probe_overlap_3D > 0.25 * probe_overlap_3D.max()
+            )
+        else:
+            self._object_fov_mask = np.asarray(object_fov_mask)
             self._positions_px = self._positions_px_all[: self._cum_probes_per_tilt[1]]
             self._positions_px_fractional = self._positions_px - xp.round(
                 self._positions_px
@@ -626,11 +713,41 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
             shifted_probes = fft_shift(self._probe, self._positions_px_fractional, xp)
             probe_intensities = xp.abs(shifted_probes) ** 2
             probe_overlap = self._sum_overlapping_patches_bincounts(probe_intensities)
+            probe_overlap = self._gaussian_filter(probe_overlap, 1.0)
 
-            figsize = kwargs.get("figsize", (8, 4))
-            cmap = kwargs.get("cmap", "Greys_r")
-            kwargs.pop("figsize", None)
-            kwargs.pop("cmap", None)
+        self._object_fov_mask_inverse = np.invert(self._object_fov_mask)
+
+        if plot_probe_overlaps:
+            figsize = kwargs.pop("figsize", (13, 4))
+            cmap = kwargs.pop("cmap", "Greys_r")
+            vmin = kwargs.pop("vmin", None)
+            vmax = kwargs.pop("vmax", None)
+            hue_start = kwargs.pop("hue_start", 0)
+            invert = kwargs.pop("invert", False)
+
+            # initial probe
+            complex_probe_rgb = Complex2RGB(
+                self.probe_centered,
+                vmin=vmin,
+                vmax=vmax,
+                hue_start=hue_start,
+                invert=invert,
+            )
+
+            # propagated
+            propagated_probe = self._probe.copy()
+
+            for s in range(self._num_slices - 1):
+                propagated_probe = self._propagate_array(
+                    propagated_probe, self._propagator_arrays[s]
+                )
+            complex_propagated_rgb = Complex2RGB(
+                asnumpy(self._return_centered_probe(propagated_probe)),
+                vmin=vmin,
+                vmax=vmax,
+                hue_start=hue_start,
+                invert=invert,
+            )
 
             extent = [
                 0,
@@ -646,39 +763,63 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                 0,
             ]
 
-            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=figsize)
+            fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=figsize)
 
             ax1.imshow(
-                asnumpy(xp.abs(self._probe) ** 2),
+                complex_probe_rgb,
                 extent=probe_extent,
-                cmap=cmap,
                 **kwargs,
+            )
+
+            divider = make_axes_locatable(ax1)
+            cax1 = divider.append_axes("right", size="5%", pad="2.5%")
+            add_colorbar_arg(
+                cax1, vmin=vmin, vmax=vmax, hue_start=hue_start, invert=invert
             )
             ax1.set_ylabel("x [A]")
             ax1.set_xlabel("y [A]")
-            ax1.set_title("Initial Probe Intensity")
+            ax1.set_title("Initial Probe")
 
             ax2.imshow(
+                complex_propagated_rgb,
+                extent=probe_extent,
+                **kwargs,
+            )
+
+            divider = make_axes_locatable(ax2)
+            cax2 = divider.append_axes("right", size="5%", pad="2.5%")
+            add_colorbar_arg(
+                cax2, vmin=vmin, vmax=vmax, hue_start=hue_start, invert=invert
+            )
+            ax2.set_ylabel("x [A]")
+            ax2.set_xlabel("y [A]")
+            ax2.set_title("Propagated Probe")
+
+            ax3.imshow(
                 asnumpy(probe_overlap),
                 extent=extent,
                 cmap=cmap,
                 **kwargs,
             )
-            ax2.scatter(
-                self.positions[:, 1],
-                self.positions[:, 0],
+            ax3.scatter(
+                self.positions[0, :, 1],
+                self.positions[0, :, 0],
                 s=2.5,
                 color=(1, 0, 0, 1),
             )
-            ax2.set_ylabel("x [A]")
-            ax2.set_xlabel("y [A]")
-            ax2.set_xlim((extent[0], extent[1]))
-            ax2.set_ylim((extent[2], extent[3]))
-            ax2.set_title("Object Field of View")
+            ax3.set_ylabel("x [A]")
+            ax3.set_xlabel("y [A]")
+            ax3.set_xlim((extent[0], extent[1]))
+            ax3.set_ylim((extent[2], extent[3]))
+            ax3.set_title("Object Field of View")
 
             fig.tight_layout()
 
         self._preprocessed = True
+
+        if self._device == "gpu":
+            xp._default_memory_pool.free_all_blocks()
+            xp.clear_memo()
 
         return self
 
@@ -696,39 +837,38 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         Returns
         --------
         propagated_probes: np.ndarray
-            Final shifted probes following N-1 propagations
+            Shifted probes at each layer
         object_patches: np.ndarray
             Patched object view
         transmitted_probes: np.ndarray
-            Transmitted probes at each layer
+            Transmitted probes after N-1 propagations and N transmissions
         """
 
         xp = self._xp
-
-        propagated_probes = fft_shift(current_probe, self._positions_px_fractional, xp)
 
         complex_object = xp.exp(1j * current_object)
         object_patches = complex_object[
             :, self._vectorized_patch_indices_row, self._vectorized_patch_indices_col
         ]
 
-        transmitted_probes = xp.empty_like(object_patches)
+        propagated_probes = xp.empty_like(object_patches)
+        propagated_probes[0] = fft_shift(
+            current_probe, self._positions_px_fractional, xp
+        )
 
         for s in range(self._num_slices):
             # transmit
-            transmitted_probes[s] = object_patches[s] * propagated_probes
+            transmitted_probes = object_patches[s] * propagated_probes[s]
 
             # propagate
             if s + 1 < self._num_slices:
-                propagated_probes = self._propagate_array(
-                    transmitted_probes[s], self._propagator_arrays[s]
+                propagated_probes[s + 1] = self._propagate_array(
+                    transmitted_probes, self._propagator_arrays[s]
                 )
 
         return propagated_probes, object_patches, transmitted_probes
 
-    def _gradient_descent_fourier_projection(
-        self, amplitudes, final_transmitted_probes
-    ):
+    def _gradient_descent_fourier_projection(self, amplitudes, transmitted_probes):
         """
         Ptychographic fourier projection method for GD method.
 
@@ -736,8 +876,8 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         --------
         amplitudes: np.ndarray
             Normalized measured amplitudes
-        final_transmitted_probes: np.ndarray
-            Transmitted probes at last layer
+        transmitted_probes: np.ndarray
+            Transmitted probes after N-1 propagations and N transmissions
 
         Returns
         --------
@@ -748,25 +888,22 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         """
 
         xp = self._xp
-        fourier_exit_waves = xp.fft.fft2(final_transmitted_probes)
+        fourier_exit_waves = xp.fft.fft2(transmitted_probes)
 
-        error = (
-            xp.mean(xp.abs(amplitudes - xp.abs(fourier_exit_waves)) ** 2)
-            / self._mean_diffraction_intensity[self._active_tilt_index]
-        )
+        error = xp.sum(xp.abs(amplitudes - xp.abs(fourier_exit_waves)) ** 2)
 
         modified_exit_wave = xp.fft.ifft2(
             amplitudes * xp.exp(1j * xp.angle(fourier_exit_waves))
         )
 
-        exit_waves = modified_exit_wave - final_transmitted_probes
+        exit_waves = modified_exit_wave - transmitted_probes
 
         return exit_waves, error
 
     def _projection_sets_fourier_projection(
         self,
         amplitudes,
-        final_transmitted_probes,
+        transmitted_probes,
         exit_waves,
         projection_a,
         projection_b,
@@ -776,13 +913,13 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         Ptychographic fourier projection method for DM_AP and RAAR methods.
         Generalized projection using three parameters: a,b,c
 
-            DM_AP(\alpha)   :   a =  -\alpha, b = 1, c = 1 + \alpha
+            DM_AP(\\alpha)   :   a =  -\\alpha, b = 1, c = 1 + \\alpha
               DM: DM_AP(1.0), AP: DM_AP(0.0)
 
-            RAAR(\beta)     :   a = 1-2\beta, b = \beta, c = 2
+            RAAR(\\beta)     :   a = 1-2\\beta, b = \beta, c = 2
               DM : RAAR(1.0)
 
-            RRR(\gamma)     :   a = -\gamma, b = \gamma, c = 2
+            RRR(\\gamma)     :   a = -\\gamma, b = \\gamma, c = 2
               DM: RRR(1.0)
 
             SUPERFLIP       :   a = 0, b = 1, c = 2
@@ -791,8 +928,8 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         --------
         amplitudes: np.ndarray
             Normalized measured amplitudes
-        final_transmitted_probes: np.ndarray
-            Transmitted probes at last layer
+        transmitted_probes: np.ndarray
+            Transmitted probes after N-1 propagations and N transmissions
         exit_waves: np.ndarray
             previously estimated exit waves
         projection_a: float
@@ -812,16 +949,13 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         projection_y = 1 - projection_c
 
         if exit_waves is None:
-            exit_waves = final_transmitted_probes.copy()
+            exit_waves = transmitted_probes.copy()
 
-        fourier_exit_waves = xp.fft.fft2(final_transmitted_probes)
-        error = (
-            xp.mean(xp.abs(amplitudes - xp.abs(fourier_exit_waves)) ** 2)
-            / self._mean_diffraction_intensity[self._active_tilt_index]
-        )
+        fourier_exit_waves = xp.fft.fft2(transmitted_probes)
+        error = xp.sum(xp.abs(amplitudes - xp.abs(fourier_exit_waves)) ** 2)
 
         factor_to_be_projected = (
-            projection_c * final_transmitted_probes + projection_y * exit_waves
+            projection_c * transmitted_probes + projection_y * exit_waves
         )
         fourier_projected_factor = xp.fft.fft2(factor_to_be_projected)
 
@@ -832,7 +966,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
 
         exit_waves = (
             projection_x * exit_waves
-            + projection_a * final_transmitted_probes
+            + projection_a * transmitted_probes
             + projection_b * projected_factor
         )
 
@@ -895,7 +1029,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                 error,
             ) = self._projection_sets_fourier_projection(
                 amplitudes,
-                transmitted_probes[-1],
+                transmitted_probes,
                 exit_waves[self._active_tilt_index],
                 projection_a,
                 projection_b,
@@ -904,7 +1038,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
 
         else:
             exit_waves, error = self._gradient_descent_fourier_projection(
-                amplitudes, transmitted_probes[-1]
+                amplitudes, transmitted_probes
             )
 
         return propagated_probes, object_patches, transmitted_probes, exit_waves, error
@@ -914,7 +1048,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         current_object,
         current_probe,
         object_patches,
-        transmitted_probes,
+        propagated_probes,
         exit_waves,
         step_size,
         normalization_min,
@@ -932,8 +1066,8 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
             Current probe estimate
         object_patches: np.ndarray
             Patched object view
-        transmitted_probes: np.ndarray
-            Transmitted probes at each layer
+        propagated_probes: np.ndarray
+            Shifted probes at each layer
         exit_waves:np.ndarray
             Updated exit_waves
         step_size: float, optional
@@ -952,13 +1086,9 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         """
         xp = self._xp
 
-        self._adjoint_prop = 0
         for s in reversed(range(self._num_slices)):
-            probe = transmitted_probes[s]
+            probe = propagated_probes[s]
             obj = object_patches[s]
-
-            # back-transmit
-            exit_waves *= xp.conj(obj)
 
             # object-update
             probe_normalization = self._sum_overlapping_patches_bincounts(
@@ -976,6 +1106,9 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                 )
                 * probe_normalization
             )
+
+            # back-transmit
+            exit_waves *= xp.conj(obj)
 
             if s > 0:
                 # back-propagate
@@ -1010,7 +1143,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         current_object,
         current_probe,
         object_patches,
-        transmitted_probes,
+        propagated_probes,
         exit_waves,
         normalization_min,
         fix_probe,
@@ -1027,8 +1160,8 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
             Current probe estimate
         object_patches: np.ndarray
             Patched object view
-        transmitted_probes: np.ndarray
-            Transmitted probes at each layer
+        propagated_probes: np.ndarray
+            Shifted probes at each layer
         exit_waves:np.ndarray
             Updated exit_waves
         normalization_min: float, optional
@@ -1048,11 +1181,8 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         # careful not to modify exit_waves in-place for projection set methods
         exit_waves_copy = exit_waves.copy()
         for s in reversed(range(self._num_slices)):
-            probe = transmitted_probes[s]
+            probe = propagated_probes[s]
             obj = object_patches[s]
-
-            # back-transmit
-            exit_waves_copy *= xp.conj(obj)
 
             # object-update
             probe_normalization = self._sum_overlapping_patches_bincounts(
@@ -1070,6 +1200,9 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                 )
                 * probe_normalization
             )
+
+            # back-transmit
+            exit_waves_copy *= xp.conj(obj)
 
             if s > 0:
                 # back-propagate
@@ -1104,7 +1237,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         current_object,
         current_probe,
         object_patches,
-        transmitted_probes,
+        propagated_probes,
         exit_waves,
         use_projection_scheme: bool,
         step_size: float,
@@ -1127,6 +1260,8 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
             Transmitted probes at each layer
         exit_waves:np.ndarray
             Updated exit_waves
+        use_projection_scheme: bool,
+            If True, use generalized projection update
         step_size: float, optional
             Update step size
         normalization_min: float, optional
@@ -1147,7 +1282,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                 current_object,
                 current_probe,
                 object_patches,
-                transmitted_probes,
+                propagated_probes,
                 exit_waves[self._active_tilt_index],
                 normalization_min,
                 fix_probe,
@@ -1157,7 +1292,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                 current_object,
                 current_probe,
                 object_patches,
-                transmitted_probes,
+                propagated_probes,
                 exit_waves,
                 step_size,
                 normalization_min,
@@ -1174,6 +1309,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         amplitudes,
         current_positions,
         positions_step_size,
+        constrain_position_distance,
     ):
         """
         Position correction using estimated intensity gradient.
@@ -1185,13 +1321,16 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         current_probe:np.ndarray
             fractionally-shifted probes
         transmitted_probes: np.ndarray
-            Transmitted probes at each layer
+            Transmitted probes after N-1 propagations and N transmissions
         amplitudes: np.ndarray
             Measured amplitudes
         current_positions: np.ndarray
             Current positions estimate
         positions_step_size: float
             Positions step size
+        constrain_position_distance: float
+            Distance to constrain position correction within original
+            field of view in A
 
         Returns
         --------
@@ -1201,68 +1340,72 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
 
         xp = self._xp
 
-        complex_object = xp.exp(1j * current_object)
-
         # Intensity gradient
-        exit_waves_fft = xp.fft.fft2(transmitted_probes[-1])
+        exit_waves_fft = xp.fft.fft2(transmitted_probes)
         exit_waves_fft_conj = xp.conj(exit_waves_fft)
         estimated_intensity = xp.abs(exit_waves_fft) ** 2
         measured_intensity = amplitudes**2
 
-        flat_shape = (transmitted_probes[-1].shape[0], -1)
+        flat_shape = (transmitted_probes.shape[0], -1)
         difference_intensity = (measured_intensity - estimated_intensity).reshape(
             flat_shape
         )
 
         # Computing perturbed exit waves one at a time to save on memory
 
+        complex_object = xp.exp(1j * current_object)
+
         # dx
-        propagated_probes = fft_shift(current_probe, self._positions_px_fractional, xp)
         obj_rolled_patches = complex_object[
             :,
             (self._vectorized_patch_indices_row + 1) % self._object_shape[0],
             self._vectorized_patch_indices_col,
         ]
 
-        transmitted_probes_perturbed = xp.empty_like(obj_rolled_patches)
+        propagated_probes_perturbed = xp.empty_like(obj_rolled_patches)
+        propagated_probes_perturbed[0] = fft_shift(
+            current_probe, self._positions_px_fractional, xp
+        )
 
         for s in range(self._num_slices):
             # transmit
-            transmitted_probes_perturbed[s] = obj_rolled_patches[s] * propagated_probes
+            transmitted_probes_perturbed = (
+                obj_rolled_patches[s] * propagated_probes_perturbed[s]
+            )
 
             # propagate
             if s + 1 < self._num_slices:
-                propagated_probes = self._propagate_array(
-                    transmitted_probes_perturbed[s], self._propagator_arrays[s]
+                propagated_probes_perturbed[s + 1] = self._propagate_array(
+                    transmitted_probes_perturbed, self._propagator_arrays[s]
                 )
 
-        exit_waves_dx_fft = exit_waves_fft - xp.fft.fft2(
-            transmitted_probes_perturbed[-1]
-        )
+        exit_waves_dx_fft = exit_waves_fft - xp.fft.fft2(transmitted_probes_perturbed)
 
         # dy
-        propagated_probes = fft_shift(current_probe, self._positions_px_fractional, xp)
         obj_rolled_patches = complex_object[
             :,
             self._vectorized_patch_indices_row,
             (self._vectorized_patch_indices_col + 1) % self._object_shape[1],
         ]
 
-        transmitted_probes_perturbed = xp.empty_like(obj_rolled_patches)
+        propagated_probes_perturbed = xp.empty_like(obj_rolled_patches)
+        propagated_probes_perturbed[0] = fft_shift(
+            current_probe, self._positions_px_fractional, xp
+        )
 
         for s in range(self._num_slices):
             # transmit
-            transmitted_probes_perturbed[s] = obj_rolled_patches[s] * propagated_probes
+            transmitted_probes_perturbed = (
+                obj_rolled_patches[s] * propagated_probes_perturbed[s]
+            )
 
             # propagate
             if s + 1 < self._num_slices:
-                propagated_probes = self._propagate_array(
-                    transmitted_probes_perturbed[s], self._propagator_arrays[s]
+                propagated_probes_perturbed[s + 1] = self._propagate_array(
+                    transmitted_probes_perturbed, self._propagator_arrays[s]
                 )
 
-        exit_waves_dy_fft = exit_waves_fft - xp.fft.fft2(
-            transmitted_probes_perturbed[-1]
-        )
+        exit_waves_dy_fft = exit_waves_fft - xp.fft.fft2(transmitted_probes_perturbed)
 
         partial_intensity_dx = 2 * xp.real(
             exit_waves_dx_fft * exit_waves_fft_conj
@@ -1284,27 +1427,41 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
             @ difference_intensity[..., None]
         )
 
+        if constrain_position_distance is not None:
+            constrain_position_distance /= xp.sqrt(
+                self.sampling[0] ** 2 + self.sampling[1] ** 2
+            )
+            x1 = (current_positions - positions_step_size * positions_update[..., 0])[
+                :, 0
+            ]
+            y1 = (current_positions - positions_step_size * positions_update[..., 0])[
+                :, 1
+            ]
+            x0 = self._positions_px_initial[:, 0]
+            y0 = self._positions_px_initial[:, 1]
+            if self._rotation_best_transpose:
+                x0, y0 = xp.array([y0, x0])
+                x1, y1 = xp.array([y1, x1])
+
+            if self._rotation_best_rad is not None:
+                rotation_angle = self._rotation_best_rad
+                x0, y0 = x0 * xp.cos(-rotation_angle) + y0 * xp.sin(
+                    -rotation_angle
+                ), -x0 * xp.sin(-rotation_angle) + y0 * xp.cos(-rotation_angle)
+                x1, y1 = x1 * xp.cos(-rotation_angle) + y1 * xp.sin(
+                    -rotation_angle
+                ), -x1 * xp.sin(-rotation_angle) + y1 * xp.cos(-rotation_angle)
+
+            outlier_ind = (x1 > (xp.max(x0) + constrain_position_distance)) + (
+                x1 < (xp.min(x0) - constrain_position_distance)
+            ) + (y1 > (xp.max(y0) + constrain_position_distance)) + (
+                y1 < (xp.min(y0) - constrain_position_distance)
+            ) > 0
+
+            positions_update[..., 0][outlier_ind] = 0
         current_positions -= positions_step_size * positions_update[..., 0]
 
         return current_positions
-
-    def _object_positivity_constraint(self, current_object):
-        """
-        Ptychographic positivity constraint.
-        Used to ensure electrostatic potential is positive.
-
-        Parameters
-        --------
-        current_object: np.ndarray
-            Current object estimate
-
-        Returns
-        --------
-        constrained_object: np.ndarray
-            Constrained object estimate
-        """
-        xp = self._xp
-        return xp.maximum(current_object, 0.0)
 
     def _object_gaussian_constraint(self, current_object, gaussian_filter_sigma):
         """
@@ -1316,7 +1473,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         current_object: np.ndarray
             Current object estimate
         gaussian_filter_sigma: float
-            Standard deviation of gaussian kernel
+            Standard deviation of gaussian kernel in A
 
         Returns
         --------
@@ -1325,11 +1482,14 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         """
         gaussian_filter = self._gaussian_filter
 
+        gaussian_filter_sigma /= self.sampling[0]
         current_object = gaussian_filter(current_object, gaussian_filter_sigma)
 
         return current_object
 
-    def _object_butterworth_constraint(self, current_object, q_lowpass, q_highpass):
+    def _object_butterworth_constraint(
+        self, current_object, q_lowpass, q_highpass, butterworth_order
+    ):
         """
         Butterworth filter
 
@@ -1341,7 +1501,8 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
             Cut-off frequency in A^-1 for low-pass butterworth filter
         q_highpass: float
             Cut-off frequency in A^-1 for high-pass butterworth filter
-
+        butterworth_order: float
+            Butterworth filter order. Smaller gives a smoother filter
         Returns
         --------
         constrained_object: np.ndarray
@@ -1356,11 +1517,14 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
 
         env = xp.ones_like(qra)
         if q_highpass:
-            env *= 1 - 1 / (1 + (qra / q_highpass) ** 4)
+            env *= 1 - 1 / (1 + (qra / q_highpass) ** (2 * butterworth_order))
         if q_lowpass:
-            env *= 1 / (1 + (qra / q_lowpass) ** 4)
+            env *= 1 / (1 + (qra / q_lowpass) ** (2 * butterworth_order))
 
+        current_object_mean = xp.mean(current_object)
+        current_object -= current_object_mean
         current_object = xp.fft.ifftn(xp.fft.fftn(current_object) * env)
+        current_object += current_object_mean
         return xp.real(current_object)
 
     def _constraints(
@@ -1369,7 +1533,17 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         current_probe,
         current_positions,
         fix_com,
-        fix_probe_fourier_amplitude,
+        fit_probe_aberrations,
+        fit_probe_aberrations_max_angular_order,
+        fit_probe_aberrations_max_radial_order,
+        constrain_probe_amplitude,
+        constrain_probe_amplitude_relative_radius,
+        constrain_probe_amplitude_relative_width,
+        constrain_probe_fourier_amplitude,
+        constrain_probe_fourier_amplitude_max_width_pixels,
+        constrain_probe_fourier_amplitude_constant_intensity,
+        fix_probe_aperture,
+        initial_probe_aperture,
         fix_positions,
         global_affine_transformation,
         gaussian_filter,
@@ -1377,10 +1551,13 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         butterworth_filter,
         q_lowpass,
         q_highpass,
+        butterworth_order,
+        object_positivity,
+        shrinkage_rad,
+        object_mask,
     ):
         """
         Ptychographic constraints operator.
-        Calls _threshold_object_constraint() and _probe_center_of_mass_constraint()
 
         Parameters
         --------
@@ -1392,20 +1569,48 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
             Current positions estimate
         fix_com: bool
             If True, probe CoM is fixed to the center
-        fix_probe_fourier_amplitude: bool
-            If True, probe fourier amplitude is set to initial probe
+        fit_probe_aberrations: bool
+            If True, fits the probe aberrations to a low-order expansion
+        fit_probe_aberrations_max_angular_order: bool
+            Max angular order of probe aberrations basis functions
+        fit_probe_aberrations_max_radial_order: bool
+            Max radial order of probe aberrations basis functions
+        constrain_probe_amplitude: bool
+            If True, probe amplitude is constrained by top hat function
+        constrain_probe_amplitude_relative_radius: float
+            Relative location of top-hat inflection point, between 0 and 0.5
+        constrain_probe_amplitude_relative_width: float
+            Relative width of top-hat sigmoid, between 0 and 0.5
+        constrain_probe_fourier_amplitude: bool
+            If True, probe aperture is constrained by fitting a sigmoid for each angular frequency.
+        constrain_probe_fourier_amplitude_max_width_pixels: float
+            Maximum pixel width of fitted sigmoid functions.
+        constrain_probe_fourier_amplitude_constant_intensity: bool
+            If True, the probe aperture is additionally constrained to a constant intensity.
+        fix_probe_aperture: bool,
+            If True, probe Fourier amplitude is replaced by initial probe aperture.
+        initial_probe_aperture: np.ndarray,
+            Initial probe aperture to use in replacing probe Fourier amplitude.
         fix_positions: bool
             If True, positions are not updated
         gaussian_filter: bool
             If True, applies real-space gaussian filter
         gaussian_filter_sigma: float
-            Standard deviation of gaussian kernel
+            Standard deviation of gaussian kernel in A
         butterworth_filter: bool
             If True, applies fourier-space butterworth filter
         q_lowpass: float
             Cut-off frequency in A^-1 for low-pass butterworth filter
         q_highpass: float
             Cut-off frequency in A^-1 for high-pass butterworth filter
+        butterworth_order: float
+            Butterworth filter order. Smaller gives a smoother filter
+        object_positivity: bool
+            If True, forces object to be positive
+        shrinkage_rad: float
+            Phase shift in radians to be subtracted from the potential at each iteration
+        object_mask: np.ndarray (boolean)
+            If not None, used to calculate additional shrinkage using masked-mean of object
 
         Returns
         --------
@@ -1427,17 +1632,47 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                 current_object,
                 q_lowpass,
                 q_highpass,
+                butterworth_order,
             )
 
-        current_object = self._object_positivity_constraint(current_object)
+        if shrinkage_rad > 0.0 or object_mask is not None:
+            current_object = self._object_shrinkage_constraint(
+                current_object,
+                shrinkage_rad,
+                object_mask,
+            )
 
-        if fix_probe_fourier_amplitude:
-            current_probe = self._probe_fourier_amplitude_constraint(current_probe)
-
-        current_probe = self._probe_finite_support_constraint(current_probe)
+        if object_positivity:
+            current_object = self._object_positivity_constraint(current_object)
 
         if fix_com:
             current_probe = self._probe_center_of_mass_constraint(current_probe)
+
+        if fix_probe_aperture:
+            current_probe = self._probe_aperture_constraint(
+                current_probe,
+                initial_probe_aperture,
+            )
+        elif constrain_probe_fourier_amplitude:
+            current_probe = self._probe_fourier_amplitude_constraint(
+                current_probe,
+                constrain_probe_fourier_amplitude_max_width_pixels,
+                constrain_probe_fourier_amplitude_constant_intensity,
+            )
+
+        if fit_probe_aberrations:
+            current_probe = self._probe_aberration_fitting_constraint(
+                current_probe,
+                fit_probe_aberrations_max_angular_order,
+                fit_probe_aberrations_max_radial_order,
+            )
+
+        if constrain_probe_amplitude:
+            current_probe = self._probe_amplitude_constraint(
+                current_probe,
+                constrain_probe_amplitude_relative_radius,
+                constrain_probe_amplitude_relative_width,
+            )
 
         if not fix_positions:
             current_positions = self._positions_center_of_mass_constraint(
@@ -1456,23 +1691,38 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         max_iter: int = 64,
         reconstruction_method: str = "gradient-descent",
         reconstruction_parameter: float = 1.0,
+        reconstruction_parameter_a: float = None,
+        reconstruction_parameter_b: float = None,
+        reconstruction_parameter_c: float = None,
         max_batch_size: int = None,
         seed_random: int = None,
-        step_size: float = 0.9,
-        normalization_min: float = 1e-3,
+        step_size: float = 0.5,
+        normalization_min: float = 1,
         positions_step_size: float = 0.9,
         fix_com: bool = True,
         fix_probe_iter: int = 0,
-        fix_probe_fourier_amplitude_iter: int = 0,
+        fix_probe_aperture_iter: int = 0,
+        constrain_probe_amplitude_iter: int = 0,
+        constrain_probe_amplitude_relative_radius: float = 0.5,
+        constrain_probe_amplitude_relative_width: float = 0.05,
+        constrain_probe_fourier_amplitude_iter: int = 0,
+        constrain_probe_fourier_amplitude_max_width_pixels: float = 3.0,
+        constrain_probe_fourier_amplitude_constant_intensity: bool = False,
         fix_positions_iter: int = np.inf,
+        constrain_position_distance: float = None,
         global_affine_transformation: bool = True,
-        probe_support_relative_radius: float = 1.0,
-        probe_support_supergaussian_degree: float = 10.0,
         gaussian_filter_sigma: float = None,
         gaussian_filter_iter: int = np.inf,
+        fit_probe_aberrations_iter: int = 0,
+        fit_probe_aberrations_max_angular_order: int = 4,
+        fit_probe_aberrations_max_radial_order: int = 4,
         butterworth_filter_iter: int = np.inf,
         q_lowpass: float = None,
         q_highpass: float = None,
+        butterworth_order: float = 2,
+        object_positivity: bool = True,
+        shrinkage_rad: float = 0.0,
+        fix_potential_baseline: bool = True,
         collective_tilt_updates: bool = False,
         store_iterations: bool = False,
         progress_bar: bool = True,
@@ -1487,7 +1737,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
             Maximum number of iterations to run
         reconstruction_method: str, optional
             Specifies which reconstruction algorithm to use, one of:
-            "generalized-projection",
+            "generalized-projections",
             "DM_AP" (or "difference-map_alternating-projections"),
             "RAAR" (or "relaxed-averaged-alternating-reflections"),
             "RRR" (or "relax-reflect-reflect"),
@@ -1495,8 +1745,12 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
             "GD" (or "gradient_descent")
         reconstruction_parameter: float, optional
             Reconstruction parameter for various reconstruction methods above.
-        reconstruction_parameter: float, optional
-            Tuning parameter to interpolate b/w DM-AP and DM-RAAR
+        reconstruction_parameter_a: float, optional
+            Reconstruction parameter a for reconstruction_method='generalized-projections'.
+        reconstruction_parameter_b: float, optional
+            Reconstruction parameter b for reconstruction_method='generalized-projections'.
+        reconstruction_parameter_c: float, optional
+            Reconstruction parameter c for reconstruction_method='generalized-projections'.
         max_batch_size: int, optional
             Max number of probes to update at once
         seed_random: int, optional
@@ -1511,26 +1765,49 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
             If True, fixes center of mass of probe
         fix_probe_iter: int, optional
             Number of iterations to run with a fixed probe before updating probe estimate
-        fix_probe_amplitude: int, optional
-            Number of iterations to run with a fixed probe amplitude
+        fix_probe_aperture_iter: int, optional
+            Number of iterations to run with a fixed probe Fourier amplitude before updating probe estimate
+        constrain_probe_amplitude_iter: int, optional
+            Number of iterations to run while constraining the real-space probe with a top-hat support.
+        constrain_probe_amplitude_relative_radius: float
+            Relative location of top-hat inflection point, between 0 and 0.5
+        constrain_probe_amplitude_relative_width: float
+            Relative width of top-hat sigmoid, between 0 and 0.5
+        constrain_probe_fourier_amplitude_iter: int, optional
+            Number of iterations to run while constraining the Fourier-space probe by fitting a sigmoid for each angular frequency.
+        constrain_probe_fourier_amplitude_max_width_pixels: float
+            Maximum pixel width of fitted sigmoid functions.
+        constrain_probe_fourier_amplitude_constant_intensity: bool
+            If True, the probe aperture is additionally constrained to a constant intensity.
         fix_positions_iter: int, optional
             Number of iterations to run with fixed positions before updating positions estimate
+        constrain_position_distance: float, optional
+            Distance to constrain position correction within original
+            field of view in A
         global_affine_transformation: bool, optional
             If True, positions are assumed to be a global affine transform from initial scan
-        probe_support_relative_radius: float, optional
-            Radius of probe supergaussian support in scaled pixel units, between (0,1]
-        probe_support_supergaussian_degree: float, optional
-            Degree supergaussian support is raised to, higher is sharper cutoff
         gaussian_filter_sigma: float, optional
-            Standard deviation of gaussian kernel
+            Standard deviation of gaussian kernel in A
         gaussian_filter_iter: int, optional
             Number of iterations to run using object smoothness constraint
+        fit_probe_aberrations_iter: int, optional
+            Number of iterations to run while fitting the probe aberrations to a low-order expansion
+        fit_probe_aberrations_max_angular_order: bool
+            Max angular order of probe aberrations basis functions
+        fit_probe_aberrations_max_radial_order: bool
+            Max radial order of probe aberrations basis functions
         butterworth_filter_iter: int, optional
             Number of iterations to run using high-pass butteworth filter
         q_lowpass: float
             Cut-off frequency in A^-1 for low-pass butterworth filter
         q_highpass: float
             Cut-off frequency in A^-1 for high-pass butterworth filter
+        butterworth_order: float
+            Butterworth filter order. Smaller gives a smoother filter
+        object_positivity: bool, optional
+            If True, forces object to be positive
+        shrinkage_rad: float
+            Phase shift in radians to be subtracted from the potential at each iteration
         store_iterations: bool, optional
             If True, reconstructed objects and probes are stored at each iteration
         progress_bar: bool, optional
@@ -1540,7 +1817,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
 
         Returns
         --------
-        self: MultislicePtychographicReconstruction
+        self: OverlapTomographicReconstruction
             Self to accommodate chaining
         """
         asnumpy = self._asnumpy
@@ -1548,17 +1825,23 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
 
         # Reconstruction method
 
-        if reconstruction_method == "generalized-projection":
-            if np.array(reconstruction_parameter).shape != (3,):
+        if reconstruction_method == "generalized-projections":
+            if (
+                reconstruction_parameter_a is None
+                or reconstruction_parameter_b is None
+                or reconstruction_parameter_c is None
+            ):
                 raise ValueError(
                     (
-                        "reconstruction_parameter must be a list of three numbers "
-                        "when using `reconstriction_method`=generalized-projection."
+                        "reconstruction_parameter_a/b/c must all be specified "
+                        "when using reconstruction_method='generalized-projections'."
                     )
                 )
 
             use_projection_scheme = True
-            projection_a, projection_b, projection_c = reconstruction_parameter
+            projection_a = reconstruction_parameter_a
+            projection_b = reconstruction_parameter_b
+            projection_c = reconstruction_parameter_c
             step_size = None
         elif (
             reconstruction_method == "DM_AP"
@@ -1617,7 +1900,8 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         else:
             raise ValueError(
                 (
-                    "reconstruction_method must be one of 'DM_AP' (or 'difference-map_alternating-projections'), "
+                    "reconstruction_method must be one of 'generalized-projections', "
+                    "'DM_AP' (or 'difference-map_alternating-projections'), "
                     "'RAAR' (or 'relaxed-averaged-alternating-reflections'), "
                     "'RRR' (or 'relax-reflect-reflect'), "
                     "'SUPERFLIP' (or 'charge-flipping'), "
@@ -1691,10 +1975,10 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         if store_iterations and (not hasattr(self, "object_iterations") or reset):
             self.object_iterations = []
             self.probe_iterations = []
-            self.error_iterations = []
 
         if reset:
             self._object = self._object_initial.copy()
+            self.error_iterations = []
             self._probe = self._probe_initial.copy()
             self._positions_px_all = self._positions_px_initial_all.copy()
 
@@ -1713,24 +1997,11 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                     UserWarning,
                 )
             else:
+                self.error_iterations = []
                 if use_projection_scheme:
                     self._exit_waves = [None] * self._num_tilts
                 else:
                     self._exit_waves = None
-
-        # Probe support mask initialization
-        x = xp.linspace(-1, 1, self._region_of_interest_shape[0], endpoint=False)
-        y = xp.linspace(-1, 1, self._region_of_interest_shape[1], endpoint=False)
-        xx, yy = xp.meshgrid(x, y, indexing="ij")
-        self._probe_support_mask = xp.exp(
-            -(
-                (
-                    (xx / probe_support_relative_radius) ** 2
-                    + (yy / probe_support_relative_radius) ** 2
-                )
-                ** probe_support_supergaussian_degree
-            )
-        )
 
         # main loop
         for a0 in tqdmnd(
@@ -1750,12 +2021,14 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
             for tilt_index in tilt_indices:
                 self._active_tilt_index = tilt_index
 
+                tilt_error = 0.0
+
                 self._object = self._rotate(
                     self._object,
                     self._tilt_angles_deg[self._active_tilt_index],
                     axes=(0, 2),
                     reshape=False,
-                    order=2,
+                    order=3,
                 )
 
                 object_sliced = self._project_sliced_object(
@@ -1829,7 +2102,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                         object_sliced,
                         self._probe,
                         object_patches,
-                        transmitted_probes,
+                        propagated_probes,
                         self._exit_waves,
                         use_projection_scheme=use_projection_scheme,
                         step_size=step_size,
@@ -1846,9 +2119,10 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                             amplitudes,
                             self._positions_px,
                             positions_step_size,
+                            constrain_position_distance,
                         )
 
-                    error += batch_error
+                    tilt_error += batch_error
 
                 if not use_projection_scheme:
                     object_sliced -= object_sliced_old
@@ -1863,7 +2137,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                         -self._tilt_angles_deg[self._active_tilt_index],
                         axes=(0, 2),
                         reshape=False,
-                        order=2,
+                        order=3,
                     )
                 else:
                     self._object += object_update
@@ -1873,8 +2147,15 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                     -self._tilt_angles_deg[self._active_tilt_index],
                     axes=(0, 2),
                     reshape=False,
-                    order=2,
+                    order=3,
                 )
+
+                # Normalize Error
+                tilt_error /= (
+                    self._mean_diffraction_intensity[self._active_tilt_index]
+                    * num_diffraction_patterns
+                )
+                error += tilt_error
 
                 # constraints
                 self._positions_px_all[start_tilt:end_tilt] = positions_px.copy()[
@@ -1891,8 +2172,21 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                         self._probe,
                         self._positions_px_all[start_tilt:end_tilt],
                         fix_com=fix_com and a0 >= fix_probe_iter,
-                        fix_probe_fourier_amplitude=a0
-                        < fix_probe_fourier_amplitude_iter,
+                        constrain_probe_amplitude=a0 < constrain_probe_amplitude_iter
+                        and a0 >= fix_probe_iter,
+                        constrain_probe_amplitude_relative_radius=constrain_probe_amplitude_relative_radius,
+                        constrain_probe_amplitude_relative_width=constrain_probe_amplitude_relative_width,
+                        constrain_probe_fourier_amplitude=a0
+                        < constrain_probe_fourier_amplitude_iter
+                        and a0 >= fix_probe_iter,
+                        constrain_probe_fourier_amplitude_max_width_pixels=constrain_probe_fourier_amplitude_max_width_pixels,
+                        constrain_probe_fourier_amplitude_constant_intensity=constrain_probe_fourier_amplitude_constant_intensity,
+                        fit_probe_aberrations=a0 < fit_probe_aberrations_iter
+                        and a0 >= fix_probe_iter,
+                        fit_probe_aberrations_max_angular_order=fit_probe_aberrations_max_angular_order,
+                        fit_probe_aberrations_max_radial_order=fit_probe_aberrations_max_radial_order,
+                        fix_probe_aperture=a0 < fix_probe_aperture_iter,
+                        initial_probe_aperture=self._probe_initial_aperture,
                         fix_positions=a0 < fix_positions_iter,
                         global_affine_transformation=global_affine_transformation,
                         gaussian_filter=a0 < gaussian_filter_iter
@@ -1902,7 +2196,17 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                         and (q_lowpass is not None or q_highpass is not None),
                         q_lowpass=q_lowpass,
                         q_highpass=q_highpass,
+                        butterworth_order=butterworth_order,
+                        object_positivity=object_positivity,
+                        shrinkage_rad=shrinkage_rad,
+                        object_mask=self._object_fov_mask_inverse
+                        if fix_potential_baseline
+                        and self._object_fov_mask_inverse.sum() > 0
+                        else None,
                     )
+
+            # Normalize Error Over Tilts
+            error /= self._num_tilts
 
             if collective_tilt_updates:
                 self._object += collective_object / self._num_tilts
@@ -1916,7 +2220,21 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                     self._probe,
                     None,
                     fix_com=fix_com and a0 >= fix_probe_iter,
-                    fix_probe_fourier_amplitude=a0 < fix_probe_fourier_amplitude_iter,
+                    constrain_probe_amplitude=a0 < constrain_probe_amplitude_iter
+                    and a0 >= fix_probe_iter,
+                    constrain_probe_amplitude_relative_radius=constrain_probe_amplitude_relative_radius,
+                    constrain_probe_amplitude_relative_width=constrain_probe_amplitude_relative_width,
+                    constrain_probe_fourier_amplitude=a0
+                    < constrain_probe_fourier_amplitude_iter
+                    and a0 >= fix_probe_iter,
+                    constrain_probe_fourier_amplitude_max_width_pixels=constrain_probe_fourier_amplitude_max_width_pixels,
+                    constrain_probe_fourier_amplitude_constant_intensity=constrain_probe_fourier_amplitude_constant_intensity,
+                    fit_probe_aberrations=a0 < fit_probe_aberrations_iter
+                    and a0 >= fix_probe_iter,
+                    fit_probe_aberrations_max_angular_order=fit_probe_aberrations_max_angular_order,
+                    fit_probe_aberrations_max_radial_order=fit_probe_aberrations_max_radial_order,
+                    fix_probe_aperture=a0 < fix_probe_aperture_iter,
+                    initial_probe_aperture=self._probe_initial_aperture,
                     fix_positions=True,
                     global_affine_transformation=global_affine_transformation,
                     gaussian_filter=a0 < gaussian_filter_iter
@@ -1926,17 +2244,28 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                     and (q_lowpass is not None or q_highpass is not None),
                     q_lowpass=q_lowpass,
                     q_highpass=q_highpass,
+                    butterworth_order=butterworth_order,
+                    object_positivity=object_positivity,
+                    shrinkage_rad=shrinkage_rad,
+                    object_mask=self._object_fov_mask_inverse
+                    if fix_potential_baseline
+                    and self._object_fov_mask_inverse.sum() > 0
+                    else None,
                 )
 
+            self.error_iterations.append(error.item())
             if store_iterations:
                 self.object_iterations.append(asnumpy(self._object.copy()))
-                self.probe_iterations.append(asnumpy(self._probe.copy()))
-                self.error_iterations.append(error.item())
+                self.probe_iterations.append(self.probe_centered)
 
         # store result
         self.object = asnumpy(self._object)
-        self.probe = asnumpy(self._probe)
+        self.probe = self.probe_centered
         self.error = error.item()
+
+        if self._device == "gpu":
+            xp._default_memory_pool.free_all_blocks()
+            xp.clear_memo()
 
         return self
 
@@ -1948,16 +2277,21 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         y_lims,
     ):
         """
-        Crops and rotated object to FOV bounded by current pixel positions.
+        Crops and rotates rotates object manually.
 
         Parameters
         ----------
         array: np.ndarray
             Object array to crop and rotate. Only operates on numpy arrays for comptatibility.
-        padding: int, optional
-            Optional padding outside pixel positions
+        angle: float
+            In-plane angle in degrees to rotate by
+        x_lims: tuple(float,float)
+            min/max x indices
+        y_lims: tuple(float,float)
+            min/max y indices
 
         Returns
+        -------
         cropped_rotated_array: np.ndarray
             Cropped and rotated object array
         """
@@ -1968,7 +2302,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
 
         if angle is not None:
             rotated_array = rotate_np(
-                asnumpy(array), np.rad2deg(angle), reshape=False, axes=(-2, -1)
+                asnumpy(array), angle, reshape=False, axes=(-2, -1)
             )
         else:
             rotated_array = asnumpy(array)
@@ -1981,7 +2315,6 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
         object_ax,
         convergence_ax,
         cbar: bool,
-        relative_error: bool,
         projection_angle_deg: float,
         projection_axes: Tuple[int, int],
         x_lims: Tuple[int, int],
@@ -2001,10 +2334,17 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
             Matplotlib axes to plot convergence plot in
         cbar: bool, optional
             If true, displays a colorbar
+        projection_angle_deg: float
+            Angle in degrees to rotate 3D array around prior to projection
+        projection_axes: tuple(int,int)
+            Axes defining projection plane
+        x_lims: tuple(float,float)
+            min/max x indices
+        y_lims: tuple(float,float)
+            min/max y indices
         """
 
-        cmap = kwargs.get("cmap", "magma")
-        kwargs.pop("cmap", None)
+        cmap = kwargs.pop("cmap", "magma")
 
         asnumpy = self._asnumpy
 
@@ -2050,20 +2390,15 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
             kwargs.pop("vmin", None)
             kwargs.pop("vmax", None)
             errors = self.error_iterations
-
-            if relative_error:
-                convergence_ax.semilogy(
-                    np.arange(errors.shape[0]), errors / errors[0], **kwargs
-                )
-            else:
-                convergence_ax.semilogy(np.arange(errors.shape[0]), errors, **kwargs)
+            convergence_ax.semilogy(np.arange(errors.shape[0]), errors, **kwargs)
 
     def _visualize_last_iteration(
         self,
+        fig,
         cbar: bool,
         plot_convergence: bool,
         plot_probe: bool,
-        relative_error: bool,
+        plot_fourier_probe: bool,
         projection_angle_deg: float,
         projection_axes: Tuple[int, int],
         x_lims: Tuple[int, int],
@@ -2075,24 +2410,29 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
 
         Parameters
         --------
+        fig: Figure
+            Matplotlib figure to place Gridspec in
         plot_convergence: bool, optional
-            If true, the RMS error plot is displayed
+            If true, the normalized mean squared error (NMSE) plot is displayed
         cbar: bool, optional
             If true, displays a colorbar
         plot_probe: bool
             If true, the reconstructed probe intensity is also displayed
-        object_mode: str
-            Specifies the attribute of the object to plot.
-            One of 'phase', 'amplitude', 'intensity'
-        relative_error: bool
-            Sets the error to be relative to the first iteration.
-            TODO - update to be relative to empty object wave error (RMS of all measurements).
-
+        plot_fourier_probe: bool, optional
+            If true, the reconstructed complex Fourier probe is displayed
+        projection_angle_deg: float
+            Angle in degrees to rotate 3D array around prior to projection
+        projection_axes: tuple(int,int)
+            Axes defining projection plane
+        x_lims: tuple(float,float)
+            min/max x indices
+        y_lims: tuple(float,float)
+            min/max y indices
         """
-        figsize = kwargs.get("figsize", (8, 5))
-        cmap = kwargs.get("cmap", "magma")
-        kwargs.pop("figsize", None)
-        kwargs.pop("cmap", None)
+        figsize = kwargs.pop("figsize", (8, 5))
+        cmap = kwargs.pop("cmap", "magma")
+        invert = kwargs.pop("invert", False)
+        hue_start = kwargs.pop("hue_start", 0)
 
         asnumpy = self._asnumpy
 
@@ -2120,15 +2460,23 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
             0,
         ]
 
-        probe_extent = [
-            0,
-            self.sampling[1] * self._region_of_interest_shape[1],
-            self.sampling[0] * self._region_of_interest_shape[0],
-            0,
-        ]
+        if plot_fourier_probe:
+            probe_extent = [
+                -self.angular_sampling[1] * self._region_of_interest_shape[1] / 2,
+                self.angular_sampling[1] * self._region_of_interest_shape[1] / 2,
+                self.angular_sampling[0] * self._region_of_interest_shape[0] / 2,
+                -self.angular_sampling[0] * self._region_of_interest_shape[0] / 2,
+            ]
+        elif plot_probe:
+            probe_extent = [
+                0,
+                self.sampling[1] * self._region_of_interest_shape[1],
+                self.sampling[0] * self._region_of_interest_shape[0],
+                0,
+            ]
 
         if plot_convergence:
-            if plot_probe:
+            if plot_probe or plot_fourier_probe:
                 spec = GridSpec(
                     ncols=2,
                     nrows=2,
@@ -2143,7 +2491,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
             else:
                 spec = GridSpec(ncols=1, nrows=2, height_ratios=[4, 1], hspace=0.15)
         else:
-            if plot_probe:
+            if plot_probe or plot_fourier_probe:
                 spec = GridSpec(
                     ncols=2,
                     nrows=1,
@@ -2156,9 +2504,10 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
             else:
                 spec = GridSpec(ncols=1, nrows=1)
 
-        fig = plt.figure(figsize=figsize)
+        if fig is None:
+            fig = plt.figure(figsize=figsize)
 
-        if plot_probe:
+        if plot_probe or plot_fourier_probe:
             # Object
             ax = fig.add_subplot(spec[0, 0])
             im = ax.imshow(
@@ -2181,23 +2530,33 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
             # Probe
             kwargs.pop("vmin", None)
             kwargs.pop("vmax", None)
+
             ax = fig.add_subplot(spec[0, 1])
+            if plot_fourier_probe:
+                probe_array = Complex2RGB(
+                    self.probe_fourier, hue_start=hue_start, invert=invert
+                )
+                ax.set_title("Reconstructed Fourier probe")
+                ax.set_ylabel("kx [mrad]")
+                ax.set_xlabel("ky [mrad]")
+            else:
+                probe_array = Complex2RGB(
+                    self.probe, hue_start=hue_start, invert=invert
+                )
+                ax.set_title("Reconstructed probe")
+                ax.set_ylabel("x [A]")
+                ax.set_xlabel("y [A]")
+
             im = ax.imshow(
-                np.abs(self.probe) ** 2,
+                probe_array,
                 extent=probe_extent,
-                cmap="Greys_r",
                 **kwargs,
             )
-            ax.set_ylabel("x [A]")
-            ax.set_xlabel("y [A]")
-            ax.set_title("Reconstructed probe intensity")
 
             if cbar:
                 divider = make_axes_locatable(ax)
                 ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
-                fig.add_axes(ax_cb)
-                fig.colorbar(im, cax=ax_cb)
-
+                add_colorbar_arg(ax_cb, hue_start=hue_start, invert=invert)
         else:
             ax = fig.add_subplot(spec[0])
             im = ax.imshow(
@@ -2224,25 +2583,22 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                 ax = fig.add_subplot(spec[1, :])
             else:
                 ax = fig.add_subplot(spec[1])
-            if relative_error:
-                ax.semilogy(np.arange(errors.shape[0]), errors / errors[0], **kwargs)
-                ax.set_ylabel("Log Rel. RMS error")
-            else:
-                ax.semilogy(np.arange(errors.shape[0]), errors, **kwargs)
-                ax.set_ylabel("Log RMS error")
+            ax.semilogy(np.arange(errors.shape[0]), errors, **kwargs)
+            ax.set_ylabel("NMSE")
             ax.set_xlabel("Iteration Number")
             ax.yaxis.tick_right()
 
-        fig.suptitle(f"RMS error: {self.error:.3e}")
+        fig.suptitle(f"Normalized Mean Squared Error: {self.error:.3e}")
         spec.tight_layout(fig)
 
     def _visualize_all_iterations(
         self,
+        fig,
         cbar: bool,
         plot_convergence: bool,
         plot_probe: bool,
+        plot_fourier_probe: bool,
         iterations_grid: Tuple[int, int],
-        relative_error: bool,
         projection_angle_deg: float,
         projection_axes: Tuple[int, int],
         x_lims: Tuple[int, int],
@@ -2254,32 +2610,70 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
 
         Parameters
         --------
+        fig: Figure
+            Matplotlib figure to place Gridspec in
         plot_convergence: bool, optional
-            If true, the RMS error plot is displayed
-        iterations_grid: Tuple[int,int]
-            Grid dimensions to plot reconstruction iterations
+            If true, the normalized mean squared error (NMSE) plot is displayed
         cbar: bool, optional
             If true, displays a colorbar
         plot_probe: bool
             If true, the reconstructed probe intensity is also displayed
-        object_mode: str
-            Specifies the attribute of the object to plot.
-            One of 'phase', 'amplitude', 'intensity'
-        relative_error: bool
-            Sets the error to be relative to the first iteration.
-            TODO - update to be relative to empty object wave error (RMS of all measurements).
-
+        plot_fourier_probe: bool, optional
+            If true, the reconstructed complex Fourier probe is displayed
+        iterations_grid: Tuple[int,int]
+            Grid dimensions to plot reconstruction iterations
+        projection_angle_deg: float
+            Angle in degrees to rotate 3D array around prior to projection
+        projection_axes: tuple(int,int)
+            Axes defining projection plane
+        x_lims: tuple(float,float)
+            min/max x indices
+        y_lims: tuple(float,float)
+            min/max y indices
         """
+        asnumpy = self._asnumpy
+
+        if not hasattr(self, "object_iterations"):
+            raise ValueError(
+                (
+                    "Object and probe iterations were not saved during reconstruction. "
+                    "Please re-run using store_iterations=True."
+                )
+            )
+
         if iterations_grid == "auto":
-            iterations_grid = (2, 4)
+            num_iter = len(self.error_iterations)
+
+            if num_iter == 1:
+                return self._visualize_last_iteration(
+                    fig=fig,
+                    plot_convergence=plot_convergence,
+                    plot_probe=plot_probe,
+                    plot_fourier_probe=plot_fourier_probe,
+                    cbar=cbar,
+                    projection_angle_deg=projection_angle_deg,
+                    projection_axes=projection_axes,
+                    x_lims=x_lims,
+                    y_lims=y_lims,
+                    **kwargs,
+                )
+            elif plot_probe or plot_fourier_probe:
+                iterations_grid = (2, 4) if num_iter > 4 else (2, num_iter)
+            else:
+                iterations_grid = (2, 4) if num_iter > 8 else (2, num_iter // 2)
         else:
-            if plot_probe and iterations_grid[0] != 2:
+            if (plot_probe or plot_fourier_probe) and iterations_grid[0] != 2:
                 raise ValueError()
 
-        figsize = kwargs.get("figsize", (12, 7))
-        cmap = kwargs.get("cmap", "magma")
-        kwargs.pop("figsize", None)
-        kwargs.pop("cmap", None)
+        auto_figsize = (
+            (3 * iterations_grid[1], 3 * iterations_grid[0] + 1)
+            if plot_convergence
+            else (3 * iterations_grid[1], 3 * iterations_grid[0])
+        )
+        figsize = kwargs.pop("figsize", auto_figsize)
+        cmap = kwargs.pop("cmap", "magma")
+        invert = kwargs.pop("invert", False)
+        hue_start = kwargs.pop("hue_start", 0)
 
         errors = np.array(self.error_iterations)
 
@@ -2307,7 +2701,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                 for obj in self.object_iterations
             ]
 
-        if plot_probe:
+        if plot_probe or plot_fourier_probe:
             total_grids = (np.prod(iterations_grid) / 2).astype("int")
             probes = self.probe_iterations
         else:
@@ -2322,25 +2716,34 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
             0,
         ]
 
-        probe_extent = [
-            0,
-            self.sampling[1] * self._region_of_interest_shape[1],
-            self.sampling[0] * self._region_of_interest_shape[0],
-            0,
-        ]
+        if plot_fourier_probe:
+            probe_extent = [
+                -self.angular_sampling[1] * self._region_of_interest_shape[1] / 2,
+                self.angular_sampling[1] * self._region_of_interest_shape[1] / 2,
+                self.angular_sampling[0] * self._region_of_interest_shape[0] / 2,
+                -self.angular_sampling[0] * self._region_of_interest_shape[0] / 2,
+            ]
+        elif plot_probe:
+            probe_extent = [
+                0,
+                self.sampling[1] * self._region_of_interest_shape[1],
+                self.sampling[0] * self._region_of_interest_shape[0],
+                0,
+            ]
 
         if plot_convergence:
-            if plot_probe:
+            if plot_probe or plot_fourier_probe:
                 spec = GridSpec(ncols=1, nrows=3, height_ratios=[4, 4, 1], hspace=0)
             else:
                 spec = GridSpec(ncols=1, nrows=2, height_ratios=[4, 1], hspace=0)
         else:
-            if plot_probe:
+            if plot_probe or plot_fourier_probe:
                 spec = GridSpec(ncols=1, nrows=2)
             else:
                 spec = GridSpec(ncols=1, nrows=1)
 
-        fig = plt.figure(figsize=figsize)
+        if fig is None:
+            fig = plt.figure(figsize=figsize)
 
         grid = ImageGrid(
             fig,
@@ -2365,7 +2768,7 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
             if cbar:
                 grid.cbar_axes[n].colorbar(im)
 
-        if plot_probe:
+        if plot_probe or plot_fourier_probe:
             kwargs.pop("vmin", None)
             kwargs.pop("vmax", None)
             grid = ImageGrid(
@@ -2378,19 +2781,37 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
             )
 
             for n, ax in enumerate(grid):
+                if plot_fourier_probe:
+                    probe_array = Complex2RGB(
+                        asnumpy(
+                            self._return_fourier_probe_from_centered_probe(
+                                probes[grid_range[n]]
+                            )
+                        ),
+                        hue_start=hue_start,
+                        invert=invert,
+                    )
+                    ax.set_title(f"Iter: {grid_range[n]} Fourier probe")
+                    ax.set_ylabel("kx [mrad]")
+                    ax.set_xlabel("ky [mrad]")
+                else:
+                    probe_array = Complex2RGB(
+                        probes[grid_range[n]], hue_start=hue_start, invert=invert
+                    )
+                    ax.set_title(f"Iter: {grid_range[n]} probe")
+                    ax.set_ylabel("x [A]")
+                    ax.set_xlabel("y [A]")
+
                 im = ax.imshow(
-                    np.abs(probes[grid_range[n]]) ** 2,
+                    probe_array,
                     extent=probe_extent,
-                    cmap="Greys_r",
                     **kwargs,
                 )
-                ax.set_title(f"Iter: {grid_range[n]} Probe")
-
-                ax.set_ylabel("x [A]")
-                ax.set_xlabel("y [A]")
 
                 if cbar:
-                    grid.cbar_axes[n].colorbar(im)
+                    add_colorbar_arg(
+                        grid.cbar_axes[n], hue_start=hue_start, invert=invert
+                    )
 
         if plot_convergence:
             kwargs.pop("vmin", None)
@@ -2399,12 +2820,8 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
                 ax2 = fig.add_subplot(spec[2])
             else:
                 ax2 = fig.add_subplot(spec[1])
-            if relative_error:
-                ax2.semilogy(np.arange(errors.shape[0]), errors / errors[0], **kwargs)
-                ax2.set_ylabel("Log Rel. RMS error")
-            else:
-                ax2.semilogy(np.arange(errors.shape[0]), errors, **kwargs)
-                ax2.set_ylabel("Log RMS error")
+            ax2.semilogy(np.arange(errors.shape[0]), errors, **kwargs)
+            ax2.set_ylabel("NMSE")
             ax2.set_xlabel("Iteration Number")
             ax2.yaxis.tick_right()
 
@@ -2412,11 +2829,12 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
 
     def visualize(
         self,
+        fig=None,
         iterations_grid: Tuple[int, int] = None,
         plot_convergence: bool = True,
         plot_probe: bool = True,
+        plot_fourier_probe: bool = False,
         cbar: bool = True,
-        relative_error: bool = True,
         projection_angle_deg: float = None,
         projection_axes: Tuple[int, int] = (0, 2),
         x_lims=(None, None),
@@ -2428,30 +2846,40 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
 
         Parameters
         --------
+        fig: Figure
+            Matplotlib figure to place Gridspec in
         plot_convergence: bool, optional
-            If true, the RMS error plot is displayed
-        iterations_grid: Tuple[int,int]
-            Grid dimensions to plot reconstruction iterations
+            If true, the normalized mean squared error (NMSE) plot is displayed
         cbar: bool, optional
             If true, displays a colorbar
         plot_probe: bool
             If true, the reconstructed probe intensity is also displayed
-        relative_error: bool
-            Sets the error to be relative to the first iteration.
-            TODO - update to be relative to empty object wave error (RMS of all measurements).
+        plot_fourier_probe: bool, optional
+            If true, the reconstructed complex Fourier probe is displayed
+        iterations_grid: Tuple[int,int]
+            Grid dimensions to plot reconstruction iterations
+        projection_angle_deg: float
+            Angle in degrees to rotate 3D array around prior to projection
+        projection_axes: tuple(int,int)
+            Axes defining projection plane
+        x_lims: tuple(float,float)
+            min/max x indices
+        y_lims: tuple(float,float)
+            min/max y indices
 
         Returns
         --------
-        self: PtychographicReconstruction
+        self: OverlapTomographicReconstruction
             Self to accommodate chaining
         """
 
         if iterations_grid is None:
             self._visualize_last_iteration(
+                fig=fig,
                 plot_convergence=plot_convergence,
                 plot_probe=plot_probe,
+                plot_fourier_probe=plot_fourier_probe,
                 cbar=cbar,
-                relative_error=relative_error,
                 projection_angle_deg=projection_angle_deg,
                 projection_axes=projection_axes,
                 x_lims=x_lims,
@@ -2460,11 +2888,12 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
             )
         else:
             self._visualize_all_iterations(
+                fig=fig,
                 plot_convergence=plot_convergence,
                 iterations_grid=iterations_grid,
                 plot_probe=plot_probe,
+                plot_fourier_probe=plot_fourier_probe,
                 cbar=cbar,
-                relative_error=relative_error,
                 projection_angle_deg=projection_angle_deg,
                 projection_axes=projection_axes,
                 x_lims=x_lims,
@@ -2473,3 +2902,137 @@ class OverlapTomographicReconstruction(PhaseReconstruction):
             )
 
         return self
+
+    def _return_object_fft(
+        self,
+        obj=None,
+        projection_angle_deg: float = None,
+        projection_axes: Tuple[int, int] = (0, 2),
+        x_lims: Tuple[int, int] = (None, None),
+        y_lims: Tuple[int, int] = (None, None),
+    ):
+        """
+        Returns obj fft shifted to center of array
+
+        Parameters
+        ----------
+        obj: array, optional
+            if None is specified, uses self._object
+        projection_angle_deg: float
+            Angle in degrees to rotate 3D array around prior to projection
+        projection_axes: tuple(int,int)
+            Axes defining projection plane
+        x_lims: tuple(float,float)
+            min/max x indices
+        y_lims: tuple(float,float)
+            min/max y indices
+        """
+
+        xp = self._xp
+        asnumpy = self._asnumpy
+
+        if obj is None:
+            obj = self._object
+        else:
+            obj = xp.asarray(obj, dtype=xp.float32)
+
+        if projection_angle_deg is not None:
+            rotated_3d_obj = self._rotate(
+                obj,
+                projection_angle_deg,
+                axes=projection_axes,
+                reshape=False,
+                order=2,
+            )
+            rotated_3d_obj = asnumpy(rotated_3d_obj)
+        else:
+            rotated_3d_obj = asnumpy(obj)
+
+        rotated_object = self._crop_rotate_object_manually(
+            rotated_3d_obj.sum(0), angle=None, x_lims=x_lims, y_lims=y_lims
+        )
+
+        return np.abs(np.fft.fftshift(np.fft.fft2(np.fft.ifftshift(rotated_object))))
+
+    def show_object_fft(
+        self,
+        obj=None,
+        projection_angle_deg: float = None,
+        projection_axes: Tuple[int, int] = (0, 2),
+        x_lims: Tuple[int, int] = (None, None),
+        y_lims: Tuple[int, int] = (None, None),
+        **kwargs,
+    ):
+        """
+        Plot FFT of reconstructed object
+
+        Parameters
+        ----------
+        obj: array, optional
+            if None is specified, uses self._object
+        projection_angle_deg: float
+            Angle in degrees to rotate 3D array around prior to projection
+        projection_axes: tuple(int,int)
+            Axes defining projection plane
+        x_lims: tuple(float,float)
+            min/max x indices
+        y_lims: tuple(float,float)
+            min/max y indices
+        """
+        if obj is None:
+            object_fft = self._return_object_fft(
+                projection_angle_deg=projection_angle_deg,
+                projection_axes=projection_axes,
+                x_lims=x_lims,
+                y_lims=y_lims,
+            )
+        else:
+            object_fft = self._return_object_fft(
+                obj,
+                projection_angle_deg=projection_angle_deg,
+                projection_axes=projection_axes,
+                x_lims=x_lims,
+                y_lims=y_lims,
+            )
+
+        figsize = kwargs.pop("figsize", (6, 6))
+        cmap = kwargs.pop("cmap", "magma")
+        vmin = kwargs.pop("vmin", 0)
+        vmax = kwargs.pop("vmax", 1)
+        power = kwargs.pop("power", 0.2)
+
+        pixelsize = 1 / (object_fft.shape[0] * self.sampling[0])
+        show(
+            object_fft,
+            figsize=figsize,
+            cmap=cmap,
+            vmin=vmin,
+            vmax=vmax,
+            scalebar=True,
+            pixelsize=pixelsize,
+            ticks=False,
+            pixelunits=r"$\AA^{-1}$",
+            power=power,
+            **kwargs,
+        )
+
+    @property
+    def positions(self):
+        """Probe positions [A]"""
+
+        if self.angular_sampling is None:
+            return None
+
+        asnumpy = self._asnumpy
+        positions_all = []
+        for tilt_index in range(self._num_tilts):
+            positions = self._positions_px_all[
+                self._cum_probes_per_tilt[tilt_index] : self._cum_probes_per_tilt[
+                    tilt_index + 1
+                ]
+            ].copy()
+            positions[:, 0] *= self.sampling[0]
+            positions[:, 1] *= self.sampling[1]
+            positions_all.append(asnumpy(positions))
+
+        return np.asarray(positions_all)

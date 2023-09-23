@@ -2,12 +2,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
 
-from py4DSTEM.visualize.show import show,show_points
+from py4DSTEM.visualize.show import show, show_points
 from py4DSTEM.visualize.overlay import add_grid_overlay
 
 
-
-def show_DP_grid(datacube,x0,y0,xL,yL,axsize=(6,6),returnfig=False,space=0,**kwargs):
+def show_DP_grid(
+    datacube, x0, y0, xL, yL, axsize=(6, 6), returnfig=False, space=0, **kwargs
+):
     """
     Shows a grid of diffraction patterns from DataCube datacube, starting from
     scan position (x0,y0) and extending xL,yL.
@@ -24,26 +25,28 @@ def show_DP_grid(datacube,x0,y0,xL,yL,axsize=(6,6),returnfig=False,space=0,**kwa
         if returnfig==false, the figure and its one axis are returned, and can be
         further edited.
     """
-    yy,xx = np.meshgrid(np.arange(y0,y0+yL),np.arange(x0,x0+xL))
+    yy, xx = np.meshgrid(np.arange(y0, y0 + yL), np.arange(x0, x0 + xL))
 
-    fig,axs = plt.subplots(xL,yL,figsize=(yL*axsize[0],xL*axsize[1]))
+    fig, axs = plt.subplots(xL, yL, figsize=(yL * axsize[0], xL * axsize[1]))
     for xi in range(xL):
         for yi in range(yL):
-            ax = axs[xi,yi]
-            x,y = xx[xi,yi],yy[xi,yi]
-            dp = datacube.data[x,y,:,:]
-            _,_ = show(dp,figax=(fig,ax),returnfig=True,**kwargs)
+            ax = axs[xi, yi]
+            x, y = xx[xi, yi], yy[xi, yi]
+            dp = datacube.data[x, y, :, :]
+            _, _ = show(dp, figax=(fig, ax), returnfig=True, **kwargs)
     plt.tight_layout()
-    plt.subplots_adjust(wspace=space,hspace=space)
+    plt.subplots_adjust(wspace=space, hspace=space)
 
     if not returnfig:
         plt.show()
         return
     else:
-        return fig,ax
+        return fig, axs
 
-def show_grid_overlay(image,x0,y0,xL,yL,color='k',linewidth=1,alpha=1,
-                                            returnfig=False,**kwargs):
+
+def show_grid_overlay(
+    image, x0, y0, xL, yL, color="k", linewidth=1, alpha=1, returnfig=False, **kwargs
+):
     """
     Shows the image with an overlaid boxgrid outline about the pixels
     beginning at (x0,y0) and with extent xL,yL in the two directions.
@@ -53,19 +56,31 @@ def show_grid_overlay(image,x0,y0,xL,yL,color='k',linewidth=1,alpha=1,
         x0,y0       the corner of the grid
         xL,xL       the extent of the grid
     """
-    fig,ax = show(image,returnfig=True,**kwargs)
-    add_grid_overlay(ax,d={'x0':x0,'y0':y0,'xL':xL,'yL':yL,
-                           'color':color,'linewidth':linewidth,'alpha':alpha})
+    fig, ax = show(image, returnfig=True, **kwargs)
+    add_grid_overlay(
+        ax,
+        d={
+            "x0": x0,
+            "y0": y0,
+            "xL": xL,
+            "yL": yL,
+            "color": color,
+            "linewidth": linewidth,
+            "alpha": alpha,
+        },
+    )
     plt.tight_layout()
 
     if not returnfig:
         plt.show()
         return
     else:
-        return fig,ax
+        return fig, ax
 
-def _show_grid_overlay(image,x0,y0,xL,yL,color='k',linewidth=1,alpha=1,
-                                            returnfig=False,**kwargs):
+
+def _show_grid_overlay(
+    image, x0, y0, xL, yL, color="k", linewidth=1, alpha=1, returnfig=False, **kwargs
+):
     """
     Shows the image with an overlaid boxgrid outline about the pixels
     beginning at (x0,y0) and with extent xL,yL in the two directions.
@@ -75,14 +90,21 @@ def _show_grid_overlay(image,x0,y0,xL,yL,color='k',linewidth=1,alpha=1,
         x0,y0       the corner of the grid
         xL,xL       the extent of the grid
     """
-    yy,xx = np.meshgrid(np.arange(y0,y0+yL),np.arange(x0,x0+xL))
+    yy, xx = np.meshgrid(np.arange(y0, y0 + yL), np.arange(x0, x0 + xL))
 
-    fig,ax = show(image,returnfig=True,**kwargs)
+    fig, ax = show(image, returnfig=True, **kwargs)
     for xi in range(xL):
         for yi in range(yL):
-            x,y = xx[xi,yi],yy[xi,yi]
-            rect = Rectangle((y-0.5,x-0.5),1,1,lw=linewidth,color=color,
-                             alpha=alpha,fill=False)
+            x, y = xx[xi, yi], yy[xi, yi]
+            rect = Rectangle(
+                (y - 0.5, x - 0.5),
+                1,
+                1,
+                lw=linewidth,
+                color=color,
+                alpha=alpha,
+                fill=False,
+            )
             ax.add_patch(rect)
     plt.tight_layout()
 
@@ -90,24 +112,27 @@ def _show_grid_overlay(image,x0,y0,xL,yL,color='k',linewidth=1,alpha=1,
         plt.show()
         return
     else:
-        return fig,ax
+        return fig, ax
+
 
 def show_image_grid(
     get_ar,
-    H,W,
-    axsize=(6,6),
+    H,
+    W,
+    axsize=(6, 6),
     returnfig=False,
-    figax = None, 
-    title = None,
-    title_index = False,
-    suptitle = None,
+    figax=None,
+    title=None,
+    title_index=False,
+    suptitle=None,
     get_bordercolor=None,
     get_x=None,
     get_y=None,
     get_pointcolors=None,
     get_s=None,
     open_circles=False,
-    **kwargs):
+    **kwargs,
+):
     """
     Displays a set of images in a grid.
 
@@ -131,14 +156,14 @@ def show_image_grid(
         H,W         integers, the dimensions of the grid
         axsize      the size of each image
         figax       controls which matplotlib Axes object draws the image.
-                    If None, generates a new figure with a single Axes instance. 
-                    Otherwise, ax must be a 2-tuple containing the matplotlib class instances 
+                    If None, generates a new figure with a single Axes instance.
+                    Otherwise, ax must be a 2-tuple containing the matplotlib class instances
                     (Figure,Axes), with ar then plotted in the specified Axes instance.
-        title       if title is sting, then prints title as suptitle. If a suptitle is also provided, 
+        title       if title is sting, then prints title as suptitle. If a suptitle is also provided,
                     the suptitle is printed insead.
-                    if title is a list of strings (ex: ['title 1','title 2']), each array has 
+                    if title is a list of strings (ex: ['title 1','title 2']), each array has
                     corresponding title in list.
-        title_index if True, prints the index i passed to get_ar over each image 
+        title_index if True, prints the index i passed to get_ar over each image
         suptitle    string, suptitle on plot
         get_bordercolor
                     if not None, should be a function defined over
@@ -166,90 +191,107 @@ def show_image_grid(
     _get_points = (get_x is not None) and (get_y is not None)
     _get_colors = get_pointcolors is not None
     _get_s = get_s is not None
-    
+
     if figax is None:
-        fig,axs = plt.subplots(H,W,figsize=(W*axsize[0],H*axsize[1]))
+        fig, axs = plt.subplots(H, W, figsize=(W * axsize[0], H * axsize[1]))
     else:
-        fig,axs = figax
-    if H==1:
-        axs = axs[np.newaxis,:]
-    elif W==1:
-        axs = axs[:,np.newaxis]
+        fig, axs = figax
+    if H == 1:
+        axs = axs[np.newaxis, :]
+    elif W == 1:
+        axs = axs[:, np.newaxis]
     for i in range(H):
         for j in range(W):
-            ax = axs[i,j]
-            N = i*W+j
-            #make titles
-            if type(title) == list: 
+            ax = axs[i, j]
+            N = i * W + j
+            # make titles
+            if type(title) == list:
                 print_title = title[N]
             else:
                 print_title = None
-            if title_index: 
-                if print_title is not None: 
+            if title_index:
+                if print_title is not None:
                     print_title = f"{N}. " + print_title
                 else:
-                    print_title = f"{N}." 
-            #make figures
+                    print_title = f"{N}."
+            # make figures
             try:
                 ar = get_ar(N)
                 if _get_bordercolor and _get_points:
                     bc = get_bordercolor(N)
-                    x,y = get_x(N),get_y(N)
+                    x, y = get_x(N), get_y(N)
                     if _get_colors:
                         pointcolors = get_pointcolors(N)
                     else:
-                        pointcolors='r'
+                        pointcolors = "r"
                     if _get_s:
                         s = get_s(N)
-                        _,_ = show_points(
-                            ar,figax=(fig,ax),
+                        _, _ = show_points(
+                            ar,
+                            figax=(fig, ax),
                             returnfig=True,
                             bordercolor=bc,
-                            x=x,y=y,s=s,
+                            x=x,
+                            y=y,
+                            s=s,
                             pointcolor=pointcolors,
                             open_circles=open_circles,
-                            title = print_title,
-                            **kwargs)
+                            title=print_title,
+                            **kwargs,
+                        )
                     else:
-                        _,_ = show_points(
-                            ar,figax=(fig,ax),
+                        _, _ = show_points(
+                            ar,
+                            figax=(fig, ax),
                             returnfig=True,
                             bordercolor=bc,
-                            x=x,y=y,
+                            x=x,
+                            y=y,
                             pointcolor=pointcolors,
                             open_circles=open_circles,
-                            title = print_title,
-                            **kwargs)
+                            title=print_title,
+                            **kwargs,
+                        )
                 elif _get_bordercolor:
                     bc = get_bordercolor(N)
-                    _,_ = show(ar,figax=(fig,ax),returnfig=True,
-                               bordercolor=bc,title = print_title, **kwargs)
+                    _, _ = show(
+                        ar,
+                        figax=(fig, ax),
+                        returnfig=True,
+                        bordercolor=bc,
+                        title=print_title,
+                        **kwargs,
+                    )
                 elif _get_points:
-                    x,y = get_x(N),get_y(N)
+                    x, y = get_x(N), get_y(N)
                     if _get_colors:
                         pointcolors = get_pointcolors(N)
                     else:
-                        pointcolors='r'
-                    _,_ = show_points(
-                        ar,figax=(fig,ax),x=x,y=y,
+                        pointcolors = "r"
+                    _, _ = show_points(
+                        ar,
+                        figax=(fig, ax),
+                        x=x,
+                        y=y,
                         returnfig=True,
                         pointcolor=pointcolors,
                         open_circles=open_circles,
-                        title = print_title,
-                         **kwargs)
+                        title=print_title,
+                        **kwargs,
+                    )
                 else:
-                    _,_ = show(ar,figax=(fig,ax),returnfig=True,title = print_title,**kwargs)
+                    _, _ = show(
+                        ar, figax=(fig, ax), returnfig=True, title=print_title, **kwargs
+                    )
             except IndexError:
-                ax.axis('off')
+                ax.axis("off")
     if type(title) == str:
         fig.suptitle(title)
     if suptitle:
         fig.suptitle(suptitle)
     plt.tight_layout()
-    
+
     if not returnfig:
         return
     else:
-        return fig,axs
-
-
+        return fig, axs
