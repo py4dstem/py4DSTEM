@@ -2775,6 +2775,8 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
             ) = self._extract_vectorized_patch_indices()
             self._exit_waves = (None,) * self._num_sim_measurements
             self._object_type = self._object_type_initial
+            if hasattr(self, "_tf"):
+                del self._tf
         elif reset is None:
             if hasattr(self, "error"):
                 warnings.warn(
