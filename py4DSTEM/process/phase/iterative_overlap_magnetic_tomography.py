@@ -808,19 +808,11 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
 
         if plot_probe_overlaps:
             figsize = kwargs.pop("figsize", (13, 4))
-            cmap = kwargs.pop("cmap", "Greys_r")
-            vmin = kwargs.pop("vmin", None)
-            vmax = kwargs.pop("vmax", None)
-            hue_start = kwargs.pop("hue_start", 0)
-            invert = kwargs.pop("invert", False)
 
             # initial probe
             complex_probe_rgb = Complex2RGB(
                 self.probe_centered,
-                vmin=vmin,
-                vmax=vmax,
-                hue_start=hue_start,
-                invert=invert,
+                power=2,
             )
 
             # propagated
@@ -832,10 +824,7 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
                 )
             complex_propagated_rgb = Complex2RGB(
                 asnumpy(self._return_centered_probe(propagated_probe)),
-                vmin=vmin,
-                vmax=vmax,
-                hue_start=hue_start,
-                invert=invert,
+                power=2,
             )
 
             extent = [
@@ -857,38 +846,35 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
             ax1.imshow(
                 complex_probe_rgb,
                 extent=probe_extent,
-                **kwargs,
             )
 
             divider = make_axes_locatable(ax1)
             cax1 = divider.append_axes("right", size="5%", pad="2.5%")
             add_colorbar_arg(
-                cax1, vmin=vmin, vmax=vmax, hue_start=hue_start, invert=invert
+                cax1,
             )
             ax1.set_ylabel("x [A]")
             ax1.set_xlabel("y [A]")
-            ax1.set_title("Initial Probe")
+            ax1.set_title("Initial probe intensity")
 
             ax2.imshow(
                 complex_propagated_rgb,
                 extent=probe_extent,
-                **kwargs,
             )
 
             divider = make_axes_locatable(ax2)
             cax2 = divider.append_axes("right", size="5%", pad="2.5%")
             add_colorbar_arg(
-                cax2, vmin=vmin, vmax=vmax, hue_start=hue_start, invert=invert
+                cax2,
             )
             ax2.set_ylabel("x [A]")
             ax2.set_xlabel("y [A]")
-            ax2.set_title("Propagated Probe")
+            ax2.set_title("Propagated probe intensity")
 
             ax3.imshow(
                 asnumpy(probe_overlap),
                 extent=extent,
-                cmap=cmap,
-                **kwargs,
+                cmap="Greys_r",
             )
             ax3.scatter(
                 self.positions[0, :, 1],
@@ -900,7 +886,7 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
             ax3.set_xlabel("y [A]")
             ax3.set_xlim((extent[0], extent[1]))
             ax3.set_ylim((extent[2], extent[3]))
-            ax3.set_title("Object Field of View")
+            ax3.set_title("Object field of view")
 
             fig.tight_layout()
 
@@ -3092,7 +3078,7 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
             ax = fig.add_subplot(spec[-1, :])
             ax.semilogy(np.arange(errors.shape[0]), errors, **kwargs)
             ax.set_ylabel("NMSE")
-            ax.set_xlabel("Iteration Number")
+            ax.set_xlabel("Iteration number")
             ax.yaxis.tick_right()
 
         spec.tight_layout(fig)

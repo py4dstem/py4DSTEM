@@ -609,19 +609,11 @@ class MixedstateMultislicePtychographicReconstruction(PtychographicReconstructio
 
         if plot_probe_overlaps:
             figsize = kwargs.pop("figsize", (13, 4))
-            cmap = kwargs.pop("cmap", "Greys_r")
-            vmin = kwargs.pop("vmin", None)
-            vmax = kwargs.pop("vmax", None)
-            hue_start = kwargs.pop("hue_start", 0)
-            invert = kwargs.pop("invert", False)
 
             # initial probe
             complex_probe_rgb = Complex2RGB(
                 self.probe_centered[0],
-                vmin=vmin,
-                vmax=vmax,
-                hue_start=hue_start,
-                invert=invert,
+                power=2,
             )
 
             # propagated
@@ -633,10 +625,7 @@ class MixedstateMultislicePtychographicReconstruction(PtychographicReconstructio
                 )
             complex_propagated_rgb = Complex2RGB(
                 asnumpy(self._return_centered_probe(propagated_probe)),
-                vmin=vmin,
-                vmax=vmax,
-                hue_start=hue_start,
-                invert=invert,
+                power=2,
             )
 
             extent = [
@@ -658,38 +647,33 @@ class MixedstateMultislicePtychographicReconstruction(PtychographicReconstructio
             ax1.imshow(
                 complex_probe_rgb,
                 extent=probe_extent,
-                **kwargs,
             )
 
             divider = make_axes_locatable(ax1)
             cax1 = divider.append_axes("right", size="5%", pad="2.5%")
             add_colorbar_arg(
-                cax1, vmin=vmin, vmax=vmax, hue_start=hue_start, invert=invert
+                cax1,
             )
             ax1.set_ylabel("x [A]")
             ax1.set_xlabel("y [A]")
-            ax1.set_title("Initial Probe[0]")
+            ax1.set_title("Initial probe[0] intensity")
 
             ax2.imshow(
                 complex_propagated_rgb,
                 extent=probe_extent,
-                **kwargs,
             )
 
             divider = make_axes_locatable(ax2)
             cax2 = divider.append_axes("right", size="5%", pad="2.5%")
-            add_colorbar_arg(
-                cax2, vmin=vmin, vmax=vmax, hue_start=hue_start, invert=invert
-            )
+            add_colorbar_arg(cax2)
             ax2.set_ylabel("x [A]")
             ax2.set_xlabel("y [A]")
-            ax2.set_title("Propagated Probe[0]")
+            ax2.set_title("Propagated probe[0] intensity")
 
             ax3.imshow(
                 asnumpy(probe_overlap),
                 extent=extent,
-                cmap=cmap,
-                **kwargs,
+                cmap="Greys_r",
             )
             ax3.scatter(
                 self.positions[:, 1],
@@ -701,7 +685,7 @@ class MixedstateMultislicePtychographicReconstruction(PtychographicReconstructio
             ax3.set_xlabel("y [A]")
             ax3.set_xlim((extent[0], extent[1]))
             ax3.set_ylim((extent[2], extent[3]))
-            ax3.set_title("Object Field of View")
+            ax3.set_title("Object field of view")
 
             fig.tight_layout()
 
@@ -1126,23 +1110,17 @@ class MixedstateMultislicePtychographicReconstruction(PtychographicReconstructio
                 )
 
                 if self._object_type == "potential":
-                    object_update += (
-                        step_size
-                        * self._sum_overlapping_patches_bincounts(
-                            xp.real(
-                                -1j
-                                * xp.conj(obj)
-                                * xp.conj(probe[:, i_probe])
-                                * exit_waves_copy[:, i_probe]
-                            )
+                    object_update += self._sum_overlapping_patches_bincounts(
+                        xp.real(
+                            -1j
+                            * xp.conj(obj)
+                            * xp.conj(probe[:, i_probe])
+                            * exit_waves_copy[:, i_probe]
                         )
                     )
                 else:
-                    object_update += (
-                        step_size
-                        * self._sum_overlapping_patches_bincounts(
-                            xp.conj(probe[:, i_probe]) * exit_waves_copy[:, i_probe]
-                        )
+                    object_update += self._sum_overlapping_patches_bincounts(
+                        xp.conj(probe[:, i_probe]) * exit_waves_copy[:, i_probe]
                     )
 
             probe_normalization = 1 / xp.sqrt(
@@ -2519,8 +2497,6 @@ class MixedstateMultislicePtychographicReconstruction(PtychographicReconstructio
         """
         figsize = kwargs.pop("figsize", (8, 5))
         cmap = kwargs.pop("cmap", "magma")
-        invert = kwargs.pop("invert", False)
-        hue_start = kwargs.pop("hue_start", 0)
 
         if self._object_type == "complex":
             obj = np.angle(self.object)
@@ -2615,30 +2591,25 @@ class MixedstateMultislicePtychographicReconstruction(PtychographicReconstructio
 
             ax = fig.add_subplot(spec[0, 1])
             if plot_fourier_probe:
-                probe_array = Complex2RGB(
-                    self.probe_fourier[0], hue_start=hue_start, invert=invert
-                )
+                probe_array = Complex2RGB(self.probe_fourier[0])
                 ax.set_title("Reconstructed Fourier probe[0]")
                 ax.set_ylabel("kx [mrad]")
                 ax.set_xlabel("ky [mrad]")
             else:
-                probe_array = Complex2RGB(
-                    self.probe[0], hue_start=hue_start, invert=invert
-                )
-                ax.set_title("Reconstructed probe[0]")
+                probe_array = Complex2RGB(self.probe[0], power=2)
+                ax.set_title("Reconstructed probe[0] intensity")
                 ax.set_ylabel("x [A]")
                 ax.set_xlabel("y [A]")
 
             im = ax.imshow(
                 probe_array,
                 extent=probe_extent,
-                **kwargs,
             )
 
             if cbar:
                 divider = make_axes_locatable(ax)
                 ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
-                add_colorbar_arg(ax_cb, hue_start=hue_start, invert=invert)
+                add_colorbar_arg(ax_cb)
 
         else:
             ax = fig.add_subplot(spec[0])
@@ -2671,10 +2642,10 @@ class MixedstateMultislicePtychographicReconstruction(PtychographicReconstructio
                 ax = fig.add_subplot(spec[1])
             ax.semilogy(np.arange(errors.shape[0]), errors, **kwargs)
             ax.set_ylabel("NMSE")
-            ax.set_xlabel("Iteration Number")
+            ax.set_xlabel("Iteration number")
             ax.yaxis.tick_right()
 
-        fig.suptitle(f"Normalized Mean Squared Error: {self.error:.3e}")
+        fig.suptitle(f"Normalized mean squared error: {self.error:.3e}")
         spec.tight_layout(fig)
 
     def _visualize_all_iterations(
@@ -2746,8 +2717,6 @@ class MixedstateMultislicePtychographicReconstruction(PtychographicReconstructio
         )
         figsize = kwargs.pop("figsize", auto_figsize)
         cmap = kwargs.pop("cmap", "magma")
-        invert = kwargs.pop("invert", False)
-        hue_start = kwargs.pop("hue_start", 0)
 
         errors = np.array(self.error_iterations)
 
@@ -2852,15 +2821,14 @@ class MixedstateMultislicePtychographicReconstruction(PtychographicReconstructio
                                 probes[grid_range[n]][0]
                             )
                         ),
-                        hue_start=hue_start,
-                        invert=invert,
                     )
                     ax.set_title(f"Iter: {grid_range[n]} Fourier probe[0]")
                     ax.set_ylabel("kx [mrad]")
                     ax.set_xlabel("ky [mrad]")
                 else:
                     probe_array = Complex2RGB(
-                        probes[grid_range[n]][0], hue_start=hue_start, invert=invert
+                        probes[grid_range[n]][0],
+                        power=2,
                     )
                     ax.set_title(f"Iter: {grid_range[n]} probe[0]")
                     ax.set_ylabel("x [A]")
@@ -2869,12 +2837,11 @@ class MixedstateMultislicePtychographicReconstruction(PtychographicReconstructio
                 im = ax.imshow(
                     probe_array,
                     extent=probe_extent,
-                    **kwargs,
                 )
 
                 if cbar:
                     add_colorbar_arg(
-                        grid.cbar_axes[n], hue_start=hue_start, invert=invert
+                        grid.cbar_axes[n],
                     )
 
         if plot_convergence:
@@ -2886,7 +2853,7 @@ class MixedstateMultislicePtychographicReconstruction(PtychographicReconstructio
                 ax2 = fig.add_subplot(spec[1])
             ax2.semilogy(np.arange(errors.shape[0]), errors, **kwargs)
             ax2.set_ylabel("NMSE")
-            ax2.set_xlabel("Iteration Number")
+            ax2.set_xlabel("Iteration number")
             ax2.yaxis.tick_right()
 
         spec.tight_layout(fig)

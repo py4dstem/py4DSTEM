@@ -728,7 +728,7 @@ def Complex2RGB(complex_data, vmin=None, vmax = None, power = None):
 
     amp = norm(np.abs(complex_data)).data
     phase = np.angle(complex_data)
-    
+
     if np.isclose(np.max(amp),np.min(amp)):
         if vmin is None:
             vmin = 0
@@ -736,9 +736,9 @@ def Complex2RGB(complex_data, vmin=None, vmax = None, power = None):
             vmax = np.max(amp)
     else:
         if vmin is None:
-            vmin = 0.02
+            vmin = 0.025
         if vmax is None:
-            vmax = 0.98
+            vmax = 0.975
         vals = np.sort(amp[~np.isnan(amp)])
         ind_vmin = np.round((vals.shape[0] - 1) * vmin).astype("int")
         ind_vmax = np.round((vals.shape[0] - 1) * vmax).astype("int")
@@ -750,7 +750,7 @@ def Complex2RGB(complex_data, vmin=None, vmax = None, power = None):
     amp = np.where(amp < vmin, vmin, amp)
     amp = np.where(amp > vmax, vmax, amp)
     
-    J = amp*100
+    J = amp*61.5 # Note we restrict luminance to 61.5
     C = np.where(J<61.5,98*J/123,1400/11-14*J/11)
     h = np.rad2deg(phase)+180
 
