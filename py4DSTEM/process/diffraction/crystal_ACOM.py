@@ -763,14 +763,16 @@ def match_orientations(
     self,
     bragg_peaks_array: PointListArray,
     num_matches_return: int = 1,
+    min_angle_between_matches_deg = None,
     min_number_peaks: int = 3,
     inversion_symmetry: bool = True,
     multiple_corr_reset: bool = True,
     return_orientation: bool = True,
     progress_bar: bool = True,
     ):
-    '''
-    This function computes the orientation of any number of PointLists stored in a PointListArray, and returns an OrienationMap.
+    """
+    This function computes the orientation of any number of PointLists stored in a PointListArray, 
+    and returns an OrienationMap. Options are the same as match_single_pattern().
 
     """
     orientation_map = OrientationMap(
@@ -809,6 +811,7 @@ def match_orientations(
         orientation = self.match_single_pattern(
             bragg_peaks=vectors,
             num_matches_return=num_matches_return,
+            min_angle_between_matches_deg = min_angle_between_matches_deg,
             min_number_peaks=min_number_peaks,
             inversion_symmetry=inversion_symmetry,
             multiple_corr_reset=multiple_corr_reset,
@@ -836,6 +839,7 @@ def match_single_pattern(
     self,
     bragg_peaks: PointList,
     num_matches_return: int = 1,
+    min_angle_between_matches_deg = None,
     min_number_peaks=3,
     inversion_symmetry=True,
     multiple_corr_reset=True,
@@ -849,23 +853,42 @@ def match_single_pattern(
     """
     Solve for the best fit orientation of a single diffraction pattern.
 
-    Args:
-        bragg_peaks (PointList):      numpy array containing the Bragg positions and intensities ('qx', 'qy', 'intensity')
-        num_matches_return (int):     return these many matches as 3th dim of orient (matrix)
-        min_number_peaks (int):       Minimum number of peaks required to perform ACOM matching
-        inversion_symmetry (bool):    check for inversion symmetry in the matches
-        multiple_corr_reset (bool):   keep original correlation score for multiple matches
-        subpixel_tilt (bool):         set to false for faster matching, returning the nearest corr point
-        plot_polar (bool):            set to true to plot the polar transform of the diffraction pattern
-        plot_corr (bool):             set to true to plot the resulting correlogram
-        returnfig (bool):             Return figure handles
-        figsize (list):               size of figure
-        verbose (bool):               Print the fitted zone axes, correlation scores
-        CUDA (bool):                  Enable CUDA for the FFT steps
+    Parameters
+    --------
+    bragg_peaks: PointList   
+        numpy array containing the Bragg positions and intensities ('qx', 'qy', 'intensity')
+    num_matches_return: int    
+        return these many matches as 3th dim of orient (matrix)
+    min_angle_between_matches_deg: int
+        Minimum angle between zone axis of multiple matches, in degrees.
+        Note that I haven't thought how to handle in-plane rotations, since multiple matches are possible.
+    min_number_peaks: int       
+        Minimum number of peaks required to perform ACOM matching
+    inversion_symmetry bool   
+        check for inversion symmetry in the matches
+    multiple_corr_reset bool   
+        keep original correlation score for multiple matches
+    subpixel_tilt: bool      
+        set to false for faster matching, returning the nearest corr point
+    plot_polar: bool           
+        set to true to plot the polar transform of the diffraction pattern
+    plot_corr: bool             
+        set to true to plot the resulting correlogram
+    returnfig: bool             
+        return figure handles
+    figsize: list               
+        size of figure
+    verbose: bool               
+        Print the fitted zone axes, correlation scores
+    CUDA: bool                  
+        Enable CUDA for the FFT steps
 
-    Returns:
-        orientation (Orientation):    Orientation class containing all outputs
-        fig, ax (handles):            Figure handles for the plotting output
+    Returns
+    --------
+    orientation: Orientation   
+        Orientation class containing all outputs
+    fig, ax: handles            
+        Figure handles for the plotting output
     """
 
     # init orientation output
@@ -1036,6 +1059,24 @@ def match_single_pattern(
                     0,
                 )
 
+        # If minimum angle is specified and we're on a match later than the first,
+        # we zero correlation values within the given range.
+        if min_angle_between_matches_deg is not None:
+            if match_ind > 0:
+                inds_previous = orientation.inds[:match_ind, 0]
+                for a0 in range(inds_previous.size):
+                    mask_zero = np.arccos(
+                        np.clip(
+                            np.sum(
+                                self.orientation_vecs * self.orientation_vecs[inds_previous[a0], :],
+                                axis=1,
+                            ),
+                            -1,
+                            1,
+                        )
+                    ) < np.deg2rad(min_angle_between_matches_deg)
+                    corr_full[mask_zero,:] = 0.0
+
         # Get maximum (non inverted) correlation value
         ind_phi = np.argmax(corr_full, axis=1)
 
@@ -1103,6 +1144,25 @@ def match_single_pattern(
                         ),
                         0,
                     )
+
+            # If minimum angle is specified and we're on a match later than the first,
+            # we zero correlation values within the given range.       
+            if min_angle_between_matches_deg is not None:
+                if match_ind > 0:
+                    inds_previous = orientation.inds[:match_ind, 0]
+                    for a0 in range(inds_previous.size):
+                        mask_zero = np.arccos(
+                            np.clip(
+                                np.sum(
+                                    self.orientation_vecs * self.orientation_vecs[inds_previous[a0], :],
+                                    axis=1,
+                                ),
+                                -1,
+                                1,
+                            )
+                        ) < np.deg2rad(min_angle_between_matches_deg)
+                        corr_full_inv[mask_zero,:] = 0.0
+
             ind_phi_inv = np.argmax(corr_full_inv, axis=1)
             corr_inv = np.zeros(self.orientation_num_zones, dtype="bool")
 
@@ -1746,6 +1806,7 @@ def cluster_grains(
 
     # Main loop
     search = True
+    comp = 0.0
     while search is True:
         inds_grain = np.argmax(sig)
 
@@ -1757,8 +1818,10 @@ def cluster_grains(
         else:
             # progressbar
             if progress_bar:
-                comp = 1 - np.mean(np.max(mark,axis = 2))
-                update_progress(comp)
+                new_comp = 1 - np.mean(np.max(mark,axis = 2))
+                if new_comp > comp + 0.001:
+                    comp = new_comp
+                    update_progress(comp)
 
             # Start cluster
             x,y,z = np.unravel_index(inds_grain, sig.shape)
