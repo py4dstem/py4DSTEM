@@ -736,9 +736,9 @@ def Complex2RGB(complex_data, vmin=None, vmax = None, power = None):
             vmax = np.max(amp)
     else:
         if vmin is None:
-            vmin = 0.025
+            vmin = 0.0
         if vmax is None:
-            vmax = 0.975
+            vmax = 1.0
         vals = np.sort(amp[~np.isnan(amp)])
         ind_vmin = np.round((vals.shape[0] - 1) * vmin).astype("int")
         ind_vmax = np.round((vals.shape[0] - 1) * vmax).astype("int")
@@ -751,7 +751,7 @@ def Complex2RGB(complex_data, vmin=None, vmax = None, power = None):
     amp = np.where(amp > vmax, vmax, amp)
     
     J = amp*61.5 # Note we restrict luminance to 61.5
-    C = np.where(J<61.5,98*J/123,1400/11-14*J/11)
+    C = np.where(J<61.5,98*J/123,1400/11-14*J/11) # Min uniform chroma
     h = np.rad2deg(phase)+180
 
     JCh = np.stack((J,C,h), axis=-1)

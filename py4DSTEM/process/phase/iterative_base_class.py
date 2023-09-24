@@ -295,13 +295,14 @@ class PhaseReconstruction(Custom):
                 if require_calibrations:
                     raise ValueError("Real-space calibrations must be given in 'A'")
 
-                warnings.warn(
-                    (
-                        "Iterative reconstruction will not be quantitative unless you specify "
-                        "real-space calibrations in 'A'"
-                    ),
-                    UserWarning,
-                )
+                if self._verbose:
+                    warnings.warn(
+                        (
+                            "Iterative reconstruction will not be quantitative unless you specify "
+                            "real-space calibrations in 'A'"
+                        ),
+                        UserWarning,
+                    )
 
                 self._scan_sampling = (1.0, 1.0)
                 self._scan_units = ("pixels",) * 2
@@ -359,13 +360,14 @@ class PhaseReconstruction(Custom):
                         "Reciprocal-space calibrations must be given in in 'A^-1' or 'mrad'"
                     )
 
-                warnings.warn(
-                    (
-                        "Iterative reconstruction will not be quantitative unless you specify "
-                        "appropriate reciprocal-space calibrations"
-                    ),
-                    UserWarning,
-                )
+                if self._verbose:
+                    warnings.warn(
+                        (
+                            "Iterative reconstruction will not be quantitative unless you specify "
+                            "appropriate reciprocal-space calibrations"
+                        ),
+                        UserWarning,
+                    )
 
                 self._angular_sampling = (1.0, 1.0)
                 self._angular_units = ("pixels",) * 2
@@ -1133,6 +1135,57 @@ class PhaseReconstruction(Custom):
         mean_intensity /= amplitudes.shape[0]
 
         return amplitudes, mean_intensity
+
+    def show_complex_CoM(
+        self,
+        com=None,
+        cbar=True,
+        scalebar=True,
+        pixelsize=None,
+        pixelunits=None,
+        **kwargs,
+    ):
+        """
+        Plot complex-valued CoM image
+
+        Parameters
+        ----------
+
+        com = (CoM_x, CoM_y) tuple
+              If None is specified, uses (self.com_x, self.com_y) instead
+        cbar: bool, optional
+            if True, adds colorbar
+        scalebar: bool, optional
+            if True, adds scalebar to probe
+        pixelunits: str, optional
+            units for scalebar, default is A
+        pixelsize: float, optional
+            default is scan sampling
+        """
+
+        if com is None:
+            com = (self.com_x, self.com_y)
+
+        if pixelsize is None:
+            pixelsize = self._scan_sampling[0]
+        if pixelunits is None:
+            pixelunits = r"$\AA$"
+
+        figsize = kwargs.pop("figsize", (6, 6))
+        fig, ax = plt.subplots(figsize=figsize)
+
+        complex_com = com[0] + 1j * com[1]
+
+        show_complex(
+            complex_com,
+            cbar=cbar,
+            figax=(fig, ax),
+            scalebar=scalebar,
+            pixelsize=pixelsize,
+            pixelunits=pixelunits,
+            ticks=False,
+            **kwargs,
+        )
 
 
 class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints):
