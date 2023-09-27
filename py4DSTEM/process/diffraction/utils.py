@@ -26,7 +26,6 @@ class Orientation:
         self.angles = np.zeros((self.num_matches, 3))
 
 
-
 @dataclass
 class OrientationMap:
     """
