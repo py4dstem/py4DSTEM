@@ -17,10 +17,10 @@ jobs:
                 runs-on: [ubuntu-latest]
                 architecture: [x86_64]
                 python-version: ["3.9", "3.10", "3.11",]
-                include:
-                    - python-version: "3.12.0-beta.4"
-                      runs-on: ubuntu-latest
-                      allow_failure: true
+                # include:
+                #     - python-version: "3.12.0-beta.4"
+                #       runs-on: ubuntu-latest
+                #       allow_failure: true
                 # Currently no public runners available for this but this or arm64 should work next time
                 # include:
                 #     - python-version: "3.10"
