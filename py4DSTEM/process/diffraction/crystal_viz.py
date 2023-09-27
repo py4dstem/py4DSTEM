@@ -991,7 +991,7 @@ def plot_diffraction_pattern(
 
 def plot_orientation_maps(
     self,
-    orientation_map = None,
+    orientation_map=None,
     orientation_ind: int = 0,
     dir_in_plane_degrees: float = 0.0,
     corr_range: np.ndarray = np.array([0, 5]),
@@ -1725,17 +1725,18 @@ def plot_fiber_orientation_maps(
     else:
         return images_orientation
 
+
 def plot_clusters(
     self,
-    area_min = 2,
-    outline_grains = True,
-    outline_thickness = 1,
-    fill_grains = 0.25,
-    smooth_grains = 1.0,
-    cmap = 'viridis',
-    figsize = (8,8),
-    returnfig = False,
-    ):
+    area_min=2,
+    outline_grains=True,
+    outline_thickness=1,
+    fill_grains=0.25,
+    smooth_grains=1.0,
+    cmap="viridis",
+    figsize=(8, 8),
+    returnfig=False,
+):
     """
     Plot the clusters as an image.
 
@@ -1761,17 +1762,22 @@ def plot_clusters(
     fig, ax (optional)
         Figure and axes handles
 
-    """    
-    
+    """
+
     # init
-    im_plot = np.zeros((
-        self.orientation_map.num_x,
-        self.orientation_map.num_y,
-        ))
-    im_grain = np.zeros((
-        self.orientation_map.num_x,
-        self.orientation_map.num_y,
-    ), dtype='bool')
+    im_plot = np.zeros(
+        (
+            self.orientation_map.num_x,
+            self.orientation_map.num_y,
+        )
+    )
+    im_grain = np.zeros(
+        (
+            self.orientation_map.num_x,
+            self.orientation_map.num_y,
+        ),
+        dtype="bool",
+    )
 
     # make plotting image
 
@@ -1780,35 +1786,30 @@ def plot_clusters(
             if outline_grains:
                 im_grain[:] = False
                 im_grain[
-                    self.cluster_inds[a0][0,:],
-                    self.cluster_inds[a0][1,:],
+                    self.cluster_inds[a0][0, :],
+                    self.cluster_inds[a0][1, :],
                 ] = True
 
-                im_dist = \
-                distance_transform_edt(
-                    erosion(np.invert(im_grain),footprint=np.ones((3,3),dtype='bool'))
-                ) \
-                - \
-                distance_transform_edt(
-                        im_grain
-                )
-                im_dist = gaussian_filter(
-                    im_dist,
-                    sigma = smooth_grains,
-                    mode = 'nearest')
-                im_add = np.exp(im_dist**2 / (-0.5*outline_thickness**2))
-                
+                im_dist = distance_transform_edt(
+                    erosion(
+                        np.invert(im_grain), footprint=np.ones((3, 3), dtype="bool")
+                    )
+                ) - distance_transform_edt(im_grain)
+                im_dist = gaussian_filter(im_dist, sigma=smooth_grains, mode="nearest")
+                im_add = np.exp(im_dist**2 / (-0.5 * outline_thickness**2))
+
                 if fill_grains > 0:
-                    im_dist = \
-                    distance_transform_edt(
-                        erosion(np.invert(im_grain),footprint=np.ones((3,3),dtype='bool'))
+                    im_dist = distance_transform_edt(
+                        erosion(
+                            np.invert(im_grain), footprint=np.ones((3, 3), dtype="bool")
+                        )
                     )
                     im_dist = gaussian_filter(
-                        im_dist,
-                        sigma = smooth_grains,
-                        mode = 'nearest')
-                    im_add += fill_grains*np.exp(im_dist**2 / (-0.5*outline_thickness**2))
-
+                        im_dist, sigma=smooth_grains, mode="nearest"
+                    )
+                    im_add += fill_grains * np.exp(
+                        im_dist**2 / (-0.5 * outline_thickness**2)
+                    )
 
                 # im_add = 1 - np.exp(
                 #     distance_transform_edt(im_grain)**2 \
@@ -1819,13 +1820,12 @@ def plot_clusters(
                 # xg,yg = np.unravel_index(self.cluster_inds[a0], im_plot.shape)
                 im_grain[:] = False
                 im_grain[
-                    self.cluster_inds[a0][0,:],
-                    self.cluster_inds[a0][1,:],
+                    self.cluster_inds[a0][0, :],
+                    self.cluster_inds[a0][1, :],
                 ] = True
                 im_plot += gaussian_filter(
-                    im_grain.astype('float'),
-                    sigma = smooth_grains,
-                    mode = 'nearest')
+                    im_grain.astype("float"), sigma=smooth_grains, mode="nearest"
+                )
 
                 # im_plot[
                 #     self.cluster_inds[a0][0,:],
@@ -1833,32 +1833,29 @@ def plot_clusters(
                 # ] += 1
 
     if outline_grains:
-        im_plot = np.clip(im_plot,0,2)
-
+        im_plot = np.clip(im_plot, 0, 2)
 
     # plotting
-    fig,ax = plt.subplots(figsize=figsize)
+    fig, ax = plt.subplots(figsize=figsize)
     ax.imshow(
         im_plot,
         # vmin = -3,
         # vmax = 3,
-        cmap = cmap,
-        )
-
-
+        cmap=cmap,
+    )
 
 
 def plot_cluster_size(
     self,
-    area_min = None,
-    area_max = None,
-    area_step = 1,
-    weight_intensity = False,
-    pixel_area = 1.0,
-    pixel_area_units = 'px^2',
-    figsize = (8,6),
-    returnfig = False,
-    ):
+    area_min=None,
+    area_max=None,
+    area_step=1,
+    weight_intensity=False,
+    pixel_area=1.0,
+    pixel_area_units="px^2",
+    figsize=(8, 6),
+    returnfig=False,
+):
     """
     Plot the cluster sizes
 
@@ -1875,7 +1872,7 @@ def plot_cluster_size(
     pixel_area: float
         Size of pixel area unit square
     pixel_area_units: string
-        Units of the pixel area 
+        Units of the pixel area
     figsize: tuple
         Size of the figure panel
     returnfig: bool
@@ -1890,42 +1887,42 @@ def plot_cluster_size(
 
     if area_max is None:
         area_max = np.max(self.cluster_sizes)
-    area = np.arange(0,area_max,area_step)
+    area = np.arange(0, area_max, area_step)
     if area_min is None:
-        sub = self.cluster_sizes.astype('int') < area_max
+        sub = self.cluster_sizes.astype("int") < area_max
     else:
         sub = np.logical_and(
-            self.cluster_sizes.astype('int') >= area_min,
-            self.cluster_sizes.astype('int') < area_max
-            )
+            self.cluster_sizes.astype("int") >= area_min,
+            self.cluster_sizes.astype("int") < area_max,
+        )
     if weight_intensity:
         hist = np.bincount(
             self.cluster_sizes[sub] // area_step,
-            weights = self.cluster_sig[sub],
-            minlength = area.shape[0],
-            )
+            weights=self.cluster_sig[sub],
+            minlength=area.shape[0],
+        )
     else:
         hist = np.bincount(
             self.cluster_sizes[sub] // area_step,
-            minlength = area.shape[0],
-            )
-        
+            minlength=area.shape[0],
+        )
+
     # plotting
-    fig,ax = plt.subplots(figsize = figsize)
+    fig, ax = plt.subplots(figsize=figsize)
     ax.bar(
         area * pixel_area,
         hist,
-        width = 0.8 * pixel_area * area_step,
-        )
-    ax.set_xlim((0,area_max*pixel_area))
-    ax.set_xlabel('Grain Area [' + pixel_area_units + ']')
+        width=0.8 * pixel_area * area_step,
+    )
+    ax.set_xlim((0, area_max * pixel_area))
+    ax.set_xlabel("Grain Area [" + pixel_area_units + "]")
     if weight_intensity:
-        ax.set_ylabel('Total Signal [arb. units]')
+        ax.set_ylabel("Total Signal [arb. units]")
     else:
-        ax.set_ylabel('Number of Grains')
+        ax.set_ylabel("Number of Grains")
 
     if returnfig:
-        return fig,ax
+        return fig, ax
 
 
 def axisEqual3D(ax):
