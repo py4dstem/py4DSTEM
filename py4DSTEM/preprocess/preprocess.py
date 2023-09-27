@@ -312,9 +312,9 @@ def bin_data_real(datacube, bin_factor):
     return datacube
 
 
-def thin_data_real(datacube, thinning_factor):
+def subsample_data_real(datacube, subsample_factor):
     """
-    Reduces data size by a factor of `thinning_factor`^2 by skipping every `thinning_factor` beam positions in both x and y.
+    Reduces data size by a factor of `subsample_factor`^2 by skipping every `subsample_factor` beam positions in both x and y.
     """
     # get shapes
     Rshape0 = datacube.Rshape
@@ -353,7 +353,7 @@ def filter_hot_pixels(datacube, thresh, ind_compare=1, return_mask=False):
     is applied to it, finding and sorting the intensities of the 21 pixels nearest
     each pixel (where 21 = (the pixel itself) + (nearest neighbors) + (next
     nearest neighbors) = (1) + (8) + (12) = 21; the next nearest neighbors
-    exclude the corners of the NNN square of pixels). This filter then returns
+    exclude the corners of the NNN square of pixels. This filter then returns
     a single value at each pixel given by the N'th highest value of these 21
     sorted values, where N is specified by `ind_compare`.  ind_compare=0
     specifies the highest intensity, =1 is the second hightest, etc. Next, a mask
@@ -418,11 +418,12 @@ def filter_hot_pixels(datacube, thresh, ind_compare=1, return_mask=False):
         ),
         axis=0,
     )
-    # arry of the ind_compare'th pixel intensity
+    # array of the ind_compare'th pixel intensity
     diff_compare = np.reshape(diff_local_med[-ind_compare - 1, :], shape)
 
     # Generate mask
-    mask = diff_mean - diff_compare > thresh
+    #mask = diff_mean - diff_compare > thresh
+    mask = diff_compare / diff_compare > thresh
 
     # If the mask is empty, return
     if np.sum(mask) == 0:

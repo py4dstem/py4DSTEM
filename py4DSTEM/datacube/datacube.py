@@ -447,45 +447,144 @@ class DataCube(
         d = bin_data_real(self, N)
         return d
 
-    def thin_R(self, N):
+    def downsample_R(self, N):
         """
         Reduces the data in real space by skipping every N patterns in the x and y directions.
 
         Accepts:
             N (int): the thinning factor
         """
-        from py4DSTEM.preprocess import thin_data_real
+        from py4DSTEM.preprocess import downsample_data_real
 
-        d = thin_data_real(self, N)
+        d = downsample_data_real(self, N)
         return d
 
     def filter_hot_pixels(self, thresh, ind_compare=1, return_mask=False):
         """
-        This function performs pixel filtering to remove hot / bright pixels. We first compute a moving local ordering filter,
-        applied to the mean diffraction image. This ordering filter will return a single value from the local sorted intensity
-        values, given by ind_compare. ind_compare=0 would be the highest intensity, =1 would be the second hightest, etc.
-        Next, a mask is generated for all pixels which are least a value thresh higher than the local ordering filter output.
-        Finally, we loop through all diffraction images, and any pixels defined by mask are replaced by their 3x3 local median.
+        This function performs pixel filtering to remove hot / bright pixels.
+        A mean diffraction pattern is calculated, then a moving local ordering filter
+        is applied to it, finding and sorting the intensities of the 21 pixels nearest
+        each pixel (where 21 = (the pixel itself) + (nearest neighbors) + (next
+        nearest neighbors) = (1) + (8) + (12) = 21; the next nearest neighbors
+        exclude the corners of the NNN square of pixels. This filter then returns
+        a single value at each pixel given by the N'th highest value of these 21
+        sorted values, where N is specified by `ind_compare`.  ind_compare=0
+        specifies the highest intensity, =1 is the second hightest, etc. Next, a mask
+        is generated which is True for all pixels which are least a value `thresh`
+        higher than the local ordering filter output. Thus for the default
+        `ind_compare` value of 1, the mask will be True wherever the mean diffraction
+        pattern is higher than the second brightest pixel in it's local window by
+        at least a value of `thresh`. Finally, we loop through all diffraction
+        images, and any pixels defined by mask are replaced by their 3x3 local
+        median.
 
-        Args:
-            datacube (DataCube):
-            thresh (float): threshold for replacing hot pixels, if pixel value minus local ordering filter exceeds it.
-            ind_compare (int): which median filter value to compare against. 0 = brightest pixel, 1 = next brightest, etc.
-            return_mask (bool): if True, returns the filter mask
+        Parameters
+        ----------
+        datacube : DataCube
+            The 4D atacube
+        thresh : float
+            Threshold for replacing hot pixels, if pixel value minus local ordering
+            filter exceeds it.
+        ind_compare : int
+            Which median filter value to compare against. 0 = brightest pixel,
+            1 = next brightest, etc.
+        return_mask : bool
+            If True, returns the filter mask
 
-        Returns:
-            datacube (DataCube)
-            mask (optional, boolean Array) the bad pixel mask
+        Returns
+        -------
+        datacube : Datacube
+        mask : bool
+            (optional) the bad pixel mask
         """
-        from py4DSTEM.preprocess import filter_hot_pixels
 
-        d = filter_hot_pixels(
-            self,
-            thresh,
-            ind_compare,
-            return_mask,
+        # Mean image over all probe positions
+        diff_mean = np.mean(datacube.data, axis=(0, 1))
+        shape = diff_mean.shape
+
+        # Moving local ordered pixel values
+        diff_local_med = np.sort(
+            np.vstack(
+                [
+                    np.roll(diff_mean, (-1, -1), axis=(0, 1)).ravel(),
+                    np.roll(diff_mean, (0, -1), axis=(0, 1)).ravel(),
+                    np.roll(diff_mean, (1, -1), axis=(0, 1)).ravel(),
+                    np.roll(diff_mean, (-1, 0), axis=(0, 1)).ravel(),
+                    np.roll(diff_mean, (0, 0), axis=(0, 1)).ravel(),
+                    np.roll(diff_mean, (1, 0), axis=(0, 1)).ravel(),
+                    np.roll(diff_mean, (-1, 1), axis=(0, 1)).ravel(),
+                    np.roll(diff_mean, (0, 1), axis=(0, 1)).ravel(),
+                    np.roll(diff_mean, (1, 1), axis=(0, 1)).ravel(),
+                    np.roll(diff_mean, (-1, -2), axis=(0, 1)).ravel(),
+                    np.roll(diff_mean, (0, -2), axis=(0, 1)).ravel(),
+                    np.roll(diff_mean, (1, -2), axis=(0, 1)).ravel(),
+                    np.roll(diff_mean, (-1, 2), axis=(0, 1)).ravel(),
+                    np.roll(diff_mean, (0, 2), axis=(0, 1)).ravel(),
+                    np.roll(diff_mean, (1, 2), axis=(0, 1)).ravel(),
+                    np.roll(diff_mean, (-2, -1), axis=(0, 1)).ravel(),
+                    np.roll(diff_mean, (-2, 0), axis=(0, 1)).ravel(),
+                    np.roll(diff_mean, (-2, 1), axis=(0, 1)).ravel(),
+                    np.roll(diff_mean, (2, -1), axis=(0, 1)).ravel(),
+                    np.roll(diff_mean, (2, 0), axis=(0, 1)).ravel(),
+                    np.roll(diff_mean, (2, 1), axis=(0, 1)).ravel(),
+                ]
+            ),
+            axis=0,
         )
-        return d
+        # array of the ind_compare'th pixel intensity
+        diff_compare = np.reshape(diff_local_med[-ind_compare - 1, :], shape)
+
+        # Generate mask
+        #mask = diff_mean - diff_compare > thresh
+        mask = diff_compare / diff_compare > thresh
+
+        # If the mask is empty, return
+        if np.sum(mask) == 0:
+            print("No hot pixels detected")
+            if return_mask is True:
+                return datacube, mask
+            else:
+                return datacube
+
+        # Otherwise, apply filtering
+
+        # Get masked indices
+        x_ma, y_ma = np.nonzero(mask)
+
+        # Get local windows for each masked pixel
+        xslices, yslices = [], []
+        for xm, ym in zip(x_ma, y_ma):
+            xslice, yslice = slice(xm - 1, xm + 2), slice(ym - 1, ym + 2)
+            if xslice.start < 0:
+                xslice = slice(0, xslice.stop)
+            elif xslice.stop > shape[0]:
+                xslice = slice(xslice.start, shape[0])
+            if yslice.start < 0:
+                yslice = slice(0, yslice.stop)
+            elif yslice.stop > shape[1]:
+                yslice = slice(yslice.start, shape[1])
+            xslices.append(xslice)
+            yslices.append(yslice)
+
+        # Loop and replace pixels
+        for ax, ay in tqdmnd(
+            *(datacube.R_Nx, datacube.R_Ny), desc="Cleaning pixels", unit=" images"
+        ):
+            for xm, ym, xs, ys in zip(x_ma, y_ma, xslices, yslices):
+                datacube.data[ax, ay, xm, ym] = np.median(datacube.data[ax, ay, xs, ys])
+
+            # Calculate local 3x3 median images
+            # im_med = median_filter(datacube.data[ax, ay, :, :], size=3, mode="nearest")
+            # datacube.data[ax, ay, :, :][mask] = im_med[mask]
+
+        # Return
+        if return_mask is True:
+            return datacube, mask
+        else:
+            return datacube
+
+
+
 
     # Probe
 

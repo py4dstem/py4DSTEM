@@ -515,7 +515,6 @@ class BraggVectorMethods:
         robust=False,
         robust_steps=3,
         robust_thresh=2,
-        mask_check_data=True,
         plot=True,
         plot_range=None,
         returncalc=True,
@@ -524,42 +523,53 @@ class BraggVectorMethods:
         """
         Fit origin of bragg vectors.
 
-        Args:
-            mask (2b boolean array, optional): ignore points where mask=True
-            fitfunction (str, optional): must be 'plane' or 'parabola' or 'bezier_two'
-            robust (bool, optional): If set to True, fit will be repeated with outliers
-                removed.
-            robust_steps (int, optional): Optional parameter. Number of robust iterations
-                                    performed after initial fit.
-            robust_thresh (int, optional): Threshold for including points, in units of
-                root-mean-square (standard deviations) error of the predicted values after
-                fitting.
-            mask_check_data (bool):     Get mask from origin measurements equal to zero. (TODO - replace)
-            plot (bool, optional): plot results
-            plot_range (float):    min and max color range for plot (pixels)
+        Parameters
+        ----------
+        mask : 2b boolean array
+            Ignore points where mask=True
+        fitfunction : str
+            The fit function. Must be 'plane' or 'parabola' or 'bezier_two'
+        robust : bool
+            If set to True, fit will be repeated with outliers removed.
+        robust_steps : int
+            Number of iterations of robust fitting performed after initial
+            fit.  Ignored if `robust` is False
+        robust_thresh : int
+            Threshold for considering points outliers, in units of
+            root-mean-square error of the predicted values after fitting.
+        plot : bool
+            Plot the results
+        plot_range : float
+            Min and max color range for plot (pixels)
+        returncalc : bool
+            Toggles returning the answer
 
-        Returns:
-            (variable): Return value depends on returnfitp. If ``returnfitp==False``
-            (default), returns a 4-tuple containing:
+        Returns
+        -------
+        (variable): Return value depends on returnfitp. If ``returnfitp==False``
+        (default), returns a 4-tuple containing:
 
-                * **qx0_fit**: *(ndarray)* the fit origin x-position
-                * **qy0_fit**: *(ndarray)* the fit origin y-position
-                * **qx0_residuals**: *(ndarray)* the x-position fit residuals
-                * **qy0_residuals**: *(ndarray)* the y-position fit residuals
+            * **qx0_fit**: *(ndarray)* the fit origin x-position
+            * **qy0_fit**: *(ndarray)* the fit origin y-position
+            * **qx0_residuals**: *(ndarray)* the x-position fit residuals
+            * **qy0_residuals**: *(ndarray)* the y-position fit residuals
         """
+        # Get the measured origin positions
         q_meas = self.calibration.get_origin_meas()
 
+        # Get the fit_origin method
         from py4DSTEM.process.calibration import fit_origin
 
-        if mask_check_data is True:
-            # TODO - replace this bad hack for the mask for the origin fit
-            mask = np.logical_not(q_meas[0] == 0)
+        # Get the mask
+        if mask is not None:
             qx0_fit, qy0_fit, qx0_residuals, qy0_residuals = fit_origin(
                 tuple(q_meas),
                 mask=mask,
             )
         else:
-            qx0_fit, qy0_fit, qx0_residuals, qy0_residuals = fit_origin(tuple(q_meas))
+            qx0_fit, qy0_fit, qx0_residuals, qy0_residuals = fit_origin(
+                tuple(q_meas)
+            )
 
         # try to add to calibration
         try:

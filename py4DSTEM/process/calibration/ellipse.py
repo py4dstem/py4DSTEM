@@ -101,7 +101,8 @@ def ellipse_err(p, x, y, val):
 
 def fit_ellipse_amorphous_ring(data, center, fitradii, p0=None, mask=None):
     """
-    Fit the amorphous halo of a diffraction pattern, including any elliptical distortion.
+    Fit the amorphous halo of a diffraction pattern, including any elliptical
+    distortion.
 
     The fit function is::
 
@@ -118,15 +119,16 @@ def fit_ellipse_amorphous_ring(data, center, fitradii, p0=None, mask=None):
         * Norm(x;I,s,u) is a gaussian in the variable x with maximum amplitude I,
           standard deviation s, and mean u
         * Theta(x) is a Heavyside step function
-        * R is the radial center of the double sided gaussian, derived from (A,B,C)
-          and set to the mean of the semiaxis lengths
+        * R is the radial center of the double sided gaussian, derived from
+          (A,B,C) and set to the mean of the semiaxis lengths
 
     The function thus contains a pair of gaussian-shaped peaks along the radial
-    direction of a polar-elliptical parametrization of a 2D plane. The first gaussian is
-    centered at the origin. The second gaussian is centered about some finite R, and is
-    'two-faced': it's comprised of two half-gaussians of different standard deviations,
-    stitched together at their mean value of R. This Janus (two-faced ;p) gaussian thus
-    comprises an elliptical ring with different inner and outer widths.
+    direction of a polar-elliptical parametrization of a 2D plane. The first
+    gaussian is centered at the origin. The second gaussian is centered about
+    some finite R, and is 'two-faced': it's comprised of two half-gaussians of
+    different standard deviations, stitched together at their mean value of R.
+    This Janus (two-faced ;p) gaussian thus comprises an elliptical ring with
+    different inner and outer widths.
 
     The parameters of the fit function are
 
@@ -139,34 +141,41 @@ def fit_ellipse_amorphous_ring(data, center, fitradii, p0=None, mask=None):
         * x0,y0: the origin
         * A,B,C: The ellipse parameters, in the form Ax^2 + Bxy + Cy^2 = 1
 
-    Args:
-        data (2d array): the data
-        center (2-tuple of numbers): the center (x0,y0)
-        fitradii (2-tuple of numbers): the inner and outer radii of the fitting annulus
-        p0 (11-tuple): initial guess parameters. If p0 is None, the function will compute
-            a guess at all parameters. If p0 is a 11-tuple it must be populated by some
-            mix of numbers and None; any parameters which are set to None will be guessed
-            by the function.  The parameters are the 11 parameters of the fit function
-            described above, p0 = (I0,I1,sigma0,sigma1,sigma2,c_bkgd,x0,y0,A,B,C).
-            Note that x0,y0 are redundant; their guess values are the x0,y0 values passed
-            to the main function, but if they are passed as elements of p0 these will
-            take precendence.
-        mask (2d array of bools): only fit to datapoints where mask is True
+    Parameters
+    ----------
+    data : 2d array
+        the data
+    center : 2-tuple of numbers
+        the center (x0,y0)
+    fitradii : 2-tuple of numbers
+        the inner and outer radii of the fitting annulus
+    p0 : 11-tuple
+        initial guess parameters. If p0 is None, the function will compute
+        a guess at all parameters. If p0 is a 11-tuple it must be populated
+        by some mix of numbers and None; any parameters which are set to None
+        will be guessed by the function.  The parameters are the 11
+        parameters of the fit function described above, p0 = (I0,I1,sigma0,
+        sigma1,sigma2,c_bkgd,x0,y0,A,B,C). Note that x0,y0 are redundant;
+        their guess values are the x0,y0 values passed to the main function,
+        but if they are passed as elements of p0 these will take precendence.
+    mask : 2d array of bools
+        only fit to datapoints where mask is True
 
-    Returns:
-        (2-tuple comprised of a 5-tuple and an 11-tuple): Returns a 2-tuple.
+    Returns
+    -------
+    (2-tuple comprised of a 5-tuple and an 11-tuple)
 
-        The first element is the ellipse parameters need to elliptically parametrize
-        diffraction space, and is itself a 5-tuple:
+    The first element is the ellipse parameters need to elliptically parametrize
+    diffraction space, and is itself a 5-tuple:
 
-            * **x0**: x center
-            * **y0**: y center,
-            * **a**: the semimajor axis length
-            * **b**: the semiminor axis length
-            * **theta**: tilt of a-axis w.r.t x-axis, in radians
+        * **x0**: x center
+        * **y0**: y center,
+        * **a**: the semimajor axis length
+        * **b**: the semiminor axis length
+        * **theta**: tilt of a-axis w.r.t x-axis, in radians
 
-        The second element is the full set of fit parameters to the double sided gaussian
-        function, described above, and is an 11-tuple
+    The second element is the full set of fit parameters to the double sided
+    gaussian function, described above, and is an 11-tuple
     """
     if mask is None:
         mask = np.ones_like(data).astype(bool)

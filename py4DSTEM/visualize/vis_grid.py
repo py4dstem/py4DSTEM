@@ -7,35 +7,58 @@ from py4DSTEM.visualize.overlay import add_grid_overlay
 
 
 def show_DP_grid(
-    datacube, x0, y0, xL, yL, axsize=(6, 6), returnfig=False, space=0, **kwargs
+    datacube, x0, y0, xL, yL, axscale=6, axsize=None, returnfig=False, wspace=0, hspace=0, axes_on=True, **kwargs
 ):
     """
     Shows a grid of diffraction patterns from DataCube datacube, starting from
     scan position (x0,y0) and extending xL,yL.
 
-    Accepts:
-        datacube        (DataCube) the 4D-STEM data
-        (x0,y0)         the corner of the grid of DPs to display
-        xL,yL           the extent of the grid
-        axsize          the size of each diffraction pattern
-        space           (number) controls the space between subplots
+    Parameters
+    ----------
+    datacube : DataCube
+        the 4D-STEM data
+    x0,y0 : ints
+        the upper left corner of the grid of DPs to display
+    xL,yL : ints
+        the extent of the grid
+    axscale : number
+        the mean sidelength of the plot for each diffraction pattern. The axsize
+        is then determined from the image size scaled by this number.  Ignored if
+        `axsize` is not None
+    axsize : None or 2-tuple
+        the size of each diffraction pattern; leave as None to automatically
+        determine this up to a scale factor given by axscale
+    wspace, hspace : numbers
+        controls the space between plots
 
-    Returns:
-        if returnfig==false (default), the figure is plotted and nothing is returned.
-        if returnfig==false, the figure and its one axis are returned, and can be
-        further edited.
+    Returns
+    -------
+    if returnfig==false (default), the figure is plotted and nothing is returned.
+    if returnfig==false, the figure and its one axis are returned, and can be
+    further edited.
     """
+    # make a meshgrid of scan positions
     yy, xx = np.meshgrid(np.arange(y0, y0 + yL), np.arange(x0, x0 + xL))
 
-    fig, axs = plt.subplots(xL, yL, figsize=(yL * axsize[0], xL * axsize[1]))
+    # set the axis size
+    if axsize is None:
+        qshape = datacube.qshape
+        qlength = np.mean(qshape)
+        axsize = (axscale*qshape[1]/qlength, axscale*qshape[0]/qlength)
+
+    # plot
+    fig, axs = plt.subplots(xL, yL, figsize=(yL*axsize[0], xL*axsize[1]))
     for xi in range(xL):
         for yi in range(yL):
             ax = axs[xi, yi]
             x, y = xx[xi, yi], yy[xi, yi]
             dp = datacube.data[x, y, :, :]
             _, _ = show(dp, figax=(fig, ax), returnfig=True, **kwargs)
-    plt.tight_layout()
-    plt.subplots_adjust(wspace=space, hspace=space)
+            if not axes_on:
+                ax.set_xticks([])
+                ax.set_yticks([])
+                ax.set_aspect('equal')
+    plt.subplots_adjust(wspace=wspace, hspace=hspace)
 
     if not returnfig:
         plt.show()
