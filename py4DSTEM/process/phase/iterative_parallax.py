@@ -11,6 +11,7 @@ import numpy as np
 from emdfile import Custom, tqdmnd
 from matplotlib.gridspec import GridSpec
 from py4DSTEM import DataCube
+from py4DSTEM.preprocess.utils import get_shifted_ar
 from py4DSTEM.process.phase.iterative_base_class import PhaseReconstruction
 from py4DSTEM.process.utils.cross_correlate import align_images_fourier
 from py4DSTEM.process.utils.utils import electron_wavelength_angstrom
@@ -112,6 +113,7 @@ class ParallaxReconstruction(PhaseReconstruction):
         threshold_intensity: float = 0.8,
         normalize_images: bool = True,
         normalize_order=0,
+        descan_correct: bool = False,
         defocus_guess: float = None,
         rotation_guess: float = None,
         plot_average_bf: bool = True,
@@ -134,6 +136,8 @@ class ParallaxReconstruction(PhaseReconstruction):
         defocus_guess: float, optional
             Initial guess of defocus value (defocus dF) in A
             If None, first iteration is assumed to be in-focus
+        descan_correct: float, optional
+            If True, aligns bright field stack based on measured descan
         rotation_guess: float, optional
             Initial guess of defocus value in degrees
             If None, first iteration assumed to be 0
@@ -180,6 +184,38 @@ class ParallaxReconstruction(PhaseReconstruction):
             raise ValueError(
                 "dp_mean must match the datacube shape. Try setting dp_mean = None."
             )
+        # descan correct
+        if descan_correct:
+            from py4DSTEM.process.phase import DPCReconstruction
+
+            dpc = DPCReconstruction(
+                energy=self._energy,
+                datacube=self._datacube,
+                verbose=False,
+            ).preprocess(
+                force_com_rotation=0,
+                force_com_transpose=False,
+                plot_center_of_mass=False,
+            )
+
+            intensities_shifted = self._intensities.copy()
+
+            center_x = np.mean(dpc._com_measured_x)
+            center_y = np.mean(dpc._com_measured_y)
+            for rx in range(intensities_shifted.shape[0]):
+                for ry in range(intensities_shifted.shape[1]):
+                    intensity_shifted = get_shifted_ar(
+                        self._intensities[rx, ry],
+                        -dpc._com_measured_x[rx, ry] + center_x,
+                        -dpc._com_measured_y[rx, ry] + center_y,
+                        bilinear=True,
+                        device="cpu",
+                    )
+
+                    intensities_shifted[rx, ry] = intensity_shifted
+
+            self._intensities = intensities_shifted
+            self._dp_mean = intensities_shifted.mean((0, 1))
 
         # select virtual detector pixels
         self._dp_mask = self._dp_mean >= (xp.max(self._dp_mean) * threshold_intensity)
