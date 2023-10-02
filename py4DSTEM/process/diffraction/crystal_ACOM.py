@@ -771,8 +771,26 @@ def match_orientations(
     progress_bar: bool = True,
 ):
     """
-    This function computes the orientation of any number of PointLists stored in a PointListArray,
-    and returns an OrienationMap. Options are the same as match_single_pattern().
+    Parameters
+    --------
+    bragg_peaks_array: PointListArray
+        PointListArray containing the Bragg peaks and intensities, with calibrations applied
+    num_matches_return: int
+        return these many matches as 3th dim of orient (matrix)
+    min_angle_between_matches_deg: int
+        Minimum angle between zone axis of multiple matches, in degrees.
+        Note that I haven't thought how to handle in-plane rotations, since multiple matches are possible.
+    min_number_peaks: int
+        Minimum number of peaks required to perform ACOM matching
+    inversion_symmetry: bool
+        check for inversion symmetry in the matches
+    multiple_corr_reset: bool
+        keep original correlation score for multiple matches
+    return_orientation: bool
+        Return orientation map from function for inspection. 
+        The map is always stored in the Crystal object.
+    progress_bar: bool
+        Show or hide the progress bar
 
     """
     orientation_map = OrientationMap(
@@ -820,12 +838,6 @@ def match_orientations(
         )
 
         orientation_map.set_orientation(orientation, rx, ry)
-    self.orientation_map = orientation_map
-
-    if return_orientation:
-        return orientation_map
-    else:
-        return
 
     # assign and return
     self.orientation_map = orientation_map
