@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import os
 from typing import Union, Optional
 import time, sys
+from tqdm import tqdm
 
 from emdfile import tqdmnd, PointList, PointListArray
 from py4DSTEM.data import RealSlice
@@ -15,7 +16,7 @@ from numpy.linalg import lstsq
 
 try:
     import cupy as cp
-except:
+except ModuleNotFoundError:
     cp = None
 
 
@@ -1777,18 +1778,14 @@ def cluster_grains(
 
     Parameters
     --------
-    corr_threshold_add: float
+    threshold_add: float
         Minimum signal required for a probe position to initialize a cluster.
-    corr_threshold_grow: float
+    threshold_grow: float
         Minimum signal required for a probe position to be added to a cluster.
     angle_tolerance_deg: float
         Rotation rolerance for clustering grains.
     progress_bar: bool
         Turns on the progress bar for the polar transformation
-
-    Returns
-    --------
-
 
     """
 
@@ -1818,6 +1815,7 @@ def cluster_grains(
     # Main loop
     search = True
     comp = 0.0
+    pbar = tqdm(total=N, display = not progress_bar)
     while search is True:
         inds_grain = np.argmax(sig)
 
@@ -1828,11 +1826,11 @@ def cluster_grains(
 
         else:
             # progressbar
-            if progress_bar:
-                new_comp = 1 - np.mean(np.max(mark, axis=2))
-                if new_comp > comp + 0.001:
-                    comp = new_comp
-                    update_progress(comp)
+            # if progress_bar:
+            #     new_comp = 1 - np.mean(np.max(mark, axis=2))
+            #     if new_comp > comp + 0.001:
+            #         comp = new_comp
+            #         update_progress(comp)
 
             # Start cluster
             x, y, z = np.unravel_index(inds_grain, sig.shape)
@@ -1896,6 +1894,8 @@ def cluster_grains(
                         inds_add = inds_all[xr[:, None], yr[None], :].ravel()
                         inds_new = np.append(inds_new, inds_add)
 
+                        pbar.update(inds_add.size)
+
                 inds_grain = np.append(inds_grain, inds_cand[keep])
                 inds_cand = np.unique(
                     np.delete(inds_new, mark.ravel()[inds_new] == False)
@@ -1913,9 +1913,7 @@ def cluster_grains(
             self.cluster_orientation.append(orientation_cluster)
             self.cluster_inds.append(xyg)
 
-    # finish progressbar
-    if progress_bar:
-        update_progress(1)
+    pbar.close()
 
 
 def cluster_orientation_map(
@@ -1929,9 +1927,8 @@ def cluster_orientation_map(
 
     Parameters
     --------
-    stripe_width: (int,ind)
-        Width of strips in the overlapping regions.
-        Kind of janky but it mostly works!
+    stripe_width: (int,int)
+        Width of stripes for plotting maps with overlapping grains
     area_min: (int)
         Minimum size of grains to include
 
@@ -1954,12 +1951,6 @@ def cluster_orientation_map(
     )
     im_count = np.zeros((self.orientation_map.num_x, self.orientation_map.num_y))
     im_mark = np.zeros((self.orientation_map.num_x, self.orientation_map.num_y))
-
-    # # coordinates
-    # xa,ya = np.meshgrid(
-    #     range(self.orientation_map.num_x),
-    #     range(self.orientation_map.num_y),
-    #     indexing = 'ij')
 
     # Loop over grains to determine number in each pixel
     for a0 in range(self.cluster_sizes.shape[0]):
