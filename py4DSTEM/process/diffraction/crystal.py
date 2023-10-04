@@ -1138,7 +1138,7 @@ def generate_moire(
     plot_result: bool
         Plot the resulting Moire lattice.
     plot_subpixel: bool
-        Apply subpixel corrections to the Bragg spot positions. 
+        Apply subpixel corrections to the Bragg spot positions.
         Matplotlib default scatter plot rounds to the nearest pixel.
     labels: list
         List of text labels for parent lattices
