@@ -1106,7 +1106,10 @@ def generate_moire(
     returnfig=False,
 ):
     """
-    Calculate a Moire lattice from 2 parent diffraction patterns.
+    Calculate a Moire lattice from 2 parent diffraction patterns. The second lattice can be rotated
+    and strained with respect to the original lattice. Note that this strain is applied in real space,
+    and so the inverse of the calculated infinitestimal strain tensor is applied.
+
 
     Parameters
     --------
@@ -1115,30 +1118,54 @@ def generate_moire(
     bragg_peaks_1: BraggVector
         Bragg vectors for parent lattice 1.
     thresh_0: float
+        Intensity threshold for structure factors from lattice 0.
     thresh_1: float
+        Intensity threshold for structure factors from lattice 1.
     int_range: (float, float)
+        Plotting intensity range for the Moire peaks.
     exx_1: float
+        Strain of lattice 1 in x direction (vertical) in real space.
     eyy_1: float
+        Strain of lattice 1 in y direction (horizontal) in real space.
     exy_1: float
+        Shear strain of lattice 1 in (x,y) direction (diagonal) in real space.
     phi_1: float
+        Rotation of lattice 1 in real space.
     power: float
+        Plotting power law (default is amplitude**2.0, i.e. intensity).
     k_max: float
+        Max k value of the calculated (and plotted) Moire lattice.
     plot_result: bool
+        Plot the resulting Moire lattice.
     plot_subpixel: bool
+        Apply subpixel corrections to the Bragg spot positions. 
+        Matplotlib default scatter plot rounds to the nearest pixel.
     labels: list
         List of text labels for parent lattices
     marker_size_parent: float
+        Size of plot markers for the two parent lattices.
     marker_size_moire: float
+        Size of plot markers for the Moire lattice.
     text_size_parent: float
+        Label text size for parent lattice.
     text_size_moire: float
+        Label text size for Moire lattice.
     add_labels_parent: bool
+        Plot the parent lattice index labels.
     add_labels_moire: bool
+        Plot the parent lattice index labels for the Moire spots.
     dist_labels: float
+        Distance to move the labels off the spots.
     dist_check: float
+        Set to some distance to "push" the labels away from each other if they are within this distance.
     sep_labels: float
+        Separation distance for labels which are "pushed" apart.
     figsize: (float,float)
+        Size of output figure.
     return_moire: bool
+        Return the moire lattice as a pointlist.
     returnfig: bool
+        Return the (fix,ax) handles of the plot.
 
     Returns
     --------
@@ -1200,11 +1227,13 @@ def generate_moire(
             [np.cos(phi_1), -np.sin(phi_1)],
             [np.sin(phi_1), np.cos(phi_1)],
         ]
-    ) @ np.array(
-        [
-            [1 + exx_1, exy_1 * 0.5],
-            [exy_1 * 0.5, 1 + eyy_1],
-        ]
+    ) @ np.linalg.inv(
+        np.array(
+            [
+                [1 + exx_1, exy_1 * 0.5],
+                [exy_1 * 0.5, 1 + eyy_1],
+            ]
+        )
     )
     qx1 = m[0, 0] * qx1_init + m[0, 1] * qy1_init
     qy1 = m[1, 0] * qx1_init + m[1, 1] * qy1_init
