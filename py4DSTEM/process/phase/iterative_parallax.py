@@ -200,14 +200,14 @@ class ParallaxReconstruction(PhaseReconstruction):
 
             intensities_shifted = self._intensities.copy()
 
-            center_x = np.mean(dpc._com_measured_x)
-            center_y = np.mean(dpc._com_measured_y)
+            center_x = np.mean(dpc._com_fitted_x)
+            center_y = np.mean(dpc._com_fitted_y)
             for rx in range(intensities_shifted.shape[0]):
                 for ry in range(intensities_shifted.shape[1]):
                     intensity_shifted = get_shifted_ar(
                         self._intensities[rx, ry],
-                        -dpc._com_measured_x[rx, ry] + center_x,
-                        -dpc._com_measured_y[rx, ry] + center_y,
+                        -dpc._com_fitted_x[rx, ry] + center_x,
+                        -dpc._com_fitted_y[rx, ry] + center_y,
                         bilinear=True,
                         device="cpu",
                     )
