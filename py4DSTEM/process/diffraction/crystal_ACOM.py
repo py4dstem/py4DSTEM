@@ -788,7 +788,7 @@ def match_orientations(
     multiple_corr_reset: bool
         keep original correlation score for multiple matches
     return_orientation: bool
-        Return orientation map from function for inspection. 
+        Return orientation map from function for inspection.
         The map is always stored in the Crystal object.
     progress_bar: bool
         Show or hide the progress bar
@@ -1815,7 +1815,8 @@ def cluster_grains(
     # Main loop
     search = True
     comp = 0.0
-    pbar = tqdm(total=N, display = not progress_bar)
+    mark_total = np.sum(np.max(mark, axis=2))
+    pbar = tqdm(total=mark_total, disable=not progress_bar)
     while search is True:
         inds_grain = np.argmax(sig)
 
@@ -1825,12 +1826,9 @@ def cluster_grains(
             search = False
 
         else:
-            # progressbar
-            # if progress_bar:
-            #     new_comp = 1 - np.mean(np.max(mark, axis=2))
-            #     if new_comp > comp + 0.001:
-            #         comp = new_comp
-            #         update_progress(comp)
+            new_marks = mark_total - np.sum(np.max(mark, axis=2))
+            pbar.update(new_marks)
+            mark_total -= new_marks
 
             # Start cluster
             x, y, z = np.unravel_index(inds_grain, sig.shape)
@@ -1893,8 +1891,6 @@ def cluster_grains(
                         )
                         inds_add = inds_all[xr[:, None], yr[None], :].ravel()
                         inds_new = np.append(inds_new, inds_add)
-
-                        pbar.update(inds_add.size)
 
                 inds_grain = np.append(inds_grain, inds_cand[keep])
                 inds_cand = np.unique(
@@ -2551,27 +2547,3 @@ orientation_ranges = {
 
 # "-3m": ["fiber", [0, 0, 1], [90.0, 60.0]],
 # "-3m": ["fiber", [0, 0, 1], [180.0, 30.0]],
-
-
-# Progressbar taken from stackexchange:
-# https://stackoverflow.com/questions/3160699/python-progress-bar
-def update_progress(progress):
-    barLength = 60  # Modify this to change the length of the progress bar
-    status = ""
-    if isinstance(progress, int):
-        progress = float(progress)
-    if not isinstance(progress, float):
-        progress = 0
-        status = "error: progress var must be float\r\n"
-    if progress < 0:
-        progress = 0
-        status = "Halt...\r\n"
-    if progress >= 1:
-        progress = 1
-        status = "Done\r\n"
-    block = int(round(barLength * progress))
-    text = "\rPercent: [{0}] {1}% {2}".format(
-        "#" * block + "-" * (barLength - block), np.round(progress * 100, 2), status
-    )
-    sys.stdout.write(text)
-    sys.stdout.flush()
