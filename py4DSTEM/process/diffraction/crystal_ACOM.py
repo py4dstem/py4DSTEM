@@ -1826,10 +1826,6 @@ def cluster_grains(
             search = False
 
         else:
-            new_marks = mark_total - np.sum(np.max(mark, axis=2))
-            pbar.update(new_marks)
-            mark_total -= new_marks
-
             # Start cluster
             x, y, z = np.unravel_index(inds_grain, sig.shape)
             mark[x, y, z] = False
@@ -1908,6 +1904,11 @@ def cluster_grains(
             self.cluster_sig = np.append(self.cluster_sig, sig_mean)
             self.cluster_orientation.append(orientation_cluster)
             self.cluster_inds.append(xyg)
+
+            # update progressbar
+            new_marks = mark_total - np.sum(np.max(mark, axis=2))
+            pbar.update(new_marks)
+            mark_total -= new_marks
 
     pbar.close()
 
