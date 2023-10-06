@@ -40,7 +40,6 @@ setup(
         "emdfile >= 0.0.13",
         "mpire >= 2.7.1",
         "threadpoolctl >= 3.1.0",
-        "sphinx_rtd_theme",
     ],
     extras_require={
         "ipyparallel": ["ipyparallel >= 6.2.4", "dill >= 0.3.3"],
