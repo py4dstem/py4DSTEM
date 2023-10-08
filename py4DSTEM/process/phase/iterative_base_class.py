@@ -1108,7 +1108,7 @@ class PhaseReconstruction(Custom):
         xp = self._xp
         mean_intensity = 0
 
-        amplitudes = xp.zeros_like(diffraction_intensities)
+        amplitudes = xp.zeros(diffraction_intensities.shape, dtype=xp.float32)
         region_of_interest_shape = diffraction_intensities.shape[-2:]
 
         com_fitted_x = self._asnumpy(com_fitted_x)
