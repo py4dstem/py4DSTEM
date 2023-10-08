@@ -1283,6 +1283,7 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
         constrain_probe_fourier_amplitude_constant_intensity: bool = False,
         fix_positions_iter: int = np.inf,
         global_affine_transformation: bool = True,
+        constrain_position_distance: float = None,
         gaussian_filter_sigma: float = None,
         gaussian_filter_iter: int = np.inf,
         fit_probe_aberrations_iter: int = 0,
@@ -1358,6 +1359,8 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
             If True, the probe aperture is additionally constrained to a constant intensity.
         fix_positions_iter: int, optional
             Number of iterations to run with fixed positions before updating positions estimate
+        constrain_position_distance: float
+            Distance to constrain position correction within original field of view in A
         global_affine_transformation: bool, optional
             If True, positions are assumed to be a global affine transform from initial scan
         gaussian_filter_sigma: float, optional
@@ -1680,6 +1683,7 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
                         amplitudes,
                         self._positions_px,
                         positions_step_size,
+                        constrain_position_distance,
                     )
 
                 error += batch_error
