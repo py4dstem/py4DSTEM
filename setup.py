@@ -57,8 +57,8 @@ setup(
     package_data={
         "py4DSTEM": [
             "process/utils/scattering_factors.txt",
-            "process/diskdetection/multicorr_row_kernel.cu",
-            "process/diskdetection/multicorr_col_kernel.cu",
+            "braggvectors/multicorr_row_kernel.cu",
+            "braggvectors/multicorr_col_kernel.cu",
         ]
     },
 )
