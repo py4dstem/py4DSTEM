@@ -80,6 +80,10 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
     initial_scan_positions: np.ndarray, optional
         Probe positions in Å for each diffraction intensity
         If None, initialized to a grid scan
+    theta_x: float
+            x tilt of propagator (in angles)
+    theta_y: float
+            y tilt of propagator (in angles)
     object_type: str, optional
         The object can be reconstructed as a real potential ('potential') or a complex
         object ('complex')
@@ -111,6 +115,8 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
         initial_object_guess: np.ndarray = None,
         initial_probe_guess: np.ndarray = None,
         initial_scan_positions: np.ndarray = None,
+        theta_x: float = 0,
+        theta_y: float = 0,
         object_type: str = "complex",
         verbose: bool = True,
         device: str = "cpu",
@@ -191,6 +197,8 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
         # Class-specific Metadata
         self._num_slices = num_slices
         self._slice_thicknesses = slice_thicknesses
+        self._theta_x = theta_x
+        self._theta_y = theta_y
 
     def _precompute_propagator_arrays(
         self,
@@ -198,6 +206,8 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
         sampling: Tuple[float, float],
         energy: float,
         slice_thicknesses: Sequence[float],
+        theta_x: float,
+        theta_y: float,
     ):
         """
         Precomputes propagator arrays complex wave-function will be convolved by,
@@ -213,6 +223,10 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
             The electron energy of the wave functions in eV
         slice_thicknesses: Sequence[float]
             Array of slice thicknesses in A
+        theta_x: float
+            x tilt of propagator (in angles)
+        theta_y: float
+            y tilt of propagator (in angles)
 
         Returns
         -------
@@ -232,6 +246,10 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
         propagators = xp.empty(
             (num_slices, kx.shape[0], ky.shape[0]), dtype=xp.complex64
         )
+
+        theta_x = np.deg2rad(theta_x)
+        theta_y = np.deg2rad(theta_y)
+
         for i, dz in enumerate(slice_thicknesses):
             propagators[i] = xp.exp(
                 1.0j * (-(kx**2)[:, None] * np.pi * wavelength * dz)
@@ -239,6 +257,10 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
             propagators[i] *= xp.exp(
                 1.0j * (-(ky**2)[None] * np.pi * wavelength * dz)
             )
+            propagators[i] *= xp.exp(
+                1.0j * (2 * kx[:, None] * np.pi * dz * np.tan(theta_x))
+            )
+            propagators[i] *= xp.exp(1.0j * (2 * ky[None] * np.pi * dz * np.tan(theta_y)))
 
         return propagators
 
@@ -561,6 +583,8 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
             self.sampling,
             self._energy,
             self._slice_thicknesses,
+            self._theta_x,
+            self._theta_y,
         )
 
         # overlaps
@@ -1859,6 +1883,8 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
             If True, the probe aperture is additionally constrained to a constant intensity.
         fix_positions_iter: int, optional
             Number of iterations to run with fixed positions before updating positions estimate
+        constrain_position_distance: float
+            Distance to constrain position correction within original field of view in A
         global_affine_transformation: bool, optional
             If True, positions are assumed to be a global affine transform from initial scan
         gaussian_filter_sigma: float, optional
