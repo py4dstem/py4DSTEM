@@ -2,6 +2,7 @@ import h5py
 from py4DSTEM.data import DiffractionSlice, RealSlice
 from py4DSTEM.datacube import DataCube
 
+
 def read_abTEM(
     filename,
     mem="RAM",
@@ -37,7 +38,6 @@ def read_abTEM(
     assert len(data.shape) in (2, 4), "abtem reader supports only 4D and 2D data"
 
     if len(data.shape) == 4:
-
         datacube = DataCube(data=data)
 
         datacube.calibration.set_R_pixel_size(sampling[0])

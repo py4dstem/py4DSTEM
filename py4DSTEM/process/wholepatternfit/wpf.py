@@ -1,18 +1,25 @@
+from __future__ import annotations
 from py4DSTEM import DataCube, RealSlice
 from emdfile import tqdmnd
-from py4DSTEM.process.wholepatternfit.wp_models import WPFModelPrototype
+from py4DSTEM.process.wholepatternfit.wp_models import (
+    WPFModel,
+    _BaseModel,
+    WPFModelType,
+    Parameter,
+)
 
 from typing import Optional
 import numpy as np
 
-from scipy.optimize import least_squares, minimize
+from scipy.optimize import least_squares
 import matplotlib.pyplot as plt
 import matplotlib.colors as mpl_c
 from matplotlib.gridspec import GridSpec
-import warnings
+
+__all__ = ["WholePatternFit"]
+
 
 class WholePatternFit:
-
     from py4DSTEM.process.wholepatternfit.wpf_viz import (
         show_model_grid,
         show_lattice_points,
@@ -27,7 +34,6 @@ class WholePatternFit:
         mask: Optional[np.ndarray] = None,
         use_jacobian: bool = True,
         meanCBED: Optional[np.ndarray] = None,
-        fit_power: float = 1,
     ):
         """
         Perform pixelwise fits using composable models and numerical optimization.
@@ -63,8 +69,6 @@ class WholePatternFit:
         meanCBED: Optional np.ndarray, used to specify the diffraction pattern used
             for initial refinement of the parameters. If not specified, the average across
             all scan positions is computed
-        fit_power: float, diffraction patterns are raised to this power, sets the gamma
-            level at which the patterns are compared
 
         """
         self.datacube = datacube
@@ -72,39 +76,44 @@ class WholePatternFit:
             meanCBED if meanCBED is not None else np.mean(datacube.data, axis=(0, 1))
         )
         # Global scaling parameter
-        self.intensity_scale = 1/np.mean(self.meanCBED)
+        self.intensity_scale = 1 / np.mean(self.meanCBED)
 
         self.mask = mask if mask is not None else np.ones_like(self.meanCBED)
-
-        self.model = []
-        self.model_param_inds = []
-
-        self.nParams = 0
-        self.use_jacobian = use_jacobian
 
         if hasattr(x0, "__iter__") and hasattr(y0, "__iter__"):
             x0 = np.array(x0)
             y0 = np.array(y0)
             if x0.size == 2:
-                self.global_xy0_lb = np.array([x0[0] - x0[1], y0[0] - y0[1]])
-                self.global_xy0_ub = np.array([x0[0] + x0[1], y0[0] + y0[1]])
+                global_xy0_lb = np.array([x0[0] - x0[1], y0[0] - y0[1]])
+                global_xy0_ub = np.array([x0[0] + x0[1], y0[0] + y0[1]])
             elif x0.size == 3:
-                self.global_xy0_lb = np.array([x0[1], y0[1]])
-                self.global_xy0_ub = np.array([x0[2], y0[2]])
+                global_xy0_lb = np.array([x0[1], y0[1]])
+                global_xy0_ub = np.array([x0[2], y0[2]])
             else:
-                self.global_xy0_lb = np.array([0.0, 0.0])
-                self.global_xy0_ub = np.array([datacube.Q_Nx, datacube.Q_Ny])
+                global_xy0_lb = np.array([0.0, 0.0])
+                global_xy0_ub = np.array([datacube.Q_Nx, datacube.Q_Ny])
             x0 = x0[0]
             y0 = y0[0]
 
         else:
-            self.global_xy0_lb = np.array([0.0, 0.0])
-            self.global_xy0_ub = np.array([datacube.Q_Nx, datacube.Q_Ny])
+            global_xy0_lb = np.array([0.0, 0.0])
+            global_xy0_ub = np.array([datacube.Q_Nx, datacube.Q_Ny])
+
+        # The WPF object holds a special Model that manages the shareable center coordinates
+        self.coordinate_model = _BaseModel(
+            x0=(x0, global_xy0_lb[0], global_xy0_ub[0]),
+            y0=(y0, global_xy0_lb[1], global_xy0_ub[1]),
+        )
+
+        self.model = [
+            self.coordinate_model,
+        ]
+
+        self.nParams = 0
+        self.use_jacobian = use_jacobian
 
         # set up the global arguments
-        self._setup_static_data(x0,y0)
-
-        self.fit_power = fit_power
+        self._setup_static_data()
 
         # for debugging: tracks all function evals
         self._track = False
@@ -112,33 +121,111 @@ class WholePatternFit:
         self._xevals = []
         # self._cost_history = []
 
-    def add_model(self, model: WPFModelPrototype):
+    def add_model(self, model: WPFModel):
+        """
+        Add a WPFModel to the current model
+
+        Parameters
+        ----------
+        model: WPFModel
+            model to add to the fitting routine
+        """
         self.model.append(model)
 
-        # keep track of where each model's parameter list begins
-        self.model_param_inds.append(self.nParams)
         self.nParams += len(model.params.keys())
 
-        self._scrape_model_params()
+        self._finalize_model()
 
-    def add_model_list(self, model_list):
+    def add_model_list(self, model_list: list[WPFModel]):
+        """
+        Add multiple WPFModel objects to the current model
+
+        Parameters
+        ----------
+        model: list[WPFModel]
+            models to add to the fitting routine
+        """
         for m in model_list:
             self.add_model(m)
 
-    def generate_initial_pattern(self):
+    def link_parameters(
+        self,
+        parent_model: WPFModel,
+        child_model: WPFModel | list[WPFModel],
+        parameters: str | list[str],
+    ):
+        """
+        Link parameters of separate models together. The parameters of
+        the child_model are replaced with the parameters of the parent_model.
+        Note, this does not add the models to the WPF object, that must
+        be performed separately.
+
+        Parameters
+        ----------
+        parent_model: WPFModel
+            model from which parameters will be copied
+        child_model: WPFModel or list of WPFModels
+            model(s) whose independent parameters are to be linked
+            with those of the parent_model
+        parameters: str or list of str
+            names of parameters to be linked
+        """
+        # Make sure child_model and parameters are iterable
+        child_model = (
+            [
+                child_model,
+            ]
+            if not hasattr(child_model, "__iter__")
+            else child_model
+        )
+
+        parameters = (
+            [
+                parameters,
+            ]
+            if not hasattr(parameters, "__iter__")
+            else parameters
+        )
+
+        for child in child_model:
+            for par in parameters:
+                child.params[par] = parent_model.params[par]
+
+    def generate_initial_pattern(self) -> np.ndarray:
+        """
+        Generate a diffraction pattern using the initial parameter
+        guesses for each model component
+
+        Returns
+        -------
+        initial_pattern: np.ndarray
+
+        """
 
         # update parameters:
-        self._scrape_model_params()
+        self._finalize_model()
         return self._pattern(self.x0, self.static_data.copy()) / self.intensity_scale
 
     def fit_to_mean_CBED(self, **fit_opts):
+        """
+        Fit model parameters to the mean CBED pattern
 
+        Parameters
+        ----------
+        fit_opts: keyword arguments passed to scipy.optimize.least_squares
+
+        Returns
+        -------
+        optimizer_result: dict
+            Output of scipy.optimize.least_squares
+            (also stored in self.mean_CBED_fit)
+
+        """
         # first make sure we have the latest parameters
-        self._scrape_model_params()
+        self._finalize_model()
 
         # set the current active pattern to the mean CBED:
         current_pattern = self.meanCBED * self.intensity_scale
-        shared_data = self.static_data.copy()
 
         self._fevals = []
         self._xevals = []
@@ -147,6 +234,7 @@ class WholePatternFit:
         default_opts = {
             "method": "trf",
             "verbose": 1,
+            "x_scale": "jac",
         }
         default_opts.update(fit_opts)
 
@@ -156,7 +244,7 @@ class WholePatternFit:
                 self.x0,
                 jac=self._jacobian,
                 bounds=(self.lower_bound, self.upper_bound),
-                args=(current_pattern, shared_data),
+                args=(current_pattern, self.static_data),
                 **default_opts,
             )
         else:
@@ -164,7 +252,7 @@ class WholePatternFit:
                 self._pattern_error,
                 self.x0,
                 bounds=(self.lower_bound, self.upper_bound),
-                args=(current_pattern, shared_data),
+                args=(current_pattern, self.static_data),
                 **default_opts,
             )
 
@@ -181,18 +269,19 @@ class WholePatternFit:
         ax.set_xlabel("Iterations")
         ax.set_yscale("log")
 
-        DP = self._pattern(self.mean_CBED_fit.x, shared_data) / self.intensity_scale
+        DP = (
+            self._pattern(self.mean_CBED_fit.x, self.static_data) / self.intensity_scale
+        )
         ax = fig.add_subplot(gs[0, 1])
         CyRd = mpl_c.LinearSegmentedColormap.from_list(
             "CyRd", ["#00ccff", "#ffffff", "#ff0000"]
         )
-        im = ax.matshow(
+        ax.matshow(
             err_im := -(DP - self.meanCBED),
             cmap=CyRd,
             vmin=-np.abs(err_im).max() / 4,
             vmax=np.abs(err_im).max() / 4,
         )
-        # fig.colorbar(im)
         ax.set_title("Error")
         ax.axis("off")
 
@@ -209,10 +298,15 @@ class WholePatternFit:
         return opt
 
     def fit_all_patterns(
-        self, 
-        resume = False, 
-        **fit_opts
-        ):
+        self,
+        resume: bool = False,
+        real_space_mask: Optional[np.ndarray] = None,
+        show_fit_metrics: bool = True,
+        distributed: bool = True,
+        num_jobs: int = None,
+        threads_per_job: int = 1,
+        **fit_opts,
+    ):
         """
         Apply model fitting to all patterns.
 
@@ -220,6 +314,18 @@ class WholePatternFit:
         ----------
         resume: bool (optional)
             Set to true to continue a previous fit with more iterations.
+        real_space_mask: np.ndarray of bools (optional)
+            Only perform the fitting on a subset of the probe positions,
+            where real_space_mask[rx,ry] == True.
+        distributed: bool (optional)
+            Whether to evaluate using a pool of worker threads
+        num_jobs: int (optional)
+            number of parallel worker threads to launch if distributed=True
+            Defaults to number of CPU cores
+        threads_per_job: int (optional)
+            number of threads for each parallel job. If num_jobs is not specified,
+            the number of workers is automatically chosen so as to not oversubscribe
+            the cores (num_jobs = CPU_count // threads_per_job)
         fit_opts: args (optional)
             args passed to scipy.optimize.least_squares
 
@@ -228,12 +334,12 @@ class WholePatternFit:
         fit_data: RealSlice
             Fitted coefficients for all probe positions
         fit_metrics: RealSlice
-            Fitting metrixs for all probe positions
+            Fitting metrics for all probe positions
 
         """
 
         # make sure we have the latest parameters
-        self._scrape_model_params()
+        unique_params, unique_names = self._finalize_model()
 
         # set tracking off
         self._track = False
@@ -242,55 +348,208 @@ class WholePatternFit:
         if resume:
             assert hasattr(self, "fit_data"), "No existing data resuming fit!"
 
-        fit_data = np.zeros((self.datacube.R_Nx, self.datacube.R_Ny, self.x0.shape[0]))
-        fit_metrics = np.zeros((self.datacube.R_Nx, self.datacube.R_Ny, 4))
+        # init
+        fit_data = np.zeros((self.x0.shape[0], self.datacube.R_Nx, self.datacube.R_Ny))
+        fit_metrics = np.zeros((4, self.datacube.R_Nx, self.datacube.R_Ny))
 
-        for rx, ry in tqdmnd(self.datacube.R_Nx, self.datacube.R_Ny):
-            current_pattern = self.datacube.data[rx, ry, :, :] * self.intensity_scale
-            shared_data = self.static_data.copy()
-            self._cost_history = (
-                []
-            )  # clear this so it doesn't grow: TODO make this not stupid
+        # Default fitting options
+        default_opts = {
+            "method": "trf",
+            "verbose": 0,
+            "x_scale": "jac",
+        }
+        default_opts.update(fit_opts)
 
-            try:
-                x0 = self.fit_data.data[rx, ry] if resume else self.x0
+        # Masking function
+        if real_space_mask is None:
+            mask = np.ones(
+                (self.datacube.R_Nx, self.datacube.R_Ny),
+                dtype=bool,
+            )
+        else:
+            mask = real_space_mask
 
-                if self.hasJacobian & self.use_jacobian:
-                    opt = least_squares(
-                        self._pattern_error,
-                        x0,
-                        jac=self._jacobian,
-                        bounds=(self.lower_bound, self.upper_bound),
-                        args=(current_pattern, shared_data),
-                        **fit_opts,
+        # Loop over probe positions
+        if not distributed:
+            for rx, ry in tqdmnd(self.datacube.R_Nx, self.datacube.R_Ny):
+                if mask[rx, ry]:
+                    current_pattern = (
+                        self.datacube.data[rx, ry, :, :] * self.intensity_scale
                     )
-                else:
-                    opt = least_squares(
-                        self._pattern_error,
-                        x0,
-                        bounds=(self.lower_bound, self.upper_bound),
-                        args=(current_pattern, shared_data),
-                        **fit_opts,
-                    )
+                    x0 = self.fit_data.data[rx, ry] if resume else self.x0
 
-                fit_data[rx, ry, :] = opt.x
-                fit_metrics[rx, ry, :] = [
-                    opt.cost,
-                    opt.optimality,
-                    opt.nfev,
-                    opt.status,
-                ]
-            # except LinAlgError as err:
-           # added so that sending an interupt or keyboard interupt breaks out of the for loop rather than just the probe
-            except InterruptedError:
-                break
-            except KeyboardInterrupt:
-                break
-            except:
-                warnings.warn(f'Fit on position ({rx,ry}) failed with error')
+                    try:
+                        if self.hasJacobian & self.use_jacobian:
+                            opt = least_squares(
+                                self._pattern_error,
+                                x0,
+                                jac=self._jacobian,
+                                bounds=(self.lower_bound, self.upper_bound),
+                                args=(current_pattern, self.static_data),
+                                **default_opts,
+                            )
+                        else:
+                            opt = least_squares(
+                                self._pattern_error,
+                                x0,
+                                bounds=(self.lower_bound, self.upper_bound),
+                                args=(current_pattern, self.static_data),
+                                **default_opts,
+                            )
 
+                        fit_data_single = opt.x
+                        fit_metrics_single = [
+                            opt.cost,
+                            opt.optimality,
+                            opt.nfev,
+                            opt.status,
+                        ]
+                    except Exception as err:
+                        fit_data_single = x0
+                        fit_metrics_single = [0, 0, 0, -2]
 
-        # Convert to RealSlices
+                    fit_data[:, rx, ry] = fit_data_single
+                    fit_metrics[:, rx, ry] = fit_metrics_single
+
+        else:
+            # distributed evaluation
+            self._fit_distributed(
+                resume=resume,
+                real_space_mask=mask,
+                num_jobs=num_jobs,
+                threads_per_job=threads_per_job,
+                fit_opts=default_opts,
+                fit_data=fit_data,
+                fit_metrics=fit_metrics,
+            )
+
+        self.fit_data = RealSlice(fit_data, name="Fit Data", slicelabels=unique_names)
+        self.fit_metrics = RealSlice(
+            fit_metrics,
+            name="Fit Metrics",
+            slicelabels=["cost", "optimality", "nfev", "status"],
+        )
+
+        if show_fit_metrics:
+            self.show_fit_metrics()
+
+        return self.fit_data, self.fit_metrics
+
+    def accept_mean_CBED_fit(self):
+        """
+        Sets the parameters optimized by fitting to mean CBED
+        as the initial guess for each of the component models.
+        """
+        x = self.mean_CBED_fit.x
+
+        for model in self.model:
+            for param in model.params.values():
+                param.initial_value = x[param.offset]
+
+    def get_lattice_maps(self) -> list[RealSlice]:
+        """
+        Get the fitted reciprical lattice vectors refined at each scan point.
+
+        Returns
+        -------
+        g_maps: list[RealSlice]
+            RealSlice objects containing the lattice data for each scan position
+        """
+        assert hasattr(self, "fit_data"), "Please run fitting first!"
+
+        lattices = [m for m in self.model if WPFModelType.LATTICE in m.model_type]
+
+        g_maps = []
+        for lat in lattices:
+            data = np.stack(
+                [
+                    self.fit_data.data[lat.params["ux"].offset],
+                    self.fit_data.data[lat.params["uy"].offset],
+                    self.fit_data.data[lat.params["vx"].offset],
+                    self.fit_data.data[lat.params["vy"].offset],
+                    self.fit_metrics["status"].data
+                    >= 0,  # negative status indicates fit error
+                ],
+                axis=0,
+            )
+
+            g_map = RealSlice(
+                data,
+                slicelabels=["g1x", "g1y", "g2x", "g2y", "mask"],
+                name=lat.name,
+            )
+            g_maps.append(g_map)
+
+        return g_maps
+
+    def _setup_static_data(self):
+        """
+        Generate basic data that each model can access during the fitting routine
+        """
+        self.static_data = {}
+
+        xArray, yArray = np.mgrid[0 : self.datacube.Q_Nx, 0 : self.datacube.Q_Ny]
+        self.static_data["xArray"] = xArray
+        self.static_data["yArray"] = yArray
+
+        self.static_data["Q_Nx"] = self.datacube.Q_Nx
+        self.static_data["Q_Ny"] = self.datacube.Q_Ny
+
+        self.static_data["parent"] = self
+
+    def _get_distance(self, params: np.ndarray, x: Parameter, y: Parameter):
+        """
+        Return the distance from a point in pixel coordinates specified
+        by two Parameter objects.
+        This method caches the result from the _BaseModel for performance
+        """
+        if (
+            x is self.model[0].params["x center"]
+            and y is self.model[0].params["y center"]
+        ):
+            # TODO: actually implement caching
+            pass
+
+        return np.hypot(
+            self.static_data["xArray"] - params[x.offset],
+            self.static_data["yArray"] - params[y.offset],
+        )
+
+    def _pattern_error(self, x, current_pattern, shared_data):
+        DP = self._pattern(x, shared_data)
+
+        DP = (DP - current_pattern) * self.mask
+
+        if self._track:
+            self._fevals.append(DP)
+            self._xevals.append(x)
+        self._cost_history.append(np.sum(DP**2))
+
+        return DP.ravel()
+
+    def _pattern(self, x, shared_data):
+        DP = np.zeros((self.datacube.Q_Nx, self.datacube.Q_Ny))
+
+        for m in self.model:
+            m.func(DP, x, **shared_data)
+
+        return DP * self.mask
+
+    def _jacobian(self, x, current_pattern, shared_data):
+        # TODO: automatic mixed analytic/finite difference
+
+        J = np.zeros(((self.datacube.Q_Nx * self.datacube.Q_Ny), self.nParams))
+
+        for m in self.model:
+            m.jacobian(J, x, **shared_data)
+
+        return J * self.mask.ravel()[:, np.newaxis]
+
+    def _finalize_model(self):
+        # iterate over all models and assign indices, accumulate list
+        # of unique parameters. then, accumulate initial value and bounds vectors
+
+        # get unique names for each model
         model_names = []
         for m in self.model:
             n = m.name
@@ -301,158 +560,151 @@ class WholePatternFit:
                     i += 1
             model_names.append(n)
 
-        param_names = ["global_x0", "global_y0"] + [
-            n + "/" + k
-            for m, n in zip(self.model, model_names)
-            for k in m.params.keys()
-        ]
+        unique_params = []
+        unique_names = []
+        idx = 0
+        for model, model_name in zip(self.model, model_names):
+            for param_name, param in model.params.items():
+                if param not in unique_params:
+                    unique_params.append(param)
+                    unique_names.append(model_name + "/" + param_name)
+                    param.offset = idx
+                    idx += 1
 
-        self.fit_data = RealSlice(fit_data, name="Fit Data", slicelabels=param_names)
-        self.fit_metrics = RealSlice(
-            fit_metrics,
-            name="Fit Metrics",
-            slicelabels=["cost", "optimality", "nfev", "status"],
-        )
-
-        self.show_fit_metrics()
-
-        return self.fit_data, self.fit_metrics
-
-    def accept_mean_CBED_fit(self):
-        x = self.mean_CBED_fit.x
-        self.static_data["global_x0"] = x[0]
-        self.static_data["global_y0"] = x[1]
-
-        self.static_data["global_r"] = np.hypot(
-            (self.static_data["xArray"] - x[0]), (self.static_data["yArray"] - x[1])
-        )
-
-        for i, m in enumerate(self.model):
-            ind = self.model_param_inds[i] + 2
-            for j, k in enumerate(m.params.keys()):
-                m.params[k].initial_value = x[ind + j]
-
-    def get_lattice_maps(self):
-        assert hasattr(self, "fit_data"), "Please run fitting first!"
-
-        lattices = [
-            (i, m)
-            for i, m in enumerate(self.model)
-            if "lattice" in type(m).__name__.lower()
-        ]
-
-        g_maps = []
-        for (i, l) in lattices:
-            param_list = list(l.params.keys())
-            lattice_offset = param_list.index("ux")
-            data_offset = self.model_param_inds[i] + 2 + lattice_offset
-
-            # TODO: Use proper RealSlice semantics for access
-            data = self.fit_data.data[:, :, data_offset : data_offset + 4]
-
-            g_map = RealSlice(
-                np.dstack((data, np.ones(data.shape[:2], dtype=np.bool_))),
-                slicelabels=["g1x", "g1y", "g2x", "g2y", "mask"],
-                name=l.name,
-            )
-            g_maps.append(g_map)
-
-        return g_maps
-
-    def _setup_static_data(self,x0,y0):
-        self.static_data = {}
-
-        xArray, yArray = np.mgrid[0 : self.datacube.Q_Nx, 0 : self.datacube.Q_Ny]
-        self.static_data["xArray"] = xArray
-        self.static_data["yArray"] = yArray
-
-        self.static_data["Q_Nx"] = self.datacube.Q_Nx
-        self.static_data["Q_Ny"] = self.datacube.Q_Ny
-
-        self.static_data["global_x0"] = x0
-        self.static_data["global_y0"] = y0
-        self.static_data["global_r"] = np.hypot(
-            (self.static_data["xArray"] - x0),
-            (self.static_data["yArray"] - y0),
-        )
-
-    def _pattern_error(self, x, current_pattern, shared_data):
-
-        DP = np.zeros((self.datacube.Q_Nx, self.datacube.Q_Ny))
-
-        shared_data["global_x0"] = x[0]
-        shared_data["global_y0"] = x[1]
-        shared_data["global_r"] = np.hypot(
-            (shared_data["xArray"] - x[0]),
-            (shared_data["yArray"] - x[1]),
-        )
-
-        for i, m in enumerate(self.model):
-            ind = self.model_param_inds[i] + 2
-            m.func(DP, *x[ind : ind + m.nParams].tolist(), **shared_data)
-
-        DP = (DP**self.fit_power - current_pattern**self.fit_power) * self.mask
-
-        if self._track:
-            self._fevals.append(DP)
-            self._xevals.append(x)
-        self._cost_history.append(np.sum(DP**2))
-
-        return DP.ravel()
-
-    def _pattern(self, x, shared_data):
-
-        DP = np.zeros((self.datacube.Q_Nx, self.datacube.Q_Ny))
-
-        shared_data["global_x0"] = x[0]
-        shared_data["global_y0"] = x[1]
-        shared_data["global_r"] = np.hypot(
-            (shared_data["xArray"] - x[0]),
-            (shared_data["yArray"] - x[1]),
-        )
-
-        for i, m in enumerate(self.model):
-            ind = self.model_param_inds[i] + 2
-            m.func(DP, *x[ind : ind + m.nParams].tolist(), **shared_data)
-
-        return (DP**self.fit_power) * self.mask
-
-    def _jacobian(self, x, current_pattern, shared_data):
-        # TODO: automatic mixed analytic/finite difference
-
-        J = np.zeros(((self.datacube.Q_Nx * self.datacube.Q_Ny), self.nParams + 2))
-
-        shared_data["global_x0"] = x[0]
-        shared_data["global_y0"] = x[1]
-        shared_data["global_r"] = np.hypot(
-            (shared_data["xArray"] - x[0]),
-            (shared_data["yArray"] - x[1]),
-        )
-
-        for i, m in enumerate(self.model):
-            ind = self.model_param_inds[i] + 2
-            m.jacobian(J, *x[ind : ind + m.nParams].tolist(), offset=ind, **shared_data)
-
-        return J * self.mask.ravel()[:, np.newaxis]
-
-    def _scrape_model_params(self):
-
-        self.x0 = np.zeros((self.nParams + 2,))
-        self.upper_bound = np.zeros_like(self.x0)
-        self.lower_bound = np.zeros_like(self.x0)
-
-        self.x0[0:2] = np.array(
-            [self.static_data["global_x0"], self.static_data["global_y0"]]
-        )
-        self.upper_bound[0:2] = self.global_xy0_ub
-        self.lower_bound[0:2] = self.global_xy0_lb
-
-        for i, m in enumerate(self.model):
-            ind = self.model_param_inds[i] + 2
-
-            for j, v in enumerate(m.params.values()):
-                self.x0[ind + j] = v.initial_value
-                self.upper_bound[ind + j] = v.upper_bound
-                self.lower_bound[ind + j] = v.lower_bound
+        self.x0 = np.array([param.initial_value for param in unique_params])
+        self.upper_bound = np.array([param.upper_bound for param in unique_params])
+        self.lower_bound = np.array([param.lower_bound for param in unique_params])
 
         self.hasJacobian = all([m.hasJacobian for m in self.model])
+
+        self.nParams = self.x0.shape[0]
+
+        return unique_params, unique_names
+
+    def _fit_single_pattern(
+        self,
+        data: np.ndarray,
+        initial_guess: np.ndarray,
+        mask: bool,
+        fit_opts,
+    ):
+        """
+        Apply model fitting to one pattern.
+
+        Parameters
+        ----------
+        data: np.ndarray
+            Diffraction pattern
+        initial_guess: np.ndarray
+            starting guess for fitting
+        mask: bool
+            Fitting is skipped if mask is False, and default values are returned
+        fit_opts:
+            args passed to scipy.optimize.least_squares
+
+        Returns
+        --------
+        fit_coefs: np.array
+            Fitted coefficients
+        fit_metrics: np.array
+            Fitting metrics
+
+        """
+        if mask:
+            try:
+                if self.hasJacobian & self.use_jacobian:
+                    opt = least_squares(
+                        self._pattern_error,
+                        initial_guess,
+                        jac=self._jacobian,
+                        bounds=(self.lower_bound, self.upper_bound),
+                        args=(data * self.intensity_scale, self.static_data),
+                        **fit_opts,
+                    )
+                else:
+                    opt = least_squares(
+                        self._pattern_error,
+                        initial_guess,
+                        bounds=(self.lower_bound, self.upper_bound),
+                        args=(data * self.intensity_scale, self.static_data),
+                        **fit_opts,
+                    )
+
+                fit_coefs = opt.x
+                fit_metrics_single = [
+                    opt.cost,
+                    opt.optimality,
+                    opt.nfev,
+                    opt.status,
+                ]
+            except Exception as err:
+                # print(err)
+                fit_coefs = initial_guess
+                fit_metrics_single = [0, 0, 0, -2]
+
+            return fit_coefs, fit_metrics_single
+        else:
+            return np.zeros_like(initial_guess), [0, 0, 0, 0]
+
+    def _fit_distributed(
+        self,
+        fit_opts: dict,
+        fit_data: np.ndarray,
+        fit_metrics: np.ndarray,
+        real_space_mask: np.ndarray,
+        resume=False,
+        num_jobs=None,
+        threads_per_job=1,
+    ):
+        """
+        Run fitting using multiprocessing to fit several patterns in parallel
+        """
+        from mpire import WorkerPool, cpu_count
+        from threadpoolctl import threadpool_limits
+
+        # prevent oversubscription when using multiple threads per job
+        num_jobs = num_jobs or cpu_count() // threads_per_job
+
+        def f(shared_data, args):
+            with threadpool_limits(limits=threads_per_job):
+                return self._fit_single_pattern(**args, fit_opts=shared_data)
+
+        # hopefully the data entries remain as views until dispatch time...
+        fit_inputs = [
+            (
+                {
+                    "data": self.datacube[rx, ry],
+                    "initial_guess": self.fit_data[rx, ry] if resume else self.x0,
+                    "mask": real_space_mask[rx, ry],
+                },
+            )
+            for rx in range(self.datacube.R_Nx)
+            for ry in range(self.datacube.R_Ny)
+        ]
+
+        with WorkerPool(
+            n_jobs=num_jobs,
+            shared_objects=fit_opts,
+        ) as pool:
+            results = pool.map(
+                f,
+                fit_inputs,
+                progress_bar=True,
+            )
+
+        for (rx, ry), res in zip(
+            np.ndindex((self.datacube.R_Nx, self.datacube.R_Ny)), results
+        ):
+            fit_data[:, rx, ry] = res[0]
+            fit_metrics[:, rx, ry] = res[1]
+
+    def __getstate__(self):
+        # Prevent pickling from copying the datacube, so that distributed
+        # evaluation does not balloon memory usage.
+        # Copy the object's state from self.__dict__ which contains
+        # all our instance attributes. Always use the dict.copy()
+        # method to avoid modifying the original state.
+        state = self.__dict__.copy()
+        # Remove the unpicklable entries.
+        del state["datacube"]
+        return state
