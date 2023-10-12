@@ -6,16 +6,18 @@ from py4DSTEM.data import Data
 from typing import Optional
 import numpy as np
 
-class QPoints(PointList,Data):
+
+class QPoints(PointList, Data):
     """
     Stores a set of diffraction space points,
     with fields 'qx', 'qy' and 'intensity'
     """
+
     def __init__(
         self,
         data: np.ndarray,
-        name: Optional[str] = 'qpoints',
-        ):
+        name: Optional[str] = "qpoints",
+    ):
         """
         Accepts:
             data (structured numpy ndarray): should have three fields, which
@@ -29,47 +31,40 @@ class QPoints(PointList,Data):
         # initialize as a PointList
         PointList.__init__(
             self,
-            data = data,
-            name = name,
+            data=data,
+            name=name,
         )
 
         # rename fields
-        self.fields = 'qx','qy','intensity'
-
+        self.fields = "qx", "qy", "intensity"
 
     # properties
 
     @property
     def qx(self):
-        return self.data['qx']
+        return self.data["qx"]
+
     @property
     def qy(self):
-        return self.data['qy']
+        return self.data["qy"]
+
     @property
     def intensity(self):
-        return self.data['intensity']
+        return self.data["intensity"]
 
     # aliases
     I = intensity
 
-
-
     # read
     # this method is not necessary but is kept for consistency of structure!
     @classmethod
-    def _get_constructor_args(cls,group):
+    def _get_constructor_args(cls, group):
         """
         Returns a dictionary of args/values to pass to the class constructor
         """
         pl_constr_args = PointList._get_constructor_args(group)
         args = {
-            'data' : pl_constr_args['data'],
-            'name' : pl_constr_args['name'],
+            "data": pl_constr_args["data"],
+            "name": pl_constr_args["name"],
         }
         return args
-
-
-
-
-
-

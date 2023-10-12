@@ -1,10 +1,11 @@
 # Read the mib file captured using the Merlin detector
-# Author: Tara Mishra, tara.matsci@gmail. 
+# Author: Tara Mishra, tara.matsci@gmail.
 # Based on the PyXEM load_mib module https://github.com/pyxem/pyxem/blob/563a3bb5f3233f46cd3e57f3cd6f9ddf7af55ad0/pyxem/utils/io_utils.py
 
 import numpy as np
 from py4DSTEM.datacube import DataCube
 import os
+
 
 def load_mib(
     file_path,
@@ -12,8 +13,9 @@ def load_mib(
     binfactor=1,
     reshape=True,
     flip=True,
-    scan = (256,256),
-    **kwargs):
+    scan=(256, 256),
+    **kwargs
+):
     """
     Read a MIB file and return as py4DSTEM DataCube.
 
@@ -48,18 +50,19 @@ def load_mib(
         data = data[:, hdr_bits:]
 
     if header["raw"] == "MIB":
-        data = data.reshape(depth,width,height)
+        data = data.reshape(depth, width, height)
     else:
-        print('Data type not supported as MIB reader')
+        print("Data type not supported as MIB reader")
 
     if reshape:
-        data = data.reshape(scan[0],scan[1],width,height)
+        data = data.reshape(scan[0], scan[1], width, height)
 
     if mem == "RAM":
-        data = np.array(data) # Load entire dataset into RAM
+        data = np.array(data)  # Load entire dataset into RAM
 
     py4dstem_data = DataCube(data=data)
     return py4dstem_data
+
 
 def manageHeader(fname):
     """Get necessary information from the header of the .mib file.
@@ -84,7 +87,6 @@ def manageHeader(fname):
         Header += str(aByte.decode("ascii"))
         # This gets rid of the header
         while aByte and ord(aByte) != 0:
-
             aByte = input.read(1)
             Header += str(aByte.decode("ascii"))
 
@@ -119,6 +121,7 @@ def manageHeader(fname):
     )
 
     return hdr
+
 
 def parse_hdr(fp):
     """Parse information from mib file header info from _manageHeader function.
@@ -217,6 +220,7 @@ def parse_hdr(fp):
 
     return hdr_info
 
+
 def get_mib_memmap(fp, mmap_mode="r"):
     """Reads the binary mib file into a numpy memmap object and returns as dask array object.
     Parameters
@@ -259,6 +263,7 @@ def get_mib_memmap(fp, mmap_mode="r"):
     data_mem = np.memmap(fp, offset=read_offset, dtype=data_type, mode=mmap_mode)
     return data_mem
 
+
 def get_mib_depth(hdr_info, fp):
     """Determine the total number of frames based on .mib file size.
     Parameters
@@ -290,7 +295,6 @@ def get_mib_depth(hdr_info, fp):
 
     file_size = os.path.getsize(fp[:-3] + "mib")
     if hdr_info["raw"] == "R64":
-
         single_frame = mib_file_size_dict.get(str(hdr_info["Counter Depth (number)"]))
         depth = int(file_size / single_frame)
     elif hdr_info["raw"] == "MIB":
@@ -305,6 +309,7 @@ def get_mib_depth(hdr_info, fp):
             depth = int(file_size / single_frame)
 
     return depth
+
 
 def get_hdr_bits(hdr_info):
     """Gets the number of character bits for the header for each frame given the data type.
@@ -348,4 +353,3 @@ def get_hdr_bits(hdr_info):
     hdr_bits = int(hdr_info["data offset"] * hdr_multiplier)
 
     return hdr_bits
-

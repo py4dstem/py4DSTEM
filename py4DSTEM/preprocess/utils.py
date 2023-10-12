@@ -2,6 +2,7 @@
 
 import numpy as np
 from scipy.ndimage import gaussian_filter
+
 try:
     import cupy as cp
 except ImportError:
@@ -32,16 +33,16 @@ def bin2D(array, factor, dtype=np.float64):
     # Collect pixel sums into new bins
     for ix in range(factor):
         for iy in range(factor):
-            binned_ar += array[0 + ix:xx + ix:factor, 0 + iy:yy + iy:factor]
+            binned_ar += array[0 + ix : xx + ix : factor, 0 + iy : yy + iy : factor]
     return binned_ar
 
 
 def make_Fourier_coords2D(Nx, Ny, pixelSize=1):
     """
     Generates Fourier coordinates for a (Nx,Ny)-shaped 2D array.
-	Specifying the pixelSize argument sets a unit size.
-	"""
-    if hasattr(pixelSize, '__len__'):
+        Specifying the pixelSize argument sets a unit size.
+    """
+    if hasattr(pixelSize, "__len__"):
         assert len(pixelSize) == 2, "pixelSize must either be a scalar or have length 2"
         pixelSize_x = pixelSize[0]
         pixelSize_y = pixelSize[1]
@@ -53,8 +54,6 @@ def make_Fourier_coords2D(Nx, Ny, pixelSize=1):
     qy = np.fft.fftfreq(Ny, pixelSize_y)
     qy, qx = np.meshgrid(qy, qx)
     return qx, qy
-
-
 
 
 def get_shifted_ar(ar, xshift, yshift, periodic=True, bilinear=False, device="cpu"):
@@ -121,12 +120,10 @@ def get_shifted_ar(ar, xshift, yshift, periodic=True, bilinear=False, device="cp
     return shifted_ar
 
 
-
-
 def get_maxima_2D(
     ar,
-    subpixel = 'poly',
-    upsample_factor = 16,
+    subpixel="poly",
+    upsample_factor=16,
     sigma=0,
     minAbsoluteIntensity=0,
     minRelativeIntensity=0,
@@ -135,7 +132,7 @@ def get_maxima_2D(
     edgeBoundary=1,
     maxNumPeaks=1,
     _ar_FT=None,
-    ):
+):
     """
     Finds the maximal points of a 2D array.
 
@@ -161,27 +158,29 @@ def get_maxima_2D(
     """
     from py4DSTEM.process.utils.multicorr import upsampled_correlation
 
-    subpixel_modes = (
-        'pixel',
-        'poly',
-        'multicorr'
-    )
+    subpixel_modes = ("pixel", "poly", "multicorr")
     er = f"Unrecognized subpixel option {subpixel}. Must be in {subpixel_modes}"
     assert subpixel in subpixel_modes, er
 
     # gaussian filtering
-    ar = ar if sigma<=0 else gaussian_filter(ar, sigma)
+    ar = ar if sigma <= 0 else gaussian_filter(ar, sigma)
 
     # local pixelwise maxima
-    maxima_bool = \
-        (ar >= np.roll(ar, (-1, 0), axis=(0, 1))) & (ar > np.roll(ar, (1, 0), axis=(0, 1))) & \
-        (ar >= np.roll(ar, (0, -1), axis=(0, 1))) & (ar > np.roll(ar, (0, 1), axis=(0, 1))) & \
-        (ar >= np.roll(ar, (-1, -1), axis=(0, 1))) & (ar > np.roll(ar, (-1, 1), axis=(0, 1))) & \
-        (ar >= np.roll(ar, (1, -1), axis=(0, 1))) & (ar > np.roll(ar, (1, 1), axis=(0, 1)))
+    maxima_bool = (
+        (ar >= np.roll(ar, (-1, 0), axis=(0, 1)))
+        & (ar > np.roll(ar, (1, 0), axis=(0, 1)))
+        & (ar >= np.roll(ar, (0, -1), axis=(0, 1)))
+        & (ar > np.roll(ar, (0, 1), axis=(0, 1)))
+        & (ar >= np.roll(ar, (-1, -1), axis=(0, 1)))
+        & (ar > np.roll(ar, (-1, 1), axis=(0, 1)))
+        & (ar >= np.roll(ar, (1, -1), axis=(0, 1)))
+        & (ar > np.roll(ar, (1, 1), axis=(0, 1)))
+    )
 
     # remove edges
     assert isinstance(edgeBoundary, (int, np.integer))
-    if edgeBoundary < 1: edgeBoundary = 1
+    if edgeBoundary < 1:
+        edgeBoundary = 1
     maxima_bool[:edgeBoundary, :] = False
     maxima_bool[-edgeBoundary:, :] = False
     maxima_bool[:, :edgeBoundary] = False
@@ -190,16 +189,15 @@ def get_maxima_2D(
     # get indices
     # sort by intensity
     maxima_x, maxima_y = np.nonzero(maxima_bool)
-    dtype = np.dtype([('x', float), ('y', float), ('intensity', float)])
+    dtype = np.dtype([("x", float), ("y", float), ("intensity", float)])
     maxima = np.zeros(len(maxima_x), dtype=dtype)
-    maxima['x'] = maxima_x
-    maxima['y'] = maxima_y
-    maxima['intensity'] = ar[maxima_x, maxima_y]
-    maxima = np.sort(maxima, order='intensity')[::-1]
+    maxima["x"] = maxima_x
+    maxima["y"] = maxima_y
+    maxima["intensity"] = ar[maxima_x, maxima_y]
+    maxima = np.sort(maxima, order="intensity")[::-1]
 
     if len(maxima) == 0:
         return maxima
-
 
     # filter
     maxima = filter_2D_maxima(
@@ -212,44 +210,44 @@ def get_maxima_2D(
         maxNumPeaks=maxNumPeaks,
     )
 
-    if subpixel == 'pixel':
+    if subpixel == "pixel":
         return maxima
-
 
     # Parabolic subpixel refinement
     for i in range(len(maxima)):
-        Ix1_ = ar[int(maxima['x'][i]) - 1, int(maxima['y'][i])].astype(np.float64)
-        Ix0 = ar[int(maxima['x'][i]), int(maxima['y'][i])].astype(np.float64)
-        Ix1 = ar[int(maxima['x'][i]) + 1, int(maxima['y'][i])].astype(np.float64)
-        Iy1_ = ar[int(maxima['x'][i]), int(maxima['y'][i]) - 1].astype(np.float64)
-        Iy0 = ar[int(maxima['x'][i]), int(maxima['y'][i])].astype(np.float64)
-        Iy1 = ar[int(maxima['x'][i]), int(maxima['y'][i]) + 1].astype(np.float64)
+        Ix1_ = ar[int(maxima["x"][i]) - 1, int(maxima["y"][i])].astype(np.float64)
+        Ix0 = ar[int(maxima["x"][i]), int(maxima["y"][i])].astype(np.float64)
+        Ix1 = ar[int(maxima["x"][i]) + 1, int(maxima["y"][i])].astype(np.float64)
+        Iy1_ = ar[int(maxima["x"][i]), int(maxima["y"][i]) - 1].astype(np.float64)
+        Iy0 = ar[int(maxima["x"][i]), int(maxima["y"][i])].astype(np.float64)
+        Iy1 = ar[int(maxima["x"][i]), int(maxima["y"][i]) + 1].astype(np.float64)
         deltax = (Ix1 - Ix1_) / (4 * Ix0 - 2 * Ix1 - 2 * Ix1_)
         deltay = (Iy1 - Iy1_) / (4 * Iy0 - 2 * Iy1 - 2 * Iy1_)
-        maxima['x'][i] += deltax
-        maxima['y'][i] += deltay
-        maxima['intensity'][i] = linear_interpolation_2D(ar, maxima['x'][i], maxima['y'][i])
+        maxima["x"][i] += deltax
+        maxima["y"][i] += deltay
+        maxima["intensity"][i] = linear_interpolation_2D(
+            ar, maxima["x"][i], maxima["y"][i]
+        )
 
-    if subpixel == 'poly':
+    if subpixel == "poly":
         return maxima
 
     # Fourier upsampling
     if _ar_FT is None:
         _ar_FT = np.fft.fft2(ar)
-    for ipeak in range(len(maxima['x'])):
-        xyShift = np.array((maxima['x'][ipeak],maxima['y'][ipeak]))
+    for ipeak in range(len(maxima["x"])):
+        xyShift = np.array((maxima["x"][ipeak], maxima["y"][ipeak]))
         # we actually have to lose some precision and go down to half-pixel
         # accuracy for multicorr
         xyShift[0] = np.round(xyShift[0] * 2) / 2
         xyShift[1] = np.round(xyShift[1] * 2) / 2
 
-        subShift = upsampled_correlation(_ar_FT,upsample_factor,xyShift)
-        maxima['x'][ipeak]=subShift[0]
-        maxima['y'][ipeak]=subShift[1]
+        subShift = upsampled_correlation(_ar_FT, upsample_factor, xyShift)
+        maxima["x"][ipeak] = subShift[0]
+        maxima["y"][ipeak] = subShift[1]
 
-    maxima = np.sort(maxima, order='intensity')[::-1]
+    maxima = np.sort(maxima, order="intensity")[::-1]
     return maxima
-
 
 
 def filter_2D_maxima(
@@ -260,7 +258,7 @@ def filter_2D_maxima(
     minSpacing=0,
     edgeBoundary=1,
     maxNumPeaks=1,
-    ):
+):
     """
     Args:
         maxima : a numpy structured array with fields 'x', 'y', 'intensity'
@@ -278,14 +276,17 @@ def filter_2D_maxima(
     """
 
     # Remove maxima which are too dim
-    if (minAbsoluteIntensity > 0):
-        deletemask = maxima['intensity'] < minAbsoluteIntensity
+    if minAbsoluteIntensity > 0:
+        deletemask = maxima["intensity"] < minAbsoluteIntensity
         maxima = maxima[~deletemask]
 
     # Remove maxima which are too dim, compared to the n-th brightest
     if (minRelativeIntensity > 0) & (len(maxima) > relativeToPeak):
         assert isinstance(relativeToPeak, (int, np.integer))
-        deletemask = maxima['intensity'] / maxima['intensity'][relativeToPeak] < minRelativeIntensity
+        deletemask = (
+            maxima["intensity"] / maxima["intensity"][relativeToPeak]
+            < minRelativeIntensity
+        )
         maxima = maxima[~deletemask]
 
     # Remove maxima which are too close
@@ -293,9 +294,11 @@ def filter_2D_maxima(
         deletemask = np.zeros(len(maxima), dtype=bool)
         for i in range(len(maxima)):
             if deletemask[i] == False:
-                tooClose = ((maxima['x'] - maxima['x'][i]) ** 2 + \
-                            (maxima['y'] - maxima['y'][i]) ** 2) < minSpacing ** 2
-                tooClose[:i + 1] = False
+                tooClose = (
+                    (maxima["x"] - maxima["x"][i]) ** 2
+                    + (maxima["y"] - maxima["y"][i]) ** 2
+                ) < minSpacing**2
+                tooClose[: i + 1] = False
                 deletemask[tooClose] = True
         maxima = maxima[~deletemask]
 
@@ -316,11 +319,9 @@ def linear_interpolation_2D(ar, x, y):
     y0, y1 = int(np.floor(y)), int(np.ceil(y))
     dx = x - x0
     dy = y - y0
-    return (1 - dx) * (1 - dy) * ar[x0, y0] + (1 - dx) * dy * ar[x0, y1] + dx * (1 - dy) * ar[x1, y0] + dx * dy * ar[
-        x1, y1]
-
-
-
-
-
-
+    return (
+        (1 - dx) * (1 - dy) * ar[x0, y0]
+        + (1 - dx) * dy * ar[x0, y1]
+        + dx * (1 - dy) * ar[x1, y0]
+        + dx * dy * ar[x1, y1]
+    )

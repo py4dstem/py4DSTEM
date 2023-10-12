@@ -1,4 +1,4 @@
-name: flake8 Lint
+name: Check for errors with flake8
 
 on:
   push:

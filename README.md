@@ -46,42 +46,50 @@ First, download and install Anaconda: www.anaconda.com/download.
 If you prefer a more lightweight conda client, you can instead install Miniconda: https://docs.conda.io/en/latest/miniconda.html.
 Then open a conda terminal and run one of the following sets of commands to ensure everything is up-to-date and create a new environment for your py4DSTEM installation:
 
-
 ```
 conda update conda
 conda create -n py4dstem
 conda activate py4dstem
-```
-
-Next, install py4DSTEM.  To simultaneously install py4DSTEM with `pymatgen` (used in some crystal structure workflows) and `jupyterlab` (providing an interface for running Python notebooks like those provided in the [py4DSTEM tutorials repository](https://github.com/py4dstem/py4DSTEM_tutorials)) run:
-
-```
 conda install -c conda-forge py4dstem pymatgen jupyterlab
-```
-
-Or if you would prefer to install only the base modules of **py4DSTEM**, you can instead run:
-
-```
-conda install -c conda-forge py4dstem
-```
-
-In Windows you should then also run:
-
-```
-conda install pywin32
 ```
 
 In order, these commands
 - ensure your installation of anaconda is up-to-date
 - make a virtual environment (see below)
 - enter the environment
-- install py4DSTEM, and optionally also pymatgen and JupyterLab
-- on Windows, enable python to talk to the windows API
+- install py4DSTEM, as well as pymatgen (used for crystal structure calculations) and JupyterLab (an interface for running Python notebooks like those in the [py4DSTEM tutorials repository](https://github.com/py4dstem/py4DSTEM_tutorials))
+
+
+We've had some recent reports install of `conda` getting stuck trying to solve the environment using the above installation.  If you run into this problem, you can install py4DSTEM using `pip` instead of `conda` by running:
+
+```
+conda update conda
+conda create -n py4dstem python=3.10 
+conda activate py4dstem
+pip install py4dstem pymatgen 
+```
+
+Both `conda` and `pip` are programs which manage package installations, i.e. make sure different codes you're installing which depend on one another are using mutually compatible versions.  Each has advantages and disadvantages; `pip` is a little more bare-bones, and we've seen this install work when `conda` doesn't.  If you also want to use Jupyterlab you can then use either `pip install jupyterlab` or `conda install jupyterlab`.
+
+If you would prefer to install only the base modules of **py4DSTEM**, and skip pymategen and Jupterlab, you can instead run:
+
+```
+conda install -c conda-forge py4dstem
+```
+
+Finally, regardless of which of the above approaches you used, in Windows you should then also run:
+
+```
+conda install pywin32
+```
+
+which enables Python to talk to the Windows API.
 
 Please note that virtual environments are used in the instructions above in order to make sure packages that have different dependencies don't conflict with one another.
 Because these directions install py4DSTEM to its own virtual environment, each time you want to use py4DSTEM you'll need to activate this environment.
 You can do this in the command line by running `conda activate py4dstem`, or, if you're using the Anaconda Navigator, by clicking on the Environments tab and then clicking on `py4dstem`.
 
+Last - as of the version 0.14.4 update, we've had a few reports of problems upgrading to the newest version.  We're not sure what's causing the issue yet, but have found the new version can be installed successfully in these cases using a fresh Anaconda installation.
 
 
 <a id='legacyinstall'></a>
