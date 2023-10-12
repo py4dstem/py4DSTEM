@@ -260,7 +260,9 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
             propagators[i] *= xp.exp(
                 1.0j * (2 * kx[:, None] * np.pi * dz * np.tan(theta_x))
             )
-            propagators[i] *= xp.exp(1.0j * (2 * ky[None] * np.pi * dz * np.tan(theta_y)))
+            propagators[i] *= xp.exp(
+                1.0j * (2 * ky[None] * np.pi * dz * np.tan(theta_y))
+            )
 
         return propagators
 

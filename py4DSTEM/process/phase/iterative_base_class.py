@@ -1084,6 +1084,7 @@ class PhaseReconstruction(Custom):
         diffraction_intensities,
         com_fitted_x,
         com_fitted_y,
+        crop_patterns,
     ):
         """
         Fix diffraction intensities CoM, shift to origin, and take square root
@@ -1096,6 +1097,8 @@ class PhaseReconstruction(Custom):
             Best fit horizontal center of mass gradient
         com_fitted_y: (Rx,Ry) xp.ndarray
             Best fit vertical center of mass gradient
+        crop_patterns: bool
+            if True, crop patterns to avoid wrap around of patterns
 
         Returns
         -------
@@ -1108,13 +1111,46 @@ class PhaseReconstruction(Custom):
         xp = self._xp
         mean_intensity = 0
 
-        amplitudes = xp.zeros(diffraction_intensities.shape, dtype=xp.float32)
-        region_of_interest_shape = diffraction_intensities.shape[-2:]
+        diffraction_intensities = self._asnumpy(diffraction_intensities)
+        if crop_patterns:
+            crop_x = int(
+                np.minimum(
+                    diffraction_intensities.shape[2] - com_fitted_x.max(),
+                    com_fitted_x.min(),
+                )
+            )
+            crop_y = int(
+                np.minimum(
+                    diffraction_intensities.shape[3] - com_fitted_y.max(),
+                    com_fitted_y.min(),
+                )
+            )
+
+            crop_w = np.minimum(crop_y, crop_x)
+            region_of_interest_shape = (crop_w * 2, crop_w * 2)
+            amplitudes = np.zeros(
+                (
+                    diffraction_intensities.shape[0],
+                    diffraction_intensities.shape[1],
+                    crop_w * 2,
+                    crop_w * 2,
+                ),
+                dtype=np.float32,
+            )
+
+            crop_mask = np.zeros(diffraction_intensities.shape[-2:], dtype=np.bool_)
+            crop_mask[:crop_w, :crop_w] = True
+            crop_mask[-crop_w:, :crop_w] = True
+            crop_mask[:crop_w:, -crop_w:] = True
+            crop_mask[-crop_w:, -crop_w:] = True
+            self._crop_mask = crop_mask
+
+        else:
+            region_of_interest_shape = diffraction_intensities.shape[-2:]
+            amplitudes = np.zeros(diffraction_intensities.shape, dtype=np.float32)
 
         com_fitted_x = self._asnumpy(com_fitted_x)
         com_fitted_y = self._asnumpy(com_fitted_y)
-        diffraction_intensities = self._asnumpy(diffraction_intensities)
-        amplitudes = self._asnumpy(amplitudes)
 
         for rx in range(diffraction_intensities.shape[0]):
             for ry in range(diffraction_intensities.shape[1]):
@@ -1125,6 +1161,11 @@ class PhaseReconstruction(Custom):
                     bilinear=True,
                     device="cpu",
                 )
+
+                if crop_patterns:
+                    intensities = intensities[crop_mask].reshape(
+                        region_of_interest_shape
+                    )
 
                 mean_intensity += np.sum(intensities)
                 amplitudes[rx, ry] = np.sqrt(np.maximum(intensities, 0))
