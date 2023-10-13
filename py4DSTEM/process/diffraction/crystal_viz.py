@@ -5,6 +5,8 @@ import matplotlib.tri as mtri
 from mpl_toolkits.mplot3d import Axes3D, art3d
 from scipy.signal import medfilt
 from scipy.ndimage import gaussian_filter
+from scipy.ndimage.morphology import distance_transform_edt
+from skimage.morphology import dilation, erosion
 
 import warnings
 import numpy as np
@@ -989,7 +991,7 @@ def plot_diffraction_pattern(
 
 def plot_orientation_maps(
     self,
-    orientation_map,
+    orientation_map=None,
     orientation_ind: int = 0,
     dir_in_plane_degrees: float = 0.0,
     corr_range: np.ndarray = np.array([0, 5]),
@@ -1010,6 +1012,7 @@ def plot_orientation_maps(
 
     Args:
         orientation_map (OrientationMap):   Class containing orientation matrices, correlation values, etc.
+                                            Optional - can reference internally stored OrientationMap.
         orientation_ind (int):              Which orientation match to plot if num_matches > 1
         dir_in_plane_degrees (float):       In-plane angle to plot in degrees.  Default is 0 / x-axis / vertical down.
         corr_range (np.ndarray):            Correlation intensity range for the plot
@@ -1037,6 +1040,9 @@ def plot_orientation_maps(
     """
 
     # Inputs
+    if orientation_map is None:
+        orientation_map = self.orientation_map
+
     # Legend size
     leg_size = np.array([300, 300], dtype="int")
 
@@ -1718,6 +1724,205 @@ def plot_fiber_orientation_maps(
         return images_orientation, fig, ax
     else:
         return images_orientation
+
+
+def plot_clusters(
+    self,
+    area_min=2,
+    outline_grains=True,
+    outline_thickness=1,
+    fill_grains=0.25,
+    smooth_grains=1.0,
+    cmap="viridis",
+    figsize=(8, 8),
+    returnfig=False,
+):
+    """
+    Plot the clusters as an image.
+
+    Parameters
+    --------
+    area_min: int (optional)
+        Min cluster size to include, in units of probe positions.
+    outline_grains: bool (optional)
+        Set to True to draw grains with outlines
+    outline_thickness: int (optional)
+        Thickenss of the grain outline
+    fill_grains: float (optional)
+        Outlined grains are filled with this value in pixels.
+    smooth_grains: float (optional)
+        Grain boundaries are smoothed by this value in pixels.
+    figsize: tuple
+        Size of the figure panel
+    returnfig: bool
+        Setting this to true returns the figure and axis handles
+
+    Returns
+    --------
+    fig, ax (optional)
+        Figure and axes handles
+
+    """
+
+    # init
+    im_plot = np.zeros(
+        (
+            self.orientation_map.num_x,
+            self.orientation_map.num_y,
+        )
+    )
+    im_grain = np.zeros(
+        (
+            self.orientation_map.num_x,
+            self.orientation_map.num_y,
+        ),
+        dtype="bool",
+    )
+
+    # make plotting image
+
+    for a0 in range(self.cluster_sizes.shape[0]):
+        if self.cluster_sizes[a0] >= area_min:
+            if outline_grains:
+                im_grain[:] = False
+                im_grain[
+                    self.cluster_inds[a0][0, :],
+                    self.cluster_inds[a0][1, :],
+                ] = True
+
+                im_dist = distance_transform_edt(
+                    erosion(
+                        np.invert(im_grain), footprint=np.ones((3, 3), dtype="bool")
+                    )
+                ) - distance_transform_edt(im_grain)
+                im_dist = gaussian_filter(im_dist, sigma=smooth_grains, mode="nearest")
+                im_add = np.exp(im_dist**2 / (-0.5 * outline_thickness**2))
+
+                if fill_grains > 0:
+                    im_dist = distance_transform_edt(
+                        erosion(
+                            np.invert(im_grain), footprint=np.ones((3, 3), dtype="bool")
+                        )
+                    )
+                    im_dist = gaussian_filter(
+                        im_dist, sigma=smooth_grains, mode="nearest"
+                    )
+                    im_add += fill_grains * np.exp(
+                        im_dist**2 / (-0.5 * outline_thickness**2)
+                    )
+
+                # im_add = 1 - np.exp(
+                #     distance_transform_edt(im_grain)**2 \
+                #     / (-2*outline_thickness**2))
+                im_plot += im_add
+                # im_plot = np.minimum(im_plot, im_add)
+            else:
+                # xg,yg = np.unravel_index(self.cluster_inds[a0], im_plot.shape)
+                im_grain[:] = False
+                im_grain[
+                    self.cluster_inds[a0][0, :],
+                    self.cluster_inds[a0][1, :],
+                ] = True
+                im_plot += gaussian_filter(
+                    im_grain.astype("float"), sigma=smooth_grains, mode="nearest"
+                )
+
+                # im_plot[
+                #     self.cluster_inds[a0][0,:],
+                #     self.cluster_inds[a0][1,:],
+                # ] += 1
+
+    if outline_grains:
+        im_plot = np.clip(im_plot, 0, 2)
+
+    # plotting
+    fig, ax = plt.subplots(figsize=figsize)
+    ax.imshow(
+        im_plot,
+        # vmin = -3,
+        # vmax = 3,
+        cmap=cmap,
+    )
+
+
+def plot_cluster_size(
+    self,
+    area_min=None,
+    area_max=None,
+    area_step=1,
+    weight_intensity=False,
+    pixel_area=1.0,
+    pixel_area_units="px^2",
+    figsize=(8, 6),
+    returnfig=False,
+):
+    """
+    Plot the cluster sizes
+
+    Parameters
+    --------
+    area_min: int (optional)
+        Min area to include in pixels^2
+    area_max: int (optional)
+        Max area bin in pixels^2
+    area_step: int (optional)
+        Step size of the histogram bin in pixels^2
+    weight_intensity: bool
+        Weight histogram by the peak intensity.
+    pixel_area: float
+        Size of pixel area unit square
+    pixel_area_units: string
+        Units of the pixel area
+    figsize: tuple
+        Size of the figure panel
+    returnfig: bool
+        Setting this to true returns the figure and axis handles
+
+    Returns
+    --------
+    fig, ax (optional)
+        Figure and axes handles
+
+    """
+
+    if area_max is None:
+        area_max = np.max(self.cluster_sizes)
+    area = np.arange(0, area_max, area_step)
+    if area_min is None:
+        sub = self.cluster_sizes.astype("int") < area_max
+    else:
+        sub = np.logical_and(
+            self.cluster_sizes.astype("int") >= area_min,
+            self.cluster_sizes.astype("int") < area_max,
+        )
+    if weight_intensity:
+        hist = np.bincount(
+            self.cluster_sizes[sub] // area_step,
+            weights=self.cluster_sig[sub],
+            minlength=area.shape[0],
+        )
+    else:
+        hist = np.bincount(
+            self.cluster_sizes[sub] // area_step,
+            minlength=area.shape[0],
+        )
+
+    # plotting
+    fig, ax = plt.subplots(figsize=figsize)
+    ax.bar(
+        area * pixel_area,
+        hist,
+        width=0.8 * pixel_area * area_step,
+    )
+    ax.set_xlim((0, area_max * pixel_area))
+    ax.set_xlabel("Grain Area [" + pixel_area_units + "]")
+    if weight_intensity:
+        ax.set_ylabel("Total Signal [arb. units]")
+    else:
+        ax.set_ylabel("Number of Grains")
+
+    if returnfig:
+        return fig, ax
 
 
 def axisEqual3D(ax):
