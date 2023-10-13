@@ -1,6 +1,5 @@
 """
 Script to update the patch version number of the py4DSTEM package.
-Author: Tara Mishra (Quantumstud)
 """
 
 version_file_path = "py4DSTEM/version.py"
