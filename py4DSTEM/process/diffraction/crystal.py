@@ -14,12 +14,18 @@ from py4DSTEM.process.diffraction.crystal_viz import plot_diffraction_pattern
 from py4DSTEM.process.diffraction.crystal_viz import plot_ring_pattern
 from py4DSTEM.process.diffraction.utils import Orientation, calc_1D_profile
 
+from importlib.util import find_spec
+
 try:
     from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
     from pymatgen.core.structure import Structure
 except ImportError:
     pass
 
+try:
+    from ase.io import read
+except ImportError:
+    pass
 
 class Crystal:
     """
@@ -399,6 +405,57 @@ class Crystal:
         numbers = np.array([s.species.elements[0].Z for s in structure])
 
         return Crystal(positions, numbers, cell)
+
+    def from_ASE(
+            atoms,
+    ):
+        """
+        Create a py4DSTEM Crystal object from an ASE atoms object
+
+        Args:
+            atoms (ase.Atoms): an ASE atoms object
+
+        """
+        return Crystal(
+            positions=atoms.get_scaled_positions(), # fractional coords
+            numbers=atoms.numbers,
+            cell = atoms.cell.array,
+            )
+
+
+    def from_generic_file(
+            filepath,
+            **kwargs
+    ):
+        """
+        Create a py4DSTEM Crystal from a wide range of generic file types using 
+        `ase.io.read`,  kwargs are passed to `ase.io.read` function. For more details
+        and compatible filetypes please see https://wiki.fysik.dtu.dk/ase/ase/io/io.html
+
+        Args:
+            filepath (str|Pathlib.Path): path to the file
+            kwargs: key word arguments to be passed to `ase.io.read`
+
+        """
+        
+        # check if ase is installed
+        if find_spec("ase") is None:
+            raise ImportWarning(
+                "Could not import ASE, please install, restart and try again"
+                )
+        else:
+            from ase.io import read
+        # try loading the file using ase read and get required properties
+        try:
+            atoms = read(filepath, **kwargs)
+            return Crystal( 
+                positions=atoms.get_scaled_positions(), # fractional coords
+                numbers=atoms.numbers,
+                cell = atoms.cell.array,
+                )
+        except Exception as e:
+            raise e
+
 
     def from_unitcell_parameters(
         latt_params,
