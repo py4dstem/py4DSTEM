@@ -278,7 +278,9 @@ class PhaseReconstruction(Custom):
         """
 
         # Copies intensities to device casting to float32
-        intensities = datacube.data
+        xp = self._xp
+
+        intensities = xp.asarray(datacube.data, dtype=xp.float32)
         self._grid_scan_shape = intensities.shape[:2]
 
         # Extracts calibrations
@@ -449,8 +451,6 @@ class PhaseReconstruction(Custom):
 
         xp = self._xp
         asnumpy = self._asnumpy
-
-        intensities = xp.asarray(intensities, dtype=xp.float32)
 
         # for ptycho
         if com_measured:
@@ -1108,7 +1108,7 @@ class PhaseReconstruction(Custom):
         xp = self._xp
         mean_intensity = 0
 
-        amplitudes = xp.zeros(diffraction_intensities.shape, dtype=xp.float32)
+        amplitudes = xp.zeros_like(diffraction_intensities)
         region_of_interest_shape = diffraction_intensities.shape[-2:]
 
         com_fitted_x = self._asnumpy(com_fitted_x)
@@ -1128,8 +1128,6 @@ class PhaseReconstruction(Custom):
 
                 mean_intensity += np.sum(intensities)
                 amplitudes[rx, ry] = np.sqrt(np.maximum(intensities, 0))
-
-        amplitudes = xp.asarray(amplitudes, dtype=xp.float32)
 
         amplitudes = xp.reshape(amplitudes, (-1,) + region_of_interest_shape)
         mean_intensity /= amplitudes.shape[0]
