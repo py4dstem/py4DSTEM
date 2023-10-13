@@ -176,7 +176,7 @@ class ParallaxReconstruction(PhaseReconstruction):
             self._datacube,
             require_calibrations=True,
         )
-        self._intensities = xp.asarray(self._intensities, dtype=xp.float32)
+
         # make sure mean diffraction pattern is shaped correctly
         if (self._dp_mean.shape[0] != self._intensities.shape[2]) or (
             self._dp_mean.shape[1] != self._intensities.shape[3]
@@ -224,14 +224,16 @@ class ParallaxReconstruction(PhaseReconstruction):
 
         # diffraction space coordinates
         self._xy_inds = np.argwhere(self._dp_mask)
-        self._kxy = (self._xy_inds - xp.mean(self._xy_inds, axis=0)[None]) * xp.array(
-            self._reciprocal_sampling
-        )[None]
+        self._kxy = xp.asarray(
+            (self._xy_inds - xp.mean(self._xy_inds, axis=0)[None])
+            * xp.array(self._reciprocal_sampling)[None],
+            dtype=xp.float32,
+        )
         self._probe_angles = self._kxy * self._wavelength
         self._kr = xp.sqrt(xp.sum(self._kxy**2, axis=1))
 
         # Window function
-        x = xp.linspace(-1, 1, self._grid_scan_shape[0] + 1)[1:]
+        x = xp.linspace(-1, 1, self._grid_scan_shape[0] + 1, dtype=xp.float32)[1:]
         x -= (x[1] - x[0]) / 2
         wx = (
             xp.sin(
@@ -242,7 +244,7 @@ class ParallaxReconstruction(PhaseReconstruction):
             )
             ** 2
         )
-        y = xp.linspace(-1, 1, self._grid_scan_shape[1] + 1)[1:]
+        y = xp.linspace(-1, 1, self._grid_scan_shape[1] + 1, dtype=xp.float32)[1:]
         y -= (y[1] - y[0]) / 2
         wy = (
             xp.sin(
@@ -259,7 +261,8 @@ class ParallaxReconstruction(PhaseReconstruction):
             (
                 self._grid_scan_shape[0] + self._object_padding_px[0],
                 self._grid_scan_shape[1] + self._object_padding_px[1],
-            )
+            ),
+            dtype=xp.float32,
         )
         self._window_pad[
             self._object_padding_px[0] // 2 : self._grid_scan_shape[0]
@@ -282,8 +285,8 @@ class ParallaxReconstruction(PhaseReconstruction):
             self._grid_scan_shape[1] + self._object_padding_px[1],
         )
         if normalize_images:
-            self._stack_BF = xp.ones(stack_shape)
-            self._stack_BF_no_window = xp.ones(stack_shape)
+            self._stack_BF = xp.ones(stack_shape, dtype=xp.float32)
+            self._stack_BF_no_window = xp.ones(stack_shape, xp.float32)
 
             if normalize_order == 0:
                 all_bfs /= xp.mean(all_bfs, axis=(1, 2))[:, None, None]
@@ -306,12 +309,12 @@ class ParallaxReconstruction(PhaseReconstruction):
                 ] = all_bfs
 
             elif normalize_order == 1:
-                x = xp.linspace(-0.5, 0.5, all_bfs.shape[1])
-                y = xp.linspace(-0.5, 0.5, all_bfs.shape[2])
+                x = xp.linspace(-0.5, 0.5, all_bfs.shape[1], xp.float32)
+                y = xp.linspace(-0.5, 0.5, all_bfs.shape[2], xp.float32)
                 ya, xa = xp.meshgrid(y, x)
                 basis = np.vstack(
                     (
-                        xp.ones(xa.size),
+                        xp.ones_like(xa),
                         xa.ravel(),
                         ya.ravel(),
                     )
@@ -364,7 +367,11 @@ class ParallaxReconstruction(PhaseReconstruction):
 
         # Fourier space operators for image shifts
         qx = xp.fft.fftfreq(self._stack_BF.shape[1], d=1)
+        qx = xp.asarray(qx, dtype=xp.float32)
+
         qy = xp.fft.fftfreq(self._stack_BF.shape[2], d=1)
+        qy = xp.asarray(qy, dtype=xp.float32)
+
         qxa, qya = xp.meshgrid(qx, qy, indexing="ij")
         self._qx_shift = -2j * xp.pi * qxa
         self._qy_shift = -2j * xp.pi * qya
@@ -399,7 +406,7 @@ class ParallaxReconstruction(PhaseReconstruction):
 
             del Gs
         else:
-            self._xy_shifts = xp.zeros((self._num_bf_images, 2))
+            self._xy_shifts = xp.zeros((self._num_bf_images, 2), dtype=xp.float32)
 
         self._stack_mean = xp.mean(self._stack_BF)
         self._mask_sum = xp.sum(self._window_edge) * self._num_bf_images
@@ -686,7 +693,8 @@ class ParallaxReconstruction(PhaseReconstruction):
                 (
                     self._num_bf_images,
                     (regularizer_matrix_size[0] + 1) * (regularizer_matrix_size[1] + 1),
-                )
+                ),
+                dtype=xp.float32,
             )
             for ii in np.arange(regularizer_matrix_size[0] + 1):
                 Bi = (
@@ -771,7 +779,7 @@ class ParallaxReconstruction(PhaseReconstruction):
             # Sort by radial order, from center to outer edge
             inds_order = xp.argsort(xp.sum(xy_vals**2, axis=1))
 
-            shifts_update = xp.zeros((self._num_bf_images, 2))
+            shifts_update = xp.zeros((self._num_bf_images, 2), dtype=xp.float32)
 
             for a1 in tqdmnd(
                 xy_vals.shape[0],
@@ -840,10 +848,18 @@ class ParallaxReconstruction(PhaseReconstruction):
                 self._qx_shift[None] * dx[:, None, None]
                 + self._qy_shift[None] * dy[:, None, None]
             )
+
             self._stack_BF = xp.real(xp.fft.ifft2(Gs * shift_op))
             self._stack_mask = xp.real(
                 xp.fft.ifft2(xp.fft.fft2(self._stack_mask) * shift_op)
             )
+
+            self._stack_BF = xp.asarray(
+                self._stack_BF, dtype=xp.float32
+            )  # numpy fft upcasts?
+            self._stack_mask = xp.asarray(
+                self._stack_mask, dtype=xp.float32
+            )  # numpy fft upcasts?
 
             del Gs
 
