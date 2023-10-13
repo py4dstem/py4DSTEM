@@ -2,7 +2,7 @@
 # calls all objects in a list _targets? to call some method *.
 
 import warnings
-
+from functools import partial, update_wrapper
 
 # This is the abstract pattern:
 
@@ -54,9 +54,10 @@ class call_method(object):
         actually bound to the instance due to this decoration.) using
         partial application of the method.)
         """
-        from functools import partial
-
-        return partial(self.__call__, instance)
+        return update_wrapper(
+            wrapper=partial(self.__call__, instance),
+            wrapped=self.func,
+        )
 
 
 # This is a functional decorator, @call_calibrate:
@@ -91,8 +92,10 @@ class call_calibrate(object):
             else:
                 pass
 
-    def __get__(self, instance, owner):
-        """ """
-        from functools import partial
 
-        return partial(self.__call__, instance)
+    def __get__(self, instance, owner):
+        return update_wrapper(
+            wrapper=partial(self.__call__, instance),
+            wrapped=self.func,
+        )
+

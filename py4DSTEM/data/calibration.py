@@ -590,8 +590,12 @@ class Calibration(Metadata):
     @call_calibrate
     def set_ellipse(self, x):
         """
-        Args:
-            x (3-tuple): (a,b,theta)
+        Sets the 3-tuple (a,b,theta).
+
+        Parameters
+        ----------
+        x : 3-tuple
+            (a,b,theta)
         """
         a, b, theta = x
         self._params["a"] = a
@@ -601,8 +605,14 @@ class Calibration(Metadata):
     @call_calibrate
     def set_p_ellipse(self, x):
         """
-        Args:
-            x (5-tuple): (qx0,qy0,a,b,theta) NOTE: does *not* change qx0,qy0!
+        Recieves the 5-tuple (qx0,qy0,a,b,theta) and sets only the 3-tuple
+        (a,b,theta). To set qx0 and qy0, use the .set_origin or .set_qx/y0
+        methods.
+
+        Parameters
+        ----------
+        x : 5-tuple
+            (_,_,a,b,theta) The first two tuple elements are ignored.
         """
         _, _, a, b, theta = x
         self._params["a"] = a
@@ -610,6 +620,9 @@ class Calibration(Metadata):
         self._params["theta"] = theta
 
     def get_ellipse(self, rx=None, ry=None):
+        """
+        Returns the 3-tuple (a,b,theta)
+        """
         a = self.get_a(rx, ry)
         b = self.get_b(rx, ry)
         theta = self.get_theta(rx, ry)
@@ -619,6 +632,9 @@ class Calibration(Metadata):
         return ans
 
     def get_p_ellipse(self, rx=None, ry=None):
+        """
+        Returns the 5-tuple (qx0,qy0,a,b,theta)
+        """
         qx0, qy0 = self.get_origin(rx, ry)
         a, b, theta = self.get_ellipse(rx, ry)
         return (qx0, qy0, a, b, theta)

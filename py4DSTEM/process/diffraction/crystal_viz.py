@@ -850,6 +850,7 @@ def plot_diffraction_pattern(
     shift_marker: float = 0.005,
     min_marker_size: float = 1e-6,
     max_marker_size: float = 1000,
+    text_size = 10,
     figsize: Union[list, tuple, np.ndarray] = (12, 6),
     returnfig: bool = False,
     input_fig_handle=None,
@@ -857,19 +858,34 @@ def plot_diffraction_pattern(
     """
     2D scatter plot of the Bragg peaks
 
-    Args:
-        bragg_peaks (PointList):        numpy array containing ('qx', 'qy', 'intensity', 'h', 'k', 'l')
-        bragg_peaks_compare(PointList): numpy array containing ('qx', 'qy', 'intensity')
-        scale_markers (float):          size scaling for markers
-        scale_markers_compare (float):  size scaling for markers of comparison
-        power_markers (float):          power law scaling for marks (default is 1, i.e. amplitude)
-        plot_range_kx_ky (float):       2 element numpy vector giving the plot range
-        add_labels (bool):              flag to add hkl labels to peaks
-        min_marker_size (float):        minimum marker size for the comparison peaks
-        max_marker_size (float):        maximum marker size for the comparison peaks
-        figsize (2 element float):      size scaling of figure axes
-        returnfig (bool):               set to True to return figure and axes handles
-        input_fig_handle (fig,ax)       Tuple containing a figure / axes handle for the plot.
+    Parameters
+    ----------
+    bragg_peaks : PointList
+        numpy array containing ('qx', 'qy', 'intensity', 'h', 'k', 'l')
+    bragg_peaks_compare : PointList)
+        numpy array containing ('qx', 'qy', 'intensity')
+    scale_markers : float
+        size scaling for markers
+    scale_markers_compare : float
+        size scaling for markers of comparison
+    power_markers : float
+        power law scaling for marks (default is 1, i.e. amplitude)
+    plot_range_kx_ky : float
+        2 element numpy vector giving the plot range
+    add_labels : bool
+        flag to add hkl labels to peaks
+    min_marker_size : float
+        minimum marker size for the comparison peaks
+    max_marker_size : float
+        maximum marker size for the comparison peaks
+    text_size : number
+        size of the overlaid Miller indices
+    figsize : 2 element float
+        size scaling of figure axes
+    returnfig : bool
+        set to True to return figure and axes handles
+    input_fig_handle : (fig,ax)
+        Tuple containing a figure / axes handle for the plot.
     """
 
     # 2D plotting
@@ -957,7 +973,7 @@ def plot_diffraction_pattern(
             "family": "sans-serif",
             "fontweight": "normal",
             "color": "r",
-            "size": 10,
+            "size": text_size,
         }
 
         def overline(x):
