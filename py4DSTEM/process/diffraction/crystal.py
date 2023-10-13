@@ -434,9 +434,7 @@ class Crystal:
 
         # check if ase is installed
         if find_spec("ase") is None:
-            raise ImportWarning(
-                "Could not import ASE, please install, and try again"
-            )
+            raise ImportWarning("Could not import ASE, please install, and try again")
         else:
             from ase.io import read
 
