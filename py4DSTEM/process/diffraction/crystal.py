@@ -423,19 +423,12 @@ class Crystal:
             cell=atoms.cell.array,
         )
 
-    def from_generic_file(filepath, **kwargs):
+    def from_prismatic(filepath):
         """
-        Create a py4DSTEM Crystal from a wide range of generic file types using
-        `ase.io.read`,  kwargs are passed to `ase.io.read` function. For more details
-        and potentially compatible filetypes please see https://wiki.fysik.dtu.dk/ase/ase/io/io.html.
-        Note this has not been tested extensively. The loaded file must have these three properties:
-            .get_scaled_positions()
-            .numbers
-            .cell.array,
+        Create a py4DSTEM Crystal object from an prismatic style xyz co-ordinate file
 
         Args:
-            filepath (str|Pathlib.Path): path to the file
-            kwargs: key word arguments to be passed to `ase.io.read`
+            filepath (str|Pathlib.Path): path to the prismatic format xyz file
 
         """
 
@@ -446,16 +439,48 @@ class Crystal:
             )
         else:
             from ase.io import read
-        # try loading the file using ase read and get required properties
-        try:
-            atoms = read(filepath, **kwargs)
-            return Crystal(
-                positions=atoms.get_scaled_positions(),  # fractional coords
-                numbers=atoms.numbers,
-                cell=atoms.cell.array,
-            )
-        except Exception as e:
-            raise e
+
+        atoms = read(filepath, format="prismatic")
+
+        return Crystal(
+            positions=atoms.get_scaled_positions(),  # fractional coords
+            numbers=atoms.numbers,
+            cell=atoms.cell.array,
+        )
+
+    # def from_generic_file(filepath, **kwargs):
+    #     """
+    #     Create a py4DSTEM Crystal from a wide range of generic file types using
+    #     `ase.io.read`,  kwargs are passed to `ase.io.read` function. For more details
+    #     and potentially compatible filetypes please see https://wiki.fysik.dtu.dk/ase/ase/io/io.html.
+    #     Note this has not been tested extensively. The loaded file must have these three properties:
+    #         .get_scaled_positions()
+    #         .numbers
+    #         .cell.array,
+
+    #     Args:
+    #         filepath (str|Pathlib.Path): path to the file
+    #         kwargs: key word arguments to be passed to `ase.io.read`
+
+    #     """
+
+    #     # check if ase is installed
+    #     if find_spec("ase") is None:
+    #         raise ImportWarning(
+    #             "Could not import ASE, please install, restart and try again"
+    #         )
+    #     else:
+    #         from ase.io import read
+    #     # try loading the file using ase read and get required properties
+    #     try:
+    #         atoms = read(filepath, **kwargs)
+    #         return Crystal(
+    #             positions=atoms.get_scaled_positions(),  # fractional coords
+    #             numbers=atoms.numbers,
+    #             cell=atoms.cell.array,
+    #         )
+    #     except Exception as e:
+    #         raise e
 
     def from_unitcell_parameters(
         latt_params,
