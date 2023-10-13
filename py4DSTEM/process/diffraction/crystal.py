@@ -430,7 +430,11 @@ class Crystal:
         """
         Create a py4DSTEM Crystal from a wide range of generic file types using 
         `ase.io.read`,  kwargs are passed to `ase.io.read` function. For more details
-        and compatible filetypes please see https://wiki.fysik.dtu.dk/ase/ase/io/io.html
+        and potentially compatible filetypes please see https://wiki.fysik.dtu.dk/ase/ase/io/io.html.
+        Note this has not been tested extensively. The loaded file must have these three properties:
+            .get_scaled_positions()
+            .numbers
+            .cell.array,
 
         Args:
             filepath (str|Pathlib.Path): path to the file
