@@ -247,7 +247,7 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
             Boolean mask of FOV. Used to calculate additional shrinkage of object
             If None, probe_overlap intensity is thresholded
         crop_patterns: bool
-            if True, crop patterns to avoid wrap around of patterns
+            if True, crop patterns to avoid wrap around of patterns when centering
 
         Returns
         --------

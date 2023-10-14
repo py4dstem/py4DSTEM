@@ -192,6 +192,7 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
         force_angular_sampling: float = None,
         force_reciprocal_sampling: float = None,
         object_fov_mask: np.ndarray = None,
+        crop_patterns: bool = False,
         **kwargs,
     ):
         """
@@ -246,6 +247,8 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
         object_fov_mask: np.ndarray (boolean)
             Boolean mask of FOV. Used to calculate additional shrinkage of object
             If None, probe_overlap intensity is thresholded
+        crop_patterns: bool
+            if True, crop patterns to avoid wrap around of patterns when centering
 
         Returns
         --------
@@ -401,9 +404,7 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
             amplitudes_0,
             mean_diffraction_intensity_0,
         ) = self._normalize_diffraction_intensities(
-            intensities_0,
-            com_fitted_x_0,
-            com_fitted_y_0,
+            intensities_0, com_fitted_x_0, com_fitted_y_0, crop_patterns
         )
 
         # explicitly delete namescapes
@@ -487,6 +488,7 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
             intensities_1,
             com_fitted_x_1,
             com_fitted_y_1,
+            crop_patterns
         )
 
         # explicitly delete namescapes
@@ -571,6 +573,7 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
                 intensities_2,
                 com_fitted_x_2,
                 com_fitted_y_2,
+                crop_patterns
             )
 
             # explicitly delete namescapes
@@ -683,6 +686,10 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
                     bilinear=True,
                     device=self._device,
                 )
+                if crop_patterns:
+                    self._vacuum_probe_intensity = self._vacuum_probe_intensity[
+                        self._crop_mask
+                    ].reshape(self._region_of_interest_shape)
 
             self._probe = (
                 ComplexProbe(

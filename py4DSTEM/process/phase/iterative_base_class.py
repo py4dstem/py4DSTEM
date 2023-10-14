@@ -1099,6 +1099,7 @@ class PhaseReconstruction(Custom):
             Best fit vertical center of mass gradient
         crop_patterns: bool
             if True, crop patterns to avoid wrap around of patterns
+            when centering
 
         Returns
         -------
