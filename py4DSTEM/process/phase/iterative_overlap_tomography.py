@@ -2398,7 +2398,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                     else None,
                     tv_denoise=a0 < tv_denoise_iter and tv_denoise_weights is not None,
                     tv_denoise_weights=tv_denoise_weights,
-                    v_denoise_inner_iter=tv_denoise_inner_iter,
+                    tv_denoise_inner_iter=tv_denoise_inner_iter,
                 )
 
             self.error_iterations.append(error.item())
