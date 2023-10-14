@@ -1172,6 +1172,7 @@ class PhaseReconstruction(Custom):
                 amplitudes[rx, ry] = np.sqrt(np.maximum(intensities, 0))
 
         amplitudes = xp.reshape(amplitudes, (-1,) + region_of_interest_shape)
+        amplitudes = xp.asarray(amplitudes)
         mean_intensity /= amplitudes.shape[0]
 
         return amplitudes, mean_intensity
