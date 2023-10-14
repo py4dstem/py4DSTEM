@@ -204,6 +204,7 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
         force_angular_sampling: float = None,
         force_reciprocal_sampling: float = None,
         object_fov_mask: np.ndarray = None,
+        crop_patterns: bool = False,
         **kwargs,
     ):
         """
@@ -261,6 +262,8 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
         object_fov_mask: np.ndarray (boolean)
             Boolean mask of FOV. Used to calculate additional shrinkage of object
             If None, probe_overlap intensity is thresholded
+        crop_patterns: bool
+            if True, crop patterns to avoid wrap around of patterns when centering
 
         Returns
         --------
@@ -346,9 +349,7 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
             self._amplitudes,
             self._mean_diffraction_intensity,
         ) = self._normalize_diffraction_intensities(
-            self._intensities,
-            self._com_fitted_x,
-            self._com_fitted_y,
+            self._intensities, self._com_fitted_x, self._com_fitted_y, crop_patterns
         )
 
         # explicitly delete namespace
@@ -429,6 +430,10 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
                         bilinear=True,
                         device=self._device,
                     )
+                    if crop_patterns:
+                        self._vacuum_probe_intensity = self._vacuum_probe_intensity[
+                            self._crop_mask
+                        ].reshape(self._region_of_interest_shape)
 
                 _probe = (
                     ComplexProbe(

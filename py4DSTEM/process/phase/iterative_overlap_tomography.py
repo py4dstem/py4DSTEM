@@ -372,6 +372,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
         force_reciprocal_sampling: float = None,
         progress_bar: bool = True,
         object_fov_mask: np.ndarray = None,
+        crop_patterns: bool = False,
         **kwargs,
     ):
         """
@@ -416,6 +417,8 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
         object_fov_mask: np.ndarray (boolean)
             Boolean mask of FOV. Used to calculate additional shrinkage of object
             If None, probe_overlap intensity is thresholded
+        crop_patterns: bool
+            if True, crop patterns to avoid wrap around of patterns when centering
 
         Returns
         --------
@@ -532,9 +535,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                 ],
                 mean_diffraction_intensity_temp,
             ) = self._normalize_diffraction_intensities(
-                intensities,
-                com_fitted_x,
-                com_fitted_y,
+                intensities, com_fitted_x, com_fitted_y, crop_patterns
             )
 
             self._mean_diffraction_intensity.append(mean_diffraction_intensity_temp)
@@ -625,6 +626,10 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                     bilinear=True,
                     device=self._device,
                 )
+                if crop_patterns:
+                    self._vacuum_probe_intensity = self._vacuum_probe_intensity[
+                        self._crop_mask
+                    ].reshape(self._region_of_interest_shape)
 
             self._probe = (
                 ComplexProbe(
