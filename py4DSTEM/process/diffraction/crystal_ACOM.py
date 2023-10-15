@@ -836,6 +836,7 @@ def match_single_pattern(
     returnfig: bool = False,
     figsize: Union[list, tuple, np.ndarray] = (12, 4),
     verbose: bool = False,
+    supress_print: bool = False,
     # plot_corr_3D: bool = False,
 ):
     """
@@ -1354,30 +1355,33 @@ def match_single_pattern(
                         zone_axis_lattice = np.round(zone_axis_lattice, decimals=3)
 
                 if orientation.corr[match_ind] > 0:
-                    print(
-                        "Best fit lattice directions: z axis = ("
-                        + str(zone_axis_lattice)
-                        + "),"
-                        " x axis = ("
-                        + str(x_proj_lattice)
-                        + "),"
-                        + " with corr value = "
-                        + str(np.round(orientation.corr[match_ind], decimals=3))
-                    )
+                    if not supress_print:
+                        print(
+                            "Best fit lattice directions: z axis = ("
+                            + str(zone_axis_lattice)
+                            + "),"
+                            " x axis = ("
+                            + str(x_proj_lattice)
+                            + "),"
+                            + " with corr value = "
+                            + str(np.round(orientation.corr[match_ind], decimals=3))
+                        )
                 else:
-                    print("No good match found for index " + str(match_ind))
+                    if not supress_print:
+                        print("No good match found for index " + str(match_ind))
 
             else:
                 zone_axis_fit = orientation.matrix[match_ind][:, 2]
                 zone_axis_lattice = self.cartesian_to_lattice(zone_axis_fit)
                 zone_axis_lattice = np.round(zone_axis_lattice, decimals=3)
-                print(
-                    "Best fit zone axis (lattice) = ("
-                    + str(zone_axis_lattice)
-                    + "),"
-                    + " with corr value = "
-                    + str(np.round(orientation.corr[match_ind], decimals=3))
-                )
+                if not supress_print:
+                    print(
+                        "Best fit zone axis (lattice) = ("
+                        + str(zone_axis_lattice)
+                        + "),"
+                        + " with corr value = "
+                        + str(np.round(orientation.corr[match_ind], decimals=3))
+                    )
 
         # if needed, delete peaks for next iteration
         if num_matches_return > 1 and corr_value[ind_best_fit] > 0:
