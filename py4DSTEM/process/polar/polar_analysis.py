@@ -50,7 +50,8 @@ def calculate_radial_statistics(
     returnval: bool
         Toggles returning the answer. Answers are always stored internally.
     returnfig: bool
-        Toggles returning figures
+        Toggles returning figures that have been plotted.  Only figures for
+        which `plot_results_*` is True are returned.
 
     Returns
     --------
@@ -102,43 +103,33 @@ def calculate_radial_statistics(
     sub = self.radial_mean > 0.0
     self.radial_var_norm[sub] /= self.radial_mean[sub] ** 2
 
+    # prepare answer
+    statistics = self.radial_mean, self.radial_var, self.radial_var_norm
+    if returnval:
+        ans = statistics if not returnfig else [statistics]
+    else:
+        ans = None if not returnfig else []
+
     # plot results
     if plot_results_mean:
+        fig, ax = plot_radial_mean(
+            self,
+            figsize=figsize,
+            returnfig=True,
+        )
         if returnfig:
-            fig, ax = plot_radial_mean(
-                self,
-                figsize=figsize,
-                returnfig=True,
-            )
-        else:
-            plot_radial_mean(
-                self,
-                figsize=figsize,
-            )
-    elif plot_results_var:
+            ans.append((fig,ax))
+    if plot_results_var:
+        fig, ax = plot_radial_var_norm(
+            self,
+            figsize=figsize,
+            returnfig=True,
+        )
         if returnfig:
-            fig, ax = plot_radial_var_norm(
-                self,
-                figsize=figsize,
-                returnfig=True,
-            )
-        else:
-            plot_radial_var_norm(
-                self,
-                figsize=figsize,
-            )
+            ans.append((fig,ax))
 
-    # Return values
-    if returnval:
-        if returnfig:
-            return self.radial_mean, self.radial_var, fig, ax
-        else:
-            return self.radial_mean, self.radial_var
-    else:
-        if returnfig:
-            return fig, ax
-        else:
-            pass
+    # return
+    return ans
 
 
 def plot_radial_mean(
