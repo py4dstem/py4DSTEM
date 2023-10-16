@@ -1267,9 +1267,11 @@ class ParallaxReconstruction(PhaseReconstruction):
 
     def aberration_fit(
         self,
+        fit_thon_rings = True,
+        fit_upsampled_fft = True,
         plot_CTF_compare: bool = False,
-        plot_dk: float = 0.005,
-        plot_k_sigma: float = 0.02,
+        # plot_dk: float = 0.005,
+        # plot_k_sigma: float = 0.02,
     ):
         """
         Fit aberrations to the measured image shifts.
@@ -1277,16 +1279,26 @@ class ParallaxReconstruction(PhaseReconstruction):
         Parameters
         ----------
         plot_CTF_compare: bool, optional
-            If True, the fitted CTF is plotted against the reconstructed frequencies
+            If True, the fitted CTF is plotted against the reconstructed frequencies.
+        fit_thon_rings: bool
+            Set to True to directly fit aberrations in the FFT of the upsampled BF 
+            image (if available). Note that this method relies on visible zero 
+            crossings in the FFT, and will not work if they are not present.
+        fit_upsampled_fft: bool
+            If True, we aberration fit is performed on the upsampled BF image.
+            This option does nothing if fit_thon_rings is not True.
         plot_dk: float, optional
             Reciprocal bin-size for polar-averaged FFT
         plot_k_sigma: float, optional
             sigma to gaussian blur polar-averaged FFT by
 
+
         """
         xp = self._xp
         asnumpy = self._asnumpy
         gaussian_filter = self._gaussian_filter
+
+        # initial aberration fit
 
         # Convert real space shifts to Angstroms
         self._xy_shifts_Ang = self._xy_shifts * xp.array(self._scan_sampling)
@@ -1316,6 +1328,42 @@ class ParallaxReconstruction(PhaseReconstruction):
             xp._default_memory_pool.free_all_blocks()
             xp.clear_memo()
 
+        # Refinement using Thon rings
+        if fit_thon_rings:
+            if fit_upsampled_fft:
+                # Get mean FFT of BF reconstruction
+                im_fft = np.abs(xp.fft.fft2(self._recon_BF_subpixel_aligned))
+
+                # coordinates
+                print(self._kde_upsample_factor)
+                q_pixel_size = np.array(self._reciprocal_sampling) \
+                    / self._kde_upsample_factor
+            else:
+                # Get mean FFT of upsampled BF reconstruction
+                im_fft = np.abs(xp.fft.fft2(self._recon_BF))
+
+                # coordinates
+                q_pixel_size = np.array(parallax_recon._reciprocal_sampling)
+            
+
+            # FFT coordinates
+            qx = fft
+
+            # weights for fits
+
+            # #zero origin pixel
+            # im_fft[0,0] = 0
+
+
+            print(im_fft.shape)
+
+            fig,ax = plt.subplots(figsize=(6,6))
+            ax.imshow(
+                np.fft.fftshift(im_fft)**0.5,
+                )
+
+
+
         # Print results
         if self._verbose:
             print(
@@ -1334,83 +1382,83 @@ class ParallaxReconstruction(PhaseReconstruction):
             print(f"Aberration C1          =  {self.aberration_C1:.0f} Ang")
             print(f"Defocus dF             = {-1*self.aberration_C1:.0f} Ang")
 
-        # Plot the CTF comparison between experiment and fit
-        if plot_CTF_compare:
-            # Get polar mean from FFT of BF reconstruction
-            im_fft = xp.abs(xp.fft.fft2(self._recon_BF))
+        # # Plot the CTF comparison between experiment and fit
+        # if plot_CTF_compare:
+        #     # Get polar mean from FFT of BF reconstruction
+        #     im_fft = xp.abs(xp.fft.fft2(self._recon_BF))
 
-            # coordinates
-            kx = xp.fft.fftfreq(self._recon_BF.shape[0], self._scan_sampling[0])
-            ky = xp.fft.fftfreq(self._recon_BF.shape[1], self._scan_sampling[1])
-            kra = xp.sqrt(kx[:, None] ** 2 + ky[None, :] ** 2)
-            k_max = xp.max(kra) / np.sqrt(2.0)
-            k_num_bins = int(xp.ceil(k_max / plot_dk))
-            k_bins = xp.arange(k_num_bins + 1) * plot_dk
+        #     # coordinates
+        #     kx = xp.fft.fftfreq(self._recon_BF.shape[0], self._scan_sampling[0])
+        #     ky = xp.fft.fftfreq(self._recon_BF.shape[1], self._scan_sampling[1])
+        #     kra = xp.sqrt(kx[:, None] ** 2 + ky[None, :] ** 2)
+        #     k_max = xp.max(kra) / np.sqrt(2.0)
+        #     k_num_bins = int(xp.ceil(k_max / plot_dk))
+        #     k_bins = xp.arange(k_num_bins + 1) * plot_dk
 
-            # histogram
-            k_ind = kra / plot_dk
-            kf = np.floor(k_ind).astype("int")
-            dk = k_ind - kf
-            sub = kf <= k_num_bins
-            hist_exp = xp.bincount(
-                kf[sub], weights=im_fft[sub] * (1 - dk[sub]), minlength=k_num_bins
-            )
-            hist_norm = xp.bincount(
-                kf[sub], weights=(1 - dk[sub]), minlength=k_num_bins
-            )
-            sub = kf <= k_num_bins - 1
+        #     # histogram
+        #     k_ind = kra / plot_dk
+        #     kf = np.floor(k_ind).astype("int")
+        #     dk = k_ind - kf
+        #     sub = kf <= k_num_bins
+        #     hist_exp = xp.bincount(
+        #         kf[sub], weights=im_fft[sub] * (1 - dk[sub]), minlength=k_num_bins
+        #     )
+        #     hist_norm = xp.bincount(
+        #         kf[sub], weights=(1 - dk[sub]), minlength=k_num_bins
+        #     )
+        #     sub = kf <= k_num_bins - 1
 
-            hist_exp += xp.bincount(
-                kf[sub] + 1, weights=im_fft[sub] * (dk[sub]), minlength=k_num_bins
-            )
-            hist_norm += xp.bincount(
-                kf[sub] + 1, weights=(dk[sub]), minlength=k_num_bins
-            )
+        #     hist_exp += xp.bincount(
+        #         kf[sub] + 1, weights=im_fft[sub] * (dk[sub]), minlength=k_num_bins
+        #     )
+        #     hist_norm += xp.bincount(
+        #         kf[sub] + 1, weights=(dk[sub]), minlength=k_num_bins
+        #     )
 
-            # KDE and normalizing
-            k_sigma = plot_dk / plot_k_sigma
-            hist_exp[0] = 0.0
-            hist_exp = gaussian_filter(hist_exp, sigma=k_sigma, mode="nearest")
-            hist_norm = gaussian_filter(hist_norm, sigma=k_sigma, mode="nearest")
-            hist_exp /= hist_norm
+        #     # KDE and normalizing
+        #     k_sigma = plot_dk / plot_k_sigma
+        #     hist_exp[0] = 0.0
+        #     hist_exp = gaussian_filter(hist_exp, sigma=k_sigma, mode="nearest")
+        #     hist_norm = gaussian_filter(hist_norm, sigma=k_sigma, mode="nearest")
+        #     hist_exp /= hist_norm
 
-            # CTF comparison
-            CTF_fit = xp.sin(
-                (-np.pi * self._wavelength * self.aberration_C1) * k_bins**2
-            )
+        #     # CTF comparison
+        #     CTF_fit = xp.sin(
+        #         (-np.pi * self._wavelength * self.aberration_C1) * k_bins**2
+        #     )
 
-            # plotting input - log scale
-            min_hist_val = xp.max(hist_exp) * 1e-3
-            hist_plot = xp.log(np.maximum(hist_exp, min_hist_val))
-            hist_plot -= xp.min(hist_plot)
-            hist_plot /= xp.max(hist_plot)
+        #     # plotting input - log scale
+        #     min_hist_val = xp.max(hist_exp) * 1e-3
+        #     hist_plot = xp.log(np.maximum(hist_exp, min_hist_val))
+        #     hist_plot -= xp.min(hist_plot)
+        #     hist_plot /= xp.max(hist_plot)
 
-            hist_plot = asnumpy(hist_plot)
-            k_bins = asnumpy(k_bins)
-            CTF_fit = asnumpy(CTF_fit)
+        #     hist_plot = asnumpy(hist_plot)
+        #     k_bins = asnumpy(k_bins)
+        #     CTF_fit = asnumpy(CTF_fit)
 
-            fig, ax = plt.subplots(figsize=(8, 4))
+        #     fig, ax = plt.subplots(figsize=(8, 4))
 
-            ax.fill_between(
-                k_bins,
-                hist_plot,
-                color=(0.7, 0.7, 0.7, 1),
-            )
+        #     ax.fill_between(
+        #         k_bins,
+        #         hist_plot,
+        #         color=(0.7, 0.7, 0.7, 1),
+        #     )
 
-            ax.plot(
-                k_bins,
-                np.clip(CTF_fit, 0.0, np.inf),
-                color=(1, 0, 0, 1),
-                linewidth=2,
-            )
-            ax.plot(
-                k_bins,
-                np.clip(-CTF_fit, 0.0, np.inf),
-                color=(0, 0.5, 1, 1),
-                linewidth=2,
-            )
-            ax.set_xlim([0, k_bins[-1]])
-            ax.set_ylim([0, 1.05])
+        #     ax.plot(
+        #         k_bins,
+        #         np.clip(CTF_fit, 0.0, np.inf),
+        #         color=(1, 0, 0, 1),
+        #         linewidth=2,
+        #     )
+        #     ax.plot(
+        #         k_bins,
+        #         np.clip(-CTF_fit, 0.0, np.inf),
+        #         color=(0, 0.5, 1, 1),
+        #         linewidth=2,
+        #     )
+        #     ax.set_xlim([0, k_bins[-1]])
+        #     ax.set_ylim([0, 1.05])
 
     def aberration_correct(
         self,
