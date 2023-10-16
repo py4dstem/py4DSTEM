@@ -217,12 +217,14 @@ def calculate_pair_dist_function(
     r_step=0.02,
     damp_origin_fluctuations=True,
     density=None,
-    plot_fits=False,
+    plot_background_fits=False,
     plot_sf_estimate=False,
     plot_reduced_pdf=True,
     plot_pdf=False,
     figsize=(8, 4),
     maxfev=None,
+    returnval=False,
+    returnfig=False,
 ):
     """
     Calculate the pair distribution function (PDF).
@@ -280,7 +282,7 @@ def calculate_pair_dist_function(
         The density of the sample, if known.  If this is not provided, only the
         reduced PDF is calculated.  If this value is provided, the PDF is also
         calculated.
-    plot_fits : bool
+    plot_background_fits : bool
     plot_sf_estimate : bool
     plot_reduced_pdf=True : bool
     plot_pdf : bool
@@ -400,6 +402,7 @@ def calculate_pair_dist_function(
     self.fk = fk
     self.bg = bg
     self.offset = coefs[0]
+    self.Sk_mask = mask
 
     # if density is provided, we can estimate the full PDF
     if density is not None:
@@ -421,78 +424,154 @@ def calculate_pair_dist_function(
     if density is None:
         return_values = self.pdf_r, self.pdf_reduced
     else:
-        return_values = self.pdf_r, self.pdf_reduced
+        return_values = self.pdf_r, self.pdf_reduced, self.pdf
     if returnval:
-        ans = statistics if not returnfig else [statistics]
+        ans = return_values if not returnfig else [return_values]
     else:
         ans = None if not returnfig else []
 
 
-
     # Plots
-    if plot_fits:
-        fig, ax = plt.subplots(figsize=figsize)
-        ax.plot(
-            self.qq,
-            self.radial_mean,
-            color="k",
+    if plot_background_fits:
+        fig,ax = self.plot_background_fits(
+            figsize = figsize,
+            returnfig = True
         )
-        ax.plot(
-            k,
-            bg,
-            color="r",
-        )
-        ax.set_xlabel("Scattering Vector (" + self.calibration.get_Q_pixel_units() + ")")
-        ax.set_ylabel("Radial Mean")
-        ax.set_xlim((self.qq[0], self.qq[-1]))
-        # ax.set_ylim((0,2e-5))
-        ax.set_xlabel("Scattering Vector [A^-1]")
-        ax.set_ylabel("I(k) and Fit Estimates")
-
-        ax.set_ylim(
-            (
-                np.min(self.radial_mean[self.radial_mean > 0]) * 0.8,
-                np.max(self.radial_mean * mask) * 1.25,
-            )
-        )
-        ax.set_yscale("log")
+        if returnfig:
+            ans.append((fig,ax))
 
     if plot_sf_estimate:
-        fig, ax = plt.subplots(figsize=figsize)
-        ax.plot(
-            k,
-            Sk,
-            color="r",
+        fig,ax = self.plot_sf_estimate(
+            figsize = figsize,
+            returnfig = True
         )
-        yr = (np.min(Sk), np.max(Sk))
-        ax.set_ylim(
-            (
-                yr[0] - 0.05 * (yr[1] - yr[0]),
-                yr[1] + 0.05 * (yr[1] - yr[0]),
-            )
-        )
-        ax.set_xlabel("Scattering Vector [A^-1]")
-        ax.set_ylabel("Reduced Structure Factor")
+        if returnfig:
+            ans.append((fig,ax))
 
     if plot_reduced_pdf:
-        fig, ax = plt.subplots(figsize=figsize)
-        ax.plot(
-            r,
-            pdf_reduced,
-            color="r",
+        fig,ax = self.plot_reduced_pdf(
+            figsize = figsize,
+            returnfig = True
         )
-        ax.set_xlabel("Radius [A]")
-        ax.set_ylabel("Reduced Pair Distribution Function")
+        if returnfig:
+            ans.append((fig,ax))
 
     if plot_pdf:
-        fig, ax = plt.subplots(figsize=figsize)
-        ax.plot(
-            r,
-            pdf,
-            color="r",
+        fig,ax = self.plot_pdf(
+            figsize = figsize,
+            returnfig = True
         )
-        ax.set_xlabel("Radius [A]")
-        ax.set_ylabel("Pair Distribution Function")
+        if returnfig:
+            ans.append((fig,ax))
+
+    # return
+    return ans
+
+
+def plot_background_fits(
+    self,
+    figsize=(8, 4),
+    returnfig=False,
+    ):
+    """
+    TODO
+    """
+    fig, ax = plt.subplots(figsize=figsize)
+    ax.plot(
+        self.qq,
+        self.radial_mean,
+        color="k",
+    )
+    ax.plot(
+        self.qq,
+        self.bg,
+        color="r",
+    )
+    ax.set_xlabel("Scattering Vector (" + self.calibration.get_Q_pixel_units() + ")")
+    ax.set_ylabel("Radial Mean")
+    ax.set_xlim((self.qq[0], self.qq[-1]))
+    ax.set_xlabel("Scattering Vector [A^-1]")
+    ax.set_ylabel("I(k) and Background Fit Estimates")
+    ax.set_ylim(
+        (
+            np.min(self.radial_mean[self.radial_mean > 0]) * 0.8,
+            np.max(self.radial_mean * self.Sk_mask) * 1.25,
+        )
+    )
+    ax.set_yscale("log")
+    if returnfig:
+        return fig,ax
+    plt.show()
+
+def plot_sf_estimate(
+    self,
+    figsize=(8, 4),
+    returnfig=False,
+    ):
+    """
+    TODO
+    """
+    fig, ax = plt.subplots(figsize=figsize)
+    ax.plot(
+        self.qq,
+        self.Sk,
+        color="r",
+    )
+    yr = (np.min(self.Sk), np.max(self.Sk))
+    ax.set_ylim(
+        (
+            yr[0] - 0.05 * (yr[1] - yr[0]),
+            yr[1] + 0.05 * (yr[1] - yr[0]),
+        )
+    )
+    ax.set_xlabel("Scattering Vector [A^-1]")
+    ax.set_ylabel("Reduced Structure Factor")
+    if returnfig:
+        return fig,ax
+    plt.show()
+
+
+def plot_reduced_pdf(
+    self,
+    figsize=(8, 4),
+    returnfig=False,
+    ):
+    """
+    TODO
+    """
+    fig, ax = plt.subplots(figsize=figsize)
+    ax.plot(
+        self.pdf_r,
+        self.pdf_reduced,
+        color="r",
+    )
+    ax.set_xlabel("Radius [A]")
+    ax.set_ylabel("Reduced Pair Distribution Function")
+    if returnfig:
+        return fig,ax
+    plt.show()
+
+def plot_pdf(
+    self,
+    figsize=(8, 4),
+    returnfig=False,
+    ):
+    """
+    TODO
+    """
+    fig, ax = plt.subplots(figsize=figsize)
+    ax.plot(
+        self.pdf_r,
+        self.pdf,
+        color="r",
+    )
+    ax.set_xlabel("Radius [A]")
+    ax.set_ylabel("Pair Distribution Function")
+    if returnfig:
+        return fig,ax
+    plt.show()
+
+
 
     # functions for inverting from reduced PDF back to S(k)
 
