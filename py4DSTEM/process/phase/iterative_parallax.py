@@ -1225,12 +1225,8 @@ class ParallaxReconstruction(PhaseReconstruction):
                     f"{self.aberration_A1y:.0f}) Ang"
                 )
             )
-            if self.aberration_C1 > 0:
-                print(f"Aberration C1          =  {self.aberration_C1:.0f} Ang")
-                print(f"Defocus dF             = {-1*self.aberration_C1:.0f} Ang")
-            else:
-                print(f"Aberration C1          = {self.aberration_C1:.0f} Ang")
-                print(f"Defocus dF             =  {-1*self.aberration_C1:.0f} Ang")
+            print(f"Aberration C1          =  {self.aberration_C1:.0f} Ang")
+            print(f"Defocus dF             = {-1*self.aberration_C1:.0f} Ang")
 
         # Plot the CTF comparison between experiment and fit
         if plot_CTF_compare:
