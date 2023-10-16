@@ -113,7 +113,7 @@ class ParallaxReconstruction(PhaseReconstruction):
         threshold_intensity: float = 0.8,
         normalize_images: bool = True,
         normalize_order=0,
-        descan_correct: bool = False,
+        descan_correct: bool = True,
         defocus_guess: float = None,
         rotation_guess: float = None,
         plot_average_bf: bool = True,
