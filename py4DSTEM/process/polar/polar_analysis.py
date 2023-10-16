@@ -10,8 +10,6 @@ from emdfile import tqdmnd
 
 def calculate_radial_statistics(
     self,
-    median_local=False,
-    median_global=False,
     plot_results_mean=False,
     plot_results_var=False,
     figsize=(8, 4),
