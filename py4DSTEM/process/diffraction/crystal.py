@@ -275,27 +275,27 @@ class Crystal:
         else:
             return crystal_strained
 
-    def from_CIF(CIF, conventional_standard_structure=True):
-        """
-        Create a Crystal object from a CIF file, using pymatgen to import the CIF
+    # def from_CIF(CIF, conventional_standard_structure=True):
+    #     """
+    #     Create a Crystal object from a CIF file, using pymatgen to import the CIF
 
-        Note that pymatgen typically prefers to return primitive unit cells,
-        which can be overridden by setting conventional_standard_structure=True.
+    #     Note that pymatgen typically prefers to return primitive unit cells,
+    #     which can be overridden by setting conventional_standard_structure=True.
 
-        Args:
-            CIF: (str or Path) path to the CIF File
-            conventional_standard_structure: (bool) if True, conventional standard unit cell will be returned
-                instead of the primitive unit cell pymatgen typically returns
-        """
-        from pymatgen.io.cif import CifParser
+    #     Args:
+    #         CIF: (str or Path) path to the CIF File
+    #         conventional_standard_structure: (bool) if True, conventional standard unit cell will be returned
+    #             instead of the primitive unit cell pymatgen typically returns
+    #     """
+    #     from pymatgen.io.cif import CifParser
 
-        parser = CifParser(CIF)
+    #     parser = CifParser(CIF)
 
-        structure = parser.get_structures()[0]
+    #     structure = parser.get_structures()[0]
 
-        return Crystal.from_pymatgen_structure(
-            structure, conventional_standard_structure=conventional_standard_structure
-        )
+    #     return Crystal.from_pymatgen_structure(
+    #         structure, conventional_standard_structure=conventional_standard_structure
+    #     )
 
     def from_pymatgen_structure(
         structure=None,
@@ -478,6 +478,46 @@ class Crystal:
         else:
             print(Warning("Could not find occupancies of crystal")) 
         return xtal
+
+    def from_cif(
+            filepath,
+            ):
+        """
+        Create a py4DSTEM Crystal object from a cif file using ase.io.read function
+        
+        Args:
+            filepath (str|Pathlib.Path): path to the file
+        """
+
+        # check if ase is installed
+        if find_spec("ase") is None:
+            raise ImportWarning(
+                "Could not import ASE, please install, restart and try again"
+            )
+        else:
+            from ase.io import read
+        # try loading the file using ase read and get required properties
+        atoms = read(filepath, format='cif')
+        xtal = Crystal(
+                positions=atoms.get_scaled_positions(),  # fractional coords
+                numbers=atoms.numbers,
+                cell=atoms.cell.array,
+            )
+        
+        # add occupancies
+        # It should be this one but keeping other method in case
+        if 'occupancies' in atoms.arrays.keys():
+            # np.array with length number of atoms
+            xtal.occupancy = atoms.arrays['occupancies'] 
+            # if created from cif file
+        elif 'occupancy' in atoms.info.keys():
+            # python dict with occupancy per site 
+            xtal.occupancy = atoms.info['occupancy']
+        # TODO add in elif statement if other ways appear
+        else:
+            print(Warning("Could not find occupancies of crystal")) 
+        return xtal
+        
 
     # def from_generic_file(filepath, **kwargs):
     #     """
