@@ -5,21 +5,12 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Circle
 from fractions import Fraction
 from typing import Union, Optional
-from scipy.optimize import curve_fit
 import sys
 
-from emdfile import tqdmnd, PointList, PointListArray
+from emdfile import PointList
 from py4DSTEM.process.utils import single_atom_scatter, electron_wavelength_angstrom
 
-from py4DSTEM.process.diffraction.crystal_viz import plot_diffraction_pattern
-from py4DSTEM.process.diffraction.crystal_viz import plot_ring_pattern
-from py4DSTEM.process.diffraction.utils import Orientation, calc_1D_profile
-
-try:
-    from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
-    from pymatgen.core.structure import Structure
-except ImportError:
-    pass
+from py4DSTEM.process.diffraction.utils import Orientation
 
 
 class Crystal:
@@ -1091,7 +1082,6 @@ def generate_moire_diffraction_pattern(
     exy_1=0.0,
     phi_1=0.0,
     power=2.0,
-    k_max=1.0,
 ):
     """
     Calculate a Moire lattice from 2 parent diffraction patterns. The second lattice can be rotated
@@ -1118,13 +1108,12 @@ def generate_moire_diffraction_pattern(
         Rotation of lattice 1 in real space.
     power: float
         Plotting power law (default is amplitude**2.0, i.e. intensity).
-    k_max: float
-        Max k value of the calculated (and plotted) Moire lattice.
 
     Returns
     --------
-    bragg_moire: BraggVector
-        Bragg vectors for moire lattice.
+    parent_peaks_0, parent_peaks_1, moire_peaks: BraggVectors
+        Bragg vectors for the rotated & strained parent lattices
+        and the moire lattice
 
     """
 
@@ -1159,14 +1148,6 @@ def generate_moire_diffraction_pattern(
     l1 = bragg_peaks_1["l"][sub1]
 
     # apply strain tensor to lattice 1
-
-    # infinitesimal
-    # m = np.array([
-    #     [1 + exx_1, (exy_1 - phi_1)*0.5],
-    #     [(exy_1 - phi_1)*0.5, 1 + eyy_1],
-    # ])
-
-    # finite rotation
     m = np.array(
         [
             [np.cos(phi_1), -np.sin(phi_1)],
@@ -1189,11 +1170,8 @@ def generate_moire_diffraction_pattern(
         np.arange(np.sum(sub1)),
         indexing="ij",
     )
-    # ind0 = ind0.ravel()
-    # ind1 = ind1.ravel()
     qx = qx0[ind0] + qx1[ind1]
     qy = qy0[ind0] + qy1[ind1]
-    # int_moire = int0_sub[ind0] + int1_sub[ind1]
     int_moire = (int0_sub[ind0] * int1_sub[ind1]) ** 0.5
 
     # moire labels
