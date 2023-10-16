@@ -15,8 +15,8 @@ import numpy as np
 
 try:
     import cupy as cp
-except ImportError:
-    cp = None
+except ModuleNotFoundError:
+    cp = np
 
 
 def upsampled_correlation(imageCorr, upsampleFactor, xyShift, device="cpu"):
