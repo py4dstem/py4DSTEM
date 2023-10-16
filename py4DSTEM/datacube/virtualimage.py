@@ -11,7 +11,8 @@ import inspect
 
 from emdfile import tqdmnd, Metadata
 from py4DSTEM.data import Calibration, RealSlice, Data, DiffractionSlice
-from py4DSTEM.visualize.show import show
+from py4DSTEM.preprocess import get_shifted_ar
+from py4DSTEM.visualize import show
 
 
 # Virtual image container class
@@ -72,6 +73,7 @@ class DataCubeVirtualImager:
         centered=False,
         calibrated=False,
         shift_center=False,
+        subpixel=False,
         verbose=True,
         dask=False,
         return_mask=False,
@@ -138,6 +140,8 @@ class DataCubeVirtualImager:
             position and the mean origin position over all patterns, rounded to
             the nearest integer for speed. Default is False. If `shift_center` is
             True, `centered` is automatically set to True.
+        subpixel : bool
+            if True, applies subpixel shifts to virtual image
         verbose : bool
             toggles a progress bar
         dask : bool
@@ -177,8 +181,7 @@ class DataCubeVirtualImager:
             "rectangular",
             "mask",
         ), "check doc strings for supported modes"
-        if shift_center == True:
-            centered = True
+
         if test_config:
             for x, y in zip(
                 ["centered", "calibrated", "shift_center"],
@@ -242,8 +245,9 @@ class DataCubeVirtualImager:
                 self.calibration.get_origin_shift() is not None
             ), "origin need to be calibrated"
             qx_shift, qy_shift = self.calibration.get_origin_shift()
-            qx_shift = qx_shift.round().astype(int)
-            qy_shift = qy_shift.round().astype(int)
+            if subpixel is False:
+                qx_shift = qx_shift.round().astype(int)
+                qy_shift = qy_shift.round().astype(int)
 
             # if return_mask is True, get+return the mask and skip the computation
             if return_mask is not False:
@@ -251,9 +255,17 @@ class DataCubeVirtualImager:
                     rx, ry = return_mask
                 except TypeError:
                     raise Exception(
-                        f"if `shift_center=True`, return_mask must be a 2-tuple of ints or False, but revieced inpute value of {return_mask}"
+                        f"if `shift_center=True`, return_mask must be a 2-tuple of \
+                        ints or False, but revieced inpute value of {return_mask}"
                     )
-                _mask = np.roll(mask, (qx_shift[rx, ry], qy_shift[rx, ry]), axis=(0, 1))
+                if subpixel:
+                    _mask = get_shifted_ar(
+                        mask, qx_shift[rx, ry], qy_shift[rx, ry], bilinear=True
+                    )
+                else:
+                    _mask = np.roll(
+                        mask, (qx_shift[rx, ry], qy_shift[rx, ry]), axis=(0, 1)
+                    )
                 return _mask
 
             # allocate space
@@ -269,7 +281,14 @@ class DataCubeVirtualImager:
                 disable=not verbose,
             ):
                 # get shifted mask
-                _mask = np.roll(mask, (qx_shift[rx, ry], qy_shift[rx, ry]), axis=(0, 1))
+                if subpixel:
+                    _mask = get_shifted_ar(
+                        mask, qx_shift[rx, ry], qy_shift[rx, ry], bilinear=True
+                    )
+                else:
+                    _mask = np.roll(
+                        mask, (qx_shift[rx, ry], qy_shift[rx, ry]), axis=(0, 1)
+                    )
                 # add to output array
                 virtual_image[rx, ry] = np.sum(self.data[rx, ry] * _mask)
 
@@ -292,6 +311,7 @@ class DataCubeVirtualImager:
                 "centered": centered,
                 "calibrated": calibrated,
                 "shift_center": shift_center,
+                "subpixel": subpixel,
                 "verbose": verbose,
                 "dask": dask,
                 "return_mask": return_mask,
@@ -318,6 +338,7 @@ class DataCubeVirtualImager:
         centered=None,
         calibrated=None,
         shift_center=False,
+        subpixel=True,
         scan_position=None,
         invert=False,
         color="r",
@@ -358,6 +379,8 @@ class DataCubeVirtualImager:
             regardless of the value of `data` (enabling e.g. overlaying the
             mask for a specific scan position on a max or mean diffraction
             image.)
+        subpixel : bool
+            if True, applies subpixel shifts to virtual image
         invert : bool
             if True, invert the masked pixel (i.e. pixels *outside* the detector
             are overlaid with a mask)
@@ -398,19 +421,24 @@ class DataCubeVirtualImager:
         elif isinstance(data, np.ndarray):
             assert (
                 data.shape == self.Qshape
-            ), f"Can't position a detector over an image with a shape that is different from diffraction space.  Diffraction space in this dataset has shape {self.Qshape} but the image passed has shape {data.shape}"
+            ), f"Can't position a detector over an image with a shape that is different \
+                from diffraction space.  Diffraction space in this dataset has shape {self.Qshape} \
+                but the image passed has shape {data.shape}"
             image = data
         elif isinstance(data, DiffractionSlice):
             assert (
                 data.shape == self.Qshape
-            ), f"Can't position a detector over an image with a shape that is different from diffraction space.  Diffraction space in this dataset has shape {self.Qshape} but the image passed has shape {data.shape}"
+            ), f"Can't position a detector over an image with a shape that is different \
+                from diffraction space.  Diffraction space in this dataset has shape {self.Qshape} \
+                but the image passed has shape {data.shape}"
             image = data.data
         elif isinstance(data, tuple):
             rx, ry = data[:2]
             image = self[rx, ry]
         else:
             raise Exception(
-                f"Invalid argument passed to `data`. Expected None or np.ndarray or tuple, not type {type(data)}"
+                f"Invalid argument passed to `data`. Expected None or np.ndarray or \
+                    tuple, not type {type(data)}"
             )
 
         # shift center
@@ -419,7 +447,9 @@ class DataCubeVirtualImager:
         elif shift_center == True:
             assert isinstance(
                 data, tuple
-            ), "If shift_center is set to True, `data` should be a 2-tuple (rx,ry). To shift the detector mask while using some other input for `data`, set `shift_center` to a 2-tuple (rx,ry)"
+            ), "If shift_center is set to True, `data` should be a 2-tuple (rx,ry). \
+                To shift the detector mask while using some other input for `data`, \
+                set `shift_center` to a 2-tuple (rx,ry)"
         elif isinstance(shift_center, tuple):
             rx, ry = shift_center[:2]
             shift_center = True
@@ -454,10 +484,15 @@ class DataCubeVirtualImager:
             assert (
                 self.calibration.get_origin_shift() is not None
             ), "origin shifts need to be calibrated"
-            qx_shift, qy_shift = self.calibration.cal.get_origin_shift()
-            qx_shift = int(np.round(qx_shift[rx, ry]))
-            qy_shift = int(np.round(qy_shift[rx, ry]))
-            mask = np.roll(mask, (qx_shift, qy_shift), axis=(0, 1))
+            qx_shift, qy_shift = self.calibration.get_origin_shift()
+            if subpixel:
+                mask = get_shifted_ar(
+                    mask, qx_shift[rx, ry], qy_shift[rx, ry], bilinear=True
+                )
+            else:
+                qx_shift = int(np.round(qx_shift[rx, ry]))
+                qy_shift = int(np.round(qy_shift[rx, ry]))
+                mask = np.roll(mask, (qx_shift, qy_shift), axis=(0, 1))
 
         # Show
         show(image, mask=mask, mask_color=color, mask_alpha=alpha, **kwargs)

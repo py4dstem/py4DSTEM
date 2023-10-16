@@ -421,7 +421,7 @@ class BraggVectorMethods:
         return qx0, qy0, mask
 
     def measure_origin_beamstop(
-        self, center_guess, radii, max_dist=2, max_iter=1, **kwargs
+        self, center_guess, radii, max_dist=None, max_iter=1, **kwargs
     ):
         """
         Find the origin from a set of braggpeaks assuming there is a beamstop, by identifying
@@ -439,6 +439,9 @@ class BraggVectorMethods:
         """
         R_Nx, R_Ny = self.Rshape
         braggpeaks = self._v_uncal
+
+        if max_dist is None:
+            max_dist = radii[1]
 
         # remove peaks outside the annulus
         braggpeaks_masked = braggpeaks.copy()
@@ -470,7 +473,7 @@ class BraggVectorMethods:
                             x_r = -x + 2 * center_curr[0]
                             y_r = -y + 2 * center_curr[1]
                             dists = np.hypot(x_r - pl.data["qx"], y_r - pl.data["qy"])
-                            dists[is_paired] = 2 * max_dist
+                            dists[is_paired] = max_dist
                             matched = dists <= max_dist
                             if any(matched):
                                 match = np.argmin(dists)
