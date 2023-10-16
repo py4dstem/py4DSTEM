@@ -1075,6 +1075,8 @@ class Crystal:
         int_exp = (int_exp**bragg_intensity_power) * (k**bragg_k_power)
         int_exp /= np.max(int_exp)
         return k, int_exp
+
+
 def generate_moire_diffraction_pattern(
     bragg_peaks_0,
     bragg_peaks_1,
@@ -1091,7 +1093,7 @@ def generate_moire_diffraction_pattern(
     Calculate a Moire lattice from 2 parent diffraction patterns. The second lattice can be rotated
     and strained with respect to the original lattice. Note that this strain is applied in real space,
     and so the inverse of the calculated infinitestimal strain tensor is applied.
-    
+
     Parameters
     --------
     bragg_peaks_0: BraggVector
@@ -1114,14 +1116,14 @@ def generate_moire_diffraction_pattern(
         Plotting power law (default is amplitude**2.0, i.e. intensity).
     k_max: float
         Max k value of the calculated (and plotted) Moire lattice.
-        
+
     Returns
     --------
     bragg_moire: BraggVector
         Bragg vectors for moire lattice.
-        
+
     """
-    
+
     # get intenties of all peaks
     int0 = bragg_peaks_0["intensity"] ** (power / 2.0)
     int1 = bragg_peaks_1["intensity"] ** (power / 2.0)
@@ -1153,13 +1155,13 @@ def generate_moire_diffraction_pattern(
     l1 = bragg_peaks_1["l"][sub1]
 
     # apply strain tensor to lattice 1
-    
+
     # infinitesimal
     # m = np.array([
     #     [1 + exx_1, (exy_1 - phi_1)*0.5],
     #     [(exy_1 - phi_1)*0.5, 1 + eyy_1],
     # ])
-    
+
     # finite rotation
     m = np.array(
         [
@@ -1199,7 +1201,7 @@ def generate_moire_diffraction_pattern(
     m_l1 = l1[ind1]
 
     # Convert thresholded and moire peaks to BraggVector class
-    
+
     pl_dtype_parent = np.dtype(
         [
             ("qx", "float"),
@@ -1210,7 +1212,7 @@ def generate_moire_diffraction_pattern(
             ("l", "int"),
         ]
     )
-    
+
     bragg_parent_0 = PointList(np.array([], dtype=pl_dtype_parent))
     bragg_parent_0.add_data_by_field(
         [
@@ -1221,7 +1223,7 @@ def generate_moire_diffraction_pattern(
             k0.ravel(),
             l0.ravel(),
         ]
-    ) 
+    )
 
     bragg_parent_1 = PointList(np.array([], dtype=pl_dtype_parent))
     bragg_parent_1.add_data_by_field(
@@ -1233,8 +1235,8 @@ def generate_moire_diffraction_pattern(
             k1.ravel(),
             l1.ravel(),
         ]
-    ) 
-    
+    )
+
     pl_dtype = np.dtype(
         [
             ("qx", "float"),
@@ -1262,8 +1264,9 @@ def generate_moire_diffraction_pattern(
             m_l1.ravel(),
         ]
     )
-    
+
     return bragg_parent_0, bragg_parent_1, bragg_moire
+
 
 def plot_moire_diffraction_pattern(
     bragg_parent_0,
@@ -1287,7 +1290,7 @@ def plot_moire_diffraction_pattern(
 ):
     """
     Plot Moire lattice and parent lattices.
-    
+
     Parameters
     --------
     bragg_peaks_0: BraggVector
@@ -1327,7 +1330,7 @@ def plot_moire_diffraction_pattern(
         Size of output figure.
     returnfig: bool
         Return the (fix,ax) handles of the plot.
-        
+
     Returns
     --------
     fig, ax: matplotlib handles (optional)
@@ -1335,10 +1338,10 @@ def plot_moire_diffraction_pattern(
     """
 
     # peak labels
-    
+
     if labels is None:
         labels = ("crystal 0", "crystal 1")
-    
+
     def overline(x):
         return str(x) if x >= 0 else (r"\overline{" + str(np.abs(x)) + "}")
 
@@ -1366,7 +1369,7 @@ def plot_moire_diffraction_pattern(
     m_k1 = bragg_moire["k1"]
     m_l1 = bragg_moire["l1"]
     int_moire = bragg_moire["intensity"]
-    
+
     fig = plt.figure(figsize=figsize)
     ax = fig.add_axes([0.09, 0.09, 0.65, 0.9])
     ax_labels = fig.add_axes([0.75, 0, 0.25, 1])
@@ -1387,7 +1390,6 @@ def plot_moire_diffraction_pattern(
     }
 
     if plot_subpixel is False:
-        
         # moire
         ax.scatter(
             qy,
