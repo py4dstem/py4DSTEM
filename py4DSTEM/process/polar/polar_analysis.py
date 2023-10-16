@@ -98,7 +98,7 @@ def calculate_radial_statistics(
         (self.radial_all - self.radial_mean[None, None]) ** 2, axis=(0, 1)
     )
 
-    self.radial_var_norm = self.radial_var
+    self.radial_var_norm = np.copy(self.radial_var)
     sub = self.radial_mean > 0.0
     self.radial_var_norm[sub] /= self.radial_mean[sub] ** 2
 
