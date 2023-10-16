@@ -21,8 +21,23 @@ def calculate_radial_statistics(
     Calculate the radial statistics used in fluctuation electron microscopy (FEM)
     and as an initial step in radial distribution function (RDF) calculation.
     The computed quantities are the radial mean, variance, and normalized variance.
-    Each signal is calculated using the original FEM definitions
-    [[TODO: add reference]], i.e. pattern-by-pattern.
+
+    There are several ways the means and variances can be computed.  Here we first
+    compute the mean and standard deviation pattern by pattern, i.e. for
+    diffraction signal d(x,y; q,theta) we take
+
+        d_mean_all(x,y; q) = \int_{0}^{2\pi} d(x,y; q,\theta) d\theta
+        d_var_all(x,y; q) = \int_{0}^{2\pi}
+            \( d(x,y; q,\theta) - d_mean_all(x,y; q,\theta) \)^2 d\theta
+
+    Then we find the mean and variance profiles by taking the means of these
+    quantities over all scan positions:
+
+        d_mean(q) = \sum_{x,y} d_mean_all(x,y; q)
+        d_var(q) = \sum_{x,y} d_var_all(x,y; q)
+
+    and the normalized variance is d_var/d_mean.
+
 
     Parameters
     --------
@@ -65,7 +80,7 @@ def calculate_radial_statistics(
         )
     )
 
-    # Compute the radial mean for each probe position
+    # Compute the radial mean and standard deviation for each probe position
     for rx, ry in tqdmnd(
         self._datacube.shape[0],
         self._datacube.shape[1],
