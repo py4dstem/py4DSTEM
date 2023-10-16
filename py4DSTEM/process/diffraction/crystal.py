@@ -410,7 +410,7 @@ class Crystal:
 
         return Crystal(positions, numbers, cell)
 
-    def from_ASE(
+    def from_ase(
         atoms,
     ):
         """
