@@ -1,8 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import os
 from typing import Union, Optional
-import time, sys
 from tqdm import tqdm
 
 from emdfile import tqdmnd, PointList, PointListArray
