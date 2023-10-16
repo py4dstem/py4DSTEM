@@ -184,38 +184,46 @@ class ParallaxReconstruction(PhaseReconstruction):
             raise ValueError(
                 "dp_mean must match the datacube shape. Try setting dp_mean = None."
             )
+
         # descan correct
         if descan_correct:
-            from py4DSTEM.process.phase import DPCReconstruction
-
-            dpc = DPCReconstruction(
-                energy=self._energy,
-                datacube=self._datacube,
-                verbose=False,
-            ).preprocess(
-                force_com_rotation=0,
-                force_com_transpose=False,
-                plot_center_of_mass=False,
+            (
+                _,
+                _,
+                com_fitted_x,
+                com_fitted_y,
+                _,
+                _,
+            ) = self._calculate_intensities_center_of_mass(
+                self._intensities,
+                dp_mask=None,
+                fit_function="plane",
+                com_shifts=None,
+                com_measured=None,
             )
 
-            intensities_shifted = self._intensities.copy()
+            com_fitted_x = asnumpy(com_fitted_x)
+            com_fitted_y = asnumpy(com_fitted_y)
+            intensities = asnumpy(self._intensities)
+            intensities_shifted = np.zeros_like(intensities)
 
-            center_x = np.mean(dpc._com_fitted_x)
-            center_y = np.mean(dpc._com_fitted_y)
+            center_x = np.mean(com_fitted_x)
+            center_y = np.mean(com_fitted_y)
+
             for rx in range(intensities_shifted.shape[0]):
                 for ry in range(intensities_shifted.shape[1]):
                     intensity_shifted = get_shifted_ar(
-                        self._intensities[rx, ry],
-                        -dpc._com_fitted_x[rx, ry] + center_x,
-                        -dpc._com_fitted_y[rx, ry] + center_y,
+                        intensities[rx, ry],
+                        -com_fitted_x[rx, ry] + center_x,
+                        -com_fitted_y[rx, ry] + center_y,
                         bilinear=True,
                         device="cpu",
                     )
 
                     intensities_shifted[rx, ry] = intensity_shifted
 
-            self._intensities = intensities_shifted
-            self._dp_mean = intensities_shifted.mean((0, 1))
+            self._intensities = xp.asarray(intensities_shifted, xp.float32)
+            self._dp_mean = self._intensities.mean((0, 1))
 
         # select virtual detector pixels
         self._dp_mask = self._dp_mean >= (xp.max(self._dp_mean) * threshold_intensity)
