@@ -118,7 +118,7 @@ def calculate_radial_statistics(
             returnfig=True,
         )
         if returnfig:
-            ans.append((fig,ax))
+            ans.append((fig, ax))
     if plot_results_var:
         fig, ax = plot_radial_var_norm(
             self,
@@ -126,7 +126,7 @@ def calculate_radial_statistics(
             returnfig=True,
         )
         if returnfig:
-            ans.append((fig,ax))
+            ans.append((fig, ax))
 
     # return
     return ans
@@ -342,8 +342,8 @@ def calculate_pair_dist_function(
     coefs[3] *= int_mean
 
     # Calculate the mean atomic form factor without a constant offset
-    #coefs_fk = (0.0, coefs[1], coefs[2], coefs[3], coefs[4])
-    #fk = scattering_model(k2, coefs_fk)
+    # coefs_fk = (0.0, coefs[1], coefs[2], coefs[3], coefs[4])
+    # fk = scattering_model(k2, coefs_fk)
     bg = scattering_model(k2, coefs)
     fk = bg - coefs[0]
 
@@ -419,7 +419,6 @@ def calculate_pair_dist_function(
         # store results
         self.pdf = pdf
 
-
     # prepare answer
     if density is None:
         return_values = self.pdf_r, self.pdf_reduced
@@ -430,39 +429,26 @@ def calculate_pair_dist_function(
     else:
         ans = None if not returnfig else []
 
-
     # Plots
     if plot_background_fits:
-        fig,ax = self.plot_background_fits(
-            figsize = figsize,
-            returnfig = True
-        )
+        fig, ax = self.plot_background_fits(figsize=figsize, returnfig=True)
         if returnfig:
-            ans.append((fig,ax))
+            ans.append((fig, ax))
 
     if plot_sf_estimate:
-        fig,ax = self.plot_sf_estimate(
-            figsize = figsize,
-            returnfig = True
-        )
+        fig, ax = self.plot_sf_estimate(figsize=figsize, returnfig=True)
         if returnfig:
-            ans.append((fig,ax))
+            ans.append((fig, ax))
 
     if plot_reduced_pdf:
-        fig,ax = self.plot_reduced_pdf(
-            figsize = figsize,
-            returnfig = True
-        )
+        fig, ax = self.plot_reduced_pdf(figsize=figsize, returnfig=True)
         if returnfig:
-            ans.append((fig,ax))
+            ans.append((fig, ax))
 
     if plot_pdf:
-        fig,ax = self.plot_pdf(
-            figsize = figsize,
-            returnfig = True
-        )
+        fig, ax = self.plot_pdf(figsize=figsize, returnfig=True)
         if returnfig:
-            ans.append((fig,ax))
+            ans.append((fig, ax))
 
     # return
     return ans
@@ -472,7 +458,7 @@ def plot_background_fits(
     self,
     figsize=(8, 4),
     returnfig=False,
-    ):
+):
     """
     TODO
     """
@@ -500,14 +486,15 @@ def plot_background_fits(
     )
     ax.set_yscale("log")
     if returnfig:
-        return fig,ax
+        return fig, ax
     plt.show()
+
 
 def plot_sf_estimate(
     self,
     figsize=(8, 4),
     returnfig=False,
-    ):
+):
     """
     TODO
     """
@@ -527,7 +514,7 @@ def plot_sf_estimate(
     ax.set_xlabel("Scattering Vector [A^-1]")
     ax.set_ylabel("Reduced Structure Factor")
     if returnfig:
-        return fig,ax
+        return fig, ax
     plt.show()
 
 
@@ -535,7 +522,7 @@ def plot_reduced_pdf(
     self,
     figsize=(8, 4),
     returnfig=False,
-    ):
+):
     """
     TODO
     """
@@ -548,14 +535,15 @@ def plot_reduced_pdf(
     ax.set_xlabel("Radius [A]")
     ax.set_ylabel("Reduced Pair Distribution Function")
     if returnfig:
-        return fig,ax
+        return fig, ax
     plt.show()
+
 
 def plot_pdf(
     self,
     figsize=(8, 4),
     returnfig=False,
-    ):
+):
     """
     TODO
     """
@@ -568,10 +556,8 @@ def plot_pdf(
     ax.set_xlabel("Radius [A]")
     ax.set_ylabel("Pair Distribution Function")
     if returnfig:
-        return fig,ax
+        return fig, ax
     plt.show()
-
-
 
     # functions for inverting from reduced PDF back to S(k)
 
@@ -653,4 +639,3 @@ def scattering_model(k2, *coefs):
     # int1*np.exp(k2/(-2*sigma1**2))
 
     return int_model
-
