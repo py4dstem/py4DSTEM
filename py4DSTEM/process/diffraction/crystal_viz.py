@@ -149,7 +149,7 @@ def plot_structure(
             zs=xyz[sub, 2],  # + d[2],
             s=size_marker,
             linewidth=2,
-            color=atomic_colors(ID_plot),
+            facecolors=atomic_colors(ID_plot),
             edgecolor=[0, 0, 0],
         )
 
