@@ -1070,16 +1070,9 @@ class ParallaxReconstruction(PhaseReconstruction):
             cmap = kwargs.pop("cmap", "magma")
 
             cropped_object = self._crop_padded_object(self._recon_BF)
-            upsampled_pad_x = np.round(
-                self._object_padding_px[0] * self._kde_upsample_factor / 2
-            ).astype("int")
-            upsampled_pad_y = np.round(
-                self._object_padding_px[1] * self._kde_upsample_factor / 2
-            ).astype("int")
-            cropped_object_aligned = self.recon_BF_subpixel_aligned[
-                upsampled_pad_x:-upsampled_pad_x,
-                upsampled_pad_y:-upsampled_pad_y,
-            ]
+            cropped_object_aligned = self._crop_padded_object(
+                self._recon_BF_subpixel_aligned, upsampled=True
+            )
 
             extent = [
                 0,
@@ -1109,7 +1102,6 @@ class ParallaxReconstruction(PhaseReconstruction):
                 ax.set_xlabel("y [A]")
 
             if plot_upsampled_FFT_comparison:
-                recon_fft = xp.fft.fft2(self._recon_BF)
                 recon_fft = xp.fft.fftshift(xp.abs(xp.fft.fft2(self._recon_BF)))
                 pad_x = np.round(
                     BF_size[0] * (self._kde_upsample_factor - 1) / 2
@@ -1128,10 +1120,10 @@ class ParallaxReconstruction(PhaseReconstruction):
                 )
 
                 reciprocal_extent = [
-                    0,
-                    self._reciprocal_sampling[1] * cropped_object_aligned.shape[1],
-                    self._reciprocal_sampling[0] * cropped_object_aligned.shape[0],
-                    0,
+                    -self._reciprocal_sampling[1] * cropped_object_aligned.shape[1] / 2,
+                    self._reciprocal_sampling[1] * cropped_object_aligned.shape[1] / 2,
+                    self._reciprocal_sampling[0] * cropped_object_aligned.shape[0] / 2,
+                    -self._reciprocal_sampling[0] * cropped_object_aligned.shape[0] / 2,
                 ]
 
                 show(
@@ -1312,8 +1304,9 @@ class ParallaxReconstruction(PhaseReconstruction):
         k_info_limit: float = None,
         k_info_power: float = 1.0,
         Wiener_filter=False,
-        Wiener_signal_noise_ratio=1.0,
-        Wiener_filter_low_only=False,
+        Wiener_signal_noise_ratio: float = 1.0,
+        Wiener_filter_low_only: bool = False,
+        upsampled: bool = True,
         **kwargs,
     ):
         """
@@ -1346,9 +1339,19 @@ class ParallaxReconstruction(PhaseReconstruction):
                 )
             )
 
+        if upsampled and hasattr(self, "_kde_upsample_factor"):
+            im = self._recon_BF_subpixel_aligned
+            sx = self._scan_sampling[0] / self._kde_upsample_factor
+            sy = self._scan_sampling[1] / self._kde_upsample_factor
+        else:
+            upsampled = False
+            im = self._recon_BF
+            sx = self._scan_sampling[0]
+            sy = self._scan_sampling[1]
+
         # Fourier coordinates
-        kx = xp.fft.fftfreq(self._recon_BF.shape[0], self._scan_sampling[0])
-        ky = xp.fft.fftfreq(self._recon_BF.shape[1], self._scan_sampling[1])
+        kx = xp.fft.fftfreq(im.shape[0], sx)
+        ky = xp.fft.fftfreq(im.shape[1], sy)
         kra2 = (kx[:, None]) ** 2 + (ky[None, :]) ** 2
 
         # CTF
@@ -1371,7 +1374,7 @@ class ParallaxReconstruction(PhaseReconstruction):
                 CTF_corr[k_mask] = xp.sign(sin_chi[k_mask])
 
             # apply correction to mean reconstructed BF image
-            im_fft_corr = xp.fft.fft2(self._recon_BF) * CTF_corr
+            im_fft_corr = xp.fft.fft2(im) * CTF_corr
 
         else:
             # CTF without tilt correction (beyond the parallax operator)
@@ -1379,7 +1382,7 @@ class ParallaxReconstruction(PhaseReconstruction):
             CTF_corr[0, 0] = 0
 
             # apply correction to mean reconstructed BF image
-            im_fft_corr = xp.fft.fft2(self._recon_BF) * CTF_corr
+            im_fft_corr = xp.fft.fft2(im) * CTF_corr
 
             # if needed, add low pass filter output image
             if k_info_limit is not None:
@@ -1402,12 +1405,14 @@ class ParallaxReconstruction(PhaseReconstruction):
 
             fig, ax = plt.subplots(figsize=figsize)
 
-            cropped_object = self._crop_padded_object(self._recon_phase_corrected)
+            cropped_object = self._crop_padded_object(
+                self._recon_phase_corrected, upsampled=upsampled
+            )
 
             extent = [
                 0,
-                self._scan_sampling[1] * cropped_object.shape[1],
-                self._scan_sampling[0] * cropped_object.shape[0],
+                sy * cropped_object.shape[1],
+                sx * cropped_object.shape[0],
                 0,
             ]
 
@@ -1421,137 +1426,6 @@ class ParallaxReconstruction(PhaseReconstruction):
             ax.set_ylabel("x [A]")
             ax.set_xlabel("y [A]")
             ax.set_title("Parallax-Corrected Phase Image")
-
-    def subpixel_aberration_correct(
-        self,
-        plot_corrected_phase: bool = True,
-        k_info_limit: float = None,
-        k_info_power: float = 1.0,
-        Wiener_filter=False,
-        Wiener_signal_noise_ratio=1.0,
-        Wiener_filter_low_only=False,
-        **kwargs,
-    ):
-        """
-        CTF correction of the phase image using the measured defocus aberration.
-
-        Parameters
-        ----------
-        plot_corrected_phase: bool, optional
-            If True, the CTF-corrected phase is plotted
-        k_info_limit: float, optional
-            maximum allowed frequency in butterworth filter
-        k_info_power: float, optional
-            power of butterworth filter
-        Wiener_filter: bool, optional
-            Use Wiener filtering instead of CTF sign correction.
-        Wiener_signal_noise_ratio: float, optional
-            Signal to noise radio at k = 0 for Wiener filter
-        Wiener_filter_low_only: bool, optional
-            Apply Wiener filtering only to the CTF portions before the 1st CTF maxima.
-        """
-
-        xp = self._xp
-        asnumpy = self._asnumpy
-
-        if not hasattr(self, "aberration_C1"):
-            raise ValueError(
-                (
-                    "CTF correction is meant to be ran after alignment and aberration fitting. "
-                    "Please run the `reconstruct()` and `aberration_fit()` functions first."
-                )
-            )
-
-        # Fourier coordinates
-        kx = xp.fft.fftfreq(
-            self._recon_BF_subpixel_aligned.shape[0],
-            self._scan_sampling[0] / self._kde_upsample_factor,
-        )
-        ky = xp.fft.fftfreq(
-            self._recon_BF_subpixel_aligned.shape[1],
-            self._scan_sampling[1] / self._kde_upsample_factor,
-        )
-        kra2 = (kx[:, None]) ** 2 + (ky[None, :]) ** 2
-
-        # CTF
-        sin_chi = xp.sin((xp.pi * self._wavelength * self.aberration_C1) * kra2)
-
-        if Wiener_filter:
-            SNR_inv = (
-                xp.sqrt(
-                    1 + (kra2**k_info_power) / ((k_info_limit) ** (2 * k_info_power))
-                )
-                / Wiener_signal_noise_ratio
-            )
-            CTF_corr = xp.sign(sin_chi) / (sin_chi**2 + SNR_inv)
-            if Wiener_filter_low_only:
-                # limit Wiener filter to only the part of the CTF before 1st maxima
-                k_thresh = 1 / xp.sqrt(
-                    2.0 * self._wavelength * xp.abs(self.aberration_C1)
-                )
-                k_mask = kra2 >= k_thresh**2
-                CTF_corr[k_mask] = xp.sign(sin_chi[k_mask])
-
-            # apply correction to mean reconstructed BF image
-            im_fft_corr = xp.fft.fft2(self._recon_BF_subpixel_aligned) * CTF_corr
-
-        else:
-            # CTF without tilt correction (beyond the parallax operator)
-            CTF_corr = xp.sign(sin_chi)
-            CTF_corr[0, 0] = 0
-
-            # apply correction to mean reconstructed BF image
-            im_fft_corr = xp.fft.fft2(self._recon_BF_subpixel_aligned) * CTF_corr
-            # if needed, add low pass filter output image
-            if k_info_limit is not None:
-                im_fft_corr /= 1 + (kra2**k_info_power) / (
-                    (k_info_limit) ** (2 * k_info_power)
-                )
-
-        # Output phase image
-        self._recon_phase_corrected_subpixel_aligned = xp.real(
-            xp.fft.ifft2(im_fft_corr)
-        )
-        self.recon_phase_corrected_subpixel_aligned = asnumpy(
-            self._recon_phase_corrected_subpixel_aligned
-        )
-
-        if self._device == "gpu":
-            xp._default_memory_pool.free_all_blocks()
-            xp.clear_memo()
-
-        # plotting
-        if plot_corrected_phase:
-            figsize = kwargs.pop("figsize", (6, 6))
-            cmap = kwargs.pop("cmap", "magma")
-
-            fig, ax = plt.subplots(figsize=figsize)
-
-            cropped_object = self._crop_padded_object(
-                self._recon_BF_subpixel_aligned, upsampled=True
-            )
-
-            extent = [
-                0,
-                self._scan_sampling[1]
-                / self._kde_upsample_factor
-                * cropped_object.shape[1],
-                self._scan_sampling[0]
-                / self._kde_upsample_factor
-                * cropped_object.shape[0],
-                0,
-            ]
-
-            ax.imshow(
-                cropped_object,
-                extent=extent,
-                cmap=cmap,
-                **kwargs,
-            )
-
-            ax.set_ylabel("x [A]")
-            ax.set_xlabel("y [A]")
-            ax.set_title("Parallax-Corrected Phase Image Subpixel Aligned")
 
     def depth_section(
         self,
@@ -1716,12 +1590,19 @@ class ParallaxReconstruction(PhaseReconstruction):
 
         asnumpy = self._asnumpy
 
-        pad_x = self._object_padding_px[0] // 2 - remaining_padding
-        pad_y = self._object_padding_px[1] // 2 - remaining_padding
-
         if upsampled:
-            pad_x *= self._kde_upsample_factor
-            pad_y *= self._kde_upsample_factor
+            pad_x = np.round(
+                self._object_padding_px[0] / 2 * self._kde_upsample_factor
+            ).astype("int")
+            pad_y = np.round(
+                self._object_padding_px[1] / 2 * self._kde_upsample_factor
+            ).astype("int")
+        else:
+            pad_x = self._object_padding_px[0] // 2
+            pad_y = self._object_padding_px[1] // 2
+
+        pad_x -= remaining_padding
+        pad_y -= remaining_padding
 
         return asnumpy(padded_object[pad_x:-pad_x, pad_y:-pad_y])
 
@@ -1730,6 +1611,7 @@ class ParallaxReconstruction(PhaseReconstruction):
         fig,
         ax,
         remaining_padding: int = 0,
+        upsampled: bool = False,
         **kwargs,
     ):
         """
@@ -1748,14 +1630,29 @@ class ParallaxReconstruction(PhaseReconstruction):
 
         cmap = kwargs.pop("cmap", "magma")
 
-        cropped_object = self._crop_padded_object(self._recon_BF, remaining_padding)
+        cropped_object = self._crop_padded_object(
+            self._recon_BF, remaining_padding, upsampled
+        )
 
-        extent = [
-            0,
-            self._scan_sampling[1] * cropped_object.shape[1],
-            self._scan_sampling[0] * cropped_object.shape[0],
-            0,
-        ]
+        if upsampled:
+            extent = [
+                0,
+                self._scan_sampling[1]
+                * cropped_object.shape[1]
+                / self._kde_upsample_factor,
+                self._scan_sampling[0]
+                * cropped_object.shape[0]
+                / self._kde_upsample_factor,
+                0,
+            ]
+
+        else:
+            extent = [
+                0,
+                self._scan_sampling[1] * cropped_object.shape[1],
+                self._scan_sampling[0] * cropped_object.shape[0],
+                0,
+            ]
 
         ax.imshow(
             cropped_object,
