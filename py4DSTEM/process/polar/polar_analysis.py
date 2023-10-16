@@ -227,6 +227,30 @@ def calculate_pair_dist_function(
     """
     Calculate the pair distribution function (PDF).
 
+    First a background is calculated using primarily the signal at the highest
+    scattering vectors available, given by a sum of two exponentials ~exp(-k^2)
+    and ~exp(-k^4) modelling the single atom scattering factor plus a constant
+    offset. Next, the structure factor is computed as
+
+        S(k) = (I(k) - bg(k)) * k / f(k)
+
+    where k is the magnitude of the scattering vector, I(k) is the mean radial
+    signal, f(k) is the single atom scattering factor, and bg(k) is the total
+    background signal (i.e. f(k) plus a constant offset). S(k) is masked outside
+    of the selected fitting region of k-values [k_min,k_max] and low/high pass
+    filters are optionally applied. The structure factor is then inverted into
+    the reduced pair distribution function g(r) using
+
+        g(r) = \frac{2}{\pi) \int sin( 2\pi r k ) S(k) dk
+
+    The value of the integral is (optionally) damped to zero at the origin to
+    match the physical requirement that this condition holds. Finally, the
+    full PDF G(r) is computed if a known dens is provided, using
+
+        G(r) = 1 + [ \frac{2}{\pi} * g(r) / ( 4\pi * D * r dr ) ]
+
+
+
     Parameters
     ----------
     k_min : number
@@ -244,6 +268,25 @@ def calculate_pair_dist_function(
         Lowpass filter, in units the scattering vector stepsize (i.e. self.qstep)
     k_highpass : number or None
         Highpass filter, in units the scattering vector stepsize (i.e. self.qstep)
+    r_min,r_max,r_step : numbers
+        Define the real space coordinates r that the PDF g(r) will be computed in.
+        The coordinates will be np.arange(r_min,r_max,r_step), given in units
+        inverse to the scattering vector units.
+    damp_origin_fluctuations : bool
+        The value of the PDF approaching the origin should be zero, however numerical
+        instability may result in non-physical finite values there. This flag toggles
+        damping the value of the PDF to zero near the origin.
+    dens : number or None
+        The dens of the sample, if known.  If this is not provided, only the
+        reduced PDF is calculated.  If this value is provided, the PDF is also
+        calculated.
+    plot_fits : bool
+    plot_sf_estimate : bool
+    plot_reduced_pdf=True : bool
+    plot_pdf : bool
+    figsize : 2-tuple
+    maxfev : integer or None
+        Max number of iterations to use when fitting the background
     """
 
     # set up coordinates and scaling
@@ -324,7 +367,7 @@ def calculate_pair_dist_function(
         Sk_lowpass = gaussian_filter(Sk, sigma=k_highpass / dk, mode="nearest")
         Sk -= Sk_lowpass
 
-    # Calculate the real space PDF
+    # Calculate the PDF
     r = np.arange(r_min, r_max, r_step)
     ra, ka = np.meshgrid(r, k)
     pdf_reduced = (
@@ -348,7 +391,7 @@ def calculate_pair_dist_function(
     self.pdf_r = r
     self.pdf_reduced = pdf_reduced
 
-    # if density is provided, we can estimate the full PDF
+    # if dens is provided, we can estimate the full PDF
     if dens is not None:
         pdf = pdf_reduced.copy()
         pdf[1:] /= 4 * np.pi * dens * r[1:] * (r[1] - r[0])
