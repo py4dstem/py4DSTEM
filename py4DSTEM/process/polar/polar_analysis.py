@@ -215,7 +215,7 @@ def calculate_pair_dist_function(
     r_min=0.0,
     r_max=20.0,
     r_step=0.02,
-    damp_origin_fluctuations=False,
+    damp_origin_fluctuations=True,
     density=None,
     plot_fits=False,
     plot_sf_estimate=False,
