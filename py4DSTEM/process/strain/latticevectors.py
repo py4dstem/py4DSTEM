@@ -116,10 +116,19 @@ def add_indices_to_braggvectors(
         shape=braggpeaks.Rshape,
     )
 
+    calstate = braggpeaks.calstate
+
     # loop over all the scan positions
     for Rx, Ry in tqdmnd(mask.shape[0], mask.shape[1]):
         if mask[Rx, Ry]:
-            pl = braggpeaks.cal[Rx, Ry]
+            pl = braggpeaks.get_vectors(
+                Rx,
+                Ry,
+                center=True,
+                ellipse=calstate["ellipse"],
+                rotate=calstate["rotate"],
+                pixel=False,
+            )
             for i in range(pl.data.shape[0]):
                 r2 = (pl.data["qx"][i] - lattice.data["qx"] + qx_shift) ** 2 + (
                     pl.data["qy"][i] - lattice.data["qy"] + qy_shift
@@ -377,6 +386,7 @@ def get_strain_from_reference_g1g2(g1g2_map, g1, g2):
                 Rx, Ry
             ]
     return strain_map
+
 
 def get_rotated_strain_map(unrotated_strain_map, xaxis_x, xaxis_y, flip_theta):
     """
