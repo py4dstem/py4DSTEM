@@ -3,7 +3,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
-from scipy.special import comb, erf
 from scipy.ndimage import gaussian_filter
 
 from emdfile import tqdmnd
