@@ -40,6 +40,7 @@ setup(
         "emdfile >= 0.0.13",
         "mpire >= 2.7.1",
         "threadpoolctl >= 3.1.0",
+        "ase >= 3.22.0",
     ],
     extras_require={
         "ipyparallel": ["ipyparallel >= 6.2.4", "dill >= 0.3.3"],
