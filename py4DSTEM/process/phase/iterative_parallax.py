@@ -177,6 +177,9 @@ class ParallaxReconstruction(PhaseReconstruction):
             require_calibrations=True,
         )
 
+        self._region_of_interest_shape = np.array(self._intensities.shape[-2:])
+        self._scan_shape = np.array(self._intensities.shape[:2])
+
         # make sure mean diffraction pattern is shaped correctly
         if (self._dp_mean.shape[0] != self._intensities.shape[2]) or (
             self._dp_mean.shape[1] != self._intensities.shape[3]
@@ -184,38 +187,48 @@ class ParallaxReconstruction(PhaseReconstruction):
             raise ValueError(
                 "dp_mean must match the datacube shape. Try setting dp_mean = None."
             )
+
         # descan correct
         if descan_correct:
-            from py4DSTEM.process.phase import DPCReconstruction
-
-            dpc = DPCReconstruction(
-                energy=self._energy,
-                datacube=self._datacube,
-                verbose=False,
-            ).preprocess(
-                force_com_rotation=0,
-                force_com_transpose=False,
-                plot_center_of_mass=False,
+            (
+                _,
+                _,
+                com_fitted_x,
+                com_fitted_y,
+                _,
+                _,
+            ) = self._calculate_intensities_center_of_mass(
+                self._intensities,
+                dp_mask=None,
+                fit_function="plane",
+                com_shifts=None,
+                com_measured=None,
             )
 
-            intensities_shifted = self._intensities.copy()
+            com_fitted_x = asnumpy(com_fitted_x)
+            com_fitted_y = asnumpy(com_fitted_y)
+            intensities = asnumpy(self._intensities)
+            intensities_shifted = np.zeros_like(intensities)
 
-            center_x = np.mean(dpc._com_fitted_x)
-            center_y = np.mean(dpc._com_fitted_y)
+            # center_x = np.mean(com_fitted_x)
+            # center_y = np.mean(com_fitted_y)
+
+            center_x, center_y = self._region_of_interest_shape / 2
+
             for rx in range(intensities_shifted.shape[0]):
                 for ry in range(intensities_shifted.shape[1]):
                     intensity_shifted = get_shifted_ar(
-                        self._intensities[rx, ry],
-                        -dpc._com_fitted_x[rx, ry] + center_x,
-                        -dpc._com_fitted_y[rx, ry] + center_y,
+                        intensities[rx, ry],
+                        -com_fitted_x[rx, ry] + center_x,
+                        -com_fitted_y[rx, ry] + center_y,
                         bilinear=True,
                         device="cpu",
                     )
 
                     intensities_shifted[rx, ry] = intensity_shifted
 
-            self._intensities = intensities_shifted
-            self._dp_mean = intensities_shifted.mean((0, 1))
+            self._intensities = xp.asarray(intensities_shifted, xp.float32)
+            self._dp_mean = self._intensities.mean((0, 1))
 
         # select virtual detector pixels
         self._dp_mask = self._dp_mean >= (xp.max(self._dp_mean) * threshold_intensity)
@@ -918,7 +931,7 @@ class ParallaxReconstruction(PhaseReconstruction):
 
     def subpixel_alignment(
         self,
-        kde_upsample_factor=4,
+        kde_upsample_factor=None,
         kde_sigma=0.125,
         plot_upsampled_BF_comparison: bool = True,
         plot_upsampled_FFT_comparison: bool = False,
@@ -947,8 +960,42 @@ class ParallaxReconstruction(PhaseReconstruction):
         xy_shifts = self._xy_shifts
         BF_size = np.array(self._stack_BF_no_window.shape[-2:])
 
+        self._DF_upsample_limit = np.max(
+            self._region_of_interest_shape / self._scan_shape
+        )
+        self._BF_upsample_limit = (
+            2 * self._kr.max() / self._reciprocal_sampling[0]
+        ) / self._scan_shape.max()
+        if self._device == "gpu":
+            self._BF_upsample_limit = self._BF_upsample_limit.item()
+
+        if kde_upsample_factor is None:
+            kde_upsample_factor = np.minimum(
+                self._BF_upsample_limit * 3 / 2, self._DF_upsample_limit
+            )
+
+            warnings.warn(
+                (
+                    f"Upsampling factor set to {kde_upsample_factor:.2f} (1.5 times the "
+                    f"bright-field upsampling limit of {self._BF_upsample_limit:.2f})."
+                ),
+                UserWarning,
+            )
+
+        if kde_upsample_factor < 1:
+            raise ValueError("kde_upsample_factor must be larger than 1")
+
+        if kde_upsample_factor > self._DF_upsample_limit:
+            warnings.warn(
+                (
+                    "Requested upsampling factor exceeds "
+                    f"dark-field upsampling limit of {self._DF_upsample_limit:.2f}."
+                ),
+                UserWarning,
+            )
+
         self._kde_upsample_factor = kde_upsample_factor
-        pixel_output = BF_size * self._kde_upsample_factor
+        pixel_output = np.round(BF_size * self._kde_upsample_factor).astype("int")
         pixel_size = pixel_output.prod()
 
         # shifted coordinates
@@ -1023,12 +1070,12 @@ class ParallaxReconstruction(PhaseReconstruction):
             cmap = kwargs.pop("cmap", "magma")
 
             cropped_object = self._crop_padded_object(self._recon_BF)
-            upsampled_pad_x = (
-                self._object_padding_px[0] * self._kde_upsample_factor // 2
-            )
-            upsampled_pad_y = (
-                self._object_padding_px[1] * self._kde_upsample_factor // 2
-            )
+            upsampled_pad_x = np.round(
+                self._object_padding_px[0] * self._kde_upsample_factor / 2
+            ).astype("int")
+            upsampled_pad_y = np.round(
+                self._object_padding_px[1] * self._kde_upsample_factor / 2
+            ).astype("int")
             cropped_object_aligned = self.recon_BF_subpixel_aligned[
                 upsampled_pad_x:-upsampled_pad_x,
                 upsampled_pad_y:-upsampled_pad_y,
@@ -1064,8 +1111,12 @@ class ParallaxReconstruction(PhaseReconstruction):
             if plot_upsampled_FFT_comparison:
                 recon_fft = xp.fft.fft2(self._recon_BF)
                 recon_fft = xp.fft.fftshift(xp.abs(xp.fft.fft2(self._recon_BF)))
-                pad_x = BF_size[0] * (self._kde_upsample_factor - 1) // 2
-                pad_y = BF_size[1] * (self._kde_upsample_factor - 1) // 2
+                pad_x = np.round(
+                    BF_size[0] * (self._kde_upsample_factor - 1) / 2
+                ).astype("int")
+                pad_y = np.round(
+                    BF_size[1] * (self._kde_upsample_factor - 1) / 2
+                ).astype("int")
                 pad_recon_fft = asnumpy(
                     xp.pad(recon_fft, ((pad_x, pad_x), (pad_y, pad_y)))
                 )
