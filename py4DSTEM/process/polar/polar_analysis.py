@@ -292,12 +292,10 @@ def calculate_pair_dist_function(
     coefs[3] *= int_mean
 
     # Calculate the mean atomic form factor without a constant offset
-    coefs_fk = (0.0, coefs[1], coefs[2], coefs[3], coefs[4])
-    fk = scattering_model(k2, coefs_fk)
+    #coefs_fk = (0.0, coefs[1], coefs[2], coefs[3], coefs[4])
+    #fk = scattering_model(k2, coefs_fk)
     bg = scattering_model(k2, coefs)
-    # @cophus:
-    # can we eliminate recalculating the model with a modified offset by
-    # just subtracting off the constant offset from bg ?
+    fk = bg - coefs[0]
 
     # mask for structure factor estimate
     if k_max is None:
@@ -322,7 +320,7 @@ def calculate_pair_dist_function(
     # Filtering of S(k)
     if k_lowpass is not None and k_lowpass > 0.0:
         Sk = gaussian_filter(Sk, sigma=k_lowpass / dk, mode="nearest")
-    if k_highpass is not None:
+    if k_highpass is not None and k_highpass > 0.0:
         Sk_lowpass = gaussian_filter(Sk, sigma=k_highpass / dk, mode="nearest")
         Sk -= Sk_lowpass
 
