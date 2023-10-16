@@ -140,7 +140,18 @@ def plot_radial_mean(
     returnfig=False,
 ):
     """
-    Plot radial mean
+    Plot the radial means.
+
+    Parameters
+    ----------
+    log_x : bool
+        Toggle log scaling of the x-axis
+    log_y : bool
+        Toggle log scaling of the y-axis
+    figsize : 2-tuple
+        Size of the output figure
+    returnfig : bool
+        Toggle returning the figure
     """
     fig, ax = plt.subplots(figsize=figsize)
     ax.plot(
@@ -170,7 +181,15 @@ def plot_radial_var_norm(
     returnfig=False,
 ):
     """
-    Plotting function for the global FEM.
+    Plot the radial variances.
+
+    Parameters
+    ----------
+    figsize : 2-tuple
+        Size of the output figure
+    returnfig : bool
+        Toggle returning the figure
+
     """
     fig, ax = plt.subplots(figsize=figsize)
     ax.plot(
