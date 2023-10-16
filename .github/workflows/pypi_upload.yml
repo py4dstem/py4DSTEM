@@ -1,6 +1,5 @@
 # Action to check the version of the package and upload it to PyPI
 # if the version is higher than the one on PyPI
-# Author: @quantumstud
 name: PyPI Upload
 
 on:
@@ -22,10 +21,15 @@ jobs:
           token: ${{ secrets.GH_ACTION_VERSION_UPDATE }}      
       - name: Get changed files
         id: changed-files-specific
-        uses: tj-actions/changed-files@v32
+        uses: tj-actions/changed-files@v39
         with:
           files: |
             py4DSTEM/version.py
+      - name: Debug version file change checker
+        run: |
+          echo "Checking variable..."
+          echo ${{ steps.changed-files-specific.outputs.any_changed }}
+          echo "Done"
       - name: Running if py4DSTEM/version.py file is not changed
         if: steps.changed-files-specific.outputs.any_changed == 'false'
         run: |
