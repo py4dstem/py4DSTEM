@@ -18,32 +18,36 @@ def calculate_radial_statistics(
     progress_bar=True,
 ):
     """
-    Calculate fluctuation electron microscopy (FEM) statistics, including radial mean,
-    variance, and normalized variance. This function uses the original FEM definitions,
-    where the signal is computed pattern-by-pattern.
-
-    TODO - finish docstrings, add median statistics.
+    Calculate the radial statistics used in fluctuation electron microscopy (FEM)
+    and as an initial step in radial distribution function (RDF) calculation.
+    The computed quantities are the radial mean, variance, and normalized variance.
+    Each signal is calculated using the original FEM definitions
+    [[TODO: add reference]], i.e. pattern-by-pattern.
 
     Parameters
     --------
-    self: PolarDatacube
-        Polar datacube used for measuring FEM properties.
+    plot_results_mean: bool
+        Toggles plotting the computed radial means
+    plot_results_var: bool
+        Toggles plotting the computed radial variances
+    figsize: 2-tuple
+        Size of output figures
+    returnval: bool
+        Toggles returning the answer. Answers are always stored internally.
+    returnfig: bool
+        Toggles returning figures
 
     Returns
     --------
     radial_avg: np.array
-        Average radial intensity
+        Optional - returned iff returnval is True. The average radial intensity.
     radial_var: np.array
-        Variance in the radial dimension
-
-
+        Optional - returned iff returnval is True. The radial variance.
+    fig_means: 2-tuple (fig,ax)
+        Optional - returned iff returnfig is True. Plot of the radial means.
+    fig_var: 2-tuple (fig,ax)
+        Optional - returned iff returnfig is True. Plot of the radial variances.
     """
-
-    # Get the dimensioned radial bins
-    self.scattering_vector = (
-        self.radial_bins * self.qstep * self.calibration.get_Q_pixel_size()
-    )
-    self.scattering_vector_units = self.calibration.get_Q_pixel_units()
 
     # init radial data arrays
     self.radial_all = np.zeros(
@@ -134,7 +138,7 @@ def plot_radial_mean(
     """
     fig, ax = plt.subplots(figsize=figsize)
     ax.plot(
-        self.scattering_vector,
+        self.qq,
         self.radial_mean,
     )
 
@@ -143,12 +147,12 @@ def plot_radial_mean(
     if log_y:
         ax.set_yscale("log")
 
-    ax.set_xlabel("Scattering Vector (" + self.scattering_vector_units + ")")
+    ax.set_xlabel("Scattering Vector (" + self.calibration.get_Q_pixel_units() + ")")
     ax.set_ylabel("Radial Mean")
-    if log_x and self.scattering_vector[0] == 0.0:
-        ax.set_xlim((self.scattering_vector[1], self.scattering_vector[-1]))
+    if log_x and self.qq[0] == 0.0:
+        ax.set_xlim((self.qq[1], self.qq[-1]))
     else:
-        ax.set_xlim((self.scattering_vector[0], self.scattering_vector[-1]))
+        ax.set_xlim((self.qq[0], self.qq[-1]))
 
     if returnfig:
         return fig, ax
@@ -164,13 +168,13 @@ def plot_radial_var_norm(
     """
     fig, ax = plt.subplots(figsize=figsize)
     ax.plot(
-        self.scattering_vector,
+        self.qq,
         self.radial_var_norm,
     )
 
-    ax.set_xlabel("Scattering Vector (" + self.scattering_vector_units + ")")
+    ax.set_xlabel("Scattering Vector (" + self.calibration.get_Q_pixel_units() + ")")
     ax.set_ylabel("Normalized Variance")
-    ax.set_xlim((self.scattering_vector[0], self.scattering_vector[-1]))
+    ax.set_xlim((self.qq[0], self.qq[-1]))
 
     if returnfig:
         return fig, ax
@@ -205,7 +209,7 @@ def calculate_pair_dist_function(
     """
 
     # init
-    k = self.scattering_vector
+    k = self.qq
     dk = k[1] - k[0]
     k2 = k**2
     Ik = self.radial_mean
@@ -325,7 +329,7 @@ def calculate_pair_dist_function(
     if plot_fits:
         fig, ax = plt.subplots(figsize=figsize)
         ax.plot(
-            self.scattering_vector,
+            self.qq,
             self.radial_mean,
             color="k",
         )
@@ -334,9 +338,9 @@ def calculate_pair_dist_function(
             bg,
             color="r",
         )
-        ax.set_xlabel("Scattering Vector (" + self.scattering_vector_units + ")")
+        ax.set_xlabel("Scattering Vector (" + self.calibration.get_Q_pixel_units() + ")")
         ax.set_ylabel("Radial Mean")
-        ax.set_xlim((self.scattering_vector[0], self.scattering_vector[-1]))
+        ax.set_xlim((self.qq[0], self.qq[-1]))
         # ax.set_ylim((0,2e-5))
         ax.set_xlabel("Scattering Vector [A^-1]")
         ax.set_ylabel("I(k) and Fit Estimates")
