@@ -230,15 +230,20 @@ def calculate_pair_dist_function(
     Parameters
     ----------
     k_min : number
-        minimum scattering vector to include in the calculation
+        Minimum scattering vector to include in the calculation
     k_max : number or None
-        maximum scattering vector to include in the calculation. Note that
-        this cutoff is *not* used when estimating the background and single
-        atom scattering factor, which is best estimated from high scattering
-        lengths.
+        Maximum scattering vector to include in the calculation. Note that
+        this cutoff is used when calculating the structure factor - however it
+        is *not* used when estimating the background / single atom scattering
+        factor, which is best estimated from high scattering lengths.
     k_width : number
-        xxx
-
+        The fitting window for the structure factor calculation [k_min,k_max]
+        includes a damped region at its edges, i.e. the signal is smoothly dampled
+        to zero in the regions [k_min, k_min+k_width] and [k_max-k_width,k_max]
+    k_lowpass : number or None
+        Lowpass filter, in units the scattering vector stepsize (i.e. self.qstep)
+    k_highpass : number or None
+        Highpass filter, in units the scattering vector stepsize (i.e. self.qstep)
     """
 
     # set up coordinates and scaling
@@ -290,6 +295,9 @@ def calculate_pair_dist_function(
     coefs_fk = (0.0, coefs[1], coefs[2], coefs[3], coefs[4])
     fk = scattering_model(k2, coefs_fk)
     bg = scattering_model(k2, coefs)
+    # @cophus:
+    # can we eliminate recalculating the model with a modified offset by
+    # just subtracting off the constant offset from bg ?
 
     # mask for structure factor estimate
     if k_max is None:
