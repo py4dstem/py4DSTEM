@@ -287,6 +287,11 @@ def calculate_pair_dist_function(
     figsize : 2-tuple
     maxfev : integer or None
         Max number of iterations to use when fitting the background
+    returnval: bool
+        Toggles returning the answer. Answers are always stored internally.
+    returnfig: bool
+        Toggles returning figures that have been plotted.  Only figures for
+        which `plot_*` is True are returned.
     """
 
     # set up coordinates and scaling
@@ -391,6 +396,11 @@ def calculate_pair_dist_function(
     self.pdf_r = r
     self.pdf_reduced = pdf_reduced
 
+    self.Sk = Sk
+    self.fk = fk
+    self.bg = bg
+    self.offset = coefs[0]
+
     # if density is provided, we can estimate the full PDF
     if density is not None:
         pdf = pdf_reduced.copy()
@@ -398,10 +408,26 @@ def calculate_pair_dist_function(
         pdf *= 2 / np.pi
         pdf += 1
 
+        # damp and clip values below zero
         if damp_origin_fluctuations:
             pdf *= r_mask
-
         pdf = np.maximum(pdf, 0.0)
+
+        # store results
+        self.pdf = pdf
+
+
+    # prepare answer
+    if density is None:
+        return_values = self.pdf_r, self.pdf_reduced
+    else:
+        return_values = self.pdf_r, self.pdf_reduced
+    if returnval:
+        ans = statistics if not returnfig else [statistics]
+    else:
+        ans = None if not returnfig else []
+
+
 
     # Plots
     if plot_fits:
