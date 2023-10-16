@@ -212,14 +212,10 @@ def calculate_pair_dist_function(
     k_width=0.25,
     k_lowpass=None,
     k_highpass=None,
-    # k_pad_max = 10.0,
     r_min=0.0,
     r_max=20.0,
     r_step=0.02,
     damp_origin_fluctuations=False,
-    # poly_background_order = 2,
-    # iterative_pdf_refine = True,
-    # num_iter = 10,
     dens=None,
     plot_fits=False,
     plot_sf_estimate=False,
@@ -231,9 +227,21 @@ def calculate_pair_dist_function(
     """
     Calculate the pair distribution function (PDF).
 
+    Parameters
+    ----------
+    k_min : number
+        minimum scattering vector to include in the calculation
+    k_max : number or None
+        maximum scattering vector to include in the calculation. Note that
+        this cutoff is *not* used when estimating the background and single
+        atom scattering factor, which is best estimated from high scattering
+        lengths.
+    k_width : number
+        xxx
+
     """
 
-    # init
+    # set up coordinates and scaling
     k = self.qq
     dk = k[1] - k[0]
     k2 = k**2
@@ -241,7 +249,7 @@ def calculate_pair_dist_function(
     int_mean = np.mean(Ik)
     sub_fit = k >= k_min
 
-    # initial coefs
+    # initial guesses for background coefs
     const_bg = np.min(self.radial_mean) / int_mean
     int0 = np.median(self.radial_mean) / int_mean - const_bg
     sigma0 = np.mean(k)
@@ -278,7 +286,7 @@ def calculate_pair_dist_function(
     coefs[1] *= int_mean
     coefs[3] *= int_mean
 
-    # Calculate the mean atomic form factor wthout any background
+    # Calculate the mean atomic form factor without a constant offset
     coefs_fk = (0.0, coefs[1], coefs[2], coefs[3], coefs[4])
     fk = scattering_model(k2, coefs_fk)
     bg = scattering_model(k2, coefs)
@@ -286,10 +294,6 @@ def calculate_pair_dist_function(
     # mask for structure factor estimate
     if k_max is None:
         k_max = np.max(k)
-    # mask = np.clip(np.minimum(
-    #     (k - k_min) / k_width,
-    #     (k_max - k) / k_width,
-    #     ),0,1)
     mask = np.clip(
         np.minimum(
             (k - 0.0) / k_width,
@@ -461,6 +465,21 @@ def calculate_FEM_local(
 
 
 def scattering_model(k2, *coefs):
+    """
+    The scattering model used to fit the PDF background. The fit
+    function is a constant plus two exponentials - one in k^2 and one
+    in k^4:
+
+        f(k; c,i0,s0,i1,s1) =
+            c + i0*exp(k^2/-2*s0^2)  + i1*exp(k^4/-2*s1^4)
+
+    Parameters
+    ----------
+    k2 : 1d array
+        the scattering vector squared
+    coefs : 5-tuple
+        Initial guesses at the parameters (c,i0,s0,i1,s1)
+    """
     coefs = np.squeeze(np.array(coefs))
 
     const_bg = coefs[0]
@@ -480,3 +499,4 @@ def scattering_model(k2, *coefs):
     # int1*np.exp(k2/(-2*sigma1**2))
 
     return int_model
+
