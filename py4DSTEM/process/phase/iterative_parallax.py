@@ -8,7 +8,7 @@ from typing import Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
-from emdfile import Custom, tqdmnd
+from emdfile import Array, Custom, Metadata, _read_metadata, tqdmnd
 from matplotlib.gridspec import GridSpec
 from py4DSTEM import DataCube
 from py4DSTEM.preprocess.utils import get_shifted_ar
@@ -75,6 +75,8 @@ class ParallaxReconstruction(PhaseReconstruction):
         else:
             raise ValueError(f"device must be either 'cpu' or 'gpu', not {device}")
 
+        self.set_save_defaults()
+
         # Data
         self._datacube = datacube
 
@@ -88,9 +90,68 @@ class ParallaxReconstruction(PhaseReconstruction):
     def to_h5(self, group):
         """
         Wraps datasets and metadata to write in emdfile classes,
-        notably ...
+        notably the (subpixel-)aligned BF.
         """
-        raise NotImplementedError()
+        # instantiation metadata
+        self.metadata = Metadata(
+            name="instantiation_metadata",
+            data={
+                "energy": self._energy,
+                "verbose": self._verbose,
+                "device": self._device,
+                "object_padding_px": self._object_padding_px,
+                "name": self.name,
+            },
+        )
+
+        # preprocessing metadata
+        self.metadata = Metadata(
+            name="preprocess_metadata",
+            data={
+                "scan_sampling": self._scan_sampling,
+                "wavelength": self._wavelength,
+            },
+        )
+
+        # reconstruction metadata
+        recon_metadata = {"reconstruction_error": float(self._recon_error)}
+
+        if hasattr(self, "aberration_C1"):
+            recon_metadata |= {
+                "aberration_rotation_QR": self.rotation_Q_to_R_rads,
+                "aberration_C1": self.aberration_C1,
+                "aberration_A1x": self.aberration_A1x,
+                "aberration_A1y": self.aberration_A1y,
+            }
+
+        if hasattr(self, "_kde_upsample_factor"):
+            recon_metadata |= {
+                "kde_upsample_factor": self._kde_upsample_factor,
+            }
+            self._subpixel_aligned_BF_emd = Array(
+                name="subpixel_aligned_BF",
+                data=self._asnumpy(self._recon_BF_subpixel_aligned),
+            )
+
+        self.metadata = Metadata(
+            name="reconstruction_metadata",
+            data=recon_metadata,
+        )
+
+        self._aligned_BF_emd = Array(
+            name="aligned_BF",
+            data=self._asnumpy(self._recon_BF),
+        )
+
+        # datacube
+        if self._save_datacube:
+            self.metadata = self._datacube.calibration
+            Custom.to_h5(self, group)
+        else:
+            dc = self._datacube
+            self._datacube = None
+            Custom.to_h5(self, group)
+            self._datacube = dc
 
     @classmethod
     def _get_constructor_args(cls, group):
@@ -98,14 +159,67 @@ class ParallaxReconstruction(PhaseReconstruction):
         Returns a dictionary of arguments/values to pass
         to the class' __init__ function
         """
-        raise NotImplementedError()
+        # Get data
+        dict_data = cls._get_emd_attr_data(cls, group)
+
+        # Get metadata dictionaries
+        instance_md = _read_metadata(group, "instantiation_metadata")
+
+        # Fix calibrations bug
+        if "_datacube" in dict_data:
+            calibrations_dict = _read_metadata(group, "calibration")._params
+            cal = Calibration()
+            cal._params.update(calibrations_dict)
+            dc = dict_data["_datacube"]
+            dc.calibration = cal
+        else:
+            dc = None
+
+        # Populate args and return
+        kwargs = {
+            "datacube": dc,
+            "energy": instance_md["energy"],
+            "verbose": instance_md["verbose"],
+            "device": instance_md["device"],
+            "object_padding_px": instance_md["object_padding_px"],
+            "name": instance_md["name"],
+        }
+
+        return kwargs
 
     def _populate_instance(self, group):
         """
         Sets post-initialization properties, notably some preprocessing meta
         optional; during read, this method is run after object instantiation.
         """
-        raise NotImplementedError()
+
+        xp = self._xp
+
+        # Preprocess metadata
+        preprocess_md = _read_metadata(group, "preprocess_metadata")
+        self._scan_sampling = preprocess_md["scan_sampling"]
+        self._wavelength = preprocess_md["wavelength"]
+
+        # Reconstruction metadata
+        reconstruction_md = _read_metadata(group, "reconstruction_metadata")
+        self._recon_error = reconstruction_md["reconstruction_error"]
+
+        # Data
+        dict_data = Custom._get_emd_attr_data(Custom, group)
+
+        if "aberration_C1" in reconstruction_md.keys:
+            self.rotation_Q_to_R_rads = reconstruction_md["aberration_rotation_QR"]
+            self.aberration_C1 = reconstruction_md["aberration_C1"]
+            self.aberration_A1x = reconstruction_md["aberration_A1x"]
+            self.aberration_A1y = reconstruction_md["aberration_A1y"]
+
+        if "kde_upsample_factor" in reconstruction_md.keys:
+            self._kde_upsample_factor = reconstruction_md["kde_upsample_factor"]
+            self._recon_BF_subpixel_aligned = xp.asarray(
+                dict_data["_subpixel_aligned_BF_emd"].data, dtype=xp.float32
+            )
+
+        self._recon_BF = xp.asarray(dict_data["_aligned_BF_emd"].data, dtype=xp.float32)
 
     def preprocess(
         self,
@@ -1630,11 +1744,11 @@ class ParallaxReconstruction(PhaseReconstruction):
 
         cmap = kwargs.pop("cmap", "magma")
 
-        cropped_object = self._crop_padded_object(
-            self._recon_BF, remaining_padding, upsampled
-        )
-
         if upsampled:
+            cropped_object = self._crop_padded_object(
+                self._recon_BF_subpixel_aligned, remaining_padding, upsampled
+            )
+
             extent = [
                 0,
                 self._scan_sampling[1]
@@ -1647,6 +1761,8 @@ class ParallaxReconstruction(PhaseReconstruction):
             ]
 
         else:
+            cropped_object = self._crop_padded_object(self._recon_BF, remaining_padding)
+
             extent = [
                 0,
                 self._scan_sampling[1] * cropped_object.shape[1],
