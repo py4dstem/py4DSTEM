@@ -154,6 +154,9 @@ class Crystal:
         # Calculate lattice parameters
         self.calculate_lattice()
 
+        # Set occupancy attribute to None
+        self.occupancy = None
+    
     def calculate_lattice(self):
         if not hasattr(self, "lat_real"):
             # calculate unit cell lattice vectors
@@ -417,11 +420,27 @@ class Crystal:
             atoms (ase.Atoms): an ASE atoms object
 
         """
-        return Crystal(
+
+        xtal = Crystal(
             positions=atoms.get_scaled_positions(),  # fractional coords
             numbers=atoms.numbers,
             cell=atoms.cell.array,
         )
+        
+        # get occupancies
+        # ASE seems to have different ways of storing occupancies 
+        # if ASE object created from prismatic file
+        if 'occupancies' in atoms.arrays.keys():
+            # np.array with length number of atoms
+            xtal.occupancy = atoms.arrays['occupancies'] 
+            # if created from cif file
+        elif 'occupancy' in atoms.info.keys():
+            # python dict with occupancy per site 
+            xtal.occupancy = atoms.info['occupancy']
+        # TODO add in elif statement if other ways appear
+        else:
+            print(Warning("Could not find occupancies of crystal")) 
+        return xtal
 
     def from_prismatic(filepath):
         """
@@ -440,11 +459,25 @@ class Crystal:
 
         atoms = read(filepath, format="prismatic")
 
-        return Crystal(
+        #create the crystal object
+        xtal = Crystal(
             positions=atoms.get_scaled_positions(),  # fractional coords
             numbers=atoms.numbers,
             cell=atoms.cell.array,
         )
+        # add occupancies
+        # It should be this one but keeping other method in case
+        if 'occupancies' in atoms.arrays.keys():
+            # np.array with length number of atoms
+            xtal.occupancy = atoms.arrays['occupancies'] 
+            # if created from cif file
+        elif 'occupancy' in atoms.info.keys():
+            # python dict with occupancy per site 
+            xtal.occupancy = atoms.info['occupancy']
+        # TODO add in elif statement if other ways appear
+        else:
+            print(Warning("Could not find occupancies of crystal")) 
+        return xtal
 
     # def from_generic_file(filepath, **kwargs):
     #     """
