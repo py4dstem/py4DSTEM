@@ -25,11 +25,10 @@ warnings.simplefilter(action="always", category=UserWarning)
 class StrainMap(RealSlice, Data):
     """
     Storage and processing methods for 4D-STEM datasets.
-    
+
     """
 
     def __init__(self, braggvectors: BraggVectors, name: Optional[str] = "strainmap"):
-        
         """
         Accepts:
             braggvectors (BraggVectors): BraggVectors for Strain Map
@@ -95,7 +94,7 @@ class StrainMap(RealSlice, Data):
         ), f".braggvectors must be BraggVectors, not type {type(x)}"
         assert (
             x.calibration.origin is not None
-        ), f"braggvectors must have a calibrated origin"
+        ), "braggvectors must have a calibrated origin"
         self._braggvectors = x
         self._braggvectors.tree(self, force=True)
 
