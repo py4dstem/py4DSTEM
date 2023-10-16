@@ -216,7 +216,7 @@ def calculate_pair_dist_function(
     r_max=20.0,
     r_step=0.02,
     damp_origin_fluctuations=False,
-    dens=None,
+    density=None,
     plot_fits=False,
     plot_sf_estimate=False,
     plot_reduced_pdf=True,
@@ -245,7 +245,7 @@ def calculate_pair_dist_function(
 
     The value of the integral is (optionally) damped to zero at the origin to
     match the physical requirement that this condition holds. Finally, the
-    full PDF G(r) is computed if a known dens is provided, using
+    full PDF G(r) is computed if a known density is provided, using
 
         G(r) = 1 + [ \frac{2}{\pi} * g(r) / ( 4\pi * D * r dr ) ]
 
@@ -276,8 +276,8 @@ def calculate_pair_dist_function(
         The value of the PDF approaching the origin should be zero, however numerical
         instability may result in non-physical finite values there. This flag toggles
         damping the value of the PDF to zero near the origin.
-    dens : number or None
-        The dens of the sample, if known.  If this is not provided, only the
+    density : number or None
+        The density of the sample, if known.  If this is not provided, only the
         reduced PDF is calculated.  If this value is provided, the PDF is also
         calculated.
     plot_fits : bool
@@ -391,10 +391,10 @@ def calculate_pair_dist_function(
     self.pdf_r = r
     self.pdf_reduced = pdf_reduced
 
-    # if dens is provided, we can estimate the full PDF
-    if dens is not None:
+    # if density is provided, we can estimate the full PDF
+    if density is not None:
         pdf = pdf_reduced.copy()
-        pdf[1:] /= 4 * np.pi * dens * r[1:] * (r[1] - r[0])
+        pdf[1:] /= 4 * np.pi * density * r[1:] * (r[1] - r[0])
         pdf *= 2 / np.pi
         pdf += 1
 
