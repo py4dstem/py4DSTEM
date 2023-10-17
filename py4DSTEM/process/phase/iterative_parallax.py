@@ -18,6 +18,8 @@ from py4DSTEM.process.utils.utils import electron_wavelength_angstrom
 from py4DSTEM.visualize import show
 from scipy.linalg import polar
 from scipy.special import comb
+from scipy.optimize import curve_fit
+from scipy.signal import medfilt2d
 
 try:
     import cupy as cp
@@ -1269,6 +1271,10 @@ class ParallaxReconstruction(PhaseReconstruction):
         self,
         fit_thon_rings = True,
         fit_upsampled_fft = True,
+        aber_order_max = 2,
+        q_power_fit = 0.0,
+        medfilt_size = None,
+        maxfev = None,
         plot_CTF_compare: bool = False,
         # plot_dk: float = 0.005,
         # plot_k_sigma: float = 0.02,
@@ -1287,10 +1293,14 @@ class ParallaxReconstruction(PhaseReconstruction):
         fit_upsampled_fft: bool
             If True, we aberration fit is performed on the upsampled BF image.
             This option does nothing if fit_thon_rings is not True.
+        aber_order_max: int
+            Max radial order for fitting of aberrations.
+        q_power_fit: float
+            q power fitting weight.
         plot_dk: float, optional
-            Reciprocal bin-size for polar-averaged FFT
+            Reciprocal bin-size for polar-averaged FFT.
         plot_k_sigma: float, optional
-            sigma to gaussian blur polar-averaged FFT by
+            sigma to gaussian blur polar-averaged FFT by.
 
 
         """
@@ -1335,7 +1345,6 @@ class ParallaxReconstruction(PhaseReconstruction):
                 im_fft = np.abs(xp.fft.fft2(self._recon_BF_subpixel_aligned))
 
                 # coordinates
-                print(self._kde_upsample_factor)
                 q_pixel_size = np.array(self._reciprocal_sampling) \
                     / self._kde_upsample_factor
             else:
@@ -1347,22 +1356,130 @@ class ParallaxReconstruction(PhaseReconstruction):
             
 
             # FFT coordinates
-            qx = fft
+            qx = np.fft.fftfreq(im_fft.shape[0],q_pixel_size[0])
+            qy = np.fft.fftfreq(im_fft.shape[1],q_pixel_size[1])
+            qr2 = qx[:,None]**2 + qy[None,:]**2
+            self.alpha2 = qr2 * self._wavelength**2
+            self.theta = np.arctan2(qy[None,:],qx[:,None])
 
             # weights for fits
+            self.q_weight = qr2 ** (q_power_fit/2)
 
-            # #zero origin pixel
-            # im_fft[0,0] = 0
+            # Aberration coefs
+            mn = []
+            for m in range(0,aber_order_max//2+1):
+                n_max = np.floor(aber_order_max-2*m).astype('int')
 
+                for n in range(0,n_max+1):
+                    if m + n > 1 or (m > 0 and n == 0):
+                        if n == 0:
+                            mn.append([m,n,0])
+                        else:
+                            mn.append([m,n,0])
+                            mn.append([m,n,1])
+            self.aber_mn = np.array(mn)
 
-            print(im_fft.shape)
+            # Aberration basis
+            self.aber_num = self.aber_mn.shape[0]
+            self.aber_basis = np.zeros((self.alpha2.size,self.aber_num))
+            # self.aber_basis[:,0] = self.alpha2.ravel()
+            for a0 in range(self.aber_num):
+                if self.aber_mn[a0,1] == 0:
+                    # Radially symmetric basis
+                    self.aber_basis[:,a0] = self.alpha2.ravel()**self.aber_mn[a0,0]
+                elif self.aber_mn[a0,2] == 0:
+                    # cos coef
+                    self.aber_basis[:,a0] = \
+                        self.alpha2.ravel()**(self.aber_mn[a0,0] + self.aber_mn[a0,1]/2.0) * \
+                        np.cos(self.aber_mn[a0,1] * self.theta.ravel())
+                else:
+                    # sin coef
+                    self.aber_basis[:,a0] = \
+                        self.alpha2.ravel()**(self.aber_mn[a0,0] + self.aber_mn[a0,1]/2.0) * \
+                        np.sin(self.aber_mn[a0,1] * self.theta.ravel())
 
-            fig,ax = plt.subplots(figsize=(6,6))
-            ax.imshow(
-                np.fft.fftshift(im_fft)**0.5,
+            # fitting image
+            im_fit = im_fft * self.q_weight
+            if medfilt_size is not None:
+                im_fit = np.fft.ifftshift(medfilt2d(
+                    np.fft.fftshift(im_fit), 
+                    medfilt_size))
+
+            # initial coefs
+            int_max = np.max(im_fit)
+            sigma_init = np.sqrt(np.max(self.alpha2) / 8.0) 
+            coefs = np.zeros(5 + self.aber_num)
+            lb = np.zeros(5 + self.aber_num)
+            ub = np.ones(5 + self.aber_num) * np.inf
+            coefs[0] = 1e-3
+            coefs[1] = int_max * 0.1
+            coefs[2] = sigma_init
+            coefs[3] = int_max * 0.9
+            coefs[4] = sigma_init
+            lb[5:] = -np.inf
+            # initial C1 value (defocus)
+            ind = np.argmin(
+                np.abs(self.aber_mn[:,0] - 1.0) + np.abs(self.aber_mn[:,1])
+            )
+            C1_dimensionless = self.aberration_C1 / np.pi * self._wavelength
+            coefs[ind + 5] = C1_dimensionless
+
+            # Fitting mask
+            fit_mask = self.alpha2 > np.sqrt(np.pi/2/np.abs(C1_dimensionless))
+            basis_masked = self.aber_basis[fit_mask.ravel(),:]
+
+            # Define fitting functions
+
+            def calc_CTF_mag(alpha2, *coefs):
+                int0 = coefs[0]
+                int1 = coefs[1]
+                sigma1 = coefs[2]
+                int_env = coefs[3]
+                sigma_env = coefs[4]
+
+                im_CTF_mag = int0 + int1 * np.exp(alpha2/(-2.0*sigma1**2))
+                env = int_env * np.exp(alpha2/(-2.0*sigma_env**2))
+                chi = np.zeros_like(im_CTF_mag)
+                for a0 in range(5,len(coefs)):
+                    chi += coefs[a0] * self.aber_basis[:,a0-5]
+                return im_CTF_mag + np.abs(np.sin(chi)) * env
+
+            def calc_CTF_mag_masked(alpha2, *coefs):
+                int0 = coefs[0]
+                int1 = coefs[1]
+                sigma1 = coefs[2]
+                int_env = coefs[3]
+                sigma_env = coefs[4]
+
+                im_CTF_mag = int0 + int1 * np.exp(alpha2/(-2.0*sigma1**2))
+                env = int_env * np.exp(alpha2/(-2.0*sigma_env**2))
+                chi = np.zeros_like(im_CTF_mag)
+                for a0 in range(5,len(coefs)):
+                    chi += coefs[a0] * basis_masked[:,a0-5]
+                return im_CTF_mag + np.abs(np.sin(chi)) * env
+
+            # Refine aberration coefficients
+            if maxfev is None:
+                coefs = np.array(
+                    curve_fit(
+                        calc_CTF_mag_masked, 
+                        self.alpha2[fit_mask], 
+                        im_fit[fit_mask], 
+                        p0 = tuple(coefs), 
+                        bounds = (lb,ub),
+                    )[0]
                 )
-
-
+            else:
+                coefs = np.array(
+                    curve_fit(
+                        calc_CTF_mag_masked, 
+                        self.alpha2[fit_mask], 
+                        im_fit[fit_mask], 
+                        p0 = tuple(coefs), 
+                        bounds = (lb,ub),
+                        maxfev = maxfev,
+                    )[0]
+                )
 
         # Print results
         if self._verbose:
@@ -1382,8 +1499,33 @@ class ParallaxReconstruction(PhaseReconstruction):
             print(f"Aberration C1          =  {self.aberration_C1:.0f} Ang")
             print(f"Defocus dF             = {-1*self.aberration_C1:.0f} Ang")
 
-        # # Plot the CTF comparison between experiment and fit
-        # if plot_CTF_compare:
+        # Plot the CTF comparison between experiment and fit
+        if plot_CTF_compare:
+            im_test = np.reshape(calc_CTF_mag(self.alpha2.ravel(), *coefs), im_fit.shape)
+
+            fig,ax = plt.subplots(figsize=(12,6))
+            ax.imshow(
+                np.hstack((
+                    np.fft.fftshift(im_fit),
+                    np.fft.fftshift(im_test),
+                )),
+                vmin = np.min(im_test[fit_mask]),
+                vmax = np.max(im_test[fit_mask]),
+                cmap = 'gray',                
+            )
+
+            # ax.imshow(
+            #     im_plot / np.max(im_plot),
+            #     vmin = 0,
+            #     vmax = 1,
+            #     cmap = 'gray',
+            #     )
+            # ax.imshow( \
+            #     np.fft.fftshift(
+            #         np.mod(np.reshape(self.aber_basis[:,2],im_fft.shape)+np.pi,2*np.pi)-np.pi
+            #     ))
+
+
         #     # Get polar mean from FFT of BF reconstruction
         #     im_fft = xp.abs(xp.fft.fft2(self._recon_BF))
 
