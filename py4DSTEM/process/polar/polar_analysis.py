@@ -38,6 +38,8 @@ def calculate_radial_statistics(
 
     and the normalized variance is d_var/d_mean.
 
+    This follows the methods described in [@cophus TODO ADD CITATION].
+
 
     Parameters
     --------
@@ -251,6 +253,7 @@ def calculate_pair_dist_function(
 
         G(r) = 1 + [ \frac{2}{\pi} * g(r) / ( 4\pi * D * r dr ) ]
 
+    This follows the methods described in [@cophus TODO ADD CITATION].
 
 
     Parameters
