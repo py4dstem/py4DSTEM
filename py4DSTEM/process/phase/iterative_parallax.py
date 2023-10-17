@@ -1335,77 +1335,85 @@ class ParallaxReconstruction(PhaseReconstruction):
 
 
         ### FFT fitting / plotting code ###
+        if fit_CTF_FFT or plot_CTF_compare:
+            if fit_upsampled_FFT:
+                # Get mean FFT of BF reconstruction
+                im_FFT = np.abs(xp.fft.fft2(self._recon_BF_subpixel_aligned))
 
-        if fit_upsampled_FFT:
-            # Get mean FFT of BF reconstruction
-            im_FFT = np.abs(xp.fft.fft2(self._recon_BF_subpixel_aligned))
-
-            # coordinates
-            q_pixel_size = np.array(self._reciprocal_sampling) \
-                / self._kde_upsample_factor
-        else:
-            # Get mean FFT of upsampled BF reconstruction
-            im_FFT = np.abs(xp.fft.fft2(self._recon_BF))
-
-            # coordinates
-            q_pixel_size = np.array(parallax_recon._reciprocal_sampling)
-
-        # FFT coordinates
-        qx = np.fft.fftfreq(im_FFT.shape[0],1/im_FFT.shape[0]/q_pixel_size[0])
-        qy = np.fft.fftfreq(im_FFT.shape[1],1/im_FFT.shape[1]/q_pixel_size[1])
-        qr2 = qx[:,None]**2 + qy[None,:]**2
-        self.alpha = np.sqrt(qr2) * self._wavelength
-        self.theta = np.arctan2(qy[None,:],qx[:,None])
-
-        # Aberration coefs
-        mn = []
-        for m in range(0,fit_aber_order_max//2+1):
-            n_max = np.floor(fit_aber_order_max-2*m).astype('int')
-
-            for n in range(0,n_max+1):
-                if m + n > 1 or (m > 0 and n == 0):
-                    if n == 0:
-                        mn.append([m,n,0])
-                    else:
-                        mn.append([m,n,0])
-                        mn.append([m,n,1])
-        self.aber_mn = np.array(mn)
-
-        # Aberration basis
-        self.aber_num = self.aber_mn.shape[0]
-        self.aber_basis = np.zeros((self.alpha.size,self.aber_num))
-        for a0 in range(self.aber_num):
-            if self.aber_mn[a0,1] == 0:
-                # Radially symmetric basis
-                self.aber_basis[:,a0] = self.alpha.ravel()**(2*self.aber_mn[a0,0])
-            elif self.aber_mn[a0,2] == 0:
-                # cos coef
-                self.aber_basis[:,a0] = \
-                    self.alpha.ravel()**(2.0*self.aber_mn[a0,0] + self.aber_mn[a0,1]) * \
-                    np.cos(self.aber_mn[a0,1] * self.theta.ravel())
+                # coordinates
+                q_pixel_size = np.array(self._reciprocal_sampling) \
+                    / self._kde_upsample_factor
             else:
-                # sin coef
-                self.aber_basis[:,a0] = \
-                    self.alpha.ravel()**(2.0*self.aber_mn[a0,0] + self.aber_mn[a0,1]) * \
-                    np.sin(self.aber_mn[a0,1] * self.theta.ravel())
+                # Get mean FFT of upsampled BF reconstruction
+                im_FFT = np.abs(xp.fft.fft2(self._recon_BF))
 
-        # CTF function
-        def calc_CTF(alpha, *coefs):
-            chi = np.zeros_like(alpha.ravel())
-            for a0 in range(len(coefs)):
-                chi += coefs[a0] * self.aber_basis[:,a0]
-            return np.reshape(chi, alpha.shape)
+                # coordinates
+                q_pixel_size = np.array(parallax_recon._reciprocal_sampling)
 
-        # initial coefficients and plotting intensity range mask
-        C10_dimensionless = self.aberration_C1 * np.pi / 4 / self._wavelength
-        coefs = np.zeros(self.aber_num)
-        ind = np.argmin(
-            np.abs(self.aber_mn[:,0] - 1.0) + np.abs(self.aber_mn[:,1])
-        )
-        coefs[ind] = C10_dimensionless
-        plot_mask = self.alpha > np.sqrt(np.pi/2/np.abs(C10_dimensionless))
-        # plot_mask[:] = True
-        angular_mask = np.cos(8.0 * np.arctan2(qy[:,None],qx[None,:]))**2 < 0.25
+            # FFT coordinates
+            qx = np.fft.fftfreq(im_FFT.shape[0],1/im_FFT.shape[0]/q_pixel_size[0])
+            qy = np.fft.fftfreq(im_FFT.shape[1],1/im_FFT.shape[1]/q_pixel_size[1])
+            qr2 = qx[:,None]**2 + qy[None,:]**2
+            self.alpha = np.sqrt(qr2) * self._wavelength
+            self.theta = np.arctan2(qy[None,:],qx[:,None])
+
+            # Aberration coefs
+            mn = []
+            for m in range(0,fit_aber_order_max//2+1):
+                n_max = np.floor(fit_aber_order_max-2*m).astype('int')
+
+                for n in range(0,n_max+1):
+                    if m + n > 1 or (m > 0 and n == 0):
+                        if n == 0:
+                            mn.append([m,n,0])
+                        else:
+                            mn.append([m,n,0])
+                            mn.append([m,n,1])
+            self.aber_mn = np.array(mn)
+            self.aber_mn = self.aber_mn[np.argsort(self.aber_mn[:,1]),:]
+            # self.aber_mn = self.aber_mn[np.lexsort((
+            #     self.aber_mn[:,0], 
+            #     self.aber_mn[:,2],
+            #     self.aber_mn[:,1], 
+            # ))]
+            sub = self.aber_mn[:,1] > 0
+            self.aber_mn[sub,:] = self.aber_mn[sub,:][np.argsort(self.aber_mn[sub,0]),:]
+
+            # Aberration basis
+            self.aber_num = self.aber_mn.shape[0]
+            self.aber_basis = np.zeros((self.alpha.size,self.aber_num))
+            for a0 in range(self.aber_num):
+                if self.aber_mn[a0,1] == 0:
+                    # Radially symmetric basis
+                    self.aber_basis[:,a0] = self.alpha.ravel()**(2*self.aber_mn[a0,0])
+                elif self.aber_mn[a0,2] == 0:
+                    # cos coef
+                    self.aber_basis[:,a0] = \
+                        self.alpha.ravel()**(2.0*self.aber_mn[a0,0] + self.aber_mn[a0,1]) * \
+                        np.cos(self.aber_mn[a0,1] * self.theta.ravel())
+                else:
+                    # sin coef
+                    self.aber_basis[:,a0] = \
+                        self.alpha.ravel()**(2.0*self.aber_mn[a0,0] + self.aber_mn[a0,1]) * \
+                        np.sin(self.aber_mn[a0,1] * self.theta.ravel())
+
+            # CTF function
+            def calc_CTF(alpha, *coefs):
+                chi = np.zeros_like(alpha.ravel())
+                for a0 in range(len(coefs)):
+                    chi += coefs[a0] * self.aber_basis[:,a0]
+                return np.reshape(chi, alpha.shape)
+
+            # initial coefficients and plotting intensity range mask
+            C10_dimensionless = self.aberration_C1 * np.pi / 4 / self._wavelength
+            coefs = np.zeros(self.aber_num)
+            ind = np.argmin(
+                np.abs(self.aber_mn[:,0] - 1.0) + np.abs(self.aber_mn[:,1])
+            )
+            coefs[ind] = C10_dimensionless
+            plot_mask = self.alpha > np.sqrt(np.pi/2/np.abs(C10_dimensionless))
+            # plot_mask[:] = True
+            angular_mask = np.cos(8.0 * np.arctan2(qy[:,None],qx[None,:]))**2 < 0.25
 
         # Refinement using CTF fitting / Thon rings
         if fit_CTF_FFT:
@@ -1422,142 +1430,36 @@ class ParallaxReconstruction(PhaseReconstruction):
                 else:
                     return np.inf
 
-            for max_num_rings in range(1,fit_max_num_rings+1):
-                # minimization
-                res = minimize(
-                    score_CTF, 
-                    coefs, 
-                    # method = 'Nelder-Mead', 
-                    # method = 'CG',
-                    method = 'BFGS',
-                    tol = 1e-8,
-                )
-                coefs = res.x
-
-            # basis = np.vstack((
-            #     self.alpha.ravel(),
-            #     im_FFT.ravel()
-            # ))
-            # print(basis.shape)
-            # score = score_CTF(self.alpha,coefs*1)
-            # print(score)
-
-
-            # im_CTF = calc_CTF(self.alpha,*coefs)
-            # im_CTF[np.abs(im_CTF) > (fit_max_num_rings+0.5)*np.pi] = np.pi/2;
-            # im_CTF = np.sin(im_CTF)**2 < fit_CTF_threshold
-            
-
-
-
-
-            # fitting image
-            # im_fit = im_fft * self.q_weight
-            # if medfilt_size is not None:
-                # im_fit = np.fft.ifftshift(medfilt2d(
-                #     np.fft.fftshift(im_fit), 
-                #     medfilt_size))
-
-            # # initial coefs
-            # int_max = np.max(im_fit)
-            # sigma_init = np.sqrt(np.max(self.alpha2) / 8.0) 
-            # coefs = np.zeros(5 + self.aber_num)
-            # lb = np.zeros(5 + self.aber_num)
-            # ub = np.ones(5 + self.aber_num) * np.inf
-            # coefs[0] = 1e-3
-            # coefs[1] = int_max * 0.1
-            # coefs[2] = sigma_init
-            # coefs[3] = int_max * 0.9
-            # coefs[4] = sigma_init
-            # lb[5:] = -np.inf
-            # # initial C1 value (defocus)
-            # ind = np.argmin(
-            #     np.abs(self.aber_mn[:,0] - 1.0) + np.abs(self.aber_mn[:,1])
-            # )
-            # C1_dimensionless = self.aberration_C1 / np.pi * self._wavelength
-            # coefs[ind + 5] = C1_dimensionless
-
-            # Fitting mask
-            # fit_mask = self.alpha2 > np.sqrt(np.pi/2/np.abs(C1_dimensionless))
-            # basis_masked = self.aber_basis[fit_mask.ravel(),:]
-
-            # Define fitting functions
-
-            # def calc_CTF_mag(alpha2, *coefs):
-            #     int0 = coefs[0]
-            #     int1 = coefs[1]
-            #     sigma1 = coefs[2]
-            #     int_env = coefs[3]
-            #     sigma_env = coefs[4]
-
-            #     im_CTF_mag = int0 + int1 * np.exp(alpha2/(-2.0*sigma1**2))
-            #     env = int_env * np.exp(alpha2/(-2.0*sigma_env**2))
-            #     chi = np.zeros_like(im_CTF_mag)
-            #     for a0 in range(5,len(coefs)):
-            #         chi += coefs[a0] * self.aber_basis[:,a0-5]
-            #     return im_CTF_mag + np.abs(np.sin(chi)) * env
-
-            # def calc_CTF_mag_masked(alpha2, *coefs):
-            #     int0 = coefs[0]
-            #     int1 = coefs[1]
-            #     sigma1 = coefs[2]
-            #     int_env = coefs[3]
-            #     sigma_env = coefs[4]
-
-            #     im_CTF_mag = int0 + int1 * np.exp(alpha2/(-2.0*sigma1**2))
-            #     env = int_env * np.exp(alpha2/(-2.0*sigma_env**2))
-            #     chi = np.zeros_like(im_CTF_mag)
-            #     for a0 in range(5,len(coefs)):
-            #         chi += coefs[a0] * basis_masked[:,a0-5]
-            #     return im_CTF_mag + np.abs(np.sin(chi)) * env
-
-            # # Refine aberration coefficients
-            # if maxfev is None:
-            #     coefs = np.array(
-            #         curve_fit(
-            #             calc_CTF_mag_masked, 
-            #             self.alpha2[fit_mask], 
-            #             im_fit[fit_mask], 
-            #             p0 = tuple(coefs), 
-            #             bounds = (lb,ub),
-            #         )[0]
+            # for max_num_rings in range(1,fit_max_num_rings+1):
+            #     # minimization
+            #     res = minimize(
+            #         score_CTF, 
+            #         coefs, 
+            #         # method = 'Nelder-Mead', 
+            #         # method = 'CG',
+            #         method = 'BFGS',
+            #         tol = 1e-8,
             #     )
-            # else:
-            #     coefs = np.array(
-            #         curve_fit(
-            #             calc_CTF_mag_masked, 
-            #             self.alpha2[fit_mask], 
-            #             im_fit[fit_mask], 
-            #             p0 = tuple(coefs), 
-            #             bounds = (lb,ub),
-            #             maxfev = maxfev,
-            #         )[0]
-            #     )
+            #     coefs = res.x
 
         # Plot the CTF comparison between experiment and fit
         if plot_CTF_compare:
             # Generate FFT plotting image
             im_scale = im_FFT * self.alpha**fit_power_alpha
-            # int_range = (np.min(im_scale[plot_mask]),np.max(im_scale[plot_mask]))
             int_vals = np.sort(im_scale.ravel())
             int_range = (
                 int_vals[np.round(0.02*im_scale.size).astype('int')],
                 int_vals[np.round(0.98*im_scale.size).astype('int')],
                 )
-
             int_range = (int_range[0],(int_range[1]-int_range[0])*1.0 + int_range[0])
             im_scale = np.clip(
                 (np.fft.fftshift(im_scale) - int_range[0]) / (int_range[1] - int_range[0]),
                 0,1)
-            # im_scale = im_scale**0.5
             im_plot = np.tile(im_scale[:,:,None],(1,1,3))
 
             # Add CTF zero crossings
             im_CTF = calc_CTF(self.alpha,*coefs)
             im_CTF[np.abs(im_CTF) > (fit_max_num_rings+0.5)*np.pi] = np.pi/2;
-            # im_CTF = np.sin(im_CTF)**2
-            # im_CTF = np.fft.fftshift(im_CTF)
-            # print(np.max(im_CTF))
             im_CTF = np.abs(np.sin(im_CTF)) < fit_CTF_threshold
             im_CTF[np.logical_not(plot_mask)] = 0
             im_CTF = np.fft.fftshift(im_CTF * angular_mask)
@@ -1569,107 +1471,13 @@ class ParallaxReconstruction(PhaseReconstruction):
             fig,ax = plt.subplots(figsize=(12,6))
             ax.imshow(
                 im_plot,
-                # np.fft.fftshift(np.reshape(self.aber_basis[:,1],im_CTF.shape))
-                # angular_mask,
-                # np.hstack((
-                #     im_scale,
-                #     im_CTF
-                # ))
-                # im_ctf
             )
-
-
-            # ax.imshow(
-            #     im_plot / np.max(im_plot),
-            #     vmin = 0,
-            #     vmax = 1,
-            #     cmap = 'gray',
-            #     )
-            # ax.imshow( \
-            #     np.fft.fftshift(
-            #         np.mod(np.reshape(self.aber_basis[:,2],im_fft.shape)+np.pi,2*np.pi)-np.pi
-            #     ))
-
-
-        #     # Get polar mean from FFT of BF reconstruction
-        #     im_fft = xp.abs(xp.fft.fft2(self._recon_BF))
-
-        #     # coordinates
-        #     kx = xp.fft.fftfreq(self._recon_BF.shape[0], self._scan_sampling[0])
-        #     ky = xp.fft.fftfreq(self._recon_BF.shape[1], self._scan_sampling[1])
-        #     kra = xp.sqrt(kx[:, None] ** 2 + ky[None, :] ** 2)
-        #     k_max = xp.max(kra) / np.sqrt(2.0)
-        #     k_num_bins = int(xp.ceil(k_max / plot_dk))
-        #     k_bins = xp.arange(k_num_bins + 1) * plot_dk
-
-        #     # histogram
-        #     k_ind = kra / plot_dk
-        #     kf = np.floor(k_ind).astype("int")
-        #     dk = k_ind - kf
-        #     sub = kf <= k_num_bins
-        #     hist_exp = xp.bincount(
-        #         kf[sub], weights=im_fft[sub] * (1 - dk[sub]), minlength=k_num_bins
-        #     )
-        #     hist_norm = xp.bincount(
-        #         kf[sub], weights=(1 - dk[sub]), minlength=k_num_bins
-        #     )
-        #     sub = kf <= k_num_bins - 1
-
-        #     hist_exp += xp.bincount(
-        #         kf[sub] + 1, weights=im_fft[sub] * (dk[sub]), minlength=k_num_bins
-        #     )
-        #     hist_norm += xp.bincount(
-        #         kf[sub] + 1, weights=(dk[sub]), minlength=k_num_bins
-        #     )
-
-        #     # KDE and normalizing
-        #     k_sigma = plot_dk / plot_k_sigma
-        #     hist_exp[0] = 0.0
-        #     hist_exp = gaussian_filter(hist_exp, sigma=k_sigma, mode="nearest")
-        #     hist_norm = gaussian_filter(hist_norm, sigma=k_sigma, mode="nearest")
-        #     hist_exp /= hist_norm
-
-        #     # CTF comparison
-        #     CTF_fit = xp.sin(
-        #         (-np.pi * self._wavelength * self.aberration_C1) * k_bins**2
-        #     )
-
-        #     # plotting input - log scale
-        #     min_hist_val = xp.max(hist_exp) * 1e-3
-        #     hist_plot = xp.log(np.maximum(hist_exp, min_hist_val))
-        #     hist_plot -= xp.min(hist_plot)
-        #     hist_plot /= xp.max(hist_plot)
-
-        #     hist_plot = asnumpy(hist_plot)
-        #     k_bins = asnumpy(k_bins)
-        #     CTF_fit = asnumpy(CTF_fit)
-
-        #     fig, ax = plt.subplots(figsize=(8, 4))
-
-        #     ax.fill_between(
-        #         k_bins,
-        #         hist_plot,
-        #         color=(0.7, 0.7, 0.7, 1),
-        #     )
-
-        #     ax.plot(
-        #         k_bins,
-        #         np.clip(CTF_fit, 0.0, np.inf),
-        #         color=(1, 0, 0, 1),
-        #         linewidth=2,
-        #     )
-        #     ax.plot(
-        #         k_bins,
-        #         np.clip(-CTF_fit, 0.0, np.inf),
-        #         color=(0, 0.5, 1, 1),
-        #         linewidth=2,
-        #     )
-        #     ax.set_xlim([0, k_bins[-1]])
-        #     ax.set_ylim([0, 1.05])
-
 
         # Print results
         if self._verbose:
+            if fit_CTF_FFT:
+                print('Initial Aberration coefficients')
+                print('-------------------------------')
             print(
                 (
                     "Rotation of Q w.r.t. R = "
@@ -1686,6 +1494,36 @@ class ParallaxReconstruction(PhaseReconstruction):
             print(f"Aberration C1          =  {self.aberration_C1:.0f} Ang")
             print(f"Defocus dF             = {-1*self.aberration_C1:.0f} Ang")
 
+            if fit_CTF_FFT:
+                # radial_order = 2 * self.aber_mn[a0,0] + 
+
+                print()
+                print('Refined Aberration coefficients')
+                print('-------------------------------')
+                print('radial   annular   dir.   coefs')
+                print('order    order                 ')
+                print('------   -------   ----   -----')
+
+                for a0 in range(self.aber_mn.shape[0]):
+                    if self.aber_mn[a0,1] == 0:
+                        print(
+                            str(self.aber_mn[a0,0]) + \
+                            '        0         -      ' + \
+                            str(np.round(coefs[a0]).astype('int')) )
+                    elif self.aber_mn[a0,2] == 0: 
+                        print(
+                            str(self.aber_mn[a0,0]) + \
+                            '        ' + \
+                            str(self.aber_mn[a0,1]) + \
+                            '         x      ' + \
+                            str(np.round(coefs[a0]).astype('int')) )
+                    else:
+                        print(
+                            str(self.aber_mn[a0,0]) + \
+                            '        ' + \
+                            str(self.aber_mn[a0,1]) + \
+                            '         y      ' + \
+                            str(np.round(coefs[a0]).astype('int')) )
 
     def aberration_correct(
         self,
