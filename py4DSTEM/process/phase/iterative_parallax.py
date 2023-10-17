@@ -18,7 +18,7 @@ from py4DSTEM.process.utils.utils import electron_wavelength_angstrom
 from py4DSTEM.visualize import show
 from scipy.linalg import polar
 from scipy.special import comb
-from scipy.optimize import curve_fit
+from scipy.optimize import curve_fit, minimize
 from scipy.signal import medfilt2d
 
 try:
@@ -1270,10 +1270,12 @@ class ParallaxReconstruction(PhaseReconstruction):
     def aberration_fit(
         self,
         fit_CTF_FFT = True,
-        fit_CTF_threshold = 0.1,
+        fit_CTF_threshold = 0.25,
         fit_upsampled_FFT = True,
         fit_aber_order_max = 2,
-        fit_maxfev = None,
+        fit_max_num_rings = 6,
+        fit_power_alpha = 2.0,
+        # fit_maxfev = None,
         plot_CTF_compare: bool = False,
     ):
         """
@@ -1301,7 +1303,7 @@ class ParallaxReconstruction(PhaseReconstruction):
         asnumpy = self._asnumpy
         gaussian_filter = self._gaussian_filter
 
-        # initial aberration fit
+        ### initial aberration fit ###
 
         # Convert real space shifts to Angstroms
         self._xy_shifts_Ang = self._xy_shifts * xp.array(self._scan_sampling)
@@ -1331,6 +1333,30 @@ class ParallaxReconstruction(PhaseReconstruction):
             xp._default_memory_pool.free_all_blocks()
             xp.clear_memo()
 
+
+        ### FFT fitting / plotting code ###
+
+        if fit_upsampled_FFT:
+            # Get mean FFT of BF reconstruction
+            im_FFT = np.abs(xp.fft.fft2(self._recon_BF_subpixel_aligned))
+
+            # coordinates
+            q_pixel_size = np.array(self._reciprocal_sampling) \
+                / self._kde_upsample_factor
+        else:
+            # Get mean FFT of upsampled BF reconstruction
+            im_FFT = np.abs(xp.fft.fft2(self._recon_BF))
+
+            # coordinates
+            q_pixel_size = np.array(parallax_recon._reciprocal_sampling)
+
+        # FFT coordinates
+        qx = np.fft.fftfreq(im_FFT.shape[0],1/im_FFT.shape[0]/q_pixel_size[0])
+        qy = np.fft.fftfreq(im_FFT.shape[1],1/im_FFT.shape[1]/q_pixel_size[1])
+        qr2 = qx[:,None]**2 + qy[None,:]**2
+        self.alpha = np.sqrt(qr2) * self._wavelength
+        self.theta = np.arctan2(qy[None,:],qx[:,None])
+
         # Aberration coefs
         mn = []
         for m in range(0,fit_aber_order_max//2+1):
@@ -1347,7 +1373,7 @@ class ParallaxReconstruction(PhaseReconstruction):
 
         # Aberration basis
         self.aber_num = self.aber_mn.shape[0]
-        self.aber_basis = np.zeros((self.alpha2.size,self.aber_num))
+        self.aber_basis = np.zeros((self.alpha.size,self.aber_num))
         for a0 in range(self.aber_num):
             if self.aber_mn[a0,1] == 0:
                 # Radially symmetric basis
@@ -1370,40 +1396,56 @@ class ParallaxReconstruction(PhaseReconstruction):
                 chi += coefs[a0] * self.aber_basis[:,a0]
             return np.reshape(chi, alpha.shape)
 
-        if fit_upsampled_FFT:
-            # Get mean FFT of BF reconstruction
-            im_fft = np.abs(xp.fft.fft2(self._recon_BF_subpixel_aligned))
-
-            # coordinates
-            q_pixel_size = np.array(self._reciprocal_sampling) \
-                / self._kde_upsample_factor
-        else:
-            # Get mean FFT of upsampled BF reconstruction
-            im_fft = np.abs(xp.fft.fft2(self._recon_BF))
-
-            # coordinates
-            q_pixel_size = np.array(parallax_recon._reciprocal_sampling)
-
-        # FFT coordinates
-        qx = np.fft.fftfreq(im_fft.shape[0],q_pixel_size[0])
-        qy = np.fft.fftfreq(im_fft.shape[1],q_pixel_size[1])
-        qr2 = qx[:,None]**2 + qy[None,:]**2
-        self.alpha = np.sqrt(qr2) * self._wavelength
-        self.theta = np.arctan2(qy[None,:],qx[:,None])
-
         # initial coefficients and plotting intensity range mask
-        C1_dimensionless = self.aberration_C1 * 0.5 * self._wavelength
+        C10_dimensionless = self.aberration_C1 * np.pi / 4 / self._wavelength
         coefs = np.zeros(self.aber_num)
         ind = np.argmin(
             np.abs(self.aber_mn[:,0] - 1.0) + np.abs(self.aber_mn[:,1])
         )
-        coefs[ind] = C1_dimensionless
-        plot_mask = self.alpha > np.sqrt(np.pi/np.abs(C1_dimensionless))
-        angular_mask = np.cos(4.0 * np.arctan2(qy[:,None],qx[None,:]))**2 < 0.5
+        coefs[ind] = C10_dimensionless
+        plot_mask = self.alpha > np.sqrt(np.pi/2/np.abs(C10_dimensionless))
+        # plot_mask[:] = True
+        angular_mask = np.cos(8.0 * np.arctan2(qy[:,None],qx[None,:]))**2 < 0.25
 
         # Refinement using CTF fitting / Thon rings
         if fit_CTF_FFT:
-            pass
+            # scoring function to minimize - mean value of zero crossing regions of FFT
+            def score_CTF(coefs):
+                im_CTF = np.abs(calc_CTF(self.alpha,*coefs))
+                mask = np.logical_and(
+                    im_CTF > 0.5*np.pi,
+                    im_CTF < (max_num_rings+0.5)*np.pi,
+                )
+                if np.any(mask):
+                    weights = np.cos(im_CTF[mask])**4
+                    return np.sum(weights*im_FFT[mask]*self.alpha[mask]**fit_power_alpha) / np.sum(weights)
+                else:
+                    return np.inf
+
+            for max_num_rings in range(1,fit_max_num_rings+1):
+                # minimization
+                res = minimize(
+                    score_CTF, 
+                    coefs, 
+                    # method = 'Nelder-Mead', 
+                    # method = 'CG',
+                    method = 'BFGS',
+                    tol = 1e-8,
+                )
+                coefs = res.x
+
+            # basis = np.vstack((
+            #     self.alpha.ravel(),
+            #     im_FFT.ravel()
+            # ))
+            # print(basis.shape)
+            # score = score_CTF(self.alpha,coefs*1)
+            # print(score)
+
+
+            # im_CTF = calc_CTF(self.alpha,*coefs)
+            # im_CTF[np.abs(im_CTF) > (fit_max_num_rings+0.5)*np.pi] = np.pi/2;
+            # im_CTF = np.sin(im_CTF)**2 < fit_CTF_threshold
             
 
 
@@ -1495,20 +1537,28 @@ class ParallaxReconstruction(PhaseReconstruction):
         # Plot the CTF comparison between experiment and fit
         if plot_CTF_compare:
             # Generate FFT plotting image
-            int_range = (np.min(im_fft[plot_mask]),np.max(im_fft[plot_mask]))
-            int_range = (int_range[0],(int_range[1]-int_range[0])*0.5 + int_range[0])
+            im_scale = im_FFT * self.alpha**fit_power_alpha
+            # int_range = (np.min(im_scale[plot_mask]),np.max(im_scale[plot_mask]))
+            int_vals = np.sort(im_scale.ravel())
+            int_range = (
+                int_vals[np.round(0.02*im_scale.size).astype('int')],
+                int_vals[np.round(0.98*im_scale.size).astype('int')],
+                )
+
+            int_range = (int_range[0],(int_range[1]-int_range[0])*1.0 + int_range[0])
             im_scale = np.clip(
-                (np.fft.fftshift(im_fft) - int_range[0]) / (int_range[1] - int_range[0]),
+                (np.fft.fftshift(im_scale) - int_range[0]) / (int_range[1] - int_range[0]),
                 0,1)
             # im_scale = im_scale**0.5
             im_plot = np.tile(im_scale[:,:,None],(1,1,3))
 
             # Add CTF zero crossings
             im_CTF = calc_CTF(self.alpha,*coefs)
+            im_CTF[np.abs(im_CTF) > (fit_max_num_rings+0.5)*np.pi] = np.pi/2;
             # im_CTF = np.sin(im_CTF)**2
             # im_CTF = np.fft.fftshift(im_CTF)
             # print(np.max(im_CTF))
-            im_CTF = np.sin(im_CTF)**2 < fit_CTF_threshold
+            im_CTF = np.abs(np.sin(im_CTF)) < fit_CTF_threshold
             im_CTF[np.logical_not(plot_mask)] = 0
             im_CTF = np.fft.fftshift(im_CTF * angular_mask)
             im_plot[:,:,0] += im_CTF
