@@ -938,12 +938,13 @@ def show_selected_dps(
         )
 
 
-def Complex2RGB(complex_data, vmin=None, vmax=None, power=None):
+def Complex2RGB(complex_data, vmin=None, vmax=None, power=None, chroma_boost=1):
     """
     complex_data (array): complex array to plot
     vmin (float)        : minimum absolute value
     vmax (float)        : maximum absolute value
     power (float)       : power to raise amplitude to
+    chroma_boost (float): boosts chroma for higher-contrast (~1-2.5)
     """
     amp = np.abs(complex_data)
     phase = np.angle(complex_data)
@@ -974,7 +975,7 @@ def Complex2RGB(complex_data, vmin=None, vmax=None, power=None):
     amp = ((amp - vmin) / vmax).clip(1e-16, 1)
 
     J = amp * 61.5  # Note we restrict luminance to the monotonic chroma cutoff
-    C = np.where(J < 61.5, 98 * J / 123, 1400 / 11 - 14 * J / 11)  # Min uniform chroma
+    C = np.minimum(chroma_boost * 98 * J / 123, 110)
     h = np.rad2deg(phase) + 180
 
     JCh = np.stack((J, C, h), axis=-1)
@@ -983,16 +984,17 @@ def Complex2RGB(complex_data, vmin=None, vmax=None, power=None):
     return rgb
 
 
-def add_colorbar_arg(cax, c=49, j=61.5):
+def add_colorbar_arg(cax, chroma_boost=1, c=49, j=61.5):
     """
     cax                 : axis to add cbar to
-    c                   : constant chroma value
-    j                   : constant luminance value
+    chroma_boost (float): boosts chroma for higher-contrast (~1-2.25)
+    c (float)           : constant chroma value
+    j (float)           : constant luminance value
     """
 
     h = np.linspace(0, 360, 256, endpoint=False)
     J = np.full_like(h, j)
-    C = np.full_like(h, c)
+    C = np.full_like(h, np.minimum(c * chroma_boost, 110))
     JCh = np.stack((J, C, h), axis=-1)
     rgb_vals = cspace_convert(JCh, "JCh", "sRGB1").clip(0, 1)
     newcmp = mcolors.ListedColormap(rgb_vals)
@@ -1012,12 +1014,13 @@ def show_complex(
     ar_complex,
     vmin=None,
     vmax=None,
+    power=None,
+    chroma_boost=1,
     cbar=True,
     scalebar=False,
     pixelunits="pixels",
     pixelsize=1,
     returnfig=False,
-    power=None,
     **kwargs
 ):
     """
@@ -1030,12 +1033,13 @@ def show_complex(
         vmax (float, optional)      : maximum absolute value
             if None, vmin/vmax are set to fractions of the distribution of pixel values in the array,
             e.g. vmin=0.02 will set the minumum display value to saturate the lower 2% of pixels
+        power (float,optional)      : power to raise amplitude to
+        chroma_boost (float)        : boosts chroma for higher-contrast (~1-2.25)
         cbar (bool, optional)       : if True, include color bar
         scalebar (bool, optional)   : if True, adds scale bar
         pixelunits (str, optional)  : units for scalebar
         pixelsize (float, optional) : size of one pixel in pixelunits for scalebar
         returnfig (bool, optional)  : if True, the function returns the tuple (figure,axis)
-        power (float,optional)      : power to raise amplitude to
 
     Returns:
         if returnfig==False (default), the figure is plotted and nothing is returned.
@@ -1050,7 +1054,7 @@ def show_complex(
     if isinstance(ar_complex, list):
         if isinstance(ar_complex[0], list):
             rgb = [
-                Complex2RGB(ar, vmin, vmax, power=power)
+                Complex2RGB(ar, vmin, vmax, power=power, chroma_boost=chroma_boost)
                 for sublist in ar_complex
                 for ar in sublist
             ]
@@ -1058,7 +1062,10 @@ def show_complex(
             W = len(ar_complex[0])
 
         else:
-            rgb = [Complex2RGB(ar, vmin, vmax, power=power) for ar in ar_complex]
+            rgb = [
+                Complex2RGB(ar, vmin, vmax, power=power, chroma_boost=chroma_boost)
+                for ar in ar_complex
+            ]
             if len(rgb[0].shape) == 4:
                 H = len(ar_complex)
                 W = rgb[0].shape[0]
@@ -1067,7 +1074,9 @@ def show_complex(
                 W = len(ar_complex)
         is_grid = True
     else:
-        rgb = Complex2RGB(ar_complex, vmin, vmax, power=power)
+        rgb = Complex2RGB(
+            ar_complex, vmin, vmax, power=power, chroma_boost=chroma_boost
+        )
         if len(rgb.shape) == 4:
             is_grid = True
             H = 1
@@ -1127,7 +1136,7 @@ def show_complex(
         else:
             divider = make_axes_locatable(ax)
             ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
-            add_colorbar_arg(ax_cb)
+            add_colorbar_arg(ax_cb, chroma_boost=chroma_boost)
 
         fig.tight_layout()
 
