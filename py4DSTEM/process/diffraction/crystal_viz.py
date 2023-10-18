@@ -91,18 +91,26 @@ def plot_structure(
 
     # Fractional atomic coordinates
     pos = self.positions
+    occ = self.occupancy
+
     # x tile
     sub = pos[:, 0] < tol_distance
     pos = np.vstack([pos, pos[sub, :] + np.array([1, 0, 0])])
     ID = np.hstack([ID, ID[sub]])
+    if occ is not None:
+        occ = np.hstack([occ, occ[sub]])
     # y tile
     sub = pos[:, 1] < tol_distance
     pos = np.vstack([pos, pos[sub, :] + np.array([0, 1, 0])])
     ID = np.hstack([ID, ID[sub]])
+    if occ is not None:
+        occ = np.hstack([occ, occ[sub]])
     # z tile
     sub = pos[:, 2] < tol_distance
     pos = np.vstack([pos, pos[sub, :] + np.array([0, 0, 1])])
     ID = np.hstack([ID, ID[sub]])
+    if occ is not None:
+        occ = np.hstack([occ, occ[sub]])
 
     # Cartesian atomic positions
     xyz = pos @ self.lat_real
@@ -141,17 +149,36 @@ def plot_structure(
 
     # atoms
     ID_all = np.unique(ID)
-    for ID_plot in ID_all:
-        sub = ID == ID_plot
-        ax.scatter(
-            xs=xyz[sub, 1],  # + d[0],
-            ys=xyz[sub, 0],  # + d[1],
-            zs=xyz[sub, 2],  # + d[2],
-            s=size_marker,
-            linewidth=2,
-            facecolors=atomic_colors(ID_plot),
-            edgecolor=[0, 0, 0],
-        )
+    if occ is None:
+        for ID_plot in ID_all:
+            sub = ID == ID_plot
+            ax.scatter(
+                xs=xyz[sub, 1],  # + d[0],
+                ys=xyz[sub, 0],  # + d[1],
+                zs=xyz[sub, 2],  # + d[2],
+                s=size_marker,
+                linewidth=2,
+                facecolors=atomic_colors(ID_plot),
+                edgecolor=[0, 0, 0],
+            )
+    else:
+        for ID_plot in ID_all:
+            sub = ID == ID_plot
+            ax.scatter(
+                xs=xyz[sub, 1],  # + d[0],
+                ys=xyz[sub, 0],  # + d[1],
+                zs=xyz[sub, 2],  # + d[2],
+                s=size_marker,
+                linewidth=2,
+                facecolors='none',
+                edgecolor=[0, 0, 0],
+            )
+        # poly = PolyCollection(
+        #     verts, 
+        #     facecolors=['r', 'g', 'b', 'y'], 
+        #     alpha = 0.6)
+        # ax.add_collection3d(poly, zs=zs, zdir='y')
+
 
     # plot limit
     if plot_limit is None:
