@@ -74,6 +74,7 @@ class Crystal:
         positions,
         numbers,
         cell,
+        occupancy = None,
     ):
         """
         Args:
@@ -138,6 +139,12 @@ class Crystal:
             self.cell = (a, b, c, alpha, beta, gamma)
         else:
             raise Exception("Cell cannot contain " + np.size(cell) + " entries")
+
+        # occupancy
+        if occupancy is not None:
+            self.occupancy = np.array(occupancy)
+        else:
+            self.occupancy = None
 
         # pymatgen flag
         if "pymatgen" in sys.modules:
