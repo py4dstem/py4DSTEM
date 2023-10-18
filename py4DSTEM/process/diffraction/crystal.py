@@ -74,7 +74,7 @@ class Crystal:
         positions,
         numbers,
         cell,
-        occupancy = None,
+        occupancy=None,
     ):
         """
         Args:

@@ -168,14 +168,14 @@ def plot_structure(
         tol = 1e-4
         num_seg = 180
         radius = 0.7
-        zp = np.zeros(num_seg+1)
+        zp = np.zeros(num_seg + 1)
 
-        mark = np.ones(xyz.shape[0],dtype='bool')
+        mark = np.ones(xyz.shape[0], dtype="bool")
         for a0 in range(xyz.shape[0]):
             if mark[a0]:
-                xyz_plot = xyz[a0,:]
-                inds = np.argwhere(np.sum((xyz - xyz_plot)**2,axis=1) < tol)
-                occ_plot = occ[inds]         
+                xyz_plot = xyz[a0, :]
+                inds = np.argwhere(np.sum((xyz - xyz_plot) ** 2, axis=1) < tol)
+                occ_plot = occ[inds]
                 mark[inds] = False
                 ID_plot = ID[inds]
 
@@ -186,42 +186,50 @@ def plot_structure(
                     occ_plot = occ_plot[0]
                     ID_plot = ID_plot[0]
 
-
                 # Plot site as series of filled arcs
                 theta0 = 0
                 for a1 in range(occ_plot.shape[0]):
                     theta1 = theta0 + occ_plot[a1] * 2.0 * np.pi
-                    theta = np.linspace(theta0,theta1,num_seg+1)
+                    theta = np.linspace(theta0, theta1, num_seg + 1)
                     xp = np.cos(theta) * radius
                     yp = np.sin(theta) * radius
 
-
                     # Rotate towards camera
-                    xyz_rot = np.vstack((xp.ravel(),yp.ravel(),zp.ravel()))
+                    xyz_rot = np.vstack((xp.ravel(), yp.ravel(), zp.ravel()))
                     if occ_plot[a1] < 1.0:
-                        xyz_rot = np.append(xyz_rot,np.array((0,0,0))[:,None], axis = 1)
-                    xyz_rot = orientation_matrix @ xyz_rot                    
+                        xyz_rot = np.append(
+                            xyz_rot, np.array((0, 0, 0))[:, None], axis=1
+                        )
+                    xyz_rot = orientation_matrix @ xyz_rot
 
                     # add to plot
-                    verts = [list(zip(
-                        xyz_rot[1,:] + xyz_plot[1],
-                        xyz_rot[0,:] + xyz_plot[0],
-                        xyz_rot[2,:] + xyz_plot[2],
-                        ))]
+                    verts = [
+                        list(
+                            zip(
+                                xyz_rot[1, :] + xyz_plot[1],
+                                xyz_rot[0, :] + xyz_plot[0],
+                                xyz_rot[2, :] + xyz_plot[2],
+                            )
+                        )
+                    ]
                     # ax.add_collection3d(
                     #     Poly3DCollection(
                     #         verts
                     #     )
                     # )
                     collection = Poly3DCollection(
-                        verts, 
-                        linewidths = 2.0, 
-                        alpha = 1.0,
-                        edgecolors = 'k',
-                        )
-                    face_color = [0.5, 0.5, 1] # alternative: matplotlib.colors.rgb2hex([0.5, 0.5, 1])
+                        verts,
+                        linewidths=2.0,
+                        alpha=1.0,
+                        edgecolors="k",
+                    )
+                    face_color = [
+                        0.5,
+                        0.5,
+                        1,
+                    ]  # alternative: matplotlib.colors.rgb2hex([0.5, 0.5, 1])
                     if ID_plot[a1] == -1:
-                        collection.set_facecolor((1.0,1.0,1.0))
+                        collection.set_facecolor((1.0, 1.0, 1.0))
                     else:
                         collection.set_facecolor(atomic_colors(ID_plot[a1]))
                     ax.add_collection3d(collection)
@@ -242,11 +250,10 @@ def plot_structure(
         #         edgecolor=[0, 0, 0],
         #     )
         # poly = PolyCollection(
-        #     verts, 
-        #     facecolors=['r', 'g', 'b', 'y'], 
+        #     verts,
+        #     facecolors=['r', 'g', 'b', 'y'],
         #     alpha = 0.6)
         # ax.add_collection3d(poly, zs=zs, zdir='y')
-
 
     # plot limit
     if plot_limit is None:
