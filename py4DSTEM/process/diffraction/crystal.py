@@ -590,12 +590,20 @@ class Crystal:
         # Calculate structure factors
         self.struct_factors = np.zeros(np.size(self.g_vec_leng, 0), dtype="complex64")
         for a0 in range(self.positions.shape[0]):
-            self.struct_factors += f_all[:, a0] * np.exp(
-                (2j * np.pi)
-                * np.sum(
-                    self.hkl * np.expand_dims(self.positions[a0, :], axis=1), axis=0
+            if self.occupancy is None:
+                self.struct_factors += f_all[:, a0] * np.exp(
+                    (2j * np.pi)
+                    * np.sum(
+                        self.hkl * np.expand_dims(self.positions[a0, :], axis=1), axis=0
+                    )
                 )
-            )
+            else:
+                self.struct_factors += f_all[:, a0] * np.exp(
+                    (2j * np.pi * self.occupancy[a0])
+                    * np.sum(
+                        self.hkl * np.expand_dims(self.positions[a0, :], axis=1), axis=0
+                    )
+                )
 
         # Divide by unit cell volume
         unit_cell_volume = np.abs(np.linalg.det(self.lat_real))

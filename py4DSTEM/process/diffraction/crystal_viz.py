@@ -167,7 +167,7 @@ def plot_structure(
         # init
         tol = 1e-4
         num_seg = 180
-        radius = 0.5
+        radius = 0.7
         zp = np.zeros(num_seg+1)
 
         mark = np.ones(xyz.shape[0],dtype='bool')
@@ -175,57 +175,60 @@ def plot_structure(
             if mark[a0]:
                 xyz_plot = xyz[a0,:]
                 inds = np.argwhere(np.sum((xyz - xyz_plot)**2,axis=1) < tol)
-                test = np.sum((xyz - xyz_plot)**2,axis=1)
+                occ_plot = occ[inds]         
                 mark[inds] = False
-
                 ID_plot = ID[inds]
-                occ_plot = occ[inds]
 
                 if np.sum(occ_plot) < 1.0:
                     occ_plot = np.append(occ_plot, 1 - np.sum(occ_plot))
                     ID_plot = np.append(ID_plot, -1)
+                else:
+                    occ_plot = occ_plot[0]
+                    ID_plot = ID_plot[0]
 
-                    # Plot site as series of filled arcs
-                    theta0 = 0
-                    for a1 in range(occ_plot.size):
-                        theta1 = theta0 + occ_plot[a1] * 2.0 * np.pi
-                        theta = np.linspace(theta0,theta1,num_seg+1)
 
-                        xp = np.cos(theta) * radius
-                        yp = np.sin(theta) * radius
-                        xyz_rot = np.vstack((xp,yp,zp))
+                # Plot site as series of filled arcs
+                theta0 = 0
+                for a1 in range(occ_plot.shape[0]):
+                    theta1 = theta0 + occ_plot[a1] * 2.0 * np.pi
+                    theta = np.linspace(theta0,theta1,num_seg+1)
+                    xp = np.cos(theta) * radius
+                    yp = np.sin(theta) * radius
+
+
+                    # Rotate towards camera
+                    xyz_rot = np.vstack((xp.ravel(),yp.ravel(),zp.ravel()))
+                    if occ_plot[a1] < 1.0:
                         xyz_rot = np.append(xyz_rot,np.array((0,0,0))[:,None], axis = 1)
+                    xyz_rot = orientation_matrix @ xyz_rot                    
 
-                        # Rotate towards camera
-                        xyz_rot = orientation_matrix @ xyz_rot
+                    # add to plot
+                    verts = [list(zip(
+                        xyz_rot[1,:] + xyz_plot[1],
+                        xyz_rot[0,:] + xyz_plot[0],
+                        xyz_rot[2,:] + xyz_plot[2],
+                        ))]
+                    # ax.add_collection3d(
+                    #     Poly3DCollection(
+                    #         verts
+                    #     )
+                    # )
+                    collection = Poly3DCollection(
+                        verts, 
+                        linewidths = 2.0, 
+                        alpha = 1.0,
+                        edgecolors = 'k',
+                        )
+                    face_color = [0.5, 0.5, 1] # alternative: matplotlib.colors.rgb2hex([0.5, 0.5, 1])
+                    if ID_plot[a1] == -1:
+                        collection.set_facecolor((1.0,1.0,1.0))
+                    else:
+                        collection.set_facecolor(atomic_colors(ID_plot[a1]))
+                    ax.add_collection3d(collection)
 
-                        # add to plot
-                        verts = [list(zip(
-                            xyz_rot[1,:] + xyz_plot[1],
-                            xyz_rot[0,:] + xyz_plot[0],
-                            xyz_rot[2,:] + xyz_plot[2],
-                            ))]
-                        # ax.add_collection3d(
-                        #     Poly3DCollection(
-                        #         verts
-                        #     )
-                        # )
-                        collection = Poly3DCollection(
-                            verts, 
-                            linewidths = 2.0, 
-                            alpha = 1.0,
-                            edgecolors = 'k',
-                            )
-                        face_color = [0.5, 0.5, 1] # alternative: matplotlib.colors.rgb2hex([0.5, 0.5, 1])
-                        if ID_plot[a1] == -1:
-                            collection.set_facecolor((1.0,1.0,1.0))
-                        else:
-                            collection.set_facecolor(atomic_colors(ID_plot[a1]))
-                        ax.add_collection3d(collection)
-
-                        # update start point
-                        if a1 < occ_plot.size:
-                            theta0 = theta1
+                    # update start point
+                    if a1 < occ_plot.size:
+                        theta0 = theta1
 
         # for ID_plot in ID_all:
         #     sub = ID == ID_plot
