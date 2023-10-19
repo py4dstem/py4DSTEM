@@ -1381,38 +1381,47 @@ class ParallaxReconstruction(PhaseReconstruction):
             qy = xp.fft.fftfreq(im_FFT.shape[1], sy)
             qr2 = qx[:, None] ** 2 + qy[None, :] ** 2
 
-            alpha = xp.sqrt(qr2) * self._wavelength
-            theta = xp.arctan2(qy[None, :], qx[:, None])
+            alpha_FFT = xp.sqrt(qr2) * self._wavelength
+            theta_FFT = xp.arctan2(qy[None, :], qx[:, None])
 
             # Aberration basis
-            self._aberrations_basis = xp.zeros((alpha.size, self._aberrations_num))
+            self._aberrations_basis_FFT = xp.zeros(
+                (alpha_FFT.size, self._aberrations_num)
+            )
             for a0 in range(self._aberrations_num):
                 m, n, a = self._aberrations_mn[a0]
                 if n == 0:
                     # Radially symmetric basis
-                    self._aberrations_basis[:, a0] = (
-                        alpha ** (m + 1) / (m + 1)
+                    self._aberrations_basis_FFT[:, a0] = (
+                        alpha_FFT ** (m + 1) / (m + 1)
                     ).ravel()
 
                 elif a == 0:
                     # cos coef
-                    self._aberrations_basis[:, a0] = (
-                        alpha ** (m + 1) * xp.cos(n * theta) / (m + 1)
+                    self._aberrations_basis_FFT[:, a0] = (
+                        alpha_FFT ** (m + 1) * xp.cos(n * theta_FFT) / (m + 1)
                     ).ravel()
                 else:
                     # sin coef
-                    self._aberrations_basis[:, a0] = (
-                        alpha ** (m + 1) * xp.sin(n * theta) / (m + 1)
+                    self._aberrations_basis_FFT[:, a0] = (
+                        alpha_FFT ** (m + 1) * xp.sin(n * theta_FFT) / (m + 1)
                     ).ravel()
 
             # global scaling
-            self._aberrations_basis *= 2 * np.pi / self._wavelength
-            self._aberrations_surface_shape = alpha.shape
+            self._aberrations_basis_FFT *= 2 * np.pi / self._wavelength
+            self._aberrations_surface_shape_FFT = alpha_FFT.shape
             plot_mask = qr2 > np.pi**2 / 4 / np.abs(self.aberration_C1)
-            angular_mask = np.cos(8.0 * theta) ** 2 < 0.25
+            angular_mask = np.cos(8.0 * theta_FFT) ** 2 < 0.25
+
+            # CTF function
+            def calculate_CTF_FFT(alpha_shape, *coefs):
+                chi = xp.zeros_like(self._aberrations_basis_FFT[:, 0])
+                for a0 in range(len(coefs)):
+                    chi += coefs[a0] * self._aberrations_basis_FFT[:, a0]
+                return xp.reshape(chi, alpha_shape)
 
         # Direct Shifts Fitting
-        elif fit_BF_shifts:
+        if fit_BF_shifts:
             # FFT coordinates
             sx = 1 / (self._reciprocal_sampling[0] * self._region_of_interest_shape[0])
             sy = 1 / (self._reciprocal_sampling[1] * self._region_of_interest_shape[1])
@@ -1476,14 +1485,12 @@ class ParallaxReconstruction(PhaseReconstruction):
             self._aberrations_basis *= 2 * np.pi / self._wavelength
             self._aberrations_surface_shape = alpha.shape
 
-        # CTF function
-        def calculate_CTF(alpha_shape, *coefs):
-            chi = xp.zeros_like(self._aberrations_basis[:, 0])
-            for a0 in range(len(coefs)):
-                chi += coefs[a0] * self._aberrations_basis[:, a0]
-            return xp.reshape(chi, alpha_shape)
-
-        self._calculate_CTF = calculate_CTF
+            # CTF function
+            def calculate_CTF(alpha_shape, *coefs):
+                chi = xp.zeros_like(self._aberrations_basis[:, 0])
+                for a0 in range(len(coefs)):
+                    chi += coefs[a0] * self._aberrations_basis[:, a0]
+                return xp.reshape(chi, alpha_shape)
 
         # initial coefficients and plotting intensity range mask
         self._aberrations_coefs = np.zeros(self._aberrations_num)
@@ -1497,7 +1504,7 @@ class ParallaxReconstruction(PhaseReconstruction):
             # scoring function to minimize - mean value of zero crossing regions of FFT
             def score_CTF(coefs):
                 im_CTF = xp.abs(
-                    self._calculate_CTF(self._aberrations_surface_shape, *coefs)
+                    calculate_CTF_FFT(self._aberrations_surface_shape_FFT, *coefs)
                 )
                 mask = xp.logical_and(
                     im_CTF > 0.5 * np.pi,
@@ -1506,7 +1513,9 @@ class ParallaxReconstruction(PhaseReconstruction):
                 if np.any(mask):
                     weights = xp.cos(im_CTF[mask]) ** 4
                     return asnumpy(
-                        xp.sum(weights * im_FFT[mask] * alpha[mask] ** fit_power_alpha)
+                        xp.sum(
+                            weights * im_FFT[mask] * alpha_FFT[mask] ** fit_power_alpha
+                        )
                         / xp.sum(weights)
                     )
                 else:
@@ -1579,7 +1588,7 @@ class ParallaxReconstruction(PhaseReconstruction):
         # Plot the CTF comparison between experiment and fit
         if plot_CTF_comparison:
             # Generate FFT plotting image
-            im_scale = asnumpy(im_FFT * alpha**fit_power_alpha)
+            im_scale = asnumpy(im_FFT * alpha_FFT**fit_power_alpha)
             int_vals = np.sort(im_scale.ravel())
             int_range = (
                 int_vals[np.round(0.02 * im_scale.size).astype("int")],
@@ -1598,8 +1607,8 @@ class ParallaxReconstruction(PhaseReconstruction):
             im_plot = np.tile(im_scale[:, :, None], (1, 1, 3))
 
             # Add CTF zero crossings
-            im_CTF = self._calculate_CTF(
-                self._aberrations_surface_shape, *self._aberrations_coefs
+            im_CTF = calculate_CTF_FFT(
+                self._aberrations_surface_shape_FFT, *self._aberrations_coefs
             )
             im_CTF_cos = xp.cos(xp.abs(im_CTF)) ** 4
             im_CTF[xp.abs(im_CTF) > (fit_max_thon_rings + 0.5) * np.pi] = np.pi / 2
@@ -1744,6 +1753,47 @@ class ParallaxReconstruction(PhaseReconstruction):
             xp._default_memory_pool.free_all_blocks()
             xp.clear_memo()
 
+    def _calculate_CTF(self, alpha_shape, sampling, *coefs):
+        xp = self._xp
+
+        # FFT coordinates
+        sx, sy = sampling
+        qx = xp.fft.fftfreq(alpha_shape[0], sx)
+        qy = xp.fft.fftfreq(alpha_shape[1], sy)
+        qr2 = qx[:, None] ** 2 + qy[None, :] ** 2
+
+        alpha = xp.sqrt(qr2) * self._wavelength
+        theta = xp.arctan2(qy[None, :], qx[:, None])
+
+        # Aberration basis
+        aberrations_basis = xp.zeros((alpha.size, self._aberrations_num))
+        for a0 in range(self._aberrations_num):
+            m, n, a = self._aberrations_mn[a0]
+            if n == 0:
+                # Radially symmetric basis
+                aberrations_basis[:, a0] = (alpha ** (m + 1) / (m + 1)).ravel()
+
+            elif a == 0:
+                # cos coef
+                aberrations_basis[:, a0] = (
+                    alpha ** (m + 1) * xp.cos(n * theta) / (m + 1)
+                ).ravel()
+            else:
+                # sin coef
+                aberrations_basis[:, a0] = (
+                    alpha ** (m + 1) * xp.sin(n * theta) / (m + 1)
+                ).ravel()
+
+        # global scaling
+        aberrations_basis *= 2 * np.pi / self._wavelength
+
+        chi = xp.zeros_like(aberrations_basis[:, 0])
+
+        for a0 in range(len(coefs)):
+            chi += coefs[a0] * aberrations_basis[:, a0]
+
+        return xp.reshape(chi, alpha_shape)
+
     def aberration_correct(
         self,
         use_CTF_fit=None,
@@ -1809,9 +1859,7 @@ class ParallaxReconstruction(PhaseReconstruction):
 
         if use_CTF_fit:
             sin_chi = np.sin(
-                self._calculate_CTF(
-                    self._aberrations_surface_shape, *self._aberrations_coefs
-                )
+                self._calculate_CTF(im.shape, (sx, sy), *self._aberrations_coefs)
             )
 
             CTF_corr = xp.sign(sin_chi)
