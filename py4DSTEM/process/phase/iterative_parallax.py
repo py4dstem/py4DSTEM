@@ -1237,10 +1237,10 @@ class ParallaxReconstruction(PhaseReconstruction):
                 )
 
                 reciprocal_extent = [
-                    -0.5/(self._scan_sampling[1]/self._kde_upsample_factor),
-                    0.5/(self._scan_sampling[1]/self._kde_upsample_factor),
-                    0.5/(self._scan_sampling[0]/self._kde_upsample_factor),
-                    -0.5/(self._scan_sampling[0]/self._kde_upsample_factor),
+                    -0.5 / (self._scan_sampling[1] / self._kde_upsample_factor),
+                    0.5 / (self._scan_sampling[1] / self._kde_upsample_factor),
+                    0.5 / (self._scan_sampling[0] / self._kde_upsample_factor),
+                    -0.5 / (self._scan_sampling[0] / self._kde_upsample_factor),
                 ]
 
                 show(
@@ -1270,17 +1270,17 @@ class ParallaxReconstruction(PhaseReconstruction):
 
     def aberration_fit(
         self,
-        fit_BF_shifts:bool = True,
-        fit_CTF_FFT:bool = False,
-        fit_aberrations_max_radial_order:int=3,
-        fit_aberrations_max_angular_order:int=4,
-        fit_aberrations_min_radial_order:int=1,
-        fit_aberrations_min_angular_order:int=0,
-        fit_max_thon_rings:int = 6,
-        fit_power_alpha:float = 2.0,
+        fit_BF_shifts: bool = True,
+        fit_CTF_FFT: bool = False,
+        fit_aberrations_max_radial_order: int = 3,
+        fit_aberrations_max_angular_order: int = 4,
+        fit_aberrations_min_radial_order: int = 1,
+        fit_aberrations_min_angular_order: int = 0,
+        fit_max_thon_rings: int = 6,
+        fit_power_alpha: float = 2.0,
         plot_CTF_comparison: bool = None,
         plot_BF_shifts_comparison: bool = None,
-        upsampled:bool=True,
+        upsampled: bool = True,
     ):
         """
         Fit aberrations to the measured image shifts.
@@ -1288,8 +1288,8 @@ class ParallaxReconstruction(PhaseReconstruction):
         Parameters
         ----------
         fit_CTF_FFT: bool
-            Set to True to directly fit aberrations in the FFT of the upsampled BF 
-            image (if available). Note that this method relies on visible zero 
+            Set to True to directly fit aberrations in the FFT of the upsampled BF
+            image (if available). Note that this method relies on visible zero
             crossings in the FFT, and will not work if they are not present.
         fit_upsampled_FFT: bool
             If True, we aberration fit is performed on the upsampled BF image.
@@ -1326,9 +1326,7 @@ class ParallaxReconstruction(PhaseReconstruction):
             )
             m_aberration = -1.0 * m_aberration
         self.aberration_C1 = (m_aberration[0, 0] + m_aberration[1, 1]) / 2.0
-        self.aberration_A1x = (
-            m_aberration[0, 0] - m_aberration[1, 1]
-        ) / 2.0 
+        self.aberration_A1x = (m_aberration[0, 0] - m_aberration[1, 1]) / 2.0
         self.aberration_A1y = (m_aberration[1, 0] + m_aberration[0, 1]) / 2.0
 
         ### Second pass
@@ -1336,32 +1334,38 @@ class ParallaxReconstruction(PhaseReconstruction):
         # Aberration coefs
         mn = []
 
-        for m in range(fit_aberrations_min_radial_order,fit_aberrations_max_radial_order+1):
-            n_max = np.minimum(fit_aberrations_max_angular_order,m+1)
-            for n in range(fit_aberrations_min_angular_order,n_max+1):
-                if (m+n) % 2:
-                    mn.append([m,n,0])
+        for m in range(
+            fit_aberrations_min_radial_order, fit_aberrations_max_radial_order + 1
+        ):
+            n_max = np.minimum(fit_aberrations_max_angular_order, m + 1)
+            for n in range(fit_aberrations_min_angular_order, n_max + 1):
+                if (m + n) % 2:
+                    mn.append([m, n, 0])
                     if n > 0:
-                        mn.append([m,n,1])
+                        mn.append([m, n, 1])
 
         self._aberrations_mn = np.array(mn)
-        self._aberrations_mn = self._aberrations_mn[np.argsort(self._aberrations_mn[:,1]),:]
-        
-        sub = self._aberrations_mn[:,1] > 0
-        self._aberrations_mn[sub,:] = self._aberrations_mn[sub,:][np.argsort(self._aberrations_mn[sub,0]),:]
+        self._aberrations_mn = self._aberrations_mn[
+            np.argsort(self._aberrations_mn[:, 1]), :
+        ]
+
+        sub = self._aberrations_mn[:, 1] > 0
+        self._aberrations_mn[sub, :] = self._aberrations_mn[sub, :][
+            np.argsort(self._aberrations_mn[sub, 0]), :
+        ]
         self._aberrations_num = self._aberrations_mn.shape[0]
 
         if plot_CTF_comparison is None:
             if fit_CTF_FFT:
                 plot_CTF_comparison = True
-        
+
         if plot_BF_shifts_comparison is None:
             if fit_BF_shifts:
                 plot_BF_shifts_comparison = True
 
         # Thon Rings Fitting
         if fit_CTF_FFT or plot_CTF_comparison:
-            if upsampled and hasattr(self,"_kde_upsample_factor"):
+            if upsampled and hasattr(self, "_kde_upsample_factor"):
                 im_FFT = xp.abs(xp.fft.fft2(self._recon_BF_subpixel_aligned))
                 sx = self._scan_sampling[0] / self._kde_upsample_factor
                 sy = self._scan_sampling[1] / self._kde_upsample_factor
@@ -1370,145 +1374,188 @@ class ParallaxReconstruction(PhaseReconstruction):
                 im_FFT = xp.abs(xp.fft.fft2(self._recon_BF))
                 sx = self._scan_sampling[0]
                 sy = self._scan_sampling[1]
-                upsampled=False
+                upsampled = False
 
             # FFT coordinates
-            qx = xp.fft.fftfreq(im_FFT.shape[0],sx)
-            qy = xp.fft.fftfreq(im_FFT.shape[1],sy)
-            qr2 = qx[:,None]**2 + qy[None,:]**2
+            qx = xp.fft.fftfreq(im_FFT.shape[0], sx)
+            qy = xp.fft.fftfreq(im_FFT.shape[1], sy)
+            qr2 = qx[:, None] ** 2 + qy[None, :] ** 2
 
             alpha = xp.sqrt(qr2) * self._wavelength
-            theta = xp.arctan2(qy[None,:],qx[:,None])
+            theta = xp.arctan2(qy[None, :], qx[:, None])
 
             # Aberration basis
-            self._aberrations_basis = xp.zeros((alpha.size,self._aberrations_num))
+            self._aberrations_basis = xp.zeros((alpha.size, self._aberrations_num))
             for a0 in range(self._aberrations_num):
-                m,n,a = self._aberrations_mn[a0]
+                m, n, a = self._aberrations_mn[a0]
                 if n == 0:
                     # Radially symmetric basis
-                    self._aberrations_basis[:,a0] = (alpha**(m+1) / (m+1)).ravel()
+                    self._aberrations_basis[:, a0] = (
+                        alpha ** (m + 1) / (m + 1)
+                    ).ravel()
 
                 elif a == 0:
                     # cos coef
-                    self._aberrations_basis[:,a0] = (alpha**(m+1) * xp.cos(n * theta) / (m+1)).ravel()
+                    self._aberrations_basis[:, a0] = (
+                        alpha ** (m + 1) * xp.cos(n * theta) / (m + 1)
+                    ).ravel()
                 else:
                     # sin coef
-                    self._aberrations_basis[:,a0] = (alpha**(m+1) * xp.sin(n * theta) / (m+1)).ravel()
-            
+                    self._aberrations_basis[:, a0] = (
+                        alpha ** (m + 1) * xp.sin(n * theta) / (m + 1)
+                    ).ravel()
+
             # global scaling
-            self._aberrations_basis *= 2*np.pi/self._wavelength
+            self._aberrations_basis *= 2 * np.pi / self._wavelength
             self._aberrations_surface_shape = alpha.shape
-            plot_mask = qr2 > np.pi**2/4/np.abs(self.aberration_C1)
-            angular_mask = np.cos(8.0 * theta)**2 < 0.25
+            plot_mask = qr2 > np.pi**2 / 4 / np.abs(self.aberration_C1)
+            angular_mask = np.cos(8.0 * theta) ** 2 < 0.25
 
         # Direct Shifts Fitting
         elif fit_BF_shifts:
-            
             # FFT coordinates
-            sx = 1/(self._reciprocal_sampling[0]*self._region_of_interest_shape[0])
-            sy = 1/(self._reciprocal_sampling[1]*self._region_of_interest_shape[1])
-            qx = xp.fft.fftfreq(self._region_of_interest_shape[0],sx)
-            qy = xp.fft.fftfreq(self._region_of_interest_shape[1],sy)
-            qr2 = qx[:,None]**2 + qy[None,:]**2
+            sx = 1 / (self._reciprocal_sampling[0] * self._region_of_interest_shape[0])
+            sy = 1 / (self._reciprocal_sampling[1] * self._region_of_interest_shape[1])
+            qx = xp.fft.fftfreq(self._region_of_interest_shape[0], sx)
+            qy = xp.fft.fftfreq(self._region_of_interest_shape[1], sy)
+            qr2 = qx[:, None] ** 2 + qy[None, :] ** 2
 
-            u = qx[:,None]*self._wavelength
-            v = qy[None,:]*self._wavelength
+            u = qx[:, None] * self._wavelength
+            v = qy[None, :] * self._wavelength
             alpha = xp.sqrt(qr2) * self._wavelength
-            theta = xp.arctan2(qy[None,:],qx[:,None])
+            theta = xp.arctan2(qy[None, :], qx[:, None])
 
             # Aberration basis
-            self._aberrations_basis = xp.zeros((alpha.size,self._aberrations_num))
-            self._aberrations_basis_du = xp.zeros((alpha.size,self._aberrations_num))
-            self._aberrations_basis_dv = xp.zeros((alpha.size,self._aberrations_num))
+            self._aberrations_basis = xp.zeros((alpha.size, self._aberrations_num))
+            self._aberrations_basis_du = xp.zeros((alpha.size, self._aberrations_num))
+            self._aberrations_basis_dv = xp.zeros((alpha.size, self._aberrations_num))
             for a0 in range(self._aberrations_num):
-                m,n,a = self._aberrations_mn[a0]
+                m, n, a = self._aberrations_mn[a0]
 
                 if n == 0:
                     # Radially symmetric basis
-                    self._aberrations_basis[:,a0] = (alpha**(m+1) / (m+1)).ravel()
-                    self._aberrations_basis_du[:,a0] = (u*alpha**(m-1)).ravel()
-                    self._aberrations_basis_dv[:,a0] = (v*alpha**(m-1)).ravel()
+                    self._aberrations_basis[:, a0] = (
+                        alpha ** (m + 1) / (m + 1)
+                    ).ravel()
+                    self._aberrations_basis_du[:, a0] = (u * alpha ** (m - 1)).ravel()
+                    self._aberrations_basis_dv[:, a0] = (v * alpha ** (m - 1)).ravel()
 
                 elif a == 0:
                     # cos coef
-                    self._aberrations_basis[:,a0] = (alpha**(m+1) * xp.cos(n * theta) / (m+1)).ravel()
-                    self._aberrations_basis_du[:,a0] = (alpha**(m-1)*((m+1)*u*xp.cos(n*theta) + n*v*xp.sin(n*theta))/(m+1)).ravel()
-                    self._aberrations_basis_dv[:,a0] = (alpha**(m-1)*((m+1)*v*xp.cos(n*theta) - n*u*xp.sin(n*theta))/(m+1)).ravel()
+                    self._aberrations_basis[:, a0] = (
+                        alpha ** (m + 1) * xp.cos(n * theta) / (m + 1)
+                    ).ravel()
+                    self._aberrations_basis_du[:, a0] = (
+                        alpha ** (m - 1)
+                        * ((m + 1) * u * xp.cos(n * theta) + n * v * xp.sin(n * theta))
+                        / (m + 1)
+                    ).ravel()
+                    self._aberrations_basis_dv[:, a0] = (
+                        alpha ** (m - 1)
+                        * ((m + 1) * v * xp.cos(n * theta) - n * u * xp.sin(n * theta))
+                        / (m + 1)
+                    ).ravel()
 
                 else:
                     # sin coef
-                    self._aberrations_basis[:,a0] = (alpha**(m+1) * xp.sin(n * theta) / (m+1)).ravel()
-                    self._aberrations_basis_du[:,a0] = (alpha**(m-1)*((m+1)*u*xp.sin(n*theta) - n*v*xp.cos(n*theta))/(m+1)).ravel()
-                    self._aberrations_basis_dv[:,a0] = (alpha**(m-1)*((m+1)*v*xp.sin(n*theta) + n*u*xp.cos(n*theta))/(m+1)).ravel()
+                    self._aberrations_basis[:, a0] = (
+                        alpha ** (m + 1) * xp.sin(n * theta) / (m + 1)
+                    ).ravel()
+                    self._aberrations_basis_du[:, a0] = (
+                        alpha ** (m - 1)
+                        * ((m + 1) * u * xp.sin(n * theta) - n * v * xp.cos(n * theta))
+                        / (m + 1)
+                    ).ravel()
+                    self._aberrations_basis_dv[:, a0] = (
+                        alpha ** (m - 1)
+                        * ((m + 1) * v * xp.sin(n * theta) + n * u * xp.cos(n * theta))
+                        / (m + 1)
+                    ).ravel()
 
             # global scaling
-            self._aberrations_basis *= 2*np.pi/self._wavelength
+            self._aberrations_basis *= 2 * np.pi / self._wavelength
             self._aberrations_surface_shape = alpha.shape
 
         # CTF function
         def calculate_CTF(alpha_shape, *coefs):
-            chi = xp.zeros_like(self._aberrations_basis[:,0])
+            chi = xp.zeros_like(self._aberrations_basis[:, 0])
             for a0 in range(len(coefs)):
-                chi += coefs[a0] * self._aberrations_basis[:,a0]
+                chi += coefs[a0] * self._aberrations_basis[:, a0]
             return xp.reshape(chi, alpha_shape)
+
         self._calculate_CTF = calculate_CTF
 
         # initial coefficients and plotting intensity range mask
         self._aberrations_coefs = np.zeros(self._aberrations_num)
         ind = np.argmin(
-            np.abs(self._aberrations_mn[:,0] - 1.0) + self._aberrations_mn[:,1]
+            np.abs(self._aberrations_mn[:, 0] - 1.0) + self._aberrations_mn[:, 1]
         )
         self._aberrations_coefs[ind] = self.aberration_C1
 
         # Refinement using CTF fitting / Thon rings
         if fit_CTF_FFT:
-
             # scoring function to minimize - mean value of zero crossing regions of FFT
             def score_CTF(coefs):
-                im_CTF = xp.abs(self._calculate_CTF(self._aberrations_surface_shape,*coefs))
+                im_CTF = xp.abs(
+                    self._calculate_CTF(self._aberrations_surface_shape, *coefs)
+                )
                 mask = xp.logical_and(
-                    im_CTF > 0.5*np.pi,
-                    im_CTF < (max_num_rings+0.5)*np.pi,
+                    im_CTF > 0.5 * np.pi,
+                    im_CTF < (max_num_rings + 0.5) * np.pi,
                 )
                 if np.any(mask):
-                    weights = xp.cos(im_CTF[mask])**4
-                    return asnumpy(xp.sum(weights*im_FFT[mask]*alpha[mask]**fit_power_alpha) / xp.sum(weights))
+                    weights = xp.cos(im_CTF[mask]) ** 4
+                    return asnumpy(
+                        xp.sum(weights * im_FFT[mask] * alpha[mask] ** fit_power_alpha)
+                        / xp.sum(weights)
+                    )
                 else:
                     return np.inf
 
-            for max_num_rings in range(1,fit_max_thon_rings+1):
+            for max_num_rings in range(1, fit_max_thon_rings + 1):
                 # minimization
                 res = minimize(
-                    score_CTF, 
-                    self._aberrations_coefs, 
-                    # method = 'Nelder-Mead', 
+                    score_CTF,
+                    self._aberrations_coefs,
+                    # method = 'Nelder-Mead',
                     # method = 'CG',
-                    method = 'BFGS',
-                    tol = 1e-8,
+                    method="BFGS",
+                    tol=1e-8,
                 )
                 self._aberrations_coefs = res.x
-        
+
         # Refinement using CTF fitting / Thon rings
         elif fit_BF_shifts:
-
             # Gradient basis
-            corner_indices = self._xy_inds-xp.asarray(self._region_of_interest_shape//2)
-            raveled_indices = np.ravel_multi_index(corner_indices.T,self._region_of_interest_shape,mode='wrap')
-            gradients = xp.vstack((
-                self._aberrations_basis_du[raveled_indices,:],
-                self._aberrations_basis_dv[raveled_indices,:]
-                ))
+            corner_indices = self._xy_inds - xp.asarray(
+                self._region_of_interest_shape // 2
+            )
+            raveled_indices = np.ravel_multi_index(
+                corner_indices.T, self._region_of_interest_shape, mode="wrap"
+            )
+            gradients = xp.vstack(
+                (
+                    self._aberrations_basis_du[raveled_indices, :],
+                    self._aberrations_basis_dv[raveled_indices, :],
+                )
+            )
 
             # Untransposed fit
             tf = AffineTransform(angle=self.rotation_Q_to_R_rads)
-            rotated_shifts = tf(self._xy_shifts_Ang,xp=xp).T.ravel()
-            aberrations_coefs, res = xp.linalg.lstsq(gradients, rotated_shifts,rcond=None)[:2]
+            rotated_shifts = tf(self._xy_shifts_Ang, xp=xp).T.ravel()
+            aberrations_coefs, res = xp.linalg.lstsq(
+                gradients, rotated_shifts, rcond=None
+            )[:2]
 
             # Transposed fit
-            transposed_shifts = xp.flip(self._xy_shifts_Ang,axis=1)
-            m_T = asnumpy(xp.linalg.lstsq(self._probe_angles, transposed_shifts, rcond=None)[0])
+            transposed_shifts = xp.flip(self._xy_shifts_Ang, axis=1)
+            m_T = asnumpy(
+                xp.linalg.lstsq(self._probe_angles, transposed_shifts, rcond=None)[0]
+            )
             m_rotation_T, _ = polar(m_T, side="right")
-            rotation_Q_to_R_rads_T = -1 * np.arctan2(m_rotation_T[1, 0], m_rotation_T[0, 0])
+            rotation_Q_to_R_rads_T = -1 * np.arctan2(
+                m_rotation_T[1, 0], m_rotation_T[0, 0]
+            )
             if np.abs(np.mod(rotation_Q_to_R_rads_T + np.pi, 2.0 * np.pi) - np.pi) > (
                 np.pi * 0.5
             ):
@@ -1517,8 +1564,10 @@ class ParallaxReconstruction(PhaseReconstruction):
                 )
 
             tf = AffineTransform(angle=rotation_Q_to_R_rads_T)
-            rotated_shifts_T = tf(transposed_shifts,xp=xp).T.ravel()
-            aberrations_coefs_T, res_T = xp.linalg.lstsq(gradients, rotated_shifts_T,rcond=None)[:2]
+            rotated_shifts_T = tf(transposed_shifts, xp=xp).T.ravel()
+            aberrations_coefs_T, res_T = xp.linalg.lstsq(
+                gradients, rotated_shifts_T, rcond=None
+            )[:2]
 
             if res_T.sum() < res.sum():
                 self._aberrations_coefs = asnumpy(aberrations_coefs_T)
@@ -1526,97 +1575,122 @@ class ParallaxReconstruction(PhaseReconstruction):
             else:
                 self._aberrations_coefs = asnumpy(aberrations_coefs)
                 self._rotated_shifts = rotated_shifts
-        
-        
+
         # Plot the CTF comparison between experiment and fit
         if plot_CTF_comparison:
             # Generate FFT plotting image
             im_scale = asnumpy(im_FFT * alpha**fit_power_alpha)
             int_vals = np.sort(im_scale.ravel())
             int_range = (
-                int_vals[np.round(0.02*im_scale.size).astype('int')],
-                int_vals[np.round(0.98*im_scale.size).astype('int')],
-                )
-            int_range = (int_range[0],(int_range[1]-int_range[0])*1.0 + int_range[0])
+                int_vals[np.round(0.02 * im_scale.size).astype("int")],
+                int_vals[np.round(0.98 * im_scale.size).astype("int")],
+            )
+            int_range = (
+                int_range[0],
+                (int_range[1] - int_range[0]) * 1.0 + int_range[0],
+            )
             im_scale = np.clip(
-                (np.fft.fftshift(im_scale) - int_range[0]) / (int_range[1] - int_range[0]),
-                0,1)
-            im_plot = np.tile(im_scale[:,:,None],(1,1,3))
+                (np.fft.fftshift(im_scale) - int_range[0])
+                / (int_range[1] - int_range[0]),
+                0,
+                1,
+            )
+            im_plot = np.tile(im_scale[:, :, None], (1, 1, 3))
 
             # Add CTF zero crossings
-            im_CTF = self._calculate_CTF(self._aberrations_surface_shape,*self._aberrations_coefs)
-            im_CTF_cos = xp.cos(xp.abs(im_CTF))**4
-            im_CTF[xp.abs(im_CTF) > (fit_max_thon_rings+0.5)*np.pi] = np.pi/2
+            im_CTF = self._calculate_CTF(
+                self._aberrations_surface_shape, *self._aberrations_coefs
+            )
+            im_CTF_cos = xp.cos(xp.abs(im_CTF)) ** 4
+            im_CTF[xp.abs(im_CTF) > (fit_max_thon_rings + 0.5) * np.pi] = np.pi / 2
             im_CTF = xp.abs(xp.sin(im_CTF)) < 0.15
             im_CTF[xp.logical_not(plot_mask)] = 0
 
             im_CTF = np.fft.fftshift(asnumpy(im_CTF * angular_mask))
-            im_plot[:,:,0] += im_CTF
-            im_plot[:,:,1] -= im_CTF
-            im_plot[:,:,2] -= im_CTF
-            im_plot = np.clip(im_plot,0,1)
+            im_plot[:, :, 0] += im_CTF
+            im_plot[:, :, 1] -= im_CTF
+            im_plot[:, :, 2] -= im_CTF
+            im_plot = np.clip(im_plot, 0, 1)
 
-            fig,(ax1,ax2) = plt.subplots(1,2,figsize=(12,6))
-            ax1.imshow(
-                im_plot,
-                vmin=int_range[0],
-                vmax=int_range[1]
-            )
-            
-            ax2.imshow(
-                np.fft.fftshift(asnumpy(im_CTF_cos)),
-                cmap='gray'
-            )
+            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 6))
+            ax1.imshow(im_plot, vmin=int_range[0], vmax=int_range[1])
+
+            ax2.imshow(np.fft.fftshift(asnumpy(im_CTF_cos)), cmap="gray")
 
             fig.tight_layout()
-        
+
         # Plot the measured/fitted shifts comparison
         if plot_BF_shifts_comparison:
-            
             if not fit_BF_shifts:
                 raise ValueError()
-            
-            measured_shifts_sx = xp.zeros(self._region_of_interest_shape,dtype=xp.float32)
-            measured_shifts_sx[self._xy_inds[:,0],self._xy_inds[:,1]] = self._rotated_shifts[:self._xy_inds.shape[0]]
-            
-            measured_shifts_sy = xp.zeros(self._region_of_interest_shape,dtype=xp.float32)
-            measured_shifts_sy[self._xy_inds[:,0],self._xy_inds[:,1]] = self._rotated_shifts[self._xy_inds.shape[0]:]
 
-            fitted_shifts = xp.tensordot(gradients,xp.array(self._aberrations_coefs),axes=1)
+            measured_shifts_sx = xp.zeros(
+                self._region_of_interest_shape, dtype=xp.float32
+            )
+            measured_shifts_sx[
+                self._xy_inds[:, 0], self._xy_inds[:, 1]
+            ] = self._rotated_shifts[: self._xy_inds.shape[0]]
 
-            fitted_shifts_sx = xp.zeros(self._region_of_interest_shape,dtype=xp.float32)
-            fitted_shifts_sx[self._xy_inds[:,0],self._xy_inds[:,1]] = fitted_shifts[:self._xy_inds.shape[0]]
+            measured_shifts_sy = xp.zeros(
+                self._region_of_interest_shape, dtype=xp.float32
+            )
+            measured_shifts_sy[
+                self._xy_inds[:, 0], self._xy_inds[:, 1]
+            ] = self._rotated_shifts[self._xy_inds.shape[0] :]
 
-            fitted_shifts_sy = xp.zeros(self._region_of_interest_shape,dtype=xp.float32)
-            fitted_shifts_sy[self._xy_inds[:,0],self._xy_inds[:,1]] = fitted_shifts[self._xy_inds.shape[0]:]
+            fitted_shifts = xp.tensordot(
+                gradients, xp.array(self._aberrations_coefs), axes=1
+            )
 
-            max_shift = xp.max(xp.array([xp.abs(measured_shifts_sx).max(),xp.abs(measured_shifts_sy).max(),xp.abs(fitted_shifts_sx).max(),xp.abs(fitted_shifts_sy).max()]))
+            fitted_shifts_sx = xp.zeros(
+                self._region_of_interest_shape, dtype=xp.float32
+            )
+            fitted_shifts_sx[self._xy_inds[:, 0], self._xy_inds[:, 1]] = fitted_shifts[
+                : self._xy_inds.shape[0]
+            ]
+
+            fitted_shifts_sy = xp.zeros(
+                self._region_of_interest_shape, dtype=xp.float32
+            )
+            fitted_shifts_sy[self._xy_inds[:, 0], self._xy_inds[:, 1]] = fitted_shifts[
+                self._xy_inds.shape[0] :
+            ]
+
+            max_shift = xp.max(
+                xp.array(
+                    [
+                        xp.abs(measured_shifts_sx).max(),
+                        xp.abs(measured_shifts_sy).max(),
+                        xp.abs(fitted_shifts_sx).max(),
+                        xp.abs(fitted_shifts_sy).max(),
+                    ]
+                )
+            )
 
             show(
                 [
-                    [
-                        asnumpy(measured_shifts_sx),
-                        asnumpy(measured_shifts_sy)
-                    ],
-                    [
-                        asnumpy(fitted_shifts_sx),
-                        asnumpy(fitted_shifts_sy)
-                    ],
+                    [asnumpy(measured_shifts_sx), asnumpy(measured_shifts_sy)],
+                    [asnumpy(fitted_shifts_sx), asnumpy(fitted_shifts_sy)],
                 ],
-                cmap='PiYG',
+                cmap="PiYG",
                 vmin=-max_shift,
                 vmax=max_shift,
-                intensity_range='absolute',
-                axsize=(4,4),
+                intensity_range="absolute",
+                axsize=(4, 4),
                 ticks=False,
-                title=["Measured Vertical Shifts","Measured Horizontal Shifts","Fitted Vertical Shifts","Fitted Horizontal Shifts"]
+                title=[
+                    "Measured Vertical Shifts",
+                    "Measured Horizontal Shifts",
+                    "Fitted Vertical Shifts",
+                    "Fitted Horizontal Shifts",
+                ],
             )
 
         # Print results
         if self._verbose:
             if fit_CTF_FFT or fit_BF_shifts:
-                print('Initial Aberration coefficients')
-                print('-------------------------------')
+                print("Initial Aberration coefficients")
+                print("-------------------------------")
             print(
                 (
                     "Rotation of Q w.r.t. R = "
@@ -1634,35 +1708,37 @@ class ParallaxReconstruction(PhaseReconstruction):
             print(f"Defocus dF             = {-1*self.aberration_C1:.0f} Ang")
 
             if fit_CTF_FFT or fit_BF_shifts:
-
                 print()
-                print('Refined Aberration coefficients')
-                print('-------------------------------')
-                print('radial   angular   dir.   coefs')
-                print('order    order                 ')
-                print('------   -------   ----   -----')
+                print("Refined Aberration coefficients")
+                print("-------------------------------")
+                print("radial   angular   dir.   coefs")
+                print("order    order                 ")
+                print("------   -------   ----   -----")
 
                 for a0 in range(self._aberrations_mn.shape[0]):
                     m, n, a = self._aberrations_mn[a0]
                     if n == 0:
                         print(
-                            str(m) + \
-                            '        0         -      ' + \
-                            str(np.round(self._aberrations_coefs[a0]).astype('int')) )
-                    elif a == 0: 
+                            str(m)
+                            + "        0         -      "
+                            + str(np.round(self._aberrations_coefs[a0]).astype("int"))
+                        )
+                    elif a == 0:
                         print(
-                            str(m) + \
-                            '        ' + \
-                            str(n) + \
-                            '         x      ' + \
-                            str(np.round(self._aberrations_coefs[a0]).astype('int')) )
+                            str(m)
+                            + "        "
+                            + str(n)
+                            + "         x      "
+                            + str(np.round(self._aberrations_coefs[a0]).astype("int"))
+                        )
                     else:
                         print(
-                            str(m) + \
-                            '        ' + \
-                            str(n) + \
-                            '         y      ' + \
-                            str(np.round(self._aberrations_coefs[a0]).astype('int')) )
+                            str(m)
+                            + "        "
+                            + str(n)
+                            + "         y      "
+                            + str(np.round(self._aberrations_coefs[a0]).astype("int"))
+                        )
 
         if self._device == "gpu":
             xp._default_memory_pool.free_all_blocks()
@@ -1670,7 +1746,7 @@ class ParallaxReconstruction(PhaseReconstruction):
 
     def aberration_correct(
         self,
-        use_FFT_fit = True,
+        use_CTF_fit=None,
         plot_corrected_phase: bool = True,
         k_info_limit: float = None,
         k_info_power: float = 1.0,
@@ -1727,8 +1803,16 @@ class ParallaxReconstruction(PhaseReconstruction):
         ky = xp.fft.fftfreq(im.shape[1], sy)
         kra2 = (kx[:, None]) ** 2 + (ky[None, :]) ** 2
 
-        if use_FFT_fit:
-            sin_chi = np.sin(self.calc_CTF(self.alpha,*self.aber_coefs))
+        if use_CTF_fit is None:
+            if hasattr(self, "_aberrations_surface_shape"):
+                use_CTF_fit = True
+
+        if use_CTF_fit:
+            sin_chi = np.sin(
+                self._calculate_CTF(
+                    self._aberrations_surface_shape, *self._aberrations_coefs
+                )
+            )
 
             CTF_corr = xp.sign(sin_chi)
             CTF_corr[0, 0] = 0
@@ -1748,7 +1832,9 @@ class ParallaxReconstruction(PhaseReconstruction):
             if Wiener_filter:
                 SNR_inv = (
                     xp.sqrt(
-                        1 + (kra2**k_info_power) / ((k_info_limit) ** (2 * k_info_power))
+                        1
+                        + (kra2**k_info_power)
+                        / ((k_info_limit) ** (2 * k_info_power))
                     )
                     / Wiener_signal_noise_ratio
                 )
