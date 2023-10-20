@@ -2208,6 +2208,7 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
             pixelunits = r"$\AA^{-1}$"
 
         figsize = kwargs.pop("figsize", (6, 6))
+        chroma_boost = kwargs.pop("chroma_boost", 2)
 
         fig, ax = plt.subplots(figsize=figsize)
         show_complex(
@@ -2218,6 +2219,7 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
             pixelsize=pixelsize,
             pixelunits=pixelunits,
             ticks=False,
+            chroma_boost = chroma_boost,
             **kwargs,
         )
 

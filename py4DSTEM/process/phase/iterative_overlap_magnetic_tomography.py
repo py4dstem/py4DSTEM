@@ -813,11 +813,13 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
 
         if plot_probe_overlaps:
             figsize = kwargs.pop("figsize", (13, 4))
+            chroma_boost = kwargs.pop("chroma_boost", 1)
 
             # initial probe
             complex_probe_rgb = Complex2RGB(
                 self.probe_centered,
                 power=2,
+                chroma_boost = chroma_boost,
             )
 
             # propagated
@@ -830,6 +832,7 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
             complex_propagated_rgb = Complex2RGB(
                 asnumpy(self._return_centered_probe(propagated_probe)),
                 power=2,
+                chroma_boost = chroma_boost,
             )
 
             extent = [
@@ -857,6 +860,7 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
             cax1 = divider.append_axes("right", size="5%", pad="2.5%")
             add_colorbar_arg(
                 cax1,
+                chroma_boost = chroma_boost,
             )
             ax1.set_ylabel("x [A]")
             ax1.set_xlabel("y [A]")
@@ -871,6 +875,7 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
             cax2 = divider.append_axes("right", size="5%", pad="2.5%")
             add_colorbar_arg(
                 cax2,
+                chroma_boost = chroma_boost,
             )
             ax2.set_ylabel("x [A]")
             ax2.set_xlabel("y [A]")
