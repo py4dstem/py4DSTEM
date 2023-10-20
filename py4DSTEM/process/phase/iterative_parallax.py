@@ -34,7 +34,7 @@ _aberration_names = {
     (1, 2): "stig      ",
     (2, 1): "coma      ",
     (2, 3): "trefoil   ",
-    (3, 0): "Cs        ",
+    (3, 0): "C3        ",
     (3, 2): "stig2     ",
     (3, 4): "quadfoil  ",
     (4, 1): "coma2     ",
@@ -155,7 +155,7 @@ class ParallaxReconstruction(PhaseReconstruction):
             self.metadata = Metadata(
                 name="aberrations_metadata",
                 data={
-                    v["common name"]: v["value [Ang]"]
+                    v["aberration name"]: v["value [Ang]"]
                     for k, v in self.aberration_dict.items()
                 },
             )
@@ -1294,7 +1294,7 @@ class ParallaxReconstruction(PhaseReconstruction):
         fit_CTF_FFT: bool = False,
         fit_aberrations_max_radial_order: int = 3,
         fit_aberrations_max_angular_order: int = 4,
-        fit_aberrations_min_radial_order: int = 1,
+        fit_aberrations_min_radial_order: int = 2,
         fit_aberrations_min_angular_order: int = 0,
         fit_max_thon_rings: int = 6,
         fit_power_alpha: float = 2.0,
@@ -1366,7 +1366,7 @@ class ParallaxReconstruction(PhaseReconstruction):
         mn = []
 
         for m in range(
-            fit_aberrations_min_radial_order, fit_aberrations_max_radial_order + 1
+            fit_aberrations_min_radial_order - 1, fit_aberrations_max_radial_order
         ):
             n_max = np.minimum(fit_aberrations_max_angular_order, m + 1)
             for n in range(fit_aberrations_min_angular_order, n_max + 1):
@@ -1741,7 +1741,7 @@ class ParallaxReconstruction(PhaseReconstruction):
 
         self.aberration_dict = {
             tuple(self._aberrations_mn[a0]): {
-                "common name": _aberration_names.get(
+                "aberration name": _aberration_names.get(
                     tuple(self._aberrations_mn[a0, :2]), "-"
                 ).strip(),
                 "value [Ang]": self._aberrations_coefs[a0],
@@ -1774,7 +1774,7 @@ class ParallaxReconstruction(PhaseReconstruction):
                 print()
                 print("Refined Aberration coefficients")
                 print("-------------------------------")
-                print("common        radial   angular   dir.   coefs")
+                print("aberration    radial   angular   dir.   coefs")
                 print("name          order    order             Ang ")
                 print("----------   -------   -------   ----   -----")
 
@@ -1785,7 +1785,7 @@ class ParallaxReconstruction(PhaseReconstruction):
                         print(
                             name
                             + "      "
-                            + str(m)
+                            + str(m + 1)
                             + "        0         -      "
                             + str(np.round(self._aberrations_coefs[a0]).astype("int"))
                         )
@@ -1793,7 +1793,7 @@ class ParallaxReconstruction(PhaseReconstruction):
                         print(
                             name
                             + "      "
-                            + str(m)
+                            + str(m + 1)
                             + "        "
                             + str(n)
                             + "         x      "
@@ -1803,7 +1803,7 @@ class ParallaxReconstruction(PhaseReconstruction):
                         print(
                             name
                             + "      "
-                            + str(m)
+                            + str(m + 1)
                             + "        "
                             + str(n)
                             + "         y      "
