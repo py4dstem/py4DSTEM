@@ -13,8 +13,8 @@ from mpl_toolkits.axes_grid1 import ImageGrid, make_axes_locatable
 
 try:
     import cupy as cp
-except ImportError:
-    cp = None
+except ModuleNotFoundError:
+    cp = np
 
 from emdfile import Array, Custom, Metadata, _read_metadata, tqdmnd
 from py4DSTEM.data import Calibration

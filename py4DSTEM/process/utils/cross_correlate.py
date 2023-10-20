@@ -6,8 +6,8 @@ from py4DSTEM.process.utils.multicorr import upsampled_correlation
 
 try:
     import cupy as cp
-except ImportError:
-    cp = None
+except ModuleNotFoundError:
+    cp = np
 
 
 def get_cross_correlation(ar, template, corrPower=1, _returnval="real"):
@@ -118,9 +118,12 @@ def align_images_fourier(
     y0 = xp.round((y0 + dy) * 2.0) / 2.0
 
     # subpixel shifts
-    xy_shift = upsampled_correlation(cc, upsample_factor, xp.array([x0, y0]), device = device)
+    xy_shift = upsampled_correlation(
+        cc, upsample_factor, xp.array([x0, y0]), device=device
+    )
 
     return xy_shift
+
 
 def align_and_shift_images(
     image_1,
@@ -151,7 +154,7 @@ def align_and_shift_images(
 
     elif device == "gpu":
         xp = cp
-    
+
     image_1 = xp.asarray(image_1)
     image_2 = xp.asarray(image_2)
 
@@ -170,6 +173,6 @@ def align_and_shift_images(
         - image_1.shape[1] / 2
     )
 
-    image_2_shifted = get_shifted_ar(image_2, dx, dy, device= device)
+    image_2_shifted = get_shifted_ar(image_2, dx, dy, device=device)
 
     return image_2_shifted
