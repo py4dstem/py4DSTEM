@@ -613,11 +613,13 @@ class MixedstateMultislicePtychographicReconstruction(PtychographicReconstructio
 
         if plot_probe_overlaps:
             figsize = kwargs.pop("figsize", (13, 4))
+            chroma_boost = kwargs.pop("chroma_boost", 1)
 
             # initial probe
             complex_probe_rgb = Complex2RGB(
                 self.probe_centered[0],
                 power=2,
+                chroma_boost = chroma_boost,
             )
 
             # propagated
@@ -630,6 +632,7 @@ class MixedstateMultislicePtychographicReconstruction(PtychographicReconstructio
             complex_propagated_rgb = Complex2RGB(
                 asnumpy(self._return_centered_probe(propagated_probe)),
                 power=2,
+                chroma_boost = chroma_boost,
             )
 
             extent = [
@@ -657,6 +660,7 @@ class MixedstateMultislicePtychographicReconstruction(PtychographicReconstructio
             cax1 = divider.append_axes("right", size="5%", pad="2.5%")
             add_colorbar_arg(
                 cax1,
+                chroma_boost = chroma_boost,
             )
             ax1.set_ylabel("x [A]")
             ax1.set_xlabel("y [A]")
@@ -669,7 +673,7 @@ class MixedstateMultislicePtychographicReconstruction(PtychographicReconstructio
 
             divider = make_axes_locatable(ax2)
             cax2 = divider.append_axes("right", size="5%", pad="2.5%")
-            add_colorbar_arg(cax2)
+            add_colorbar_arg(cax2, chroma_boost=chroma_boost)
             ax2.set_ylabel("x [A]")
             ax2.set_xlabel("y [A]")
             ax2.set_title("Propagated probe[0] intensity")
@@ -2502,6 +2506,11 @@ class MixedstateMultislicePtychographicReconstruction(PtychographicReconstructio
         figsize = kwargs.pop("figsize", (8, 5))
         cmap = kwargs.pop("cmap", "magma")
 
+        if plot_fourier_probe:
+            chroma_boost = kwargs.pop("chroma_boost", 2)
+        else:
+            chroma_boost = kwargs.pop("chroma_boost", 1)
+
         if self._object_type == "complex":
             obj = np.angle(self.object)
         else:
@@ -2595,12 +2604,12 @@ class MixedstateMultislicePtychographicReconstruction(PtychographicReconstructio
 
             ax = fig.add_subplot(spec[0, 1])
             if plot_fourier_probe:
-                probe_array = Complex2RGB(self.probe_fourier[0])
+                probe_array = Complex2RGB(self.probe_fourier[0],chroma_boost=chroma_boost)
                 ax.set_title("Reconstructed Fourier probe[0]")
                 ax.set_ylabel("kx [mrad]")
                 ax.set_xlabel("ky [mrad]")
             else:
-                probe_array = Complex2RGB(self.probe[0], power=2)
+                probe_array = Complex2RGB(self.probe[0], power=2, chroma_boost=chroma_boost)
                 ax.set_title("Reconstructed probe[0] intensity")
                 ax.set_ylabel("x [A]")
                 ax.set_xlabel("y [A]")
@@ -2613,7 +2622,7 @@ class MixedstateMultislicePtychographicReconstruction(PtychographicReconstructio
             if cbar:
                 divider = make_axes_locatable(ax)
                 ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
-                add_colorbar_arg(ax_cb)
+                add_colorbar_arg(ax_cb,chroma_boost=chroma_boost)
 
         else:
             ax = fig.add_subplot(spec[0])
@@ -2722,6 +2731,11 @@ class MixedstateMultislicePtychographicReconstruction(PtychographicReconstructio
         figsize = kwargs.pop("figsize", auto_figsize)
         cmap = kwargs.pop("cmap", "magma")
 
+        if plot_fourier_probe:
+            chroma_boost = kwargs.pop("chroma_boost", 2)
+        else:
+            chroma_boost = kwargs.pop("chroma_boost", 1)
+
         errors = np.array(self.error_iterations)
 
         objects = []
@@ -2825,6 +2839,7 @@ class MixedstateMultislicePtychographicReconstruction(PtychographicReconstructio
                                 probes[grid_range[n]][0]
                             )
                         ),
+                        chroma_boost = chroma_boost,
                     )
                     ax.set_title(f"Iter: {grid_range[n]} Fourier probe[0]")
                     ax.set_ylabel("kx [mrad]")
@@ -2833,6 +2848,7 @@ class MixedstateMultislicePtychographicReconstruction(PtychographicReconstructio
                     probe_array = Complex2RGB(
                         probes[grid_range[n]][0],
                         power=2,
+                        chroma_boost = chroma_boost,
                     )
                     ax.set_title(f"Iter: {grid_range[n]} probe[0]")
                     ax.set_ylabel("x [A]")
@@ -2846,6 +2862,7 @@ class MixedstateMultislicePtychographicReconstruction(PtychographicReconstructio
                 if cbar:
                     add_colorbar_arg(
                         grid.cbar_axes[n],
+                        chroma_boost = chroma_boost,
                     )
 
         if plot_convergence:
@@ -2953,12 +2970,15 @@ class MixedstateMultislicePtychographicReconstruction(PtychographicReconstructio
         if pixelunits is None:
             pixelunits = r"$\AA^{-1}$"
 
+        chroma_boost = kwargs.pop("chroma_boost", 2)
+        
         show_complex(
             probe if len(probe) > 1 else probe[0],
             scalebar=scalebar,
             pixelsize=pixelsize,
             pixelunits=pixelunits,
             ticks=False,
+            chroma_boost = chroma_boost,
             **kwargs,
         )
 

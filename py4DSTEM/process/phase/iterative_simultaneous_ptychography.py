@@ -753,11 +753,13 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
 
         if plot_probe_overlaps:
             figsize = kwargs.pop("figsize", (9, 4))
+            chroma_boost = kwargs.pop("chroma_boost", 1)
 
             # initial probe
             complex_probe_rgb = Complex2RGB(
                 self.probe_centered,
                 power=2,
+                chroma_boost = chroma_boost,
             )
 
             extent = [
@@ -785,6 +787,7 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
             cax1 = divider.append_axes("right", size="5%", pad="2.5%")
             add_colorbar_arg(
                 cax1,
+                chroma_boost = chroma_boost,
             )
             ax1.set_ylabel("x [A]")
             ax1.set_xlabel("y [A]")
@@ -3078,6 +3081,11 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
         vmax_e = kwargs.pop("vmax_e", max_e)
         vmin_m = kwargs.pop("vmin_m", min_m)
         vmax_m = kwargs.pop("vmax_m", max_m)
+        
+        if plot_fourier_probe:
+            chroma_boost = kwargs.pop("chroma_boost", 2)
+        else:
+            chroma_boost = kwargs.pop("chroma_boost", 1)
 
         extent = [
             0,
@@ -3184,12 +3192,13 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
             if plot_fourier_probe:
                 probe_array = Complex2RGB(
                     self.probe_fourier,
+                    chroma_boost = chroma_boost,
                 )
                 ax.set_title("Reconstructed Fourier probe")
                 ax.set_ylabel("kx [mrad]")
                 ax.set_xlabel("ky [mrad]")
             else:
-                probe_array = Complex2RGB(self.probe, power=2)
+                probe_array = Complex2RGB(self.probe, power=2,chroma_boost=chroma_boost)
                 ax.set_title("Reconstructed probe intensity")
                 ax.set_ylabel("x [A]")
                 ax.set_xlabel("y [A]")
@@ -3202,7 +3211,7 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
             if cbar:
                 divider = make_axes_locatable(ax)
                 ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
-                add_colorbar_arg(ax_cb)
+                add_colorbar_arg(ax_cb,chroma_boost=chroma_boost)
 
         else:
             # Electrostatic Object
