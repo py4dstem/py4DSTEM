@@ -555,10 +555,12 @@ class PtychographicConstraints:
         fourier_probe = xp.fft.fft2(current_probe)
         fourier_probe_abs = xp.abs(fourier_probe)
         sampling = self.sampling
+        energy = self._energy
 
         fitted_angle, _ = fit_aberration_surface(
             fourier_probe,
             sampling,
+            energy,
             max_angular_order,
             max_radial_order,
             xp=xp,
