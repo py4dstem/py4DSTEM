@@ -52,7 +52,7 @@ if not exists(testpath):
 if args.data == "tutorials":
     data = ["tutorials"]
 elif args.data == "io":
-    data = ["test_io", "test_arina"]
+    data = ["test_io", "test_arina", "test_atomic_coords"]
 elif args.data == "basic":
     data = ["small_datacube"]
 elif args.data == "strain":

@@ -123,12 +123,30 @@ file_ids = {
         "downsample_Si_SiGe_analysis_braggdisks_cal.h5",
         "1bYgDdAlnWHyFmY-SwN3KVpMutWBI5MhP",
     ),
-    "test_Si_cif": ("Si.cif", "1b5ZonO0Upcp6eoiE-UEzGe1ymSj4QBaO"),
-    "test_Si_cif_sym": ("Si-sym.cif", "1Q26anzuq9FRgjNPGHUyrQ3d1pmP1B--T"),
-    "test_Si_prismatic": ("Si.prismatic", "1h_tnmygDGin3rMMBYtV2-VCJbO9_4Q_F"),
-    "test_NaCl_cif": ("NaCl.cif", "1nfUTyHTwYM6S5mCxIgwzrtN9gS0ReOYb"),
-    "test_NaCl_prismatic": ("NaCl.prismatic", "1_fWx6C3PkT47fBJufYjM3DN7eeMIQqYj"),
-    "test_DRX_cif": ("DRX.cif", "1hiGqFW6BJMFl718h63jQybpWfY-lNmsr"),
+    "test_Si_cif": (
+        "Si.cif",
+        "1b5ZonO0Upcp6eoiE-UEzGe1ymSj4QBaO"
+    ),
+    "test_Si_cif_sym": (
+        "Si-sym.cif",
+        "1Q26anzuq9FRgjNPGHUyrQ3d1pmP1B--T"
+    ),
+    "test_Si_prismatic": (
+        "Si.prismatic",
+        "1h_tnmygDGin3rMMBYtV2-VCJbO9_4Q_F"
+    ),
+    "test_NaCl_cif": (
+        "NaCl.cif",
+        "1nfUTyHTwYM6S5mCxIgwzrtN9gS0ReOYb"
+    ),
+    "test_NaCl_prismatic": (
+        "NaCl.prismatic",
+        "1_fWx6C3PkT47fBJufYjM3DN7eeMIQqYj"
+    ),
+    "test_DRX_cif": (
+        "DRX.cif",
+        "1hiGqFW6BJMFl718h63jQybpWfY-lNmsr"
+    ),
 }
 
 # collections of files
