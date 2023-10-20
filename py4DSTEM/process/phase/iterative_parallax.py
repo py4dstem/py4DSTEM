@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from emdfile import Array, Custom, Metadata, _read_metadata, tqdmnd
 from matplotlib.gridspec import GridSpec
+from mpl_toolkits.axes_grid1.axes_divider import make_axes_locatable
 from py4DSTEM import DataCube
 from py4DSTEM.preprocess.utils import get_shifted_ar
 from py4DSTEM.process.phase.iterative_base_class import PhaseReconstruction
@@ -29,6 +30,23 @@ except ImportError:
 
 warnings.simplefilter(action="always", category=UserWarning)
 
+_aberration_names = {
+    (1, 0): "-defocus  ",
+    (1, 2): "stig      ",
+    (2, 1): "coma      ",
+    (2, 3): "trefoil   ",
+    (3, 0): "Cs        ",
+    (3, 2): "stig2     ",
+    (3, 4): "quadfoil  ",
+    (4, 1): "coma2     ",
+    (4, 3): "trefoil2  ",
+    (4, 5): "pentafoil ",
+    (5, 0): "C5        ",
+    (5, 2): "stig3     ",
+    (5, 4): "quadfoil2 ",
+    (5, 6): "hexafoil  ",
+}
+
 
 class ParallaxReconstruction(PhaseReconstruction):
     """
@@ -40,9 +58,6 @@ class ParallaxReconstruction(PhaseReconstruction):
         Input 4D diffraction pattern intensities
     energy: float
         The electron energy of the wave functions in eV
-    dp_mean: ndarray, optional
-        Mean diffraction pattern
-        If None, get_dp_mean() is used
     verbose: bool, optional
         If True, class methods will inherit this and print additional information
     device: str, optional
@@ -122,6 +137,7 @@ class ParallaxReconstruction(PhaseReconstruction):
         if hasattr(self, "aberration_C1"):
             recon_metadata |= {
                 "aberration_rotation_QR": self.rotation_Q_to_R_rads,
+                "aberration_transpose": self.transpose_detected,
                 "aberration_C1": self.aberration_C1,
                 "aberration_A1x": self.aberration_A1x,
                 "aberration_A1y": self.aberration_A1y,
@@ -134,6 +150,15 @@ class ParallaxReconstruction(PhaseReconstruction):
             self._subpixel_aligned_BF_emd = Array(
                 name="subpixel_aligned_BF",
                 data=self._asnumpy(self._recon_BF_subpixel_aligned),
+            )
+
+        if hasattr(self, "aberration_dict"):
+            self.metadata = Metadata(
+                name="aberrations_metadata",
+                data={
+                    v["common name"]: v["value [Ang]"]
+                    for k, v in self.aberration_dict.items()
+                },
             )
 
         self.metadata = Metadata(
@@ -212,6 +237,7 @@ class ParallaxReconstruction(PhaseReconstruction):
 
         if "aberration_C1" in reconstruction_md.keys:
             self.rotation_Q_to_R_rads = reconstruction_md["aberration_rotation_QR"]
+            self.transpose_detected = reconstruction_md["aberration_transpose"]
             self.aberration_C1 = reconstruction_md["aberration_C1"]
             self.aberration_A1x = reconstruction_md["aberration_A1x"]
             self.aberration_A1y = reconstruction_md["aberration_A1y"]
@@ -326,9 +352,6 @@ class ParallaxReconstruction(PhaseReconstruction):
             com_fitted_y = asnumpy(com_fitted_y)
             intensities = asnumpy(self._intensities)
             intensities_shifted = np.zeros_like(intensities)
-
-            # center_x = np.mean(com_fitted_x)
-            # center_y = np.mean(com_fitted_y)
 
             center_x, center_y = self._region_of_interest_shape / 2
 
@@ -706,8 +729,6 @@ class ParallaxReconstruction(PhaseReconstruction):
                 convergence.append(asnumpy(self._recon_error[0]))
 
         if plot_convergence:
-            from mpl_toolkits.axes_grid1.axes_divider import make_axes_locatable
-
             fig, ax = plt.subplots()
             ax.set_title("convergence")
             im = ax.imshow(
@@ -1287,19 +1308,29 @@ class ParallaxReconstruction(PhaseReconstruction):
 
         Parameters
         ----------
+        fit_BF_shifts: bool
+            Set to True to fit aberrations to the measured BF shifts directly.
         fit_CTF_FFT: bool
-            Set to True to directly fit aberrations in the FFT of the upsampled BF
-            image (if available). Note that this method relies on visible zero
-            crossings in the FFT, and will not work if they are not present.
-        fit_upsampled_FFT: bool
-            If True, we aberration fit is performed on the upsampled BF image.
-            This option does nothing if fit_thon_rings is not True.
-        fit_aber_order_max: int
+            Set to True to fit aberrations in the FFT of the (upsampled) BF
+            image. Note that this method relies on visible zero crossings in the FFT.
+        fit_aberrations_max_radial_order: int
             Max radial order for fitting of aberrations.
-        ctf_threshold: float
-            CTF fitting minimizes value at CTF zero crossings (Thon ring minima).
-        plot_CTF_compare: bool, optional
+        fit_aberrations_max_angular_order: int
+            Max angular order for fitting of aberrations.
+        fit_aberrations_min_radial_order: int
+            Min radial order for fitting of aberrations.
+        fit_aberrations_min_angular_order: int
+            Min angular order for fitting of aberrations.
+        fit_max_thon_rings: int
+            Max number of Thon rings to search for during CTF FFT fitting.
+        fit_power_alpha: int
+            Power to raise FFT alpha weighting during CTF FFT fitting.
+        plot_CTF_comparison: bool, optional
             If True, the fitted CTF is plotted against the reconstructed frequencies.
+        plot_BF_shifts_comparison: bool, optional
+            If True, the measured vs fitted BF shifts are plotted.
+        upsampled: bool
+            If True, and upsampled BF is available, uses that for CTF FFT fitting.
 
         """
         xp = self._xp
@@ -1328,6 +1359,7 @@ class ParallaxReconstruction(PhaseReconstruction):
         self.aberration_C1 = (m_aberration[0, 0] + m_aberration[1, 1]) / 2.0
         self.aberration_A1x = (m_aberration[0, 0] - m_aberration[1, 1]) / 2.0
         self.aberration_A1y = (m_aberration[1, 0] + m_aberration[0, 1]) / 2.0
+        self.transpose_detected = False
 
         ### Second pass
 
@@ -1352,6 +1384,9 @@ class ParallaxReconstruction(PhaseReconstruction):
         sub = self._aberrations_mn[:, 1] > 0
         self._aberrations_mn[sub, :] = self._aberrations_mn[sub, :][
             np.argsort(self._aberrations_mn[sub, 0]), :
+        ]
+        self._aberrations_mn[~sub, :] = self._aberrations_mn[~sub, :][
+            np.argsort(self._aberrations_mn[~sub, 0]), :
         ]
         self._aberrations_num = self._aberrations_mn.shape[0]
 
@@ -1579,8 +1614,18 @@ class ParallaxReconstruction(PhaseReconstruction):
             )[:2]
 
             if res_T.sum() < res.sum():
+                self.rotation_Q_to_R_rads = rotation_Q_to_R_rads_T
+                self.transpose_detected = True
                 self._aberrations_coefs = asnumpy(aberrations_coefs_T)
                 self._rotated_shifts = rotated_shifts_T
+
+                warnings.warn(
+                    (
+                        "Data transpose detected. "
+                        f"Overwriting rotation value to {np.rad2deg(rotation_Q_to_R_rads_T):.3f}"
+                    ),
+                    UserWarning,
+                )
             else:
                 self._aberrations_coefs = asnumpy(aberrations_coefs)
                 self._rotated_shifts = rotated_shifts
@@ -1695,6 +1740,16 @@ class ParallaxReconstruction(PhaseReconstruction):
                 ],
             )
 
+        self.aberration_dict = {
+            tuple(self._aberrations_mn[a0]): {
+                "common name": _aberration_names.get(
+                    tuple(self._aberrations_mn[a0, :2]), "-"
+                ).strip(),
+                "value [Ang]": self._aberrations_coefs[a0],
+            }
+            for a0 in range(self._aberrations_num)
+        }
+
         # Print results
         if self._verbose:
             if fit_CTF_FFT or fit_BF_shifts:
@@ -1720,21 +1775,26 @@ class ParallaxReconstruction(PhaseReconstruction):
                 print()
                 print("Refined Aberration coefficients")
                 print("-------------------------------")
-                print("radial   angular   dir.   coefs")
-                print("order    order                 ")
-                print("------   -------   ----   -----")
+                print("common        radial   angular   dir.   coefs")
+                print("name          order    order             Ang ")
+                print("----------   -------   -------   ----   -----")
 
                 for a0 in range(self._aberrations_mn.shape[0]):
                     m, n, a = self._aberrations_mn[a0]
+                    name = _aberration_names.get((m, n), "    --    ")
                     if n == 0:
                         print(
-                            str(m)
+                            name
+                            + "      "
+                            + str(m)
                             + "        0         -      "
                             + str(np.round(self._aberrations_coefs[a0]).astype("int"))
                         )
                     elif a == 0:
                         print(
-                            str(m)
+                            name
+                            + "      "
+                            + str(m)
                             + "        "
                             + str(n)
                             + "         x      "
@@ -1742,7 +1802,9 @@ class ParallaxReconstruction(PhaseReconstruction):
                         )
                     else:
                         print(
-                            str(m)
+                            name
+                            + "      "
+                            + str(m)
                             + "        "
                             + str(n)
                             + "         y      "
