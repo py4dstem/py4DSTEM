@@ -1552,7 +1552,7 @@ def aberrations_basis_function(
     # mn = [[0,0,0]]
     mn = []
 
-    for m in range(1, max_radial_order + 1):
+    for m in range(1, max_radial_order):
         n_max = np.minimum(max_angular_order, m + 1)
         for n in range(0, n_max + 1):
             if (m + n) % 2:
