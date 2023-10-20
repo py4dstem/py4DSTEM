@@ -11,7 +11,7 @@ import numpy as np
 from emdfile import Array, Custom, Metadata, _read_metadata, tqdmnd
 from matplotlib.gridspec import GridSpec
 from mpl_toolkits.axes_grid1.axes_divider import make_axes_locatable
-from py4DSTEM import DataCube
+from py4DSTEM import Calibration, DataCube
 from py4DSTEM.preprocess.utils import get_shifted_ar
 from py4DSTEM.process.phase.iterative_base_class import PhaseReconstruction
 from py4DSTEM.process.phase.utils import AffineTransform
@@ -19,9 +19,8 @@ from py4DSTEM.process.utils.cross_correlate import align_images_fourier
 from py4DSTEM.process.utils.utils import electron_wavelength_angstrom
 from py4DSTEM.visualize import show
 from scipy.linalg import polar
+from scipy.optimize import minimize
 from scipy.special import comb
-from scipy.optimize import curve_fit, minimize
-from scipy.signal import medfilt2d
 
 try:
     import cupy as cp

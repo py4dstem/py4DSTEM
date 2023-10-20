@@ -2219,7 +2219,7 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
             pixelsize=pixelsize,
             pixelunits=pixelunits,
             ticks=False,
-            chroma_boost = chroma_boost,
+            chroma_boost=chroma_boost,
             **kwargs,
         )
 
