@@ -759,7 +759,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
             complex_probe_rgb = Complex2RGB(
                 self.probe_centered,
                 power=2,
-                chroma_boost = chroma_boost,
+                chroma_boost=chroma_boost,
             )
 
             # propagated
@@ -772,7 +772,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
             complex_propagated_rgb = Complex2RGB(
                 asnumpy(self._return_centered_probe(propagated_probe)),
                 power=2,
-                chroma_boost = chroma_boost,
+                chroma_boost=chroma_boost,
             )
 
             extent = [
@@ -800,7 +800,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
             cax1 = divider.append_axes("right", size="5%", pad="2.5%")
             add_colorbar_arg(
                 cax1,
-                chroma_boost = chroma_boost,
+                chroma_boost=chroma_boost,
             )
             ax1.set_ylabel("x [A]")
             ax1.set_xlabel("y [A]")
@@ -815,7 +815,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
             cax2 = divider.append_axes("right", size="5%", pad="2.5%")
             add_colorbar_arg(
                 cax2,
-                chroma_boost = chroma_boost,
+                chroma_boost=chroma_boost,
             )
             ax2.set_ylabel("x [A]")
             ax2.set_xlabel("y [A]")
@@ -2696,7 +2696,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
             if plot_fourier_probe:
                 probe_array = Complex2RGB(
                     self.probe_fourier,
-                    chroma_boost = chroma_boost,
+                    chroma_boost=chroma_boost,
                 )
                 ax.set_title("Reconstructed Fourier probe")
                 ax.set_ylabel("kx [mrad]")
@@ -2705,7 +2705,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                 probe_array = Complex2RGB(
                     self.probe,
                     power=2,
-                    chroma_boost = chroma_boost,
+                    chroma_boost=chroma_boost,
                 )
                 ax.set_title("Reconstructed probe intensity")
                 ax.set_ylabel("x [A]")
@@ -2722,7 +2722,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                 ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
                 add_colorbar_arg(
                     ax_cb,
-                    chroma_boost = chroma_boost,
+                    chroma_boost=chroma_boost,
                 )
         else:
             ax = fig.add_subplot(spec[0])
@@ -2958,7 +2958,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                                 probes[grid_range[n]]
                             )
                         ),
-                        chroma_boost = chroma_boost,
+                        chroma_boost=chroma_boost,
                     )
                     ax.set_title(f"Iter: {grid_range[n]} Fourier probe")
                     ax.set_ylabel("kx [mrad]")
@@ -2967,7 +2967,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                     probe_array = Complex2RGB(
                         probes[grid_range[n]],
                         power=2,
-                        chroma_boost = chroma_boost,
+                        chroma_boost=chroma_boost,
                     )
                     ax.set_title(f"Iter: {grid_range[n]} probe intensity")
                     ax.set_ylabel("x [A]")
@@ -2981,7 +2981,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                 if cbar:
                     add_colorbar_arg(
                         grid.cbar_axes[n],
-                        chroma_boost = chroma_boost,
+                        chroma_boost=chroma_boost,
                     )
 
         if plot_convergence:

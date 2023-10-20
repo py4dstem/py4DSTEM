@@ -516,7 +516,7 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
             complex_probe_rgb = Complex2RGB(
                 self.probe_centered,
                 power=2,
-                chroma_boost = chroma_boost,
+                chroma_boost=chroma_boost,
             )
 
             extent = [
@@ -546,7 +546,7 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
 
                 divider = make_axes_locatable(axs[i])
                 cax = divider.append_axes("right", size="5%", pad="2.5%")
-                add_colorbar_arg(cax, chroma_boost = chroma_boost)
+                add_colorbar_arg(cax, chroma_boost=chroma_boost)
 
             axs[-1].imshow(
                 asnumpy(probe_overlap),
@@ -1946,7 +1946,7 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
             if plot_fourier_probe:
                 probe_array = Complex2RGB(
                     self.probe_fourier[0],
-                    chroma_boost = chroma_boost,
+                    chroma_boost=chroma_boost,
                 )
                 ax.set_title("Reconstructed Fourier probe[0]")
                 ax.set_ylabel("kx [mrad]")
@@ -1955,7 +1955,7 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
                 probe_array = Complex2RGB(
                     self.probe[0],
                     power=2,
-                    chroma_boost = chroma_boost,
+                    chroma_boost=chroma_boost,
                 )
                 ax.set_title("Reconstructed probe[0] intensity")
                 ax.set_ylabel("x [A]")
@@ -1969,7 +1969,7 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
             if cbar:
                 divider = make_axes_locatable(ax)
                 ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
-                add_colorbar_arg(ax_cb,chroma_boost = chroma_boost)
+                add_colorbar_arg(ax_cb, chroma_boost=chroma_boost)
 
         else:
             ax = fig.add_subplot(spec[0])
@@ -2077,7 +2077,7 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
         )
         figsize = kwargs.pop("figsize", auto_figsize)
         cmap = kwargs.pop("cmap", "magma")
-        
+
         if plot_fourier_probe:
             chroma_boost = kwargs.pop("chroma_boost", 2)
         else:
@@ -2184,7 +2184,7 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
                                 probes[grid_range[n]][0]
                             )
                         ),
-                        chroma_boost = chroma_boost,
+                        chroma_boost=chroma_boost,
                     )
                     ax.set_title(f"Iter: {grid_range[n]} Fourier probe[0]")
                     ax.set_ylabel("kx [mrad]")
@@ -2193,7 +2193,7 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
                     probe_array = Complex2RGB(
                         probes[grid_range[n]][0],
                         power=2,
-                        chroma_boost = chroma_boost,
+                        chroma_boost=chroma_boost,
                     )
                     ax.set_title(f"Iter: {grid_range[n]} probe[0] intensity")
                     ax.set_ylabel("x [A]")
@@ -2207,7 +2207,7 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
                 if cbar:
                     add_colorbar_arg(
                         grid.cbar_axes[n],
-                        chroma_boost = chroma_boost,
+                        chroma_boost=chroma_boost,
                     )
 
         if plot_convergence:
@@ -2317,13 +2317,13 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
             pixelunits = r"$\AA^{-1}$"
 
         chroma_boost = kwargs.pop("chroma_boost", 2)
-        
+
         show_complex(
             probe if len(probe) > 1 else probe[0],
             scalebar=scalebar,
             pixelsize=pixelsize,
             pixelunits=pixelunits,
             ticks=False,
-            chroma_boost = chroma_boost,
+            chroma_boost=chroma_boost,
             **kwargs,
         )
