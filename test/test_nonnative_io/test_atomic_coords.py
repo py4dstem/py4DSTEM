@@ -8,8 +8,8 @@ import numpy as np
 
 # set filepaths
 dirpath = join(py4DSTEM._TESTPATH, "test_atomic_coords")
-filepath_si_cif = join(dirpath,"Si.cif")
-filepath_si_prismatic = join(dirpath,"Si.prismatic")
+filepath_si_cif = join(dirpath, "Si.cif")
+filepath_si_prismatic = join(dirpath, "Si.prismatic")
 
 # occupancy for Si atoms loaded via cif
 cif_occupancy = {
@@ -27,17 +27,16 @@ prismatic_occupancy = np.ones(8, dtype=np.float32)
 
 
 class TestOccupancy:
-
-    #def setup_class(cls):
+    # def setup_class(cls):
     #    pass
 
-    #def teardown_class(cls):
+    # def teardown_class(cls):
     #    pass
 
     def setup_method(self):
         self.xtal_py4dstem = self.create_py4DSTEM_Si_crystal()
 
-    #def teadown_method(self):
+    # def teadown_method(self):
     #    pass
 
     def create_py4DSTEM_Si_crystal(self):
@@ -61,7 +60,6 @@ class TestOccupancy:
 
         return xtal
 
-
     def test_from_ase_pure(self):
         """
         Test Crystal.from_ase function with pure ASE object
@@ -78,7 +76,9 @@ class TestOccupancy:
             [0.75, 0.25, 0.25],
             [0.5, 0.5, 0.5],
         ]
-        atoms = Atoms("Si" * 8, scaled_positions=scaled_positions, cell=[a, a, a], pbc=True)
+        atoms = Atoms(
+            "Si" * 8, scaled_positions=scaled_positions, cell=[a, a, a], pbc=True
+        )
         xtal = Crystal.from_ase(atoms)
 
         # Run Tests
@@ -87,11 +87,12 @@ class TestOccupancy:
         # occupancy should be None, as not provided
         assert xtal.occupancy is None, "occupancy is not None"
         # check the cells are close
-        assert np.allclose(xtal.cell, self.xtal_py4dstem.cell), "unit cells do not match"
+        assert np.allclose(
+            xtal.cell, self.xtal_py4dstem.cell
+        ), "unit cells do not match"
         # check the atom positions are close, all fractional coords
         # TODO this is not be the best way to check this...
         assert np.allclose(xtal.positions.sum(), self.xtal_py4dstem.positions.sum())
-
 
     def test_from_ase_cif(self):
         """
@@ -107,11 +108,12 @@ class TestOccupancy:
         # occupancy should be the same as cif_occupancy
         assert xtal.occupancy == cif_occupancy, "occupancy is not correct"
         # check the cells are close
-        assert np.allclose(xtal.cell, self.xtal_py4dstem.cell), "unit cells do not match"
+        assert np.allclose(
+            xtal.cell, self.xtal_py4dstem.cell
+        ), "unit cells do not match"
         # check the atom positions are close, all fractional coords
         # TODO this is not be the best way to check this...
         assert np.allclose(xtal.positions.sum(), self.xtal_py4dstem.positions.sum())
-
 
     def test_from_ase_prismatic(self):
         """
@@ -127,11 +129,12 @@ class TestOccupancy:
         # occupancy should be the same as  prismatic occupancy
         assert np.all(xtal.occupancy == prismatic_occupancy), "occupancy is not correct"
         # check the cells are close
-        assert np.allclose(xtal.cell, self.xtal_py4dstem.cell), "unit cells do not match"
+        assert np.allclose(
+            xtal.cell, self.xtal_py4dstem.cell
+        ), "unit cells do not match"
         # check the atom positions are close, all fractional coords
         # TODO this is not be the best way to check this...
         assert np.allclose(xtal.positions.sum(), self.xtal_py4dstem.positions.sum())
-
 
     def test_from_cif(self):
         """
@@ -147,11 +150,12 @@ class TestOccupancy:
         # occupancy should not be == cif_occupancy
         assert xtal.occupancy == cif_occupancy, "occupancy is not correct"
         # check the cells are close
-        assert np.allclose(xtal.cell, self.xtal_py4dstem.cell), "unit cells do not match"
+        assert np.allclose(
+            xtal.cell, self.xtal_py4dstem.cell
+        ), "unit cells do not match"
         # check the atom positions are close, all fractional coords
         # TODO this is not be the best way to check this...
         assert np.allclose(xtal.positions.sum(), self.xtal_py4dstem.positions.sum())
-
 
     def test_from_prismatic(self):
         """
@@ -167,7 +171,9 @@ class TestOccupancy:
         # occupancy should be == prismatic_occupancy
         assert xtal.occupancy is prismatic_occupancy, "occupancy is not correct"
         # check the cells are close
-        assert np.allclose(xtal.cell, self.xtal_py4dstem.cell), "unit cells do not match"
+        assert np.allclose(
+            xtal.cell, self.xtal_py4dstem.cell
+        ), "unit cells do not match"
         # check the atom positions are close, all fractional coords
         # TODO this is not be the best way to check this...
         assert np.allclose(xtal.positions.sum(), self.xtal_py4dstem.positions.sum())
