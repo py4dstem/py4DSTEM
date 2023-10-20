@@ -17,8 +17,8 @@ from scipy.ndimage import rotate as rotate_np
 
 try:
     import cupy as cp
-except ImportError:
-    cp = None
+except ModuleNotFoundError:
+    cp = np
 
 from emdfile import Custom, tqdmnd
 from py4DSTEM import DataCube

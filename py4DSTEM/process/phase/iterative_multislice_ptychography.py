@@ -15,8 +15,8 @@ from py4DSTEM.visualize.vis_special import Complex2RGB, add_colorbar_arg, show_c
 
 try:
     import cupy as cp
-except ImportError:
-    cp = None
+except ModuleNotFoundError:
+    cp = np
 
 from emdfile import Custom, tqdmnd
 from py4DSTEM import DataCube
