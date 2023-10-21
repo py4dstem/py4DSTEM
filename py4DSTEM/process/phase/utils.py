@@ -1549,10 +1549,10 @@ def aberrations_basis_function(
     xp=np,
 ):
     """ """
-    # mn = [[0,0,0]]
-    mn = []
+    mn = [[0,0,0]]
+    # mn = []
 
-    for m in range(1, max_radial_order):
+    for m in range(max_radial_order+1):
         n_max = np.minimum(max_angular_order, m + 1)
         for n in range(0, n_max + 1):
             if (m + n) % 2:
@@ -1583,9 +1583,9 @@ def aberrations_basis_function(
     theta = xp.arctan2(qy[None, :], qx[:, None])
 
     # Aberration basis
-    aberrations_basis = xp.zeros((alpha.size, aberrations_num))
+    aberrations_basis = xp.ones((alpha.size, aberrations_num))
 
-    for a0 in range(aberrations_num):
+    for a0 in range(1,aberrations_num):
         m, n, a = aberrations_mn[a0]
         if n == 0:
             # Radially symmetric basis
@@ -1641,7 +1641,7 @@ def fit_aberration_surface(
 
     Aw = raveled_basis * raveled_weights[:, None]
     bw = unwrapped_angle.ravel() * raveled_weights
-    coeff = -xp.linalg.lstsq(Aw, bw, rcond=None)[0]
+    coeff = xp.linalg.lstsq(Aw, bw, rcond=None)[0]
 
     fitted_angle = xp.tensordot(raveled_basis, coeff, axes=1).reshape(probe_angle.shape)
 
