@@ -3237,8 +3237,9 @@ class MixedstateMultislicePtychographicReconstruction(PtychographicReconstructio
             0,
         ]
 
+        figsize = kwargs.pop("figsize", (6, 6))
         if not plot_line_profile:
-            fig, ax = plt.subplots()
+            fig, ax = plt.subplots(figsize=figsize)
             im = ax.imshow(plot_im, cmap="magma", extent=extent)
             if aspect is not None:
                 ax.set_aspect(aspect)
@@ -3253,11 +3254,11 @@ class MixedstateMultislicePtychographicReconstruction(PtychographicReconstructio
         else:
             extent2 = [
                 0,
-                self.sampling[0] * ms_obj.shape[1],
                 self.sampling[1] * ms_obj.shape[2],
+                self.sampling[0] * ms_obj.shape[1],
                 0,
             ]
-            fig, ax = plt.subplots(2, 1)
+            fig, ax = plt.subplots(2, 1, figsize=figsize)
             ax[0].imshow(ms_obj.sum(0), cmap="gray", extent=extent2)
             ax[0].plot(
                 [y1 * self.sampling[0], y2 * self.sampling[1]],

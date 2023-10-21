@@ -1874,6 +1874,7 @@ class ParallaxReconstruction(PhaseReconstruction):
         ----------
         use_FFT_fit: bool
             Use the CTF fitted to the zero crossings of the FFT.
+            Default is True
         plot_corrected_phase: bool, optional
             If True, the CTF-corrected phase is plotted
         k_info_limit: float, optional

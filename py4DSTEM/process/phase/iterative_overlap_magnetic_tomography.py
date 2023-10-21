@@ -3292,7 +3292,7 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
         vmax = kwargs.pop("vmax", 1)
         power = kwargs.pop("power", 0.2)
 
-        pixelsize = 1 / (object_fft.shape[0] * self.sampling[0])
+        pixelsize = 1 / (object_fft.shape[1] * self.sampling[1])
         show(
             object_fft,
             figsize=figsize,
