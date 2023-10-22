@@ -37,7 +37,7 @@ setup(
         "gdown >= 4.7.1",
         "dask >= 2.3.0",
         "distributed >= 2.3.0",
-        "emdfile >= 0.0.13",
+        "emdfile >= 0.0.14",
         "mpire >= 2.7.1",
         "threadpoolctl >= 3.1.0",
     ],
