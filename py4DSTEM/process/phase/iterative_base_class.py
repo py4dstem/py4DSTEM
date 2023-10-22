@@ -56,6 +56,53 @@ class PhaseReconstruction(Custom):
         self._datacube = datacube
         return self
 
+    def reinitialize_parameters(self, device: str = None, verbose: bool = None):
+        """
+        Reinitializes common parameters. This is useful when loading a previously-saved
+        reconstruction (which set device='cpu' and verbose=True for compatibility) ,
+        using different initialization parameters.
+
+        Parameters
+        ----------
+        device: str, optional
+            If not None, imports and assigns appropriate device modules
+        verbose: bool, optional
+            If not None, sets the verbosity to verbose
+
+        Returns
+        --------
+        self: PhaseReconstruction
+            Self to enable chaining
+        """
+
+        if device is not None:
+            if device == "cpu":
+                self._xp = np
+                self._asnumpy = np.asarray
+                from scipy.ndimage import gaussian_filter
+
+                self._gaussian_filter = gaussian_filter
+                from scipy.special import erf
+
+                self._erf = erf
+            elif device == "gpu":
+                self._xp = cp
+                self._asnumpy = cp.asnumpy
+                from cupyx.scipy.ndimage import gaussian_filter
+
+                self._gaussian_filter = gaussian_filter
+                from cupyx.scipy.special import erf
+
+                self._erf = erf
+            else:
+                raise ValueError(f"device must be either 'cpu' or 'gpu', not {device}")
+            self._device = device
+
+        if verbose is not None:
+            self._verbose = verbose
+
+        return self
+
     def set_save_defaults(
         self,
         save_datacube: bool = False,
@@ -1408,10 +1455,10 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
             "object_type": instance_md["object_type"],
             "semiangle_cutoff": instance_md["semiangle_cutoff"],
             "rolloff": instance_md["rolloff"],
-            "verbose": instance_md["verbose"],
             "name": instance_md["name"],
-            "device": instance_md["device"],
             "polar_parameters": polar_params,
+            "verbose": True,  # for compatibility
+            "device": "cpu",  # for compatibility
         }
 
         class_specific_kwargs = {}

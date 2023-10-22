@@ -195,9 +195,9 @@ class DPCReconstruction(PhaseReconstruction):
             "datacube": dc,
             "initial_object_guess": np.asarray(obj),
             "energy": instance_md["energy"],
-            "verbose": instance_md["verbose"],
             "name": instance_md["name"],
-            "device": instance_md["device"],
+            "verbose": True,  # for compatibility
+            "device": "cpu",  # for compatibility
         }
 
         return kwargs
