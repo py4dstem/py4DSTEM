@@ -206,10 +206,10 @@ class ParallaxReconstruction(PhaseReconstruction):
         kwargs = {
             "datacube": dc,
             "energy": instance_md["energy"],
-            "verbose": instance_md["verbose"],
-            "device": instance_md["device"],
             "object_padding_px": instance_md["object_padding_px"],
             "name": instance_md["name"],
+            "verbose": True,  # for compatibility
+            "device": "cpu",  # for compatibility
         }
 
         return kwargs
