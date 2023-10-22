@@ -30,7 +30,7 @@ except ModuleNotFoundError:
 warnings.simplefilter(action="always", category=UserWarning)
 
 _aberration_names = {
-    (1, 0): "-defocus  ",
+    (1, 0): "C1        ",
     (1, 2): "stig      ",
     (2, 1): "coma      ",
     (2, 3): "trefoil   ",
@@ -1290,7 +1290,7 @@ class ParallaxReconstruction(PhaseReconstruction):
 
     def aberration_fit(
         self,
-        fit_BF_shifts: bool = True,
+        fit_BF_shifts: bool = False,
         fit_CTF_FFT: bool = False,
         fit_aberrations_max_radial_order: int = 3,
         fit_aberrations_max_angular_order: int = 4,
@@ -1301,6 +1301,7 @@ class ParallaxReconstruction(PhaseReconstruction):
         plot_CTF_comparison: bool = None,
         plot_BF_shifts_comparison: bool = None,
         upsampled: bool = True,
+        force_transpose: bool = None,
     ):
         """
         Fit aberrations to the measured image shifts.
@@ -1330,6 +1331,8 @@ class ParallaxReconstruction(PhaseReconstruction):
             If True, the measured vs fitted BF shifts are plotted.
         upsampled: bool
             If True, and upsampled BF is available, uses that for CTF FFT fitting.
+        force_transpose: bool
+            If True, and fit_BF_shifts is True, flips the measured x and y shifts
 
         """
         xp = self._xp
@@ -1358,7 +1361,11 @@ class ParallaxReconstruction(PhaseReconstruction):
         self.aberration_C1 = (m_aberration[0, 0] + m_aberration[1, 1]) / 2.0
         self.aberration_A1x = (m_aberration[0, 0] - m_aberration[1, 1]) / 2.0
         self.aberration_A1y = (m_aberration[1, 0] + m_aberration[0, 1]) / 2.0
-        self.transpose_detected = False
+
+        if force_transpose is None:
+            self.transpose_detected = False
+        else:
+            self.transpose_detected = force_transpose
 
         ### Second pass
 
@@ -1583,48 +1590,63 @@ class ParallaxReconstruction(PhaseReconstruction):
                 )
             )
 
-            # Untransposed fit
-            tf = AffineTransform(angle=self.rotation_Q_to_R_rads)
-            rotated_shifts = tf(self._xy_shifts_Ang, xp=xp).T.ravel()
-            aberrations_coefs, res = xp.linalg.lstsq(
-                gradients, rotated_shifts, rcond=None
-            )[:2]
-
-            # Transposed fit
-            transposed_shifts = xp.flip(self._xy_shifts_Ang, axis=1)
-            m_T = asnumpy(
-                xp.linalg.lstsq(self._probe_angles, transposed_shifts, rcond=None)[0]
-            )
-            m_rotation_T, _ = polar(m_T, side="right")
-            rotation_Q_to_R_rads_T = -1 * np.arctan2(
-                m_rotation_T[1, 0], m_rotation_T[0, 0]
-            )
-            if np.abs(np.mod(rotation_Q_to_R_rads_T + np.pi, 2.0 * np.pi) - np.pi) > (
-                np.pi * 0.5
-            ):
-                rotation_Q_to_R_rads_T = (
-                    np.mod(rotation_Q_to_R_rads_T, 2.0 * np.pi) - np.pi
+            if force_transpose is None or force_transpose is True:
+                # Transposed fit
+                transposed_shifts = xp.flip(self._xy_shifts_Ang, axis=1)
+                m_T = asnumpy(
+                    xp.linalg.lstsq(self._probe_angles, transposed_shifts, rcond=None)[
+                        0
+                    ]
                 )
+                m_rotation_T, _ = polar(m_T, side="right")
+                rotation_Q_to_R_rads_T = -1 * np.arctan2(
+                    m_rotation_T[1, 0], m_rotation_T[0, 0]
+                )
+                if np.abs(
+                    np.mod(rotation_Q_to_R_rads_T + np.pi, 2.0 * np.pi) - np.pi
+                ) > (np.pi * 0.5):
+                    rotation_Q_to_R_rads_T = (
+                        np.mod(rotation_Q_to_R_rads_T, 2.0 * np.pi) - np.pi
+                    )
 
-            tf = AffineTransform(angle=rotation_Q_to_R_rads_T)
-            rotated_shifts_T = tf(transposed_shifts, xp=xp).T.ravel()
-            aberrations_coefs_T, res_T = xp.linalg.lstsq(
-                gradients, rotated_shifts_T, rcond=None
-            )[:2]
+                tf_T = AffineTransform(angle=rotation_Q_to_R_rads_T)
+                rotated_shifts_T = tf_T(transposed_shifts, xp=xp).T.ravel()
+                aberrations_coefs_T, res_T = xp.linalg.lstsq(
+                    gradients, rotated_shifts_T, rcond=None
+                )[:2]
 
-            if res_T.sum() < res.sum():
+            if force_transpose is None or force_transpose is False:
+                # Untransposed fit
+                tf = AffineTransform(angle=self.rotation_Q_to_R_rads)
+                rotated_shifts = tf(self._xy_shifts_Ang, xp=xp).T.ravel()
+                aberrations_coefs, res = xp.linalg.lstsq(
+                    gradients, rotated_shifts, rcond=None
+                )[:2]
+
+            if force_transpose is None:
+                # Compare fits
+                if res_T.sum() < res.sum():
+                    self.rotation_Q_to_R_rads = rotation_Q_to_R_rads_T
+                    self.transpose_detected = True
+                    self._aberrations_coefs = asnumpy(aberrations_coefs_T)
+                    self._rotated_shifts = rotated_shifts_T
+
+                    warnings.warn(
+                        (
+                            "Data transpose detected. "
+                            f"Overwriting rotation value to {np.rad2deg(rotation_Q_to_R_rads_T):.3f}"
+                        ),
+                        UserWarning,
+                    )
+                else:
+                    self._aberrations_coefs = asnumpy(aberrations_coefs)
+                    self._rotated_shifts = rotated_shifts
+
+            elif force_transpose is True:
                 self.rotation_Q_to_R_rads = rotation_Q_to_R_rads_T
-                self.transpose_detected = True
                 self._aberrations_coefs = asnumpy(aberrations_coefs_T)
                 self._rotated_shifts = rotated_shifts_T
 
-                warnings.warn(
-                    (
-                        "Data transpose detected. "
-                        f"Overwriting rotation value to {np.rad2deg(rotation_Q_to_R_rads_T):.3f}"
-                    ),
-                    UserWarning,
-                )
             else:
                 self._aberrations_coefs = asnumpy(aberrations_coefs)
                 self._rotated_shifts = rotated_shifts
