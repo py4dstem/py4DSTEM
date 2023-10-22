@@ -1549,10 +1549,11 @@ def aberrations_basis_function(
     xp=np,
 ):
     """ """
-    mn = [[0, 0, 0]]
-    # mn = []
 
-    for m in range(max_radial_order + 1):
+    # Add constant phase shift in basis
+    mn = [[-1, 0, 0]]
+
+    for m in range(1, max_radial_order):
         n_max = np.minimum(max_angular_order, m + 1)
         for n in range(0, n_max + 1):
             if (m + n) % 2:
@@ -1585,6 +1586,7 @@ def aberrations_basis_function(
     # Aberration basis
     aberrations_basis = xp.ones((alpha.size, aberrations_num))
 
+    # Skip constant to avoid dividing by zero in normalization
     for a0 in range(1, aberrations_num):
         m, n, a = aberrations_mn[a0]
         if n == 0:
