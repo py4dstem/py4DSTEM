@@ -40,6 +40,8 @@ setup(
         "emdfile >= 0.0.14",
         "mpire >= 2.7.1",
         "threadpoolctl >= 3.1.0",
+        "pylops >= 2.1.0",
+        "colorspacious >= 1.1.2",
     ],
     extras_require={
         "ipyparallel": ["ipyparallel >= 6.2.4", "dill >= 0.3.3"],
