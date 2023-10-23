@@ -5,7 +5,7 @@ from typing import Optional
 
 import matplotlib.pyplot as plt
 import numpy as np
-from py4DSTEM import PointList
+from py4DSTEM import PointList, PointListArray, tqdmnd
 from py4DSTEM.braggvectors import BraggVectors
 from py4DSTEM.data import Data, RealSlice
 from py4DSTEM.preprocess.utils import get_maxima_2D
@@ -73,7 +73,7 @@ class StrainMap(RealSlice, Data):
         assert self.calstate["center"], "braggvectors must be centered"
         if self.calstate["rotate"] == False:
             warnings.warn(
-                ("Real to reciprocal space rotaiton not calibrated"),
+                ("Real to reciprocal space rotation not calibrated"),
                 UserWarning,
             )
 
@@ -98,6 +98,19 @@ class StrainMap(RealSlice, Data):
         self._braggvectors = x
         self._braggvectors.tree(self, force=True)
 
+    @property
+    def rshape(self):
+        return self._braggvectors.Rshape
+
+    @property
+    def qshape(self):
+        return self._braggvectors.Qshape
+
+    @property
+    def origin(self):
+        return self.calibration.get_origin_mean()
+
+
     def reset_calstate(self):
         """
         Resets the calibration state. This recomputes the BVM, and removes any computations
@@ -117,9 +130,9 @@ class StrainMap(RealSlice, Data):
 
     def choose_lattice_vectors(
         self,
-        index_g0,
-        index_g1,
-        index_g2,
+        index_g1 = None,
+        index_g2 = None,
+        index_origin = None,
         subpixel="multicorr",
         upsample_factor=16,
         sigma=0,
@@ -155,12 +168,12 @@ class StrainMap(RealSlice, Data):
 
         Parameters
         ----------
-        index_g0 : int
-            selected index for the origin
         index_g1 : int
             selected index for g1
         index_g2 :int
             selected index for g2
+        index_origin : int
+            selected index for the origin
         subpixel : str in ('pixel','poly','multicorr')
             See the docstring for py4DSTEM.preprocess.get_maxima_2D
         upsample_factor : int
@@ -211,8 +224,8 @@ class StrainMap(RealSlice, Data):
         (optional) : None or (g0,g1,g2) or (fig,(ax1,ax2)) or both of the latter
         """
         # validate inputs
-        for i in (index_g0, index_g1, index_g2):
-            assert isinstance(i, (int, np.integer)), "indices must be integers!"
+        for i in (index_origin, index_g1, index_g2):
+            assert(isinstance(i, (int, np.integer)) or (i is None)), "indices must be integers!"
         # check the calstate
         assert (
             self.calstate == self.braggvectors.calstate
@@ -233,30 +246,42 @@ class StrainMap(RealSlice, Data):
             maxNumPeaks=maxNumPeaks,
         )
 
+        # guess the origin and g1 g2 vectors if indices aren't provided
+        if np.any([x is None for x in (index_g1,index_g2,index_origin)]):
+
+            # get distances and angles from calibrated origin
+            g_dists = np.hypot(g['x']-self.origin[0], g['y']-self.origin[1])
+            g_angles = np.angle(g['x']-self.origin[0] + 1j*(g['y']-self.origin[1]))
+
+            # guess the origin
+            if index_origin is None:
+                index_origin = np.argmin(g_dists)
+                g_dists[index_origin] = 2*np.max(g_dists)
+
+            # guess g1
+            if index_g1 is None:
+                index_g1 = np.argmin(g_dists)
+                g_dists[index_g1] = 2*np.max(g_dists)
+
+            # guess g2
+            if index_g2 is None:
+                angle_scaling = np.cos(g_angles - g_angles[index_g1])**2
+                index_g2 = np.argmin(g_dists*(angle_scaling+0.1))
+
+
         # get the lattice vectors
         gx, gy = g["x"], g["y"]
-        g0 = gx[index_g0], gy[index_g0]
+        g0 = gx[index_origin], gy[index_origin]
         g1x = gx[index_g1] - g0[0]
         g1y = gy[index_g1] - g0[1]
         g2x = gx[index_g2] - g0[0]
         g2y = gy[index_g2] - g0[1]
         g1, g2 = (g1x, g1y), (g2x, g2y)
 
-        # if x0 is None:
-        #     x0 = self.braggvectors.Qshape[0] / 2
-        # if y0 is None:
-        #     y0 = self.braggvectors.Qshape[0] / 2
-
-        # index braggvectors
-        # _, _, braggdirections = index_bragg_directions(
-        #     x0, y0, g["x"], g["y"], g1, g2
-        # )
-
+        # index the lattice vectors
         _, _, braggdirections = index_bragg_directions(
             g0[0], g0[1], g["x"], g["y"], g1, g2
         )
-
-        self.braggdirections = braggdirections
 
         # make the figure
         fig, ax = plt.subplots(1, 3, figsize=figsize)
@@ -274,12 +299,12 @@ class StrainMap(RealSlice, Data):
         # Add indices to left panel
         d = {"x": gx, "y": gy, "size": size_indices, "color": c_indices}
         d0 = {
-            "x": gx[index_g0],
-            "y": gy[index_g0],
+            "x": gx[index_origin],
+            "y": gy[index_origin],
             "size": size_indices,
             "color": c0,
             "fontweight": "bold",
-            "labels": [str(index_g0)],
+            "labels": [str(index_origin)],
         }
         d1 = {
             "x": gx[index_g1],
@@ -304,8 +329,8 @@ class StrainMap(RealSlice, Data):
 
         # Add vectors to right panel
         dg1 = {
-            "x0": gx[index_g0],
-            "y0": gy[index_g0],
+            "x0": gx[index_origin],
+            "y0": gy[index_origin],
             "vx": g1[0],
             "vy": g1[1],
             "width": width_vectors,
@@ -315,8 +340,8 @@ class StrainMap(RealSlice, Data):
             "labelcolor": c_vectorlabels,
         }
         dg2 = {
-            "x0": gx[index_g0],
-            "y0": gy[index_g0],
+            "x0": gx[index_origin],
+            "y0": gy[index_origin],
             "vx": g2[0],
             "vy": g2[1],
             "width": width_vectors,
@@ -333,6 +358,11 @@ class StrainMap(RealSlice, Data):
         self.g0 = g0
         self.g1 = g1
         self.g2 = g2
+
+        # center the bragg directions and store
+        braggdirections.data['qx'] -= self.origin[0]
+        braggdirections.data['qy'] -= self.origin[1]
+        self.braggdirections = braggdirections
 
         # return
         if returncalc and returnfig:
@@ -381,23 +411,68 @@ class StrainMap(RealSlice, Data):
             self.calstate == self.braggvectors.calstate
         ), "The calibration state has changed! To resync the calibration state, use `.reset_calstate`."
 
-        bragg_vectors_indexed = add_indices_to_braggvectors(
-            self.braggvectors,
-            self.braggdirections,
-            maxPeakSpacing=max_peak_spacing,
-            qx_shift=self.braggvectors.Qshape[0] / 2,
-            qy_shift=self.braggvectors.Qshape[1] / 2,
-            mask=mask,
+
+        ### add indices to the bragg vectors
+
+        # validate mask
+        if mask is None:
+            mask = np.ones(self.braggvectors.Rshape, dtype=bool)
+        assert (
+            mask.shape == self.braggvectors.Rshape
+        ), "mask must have same shape as pointlistarray"
+        assert mask.dtype == bool, "mask must be boolean"
+
+        # set up new braggpeaks PLA
+        indexed_braggpeaks = PointListArray(
+            dtype = [
+                ("qx", float),
+                ("qy", float),
+                ("intensity", float),
+                ("h", int),
+                ("k", int),
+            ],
+            shape=self.braggvectors.Rshape,
         )
+        calstate = self.braggvectors.calstate
 
-        self.bragg_vectors_indexed = bragg_vectors_indexed
+        # loop over all the scan positions
+        for Rx, Ry in tqdmnd(mask.shape[0], mask.shape[1]):
+            if mask[Rx, Ry]:
+                pl = self.braggvectors.get_vectors(
+                    Rx,
+                    Ry,
+                    center=True,
+                    ellipse=calstate["ellipse"],
+                    rotate=calstate["rotate"],
+                    pixel=False,
+                )
+                for i in range(pl.data.shape[0]):
+                    r = np.hypot(
+                        pl.data["qx"][i]-self.braggdirections.data["qx"],
+                        pl.data["qy"][i]-self.braggdirections.data["qy"]
+                    )
+                    ind = np.argmin(r)
+                    if r[ind] <= max_peak_spacing:
+                        indexed_braggpeaks[Rx, Ry].add_data_by_field(
+                            (
+                                pl.data["qx"][i],
+                                pl.data["qy"][i],
+                                pl.data["intensity"][i],
+                                self.braggdirections.data["h"][ind],
+                                self.braggdirections.data["k"][ind],
+                            )
+                        )
+        self.bragg_vectors_indexed = indexed_braggpeaks
 
-        # fit bragg vectors
+
+        ### fit bragg vectors
         g1g2_map = fit_lattice_vectors_all_DPs(self.bragg_vectors_indexed)
         self.g1g2_map = g1g2_map
 
+
+        # return
         if returncalc:
-            self.braggdirections, self.bragg_vectors_indexed, self.g1g2_map
+            return self.braggdirections, self.bragg_vectors_indexed, self.g1g2_map
 
     def get_strain(
         self, mask=None, g_reference=None, flip_theta=False, returncalc=False, **kwargs
