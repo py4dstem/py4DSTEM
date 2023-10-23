@@ -404,7 +404,6 @@ def show_class_BPs_grid(
         return fig, axs
 
 
-
 def show_pointlabels(
     ar, x, y, color="lightblue", size=20, alpha=1, returnfig=False, **kwargs
 ):
