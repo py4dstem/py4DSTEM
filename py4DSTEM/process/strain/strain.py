@@ -115,7 +115,7 @@ class StrainMap(RealSlice, Data):
     @property
     def mask(self):
         try:
-            return self.g1g2_map['mask'].data.astype('bool')
+            return self.g1g2_map["mask"].data.astype("bool")
         except:
             return np.ones(self.rshape, dtype=bool)
 
@@ -138,9 +138,9 @@ class StrainMap(RealSlice, Data):
 
     def choose_lattice_vectors(
         self,
-        index_g1 = None,
-        index_g2 = None,
-        index_origin = None,
+        index_g1=None,
+        index_g2=None,
+        index_origin=None,
         subpixel="multicorr",
         upsample_factor=16,
         sigma=0,
@@ -233,7 +233,9 @@ class StrainMap(RealSlice, Data):
         """
         # validate inputs
         for i in (index_origin, index_g1, index_g2):
-            assert(isinstance(i, (int, np.integer)) or (i is None)), "indices must be integers!"
+            assert isinstance(i, (int, np.integer)) or (
+                i is None
+            ), "indices must be integers!"
         # check the calstate
         assert (
             self.calstate == self.braggvectors.calstate
@@ -255,27 +257,27 @@ class StrainMap(RealSlice, Data):
         )
 
         # guess the origin and g1 g2 vectors if indices aren't provided
-        if np.any([x is None for x in (index_g1,index_g2,index_origin)]):
-
+        if np.any([x is None for x in (index_g1, index_g2, index_origin)]):
             # get distances and angles from calibrated origin
-            g_dists = np.hypot(g['x']-self.origin[0], g['y']-self.origin[1])
-            g_angles = np.angle(g['x']-self.origin[0] + 1j*(g['y']-self.origin[1]))
+            g_dists = np.hypot(g["x"] - self.origin[0], g["y"] - self.origin[1])
+            g_angles = np.angle(
+                g["x"] - self.origin[0] + 1j * (g["y"] - self.origin[1])
+            )
 
             # guess the origin
             if index_origin is None:
                 index_origin = np.argmin(g_dists)
-                g_dists[index_origin] = 2*np.max(g_dists)
+                g_dists[index_origin] = 2 * np.max(g_dists)
 
             # guess g1
             if index_g1 is None:
                 index_g1 = np.argmin(g_dists)
-                g_dists[index_g1] = 2*np.max(g_dists)
+                g_dists[index_g1] = 2 * np.max(g_dists)
 
             # guess g2
             if index_g2 is None:
-                angle_scaling = np.cos(g_angles - g_angles[index_g1])**2
-                index_g2 = np.argmin(g_dists*(angle_scaling+0.1))
-
+                angle_scaling = np.cos(g_angles - g_angles[index_g1]) ** 2
+                index_g2 = np.argmin(g_dists * (angle_scaling + 0.1))
 
         # get the lattice vectors
         gx, gy = g["x"], g["y"]
@@ -368,8 +370,8 @@ class StrainMap(RealSlice, Data):
         self.g2 = g2
 
         # center the bragg directions and store
-        braggdirections.data['qx'] -= self.origin[0]
-        braggdirections.data['qy'] -= self.origin[1]
+        braggdirections.data["qx"] -= self.origin[0]
+        braggdirections.data["qy"] -= self.origin[1]
         self.braggdirections = braggdirections
 
         # return
@@ -409,7 +411,6 @@ class StrainMap(RealSlice, Data):
             self.calstate == self.braggvectors.calstate
         ), "The calibration state has changed! To resync the calibration state, use `.reset_calstate`."
 
-
         ### add indices to the bragg vectors
 
         # validate mask
@@ -422,7 +423,7 @@ class StrainMap(RealSlice, Data):
 
         # set up new braggpeaks PLA
         indexed_braggpeaks = PointListArray(
-            dtype = [
+            dtype=[
                 ("qx", float),
                 ("qy", float),
                 ("intensity", float),
@@ -446,8 +447,8 @@ class StrainMap(RealSlice, Data):
                 )
                 for i in range(pl.data.shape[0]):
                     r = np.hypot(
-                        pl.data["qx"][i]-self.braggdirections.data["qx"],
-                        pl.data["qy"][i]-self.braggdirections.data["qy"]
+                        pl.data["qx"][i] - self.braggdirections.data["qx"],
+                        pl.data["qy"][i] - self.braggdirections.data["qy"],
                     )
                     ind = np.argmin(r)
                     if r[ind] <= max_peak_spacing:
@@ -462,11 +463,9 @@ class StrainMap(RealSlice, Data):
                         )
         self.bragg_vectors_indexed = indexed_braggpeaks
 
-
         ### fit bragg vectors
         g1g2_map = fit_lattice_vectors_all_DPs(self.bragg_vectors_indexed)
         self.g1g2_map = g1g2_map
-
 
         # return
         if returncalc:
@@ -496,7 +495,7 @@ class StrainMap(RealSlice, Data):
 
         if mask is None:
             mask = self.mask
-            #mask = np.ones(self.g1g2_map.shape, dtype="bool")
+            # mask = np.ones(self.g1g2_map.shape, dtype="bool")
             # strainmap_g1g2 = get_strain_from_reference_region(
             #     self.g1g2_map,
             #     mask=mask,
@@ -522,11 +521,11 @@ class StrainMap(RealSlice, Data):
             flip_theta=flip_theta,
         )
 
-        self.data[0] = strainmap_rotated['e_xx'].data
-        self.data[1] = strainmap_rotated['e_yy'].data
-        self.data[2] = strainmap_rotated['e_xy'].data
-        self.data[3] = strainmap_rotated['theta'].data
-        self.data[4] = strainmap_rotated['mask'].data
+        self.data[0] = strainmap_rotated["e_xx"].data
+        self.data[1] = strainmap_rotated["e_yy"].data
+        self.data[2] = strainmap_rotated["e_xy"].data
+        self.data[3] = strainmap_rotated["theta"].data
+        self.data[4] = strainmap_rotated["mask"].data
         self.g_reference = g_reference
 
         figsize = kwargs.pop("figsize", (14, 4))
@@ -556,7 +555,6 @@ class StrainMap(RealSlice, Data):
         if returncalc:
             return self.strainmap
 
-
     def show_strain(
         self,
         vrange_exx,
@@ -573,7 +571,7 @@ class StrainMap(RealSlice, Data):
         ticknumber=5,
         unitlabelsize=24,
         show_axes=False,
-        axes_position = (0,0),
+        axes_position=(0, 0),
         axes_length=10,
         axes_width=1,
         axes_color="w",
@@ -584,7 +582,7 @@ class StrainMap(RealSlice, Data):
         axes_labelcolor="r",
         axes_plots=("exx"),
         cmap="RdBu_r",
-        mask_color = 'k',
+        mask_color="k",
         layout=0,
         figsize=(12, 12),
         returnfig=False,
@@ -675,18 +673,18 @@ class StrainMap(RealSlice, Data):
         ## Plot
 
         # modify the figsize according to the image aspect ratio
-        ratio = np.sqrt(self.rshape[1]/self.rshape[0])
+        ratio = np.sqrt(self.rshape[1] / self.rshape[0])
         figsize_mean = np.mean(figsize)
-        figsize = (figsize_mean*ratio, figsize_mean/ratio)
+        figsize = (figsize_mean * ratio, figsize_mean / ratio)
 
         # set up layout
         if layout == 0:
             fig, ((ax11, ax12), (ax21, ax22)) = plt.subplots(2, 2, figsize=figsize)
         elif layout == 1:
-            figsize = (figsize[0]*np.sqrt(2),figsize[1]/np.sqrt(2))
+            figsize = (figsize[0] * np.sqrt(2), figsize[1] / np.sqrt(2))
             fig, (ax11, ax12, ax21, ax22) = plt.subplots(1, 4, figsize=figsize)
         else:
-            figsize = (figsize[0]/np.sqrt(2),figsize[1]*np.sqrt(2))
+            figsize = (figsize[0] / np.sqrt(2), figsize[1] * np.sqrt(2))
             fig, (ax11, ax12, ax21, ax22) = plt.subplots(4, 1, figsize=figsize)
 
         # display images, returning cbar axis references
@@ -697,8 +695,8 @@ class StrainMap(RealSlice, Data):
             vmax=vmax_exx,
             intensity_range="absolute",
             cmap=cmap,
-            mask = self.mask,
-            mask_color = mask_color,
+            mask=self.mask,
+            mask_color=mask_color,
             returncax=True,
         )
         cax12 = show(
@@ -708,8 +706,8 @@ class StrainMap(RealSlice, Data):
             vmax=vmax_eyy,
             intensity_range="absolute",
             cmap=cmap,
-            mask = self.mask,
-            mask_color = mask_color,
+            mask=self.mask,
+            mask_color=mask_color,
             returncax=True,
         )
         cax21 = show(
@@ -719,8 +717,8 @@ class StrainMap(RealSlice, Data):
             vmax=vmax_exy,
             intensity_range="absolute",
             cmap=cmap,
-            mask = self.mask,
-            mask_color = mask_color,
+            mask=self.mask,
+            mask_color=mask_color,
             returncax=True,
         )
         cax22 = show(
@@ -730,8 +728,8 @@ class StrainMap(RealSlice, Data):
             vmax=vmax_theta,
             intensity_range="absolute",
             cmap=cmap,
-            mask = self.mask,
-            mask_color = mask_color,
+            mask=self.mask,
+            mask_color=mask_color,
             returncax=True,
         )
         ax11.set_title(r"$\epsilon_{xx}$", size=titlesize)
@@ -782,7 +780,9 @@ class StrainMap(RealSlice, Data):
                     ticks = np.linspace(vmin, vmax, ticknumber, endpoint=True)
                     if ind < 3:
                         ticklabels = np.round(
-                            np.linspace(100 * vmin, 100 * vmax, ticknumber, endpoint=True),
+                            np.linspace(
+                                100 * vmin, 100 * vmax, ticknumber, endpoint=True
+                            ),
                             decimals=2,
                         ).astype(str)
                     else:
@@ -873,8 +873,6 @@ class StrainMap(RealSlice, Data):
         else:
             axs = ((ax11, ax12), (ax21, ax22))
             return fig, axs
-
-
 
     def show_lattice_vectors(
         ar,

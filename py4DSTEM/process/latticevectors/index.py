@@ -108,8 +108,6 @@ def generate_lattice(ux, uy, vx, vy, x0, y0, Q_Nx, Q_Ny, h_max=None, k_max=None)
     return ideal_lattice
 
 
-
-
 def bragg_vector_intensity_map_by_index(braggpeaks, h, k, symmetric=False):
     """
     Returns a correlation intensity map for an indexed (h,k) Bragg vector

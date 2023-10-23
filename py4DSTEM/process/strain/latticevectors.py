@@ -456,4 +456,3 @@ def get_rotated_strain_map(unrotated_strain_map, xaxis_x, xaxis_y, flip_theta):
         rotated_strain_map.data[3, :, :] = unrotated_strain_map.get_slice("theta").data
     rotated_strain_map.data[4, :, :] = unrotated_strain_map.get_slice("mask").data
     return rotated_strain_map
-
