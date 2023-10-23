@@ -4,6 +4,7 @@ import warnings
 from typing import Optional
 
 import matplotlib.pyplot as plt
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 import numpy as np
 from py4DSTEM import PointList, PointListArray, tqdmnd
 from py4DSTEM.braggvectors import BraggVectors
@@ -18,6 +19,7 @@ from py4DSTEM.process.strain.latticevectors import (
     index_bragg_directions,
 )
 from py4DSTEM.visualize import add_bragg_index_labels, add_pointlabels, add_vector, show
+from py4DSTEM.visualize import ax_addaxes, ax_addaxes_QtoR
 
 warnings.simplefilter(action="always", category=UserWarning)
 
@@ -110,6 +112,12 @@ class StrainMap(RealSlice, Data):
     def origin(self):
         return self.calibration.get_origin_mean()
 
+    @property
+    def mask(self):
+        try:
+            return self.g1g2_map['mask'].data.astype('bool')
+        except:
+            return np.ones(self.rshape, dtype=bool)
 
     def reset_calstate(self):
         """
@@ -366,9 +374,9 @@ class StrainMap(RealSlice, Data):
 
         # return
         if returncalc and returnfig:
-            return (g0, g1, g2), (fig, ax)
+            return (self.g0, self.g1, self.g2, self.braggdirections), (fig, ax)
         elif returncalc:
-            return (g0, g1, g2)
+            return (self.g0, self.g1, self.g2, self.braggdirections)
         elif returnfig:
             return (fig, ax)
         else:
@@ -378,8 +386,6 @@ class StrainMap(RealSlice, Data):
         self,
         max_peak_spacing=2,
         mask=None,
-        plot=True,
-        vis_params={},
         returncalc=False,
     ):
         """
@@ -388,10 +394,6 @@ class StrainMap(RealSlice, Data):
         reciprocal lattice directions.
 
         Args:
-            x0 : floagt
-                x-coord of origin
-            y0 : float
-                y-coord of origin
             max_peak_spacing: float
                 Maximum distance from the ideal lattice points
                 to include a peak for indexing
@@ -399,10 +401,6 @@ class StrainMap(RealSlice, Data):
                 Boolean mask, same shape as the pointlistarray, indicating which
                 locations should be indexed. This can be used to index different regions of
                 the scan with different lattices
-            plot:bool
-                plot results if tru
-            vis_params : dict
-                additional visualization parameters passed to `show`
             returncalc : bool
                 if True, returns bragg_directions, bragg_vectors_indexed, g1g2_map
         """
@@ -472,7 +470,7 @@ class StrainMap(RealSlice, Data):
 
         # return
         if returncalc:
-            return self.braggdirections, self.bragg_vectors_indexed, self.g1g2_map
+            return self.bragg_vectors_indexed, self.g1g2_map
 
     def get_strain(
         self, mask=None, g_reference=None, flip_theta=False, returncalc=False, **kwargs
@@ -497,8 +495,8 @@ class StrainMap(RealSlice, Data):
         ), "The calibration state has changed! To resync the calibration state, use `.reset_calstate`."
 
         if mask is None:
-            mask = np.ones(self.g1g2_map.shape, dtype="bool")
-
+            mask = self.mask
+            #mask = np.ones(self.g1g2_map.shape, dtype="bool")
             # strainmap_g1g2 = get_strain_from_reference_region(
             #     self.g1g2_map,
             #     mask=mask,
@@ -524,9 +522,12 @@ class StrainMap(RealSlice, Data):
             flip_theta=flip_theta,
         )
 
-        self.strainmap_rotated = strainmap_rotated
-
-        from py4DSTEM.visualize import show_strain
+        self.data[0] = strainmap_rotated['e_xx'].data
+        self.data[1] = strainmap_rotated['e_yy'].data
+        self.data[2] = strainmap_rotated['e_xy'].data
+        self.data[3] = strainmap_rotated['theta'].data
+        self.data[4] = strainmap_rotated['mask'].data
+        self.g_reference = g_reference
 
         figsize = kwargs.pop("figsize", (14, 4))
         vrange_exx = kwargs.pop("vrange_exx", [-2.0, 2.0])
@@ -535,8 +536,7 @@ class StrainMap(RealSlice, Data):
         bkgrd = kwargs.pop("bkgrd", False)
         axes_plots = kwargs.pop("axes_plots", ())
 
-        fig, ax = show_strain(
-            self.strainmap_rotated,
+        fig, ax = self.show_strain(
             vrange_exx=vrange_exx,
             vrange_theta=vrange_theta,
             ticknumber=ticknumber,
@@ -554,7 +554,327 @@ class StrainMap(RealSlice, Data):
             ax[1][1].imshow(mask, alpha=0.2, cmap="binary")
 
         if returncalc:
-            return self.strainmap_rotated
+            return self.strainmap
+
+
+    def show_strain(
+        self,
+        vrange_exx,
+        vrange_theta,
+        vrange_exy=None,
+        vrange_eyy=None,
+        flip_theta=False,
+        bkgrd=True,
+        show_cbars=("exx", "eyy", "exy", "theta"),
+        bordercolor="k",
+        borderwidth=1,
+        titlesize=24,
+        ticklabelsize=16,
+        ticknumber=5,
+        unitlabelsize=24,
+        show_axes=False,
+        axes_position = (0,0),
+        axes_length=10,
+        axes_width=1,
+        axes_color="w",
+        xaxis_space="Q",
+        labelaxes=True,
+        QR_rotation=0,
+        axes_labelsize=12,
+        axes_labelcolor="r",
+        axes_plots=("exx"),
+        cmap="RdBu_r",
+        mask_color = 'k',
+        layout=0,
+        figsize=(12, 12),
+        returnfig=False,
+    ):
+        """
+        Display a strain map, showing the 4 strain components (e_xx,e_yy,e_xy,theta), and
+        masking each image with strainmap.get_slice('mask')
+
+        Args:
+            vrange_exx (length 2 list or tuple):
+            vrange_theta (length 2 list or tuple):
+            vrange_exy (length 2 list or tuple):
+            vrange_eyy (length 2 list or tuple):
+            flip_theta (bool): if True, take negative of angle
+            bkgrd (bool):
+            show_cbars (tuple of strings): Show colorbars for the specified axes. Must be a
+                tuple containing any, all, or none of ('exx','eyy','exy','theta').
+            bordercolor (color):
+            borderwidth (number):
+            titlesize (number):
+            ticklabelsize (number):
+            ticknumber (number): number of ticks on colorbars
+            unitlabelsize (number):
+            show_axes (bool):
+            axes_x0 (number):
+            axes_y0 (number):
+            xaxis_x (number):
+            xaxis_y (number):
+            axes_length (number):
+            axes_width (number):
+            axes_color (color):
+            xaxis_space (string): must be 'Q' or 'R'
+            labelaxes (bool):
+            QR_rotation (number):
+            axes_labelsize (number):
+            axes_labelcolor (color):
+            axes_plots (tuple of strings): controls if coordinate axes showing the
+                orientation of the strain matrices are overlaid over any of the plots.
+                Must be a tuple of strings containing any, all, or none of
+                ('exx','eyy','exy','theta').
+            cmap (colormap):
+            layout=0 (int): determines the layout of the grid which the strain components
+                will be plotted in.  Must be in (0,1,2).  0=(2x2), 1=(1x4), 2=(4x1).
+            figsize (length 2 tuple of numbers):
+            returnfig (bool):
+        """
+        # Lookup table for different layouts
+        assert layout in (0, 1, 2)
+        layout_lookup = {
+            0: ["left", "right", "left", "right"],
+            1: ["bottom", "bottom", "bottom", "bottom"],
+            2: ["right", "right", "right", "right"],
+        }
+        layout_p = layout_lookup[layout]
+
+        # Contrast limits
+        if vrange_exy is None:
+            vrange_exy = vrange_exx
+        if vrange_eyy is None:
+            vrange_eyy = vrange_exx
+        for vrange in (vrange_exx, vrange_eyy, vrange_exy, vrange_theta):
+            assert len(vrange) == 2, "vranges must have length 2"
+        vmin_exx, vmax_exx = vrange_exx[0] / 100.0, vrange_exx[1] / 100.0
+        vmin_eyy, vmax_eyy = vrange_eyy[0] / 100.0, vrange_eyy[1] / 100.0
+        vmin_exy, vmax_exy = vrange_exy[0] / 100.0, vrange_exy[1] / 100.0
+        # theta is plotted in units of degrees
+        vmin_theta, vmax_theta = vrange_theta[0] / (180.0 / np.pi), vrange_theta[1] / (
+            180.0 / np.pi
+        )
+
+        # Get images
+        e_xx = np.ma.array(
+            self.get_slice("exx").data, mask=self.get_slice("mask").data == False
+        )
+        e_yy = np.ma.array(
+            self.get_slice("eyy").data, mask=self.get_slice("mask").data == False
+        )
+        e_xy = np.ma.array(
+            self.get_slice("exy").data, mask=self.get_slice("mask").data == False
+        )
+        theta = np.ma.array(
+            self.get_slice("theta").data,
+            mask=self.get_slice("mask").data == False,
+        )
+        if flip_theta == True:
+            theta = -theta
+
+        ## Plot
+
+        # modify the figsize according to the image aspect ratio
+        ratio = np.sqrt(self.rshape[1]/self.rshape[0])
+        figsize_mean = np.mean(figsize)
+        figsize = (figsize_mean*ratio, figsize_mean/ratio)
+
+        # set up layout
+        if layout == 0:
+            fig, ((ax11, ax12), (ax21, ax22)) = plt.subplots(2, 2, figsize=figsize)
+        elif layout == 1:
+            figsize = (figsize[0]*np.sqrt(2),figsize[1]/np.sqrt(2))
+            fig, (ax11, ax12, ax21, ax22) = plt.subplots(1, 4, figsize=figsize)
+        else:
+            figsize = (figsize[0]/np.sqrt(2),figsize[1]*np.sqrt(2))
+            fig, (ax11, ax12, ax21, ax22) = plt.subplots(4, 1, figsize=figsize)
+
+        # display images, returning cbar axis references
+        cax11 = show(
+            e_xx,
+            figax=(fig, ax11),
+            vmin=vmin_exx,
+            vmax=vmax_exx,
+            intensity_range="absolute",
+            cmap=cmap,
+            mask = self.mask,
+            mask_color = mask_color,
+            returncax=True,
+        )
+        cax12 = show(
+            e_yy,
+            figax=(fig, ax12),
+            vmin=vmin_eyy,
+            vmax=vmax_eyy,
+            intensity_range="absolute",
+            cmap=cmap,
+            mask = self.mask,
+            mask_color = mask_color,
+            returncax=True,
+        )
+        cax21 = show(
+            e_xy,
+            figax=(fig, ax21),
+            vmin=vmin_exy,
+            vmax=vmax_exy,
+            intensity_range="absolute",
+            cmap=cmap,
+            mask = self.mask,
+            mask_color = mask_color,
+            returncax=True,
+        )
+        cax22 = show(
+            theta,
+            figax=(fig, ax22),
+            vmin=vmin_theta,
+            vmax=vmax_theta,
+            intensity_range="absolute",
+            cmap=cmap,
+            mask = self.mask,
+            mask_color = mask_color,
+            returncax=True,
+        )
+        ax11.set_title(r"$\epsilon_{xx}$", size=titlesize)
+        ax12.set_title(r"$\epsilon_{yy}$", size=titlesize)
+        ax21.set_title(r"$\epsilon_{xy}$", size=titlesize)
+        ax22.set_title(r"$\theta$", size=titlesize)
+
+        # Add black background
+        if bkgrd:
+            mask = np.ma.masked_where(
+                self.get_slice("mask").data.astype(bool),
+                np.zeros_like(self.get_slice("mask").data),
+            )
+            ax11.matshow(mask, cmap="gray")
+            ax12.matshow(mask, cmap="gray")
+            ax21.matshow(mask, cmap="gray")
+            ax22.matshow(mask, cmap="gray")
+
+        # add colorbars
+        show_cbars = np.array(
+            [
+                "exx" in show_cbars,
+                "eyy" in show_cbars,
+                "exy" in show_cbars,
+                "theta" in show_cbars,
+            ]
+        )
+        if np.any(show_cbars):
+            divider11 = make_axes_locatable(ax11)
+            divider12 = make_axes_locatable(ax12)
+            divider21 = make_axes_locatable(ax21)
+            divider22 = make_axes_locatable(ax22)
+            cbax11 = divider11.append_axes(layout_p[0], size="4%", pad=0.15)
+            cbax12 = divider12.append_axes(layout_p[1], size="4%", pad=0.15)
+            cbax21 = divider21.append_axes(layout_p[2], size="4%", pad=0.15)
+            cbax22 = divider22.append_axes(layout_p[3], size="4%", pad=0.15)
+            for ind, show_cbar, cax, cbax, vmin, vmax, tickside, tickunits in zip(
+                range(4),
+                show_cbars,
+                (cax11, cax12, cax21, cax22),
+                (cbax11, cbax12, cbax21, cbax22),
+                (vmin_exx, vmin_eyy, vmin_exy, vmin_theta),
+                (vmax_exx, vmax_eyy, vmax_exy, vmax_theta),
+                (layout_p[0], layout_p[1], layout_p[2], layout_p[3]),
+                ("% ", " %", "% ", r" $^\circ$"),
+            ):
+                if show_cbar:
+                    ticks = np.linspace(vmin, vmax, ticknumber, endpoint=True)
+                    if ind < 3:
+                        ticklabels = np.round(
+                            np.linspace(100 * vmin, 100 * vmax, ticknumber, endpoint=True),
+                            decimals=2,
+                        ).astype(str)
+                    else:
+                        ticklabels = np.round(
+                            np.linspace(
+                                (180 / np.pi) * vmin,
+                                (180 / np.pi) * vmax,
+                                ticknumber,
+                                endpoint=True,
+                            ),
+                            decimals=2,
+                        ).astype(str)
+
+                    if tickside in ("left", "right"):
+                        cb = plt.colorbar(
+                            cax, cax=cbax, ticks=ticks, orientation="vertical"
+                        )
+                        cb.ax.set_yticklabels(ticklabels, size=ticklabelsize)
+                        cbax.yaxis.set_ticks_position(tickside)
+                        cbax.set_ylabel(tickunits, size=unitlabelsize, rotation=0)
+                        cbax.yaxis.set_label_position(tickside)
+                    else:
+                        cb = plt.colorbar(
+                            cax, cax=cbax, ticks=ticks, orientation="horizontal"
+                        )
+                        cb.ax.set_xticklabels(ticklabels, size=ticklabelsize)
+                        cbax.xaxis.set_ticks_position(tickside)
+                        cbax.set_xlabel(tickunits, size=unitlabelsize, rotation=0)
+                        cbax.xaxis.set_label_position(tickside)
+                else:
+                    cbax.axis("off")
+
+        # Add coordinate axes
+        if show_axes:
+            assert xaxis_space in ("R", "Q"), "xaxis_space must be 'R' or 'Q'"
+            show_which_axes = np.array(
+                [
+                    "exx" in axes_plots,
+                    "eyy" in axes_plots,
+                    "exy" in axes_plots,
+                    "theta" in axes_plots,
+                ]
+            )
+            for _show, _ax in zip(show_which_axes, (ax11, ax12, ax21, ax22)):
+                if _show:
+                    if xaxis_space == "R":
+                        ax_addaxes(
+                            _ax,
+                            self.g_reference[0],
+                            self.g_reference[1],
+                            axes_length,
+                            axes_position[0],
+                            axes_position[1],
+                            width=axes_width,
+                            color=axes_color,
+                            labelaxes=labelaxes,
+                            labelsize=axes_labelsize,
+                            labelcolor=axes_labelcolor,
+                        )
+                    else:
+                        ax_addaxes_QtoR(
+                            _ax,
+                            self.g_reference[0],
+                            self.g_reference[1],
+                            axes_length,
+                            axes_position[0],
+                            axes_position[1],
+                            QR_rotation,
+                            width=axes_width,
+                            color=axes_color,
+                            labelaxes=labelaxes,
+                            labelsize=axes_labelsize,
+                            labelcolor=axes_labelcolor,
+                        )
+
+        # Add borders
+        if bordercolor is not None:
+            for ax in (ax11, ax12, ax21, ax22):
+                for s in ["bottom", "top", "left", "right"]:
+                    ax.spines[s].set_color(bordercolor)
+                    ax.spines[s].set_linewidth(borderwidth)
+                ax.set_xticks([])
+                ax.set_yticks([])
+
+        if not returnfig:
+            plt.show()
+            return
+        else:
+            axs = ((ax11, ax12), (ax21, ax22))
+            return fig, axs
+
+
 
     def show_lattice_vectors(
         ar,
