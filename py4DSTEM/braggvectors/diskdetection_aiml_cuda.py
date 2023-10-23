@@ -17,8 +17,8 @@ from py4DSTEM.braggvectors.diskdetection_aiml import _get_latest_model
 
 try:
     import cupy as cp
-except:
-    raise ImportError("Import Error: Please install cupy before proceeding")
+except ModuleNotFoundError:
+    raise ImportError("AIML CUDA Requires cupy")
 
 try:
     import tensorflow as tf

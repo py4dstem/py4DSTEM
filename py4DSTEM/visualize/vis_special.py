@@ -1,6 +1,5 @@
 from matplotlib import cm, colors as mcolors, pyplot as plt
 import numpy as np
-from matplotlib.colors import hsv_to_rgb
 from matplotlib.patches import Wedge
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.spatial import Voronoi
@@ -17,6 +16,7 @@ from py4DSTEM.visualize.overlay import (
 )
 from py4DSTEM.visualize.vis_grid import show_image_grid
 from py4DSTEM.visualize.vis_RQ import ax_addaxes, ax_addaxes_QtoR
+from colorspacious import cspace_convert
 
 
 def show_elliptical_fit(
@@ -937,15 +937,20 @@ def show_selected_dps(
         )
 
 
-def Complex2RGB(complex_data, vmin=None, vmax=None, hue_start=0, invert=False):
+def Complex2RGB(complex_data, vmin=None, vmax=None, power=None, chroma_boost=1):
     """
     complex_data (array): complex array to plot
     vmin (float)        : minimum absolute value
     vmax (float)        : maximum absolute value
-    hue_start (float)   : rotational offset for colormap (degrees)
-    inverse (bool)      : if True, uses light color scheme
+    power (float)       : power to raise amplitude to
+    chroma_boost (float): boosts chroma for higher-contrast (~1-2.5)
     """
     amp = np.abs(complex_data)
+    phase = np.angle(complex_data)
+
+    if power is not None:
+        amp = amp**power
+
     if np.isclose(np.max(amp), np.min(amp)):
         if vmin is None:
             vmin = 0
@@ -966,36 +971,40 @@ def Complex2RGB(complex_data, vmin=None, vmax=None, hue_start=0, invert=False):
 
     amp = np.where(amp < vmin, vmin, amp)
     amp = np.where(amp > vmax, vmax, amp)
+    amp = ((amp - vmin) / vmax).clip(1e-16, 1)
 
-    phase = np.angle(complex_data) + np.deg2rad(hue_start)
-    amp /= np.max(amp)
-    rgb = np.zeros(phase.shape + (3,))
-    rgb[..., 0] = 0.5 * (np.sin(phase) + 1) * amp
-    rgb[..., 1] = 0.5 * (np.sin(phase + np.pi / 2) + 1) * amp
-    rgb[..., 2] = 0.5 * (-np.sin(phase) + 1) * amp
+    J = amp * 61.5  # Note we restrict luminance to the monotonic chroma cutoff
+    C = np.minimum(chroma_boost * 98 * J / 123, 110)
+    h = np.rad2deg(phase) + 180
 
-    return 1 - rgb if invert else rgb
+    JCh = np.stack((J, C, h), axis=-1)
+    rgb = cspace_convert(JCh, "JCh", "sRGB1").clip(0, 1)
+
+    return rgb
 
 
-def add_colorbar_arg(cax, vmin=None, vmax=None, hue_start=0, invert=False):
+def add_colorbar_arg(cax, chroma_boost=1, c=49, j=61.5):
     """
-    cax                 : axis to add cbar too
-    vmin (float)        : minimum absolute value
-    vmax (float)        : maximum absolute value
-    hue_start (float)   : rotational offset for colormap (degrees)
-    inverse (bool)      : if True, uses light color scheme
+    cax                 : axis to add cbar to
+    chroma_boost (float): boosts chroma for higher-contrast (~1-2.25)
+    c (float)           : constant chroma value
+    j (float)           : constant luminance value
     """
-    z = np.exp(1j * np.linspace(-np.pi, np.pi, 200))
-    rgb_vals = Complex2RGB(z, vmin=vmin, vmax=vmax, hue_start=hue_start, invert=invert)
+
+    h = np.linspace(0, 360, 256, endpoint=False)
+    J = np.full_like(h, j)
+    C = np.full_like(h, np.minimum(c * chroma_boost, 110))
+    JCh = np.stack((J, C, h), axis=-1)
+    rgb_vals = cspace_convert(JCh, "JCh", "sRGB1").clip(0, 1)
     newcmp = mcolors.ListedColormap(rgb_vals)
     norm = mcolors.Normalize(vmin=-np.pi, vmax=np.pi)
 
-    cb1 = plt.colorbar(cm.ScalarMappable(norm=norm, cmap=newcmp), cax=cax)
+    cb = plt.colorbar(cm.ScalarMappable(norm=norm, cmap=newcmp), cax=cax)
 
-    cb1.set_label("arg", rotation=0, ha="center", va="bottom")
-    cb1.ax.yaxis.set_label_coords(0.5, 1.01)
-    cb1.set_ticks(np.array([-np.pi, -np.pi / 2, 0, np.pi / 2, np.pi]))
-    cb1.set_ticklabels(
+    cb.set_label("arg", rotation=0, ha="center", va="bottom")
+    cb.ax.yaxis.set_label_coords(0.5, 1.01)
+    cb.set_ticks(np.array([-np.pi, -np.pi / 2, 0, np.pi / 2, np.pi]))
+    cb.set_ticklabels(
         [r"$-\pi$", r"$-\dfrac{\pi}{2}$", "$0$", r"$\dfrac{\pi}{2}$", r"$\pi$"]
     )
 
@@ -1004,13 +1013,13 @@ def show_complex(
     ar_complex,
     vmin=None,
     vmax=None,
+    power=None,
+    chroma_boost=1,
     cbar=True,
     scalebar=False,
     pixelunits="pixels",
     pixelsize=1,
     returnfig=False,
-    hue_start=0,
-    invert=False,
     **kwargs
 ):
     """
@@ -1023,13 +1032,13 @@ def show_complex(
         vmax (float, optional)      : maximum absolute value
             if None, vmin/vmax are set to fractions of the distribution of pixel values in the array,
             e.g. vmin=0.02 will set the minumum display value to saturate the lower 2% of pixels
-        cbar (bool, optional)       : if True, include color wheel
+        power (float,optional)      : power to raise amplitude to
+        chroma_boost (float)        : boosts chroma for higher-contrast (~1-2.25)
+        cbar (bool, optional)       : if True, include color bar
         scalebar (bool, optional)   : if True, adds scale bar
         pixelunits (str, optional)  : units for scalebar
         pixelsize (float, optional) : size of one pixel in pixelunits for scalebar
         returnfig (bool, optional)  : if True, the function returns the tuple (figure,axis)
-        hue_start (float, optional) : rotational offset for colormap (degrees)
-        inverse (bool)              : if True, uses light color scheme
 
     Returns:
         if returnfig==False (default), the figure is plotted and nothing is returned.
@@ -1044,7 +1053,7 @@ def show_complex(
     if isinstance(ar_complex, list):
         if isinstance(ar_complex[0], list):
             rgb = [
-                Complex2RGB(ar, vmin, vmax, hue_start=hue_start, invert=invert)
+                Complex2RGB(ar, vmin, vmax, power=power, chroma_boost=chroma_boost)
                 for sublist in ar_complex
                 for ar in sublist
             ]
@@ -1053,7 +1062,7 @@ def show_complex(
 
         else:
             rgb = [
-                Complex2RGB(ar, vmin, vmax, hue_start=hue_start, invert=invert)
+                Complex2RGB(ar, vmin, vmax, power=power, chroma_boost=chroma_boost)
                 for ar in ar_complex
             ]
             if len(rgb[0].shape) == 4:
@@ -1064,7 +1073,9 @@ def show_complex(
                 W = len(ar_complex)
         is_grid = True
     else:
-        rgb = Complex2RGB(ar_complex, vmin, vmax, hue_start=hue_start, invert=invert)
+        rgb = Complex2RGB(
+            ar_complex, vmin, vmax, power=power, chroma_boost=chroma_boost
+        )
         if len(rgb.shape) == 4:
             is_grid = True
             H = 1
@@ -1115,37 +1126,18 @@ def show_complex(
             add_scalebar(ax, scalebar)
 
     # add color bar
-    if cbar == True:
-        ax0 = fig.add_axes([1, 0.35, 0.3, 0.3])
+    if cbar:
+        if is_grid:
+            for ax_flat in ax.flatten():
+                divider = make_axes_locatable(ax_flat)
+                ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
+                add_colorbar_arg(ax_cb)
+        else:
+            divider = make_axes_locatable(ax)
+            ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
+            add_colorbar_arg(ax_cb, chroma_boost=chroma_boost)
 
-        # create wheel
-        AA = 1000
-        kx = np.fft.fftshift(np.fft.fftfreq(AA))
-        ky = np.fft.fftshift(np.fft.fftfreq(AA))
-        kya, kxa = np.meshgrid(ky, kx)
-        kra = (kya**2 + kxa**2) ** 0.5
-        ktheta = np.arctan2(-kxa, kya)
-        ktheta = kra * np.exp(1j * ktheta)
+        fig.tight_layout()
 
-        # convert to hsv
-        rgb = Complex2RGB(ktheta, 0, 0.4, hue_start=hue_start, invert=invert)
-        ind = kra > 0.4
-        rgb[ind] = [1, 1, 1]
-
-        # plot
-        ax0.imshow(rgb)
-
-        # add axes
-        ax0.axhline(AA / 2, 0, AA, color="k")
-        ax0.axvline(AA / 2, 0, AA, color="k")
-        ax0.axis("off")
-
-        label_size = 16
-
-        ax0.text(AA, AA / 2, 1, fontsize=label_size)
-        ax0.text(AA / 2, 0, "i", fontsize=label_size)
-        ax0.text(AA / 2, AA, "-i", fontsize=label_size)
-        ax0.text(0, AA / 2, -1, fontsize=label_size)
-
-    if returnfig == True:
+    if returnfig:
         return fig, ax
