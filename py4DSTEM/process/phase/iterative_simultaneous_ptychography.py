@@ -14,8 +14,8 @@ from py4DSTEM.visualize.vis_special import Complex2RGB, add_colorbar_arg
 
 try:
     import cupy as cp
-except ImportError:
-    cp = None
+except ModuleNotFoundError:
+    cp = np
 
 from emdfile import Custom, tqdmnd
 from py4DSTEM import DataCube
@@ -192,6 +192,7 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
         force_angular_sampling: float = None,
         force_reciprocal_sampling: float = None,
         object_fov_mask: np.ndarray = None,
+        crop_patterns: bool = False,
         **kwargs,
     ):
         """
@@ -246,6 +247,8 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
         object_fov_mask: np.ndarray (boolean)
             Boolean mask of FOV. Used to calculate additional shrinkage of object
             If None, probe_overlap intensity is thresholded
+        crop_patterns: bool
+            if True, crop patterns to avoid wrap around of patterns when centering
 
         Returns
         --------
@@ -401,9 +404,7 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
             amplitudes_0,
             mean_diffraction_intensity_0,
         ) = self._normalize_diffraction_intensities(
-            intensities_0,
-            com_fitted_x_0,
-            com_fitted_y_0,
+            intensities_0, com_fitted_x_0, com_fitted_y_0, crop_patterns
         )
 
         # explicitly delete namescapes
@@ -484,9 +485,7 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
             amplitudes_1,
             mean_diffraction_intensity_1,
         ) = self._normalize_diffraction_intensities(
-            intensities_1,
-            com_fitted_x_1,
-            com_fitted_y_1,
+            intensities_1, com_fitted_x_1, com_fitted_y_1, crop_patterns
         )
 
         # explicitly delete namescapes
@@ -568,9 +567,7 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
                 amplitudes_2,
                 mean_diffraction_intensity_2,
             ) = self._normalize_diffraction_intensities(
-                intensities_2,
-                com_fitted_x_2,
-                com_fitted_y_2,
+                intensities_2, com_fitted_x_2, com_fitted_y_2, crop_patterns
             )
 
             # explicitly delete namescapes
@@ -683,6 +680,10 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
                     bilinear=True,
                     device=self._device,
                 )
+                if crop_patterns:
+                    self._vacuum_probe_intensity = self._vacuum_probe_intensity[
+                        self._crop_mask
+                    ].reshape(self._region_of_interest_shape)
 
             self._probe = (
                 ComplexProbe(
@@ -746,19 +747,13 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
 
         if plot_probe_overlaps:
             figsize = kwargs.pop("figsize", (9, 4))
-            cmap = kwargs.pop("cmap", "Greys_r")
-            vmin = kwargs.pop("vmin", None)
-            vmax = kwargs.pop("vmax", None)
-            hue_start = kwargs.pop("hue_start", 0)
-            invert = kwargs.pop("invert", False)
+            chroma_boost = kwargs.pop("chroma_boost", 1)
 
             # initial probe
             complex_probe_rgb = Complex2RGB(
                 self.probe_centered,
-                vmin=vmin,
-                vmax=vmax,
-                hue_start=hue_start,
-                invert=invert,
+                power=2,
+                chroma_boost=chroma_boost,
             )
 
             extent = [
@@ -780,23 +775,22 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
             ax1.imshow(
                 complex_probe_rgb,
                 extent=probe_extent,
-                **kwargs,
             )
 
             divider = make_axes_locatable(ax1)
             cax1 = divider.append_axes("right", size="5%", pad="2.5%")
             add_colorbar_arg(
-                cax1, vmin=vmin, vmax=vmax, hue_start=hue_start, invert=invert
+                cax1,
+                chroma_boost=chroma_boost,
             )
             ax1.set_ylabel("x [A]")
             ax1.set_xlabel("y [A]")
-            ax1.set_title("Initial Probe")
+            ax1.set_title("Initial probe intensity")
 
             ax2.imshow(
                 asnumpy(probe_overlap),
                 extent=extent,
-                cmap=cmap,
-                **kwargs,
+                cmap="Greys_r",
             )
             ax2.scatter(
                 self.positions[:, 1],
@@ -808,7 +802,7 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
             ax2.set_xlabel("y [A]")
             ax2.set_xlim((extent[0], extent[1]))
             ax2.set_ylim((extent[2], extent[3]))
-            ax2.set_title("Object Field of View")
+            ax2.set_title("Object field of view")
 
             fig.tight_layout()
 
@@ -2232,6 +2226,9 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
         q_highpass_e,
         q_highpass_m,
         butterworth_order,
+        tv_denoise,
+        tv_denoise_weight,
+        tv_denoise_inner_iter,
         warmup_iteration,
         object_positivity,
         shrinkage_rad,
@@ -2300,6 +2297,12 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
             Cut-off frequency in A^-1 for high-pass filtering magnetic object
         butterworth_order: float
             Butterworth filter order. Smaller gives a smoother filter
+        tv_denoise: bool
+            If True, applies TV denoising on object
+        tv_denoise_weight: float
+            Denoising weight. The greater `weight`, the more denoising.
+        tv_denoise_inner_iter: float
+            Number of iterations to run in inner loop of TV denoising
         warmup_iteration: bool
             If True, constraints electrostatic object only
         object_positivity: bool
@@ -2349,6 +2352,15 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
 
                 if self._object_type == "complex":
                     magnetic_obj = magnetic_obj.real
+        if tv_denoise:
+            electrostatic_obj = self._object_denoise_tv_pylops(
+                electrostatic_obj, tv_denoise_weight, tv_denoise_inner_iter
+            )
+
+            if not warmup_iteration:
+                magnetic_obj = self._object_denoise_tv_pylops(
+                    magnetic_obj, tv_denoise_weight, tv_denoise_inner_iter
+                )
 
         if shrinkage_rad > 0.0 or object_mask is not None:
             electrostatic_obj = self._object_shrinkage_constraint(
@@ -2446,6 +2458,9 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
         q_highpass_e: float = None,
         q_highpass_m: float = None,
         butterworth_order: float = 2,
+        tv_denoise_iter: int = np.inf,
+        tv_denoise_weight: float = None,
+        tv_denoise_inner_iter: float = 40,
         object_positivity: bool = True,
         shrinkage_rad: float = 0.0,
         fix_potential_baseline: bool = True,
@@ -2538,6 +2553,12 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
             Cut-off frequency in A^-1 for high-pass filtering magnetic object
         butterworth_order: float
             Butterworth filter order. Smaller gives a smoother filter
+        tv_denoise_iter: int, optional
+            Number of iterations to run using tv denoise filter on object
+        tv_denoise_weight: float
+            Denoising weight. The greater `weight`, the more denoising.
+        tv_denoise_inner_iter: float
+            Number of iterations to run in inner loop of TV denoising
         object_positivity: bool, optional
             If True, forces object to be positive
         shrinkage_rad: float
@@ -2748,6 +2769,8 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
             ) = self._extract_vectorized_patch_indices()
             self._exit_waves = (None,) * self._num_sim_measurements
             self._object_type = self._object_type_initial
+            if hasattr(self, "_tf"):
+                del self._tf
         elif reset is None:
             if hasattr(self, "error"):
                 warnings.warn(
@@ -2899,6 +2922,9 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
                 q_highpass_e=q_highpass_e,
                 q_highpass_m=q_highpass_m,
                 butterworth_order=butterworth_order,
+                tv_denoise=a0 < tv_denoise_iter and tv_denoise_weight is not None,
+                tv_denoise_weight=tv_denoise_weight,
+                tv_denoise_inner_iter=tv_denoise_inner_iter,
                 object_positivity=object_positivity,
                 shrinkage_rad=shrinkage_rad,
                 object_mask=self._object_fov_mask_inverse
@@ -3029,8 +3055,6 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
         figsize = kwargs.pop("figsize", (12, 5))
         cmap_e = kwargs.pop("cmap_e", "magma")
         cmap_m = kwargs.pop("cmap_m", "PuOr")
-        invert = kwargs.pop("invert", False)
-        hue_start = kwargs.pop("hue_start", 0)
 
         if self._object_type == "complex":
             obj_e = np.angle(self.object[0])
@@ -3051,6 +3075,11 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
         vmax_e = kwargs.pop("vmax_e", max_e)
         vmin_m = kwargs.pop("vmin_m", min_m)
         vmax_m = kwargs.pop("vmax_m", max_m)
+
+        if plot_fourier_probe:
+            chroma_boost = kwargs.pop("chroma_boost", 2)
+        else:
+            chroma_boost = kwargs.pop("chroma_boost", 1)
 
         extent = [
             0,
@@ -3156,29 +3185,29 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
             ax = fig.add_subplot(spec[0, 2])
             if plot_fourier_probe:
                 probe_array = Complex2RGB(
-                    self.probe_fourier, hue_start=hue_start, invert=invert
+                    self.probe_fourier,
+                    chroma_boost=chroma_boost,
                 )
                 ax.set_title("Reconstructed Fourier probe")
                 ax.set_ylabel("kx [mrad]")
                 ax.set_xlabel("ky [mrad]")
             else:
                 probe_array = Complex2RGB(
-                    self.probe, hue_start=hue_start, invert=invert
+                    self.probe, power=2, chroma_boost=chroma_boost
                 )
-                ax.set_title("Reconstructed probe")
+                ax.set_title("Reconstructed probe intensity")
                 ax.set_ylabel("x [A]")
                 ax.set_xlabel("y [A]")
 
             im = ax.imshow(
                 probe_array,
                 extent=probe_extent,
-                **kwargs,
             )
 
             if cbar:
                 divider = make_axes_locatable(ax)
                 ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
-                add_colorbar_arg(ax_cb, hue_start=hue_start, invert=invert)
+                add_colorbar_arg(ax_cb, chroma_boost=chroma_boost)
 
         else:
             # Electrostatic Object
@@ -3229,10 +3258,10 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
             ax = fig.add_subplot(spec[1, :])
             ax.semilogy(np.arange(errors.shape[0]), errors, **kwargs)
             ax.set_ylabel("NMSE")
-            ax.set_xlabel("Iteration Number")
+            ax.set_xlabel("Iteration number")
             ax.yaxis.tick_right()
 
-        fig.suptitle(f"Normalized Mean Squared Error: {self.error:.3e}")
+        fig.suptitle(f"Normalized mean squared error: {self.error:.3e}")
         spec.tight_layout(fig)
 
     def _visualize_all_iterations(

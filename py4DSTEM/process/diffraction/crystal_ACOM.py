@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import os
 from typing import Union, Optional
+from tqdm import tqdm
 
 from emdfile import tqdmnd, PointList, PointListArray
 from py4DSTEM.data import RealSlice
@@ -14,7 +14,7 @@ from numpy.linalg import lstsq
 
 try:
     import cupy as cp
-except:
+except ModuleNotFoundError:
     cp = None
 
 
@@ -762,14 +762,34 @@ def match_orientations(
     self,
     bragg_peaks_array: PointListArray,
     num_matches_return: int = 1,
-    min_number_peaks=3,
-    inversion_symmetry=True,
-    multiple_corr_reset=True,
-    progress_bar: bool = True,
+    min_angle_between_matches_deg=None,
+    min_number_peaks: int = 3,
+    inversion_symmetry: bool = True,
+    multiple_corr_reset: bool = True,
     return_orientation: bool = True,
+    progress_bar: bool = True,
 ):
     """
-    This function computes the orientation of any number of PointLists stored in a PointListArray, and returns an OrienationMap.
+    Parameters
+    --------
+    bragg_peaks_array: PointListArray
+        PointListArray containing the Bragg peaks and intensities, with calibrations applied
+    num_matches_return: int
+        return these many matches as 3th dim of orient (matrix)
+    min_angle_between_matches_deg: int
+        Minimum angle between zone axis of multiple matches, in degrees.
+        Note that I haven't thought how to handle in-plane rotations, since multiple matches are possible.
+    min_number_peaks: int
+        Minimum number of peaks required to perform ACOM matching
+    inversion_symmetry: bool
+        check for inversion symmetry in the matches
+    multiple_corr_reset: bool
+        keep original correlation score for multiple matches
+    return_orientation: bool
+        Return orientation map from function for inspection.
+        The map is always stored in the Crystal object.
+    progress_bar: bool
+        Show or hide the progress bar
 
     """
     orientation_map = OrientationMap(
@@ -808,6 +828,7 @@ def match_orientations(
         orientation = self.match_single_pattern(
             bragg_peaks=vectors,
             num_matches_return=num_matches_return,
+            min_angle_between_matches_deg=min_angle_between_matches_deg,
             min_number_peaks=min_number_peaks,
             inversion_symmetry=inversion_symmetry,
             multiple_corr_reset=multiple_corr_reset,
@@ -816,6 +837,8 @@ def match_orientations(
         )
 
         orientation_map.set_orientation(orientation, rx, ry)
+
+    # assign and return
     self.orientation_map = orientation_map
 
     if return_orientation:
@@ -828,6 +851,7 @@ def match_single_pattern(
     self,
     bragg_peaks: PointList,
     num_matches_return: int = 1,
+    min_angle_between_matches_deg=None,
     min_number_peaks=3,
     inversion_symmetry=True,
     multiple_corr_reset=True,
@@ -841,23 +865,42 @@ def match_single_pattern(
     """
     Solve for the best fit orientation of a single diffraction pattern.
 
-    Args:
-        bragg_peaks (PointList):      numpy array containing the Bragg positions and intensities ('qx', 'qy', 'intensity')
-        num_matches_return (int):     return these many matches as 3th dim of orient (matrix)
-        min_number_peaks (int):       Minimum number of peaks required to perform ACOM matching
-        inversion_symmetry (bool):    check for inversion symmetry in the matches
-        multiple_corr_reset (bool):   keep original correlation score for multiple matches
-        subpixel_tilt (bool):         set to false for faster matching, returning the nearest corr point
-        plot_polar (bool):            set to true to plot the polar transform of the diffraction pattern
-        plot_corr (bool):             set to true to plot the resulting correlogram
-        returnfig (bool):             Return figure handles
-        figsize (list):               size of figure
-        verbose (bool):               Print the fitted zone axes, correlation scores
-        CUDA (bool):                  Enable CUDA for the FFT steps
+    Parameters
+    --------
+    bragg_peaks: PointList
+        numpy array containing the Bragg positions and intensities ('qx', 'qy', 'intensity')
+    num_matches_return: int
+        return these many matches as 3th dim of orient (matrix)
+    min_angle_between_matches_deg: int
+        Minimum angle between zone axis of multiple matches, in degrees.
+        Note that I haven't thought how to handle in-plane rotations, since multiple matches are possible.
+    min_number_peaks: int
+        Minimum number of peaks required to perform ACOM matching
+    inversion_symmetry bool
+        check for inversion symmetry in the matches
+    multiple_corr_reset bool
+        keep original correlation score for multiple matches
+    subpixel_tilt: bool
+        set to false for faster matching, returning the nearest corr point
+    plot_polar: bool
+        set to true to plot the polar transform of the diffraction pattern
+    plot_corr: bool
+        set to true to plot the resulting correlogram
+    returnfig: bool
+        return figure handles
+    figsize: list
+        size of figure
+    verbose: bool
+        Print the fitted zone axes, correlation scores
+    CUDA: bool
+        Enable CUDA for the FFT steps
 
-    Returns:
-        orientation (Orientation):    Orientation class containing all outputs
-        fig, ax (handles):            Figure handles for the plotting output
+    Returns
+    --------
+    orientation: Orientation
+        Orientation class containing all outputs
+    fig, ax: handles
+        Figure handles for the plotting output
     """
 
     # init orientation output
@@ -1028,6 +1071,25 @@ def match_single_pattern(
                     0,
                 )
 
+        # If minimum angle is specified and we're on a match later than the first,
+        # we zero correlation values within the given range.
+        if min_angle_between_matches_deg is not None:
+            if match_ind > 0:
+                inds_previous = orientation.inds[:match_ind, 0]
+                for a0 in range(inds_previous.size):
+                    mask_zero = np.arccos(
+                        np.clip(
+                            np.sum(
+                                self.orientation_vecs
+                                * self.orientation_vecs[inds_previous[a0], :],
+                                axis=1,
+                            ),
+                            -1,
+                            1,
+                        )
+                    ) < np.deg2rad(min_angle_between_matches_deg)
+                    corr_full[mask_zero, :] = 0.0
+
         # Get maximum (non inverted) correlation value
         ind_phi = np.argmax(corr_full, axis=1)
 
@@ -1095,6 +1157,26 @@ def match_single_pattern(
                         ),
                         0,
                     )
+
+            # If minimum angle is specified and we're on a match later than the first,
+            # we zero correlation values within the given range.
+            if min_angle_between_matches_deg is not None:
+                if match_ind > 0:
+                    inds_previous = orientation.inds[:match_ind, 0]
+                    for a0 in range(inds_previous.size):
+                        mask_zero = np.arccos(
+                            np.clip(
+                                np.sum(
+                                    self.orientation_vecs
+                                    * self.orientation_vecs[inds_previous[a0], :],
+                                    axis=1,
+                                ),
+                                -1,
+                                1,
+                            )
+                        ) < np.deg2rad(min_angle_between_matches_deg)
+                        corr_full_inv[mask_zero, :] = 0.0
+
             ind_phi_inv = np.argmax(corr_full_inv, axis=1)
             corr_inv = np.zeros(self.orientation_num_zones, dtype="bool")
 
@@ -1680,6 +1762,250 @@ def match_single_pattern(
         return orientation, fig, ax
     else:
         return orientation
+
+
+def cluster_grains(
+    self,
+    threshold_add=1.0,
+    threshold_grow=0.1,
+    angle_tolerance_deg=5.0,
+    progress_bar=True,
+):
+    """
+    Cluster grains using rotation criterion, and correlation values.
+
+    Parameters
+    --------
+    threshold_add: float
+        Minimum signal required for a probe position to initialize a cluster.
+    threshold_grow: float
+        Minimum signal required for a probe position to be added to a cluster.
+    angle_tolerance_deg: float
+        Rotation rolerance for clustering grains.
+    progress_bar: bool
+        Turns on the progress bar for the polar transformation
+
+    """
+
+    # symmetry operators
+    sym = self.symmetry_operators
+
+    # Get data
+    # Correlation data = signal to cluster with
+    sig = self.orientation_map.corr.copy()
+    sig_init = sig.copy()
+    mark = sig >= threshold_grow
+    sig[np.logical_not(mark)] = 0
+    # orientation matrix used for angle tolerance
+    matrix = self.orientation_map.matrix.copy()
+
+    # init
+    self.cluster_sizes = np.array((), dtype="int")
+    self.cluster_sig = np.array(())
+    self.cluster_inds = []
+    self.cluster_orientation = []
+    inds_all = np.zeros_like(sig, dtype="int")
+    inds_all.ravel()[:] = np.arange(inds_all.size)
+
+    # Tolerance
+    tol = np.deg2rad(angle_tolerance_deg)
+
+    # Main loop
+    search = True
+    comp = 0.0
+    mark_total = np.sum(np.max(mark, axis=2))
+    pbar = tqdm(total=mark_total, disable=not progress_bar)
+    while search is True:
+        inds_grain = np.argmax(sig)
+
+        val = sig.ravel()[inds_grain]
+
+        if val < threshold_add:
+            search = False
+
+        else:
+            # Start cluster
+            x, y, z = np.unravel_index(inds_grain, sig.shape)
+            mark[x, y, z] = False
+            sig[x, y, z] = 0
+            matrix_cluster = matrix[x, y, z]
+            orientation_cluster = self.orientation_map.get_orientation_single(x, y, z)
+
+            # Neighbors to search
+            xr = np.clip(x + np.arange(-1, 2, dtype="int"), 0, sig.shape[0] - 1)
+            yr = np.clip(y + np.arange(-1, 2, dtype="int"), 0, sig.shape[1] - 1)
+            inds_cand = inds_all[xr[:, None], yr[None], :].ravel()
+            inds_cand = np.delete(inds_cand, mark.ravel()[inds_cand] == False)
+
+            if inds_cand.size == 0:
+                grow = False
+            else:
+                grow = True
+
+            # grow the cluster
+            while grow is True:
+                inds_new = np.array((), dtype="int")
+
+                keep = np.zeros(inds_cand.size, dtype="bool")
+                for a0 in range(inds_cand.size):
+                    xc, yc, zc = np.unravel_index(inds_cand[a0], sig.shape)
+
+                    # Angle test between orientation matrices
+                    dphi = np.min(
+                        np.arccos(
+                            np.clip(
+                                (
+                                    np.trace(
+                                        self.symmetry_operators
+                                        @ matrix[xc, yc, zc]
+                                        @ np.transpose(matrix_cluster),
+                                        axis1=1,
+                                        axis2=2,
+                                    )
+                                    - 1
+                                )
+                                / 2,
+                                -1,
+                                1,
+                            )
+                        )
+                    )
+
+                    if np.abs(dphi) < tol:
+                        keep[a0] = True
+
+                        sig[xc, yc, zc] = 0
+                        mark[xc, yc, zc] = False
+
+                        xr = np.clip(
+                            xc + np.arange(-1, 2, dtype="int"), 0, sig.shape[0] - 1
+                        )
+                        yr = np.clip(
+                            yc + np.arange(-1, 2, dtype="int"), 0, sig.shape[1] - 1
+                        )
+                        inds_add = inds_all[xr[:, None], yr[None], :].ravel()
+                        inds_new = np.append(inds_new, inds_add)
+
+                inds_grain = np.append(inds_grain, inds_cand[keep])
+                inds_cand = np.unique(
+                    np.delete(inds_new, mark.ravel()[inds_new] == False)
+                )
+
+                if inds_cand.size == 0:
+                    grow = False
+
+            # convert grain to x,y coordinates, add = list
+            xg, yg, zg = np.unravel_index(inds_grain, sig.shape)
+            xyg = np.unique(np.vstack((xg, yg)), axis=1)
+            sig_mean = np.mean(sig_init.ravel()[inds_grain])
+            self.cluster_sizes = np.append(self.cluster_sizes, xyg.shape[1])
+            self.cluster_sig = np.append(self.cluster_sig, sig_mean)
+            self.cluster_orientation.append(orientation_cluster)
+            self.cluster_inds.append(xyg)
+
+            # update progressbar
+            new_marks = mark_total - np.sum(np.max(mark, axis=2))
+            pbar.update(new_marks)
+            mark_total -= new_marks
+
+    pbar.close()
+
+
+def cluster_orientation_map(
+    self,
+    stripe_width=(2, 2),
+    area_min=2,
+):
+    """
+    Produce a new orientation map from the clustered grains.
+    Use a stripe pattern for the overlapping grains.
+
+    Parameters
+    --------
+    stripe_width: (int,int)
+        Width of stripes for plotting maps with overlapping grains
+    area_min: (int)
+        Minimum size of grains to include
+
+    Returns
+    --------
+
+    orientation_map
+        The clustered orientation map
+
+    """
+
+    # init
+    orientation_map = OrientationMap(
+        num_x=self.orientation_map.num_x,
+        num_y=self.orientation_map.num_y,
+        num_matches=1,
+    )
+    im_grain = np.zeros(
+        (self.orientation_map.num_x, self.orientation_map.num_y), dtype="bool"
+    )
+    im_count = np.zeros((self.orientation_map.num_x, self.orientation_map.num_y))
+    im_mark = np.zeros((self.orientation_map.num_x, self.orientation_map.num_y))
+
+    # Loop over grains to determine number in each pixel
+    for a0 in range(self.cluster_sizes.shape[0]):
+        if self.cluster_sizes[a0] >= area_min:
+            im_grain[:] = False
+            im_grain[
+                self.cluster_inds[a0][0, :],
+                self.cluster_inds[a0][1, :],
+            ] = True
+            im_count += im_grain
+    im_stripe = im_count >= 2
+    im_single = np.logical_not(im_stripe)
+
+    # prefactor for stripes
+    if stripe_width[0] == 0:
+        dx = 0
+    else:
+        dx = 1 / stripe_width[0]
+    if stripe_width[1] == 0:
+        dy = 0
+    else:
+        dy = 1 / stripe_width[1]
+
+    # loop over grains
+    for a0 in range(self.cluster_sizes.shape[0]):
+        if self.cluster_sizes[a0] >= area_min:
+            im_grain[:] = False
+            im_grain[
+                self.cluster_inds[a0][0, :],
+                self.cluster_inds[a0][1, :],
+            ] = True
+
+            # non-overlapping grains
+            sub = np.logical_and(im_grain, im_single)
+            x, y = np.unravel_index(np.where(sub.ravel()), im_grain.shape)
+            x = np.atleast_1d(np.squeeze(x))
+            y = np.atleast_1d(np.squeeze(y))
+            for a1 in range(x.size):
+                orientation_map.set_orientation(
+                    self.cluster_orientation[a0], x[a1], y[a1]
+                )
+
+            # overlapping grains
+            sub = np.logical_and(im_grain, im_stripe)
+            x, y = np.unravel_index(np.where(sub.ravel()), im_grain.shape)
+            x = np.atleast_1d(np.squeeze(x))
+            y = np.atleast_1d(np.squeeze(y))
+            for a1 in range(x.size):
+                d = np.mod(
+                    x[a1] * dx + y[a1] * dy + im_mark[x[a1], y[a1]] + +0.5,
+                    im_count[x[a1], y[a1]],
+                )
+
+                if d < 1.0:
+                    orientation_map.set_orientation(
+                        self.cluster_orientation[a0], x[a1], y[a1]
+                    )
+                im_mark[x[a1], y[a1]] += 1
+
+    return orientation_map
 
 
 def calculate_strain(
