@@ -7,6 +7,4 @@ from py4DSTEM.process.strain.latticevectors import (
     get_reference_g1g2,
     get_strain_from_reference_g1g2,
     get_rotated_strain_map,
-
 )
-
