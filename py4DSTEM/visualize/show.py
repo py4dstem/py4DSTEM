@@ -25,7 +25,7 @@ from py4DSTEM.visualize.overlay import (
 
 def show(
     ar,
-    figsize=(8, 8),
+    figsize=(5, 5),
     cmap="gray",
     scaling="none",
     intensity_range="ordered",
