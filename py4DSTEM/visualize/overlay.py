@@ -408,7 +408,7 @@ def add_ellipses(ax, d):
             (cent[1], cent[0]),
             2 * _b,
             2 * _a,
-            angle = -np.degrees(_theta),
+            angle=-np.degrees(_theta),
             color=col,
             fill=f,
             alpha=_alpha,
