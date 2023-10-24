@@ -1642,6 +1642,9 @@ class ParallaxReconstruction(PhaseReconstruction):
                         ),
                         UserWarning,
                     )
+                else:
+                    self._aberrations_coefs = asnumpy(aberrations_coefs)
+                    self._rotated_shifts = rotated_shifts
             else:
                 self._aberrations_coefs = asnumpy(aberrations_coefs)
                 self._rotated_shifts = rotated_shifts
