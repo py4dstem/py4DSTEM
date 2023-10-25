@@ -1789,6 +1789,7 @@ class ParallaxReconstruction(PhaseReconstruction):
             )
             print(f"Aberration C1          =  {self.aberration_C1:.0f} Ang")
             print(f"Defocus dF             = {-1*self.aberration_C1:.0f} Ang")
+            print(f"Transpose              = {self.transpose_detected}")
 
             if fit_CTF_FFT or fit_BF_shifts:
                 print()
