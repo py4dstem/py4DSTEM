@@ -81,9 +81,11 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
         Probe positions in Å for each diffraction intensity
         If None, initialized to a grid scan
     theta_x: float
-            x tilt of propagator (in angles)
+        x tilt of propagator (in angles)
     theta_y: float
-            y tilt of propagator (in angles)
+        y tilt of propagator (in angles)
+    middle_focus: bool
+        if True, adds half the sample thickness to the defocus
     object_type: str, optional
         The object can be reconstructed as a real potential ('potential') or a complex
         object ('complex')
@@ -117,6 +119,7 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
         initial_scan_positions: np.ndarray = None,
         theta_x: float = 0,
         theta_y: float = 0,
+        middle_focus: bool = False,
         object_type: str = "complex",
         verbose: bool = True,
         device: str = "cpu",
@@ -149,6 +152,25 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
         for key in kwargs.keys():
             if (key not in polar_symbols) and (key not in polar_aliases.keys()):
                 raise ValueError("{} not a recognized parameter".format(key))
+
+        if np.isscalar(slice_thicknesses):
+            mean_slice_thickness = slice_thicknesses
+        else:
+            mean_slice_thickness = np.mean(slice_thicknesses)
+
+        if middle_focus:
+            if "defocus" in kwargs:
+                kwargs["defocus"] += mean_slice_thickness * num_slices / 2
+            elif "C10" in kwargs:
+                kwargs["C10"] -= mean_slice_thickness * num_slices / 2
+            elif polar_parameters is not None and "defocus" in polar_parameters:
+                polar_parameters["defocus"] = (
+                    polar_parameters["defocus"] + mean_slice_thickness * num_slices / 2
+                )
+            elif polar_parameters is not None and "C10" in polar_parameters:
+                polar_parameters["C10"] = (
+                    polar_parameters["C10"] - mean_slice_thickness * num_slices / 2
+                )
 
         self._polar_parameters = dict(zip(polar_symbols, [0.0] * len(polar_symbols)))
 
