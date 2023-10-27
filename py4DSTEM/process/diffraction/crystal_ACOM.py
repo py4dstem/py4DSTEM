@@ -900,9 +900,13 @@ def match_single_pattern(
         Orientation class containing all outputs
     fig, ax: handles
         Figure handles for the plotting output
-    """
+       """
 
-    # init orientation output
+    # adding assert statement for checking  self.orientation_ref is present
+    assert hasattr(
+        self, "orientation_ref"
+    ), "orientation_plan must be run with 'calculate_correlation_array=True'"
+
     orientation = Orientation(num_matches=num_matches_return)
     if bragg_peaks.data.shape[0] < min_number_peaks:
         return orientation
