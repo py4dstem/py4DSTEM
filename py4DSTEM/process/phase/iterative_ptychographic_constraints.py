@@ -433,8 +433,8 @@ class PtychographicConstraints:
         xp = self._xp
         erf = self._erf
 
-        # probe_intensity = xp.abs(current_probe) ** 2
-        # current_probe_sum = xp.sum(probe_intensity)
+        probe_intensity = xp.abs(current_probe) ** 2
+        current_probe_sum = xp.sum(probe_intensity)
 
         X = xp.fft.fftfreq(current_probe.shape[0])[:, None]
         Y = xp.fft.fftfreq(current_probe.shape[1])[None]
@@ -444,10 +444,10 @@ class PtychographicConstraints:
         tophat_mask = 0.5 * (1 - erf(sigma * r / (1 - r**2)))
 
         updated_probe = current_probe * tophat_mask
-        # updated_probe_sum = xp.sum(xp.abs(updated_probe) ** 2)
-        # normalization = xp.sqrt(current_probe_sum / updated_probe_sum)
+        updated_probe_sum = xp.sum(xp.abs(updated_probe) ** 2)
+        normalization = xp.sqrt(current_probe_sum / updated_probe_sum)
 
-        return updated_probe  # * normalization
+        return updated_probe * normalization
 
     def _probe_fourier_amplitude_constraint(
         self,
@@ -476,7 +476,7 @@ class PtychographicConstraints:
         xp = self._xp
         asnumpy = self._asnumpy
 
-        # current_probe_sum = xp.sum(xp.abs(current_probe) ** 2)
+        current_probe_sum = xp.sum(xp.abs(current_probe) ** 2)
         current_probe_fft = xp.fft.fft2(current_probe)
 
         updated_probe_fft, _, _, _ = regularize_probe_amplitude(
@@ -489,10 +489,10 @@ class PtychographicConstraints:
 
         updated_probe_fft = xp.asarray(updated_probe_fft)
         updated_probe = xp.fft.ifft2(updated_probe_fft)
-        # updated_probe_sum = xp.sum(xp.abs(updated_probe) ** 2)
-        # normalization = xp.sqrt(current_probe_sum / updated_probe_sum)
+        updated_probe_sum = xp.sum(xp.abs(updated_probe) ** 2)
+        normalization = xp.sqrt(current_probe_sum / updated_probe_sum)
 
-        return updated_probe  # * normalization
+        return updated_probe * normalization
 
     def _probe_aperture_constraint(
         self,
@@ -514,16 +514,16 @@ class PtychographicConstraints:
         """
         xp = self._xp
 
-        # current_probe_sum = xp.sum(xp.abs(current_probe) ** 2)
+        current_probe_sum = xp.sum(xp.abs(current_probe) ** 2)
         current_probe_fft_phase = xp.angle(xp.fft.fft2(current_probe))
 
         updated_probe = xp.fft.ifft2(
             xp.exp(1j * current_probe_fft_phase) * initial_probe_aperture
         )
-        # updated_probe_sum = xp.sum(xp.abs(updated_probe) ** 2)
-        # normalization = xp.sqrt(current_probe_sum / updated_probe_sum)
+        updated_probe_sum = xp.sum(xp.abs(updated_probe) ** 2)
+        normalization = xp.sqrt(current_probe_sum / updated_probe_sum)
 
-        return updated_probe  # * normalization
+        return updated_probe * normalization
 
     def _probe_aberration_fitting_constraint(
         self,
