@@ -29,7 +29,7 @@ def orientation_plan(
     corr_kernel_size: float = 0.08,
     radial_power: float = 1.0,
     intensity_power: float = 0.25,  # New default intensity power scaling
-    calculate_correlation_array = True,
+    calculate_correlation_array=True,
     tol_peak_delete=None,
     tol_distance: float = 0.01,
     fiber_axis=None,
