@@ -900,7 +900,7 @@ def match_single_pattern(
         Orientation class containing all outputs
     fig, ax: handles
         Figure handles for the plotting output
-       """
+    """
 
     # adding assert statement for checking  self.orientation_ref is present
     assert hasattr(
