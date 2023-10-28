@@ -486,7 +486,7 @@ class CalibratedVectorGetter:
             R = np.array(
                 [[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]]
             )
-            # apply
+            # rotate and flip
             if flip:
                 positions = R @ np.vstack((ans["qy"], ans["qx"]))
             else:
