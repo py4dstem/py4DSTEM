@@ -472,27 +472,28 @@ class StrainMap(RealSlice, Data):
             return self.bragg_vectors_indexed, self.g1g2_map
 
     def get_strain(
-        self, mask=None, g_reference=None, flip_theta=False, returncalc=False, **kwargs
+        self, mask=None, coordinate_rotation=0, returncalc=False, **kwargs
     ):
         """
-        mask: nd.array (bool)
+        Parameters
+        ----------
+        mask : nd.array (bool)
             Use lattice vectors from g1g2_map scan positions
             wherever mask==True. If mask is None gets median strain
             map from entire field of view. If mask is not None, gets
             reference g1 and g2 from region and then calculates strain.
-        g_reference: nd.array of form [x,y]
-            G_reference (tupe): reference coordinate system for
-            xaxis_x and xaxis_y
-        flip_theta: bool
-            If True, flips rotation coordinate system
-        returncal: bool
+        coordinate_rotation : number
+            Rotate the reference coordinate system counterclockwise by this
+            amount, in degrees
+        returncal : bool
             It True, returns rotated map
         """
-        # check the calstate
+        # confirm that the calstate hasn't changed
         assert (
             self.calstate == self.braggvectors.calstate
         ), "The calibration state has changed! To resync the calibration state, use `.reset_calstate`."
 
+        # get the mask
         if mask is None:
             mask = self.mask
             # mask = np.ones(self.g1g2_map.shape, dtype="bool")
@@ -505,129 +506,116 @@ class StrainMap(RealSlice, Data):
         #     strain_map = get_strain_from_reference_g1g2(self.g1g2_map, g1_ref, g2_ref)
         # else:
 
+        # get the reference g1/g2 vectors
         g1_ref, g2_ref = get_reference_g1g2(self.g1g2_map, mask)
 
+        # find the strain
         strainmap_g1g2 = get_strain_from_reference_g1g2(self.g1g2_map, g1_ref, g2_ref)
-
         self.strainmap_g1g2 = strainmap_g1g2
 
-        if g_reference is None:
-            g_reference = np.subtract(self.g1, self.g2)
+        # get the reference coordinate system
+        theta = np.radians(coordinate_rotation)
+        xaxis_x = np.cos(theta)
+        xaxis_y = np.sin(theta)
 
+        # get the strain in the reference coordinates
         strainmap_rotated = get_rotated_strain_map(
             self.strainmap_g1g2,
-            xaxis_x=g_reference[0],
-            xaxis_y=g_reference[1],
-            flip_theta=flip_theta,
+            xaxis_x = xaxis_x,
+            xaxis_y = xaxis_y,
+            flip_theta = False,
         )
 
+        # store the data
         self.data[0] = strainmap_rotated["e_xx"].data
         self.data[1] = strainmap_rotated["e_yy"].data
         self.data[2] = strainmap_rotated["e_xy"].data
         self.data[3] = strainmap_rotated["theta"].data
         self.data[4] = strainmap_rotated["mask"].data
-        self.g_reference = g_reference
+        self.coordinate_rotation = coordinate_rotation
 
-        figsize = kwargs.pop("figsize", (14, 4))
-        vrange_exx = kwargs.pop("vrange_exx", [-2.0, 2.0])
-        vrange_theta = kwargs.pop("vrange_theta", [-2.0, 2.0])
-        ticknumber = kwargs.pop("ticknumber", 3)
-        bkgrd = kwargs.pop("bkgrd", False)
-        axes_plots = kwargs.pop("axes_plots", ())
-
+        # plot the results
         fig, ax = self.show_strain(
-            vrange_exx=vrange_exx,
-            vrange_theta=vrange_theta,
-            ticknumber=ticknumber,
-            axes_plots=axes_plots,
-            bkgrd=bkgrd,
-            figsize=figsize,
             **kwargs,
             returnfig=True,
         )
 
+        # modify masking
         if not np.all(mask == True):
             ax[0][0].imshow(mask, alpha=0.2, cmap="binary")
             ax[0][1].imshow(mask, alpha=0.2, cmap="binary")
             ax[1][0].imshow(mask, alpha=0.2, cmap="binary")
             ax[1][1].imshow(mask, alpha=0.2, cmap="binary")
 
+        # return
         if returncalc:
             return self.strainmap
 
+
     def show_strain(
         self,
-        vrange_exx,
-        vrange_theta,
+        vrange = [-3,3],
+        vrange_theta = [-3,3],
+        vrange_exx=None,
         vrange_exy=None,
         vrange_eyy=None,
-        flip_theta=False,
         bkgrd=True,
-        show_cbars=("exx", "eyy", "exy", "theta"),
+        show_cbars=("eyy", "theta"),
         bordercolor="k",
         borderwidth=1,
         titlesize=24,
         ticklabelsize=16,
         ticknumber=5,
         unitlabelsize=24,
-        show_axes=False,
-        axes_position=(0, 0),
-        axes_length=10,
-        axes_width=1,
-        axes_color="w",
-        xaxis_space="Q",
-        labelaxes=True,
-        QR_rotation=0,
-        axes_labelsize=12,
-        axes_labelcolor="r",
-        axes_plots=("exx"),
         cmap="RdBu_r",
+        cmap_theta="PRGn",
         mask_color="k",
+        color_axes="k",
+        show_gvects=False,
+        color_gvects="r",
+        legend_camera_length = 1.6,
         layout=0,
-        figsize=(12, 12),
+        figsize=None,
         returnfig=False,
     ):
         """
-        Display a strain map, showing the 4 strain components (e_xx,e_yy,e_xy,theta), and
-        masking each image with strainmap.get_slice('mask')
+        Display a strain map, showing the 4 strain components
+        (e_xx,e_yy,e_xy,theta), and masking each image with
+        strainmap.get_slice('mask')
 
-        Args:
-            vrange_exx (length 2 list or tuple):
-            vrange_theta (length 2 list or tuple):
-            vrange_exy (length 2 list or tuple):
-            vrange_eyy (length 2 list or tuple):
-            flip_theta (bool): if True, take negative of angle
-            bkgrd (bool):
-            show_cbars (tuple of strings): Show colorbars for the specified axes. Must be a
-                tuple containing any, all, or none of ('exx','eyy','exy','theta').
-            bordercolor (color):
-            borderwidth (number):
-            titlesize (number):
-            ticklabelsize (number):
-            ticknumber (number): number of ticks on colorbars
-            unitlabelsize (number):
-            show_axes (bool):
-            axes_x0 (number):
-            axes_y0 (number):
-            xaxis_x (number):
-            xaxis_y (number):
-            axes_length (number):
-            axes_width (number):
-            axes_color (color):
-            xaxis_space (string): must be 'Q' or 'R'
-            labelaxes (bool):
-            QR_rotation (number):
-            axes_labelsize (number):
-            axes_labelcolor (color):
-            axes_plots (tuple of strings): controls if coordinate axes showing the
-                orientation of the strain matrices are overlaid over any of the plots.
-                Must be a tuple of strings containing any, all, or none of
-                ('exx','eyy','exy','theta').
-            cmap (colormap):
-            layout=0 (int): determines the layout of the grid which the strain components
-                will be plotted in.  Must be in (0,1,2).  0=(2x2), 1=(1x4), 2=(4x1).
-            figsize (length 2 tuple of numbers):
-            returnfig (bool):
+        Parameters
+        ----------
+        vrange : length 2 list or tuple
+        vrange_theta : length 2 list or tuple
+        vrange_exx : length 2 list or tuple
+        vrange_exy : length 2 list or tuple
+        vrange_eyy :length 2 list or tuple
+        bkgrd : bool
+        show_cbars :tuple of strings
+            Show colorbars for the specified axes. Must be a tuple
+            containing any, all, or none of ('exx','eyy','exy','theta')
+        bordercolor : color
+        borderwidth : number
+        titlesize : number
+        ticklabelsize : number
+        ticknumber : number
+            number of ticks on colorbars
+        unitlabelsize : number
+        cmap : colormap
+        cmap_theta : colormap
+        mask_color : color
+        color_axes : color
+        show_gvects : bool
+            Toggles displaying the g-vectors in the legend
+        color_gvects : color
+        legend_camera_length : number
+            The distance the legend is viewed from; a smaller number yields
+            a larger legend
+        layout : int
+            determines the layout of the grid which the strain components
+            will be plotted in.  Must be in (0,1,2).  0=(2x2), 1=(1x4), 2=(4x1).
+        figsize : length 2 tuple of numbers
+        returnfig : bool
         """
         # Lookup table for different layouts
         assert layout in (0, 1, 2)
@@ -639,10 +627,12 @@ class StrainMap(RealSlice, Data):
         layout_p = layout_lookup[layout]
 
         # Contrast limits
+        if vrange_exx is None:
+            vrange_exx = vrange
         if vrange_exy is None:
-            vrange_exy = vrange_exx
+            vrange_exy = vrange
         if vrange_eyy is None:
-            vrange_eyy = vrange_exx
+            vrange_eyy = vrange
         for vrange in (vrange_exx, vrange_eyy, vrange_exy, vrange_theta):
             assert len(vrange) == 2, "vranges must have length 2"
         vmin_exx, vmax_exx = vrange_exx[0] / 100.0, vrange_exx[1] / 100.0
@@ -667,25 +657,33 @@ class StrainMap(RealSlice, Data):
             self.get_slice("theta").data,
             mask=self.get_slice("mask").data == False,
         )
-        if flip_theta == True:
-            theta = -theta
 
         ## Plot
 
-        # modify the figsize according to the image aspect ratio
-        ratio = np.sqrt(self.rshape[1] / self.rshape[0])
-        figsize_mean = np.mean(figsize)
-        figsize = (figsize_mean * ratio, figsize_mean / ratio)
+        # if figsize hasn't been set, set it based on the
+        # chosen layout and the image shape
+        if figsize is None:
+            ratio = np.sqrt(self.rshape[1]/self.rshape[0])
+            if layout == 0:
+                figsize = (13*ratio,8/ratio)
+            elif layout == 1:
+                figsize = (10*ratio,4/ratio)
+            else:
+                figsize = (4*ratio,10/ratio)
+
 
         # set up layout
         if layout == 0:
-            fig, ((ax11, ax12), (ax21, ax22)) = plt.subplots(2, 2, figsize=figsize)
+            fig, ((ax11, ax12, ax_legend1), (ax21, ax22, ax_legend2)) =\
+                plt.subplots(2, 3, figsize=figsize)
         elif layout == 1:
             figsize = (figsize[0] * np.sqrt(2), figsize[1] / np.sqrt(2))
-            fig, (ax11, ax12, ax21, ax22) = plt.subplots(1, 4, figsize=figsize)
+            fig, (ax11, ax12, ax21, ax22, ax_legend) =\
+                plt.subplots(1, 5, figsize=figsize)
         else:
             figsize = (figsize[0] / np.sqrt(2), figsize[1] * np.sqrt(2))
-            fig, (ax11, ax12, ax21, ax22) = plt.subplots(4, 1, figsize=figsize)
+            fig, (ax11, ax12, ax21, ax22, ax_legend) =\
+                plt.subplots(5, 1, figsize=figsize)
 
         # display images, returning cbar axis references
         cax11 = show(
@@ -727,7 +725,7 @@ class StrainMap(RealSlice, Data):
             vmin=vmin_theta,
             vmax=vmax_theta,
             intensity_range="absolute",
-            cmap=cmap,
+            cmap=cmap_theta,
             mask=self.mask,
             mask_color=mask_color,
             returncax=True,
@@ -815,49 +813,6 @@ class StrainMap(RealSlice, Data):
                 else:
                     cbax.axis("off")
 
-        # Add coordinate axes
-        if show_axes:
-            assert xaxis_space in ("R", "Q"), "xaxis_space must be 'R' or 'Q'"
-            show_which_axes = np.array(
-                [
-                    "exx" in axes_plots,
-                    "eyy" in axes_plots,
-                    "exy" in axes_plots,
-                    "theta" in axes_plots,
-                ]
-            )
-            for _show, _ax in zip(show_which_axes, (ax11, ax12, ax21, ax22)):
-                if _show:
-                    if xaxis_space == "R":
-                        ax_addaxes(
-                            _ax,
-                            self.g_reference[0],
-                            self.g_reference[1],
-                            axes_length,
-                            axes_position[0],
-                            axes_position[1],
-                            width=axes_width,
-                            color=axes_color,
-                            labelaxes=labelaxes,
-                            labelsize=axes_labelsize,
-                            labelcolor=axes_labelcolor,
-                        )
-                    else:
-                        ax_addaxes_QtoR(
-                            _ax,
-                            self.g_reference[0],
-                            self.g_reference[1],
-                            axes_length,
-                            axes_position[0],
-                            axes_position[1],
-                            QR_rotation,
-                            width=axes_width,
-                            color=axes_color,
-                            labelaxes=labelaxes,
-                            labelsize=axes_labelsize,
-                            labelcolor=axes_labelcolor,
-                        )
-
         # Add borders
         if bordercolor is not None:
             for ax in (ax11, ax12, ax21, ax22):
@@ -867,6 +822,158 @@ class StrainMap(RealSlice, Data):
                 ax.set_xticks([])
                 ax.set_yticks([])
 
+        # Legend
+
+        # for layout 0, combine vertical plots on the right end
+        if layout == 0:
+            # get gridspec object
+            gs = ax_legend1.get_gridspec()
+            # remove last two axes
+            ax_legend1.remove()
+            ax_legend2.remove()
+            # make new axis
+            ax_legend = fig.add_subplot(gs[:,-1])
+
+        # get the coordinate axes' directions
+        QRrot = self.calibration.get_QR_rotation()
+        rotation = np.sum([
+            np.radians(self.coordinate_rotation),
+            QRrot
+        ])
+        xaxis_vectx = np.cos(rotation)
+        xaxis_vecty = np.sin(rotation)
+        yaxis_vectx = np.cos(rotation+np.pi/2)
+        yaxis_vecty = np.sin(rotation+np.pi/2)
+
+        # make the coordinate axes
+        ax_legend.arrow(
+            x = 0,
+            y = 0,
+            dx = xaxis_vecty,
+            dy = xaxis_vectx,
+            color = color_axes,
+            length_includes_head = True,
+            width = 0.01,
+            head_width = 0.1,
+        )
+        ax_legend.arrow(
+            x = 0,
+            y = 0,
+            dx = yaxis_vecty,
+            dy = yaxis_vectx,
+            color = color_axes,
+            length_includes_head = True,
+            width = 0.01,
+            head_width = 0.1,
+        )
+        ax_legend.text(
+            x = xaxis_vecty*1.12,
+            y = xaxis_vectx*1.12,
+            s = 'x',
+            fontsize = 14,
+            color = color_axes,
+            horizontalalignment = 'center',
+            verticalalignment = 'center',
+        )
+        ax_legend.text(
+            x = yaxis_vecty*1.12,
+            y = yaxis_vectx*1.12,
+            s = 'y',
+            fontsize = 14,
+            color = color_axes,
+            horizontalalignment = 'center',
+            verticalalignment = 'center',
+        )
+
+        # make the g-vectors
+        if show_gvects:
+
+            # get the g-vectors directions
+            g1q = np.array(self.g1)
+            g2q = np.array(self.g2)
+            g1norm = np.linalg.norm(g1q)
+            g2norm = np.linalg.norm(g2q)
+            g1q /= np.linalg.norm(g1norm)
+            g2q /= np.linalg.norm(g2norm)
+            # set the lengths
+            g_ratio = g2norm/g1norm
+            if g_ratio > 1:
+                g1q /= g_ratio
+            else:
+                g2q *= g_ratio
+            # rotate
+            R = np.array(
+                [
+                    [ np.cos(QRrot), np.sin(QRrot)],
+                    [-np.sin(QRrot), np.cos(QRrot)]
+                ]
+            )
+            g1_x,g1_y = np.matmul(g1q,R)
+            g2_x,g2_y = np.matmul(g2q,R)
+
+            # draw the g vectors
+            ax_legend.arrow(
+                x = 0,
+                y = 0,
+                dx = g1_y*0.8,
+                dy = g1_x*0.8,
+                color = color_gvects,
+                length_includes_head = True,
+                width = 0.005,
+                head_width = 0.05,
+            )
+            ax_legend.arrow(
+                x = 0,
+                y = 0,
+                dx = g2_y*0.8,
+                dy = g2_x*0.8,
+                color = color_gvects,
+                length_includes_head = True,
+                width = 0.005,
+                head_width = 0.05,
+            )
+            ax_legend.text(
+                x = g1_y*0.96,
+                y = g1_x*0.96,
+                s = r'$g_1$',
+                fontsize = 12,
+                color = color_gvects,
+                horizontalalignment = 'center',
+                verticalalignment = 'center',
+            )
+            ax_legend.text(
+                x = g2_y*0.96,
+                y = g2_x*0.96,
+                s = r'$g_2$',
+                fontsize = 12,
+                color = color_gvects,
+                horizontalalignment = 'center',
+                verticalalignment = 'center',
+            )
+
+        # find center and extent
+        xmin = np.min([0,0,xaxis_vectx,yaxis_vectx])
+        xmax = np.max([0,0,xaxis_vectx,yaxis_vectx])
+        ymin = np.min([0,0,xaxis_vecty,yaxis_vecty])
+        ymax = np.max([0,0,xaxis_vecty,yaxis_vecty])
+        if show_gvects:
+            xmin = np.min([xmin,g1_x,g2_x])
+            xmax = np.max([xmax,g1_x,g2_x])
+            ymin = np.min([ymin,g1_y,g2_y])
+            ymax = np.max([ymax,g1_y,g2_y])
+        x0 = np.mean([xmin,xmax])
+        y0 = np.mean([ymin,ymax])
+        xL = (xmax-x0) * legend_camera_length
+        yL = (ymax-y0) * legend_camera_length
+
+        # set the extent and aspect
+        ax_legend.set_xlim([y0-yL,y0+yL])
+        ax_legend.set_ylim([x0-xL,x0+xL])
+        ax_legend.invert_yaxis()
+        ax_legend.set_aspect("equal")
+        ax_legend.axis('off')
+
+        # show/return
         if not returnfig:
             plt.show()
             return
