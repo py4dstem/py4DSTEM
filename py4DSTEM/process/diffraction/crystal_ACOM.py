@@ -905,7 +905,7 @@ def match_single_pattern(
     # adding assert statement for checking  self.orientation_ref is present
     # adding assert statement for checking  self.orientation_ref is present
     if not hasattr(self, "orientation_ref"):
-        raise Warning(
+        raise ValueError(
             "orientation_plan must be run with 'calculate_correlation_array=True'"
         )
 
