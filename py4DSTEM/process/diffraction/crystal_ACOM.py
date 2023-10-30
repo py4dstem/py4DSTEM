@@ -903,10 +903,12 @@ def match_single_pattern(
     """
 
     # adding assert statement for checking  self.orientation_ref is present
-    assert hasattr(
+        # adding assert statement for checking  self.orientation_ref is present
+    if not hasattr(
         self, "orientation_ref"
-    ), "orientation_plan must be run with 'calculate_correlation_array=True'"
-
+    ):
+        raise Warning("orientation_plan must be run with 'calculate_correlation_array=True'")
+    
     orientation = Orientation(num_matches=num_matches_return)
     if bragg_peaks.data.shape[0] < min_number_peaks:
         return orientation
