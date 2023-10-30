@@ -517,6 +517,8 @@ class StrainMap(RealSlice, Data):
         theta = np.radians(coordinate_rotation)
         xaxis_x = np.cos(theta)
         xaxis_y = np.sin(theta)
+        self.coordinate_rotation_degrees = coordinate_rotation
+        self.coordinate_rotation_radians = theta
 
         # get the strain in the reference coordinates
         strainmap_rotated = get_rotated_strain_map(
@@ -532,7 +534,6 @@ class StrainMap(RealSlice, Data):
         self.data[2] = strainmap_rotated["e_xy"].data
         self.data[3] = strainmap_rotated["theta"].data
         self.data[4] = strainmap_rotated["mask"].data
-        self.coordinate_rotation = coordinate_rotation
 
         # plot the results
         fig, ax = self.show_strain(
@@ -837,7 +838,7 @@ class StrainMap(RealSlice, Data):
         # get the coordinate axes' directions
         QRrot = self.calibration.get_QR_rotation()
         rotation = np.sum([
-            np.radians(self.coordinate_rotation),
+            self.coordinate_rotation_radians,
             QRrot
         ])
         xaxis_vectx = np.cos(rotation)
@@ -972,6 +973,369 @@ class StrainMap(RealSlice, Data):
         ax_legend.invert_yaxis()
         ax_legend.set_aspect("equal")
         ax_legend.axis('off')
+
+        # show/return
+        if not returnfig:
+            plt.show()
+            return
+        else:
+            axs = ((ax11, ax12), (ax21, ax22))
+            return fig, axs
+
+
+    def show_reference_directions(
+        self,
+        im_uncal = None,
+        im_cal = None,
+        color_axes="y",
+        color_gvects="r",
+        origin_uncal = None,
+        origin_cal = None,
+        camera_length = 1.8,
+        visp_uncal = {'scaling' : 'log'},
+        visp_cal = {'scaling' : 'log'},
+        layout = "horizontal",
+        titlesize = 16,
+        size_labels = 14,
+        #ticklabelsize=16,
+        #ticknumber=5,
+        #unitlabelsize=24,
+        figsize = None,
+        returnfig = False,
+    ):
+        """
+        Show the reference coordinate system used to compute the strain
+        overlaid over calibrated and uncalibrated diffraction space images.
+
+        The diffraction images used can be specificied with the `im_uncal`
+        and `im_cal` arguments, and default to the uncalibrated and calibrated
+        Bragg vector maps.  The `rotate_cal` argument causes the `im_cal` array
+        to be rotated by -QR rotation from the calibration metadata, so that an
+        uncalibrated image (like a raw diffraction image or mean or max
+        diffraction pattern) can be passed to the `im_cal` argument.
+
+        Parameters
+        ----------
+        im_uncal : 2d array or None
+            Uncalibrated diffraction space image to dispay; defaults to
+            the maximal diffraction image.
+        im_cal : 2d array or None
+            Calibrated diffraction space image to display; defaults to
+            the calibrated Bragg vector map.
+        color_axes : color
+            The color of the overlaid coordinate axes
+        color_gvects : color
+            The color of the g-vectors
+        origin_uncal : 2-tuple or None
+            Where to place the origin of the coordinate system overlaid on
+            the uncalibrated diffraction image. Defaults to the mean origin
+            from the calibration metadata.
+        origin_cal : 2-tuple or None
+            Where to place the origin of the coordinate system overlaid on
+            the calibrated diffraction image. Defaults to the mean origin
+            from the calibration metadata.
+        camera_length : number
+            Determines the length of the overlaid coordinate axes; a smaller
+            number yields larger axes.
+        visp_uncal : dict
+            Visualization parameters for the uncalibrated diffraction image.
+        visp_cal : dict
+            Visualization parameters for the calibrated diffraction image.
+        layout : str; either "horizontal" or "vertical"
+            Determines the layout of the visualization.
+        titlesize : number
+            The size of the plot titles
+        size_labels : number
+            The size of the axis labels
+        figsize : length 2 tuple of numbers or None
+            Size of the figure
+        returnfig : bool
+            Toggles returning the figure
+        """
+        # Set up the figure
+        assert layout in ("horizontal", "vertical")
+
+        # Set the figsize
+        if figsize is None:
+            ratio = np.sqrt(self.rshape[1]/self.rshape[0])
+            if layout == "horizontal":
+                figsize = (10*ratio,8/ratio)
+            else:
+                figsize = (8*ratio,12/ratio)
+
+        # Create the figure
+        if layout == "horizontal":
+            fig, (ax1, ax2) =\
+                plt.subplots(1, 2, figsize=figsize)
+        else:
+            fig, (ax1, ax2) =\
+                plt.subplots(2, 1, figsize=figsize)
+
+        # prepare images
+        if im_uncal is None:
+            im_uncal = self.braggvectors.histogram( mode='raw' )
+        if im_cal is None:
+            im_cal = self.braggvectors.histogram( mode='cal' )
+
+        # display images
+        show(
+            im_cal,
+            figax=(fig, ax1),
+            **visp_cal
+        )
+        show(
+            im_uncal,
+            figax=(fig, ax2),
+            **visp_uncal
+        )
+        ax1.set_title("Calibrated", size=titlesize)
+        ax2.set_title("Uncalibrated", size=titlesize)
+
+
+        # Get the coordinate axes
+
+        # get the directions
+
+        # calibrated 
+        QRrot = self.calibration.get_QR_rotation()
+        rotation = np.sum([
+            self.coordinate_rotation_radians,
+            QRrot
+        ])
+        xaxis_cal = np.array([
+            np.cos(rotation),
+            np.sin(rotation)
+        ])
+        yaxis_cal = np.array([
+            np.cos(rotation+np.pi/2),
+            np.sin(rotation+np.pi/2)
+        ])
+
+        # uncalibrated 
+        xaxis_uncal = np.array([
+            np.cos(self.coordinate_rotation_radians),
+            np.sin(self.coordinate_rotation_radians)
+        ])
+        yaxis_uncal = np.array([
+            np.cos(self.coordinate_rotation_radians+np.pi/2),
+            np.sin(self.coordinate_rotation_radians+np.pi/2)
+        ])
+        # inversion
+        if self.calibration.get_QR_flip():
+            xaxis_uncal = np.array([
+                xaxis_uncal[1],
+                xaxis_uncal[0]
+            ])
+            yaxis_uncal = np.array([
+                yaxis_uncal[1],
+                yaxis_uncal[0]
+            ])
+
+        # set the lengths
+        Lmean = np.mean([im_cal.shape[0],im_cal.shape[1]])/2
+        xaxis_cal *= Lmean/camera_length
+        yaxis_cal *= Lmean/camera_length
+        xaxis_uncal *= Lmean/camera_length
+        yaxis_uncal *= Lmean/camera_length
+
+        # Get the g-vectors
+
+        # calibrated
+        g1_cal = np.array(self.g1)
+        g2_cal = np.array(self.g2)
+
+        # uncalibrated
+        R = np.array(
+            [
+                [np.cos(QRrot), -np.sin(QRrot)],
+                [np.sin(QRrot),  np.cos(QRrot)]
+            ]
+        )
+        g1_uncal = np.matmul(g1_cal,R)
+        g2_uncal = np.matmul(g2_cal,R)
+        # inversion
+        if self.calibration.get_QR_flip():
+            g1_uncal = np.array([
+                g1_uncal[1],
+                g1_uncal[0]
+            ])
+            g2_uncal = np.array([
+                g2_uncal[1],
+                g2_uncal[0]
+            ])
+
+
+        # Set origin positions
+        if origin_uncal is None:
+            origin_uncal = self.calibration.get_origin_mean()
+        if origin_cal is None:
+            origin_cal = self.calibration.get_origin_mean()
+
+        # Draw calibrated coordinate axes
+        ax1.arrow(
+            x = origin_cal[1],
+            y = origin_cal[0],
+            dx = xaxis_cal[1],
+            dy = xaxis_cal[0],
+            color = color_axes,
+            length_includes_head = True,
+            width = 0.01,
+            head_width = 0.1,
+        )
+        ax1.arrow(
+            x = origin_cal[1],
+            y = origin_cal[0],
+            dx = yaxis_cal[1],
+            dy = yaxis_cal[0],
+            color = color_axes,
+            length_includes_head = True,
+            width = 0.01,
+            head_width = 0.1,
+        )
+        ax1.text(
+            x = origin_cal[1] + xaxis_cal[1]*1.12,
+            y = origin_cal[0] + xaxis_cal[0]*1.12,
+            s = 'x',
+            fontsize = size_labels,
+            color = color_axes,
+            horizontalalignment = 'center',
+            verticalalignment = 'center',
+        )
+        ax1.text(
+            x = origin_cal[1] + yaxis_cal[1]*1.12,
+            y = origin_cal[0] + yaxis_cal[0]*1.12,
+            s = 'y',
+            fontsize = size_labels,
+            color = color_axes,
+            horizontalalignment = 'center',
+            verticalalignment = 'center',
+        )
+
+        # Draw uncalibrated coordinate axes
+        ax2.arrow(
+            x = origin_uncal[1],
+            y = origin_uncal[0],
+            dx = xaxis_uncal[1],
+            dy = xaxis_uncal[0],
+            color = color_axes,
+            length_includes_head = True,
+            width = 0.01,
+            head_width = 0.1,
+        )
+        ax2.arrow(
+            x = origin_uncal[1],
+            y = origin_uncal[0],
+            dx = yaxis_uncal[1],
+            dy = yaxis_uncal[0],
+            color = color_axes,
+            length_includes_head = True,
+            width = 0.01,
+            head_width = 0.1,
+        )
+        ax2.text(
+            x = origin_uncal[1] + xaxis_uncal[1]*1.12,
+            y = origin_uncal[0] + xaxis_uncal[0]*1.12,
+            s = 'x',
+            fontsize = size_labels,
+            color = color_axes,
+            horizontalalignment = 'center',
+            verticalalignment = 'center',
+        )
+        ax2.text(
+            x = origin_uncal[1] + yaxis_uncal[1]*1.12,
+            y = origin_uncal[0] + yaxis_uncal[0]*1.12,
+            s = 'y',
+            fontsize = size_labels,
+            color = color_axes,
+            horizontalalignment = 'center',
+            verticalalignment = 'center',
+        )
+
+
+        # Draw the calibrated g-vectors
+
+        # draw the g vectors
+        ax1.arrow(
+            x = origin_cal[1],
+            y = origin_cal[0],
+            dx = g1_cal[1],
+            dy = g1_cal[0],
+            color = color_gvects,
+            length_includes_head = True,
+            width = 0.005,
+            head_width = 0.05,
+        )
+        ax1.arrow(
+            x = origin_cal[1],
+            y = origin_cal[0],
+            dx = g2_cal[1],
+            dy = g2_cal[0],
+            color = color_gvects,
+            length_includes_head = True,
+            width = 0.005,
+            head_width = 0.05,
+        )
+        ax1.text(
+            x = origin_cal[1] + g1_cal[1]*1.08,
+            y = origin_cal[0] + g1_cal[0]*1.08,
+            s = r'$g_1$',
+            fontsize = size_labels*0.88,
+            color = color_gvects,
+            horizontalalignment = 'center',
+            verticalalignment = 'center',
+        )
+        ax1.text(
+            x = origin_cal[1] + g2_cal[1]*1.08,
+            y = origin_cal[0] + g2_cal[0]*1.08,
+            s = r'$g_2$',
+            fontsize = size_labels*0.88,
+            color = color_gvects,
+            horizontalalignment = 'center',
+            verticalalignment = 'center',
+        )
+
+        # Draw the uncalibrated g-vectors
+
+        # draw the g vectors
+        ax2.arrow(
+            x = origin_uncal[1],
+            y = origin_uncal[0],
+            dx = g1_uncal[1],
+            dy = g1_uncal[0],
+            color = color_gvects,
+            length_includes_head = True,
+            width = 0.005,
+            head_width = 0.05,
+        )
+        ax2.arrow(
+            x = origin_uncal[1],
+            y = origin_uncal[0],
+            dx = g2_uncal[1],
+            dy = g2_uncal[0],
+            color = color_gvects,
+            length_includes_head = True,
+            width = 0.005,
+            head_width = 0.05,
+        )
+        ax2.text(
+            x = origin_uncal[1] + g1_uncal[1]*1.08,
+            y = origin_uncal[0] + g1_uncal[0]*1.08,
+            s = r'$g_1$',
+            fontsize = size_labels*0.88,
+            color = color_gvects,
+            horizontalalignment = 'center',
+            verticalalignment = 'center',
+        )
+        ax2.text(
+            x = origin_uncal[1] + g2_uncal[1]*1.08,
+            y = origin_uncal[0] + g2_uncal[0]*1.08,
+            s = r'$g_2$',
+            fontsize = size_labels*0.88,
+            color = color_gvects,
+            horizontalalignment = 'center',
+            verticalalignment = 'center',
+        )
+
 
         # show/return
         if not returnfig:
