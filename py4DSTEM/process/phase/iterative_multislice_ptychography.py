@@ -3097,7 +3097,7 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
 
         rotated_object = np.roll(
             rotate(ms_obj, np.rad2deg(angle), reshape=False, axes=(-1, -2)),
-            int(x1_0),
+            -int(x1_0),
             axis=1,
         )
 
