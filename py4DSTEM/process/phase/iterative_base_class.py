@@ -1257,7 +1257,7 @@ class PhaseReconstruction(Custom):
         if pixelsize is None:
             pixelsize = self._scan_sampling[0]
         if pixelunits is None:
-            pixelunits = r"$\AA$"
+            pixelunits = self._scan_units[0]
 
         figsize = kwargs.pop("figsize", (6, 6))
         fig, ax = plt.subplots(figsize=figsize)

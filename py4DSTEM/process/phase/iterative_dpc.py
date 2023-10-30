@@ -799,6 +799,7 @@ class DPCReconstruction(PhaseReconstruction):
                 anti_gridding=anti_gridding,
             )
 
+            self.error_iterations.append(self.error.item())
             if store_iterations:
                 self.object_phase_iterations.append(
                     asnumpy(
@@ -807,7 +808,6 @@ class DPCReconstruction(PhaseReconstruction):
                         ].copy()
                     )
                 )
-                self.error_iterations.append(self.error.item())
 
         if self._step_size < stopping_criterion:
             if self._verbose:
