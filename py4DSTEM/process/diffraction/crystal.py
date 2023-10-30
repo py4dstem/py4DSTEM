@@ -149,7 +149,7 @@ class Crystal:
                     f"Number of occupancies ({self.occupancy.shape[0]}) and atomic positions ({self.positions.shape[0]}) do not match"
                 )
         else:
-            self.occupancy = np.ones(self.positions.shape[0], dtype="intp")
+            self.occupancy = np.ones(self.positions.shape[0], dtype=np.float32)
 
         # pymatgen flag
         if "pymatgen" in sys.modules:
