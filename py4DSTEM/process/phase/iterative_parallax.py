@@ -1098,26 +1098,46 @@ class ParallaxReconstruction(PhaseReconstruction):
         BF_size = np.array(self._stack_BF_no_window.shape[-2:])
 
         self._DF_upsample_limit = np.max(
-            self._region_of_interest_shape / self._scan_shape
+            2 * self._region_of_interest_shape / self._scan_shape
         )
         self._BF_upsample_limit = (
-            2 * self._kr.max() / self._reciprocal_sampling[0]
+            4 * self._kr.max() / self._reciprocal_sampling[0]
         ) / self._scan_shape.max()
         if self._device == "gpu":
             self._BF_upsample_limit = self._BF_upsample_limit.item()
 
         if kde_upsample_factor is None:
-            kde_upsample_factor = np.minimum(
-                self._BF_upsample_limit * 3 / 2, self._DF_upsample_limit
-            )
+            if self._BF_upsample_limit * 3 / 2 > self._DF_upsample_limit:
+                kde_upsample_factor = self._DF_upsample_limit
 
-            warnings.warn(
-                (
-                    f"Upsampling factor set to {kde_upsample_factor:.2f} (1.5 times the "
-                    f"bright-field upsampling limit of {self._BF_upsample_limit:.2f})."
-                ),
-                UserWarning,
-            )
+                warnings.warn(
+                    (
+                        f"Upsampling factor set to {kde_upsample_factor:.2f} (the "
+                        f"dark-field upsampling limit)."
+                    ),
+                    UserWarning,
+                )
+
+            elif self._BF_upsample_limit * 3 / 2 > 1:
+                kde_upsample_factor = self._BF_upsample_limit * 3 / 2
+
+                warnings.warn(
+                    (
+                        f"Upsampling factor set to {kde_upsample_factor:.2f} (1.5 times the "
+                        f"bright-field upsampling limit of {self._BF_upsample_limit:.2f})."
+                    ),
+                    UserWarning,
+                )
+            else:
+                kde_upsample_factor = self._DF_upsample_limit * 2 / 3
+
+                warnings.warn(
+                    (
+                        f"Upsampling factor set to {kde_upsample_factor:.2f} (2/3 times the "
+                        f"dark-field upsampling limit of {self._DF_upsample_limit:.2f})."
+                    ),
+                    UserWarning,
+                )
 
         if kde_upsample_factor < 1:
             raise ValueError("kde_upsample_factor must be larger than 1")
@@ -2349,3 +2369,21 @@ class ParallaxReconstruction(PhaseReconstruction):
         ax.set_title("Reconstructed Bright Field Image")
 
         return self
+
+    @property
+    def object_cropped(self):
+        """cropped object"""
+        if hasattr(self, "_recon_phase_corrected"):
+            if hasattr(self, "_kde_upsample_factor"):
+                return self._crop_padded_object(
+                    self._recon_phase_corrected, upsampled=True
+                )
+            else:
+                return self._crop_padded_object(self._recon_phase_corrected)
+        else:
+            if hasattr(self, "_kde_upsample_factor"):
+                return self._crop_padded_object(
+                    self._recon_BF_subpixel_aligned, upsampled=True
+                )
+            else:
+                return self._crop_padded_object(self._recon_BF)
