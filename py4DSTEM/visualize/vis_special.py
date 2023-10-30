@@ -829,7 +829,7 @@ def show_complex(
             for ax_flat in ax.flatten():
                 divider = make_axes_locatable(ax_flat)
                 ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
-                add_colorbar_arg(ax_cb)
+                add_colorbar_arg(ax_cb, chroma_boost=chroma_boost)
         else:
             divider = make_axes_locatable(ax)
             ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
