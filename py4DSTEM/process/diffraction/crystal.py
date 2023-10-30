@@ -85,7 +85,7 @@ class Crystal:
                 3 numbers: the three lattice parameters for an orthorhombic cell
                 6 numbers: the a,b,c lattice parameters and ɑ,β,ɣ angles for any cell
                 3x3 array: row vectors containing the (u,v,w) lattice vectors.
-
+            occupancy (np.array): Partial occupancy values for each atomic site. Must match the length of positions
         """
         # Initialize Crystal
         self.positions = np.asarray(positions)  #: fractional atomic coordinates
@@ -143,8 +143,13 @@ class Crystal:
         # occupancy
         if occupancy is not None:
             self.occupancy = np.array(occupancy)
+            # check the occupancy shape makes sense
+            if self.occupancy.shape[0] != self.positions.shape[0]:
+                raise Warning(
+                    f"Number of occupancies ({self.occupancy.shape[0]}) and atomic positions ({self.positions.shape[0]}) do not match"
+                )
         else:
-            self.occupancy = None
+            self.occupancy = np.ones(self.positions.shape[0], dtype="intp")
 
         # pymatgen flag
         if "pymatgen" in sys.modules:
@@ -271,6 +276,59 @@ class Crystal:
             return crystal_strained, deformation_matrix
         else:
             return crystal_strained
+
+    def from_ase(
+        atoms,
+    ):
+        """
+        Create a py4DSTEM Crystal object from an ASE atoms object
+
+        Args:
+            atoms (ase.Atoms): an ASE atoms object
+
+        """
+        # get the occupancies from the atoms object
+        occupancies = (
+            atoms.arrays["occupancies"]
+            if "occupancies" in atoms.arrays.keys()
+            else None
+        )
+        # TODO support getting it from atoms.info['occupancy'] dictionary
+        xtal = Crystal(
+            positions=atoms.get_scaled_positions(),  # fractional coords
+            numbers=atoms.numbers,
+            cell=atoms.cell.array,
+            occupancy=occupancies,
+        )
+        return xtal
+
+    def from_prismatic(filepath):
+        """
+        Create a py4DSTEM Crystal object from an prismatic style xyz co-ordinate file
+
+        Args:
+            filepath (str|Pathlib.Path): path to the prismatic format xyz file
+
+        """
+
+        from ase import io
+
+        # read the atoms using ase
+        atoms = io.read(filepath, format="prismatic")
+
+        # get the occupancies from the atoms object
+        occupancies = (
+            atoms.arrays["occupancies"]
+            if "occupancies" in atoms.arrays.keys()
+            else None
+        )
+        xtal = Crystal(
+            positions=atoms.get_scaled_positions(),  # fractional coords
+            numbers=atoms.numbers,
+            cell=atoms.cell.array,
+            occupancy=occupancies,
+        )
+        return xtal
 
     def from_CIF(CIF, conventional_standard_structure=True):
         """
@@ -590,20 +648,12 @@ class Crystal:
         # Calculate structure factors
         self.struct_factors = np.zeros(np.size(self.g_vec_leng, 0), dtype="complex64")
         for a0 in range(self.positions.shape[0]):
-            if self.occupancy is None:
-                self.struct_factors += f_all[:, a0] * np.exp(
-                    (2j * np.pi)
-                    * np.sum(
-                        self.hkl * np.expand_dims(self.positions[a0, :], axis=1), axis=0
-                    )
+            self.struct_factors += f_all[:, a0] * np.exp(
+                (2j * np.pi * self.occupancy[a0])
+                * np.sum(
+                    self.hkl * np.expand_dims(self.positions[a0, :], axis=1), axis=0
                 )
-            else:
-                self.struct_factors += f_all[:, a0] * np.exp(
-                    (2j * np.pi * self.occupancy[a0])
-                    * np.sum(
-                        self.hkl * np.expand_dims(self.positions[a0, :], axis=1), axis=0
-                    )
-                )
+            )
 
         # Divide by unit cell volume
         unit_cell_volume = np.abs(np.linalg.det(self.lat_real))
