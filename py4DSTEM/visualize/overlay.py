@@ -832,7 +832,14 @@ def add_scalebar(ax, d):
     labelpos_y = y0
 
     # Add line
-    ax.plot((yi, yf), (xi, xf), lw=width, color=color, alpha=alpha)
+    ax.plot(
+        (yi, yf),
+        (xi, xf),
+        color=color,
+        alpha=alpha,
+        lw=width,
+        solid_capstyle="butt",
+    )
 
     # Add label
     if label:
