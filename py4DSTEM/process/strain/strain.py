@@ -18,8 +18,14 @@ from py4DSTEM.process.strain.latticevectors import (
     get_strain_from_reference_g1g2,
     index_bragg_directions,
 )
-from py4DSTEM.visualize import add_bragg_index_labels, add_pointlabels, add_vector, show
-from py4DSTEM.visualize import ax_addaxes, ax_addaxes_QtoR
+from py4DSTEM.visualize import (
+    show,
+    add_bragg_index_labels,
+    add_pointlabels,
+    add_vector,
+    ax_addaxes,
+    ax_addaxes_QtoR
+)
 
 warnings.simplefilter(action="always", category=UserWarning)
 
@@ -30,13 +36,22 @@ class StrainMap(RealSlice, Data):
 
     """
 
-    def __init__(self, braggvectors: BraggVectors, name: Optional[str] = "strainmap"):
+    def __init__(
+        self,
+        braggvectors: BraggVectors,
+        name: Optional[str] = "strainmap"
+        ):
         """
-        Accepts:
-            braggvectors (BraggVectors): BraggVectors for Strain Map
-            name (str): the name of the strainmap
-        Returns:
-            A new StrainMap instance.
+        Parameters
+        ----------
+        braggvectors : BraggVectors
+            The Bragg vectors
+        name : str
+            The name of the strainmap
+
+        Returns
+        -------
+        A new StrainMap instance.
         """
         assert isinstance(
             braggvectors, BraggVectors
@@ -112,13 +127,6 @@ class StrainMap(RealSlice, Data):
     def origin(self):
         return self.calibration.get_origin_mean()
 
-    @property
-    def mask(self):
-        try:
-            return self.g1g2_map["mask"].data.astype("bool")
-        except:
-            return np.ones(self.rshape, dtype=bool)
-
     def reset_calstate(self):
         """
         Resets the calibration state. This recomputes the BVM, and removes any computations
@@ -170,9 +178,11 @@ class StrainMap(RealSlice, Data):
         Choose which lattice vectors to use for strain mapping.
 
         Overlays the bvm with the points detected via local 2D
-        maxima detection, plus an index for each point. User selects
-        3 points using the overlaid indices, which are identified as
-        the origin and the termini of the lattice vectors g1 and g2.
+        maxima detection, plus an index for each point. Three points
+        are selected which correspond to the origin, and the basis
+        reciprocal lattice vectors g1 and g2. By default these are
+        automatically located; the user can override and select these
+        manually using the `index_*` arguments.
 
         Parameters
         ----------
@@ -386,25 +396,27 @@ class StrainMap(RealSlice, Data):
 
     def fit_lattice_vectors(
         self,
-        max_peak_spacing=2,
-        mask=None,
-        returncalc=False,
+        max_peak_spacing = 2,
+        mask = None,
+        returncalc = False
     ):
         """
-        From an origin (x0,y0), a set of reciprocal lattice vectors gx,gy, and an pair of
-        lattice vectors g1=(g1x,g1y), g2=(g2x,g2y), find the indices (h,k) of all the
-        reciprocal lattice directions.
+        Fit the basis lattice vectors g1 and g2 to the detected Bragg peaks
+        in each pattern.  The fit uses all detected peaks which are within
+        a distance of `max_peak_spacing` of the indexed peaks determined
+        in `choose_lattice_vectors`.  Bragg peaks used in the fit are weighted
+        by their intensity.
 
-        Args:
-            max_peak_spacing: float
-                Maximum distance from the ideal lattice points
-                to include a peak for indexing
-            mask: bool
-                Boolean mask, same shape as the pointlistarray, indicating which
-                locations should be indexed. This can be used to index different regions of
-                the scan with different lattices
-            returncalc : bool
-                if True, returns bragg_directions, bragg_vectors_indexed, g1g2_map
+        Parameters
+        ----------
+        max_peak_spacing : float
+            Maximum distance from the ideal lattice points to include a peak
+            for indexing
+        mask : 2d boolean array
+            A real space shaped Boolean mask indicating scan positions at which
+            to fit the lattice vectors.
+        returncalc : bool
+            if True, returns bragg_directions, bragg_vectors_indexed, g1g2_map
         """
         # check the calstate
         assert (
@@ -420,6 +432,7 @@ class StrainMap(RealSlice, Data):
             mask.shape == self.braggvectors.Rshape
         ), "mask must have same shape as pointlistarray"
         assert mask.dtype == bool, "mask must be boolean"
+        self.mask = mask
 
         # set up new braggpeaks PLA
         indexed_braggpeaks = PointListArray(
@@ -467,21 +480,36 @@ class StrainMap(RealSlice, Data):
         g1g2_map = fit_lattice_vectors_all_DPs(self.bragg_vectors_indexed)
         self.g1g2_map = g1g2_map
 
+        # update the mask
+        g1g2_mask = self.g1g2_map["mask"].data.astype("bool")
+        self.mask = np.logical_and(self.mask, g1g2_mask)
+
         # return
         if returncalc:
             return self.bragg_vectors_indexed, self.g1g2_map
 
     def get_strain(
-        self, mask=None, coordinate_rotation=0, returncalc=False, **kwargs
+        self,
+        gvects = None,
+        coordinate_rotation = 0,
+        returncalc = False,
+        **kwargs
     ):
         """
+        Compute the strain as the deviation of the basis reciprocal lattice
+        vectors which have been fit at each scan position with respect to a
+        pair of reference lattice vectors, determined by the argument `gvects`.
+
         Parameters
         ----------
-        mask : nd.array (bool)
-            Use lattice vectors from g1g2_map scan positions
-            wherever mask==True. If mask is None gets median strain
-            map from entire field of view. If mask is not None, gets
-            reference g1 and g2 from region and then calculates strain.
+        gvects : None or 2d-array or tuple
+            Specifies how to select the reference lattice vectors. If None,
+            use the median of the fit lattice vectors over the whole dataset.
+            If a 2d array is passed, it should be real space shaped and boolean.
+            In this case, uses the median of the fit lattice vectors in all scan
+            positions where this array is True. Otherwise, should be a length 2
+            tuple of length 2 array/list/tuples, which are used directly as
+            g1 and g2.
         coordinate_rotation : number
             Rotate the reference coordinate system counterclockwise by this
             amount, in degrees
@@ -493,24 +521,29 @@ class StrainMap(RealSlice, Data):
             self.calstate == self.braggvectors.calstate
         ), "The calibration state has changed! To resync the calibration state, use `.reset_calstate`."
 
-        # get the mask
-        if mask is None:
-            mask = self.mask
-            # mask = np.ones(self.g1g2_map.shape, dtype="bool")
-            # strainmap_g1g2 = get_strain_from_reference_region(
-            #     self.g1g2_map,
-            #     mask=mask,
-            # )
-
-        #     g1_ref, g2_ref = get_reference_g1g2(self.g1g2_map, mask)
-        #     strain_map = get_strain_from_reference_g1g2(self.g1g2_map, g1_ref, g2_ref)
-        # else:
-
-        # get the reference g1/g2 vectors
-        g1_ref, g2_ref = get_reference_g1g2(self.g1g2_map, mask)
+        # get the reference g-vectors
+        if gvects is None:
+            g1_ref, g2_ref = get_reference_g1g2(
+                self.g1g2_map,
+                self.mask
+            )
+        elif isinstance(gvects, np.ndarray):
+            assert(gvects.shape == self.rshape)
+            assert(gvects.dtype == bool)
+            g1_ref, g2_ref = get_reference_g1g2(
+                self.g1g2_map,
+                np.logical_and(gvects, self.mask)
+            )
+        else:
+            g1_ref = np.array(gvects[0])
+            g2_ref = np.array(gvects[1])
 
         # find the strain
-        strainmap_g1g2 = get_strain_from_reference_g1g2(self.g1g2_map, g1_ref, g2_ref)
+        strainmap_g1g2 = get_strain_from_reference_g1g2(
+            self.g1g2_map,
+            g1_ref,
+            g2_ref
+        )
         self.strainmap_g1g2 = strainmap_g1g2
 
         # get the reference coordinate system
@@ -541,16 +574,34 @@ class StrainMap(RealSlice, Data):
             returnfig=True,
         )
 
-        # modify masking
-        if not np.all(mask == True):
-            ax[0][0].imshow(mask, alpha=0.2, cmap="binary")
-            ax[0][1].imshow(mask, alpha=0.2, cmap="binary")
-            ax[1][0].imshow(mask, alpha=0.2, cmap="binary")
-            ax[1][1].imshow(mask, alpha=0.2, cmap="binary")
-
         # return
         if returncalc:
             return self.strainmap
+
+
+    def get_reference_g1g2(
+        self,
+        ROI
+        ):
+        """
+        Get reference g1,g2 vectors by taking the median fit vectors
+        in the specified ROI.
+
+        Parameters
+        ----------
+        ROI : real space shaped 2d boolean ndarray
+            Use scan positions where ROI is True
+
+        Returns
+        -------
+        g1_ref,g2_ref : 2 tuple of length 2 ndarrays
+        """
+        g1_ref, g2_ref = get_reference_g1g2(
+            self.g1g2_map,
+            ROI
+        )
+        return g1_ref, g2_ref
+
 
 
     def show_strain(
@@ -936,15 +987,6 @@ class StrainMap(RealSlice, Data):
                 g1q /= g_ratio
             else:
                 g2q *= g_ratio
-            # rotate
-            #R = np.array(
-            #    [
-            #        [ np.cos(QRrot), np.sin(QRrot)],
-            #        [-np.sin(QRrot), np.cos(QRrot)]
-            #    ]
-            #)
-            #g1_x,g1_y = np.matmul(g1q,R)
-            #g2_x,g2_y = np.matmul(g2q,R)
             g1_x,g1_y = g1q
             g2_x,g2_y = g2q
 
@@ -1393,7 +1435,10 @@ class StrainMap(RealSlice, Data):
         returnfig=False,
         **kwargs,
     ):
-        """Adds the vectors g1,g2 to an image, with tail positions at (x0,y0).  g1 and g2 are 2-tuples (gx,gy)."""
+        """
+        Adds the vectors g1,g2 to an image, with tail positions at (x0,y0).
+        g1 and g2 are 2-tuples (gx,gy).
+        """
         fig, ax = show(ar, returnfig=True, **kwargs)
 
         # Add vectors
@@ -1446,10 +1491,13 @@ class StrainMap(RealSlice, Data):
         """
         Shows an array with an overlay describing the Bragg directions
 
-        Accepts:
-            ar                  (arrray) the image
-            bragg_directions    (PointList) the bragg scattering directions; must have coordinates
-                                'qx','qy','h', and 'k'. Optionally may also have 'l'.
+        Parameters
+        ----------
+        ar : np.ndarray
+            The display image
+        bragg_directions : PointList
+            The Bragg scattering directions.  Must have coordinates
+            'qx','qy','h', and 'k'. Optionally may also have 'l'.
         """
         assert isinstance(bragg_directions, PointList)
         for k in ("qx", "qy", "h", "k"):
