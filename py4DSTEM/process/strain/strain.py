@@ -557,27 +557,28 @@ class StrainMap(RealSlice, Data):
         self,
         vrange = [-3,3],
         vrange_theta = [-3,3],
-        vrange_exx=None,
-        vrange_exy=None,
-        vrange_eyy=None,
-        bkgrd=True,
-        show_cbars=("eyy", "theta"),
-        bordercolor="k",
-        borderwidth=1,
-        titlesize=24,
-        ticklabelsize=16,
-        ticknumber=5,
-        unitlabelsize=24,
-        cmap="RdBu_r",
-        cmap_theta="PRGn",
-        mask_color="k",
-        color_axes="k",
-        show_gvects=False,
-        color_gvects="r",
+        vrange_exx = None,
+        vrange_exy = None,
+        vrange_eyy = None,
+        bkgrd = True,
+        show_cbars = None,
+        bordercolor = "k",
+        borderwidth = 1,
+        titlesize = 18,
+        ticklabelsize = 10,
+        ticknumber = 5,
+        unitlabelsize = 16,
+        cmap = "RdBu_r",
+        cmap_theta = "PRGn",
+        mask_color = "k",
+        color_axes = "k",
+        show_gvects = True,
+        color_gvects = "r",
         legend_camera_length = 1.6,
-        layout=0,
-        figsize=None,
-        returnfig=False,
+        scale_gvects = 0.6,
+        layout = 0,
+        figsize = None,
+        returnfig = False,
     ):
         """
         Display a strain map, showing the 4 strain components
@@ -587,36 +588,59 @@ class StrainMap(RealSlice, Data):
         Parameters
         ----------
         vrange : length 2 list or tuple
+            The colorbar intensity range for exx,eyy, and exy.
         vrange_theta : length 2 list or tuple
+            The colorbar intensity range for theta.
         vrange_exx : length 2 list or tuple
+            The colorbar intensity range for exx; overrides `vrange`
+            for exx
         vrange_exy : length 2 list or tuple
-        vrange_eyy :length 2 list or tuple
+            The colorbar intensity range for exy; overrides `vrange`
+            for exy
+        vrange_eyy : length 2 list or tuple
+            The colorbar intensity range for eyy; overrides `vrange`
+            for eyy
         bkgrd : bool
-        show_cbars :tuple of strings
-            Show colorbars for the specified axes. Must be a tuple
-            containing any, all, or none of ('exx','eyy','exy','theta')
+            Overlay a mask over background pixels
+        show_cbars : None or a tuple of strings
+            Show colorbars for the specified axes. Valid strings are
+            'exx', 'eyy', 'exy', and 'theta'.
         bordercolor : color
+            Color for the image borders
         borderwidth : number
+            Width of the image borders
         titlesize : number
+            Size of the image titles
         ticklabelsize : number
+            Size of the colorbar ticks
         ticknumber : number
-            number of ticks on colorbars
+            Number of ticks on colorbars
         unitlabelsize : number
+            Size of the units label on the colorbars
         cmap : colormap
+            Colormap for exx, exy, and eyy
         cmap_theta : colormap
+            Colormap for theta
         mask_color : color
+            Color for the background mask
         color_axes : color
+            Color for the legend coordinate axes
         show_gvects : bool
             Toggles displaying the g-vectors in the legend
         color_gvects : color
+            Color for the legend g-vectors
         legend_camera_length : number
             The distance the legend is viewed from; a smaller number yields
             a larger legend
+        scale_gvects : number
+            Scaling for the legend g-vectors relative to the coordinate axes
         layout : int
-            determines the layout of the grid which the strain components
+            Determines the layout of the grid which the strain components
             will be plotted in.  Must be in (0,1,2).  0=(2x2), 1=(1x4), 2=(4x1).
         figsize : length 2 tuple of numbers
+            Size of the figure
         returnfig : bool
+            Toggles returning the figure
         """
         # Lookup table for different layouts
         assert layout in (0, 1, 2)
@@ -626,6 +650,20 @@ class StrainMap(RealSlice, Data):
             2: ["right", "right", "right", "right"],
         }
         layout_p = layout_lookup[layout]
+
+        # Set which colorbars to display
+        if show_cbars is None:
+            if np.all([v is None for v in (
+                vrange_exx,
+                vrange_eyy,
+                vrange_exy,
+            )]):
+                show_cbars = ('eyy','theta')
+            else:
+                show_cbars = ('exx','eyy','exy','theta')
+        else:
+            assert np.all([v in ('exx','eyy','exy','theta') for v in show_cbars])
+
 
         # Contrast limits
         if vrange_exx is None:
@@ -836,11 +874,7 @@ class StrainMap(RealSlice, Data):
             ax_legend = fig.add_subplot(gs[:,-1])
 
         # get the coordinate axes' directions
-        QRrot = self.calibration.get_QR_rotation()
-        rotation = np.sum([
-            self.coordinate_rotation_radians,
-            QRrot
-        ])
+        rotation = self.coordinate_rotation_radians
         xaxis_vectx = np.cos(rotation)
         xaxis_vecty = np.sin(rotation)
         yaxis_vectx = np.cos(rotation+np.pi/2)
@@ -868,8 +902,8 @@ class StrainMap(RealSlice, Data):
             head_width = 0.1,
         )
         ax_legend.text(
-            x = xaxis_vecty*1.12,
-            y = xaxis_vectx*1.12,
+            x = xaxis_vecty*1.16,
+            y = xaxis_vectx*1.16,
             s = 'x',
             fontsize = 14,
             color = color_axes,
@@ -877,8 +911,8 @@ class StrainMap(RealSlice, Data):
             verticalalignment = 'center',
         )
         ax_legend.text(
-            x = yaxis_vecty*1.12,
-            y = yaxis_vectx*1.12,
+            x = yaxis_vecty*1.16,
+            y = yaxis_vectx*1.16,
             s = 'y',
             fontsize = 14,
             color = color_axes,
@@ -894,8 +928,8 @@ class StrainMap(RealSlice, Data):
             g2q = np.array(self.g2)
             g1norm = np.linalg.norm(g1q)
             g2norm = np.linalg.norm(g2q)
-            g1q /= np.linalg.norm(g1norm)
-            g2q /= np.linalg.norm(g2norm)
+            g1q /= g1norm
+            g2q /= g2norm
             # set the lengths
             g_ratio = g2norm/g1norm
             if g_ratio > 1:
@@ -903,21 +937,23 @@ class StrainMap(RealSlice, Data):
             else:
                 g2q *= g_ratio
             # rotate
-            R = np.array(
-                [
-                    [ np.cos(QRrot), np.sin(QRrot)],
-                    [-np.sin(QRrot), np.cos(QRrot)]
-                ]
-            )
-            g1_x,g1_y = np.matmul(g1q,R)
-            g2_x,g2_y = np.matmul(g2q,R)
+            #R = np.array(
+            #    [
+            #        [ np.cos(QRrot), np.sin(QRrot)],
+            #        [-np.sin(QRrot), np.cos(QRrot)]
+            #    ]
+            #)
+            #g1_x,g1_y = np.matmul(g1q,R)
+            #g2_x,g2_y = np.matmul(g2q,R)
+            g1_x,g1_y = g1q
+            g2_x,g2_y = g2q
 
             # draw the g vectors
             ax_legend.arrow(
                 x = 0,
                 y = 0,
-                dx = g1_y*0.8,
-                dy = g1_x*0.8,
+                dx = g1_y*scale_gvects,
+                dy = g1_x*scale_gvects,
                 color = color_gvects,
                 length_includes_head = True,
                 width = 0.005,
@@ -926,16 +962,16 @@ class StrainMap(RealSlice, Data):
             ax_legend.arrow(
                 x = 0,
                 y = 0,
-                dx = g2_y*0.8,
-                dy = g2_x*0.8,
+                dx = g2_y*scale_gvects,
+                dy = g2_x*scale_gvects,
                 color = color_gvects,
                 length_includes_head = True,
                 width = 0.005,
                 head_width = 0.05,
             )
             ax_legend.text(
-                x = g1_y*0.96,
-                y = g1_x*0.96,
+                x = g1_y*scale_gvects*1.2,
+                y = g1_x*scale_gvects*1.2,
                 s = r'$g_1$',
                 fontsize = 12,
                 color = color_gvects,
@@ -943,8 +979,8 @@ class StrainMap(RealSlice, Data):
                 verticalalignment = 'center',
             )
             ax_legend.text(
-                x = g2_y*0.96,
-                y = g2_x*0.96,
+                x = g2_y*scale_gvects*1.2,
+                y = g2_x*scale_gvects*1.2,
                 s = r'$g_2$',
                 fontsize = 12,
                 color = color_gvects,
@@ -987,7 +1023,7 @@ class StrainMap(RealSlice, Data):
         self,
         im_uncal = None,
         im_cal = None,
-        color_axes="y",
+        color_axes="linen",
         color_gvects="r",
         origin_uncal = None,
         origin_cal = None,
@@ -997,9 +1033,6 @@ class StrainMap(RealSlice, Data):
         layout = "horizontal",
         titlesize = 16,
         size_labels = 14,
-        #ticklabelsize=16,
-        #ticknumber=5,
-        #unitlabelsize=24,
         figsize = None,
         returnfig = False,
     ):
@@ -1097,11 +1130,7 @@ class StrainMap(RealSlice, Data):
         # get the directions
 
         # calibrated 
-        QRrot = self.calibration.get_QR_rotation()
-        rotation = np.sum([
-            self.coordinate_rotation_radians,
-            QRrot
-        ])
+        rotation = self.coordinate_rotation_radians
         xaxis_cal = np.array([
             np.cos(rotation),
             np.sin(rotation)
@@ -1112,13 +1141,18 @@ class StrainMap(RealSlice, Data):
         ])
 
         # uncalibrated 
+        QRrot = self.calibration.get_QR_rotation()
+        rotation = np.sum([
+            self.coordinate_rotation_radians,
+            -QRrot
+        ])
         xaxis_uncal = np.array([
-            np.cos(self.coordinate_rotation_radians),
-            np.sin(self.coordinate_rotation_radians)
+            np.cos(rotation),
+            np.sin(rotation)
         ])
         yaxis_uncal = np.array([
-            np.cos(self.coordinate_rotation_radians+np.pi/2),
-            np.sin(self.coordinate_rotation_radians+np.pi/2)
+            np.cos(rotation+np.pi/2),
+            np.sin(rotation+np.pi/2)
         ])
         # inversion
         if self.calibration.get_QR_flip():
@@ -1172,6 +1206,7 @@ class StrainMap(RealSlice, Data):
             origin_cal = self.calibration.get_origin_mean()
 
         # Draw calibrated coordinate axes
+        coordax_width = Lmean*2/100
         ax1.arrow(
             x = origin_cal[1],
             y = origin_cal[0],
@@ -1179,8 +1214,8 @@ class StrainMap(RealSlice, Data):
             dy = xaxis_cal[0],
             color = color_axes,
             length_includes_head = True,
-            width = 0.01,
-            head_width = 0.1,
+            width = coordax_width,
+            head_width = coordax_width * 5,
         )
         ax1.arrow(
             x = origin_cal[1],
@@ -1189,12 +1224,12 @@ class StrainMap(RealSlice, Data):
             dy = yaxis_cal[0],
             color = color_axes,
             length_includes_head = True,
-            width = 0.01,
-            head_width = 0.1,
+            width = coordax_width,
+            head_width = coordax_width * 5,
         )
         ax1.text(
-            x = origin_cal[1] + xaxis_cal[1]*1.12,
-            y = origin_cal[0] + xaxis_cal[0]*1.12,
+            x = origin_cal[1] + xaxis_cal[1]*1.16,
+            y = origin_cal[0] + xaxis_cal[0]*1.16,
             s = 'x',
             fontsize = size_labels,
             color = color_axes,
@@ -1202,8 +1237,8 @@ class StrainMap(RealSlice, Data):
             verticalalignment = 'center',
         )
         ax1.text(
-            x = origin_cal[1] + yaxis_cal[1]*1.12,
-            y = origin_cal[0] + yaxis_cal[0]*1.12,
+            x = origin_cal[1] + yaxis_cal[1]*1.16,
+            y = origin_cal[0] + yaxis_cal[0]*1.16,
             s = 'y',
             fontsize = size_labels,
             color = color_axes,
@@ -1219,8 +1254,8 @@ class StrainMap(RealSlice, Data):
             dy = xaxis_uncal[0],
             color = color_axes,
             length_includes_head = True,
-            width = 0.01,
-            head_width = 0.1,
+            width = coordax_width,
+            head_width = coordax_width * 5,
         )
         ax2.arrow(
             x = origin_uncal[1],
@@ -1229,12 +1264,12 @@ class StrainMap(RealSlice, Data):
             dy = yaxis_uncal[0],
             color = color_axes,
             length_includes_head = True,
-            width = 0.01,
-            head_width = 0.1,
+            width = coordax_width,
+            head_width = coordax_width * 5,
         )
         ax2.text(
-            x = origin_uncal[1] + xaxis_uncal[1]*1.12,
-            y = origin_uncal[0] + xaxis_uncal[0]*1.12,
+            x = origin_uncal[1] + xaxis_uncal[1]*1.16,
+            y = origin_uncal[0] + xaxis_uncal[0]*1.16,
             s = 'x',
             fontsize = size_labels,
             color = color_axes,
@@ -1242,8 +1277,8 @@ class StrainMap(RealSlice, Data):
             verticalalignment = 'center',
         )
         ax2.text(
-            x = origin_uncal[1] + yaxis_uncal[1]*1.12,
-            y = origin_uncal[0] + yaxis_uncal[0]*1.12,
+            x = origin_uncal[1] + yaxis_uncal[1]*1.16,
+            y = origin_uncal[0] + yaxis_uncal[0]*1.16,
             s = 'y',
             fontsize = size_labels,
             color = color_axes,
@@ -1262,8 +1297,8 @@ class StrainMap(RealSlice, Data):
             dy = g1_cal[0],
             color = color_gvects,
             length_includes_head = True,
-            width = 0.005,
-            head_width = 0.05,
+            width = coordax_width * 0.5,
+            head_width = coordax_width * 2.5,
         )
         ax1.arrow(
             x = origin_cal[1],
@@ -1272,12 +1307,12 @@ class StrainMap(RealSlice, Data):
             dy = g2_cal[0],
             color = color_gvects,
             length_includes_head = True,
-            width = 0.005,
-            head_width = 0.05,
+            width = coordax_width * 0.5,
+            head_width = coordax_width * 2.5,
         )
         ax1.text(
-            x = origin_cal[1] + g1_cal[1]*1.08,
-            y = origin_cal[0] + g1_cal[0]*1.08,
+            x = origin_cal[1] + g1_cal[1]*1.16,
+            y = origin_cal[0] + g1_cal[0]*1.16,
             s = r'$g_1$',
             fontsize = size_labels*0.88,
             color = color_gvects,
@@ -1285,8 +1320,8 @@ class StrainMap(RealSlice, Data):
             verticalalignment = 'center',
         )
         ax1.text(
-            x = origin_cal[1] + g2_cal[1]*1.08,
-            y = origin_cal[0] + g2_cal[0]*1.08,
+            x = origin_cal[1] + g2_cal[1]*1.16,
+            y = origin_cal[0] + g2_cal[0]*1.16,
             s = r'$g_2$',
             fontsize = size_labels*0.88,
             color = color_gvects,
@@ -1304,8 +1339,8 @@ class StrainMap(RealSlice, Data):
             dy = g1_uncal[0],
             color = color_gvects,
             length_includes_head = True,
-            width = 0.005,
-            head_width = 0.05,
+            width = coordax_width * 0.5,
+            head_width = coordax_width * 2.5,
         )
         ax2.arrow(
             x = origin_uncal[1],
@@ -1314,12 +1349,12 @@ class StrainMap(RealSlice, Data):
             dy = g2_uncal[0],
             color = color_gvects,
             length_includes_head = True,
-            width = 0.005,
-            head_width = 0.05,
+            width = coordax_width * 0.5,
+            head_width = coordax_width * 2.5,
         )
         ax2.text(
-            x = origin_uncal[1] + g1_uncal[1]*1.08,
-            y = origin_uncal[0] + g1_uncal[0]*1.08,
+            x = origin_uncal[1] + g1_uncal[1]*1.16,
+            y = origin_uncal[0] + g1_uncal[0]*1.16,
             s = r'$g_1$',
             fontsize = size_labels*0.88,
             color = color_gvects,
@@ -1327,8 +1362,8 @@ class StrainMap(RealSlice, Data):
             verticalalignment = 'center',
         )
         ax2.text(
-            x = origin_uncal[1] + g2_uncal[1]*1.08,
-            y = origin_uncal[0] + g2_uncal[0]*1.08,
+            x = origin_uncal[1] + g2_uncal[1]*1.16,
+            y = origin_uncal[0] + g2_uncal[0]*1.16,
             s = r'$g_2$',
             fontsize = size_labels*0.88,
             color = color_gvects,
