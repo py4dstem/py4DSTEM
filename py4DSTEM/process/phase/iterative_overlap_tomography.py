@@ -88,6 +88,8 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
     object_type: str, optional
         The object can be reconstructed as a real potential ('potential') or a complex
         object ('complex')
+    positions_mask: np.ndarray, optional
+        Boolean real space mask to select positions to ignore in reconstruction
     name: str, optional
         Class name
     kwargs:
@@ -111,6 +113,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
         polar_parameters: Mapping[str, float] = None,
         object_padding_px: Tuple[int, int] = None,
         object_type: str = "potential",
+        positions_mask: np.ndarray = None,
         initial_object_guess: np.ndarray = None,
         initial_probe_guess: np.ndarray = None,
         initial_scan_positions: Sequence[np.ndarray] = None,
@@ -188,6 +191,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
         self._rolloff = rolloff
         self._object_type = object_type
         self._object_padding_px = object_padding_px
+        self._positions_mask = positions_mask
         self._verbose = verbose
         self._device = device
         self._preprocessed = False
@@ -555,7 +559,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                     tilt_index + 1
                 ]
             ] = self._calculate_scan_positions_in_pixels(
-                self._scan_positions[tilt_index]
+                self._scan_positions[tilt_index], self._positions_mask[tilt_index]
             )
 
         # handle semiangle specified in pixels

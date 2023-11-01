@@ -1535,7 +1535,9 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
             else:
                 raise ValueError("{} not a recognized parameter".format(symbol))
 
-    def _calculate_scan_positions_in_pixels(self, positions: np.ndarray):
+    def _calculate_scan_positions_in_pixels(
+        self, positions: np.ndarray, positions_mask
+    ):
         """
         Method to compute the initial guess of scan positions in pixels.
 
@@ -1544,6 +1546,8 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
         positions: (J,2) np.ndarray or None
             Input probe positions in Å.
             If None, a raster scan using experimental parameters is constructed.
+        positions_mask: np.ndarray, optional
+            Boolean real space mask to select positions in datacube to skip for reconstruction
 
         Returns
         -------
@@ -1591,6 +1595,15 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
         else:
             positions = np.array([x.ravel(), y.ravel()]).T
         positions -= np.min(positions, axis=0)
+
+        if positions_mask is not None:
+            if positions_mask.dtype != "bool":
+                warnings.warn(
+                    ("`positions_mask` converged to `bool` array"),
+                    UserWarning,
+                )
+                positions_mask = np.asarray(positions_mask, dtype="bool")
+            positions = positions[positions_mask.ravel()]
 
         if self._object_padding_px is None:
             float_padding = self._region_of_interest_shape / 2

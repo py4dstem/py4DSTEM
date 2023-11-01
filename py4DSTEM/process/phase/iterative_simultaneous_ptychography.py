@@ -66,6 +66,8 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
     object_padding_px: Tuple[int,int], optional
         Pixel dimensions to pad objects with
         If None, the padding is set to half the probe ROI dimensions
+    positions_mask: np.ndarray, optional
+        Boolean real space mask to select positions in datacube to skip for reconstruction
     initial_object_guess: np.ndarray, optional
         Initial guess for complex-valued object of dimensions (Px,Py)
         If None, initialized to 1.0j
@@ -102,6 +104,7 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
         vacuum_probe_intensity: np.ndarray = None,
         polar_parameters: Mapping[str, float] = None,
         object_padding_px: Tuple[int, int] = None,
+        positions_mask: np.ndarray = None,
         initial_object_guess: np.ndarray = None,
         initial_probe_guess: np.ndarray = None,
         initial_scan_positions: np.ndarray = None,
@@ -167,6 +170,7 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
         self._rolloff = rolloff
         self._object_type = object_type
         self._object_padding_px = object_padding_px
+        self._positions_mask = positions_mask
         self._verbose = verbose
         self._device = device
         self._preprocessed = False
@@ -607,7 +611,7 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
         self._region_of_interest_shape = np.array(self._amplitudes[0].shape[-2:])
 
         self._positions_px = self._calculate_scan_positions_in_pixels(
-            self._scan_positions
+            self._scan_positions, self._positions_mask
         )
 
         # handle semiangle specified in pixels

@@ -85,6 +85,8 @@ class MixedstateMultislicePtychographicReconstruction(PtychographicReconstructio
     object_type: str, optional
         The object can be reconstructed as a real potential ('potential') or a complex
         object ('complex')
+    positions_mask: np.ndarray, optional
+        Boolean real space mask to select positions in datacube to skip for reconstruction
     verbose: bool, optional
         If True, class methods will inherit this and print additional information
     device: str, optional
@@ -115,6 +117,7 @@ class MixedstateMultislicePtychographicReconstruction(PtychographicReconstructio
         initial_probe_guess: np.ndarray = None,
         initial_scan_positions: np.ndarray = None,
         object_type: str = "complex",
+        positions_mask: np.ndarray = None,
         verbose: bool = True,
         device: str = "cpu",
         name: str = "multi-slice_ptychographic_reconstruction",
@@ -201,6 +204,7 @@ class MixedstateMultislicePtychographicReconstruction(PtychographicReconstructio
         self._semiangle_cutoff_pixels = semiangle_cutoff_pixels
         self._rolloff = rolloff
         self._object_type = object_type
+        self._positions_mask = positions_mask
         self._object_padding_px = object_padding_px
         self._verbose = verbose
         self._device = device
@@ -454,7 +458,7 @@ class MixedstateMultislicePtychographicReconstruction(PtychographicReconstructio
         del self._intensities
 
         self._positions_px = self._calculate_scan_positions_in_pixels(
-            self._scan_positions
+            self._scan_positions, self._positions_mask
         )
 
         # handle semiangle specified in pixels
