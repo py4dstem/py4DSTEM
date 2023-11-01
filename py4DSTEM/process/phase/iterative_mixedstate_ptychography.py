@@ -164,7 +164,7 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
             raise ValueError(
                 f"object_type must be either 'potential' or 'complex', not {object_type}"
             )
-        if positions_mask.dtype != "bool":
+        if positions_mask is not None and positions_mask.dtype != "bool":
             warnings.warn(
                 ("`positions_mask` converted to `bool` array"),
                 UserWarning,
