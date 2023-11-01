@@ -189,6 +189,13 @@ class MixedstateMultislicePtychographicReconstruction(PtychographicReconstructio
                 f"object_type must be either 'potential' or 'complex', not {object_type}"
             )
 
+        if positions_mask.dtype != "bool":
+            warnings.warn(
+                ("`positions_mask` converted to `bool` array"),
+                UserWarning,
+            )
+            positions_mask = np.asarray(positions_mask, dtype="bool")
+
         self.set_save_defaults()
 
         # Data
@@ -449,7 +456,11 @@ class MixedstateMultislicePtychographicReconstruction(PtychographicReconstructio
             self._amplitudes,
             self._mean_diffraction_intensity,
         ) = self._normalize_diffraction_intensities(
-            self._intensities, self._com_fitted_x, self._com_fitted_y, crop_patterns
+            self._intensities,
+            self._com_fitted_x,
+            self._com_fitted_y,
+            crop_patterns,
+            self._positions_mask,
         )
 
         # explicitly delete namespace

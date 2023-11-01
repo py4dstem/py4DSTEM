@@ -153,6 +153,12 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
             raise ValueError(
                 f"object_type must be either 'potential' or 'complex', not {object_type}"
             )
+        if positions_mask.dtype != "bool":
+            warnings.warn(
+                ("`positions_mask` converted to `bool` array"),
+                UserWarning,
+            )
+            positions_mask = np.asarray(positions_mask, dtype="bool")
 
         self.set_save_defaults()
 
@@ -408,7 +414,11 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
             amplitudes_0,
             mean_diffraction_intensity_0,
         ) = self._normalize_diffraction_intensities(
-            intensities_0, com_fitted_x_0, com_fitted_y_0, crop_patterns
+            intensities_0,
+            com_fitted_x_0,
+            com_fitted_y_0,
+            crop_patterns,
+            self._positions_mask,
         )
 
         # explicitly delete namescapes
@@ -489,7 +499,11 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
             amplitudes_1,
             mean_diffraction_intensity_1,
         ) = self._normalize_diffraction_intensities(
-            intensities_1, com_fitted_x_1, com_fitted_y_1, crop_patterns
+            intensities_1,
+            com_fitted_x_1,
+            com_fitted_y_1,
+            crop_patterns,
+            self._positions_mask,
         )
 
         # explicitly delete namescapes
@@ -571,7 +585,11 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
                 amplitudes_2,
                 mean_diffraction_intensity_2,
             ) = self._normalize_diffraction_intensities(
-                intensities_2, com_fitted_x_2, com_fitted_y_2, crop_patterns
+                intensities_2,
+                com_fitted_x_2,
+                com_fitted_y_2,
+                crop_patterns,
+                self._positions_mask,
             )
 
             # explicitly delete namescapes
