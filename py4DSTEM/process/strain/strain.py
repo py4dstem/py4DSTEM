@@ -26,7 +26,7 @@ from py4DSTEM.visualize import (
     add_pointlabels,
     add_vector,
     ax_addaxes,
-    ax_addaxes_QtoR
+    ax_addaxes_QtoR,
 )
 
 
@@ -36,11 +36,7 @@ class StrainMap(RealSlice, Data):
 
     """
 
-    def __init__(
-        self,
-        braggvectors: BraggVectors,
-        name: Optional[str] = "strainmap"
-        ):
+    def __init__(self, braggvectors: BraggVectors, name: Optional[str] = "strainmap"):
         """
         Parameters
         ----------
@@ -397,7 +393,7 @@ class StrainMap(RealSlice, Data):
     def set_max_peak_spacing(
         self,
         max_peak_spacing,
-        returnfig = False,
+        returnfig=False,
         **vis_params,
     ):
         """
@@ -421,7 +417,7 @@ class StrainMap(RealSlice, Data):
         self.max_peak_spacing = max_peak_spacing
 
         # make the figure
-        fig,ax = show(
+        fig, ax = show(
             self.bvm.data,
             returnfig=True,
             **vis_params,
@@ -429,18 +425,15 @@ class StrainMap(RealSlice, Data):
 
         # make the circle patch collection
         patches = []
-        qx = self.braggdirections['qx']
-        qy = self.braggdirections['qy']
+        qx = self.braggdirections["qx"]
+        qy = self.braggdirections["qy"]
         origin = self.origin
         for idx in range(len(qx)):
             c = Circle(
-                xy = (
-                    qy[idx] + origin[1],
-                    qx[idx] + origin[0]
-                ),
-                radius = self.max_peak_spacing,
-                edgecolor = 'r',
-                fill = False
+                xy=(qy[idx] + origin[1], qx[idx] + origin[0]),
+                radius=self.max_peak_spacing,
+                edgecolor="r",
+                fill=False,
             )
             patches.append(c)
         pc = PatchCollection(patches, match_original=True)
@@ -450,17 +443,12 @@ class StrainMap(RealSlice, Data):
 
         # return
         if returnfig:
-            return fig,ax
+            return fig, ax
         else:
             plt.show()
 
-
     def fit_basis_vectors(
-        self,
-        mask = None,
-        max_peak_spacing = None,
-        vis_params = {},
-        returncalc = False
+        self, mask=None, max_peak_spacing=None, vis_params={}, returncalc=False
     ):
         """
         Fit the basis lattice vectors to the detected Bragg peaks at each
@@ -497,11 +485,8 @@ class StrainMap(RealSlice, Data):
 
         # handle the max peak spacing
         if max_peak_spacing is not None:
-            self.set_max_peak_spacing(
-                max_peak_spacing,
-                **vis_params
-            )
-        assert(hasattr(self,'max_peak_spacing')), "Set the maximum peak spacing!"
+            self.set_max_peak_spacing(max_peak_spacing, **vis_params)
+        assert hasattr(self, "max_peak_spacing"), "Set the maximum peak spacing!"
 
         # index the bragg vectors
 
@@ -575,13 +560,8 @@ class StrainMap(RealSlice, Data):
         if returncalc:
             return self.bragg_vectors_indexed, self.g1g2_map
 
-
     def get_strain(
-        self,
-        gvects = None,
-        coordinate_rotation = 0,
-        returncalc = False,
-        **kwargs
+        self, gvects=None, coordinate_rotation=0, returncalc=False, **kwargs
     ):
         """
         Compute the strain as the deviation of the basis reciprocal lattice
@@ -611,27 +591,19 @@ class StrainMap(RealSlice, Data):
 
         # get the reference g-vectors
         if gvects is None:
-            g1_ref, g2_ref = get_reference_g1g2(
-                self.g1g2_map,
-                self.mask
-            )
+            g1_ref, g2_ref = get_reference_g1g2(self.g1g2_map, self.mask)
         elif isinstance(gvects, np.ndarray):
-            assert(gvects.shape == self.rshape)
-            assert(gvects.dtype == bool)
+            assert gvects.shape == self.rshape
+            assert gvects.dtype == bool
             g1_ref, g2_ref = get_reference_g1g2(
-                self.g1g2_map,
-                np.logical_and(gvects, self.mask)
+                self.g1g2_map, np.logical_and(gvects, self.mask)
             )
         else:
             g1_ref = np.array(gvects[0])
             g2_ref = np.array(gvects[1])
 
         # find the strain
-        strainmap_g1g2 = get_strain_from_reference_g1g2(
-            self.g1g2_map,
-            g1_ref,
-            g2_ref
-        )
+        strainmap_g1g2 = get_strain_from_reference_g1g2(self.g1g2_map, g1_ref, g2_ref)
         self.strainmap_g1g2 = strainmap_g1g2
 
         # get the reference coordinate system
@@ -644,9 +616,9 @@ class StrainMap(RealSlice, Data):
         # get the strain in the reference coordinates
         strainmap_rotated = get_rotated_strain_map(
             self.strainmap_g1g2,
-            xaxis_x = xaxis_x,
-            xaxis_y = xaxis_y,
-            flip_theta = False,
+            xaxis_x=xaxis_x,
+            xaxis_y=xaxis_y,
+            flip_theta=False,
         )
 
         # store the data
@@ -666,11 +638,7 @@ class StrainMap(RealSlice, Data):
         if returncalc:
             return self.strainmap
 
-
-    def get_reference_g1g2(
-        self,
-        ROI
-        ):
+    def get_reference_g1g2(self, ROI):
         """
         Get reference g1,g2 vectors by taking the median fit vectors
         in the specified ROI.
@@ -684,40 +652,35 @@ class StrainMap(RealSlice, Data):
         -------
         g1_ref,g2_ref : 2 tuple of length 2 ndarrays
         """
-        g1_ref, g2_ref = get_reference_g1g2(
-            self.g1g2_map,
-            ROI
-        )
+        g1_ref, g2_ref = get_reference_g1g2(self.g1g2_map, ROI)
         return g1_ref, g2_ref
-
-
 
     def show_strain(
         self,
-        vrange = [-3,3],
-        vrange_theta = [-3,3],
-        vrange_exx = None,
-        vrange_exy = None,
-        vrange_eyy = None,
-        bkgrd = True,
-        show_cbars = None,
-        bordercolor = "k",
-        borderwidth = 1,
-        titlesize = 18,
-        ticklabelsize = 10,
-        ticknumber = 5,
-        unitlabelsize = 16,
-        cmap = "RdBu_r",
-        cmap_theta = "PRGn",
-        mask_color = "k",
-        color_axes = "k",
-        show_gvects = True,
-        color_gvects = "r",
-        legend_camera_length = 1.6,
-        scale_gvects = 0.6,
-        layout = 0,
-        figsize = None,
-        returnfig = False,
+        vrange=[-3, 3],
+        vrange_theta=[-3, 3],
+        vrange_exx=None,
+        vrange_exy=None,
+        vrange_eyy=None,
+        bkgrd=True,
+        show_cbars=None,
+        bordercolor="k",
+        borderwidth=1,
+        titlesize=18,
+        ticklabelsize=10,
+        ticknumber=5,
+        unitlabelsize=16,
+        cmap="RdBu_r",
+        cmap_theta="PRGn",
+        mask_color="k",
+        color_axes="k",
+        show_gvects=True,
+        color_gvects="r",
+        legend_camera_length=1.6,
+        scale_gvects=0.6,
+        layout=0,
+        figsize=None,
+        returnfig=False,
     ):
         """
         Display a strain map, showing the 4 strain components
@@ -792,17 +755,21 @@ class StrainMap(RealSlice, Data):
 
         # Set which colorbars to display
         if show_cbars is None:
-            if np.all([v is None for v in (
-                vrange_exx,
-                vrange_eyy,
-                vrange_exy,
-            )]):
-                show_cbars = ('eyy','theta')
+            if np.all(
+                [
+                    v is None
+                    for v in (
+                        vrange_exx,
+                        vrange_eyy,
+                        vrange_exy,
+                    )
+                ]
+            ):
+                show_cbars = ("eyy", "theta")
             else:
-                show_cbars = ('exx','eyy','exy','theta')
+                show_cbars = ("exx", "eyy", "exy", "theta")
         else:
-            assert np.all([v in ('exx','eyy','exy','theta') for v in show_cbars])
-
+            assert np.all([v in ("exx", "eyy", "exy", "theta") for v in show_cbars])
 
         # Contrast limits
         if vrange_exx is None:
@@ -841,27 +808,29 @@ class StrainMap(RealSlice, Data):
         # if figsize hasn't been set, set it based on the
         # chosen layout and the image shape
         if figsize is None:
-            ratio = np.sqrt(self.rshape[1]/self.rshape[0])
+            ratio = np.sqrt(self.rshape[1] / self.rshape[0])
             if layout == 0:
-                figsize = (13*ratio,8/ratio)
+                figsize = (13 * ratio, 8 / ratio)
             elif layout == 1:
-                figsize = (10*ratio,4/ratio)
+                figsize = (10 * ratio, 4 / ratio)
             else:
-                figsize = (4*ratio,10/ratio)
-
+                figsize = (4 * ratio, 10 / ratio)
 
         # set up layout
         if layout == 0:
-            fig, ((ax11, ax12, ax_legend1), (ax21, ax22, ax_legend2)) =\
-                plt.subplots(2, 3, figsize=figsize)
+            fig, ((ax11, ax12, ax_legend1), (ax21, ax22, ax_legend2)) = plt.subplots(
+                2, 3, figsize=figsize
+            )
         elif layout == 1:
             figsize = (figsize[0] * np.sqrt(2), figsize[1] / np.sqrt(2))
-            fig, (ax11, ax12, ax21, ax22, ax_legend) =\
-                plt.subplots(1, 5, figsize=figsize)
+            fig, (ax11, ax12, ax21, ax22, ax_legend) = plt.subplots(
+                1, 5, figsize=figsize
+            )
         else:
             figsize = (figsize[0] / np.sqrt(2), figsize[1] * np.sqrt(2))
-            fig, (ax11, ax12, ax21, ax22, ax_legend) =\
-                plt.subplots(5, 1, figsize=figsize)
+            fig, (ax11, ax12, ax21, ax22, ax_legend) = plt.subplots(
+                5, 1, figsize=figsize
+            )
 
         # display images, returning cbar axis references
         cax11 = show(
@@ -1010,58 +979,57 @@ class StrainMap(RealSlice, Data):
             ax_legend1.remove()
             ax_legend2.remove()
             # make new axis
-            ax_legend = fig.add_subplot(gs[:,-1])
+            ax_legend = fig.add_subplot(gs[:, -1])
 
         # get the coordinate axes' directions
         rotation = self.coordinate_rotation_radians
         xaxis_vectx = np.cos(rotation)
         xaxis_vecty = np.sin(rotation)
-        yaxis_vectx = np.cos(rotation+np.pi/2)
-        yaxis_vecty = np.sin(rotation+np.pi/2)
+        yaxis_vectx = np.cos(rotation + np.pi / 2)
+        yaxis_vecty = np.sin(rotation + np.pi / 2)
 
         # make the coordinate axes
         ax_legend.arrow(
-            x = 0,
-            y = 0,
-            dx = xaxis_vecty,
-            dy = xaxis_vectx,
-            color = color_axes,
-            length_includes_head = True,
-            width = 0.01,
-            head_width = 0.1,
+            x=0,
+            y=0,
+            dx=xaxis_vecty,
+            dy=xaxis_vectx,
+            color=color_axes,
+            length_includes_head=True,
+            width=0.01,
+            head_width=0.1,
         )
         ax_legend.arrow(
-            x = 0,
-            y = 0,
-            dx = yaxis_vecty,
-            dy = yaxis_vectx,
-            color = color_axes,
-            length_includes_head = True,
-            width = 0.01,
-            head_width = 0.1,
+            x=0,
+            y=0,
+            dx=yaxis_vecty,
+            dy=yaxis_vectx,
+            color=color_axes,
+            length_includes_head=True,
+            width=0.01,
+            head_width=0.1,
         )
         ax_legend.text(
-            x = xaxis_vecty*1.16,
-            y = xaxis_vectx*1.16,
-            s = 'x',
-            fontsize = 14,
-            color = color_axes,
-            horizontalalignment = 'center',
-            verticalalignment = 'center',
+            x=xaxis_vecty * 1.16,
+            y=xaxis_vectx * 1.16,
+            s="x",
+            fontsize=14,
+            color=color_axes,
+            horizontalalignment="center",
+            verticalalignment="center",
         )
         ax_legend.text(
-            x = yaxis_vecty*1.16,
-            y = yaxis_vectx*1.16,
-            s = 'y',
-            fontsize = 14,
-            color = color_axes,
-            horizontalalignment = 'center',
-            verticalalignment = 'center',
+            x=yaxis_vecty * 1.16,
+            y=yaxis_vectx * 1.16,
+            s="y",
+            fontsize=14,
+            color=color_axes,
+            horizontalalignment="center",
+            verticalalignment="center",
         )
 
         # make the g-vectors
         if show_gvects:
-
             # get the g-vectors directions
             g1q = np.array(self.g1)
             g2q = np.array(self.g2)
@@ -1070,75 +1038,75 @@ class StrainMap(RealSlice, Data):
             g1q /= g1norm
             g2q /= g2norm
             # set the lengths
-            g_ratio = g2norm/g1norm
+            g_ratio = g2norm / g1norm
             if g_ratio > 1:
                 g1q /= g_ratio
             else:
                 g2q *= g_ratio
-            g1_x,g1_y = g1q
-            g2_x,g2_y = g2q
+            g1_x, g1_y = g1q
+            g2_x, g2_y = g2q
 
             # draw the g vectors
             ax_legend.arrow(
-                x = 0,
-                y = 0,
-                dx = g1_y*scale_gvects,
-                dy = g1_x*scale_gvects,
-                color = color_gvects,
-                length_includes_head = True,
-                width = 0.005,
-                head_width = 0.05,
+                x=0,
+                y=0,
+                dx=g1_y * scale_gvects,
+                dy=g1_x * scale_gvects,
+                color=color_gvects,
+                length_includes_head=True,
+                width=0.005,
+                head_width=0.05,
             )
             ax_legend.arrow(
-                x = 0,
-                y = 0,
-                dx = g2_y*scale_gvects,
-                dy = g2_x*scale_gvects,
-                color = color_gvects,
-                length_includes_head = True,
-                width = 0.005,
-                head_width = 0.05,
+                x=0,
+                y=0,
+                dx=g2_y * scale_gvects,
+                dy=g2_x * scale_gvects,
+                color=color_gvects,
+                length_includes_head=True,
+                width=0.005,
+                head_width=0.05,
             )
             ax_legend.text(
-                x = g1_y*scale_gvects*1.2,
-                y = g1_x*scale_gvects*1.2,
-                s = r'$g_1$',
-                fontsize = 12,
-                color = color_gvects,
-                horizontalalignment = 'center',
-                verticalalignment = 'center',
+                x=g1_y * scale_gvects * 1.2,
+                y=g1_x * scale_gvects * 1.2,
+                s=r"$g_1$",
+                fontsize=12,
+                color=color_gvects,
+                horizontalalignment="center",
+                verticalalignment="center",
             )
             ax_legend.text(
-                x = g2_y*scale_gvects*1.2,
-                y = g2_x*scale_gvects*1.2,
-                s = r'$g_2$',
-                fontsize = 12,
-                color = color_gvects,
-                horizontalalignment = 'center',
-                verticalalignment = 'center',
+                x=g2_y * scale_gvects * 1.2,
+                y=g2_x * scale_gvects * 1.2,
+                s=r"$g_2$",
+                fontsize=12,
+                color=color_gvects,
+                horizontalalignment="center",
+                verticalalignment="center",
             )
 
         # find center and extent
-        xmin = np.min([0,0,xaxis_vectx,yaxis_vectx])
-        xmax = np.max([0,0,xaxis_vectx,yaxis_vectx])
-        ymin = np.min([0,0,xaxis_vecty,yaxis_vecty])
-        ymax = np.max([0,0,xaxis_vecty,yaxis_vecty])
+        xmin = np.min([0, 0, xaxis_vectx, yaxis_vectx])
+        xmax = np.max([0, 0, xaxis_vectx, yaxis_vectx])
+        ymin = np.min([0, 0, xaxis_vecty, yaxis_vecty])
+        ymax = np.max([0, 0, xaxis_vecty, yaxis_vecty])
         if show_gvects:
-            xmin = np.min([xmin,g1_x,g2_x])
-            xmax = np.max([xmax,g1_x,g2_x])
-            ymin = np.min([ymin,g1_y,g2_y])
-            ymax = np.max([ymax,g1_y,g2_y])
-        x0 = np.mean([xmin,xmax])
-        y0 = np.mean([ymin,ymax])
-        xL = (xmax-x0) * legend_camera_length
-        yL = (ymax-y0) * legend_camera_length
+            xmin = np.min([xmin, g1_x, g2_x])
+            xmax = np.max([xmax, g1_x, g2_x])
+            ymin = np.min([ymin, g1_y, g2_y])
+            ymax = np.max([ymax, g1_y, g2_y])
+        x0 = np.mean([xmin, xmax])
+        y0 = np.mean([ymin, ymax])
+        xL = (xmax - x0) * legend_camera_length
+        yL = (ymax - y0) * legend_camera_length
 
         # set the extent and aspect
-        ax_legend.set_xlim([y0-yL,y0+yL])
-        ax_legend.set_ylim([x0-xL,x0+xL])
+        ax_legend.set_xlim([y0 - yL, y0 + yL])
+        ax_legend.set_ylim([x0 - xL, x0 + xL])
         ax_legend.invert_yaxis()
         ax_legend.set_aspect("equal")
-        ax_legend.axis('off')
+        ax_legend.axis("off")
 
         # show/return
         if not returnfig:
@@ -1148,23 +1116,22 @@ class StrainMap(RealSlice, Data):
             axs = ((ax11, ax12), (ax21, ax22))
             return fig, axs
 
-
     def show_reference_directions(
         self,
-        im_uncal = None,
-        im_cal = None,
+        im_uncal=None,
+        im_cal=None,
         color_axes="linen",
         color_gvects="r",
-        origin_uncal = None,
-        origin_cal = None,
-        camera_length = 1.8,
-        visp_uncal = {'scaling' : 'log'},
-        visp_cal = {'scaling' : 'log'},
-        layout = "horizontal",
-        titlesize = 16,
-        size_labels = 14,
-        figsize = None,
-        returnfig = False,
+        origin_uncal=None,
+        origin_cal=None,
+        camera_length=1.8,
+        visp_uncal={"scaling": "log"},
+        visp_cal={"scaling": "log"},
+        layout="horizontal",
+        titlesize=16,
+        size_labels=14,
+        figsize=None,
+        returnfig=False,
     ):
         """
         Show the reference coordinate system used to compute the strain
@@ -1220,87 +1187,59 @@ class StrainMap(RealSlice, Data):
 
         # Set the figsize
         if figsize is None:
-            ratio = np.sqrt(self.rshape[1]/self.rshape[0])
+            ratio = np.sqrt(self.rshape[1] / self.rshape[0])
             if layout == "horizontal":
-                figsize = (10*ratio,8/ratio)
+                figsize = (10 * ratio, 8 / ratio)
             else:
-                figsize = (8*ratio,12/ratio)
+                figsize = (8 * ratio, 12 / ratio)
 
         # Create the figure
         if layout == "horizontal":
-            fig, (ax1, ax2) =\
-                plt.subplots(1, 2, figsize=figsize)
+            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=figsize)
         else:
-            fig, (ax1, ax2) =\
-                plt.subplots(2, 1, figsize=figsize)
+            fig, (ax1, ax2) = plt.subplots(2, 1, figsize=figsize)
 
         # prepare images
         if im_uncal is None:
-            im_uncal = self.braggvectors.histogram( mode='raw' )
+            im_uncal = self.braggvectors.histogram(mode="raw")
         if im_cal is None:
-            im_cal = self.braggvectors.histogram( mode='cal' )
+            im_cal = self.braggvectors.histogram(mode="cal")
 
         # display images
-        show(
-            im_cal,
-            figax=(fig, ax1),
-            **visp_cal
-        )
-        show(
-            im_uncal,
-            figax=(fig, ax2),
-            **visp_uncal
-        )
+        show(im_cal, figax=(fig, ax1), **visp_cal)
+        show(im_uncal, figax=(fig, ax2), **visp_uncal)
         ax1.set_title("Calibrated", size=titlesize)
         ax2.set_title("Uncalibrated", size=titlesize)
-
 
         # Get the coordinate axes
 
         # get the directions
 
-        # calibrated 
+        # calibrated
         rotation = self.coordinate_rotation_radians
-        xaxis_cal = np.array([
-            np.cos(rotation),
-            np.sin(rotation)
-        ])
-        yaxis_cal = np.array([
-            np.cos(rotation+np.pi/2),
-            np.sin(rotation+np.pi/2)
-        ])
+        xaxis_cal = np.array([np.cos(rotation), np.sin(rotation)])
+        yaxis_cal = np.array(
+            [np.cos(rotation + np.pi / 2), np.sin(rotation + np.pi / 2)]
+        )
 
-        # uncalibrated 
+        # uncalibrated
         QRrot = self.calibration.get_QR_rotation()
-        rotation = np.sum([
-            self.coordinate_rotation_radians,
-            -QRrot
-        ])
-        xaxis_uncal = np.array([
-            np.cos(rotation),
-            np.sin(rotation)
-        ])
-        yaxis_uncal = np.array([
-            np.cos(rotation+np.pi/2),
-            np.sin(rotation+np.pi/2)
-        ])
+        rotation = np.sum([self.coordinate_rotation_radians, -QRrot])
+        xaxis_uncal = np.array([np.cos(rotation), np.sin(rotation)])
+        yaxis_uncal = np.array(
+            [np.cos(rotation + np.pi / 2), np.sin(rotation + np.pi / 2)]
+        )
         # inversion
         if self.calibration.get_QR_flip():
-            xaxis_uncal = np.array([
-                xaxis_uncal[1],
-                xaxis_uncal[0]
-            ])
-            yaxis_uncal = np.array([
-                yaxis_uncal[1],
-                yaxis_uncal[0]
-            ])
+            xaxis_uncal = np.array([xaxis_uncal[1], xaxis_uncal[0]])
+            yaxis_uncal = np.array([yaxis_uncal[1], yaxis_uncal[0]])
 
         # set the lengths
-        Lmean = np.mean([im_cal.shape[0],im_cal.shape[1]])/2
-        xaxis_cal *= Lmean/camera_length
-        yaxis_cal *= Lmean/camera_length
-        xaxis_uncal *= Lmean/camera_length
-        yaxis_uncal *= Lmean/camera_length
+        Lmean = np.mean([im_cal.shape[0], im_cal.shape[1]]) / 2
+        xaxis_cal *= Lmean / camera_length
+        yaxis_cal *= Lmean / camera_length
+        xaxis_uncal *= Lmean / camera_length
+        yaxis_uncal *= Lmean / camera_length
 
         # Get the g-vectors
 
@@ -1309,25 +1248,13 @@ class StrainMap(RealSlice, Data):
         g2_cal = np.array(self.g2)
 
         # uncalibrated
-        R = np.array(
-            [
-                [np.cos(QRrot), -np.sin(QRrot)],
-                [np.sin(QRrot),  np.cos(QRrot)]
-            ]
-        )
-        g1_uncal = np.matmul(g1_cal,R)
-        g2_uncal = np.matmul(g2_cal,R)
+        R = np.array([[np.cos(QRrot), -np.sin(QRrot)], [np.sin(QRrot), np.cos(QRrot)]])
+        g1_uncal = np.matmul(g1_cal, R)
+        g2_uncal = np.matmul(g2_cal, R)
         # inversion
         if self.calibration.get_QR_flip():
-            g1_uncal = np.array([
-                g1_uncal[1],
-                g1_uncal[0]
-            ])
-            g2_uncal = np.array([
-                g2_uncal[1],
-                g2_uncal[0]
-            ])
-
+            g1_uncal = np.array([g1_uncal[1], g1_uncal[0]])
+            g2_uncal = np.array([g2_uncal[1], g2_uncal[0]])
 
         # Set origin positions
         if origin_uncal is None:
@@ -1336,171 +1263,169 @@ class StrainMap(RealSlice, Data):
             origin_cal = self.calibration.get_origin_mean()
 
         # Draw calibrated coordinate axes
-        coordax_width = Lmean*2/100
+        coordax_width = Lmean * 2 / 100
         ax1.arrow(
-            x = origin_cal[1],
-            y = origin_cal[0],
-            dx = xaxis_cal[1],
-            dy = xaxis_cal[0],
-            color = color_axes,
-            length_includes_head = True,
-            width = coordax_width,
-            head_width = coordax_width * 5,
+            x=origin_cal[1],
+            y=origin_cal[0],
+            dx=xaxis_cal[1],
+            dy=xaxis_cal[0],
+            color=color_axes,
+            length_includes_head=True,
+            width=coordax_width,
+            head_width=coordax_width * 5,
         )
         ax1.arrow(
-            x = origin_cal[1],
-            y = origin_cal[0],
-            dx = yaxis_cal[1],
-            dy = yaxis_cal[0],
-            color = color_axes,
-            length_includes_head = True,
-            width = coordax_width,
-            head_width = coordax_width * 5,
+            x=origin_cal[1],
+            y=origin_cal[0],
+            dx=yaxis_cal[1],
+            dy=yaxis_cal[0],
+            color=color_axes,
+            length_includes_head=True,
+            width=coordax_width,
+            head_width=coordax_width * 5,
         )
         ax1.text(
-            x = origin_cal[1] + xaxis_cal[1]*1.16,
-            y = origin_cal[0] + xaxis_cal[0]*1.16,
-            s = 'x',
-            fontsize = size_labels,
-            color = color_axes,
-            horizontalalignment = 'center',
-            verticalalignment = 'center',
+            x=origin_cal[1] + xaxis_cal[1] * 1.16,
+            y=origin_cal[0] + xaxis_cal[0] * 1.16,
+            s="x",
+            fontsize=size_labels,
+            color=color_axes,
+            horizontalalignment="center",
+            verticalalignment="center",
         )
         ax1.text(
-            x = origin_cal[1] + yaxis_cal[1]*1.16,
-            y = origin_cal[0] + yaxis_cal[0]*1.16,
-            s = 'y',
-            fontsize = size_labels,
-            color = color_axes,
-            horizontalalignment = 'center',
-            verticalalignment = 'center',
+            x=origin_cal[1] + yaxis_cal[1] * 1.16,
+            y=origin_cal[0] + yaxis_cal[0] * 1.16,
+            s="y",
+            fontsize=size_labels,
+            color=color_axes,
+            horizontalalignment="center",
+            verticalalignment="center",
         )
 
         # Draw uncalibrated coordinate axes
         ax2.arrow(
-            x = origin_uncal[1],
-            y = origin_uncal[0],
-            dx = xaxis_uncal[1],
-            dy = xaxis_uncal[0],
-            color = color_axes,
-            length_includes_head = True,
-            width = coordax_width,
-            head_width = coordax_width * 5,
+            x=origin_uncal[1],
+            y=origin_uncal[0],
+            dx=xaxis_uncal[1],
+            dy=xaxis_uncal[0],
+            color=color_axes,
+            length_includes_head=True,
+            width=coordax_width,
+            head_width=coordax_width * 5,
         )
         ax2.arrow(
-            x = origin_uncal[1],
-            y = origin_uncal[0],
-            dx = yaxis_uncal[1],
-            dy = yaxis_uncal[0],
-            color = color_axes,
-            length_includes_head = True,
-            width = coordax_width,
-            head_width = coordax_width * 5,
+            x=origin_uncal[1],
+            y=origin_uncal[0],
+            dx=yaxis_uncal[1],
+            dy=yaxis_uncal[0],
+            color=color_axes,
+            length_includes_head=True,
+            width=coordax_width,
+            head_width=coordax_width * 5,
         )
         ax2.text(
-            x = origin_uncal[1] + xaxis_uncal[1]*1.16,
-            y = origin_uncal[0] + xaxis_uncal[0]*1.16,
-            s = 'x',
-            fontsize = size_labels,
-            color = color_axes,
-            horizontalalignment = 'center',
-            verticalalignment = 'center',
+            x=origin_uncal[1] + xaxis_uncal[1] * 1.16,
+            y=origin_uncal[0] + xaxis_uncal[0] * 1.16,
+            s="x",
+            fontsize=size_labels,
+            color=color_axes,
+            horizontalalignment="center",
+            verticalalignment="center",
         )
         ax2.text(
-            x = origin_uncal[1] + yaxis_uncal[1]*1.16,
-            y = origin_uncal[0] + yaxis_uncal[0]*1.16,
-            s = 'y',
-            fontsize = size_labels,
-            color = color_axes,
-            horizontalalignment = 'center',
-            verticalalignment = 'center',
+            x=origin_uncal[1] + yaxis_uncal[1] * 1.16,
+            y=origin_uncal[0] + yaxis_uncal[0] * 1.16,
+            s="y",
+            fontsize=size_labels,
+            color=color_axes,
+            horizontalalignment="center",
+            verticalalignment="center",
         )
-
 
         # Draw the calibrated g-vectors
 
         # draw the g vectors
         ax1.arrow(
-            x = origin_cal[1],
-            y = origin_cal[0],
-            dx = g1_cal[1],
-            dy = g1_cal[0],
-            color = color_gvects,
-            length_includes_head = True,
-            width = coordax_width * 0.5,
-            head_width = coordax_width * 2.5,
+            x=origin_cal[1],
+            y=origin_cal[0],
+            dx=g1_cal[1],
+            dy=g1_cal[0],
+            color=color_gvects,
+            length_includes_head=True,
+            width=coordax_width * 0.5,
+            head_width=coordax_width * 2.5,
         )
         ax1.arrow(
-            x = origin_cal[1],
-            y = origin_cal[0],
-            dx = g2_cal[1],
-            dy = g2_cal[0],
-            color = color_gvects,
-            length_includes_head = True,
-            width = coordax_width * 0.5,
-            head_width = coordax_width * 2.5,
+            x=origin_cal[1],
+            y=origin_cal[0],
+            dx=g2_cal[1],
+            dy=g2_cal[0],
+            color=color_gvects,
+            length_includes_head=True,
+            width=coordax_width * 0.5,
+            head_width=coordax_width * 2.5,
         )
         ax1.text(
-            x = origin_cal[1] + g1_cal[1]*1.16,
-            y = origin_cal[0] + g1_cal[0]*1.16,
-            s = r'$g_1$',
-            fontsize = size_labels*0.88,
-            color = color_gvects,
-            horizontalalignment = 'center',
-            verticalalignment = 'center',
+            x=origin_cal[1] + g1_cal[1] * 1.16,
+            y=origin_cal[0] + g1_cal[0] * 1.16,
+            s=r"$g_1$",
+            fontsize=size_labels * 0.88,
+            color=color_gvects,
+            horizontalalignment="center",
+            verticalalignment="center",
         )
         ax1.text(
-            x = origin_cal[1] + g2_cal[1]*1.16,
-            y = origin_cal[0] + g2_cal[0]*1.16,
-            s = r'$g_2$',
-            fontsize = size_labels*0.88,
-            color = color_gvects,
-            horizontalalignment = 'center',
-            verticalalignment = 'center',
+            x=origin_cal[1] + g2_cal[1] * 1.16,
+            y=origin_cal[0] + g2_cal[0] * 1.16,
+            s=r"$g_2$",
+            fontsize=size_labels * 0.88,
+            color=color_gvects,
+            horizontalalignment="center",
+            verticalalignment="center",
         )
 
         # Draw the uncalibrated g-vectors
 
         # draw the g vectors
         ax2.arrow(
-            x = origin_uncal[1],
-            y = origin_uncal[0],
-            dx = g1_uncal[1],
-            dy = g1_uncal[0],
-            color = color_gvects,
-            length_includes_head = True,
-            width = coordax_width * 0.5,
-            head_width = coordax_width * 2.5,
+            x=origin_uncal[1],
+            y=origin_uncal[0],
+            dx=g1_uncal[1],
+            dy=g1_uncal[0],
+            color=color_gvects,
+            length_includes_head=True,
+            width=coordax_width * 0.5,
+            head_width=coordax_width * 2.5,
         )
         ax2.arrow(
-            x = origin_uncal[1],
-            y = origin_uncal[0],
-            dx = g2_uncal[1],
-            dy = g2_uncal[0],
-            color = color_gvects,
-            length_includes_head = True,
-            width = coordax_width * 0.5,
-            head_width = coordax_width * 2.5,
+            x=origin_uncal[1],
+            y=origin_uncal[0],
+            dx=g2_uncal[1],
+            dy=g2_uncal[0],
+            color=color_gvects,
+            length_includes_head=True,
+            width=coordax_width * 0.5,
+            head_width=coordax_width * 2.5,
         )
         ax2.text(
-            x = origin_uncal[1] + g1_uncal[1]*1.16,
-            y = origin_uncal[0] + g1_uncal[0]*1.16,
-            s = r'$g_1$',
-            fontsize = size_labels*0.88,
-            color = color_gvects,
-            horizontalalignment = 'center',
-            verticalalignment = 'center',
+            x=origin_uncal[1] + g1_uncal[1] * 1.16,
+            y=origin_uncal[0] + g1_uncal[0] * 1.16,
+            s=r"$g_1$",
+            fontsize=size_labels * 0.88,
+            color=color_gvects,
+            horizontalalignment="center",
+            verticalalignment="center",
         )
         ax2.text(
-            x = origin_uncal[1] + g2_uncal[1]*1.16,
-            y = origin_uncal[0] + g2_uncal[0]*1.16,
-            s = r'$g_2$',
-            fontsize = size_labels*0.88,
-            color = color_gvects,
-            horizontalalignment = 'center',
-            verticalalignment = 'center',
+            x=origin_uncal[1] + g2_uncal[1] * 1.16,
+            y=origin_uncal[0] + g2_uncal[0] * 1.16,
+            s=r"$g_2$",
+            fontsize=size_labels * 0.88,
+            color=color_gvects,
+            horizontalalignment="center",
+            verticalalignment="center",
         )
-
 
         # show/return
         if not returnfig:
@@ -1651,4 +1576,3 @@ class StrainMap(RealSlice, Data):
             "name": ar_constr_args["name"],
         }
         return args
-
