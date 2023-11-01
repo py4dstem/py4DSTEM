@@ -552,14 +552,19 @@ class BraggVectorMethods:
         from py4DSTEM.process.calibration import fit_origin
 
         if mask_check_data is True:
-            # TODO - replace this bad hack for the mask for the origin fit
-            mask = np.logical_not(q_meas[0] == 0)
-            qx0_fit, qy0_fit, qx0_residuals, qy0_residuals = fit_origin(
-                tuple(q_meas),
-                mask=mask,
-            )
-        else:
-            qx0_fit, qy0_fit, qx0_residuals, qy0_residuals = fit_origin(tuple(q_meas))
+            data_mask = np.logical_not(q_meas[0] == 0)
+            if mask is None:
+                mask = data_mask
+            else:
+                mask = np.logical_and(mask, data_mask)
+
+        qx0_fit, qy0_fit, qx0_residuals, qy0_residuals = fit_origin(
+            tuple(q_meas),
+            mask=mask,
+            robust=robust,
+            robust_steps=robust_steps,
+            robust_thresh=robust_thresh,
+        )
 
         # try to add to calibration
         try:
