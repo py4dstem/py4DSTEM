@@ -4,6 +4,8 @@ import warnings
 from typing import Optional
 
 import matplotlib.pyplot as plt
+from matplotlib.patches import Circle
+from matplotlib.collections import PatchCollection
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import numpy as np
 from py4DSTEM import PointList, PointListArray, tqdmnd
@@ -26,8 +28,6 @@ from py4DSTEM.visualize import (
     ax_addaxes,
     ax_addaxes_QtoR
 )
-
-warnings.simplefilter(action="always", category=UserWarning)
 
 
 class StrainMap(RealSlice, Data):
@@ -144,7 +144,7 @@ class StrainMap(RealSlice, Data):
 
     # Class methods
 
-    def choose_lattice_vectors(
+    def choose_basis_vectors(
         self,
         index_g1=None,
         index_g2=None,
@@ -175,7 +175,7 @@ class StrainMap(RealSlice, Data):
         returnfig=False,
     ):
         """
-        Choose which lattice vectors to use for strain mapping.
+        Choose basis lattice vectors g1 and g2 for strain mapping.
 
         Overlays the bvm with the points detected via local 2D
         maxima detection, plus an index for each point. Three points
@@ -239,7 +239,7 @@ class StrainMap(RealSlice, Data):
 
         Returns
         -------
-        (optional) : None or (g0,g1,g2) or (fig,(ax1,ax2)) or both of the latter
+        (optional) : None or (g0,g1,g2) or (fig,(ax1,ax2)) or the latter two
         """
         # validate inputs
         for i in (index_origin, index_g1, index_g2):
@@ -394,27 +394,99 @@ class StrainMap(RealSlice, Data):
         else:
             return
 
-    def fit_lattice_vectors(
+    def set_max_peak_spacing(
         self,
-        max_peak_spacing = 2,
-        mask = None,
-        returncalc = False
+        max_peak_spacing,
+        returnfig = False,
+        **vis_params,
     ):
         """
-        Fit the basis lattice vectors g1 and g2 to the detected Bragg peaks
-        in each pattern.  The fit uses all detected peaks which are within
-        a distance of `max_peak_spacing` of the indexed peaks determined
-        in `choose_lattice_vectors`.  Bragg peaks used in the fit are weighted
-        by their intensity.
+        Set the size of the regions of diffraction space in which detected Bragg
+        peaks will be indexed and included in subsequent fitting of basis
+        vectors, and visualize those regions.
 
         Parameters
         ----------
-        max_peak_spacing : float
-            Maximum distance from the ideal lattice points to include a peak
-            for indexing
+        max_peak_spacing : number
+            The maximum allowable distance between a detected Bragg peak and
+            the indexed maxima found in `choose_basis_vectors` for the detected
+            peak to be indexed
+        returnfig : bool
+            Toggles returning the figure
+        vis_params : dict
+            Any additional arguments are passed to the `show` function when
+            visualization the BVM
+        """
+        # set the max peak spacing
+        self.max_peak_spacing = max_peak_spacing
+
+        # make the figure
+        fig,ax = show(
+            self.bvm.data,
+            returnfig=True,
+            **vis_params,
+        )
+
+        # make the circle patch collection
+        patches = []
+        qx = self.braggdirections['qx']
+        qy = self.braggdirections['qy']
+        origin = self.origin
+        for idx in range(len(qx)):
+            c = Circle(
+                xy = (
+                    qy[idx] + origin[1],
+                    qx[idx] + origin[0]
+                ),
+                radius = self.max_peak_spacing,
+                edgecolor = 'r',
+                fill = False
+            )
+            patches.append(c)
+        pc = PatchCollection(patches, match_original=True)
+
+        # draw the circles
+        ax.add_collection(pc)
+
+        # return
+        if returnfig:
+            return fig,ax
+        else:
+            plt.show()
+
+
+    def fit_basis_vectors(
+        self,
+        mask = None,
+        max_peak_spacing = None,
+        vis_params = {},
+        returncalc = False
+    ):
+        """
+        Fit the basis lattice vectors to the detected Bragg peaks at each
+        scan position.
+
+        First, the lattice vectors at each scan position are indexed using the
+        basis vectors g1 and g2 specified previously with `choose_basis_vectors`
+        Detected Bragg peaks which are farther from the set of lattice vectors
+        found in `choose_basis vectors` than the maximum peak spacing are
+        ignored; the maximum peak spacing can be set previously by calling
+        `set_max_peak_spacing` or by specifying the `max_peak_spacing` argument
+        here. A fit is then performed to refine the values of g1 and g2 at each
+        scan position, fitting the basis vectors to all detected and indexed
+        peaks, weighting the peaks according to their intensity.
+
+        Parameters
+        ----------
         mask : 2d boolean array
             A real space shaped Boolean mask indicating scan positions at which
             to fit the lattice vectors.
+        max_peak_spacing : float
+            Maximum distance from the ideal lattice points to include a peak
+            for indexing
+        vis_params : dict
+            Visualization parameters for showing the max peak spacing; ignored
+            if `max_peak_spacing` is not set
         returncalc : bool
             if True, returns bragg_directions, bragg_vectors_indexed, g1g2_map
         """
@@ -423,9 +495,17 @@ class StrainMap(RealSlice, Data):
             self.calstate == self.braggvectors.calstate
         ), "The calibration state has changed! To resync the calibration state, use `.reset_calstate`."
 
-        ### add indices to the bragg vectors
+        # handle the max peak spacing
+        if max_peak_spacing is not None:
+            self.set_max_peak_spacing(
+                max_peak_spacing,
+                **vis_params
+            )
+        assert(hasattr(self,'max_peak_spacing')), "Set the maximum peak spacing!"
 
-        # validate mask
+        # index the bragg vectors
+
+        # handle the mask
         if mask is None:
             mask = np.ones(self.braggvectors.Rshape, dtype=bool)
         assert (
@@ -445,10 +525,17 @@ class StrainMap(RealSlice, Data):
             ],
             shape=self.braggvectors.Rshape,
         )
-        calstate = self.braggvectors.calstate
 
         # loop over all the scan positions
-        for Rx, Ry in tqdmnd(mask.shape[0], mask.shape[1]):
+        # and perform indexing, excluding peaks outside of max_peak_spacing
+        calstate = self.braggvectors.calstate
+        for Rx, Ry in tqdmnd(
+            mask.shape[0],
+            mask.shape[1],
+            desc="Indexing Bragg scattering",
+            unit="DP",
+            unit_scale=True,
+        ):
             if mask[Rx, Ry]:
                 pl = self.braggvectors.get_vectors(
                     Rx,
@@ -464,7 +551,7 @@ class StrainMap(RealSlice, Data):
                         pl.data["qy"][i] - self.braggdirections.data["qy"],
                     )
                     ind = np.argmin(r)
-                    if r[ind] <= max_peak_spacing:
+                    if r[ind] <= self.max_peak_spacing:
                         indexed_braggpeaks[Rx, Ry].add_data_by_field(
                             (
                                 pl.data["qx"][i],
@@ -476,7 +563,7 @@ class StrainMap(RealSlice, Data):
                         )
         self.bragg_vectors_indexed = indexed_braggpeaks
 
-        ### fit bragg vectors
+        # fit bragg vectors
         g1g2_map = fit_lattice_vectors_all_DPs(self.bragg_vectors_indexed)
         self.g1g2_map = g1g2_map
 
@@ -487,6 +574,7 @@ class StrainMap(RealSlice, Data):
         # return
         if returncalc:
             return self.bragg_vectors_indexed, self.g1g2_map
+
 
     def get_strain(
         self,
@@ -1563,3 +1651,4 @@ class StrainMap(RealSlice, Data):
             "name": ar_constr_args["name"],
         }
         return args
+

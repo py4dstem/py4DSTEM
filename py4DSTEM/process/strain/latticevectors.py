@@ -258,7 +258,13 @@ def fit_lattice_vectors_all_DPs(braggpeaks, x0=0, y0=0, minNumPeaks=5):
     )
 
     # Fit lattice vectors
-    for Rx, Ry in tqdmnd(braggpeaks.shape[0], braggpeaks.shape[1]):
+    for Rx, Ry in tqdmnd(
+        braggpeaks.shape[0],
+        braggpeaks.shape[1],
+        desc="Fitting lattice vectors",
+        unit="DP",
+        unit_scale=True,
+    ):
         braggpeaks_curr = braggpeaks.get_pointlist(Rx, Ry)
         qx0, qy0, g1x, g1y, g2x, g2y, error = fit_lattice_vectors(
             braggpeaks_curr, x0, y0, minNumPeaks
@@ -359,32 +365,37 @@ def get_strain_from_reference_g1g2(g1g2_map, g1, g2):
     g2x, g2y = g2
     M = np.array([[g1x, g1y], [g2x, g2y]])
 
-    for Rx in range(R_Nx):
-        for Ry in range(R_Ny):
-            # Get lattice vectors for DP at Rx,Ry
-            alpha = np.array(
+    for Rx, Ry in tqdmnd(
+        R_Nx,
+        R_Ny,
+        desc="Calculating strain",
+        unit="DP",
+        unit_scale=True,
+    ):
+        # Get lattice vectors for DP at Rx,Ry
+        alpha = np.array(
+            [
                 [
-                    [
-                        g1g2_map.get_slice("g1x").data[Rx, Ry],
-                        g1g2_map.get_slice("g1y").data[Rx, Ry],
-                    ],
-                    [
-                        g1g2_map.get_slice("g2x").data[Rx, Ry],
-                        g1g2_map.get_slice("g2y").data[Rx, Ry],
-                    ],
-                ]
-            )
-            # Get transformation matrix
-            beta = lstsq(M, alpha, rcond=None)[0].T
-
-            # Get the infinitesimal strain matrix
-            strain_map.get_slice("e_xx").data[Rx, Ry] = 1 - beta[0, 0]
-            strain_map.get_slice("e_yy").data[Rx, Ry] = 1 - beta[1, 1]
-            strain_map.get_slice("e_xy").data[Rx, Ry] = -(beta[0, 1] + beta[1, 0]) / 2.0
-            strain_map.get_slice("theta").data[Rx, Ry] = (beta[0, 1] - beta[1, 0]) / 2.0
-            strain_map.get_slice("mask").data[Rx, Ry] = g1g2_map.get_slice("mask").data[
-                Rx, Ry
+                    g1g2_map.get_slice("g1x").data[Rx, Ry],
+                    g1g2_map.get_slice("g1y").data[Rx, Ry],
+                ],
+                [
+                    g1g2_map.get_slice("g2x").data[Rx, Ry],
+                    g1g2_map.get_slice("g2y").data[Rx, Ry],
+                ],
             ]
+        )
+        # Get transformation matrix
+        beta = lstsq(M, alpha, rcond=None)[0].T
+
+        # Get the infinitesimal strain matrix
+        strain_map.get_slice("e_xx").data[Rx, Ry] = 1 - beta[0, 0]
+        strain_map.get_slice("e_yy").data[Rx, Ry] = 1 - beta[1, 1]
+        strain_map.get_slice("e_xy").data[Rx, Ry] = -(beta[0, 1] + beta[1, 0]) / 2.0
+        strain_map.get_slice("theta").data[Rx, Ry] = (beta[0, 1] - beta[1, 0]) / 2.0
+        strain_map.get_slice("mask").data[Rx, Ry] = g1g2_map.get_slice("mask").data[
+            Rx, Ry
+        ]
     return strain_map
 
 
