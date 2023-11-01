@@ -561,6 +561,7 @@ class BraggVectorMethods:
         qx0_fit, qy0_fit, qx0_residuals, qy0_residuals = fit_origin(
             tuple(q_meas),
             mask=mask,
+            fitfunction=fitfunction,
             robust=robust,
             robust_steps=robust_steps,
             robust_thresh=robust_thresh,
