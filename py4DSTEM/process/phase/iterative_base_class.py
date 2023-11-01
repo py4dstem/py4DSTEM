@@ -1163,6 +1163,12 @@ class PhaseReconstruction(Custom):
         mean_intensity = 0
 
         diffraction_intensities = self._asnumpy(diffraction_intensities)
+        if positions_mask is not None:
+            number_of_patterns = np.count_nonzero(self._positions_mask.ravel())
+            sx, sy = np.where(~self._positions_mask)
+        else:
+            number_of_patterns = np.prod(diffraction_intensities.shape[:2])
+
         if crop_patterns:
             crop_x = int(
                 np.minimum(
@@ -1181,8 +1187,7 @@ class PhaseReconstruction(Custom):
             region_of_interest_shape = (crop_w * 2, crop_w * 2)
             amplitudes = np.zeros(
                 (
-                    diffraction_intensities.shape[0],
-                    diffraction_intensities.shape[1],
+                    number_of_patterns,
                     crop_w * 2,
                     crop_w * 2,
                 ),
@@ -1198,13 +1203,19 @@ class PhaseReconstruction(Custom):
 
         else:
             region_of_interest_shape = diffraction_intensities.shape[-2:]
-            amplitudes = np.zeros(diffraction_intensities.shape, dtype=np.float32)
+            amplitudes = np.zeros(
+                (number_of_patterns,) + region_of_interest_shape, dtype=np.float32
+            )
 
         com_fitted_x = self._asnumpy(com_fitted_x)
         com_fitted_y = self._asnumpy(com_fitted_y)
 
+        counter = 0
         for rx in range(diffraction_intensities.shape[0]):
             for ry in range(diffraction_intensities.shape[1]):
+                if positions_mask is not None:
+                    if rx in sx and ry in sy:
+                        continue
                 intensities = get_shifted_ar(
                     diffraction_intensities[rx, ry],
                     -com_fitted_x[rx, ry],
@@ -1219,13 +1230,10 @@ class PhaseReconstruction(Custom):
                     )
 
                 mean_intensity += np.sum(intensities)
-                amplitudes[rx, ry] = np.sqrt(np.maximum(intensities, 0))
+                amplitudes[counter] = np.sqrt(np.maximum(intensities, 0))
+                counter += 1
 
-        amplitudes = xp.reshape(amplitudes, (-1,) + region_of_interest_shape)
         amplitudes = xp.asarray(amplitudes)
-        if positions_mask is not None:
-            amplitudes = amplitudes[positions_mask.ravel()]
-
         mean_intensity /= amplitudes.shape[0]
 
         return amplitudes, mean_intensity

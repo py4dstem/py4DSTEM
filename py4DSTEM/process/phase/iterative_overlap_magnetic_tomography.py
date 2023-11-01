@@ -166,7 +166,7 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
         if object_type != "potential":
             raise NotImplementedError()
 
-        if positions_mask.dtype != "bool":
+        if positions_mask is not None and positions_mask.dtype != "bool":
             warnings.warn(
                 ("`positions_mask` converted to `bool` array"),
                 UserWarning,
