@@ -3327,3 +3327,8 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
             positions_all.append(asnumpy(positions))
 
         return np.asarray(positions_all)
+
+    @property
+    def self_consistency_errors(self):
+        """Compute the self-consistency errors for each probe position"""
+        raise NotImplementedError()
