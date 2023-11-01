@@ -166,6 +166,13 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
         if object_type != "potential":
             raise NotImplementedError()
 
+        if positions_mask.dtype != "bool":
+            warnings.warn(
+                ("`positions_mask` converted to `bool` array"),
+                UserWarning,
+            )
+            positions_mask = np.asarray(positions_mask, dtype="bool")
+
         self.set_save_defaults()
 
         # Data
@@ -599,7 +606,11 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
                 ],
                 mean_diffraction_intensity_temp,
             ) = self._normalize_diffraction_intensities(
-                intensities, com_fitted_x, com_fitted_y, crop_patterns
+                intensities,
+                com_fitted_x,
+                com_fitted_y,
+                crop_patterns,
+                self._positions_mask[tilt_index],
             )
 
             self._mean_diffraction_intensity.append(mean_diffraction_intensity_temp)

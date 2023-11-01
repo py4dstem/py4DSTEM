@@ -1132,6 +1132,7 @@ class PhaseReconstruction(Custom):
         com_fitted_x,
         com_fitted_y,
         crop_patterns,
+        positions_mask,
     ):
         """
         Fix diffraction intensities CoM, shift to origin, and take square root
@@ -1147,6 +1148,8 @@ class PhaseReconstruction(Custom):
         crop_patterns: bool
             if True, crop patterns to avoid wrap around of patterns
             when centering
+        positions_mask: np.ndarray, optional
+            Boolean real space mask to select positions in datacube to skip for reconstruction
 
         Returns
         -------
@@ -1220,6 +1223,9 @@ class PhaseReconstruction(Custom):
 
         amplitudes = xp.reshape(amplitudes, (-1,) + region_of_interest_shape)
         amplitudes = xp.asarray(amplitudes)
+        if positions_mask is not None:
+            amplitudes = amplitudes[positions_mask.ravel()]
+
         mean_intensity /= amplitudes.shape[0]
 
         return amplitudes, mean_intensity
@@ -1597,12 +1603,6 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
         positions -= np.min(positions, axis=0)
 
         if positions_mask is not None:
-            if positions_mask.dtype != "bool":
-                warnings.warn(
-                    ("`positions_mask` converged to `bool` array"),
-                    UserWarning,
-                )
-                positions_mask = np.asarray(positions_mask, dtype="bool")
             positions = positions[positions_mask.ravel()]
 
         if self._object_padding_px is None:
