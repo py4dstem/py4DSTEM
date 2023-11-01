@@ -1165,7 +1165,6 @@ class PhaseReconstruction(Custom):
         diffraction_intensities = self._asnumpy(diffraction_intensities)
         if positions_mask is not None:
             number_of_patterns = np.count_nonzero(self._positions_mask.ravel())
-            sx, sy = np.where(~self._positions_mask)
         else:
             number_of_patterns = np.prod(diffraction_intensities.shape[:2])
 
@@ -1214,7 +1213,7 @@ class PhaseReconstruction(Custom):
         for rx in range(diffraction_intensities.shape[0]):
             for ry in range(diffraction_intensities.shape[1]):
                 if positions_mask is not None:
-                    if rx in sx and ry in sy:
+                    if not self._positions_mask[rx,ry]:
                         continue
                 intensities = get_shifted_ar(
                     diffraction_intensities[rx, ry],
