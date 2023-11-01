@@ -1213,7 +1213,7 @@ class PhaseReconstruction(Custom):
         for rx in range(diffraction_intensities.shape[0]):
             for ry in range(diffraction_intensities.shape[1]):
                 if positions_mask is not None:
-                    if not self._positions_mask[rx,ry]:
+                    if not self._positions_mask[rx, ry]:
                         continue
                 intensities = get_shifted_ar(
                     diffraction_intensities[rx, ry],
