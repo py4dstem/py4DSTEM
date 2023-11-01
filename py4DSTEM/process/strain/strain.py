@@ -1432,8 +1432,7 @@ class StrainMap(RealSlice, Data):
             plt.show()
             return
         else:
-            axs = ((ax11, ax12), (ax21, ax22))
-            return fig, axs
+            return fig, (ax1,ax2)
 
     def show_lattice_vectors(
         ar,
