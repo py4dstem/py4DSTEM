@@ -519,7 +519,7 @@ class BraggVectorMethods:
         mask_check_data=True,
         plot=True,
         plot_range=None,
-        cmap = 'RdBu_r',
+        cmap="RdBu_r",
         returncalc=True,
         **kwargs,
     ):
@@ -583,16 +583,15 @@ class BraggVectorMethods:
                 qy0_fit,
                 qx0_residuals,
                 qy0_residuals,
-                mask = mask,
-                plot_range = plot_range,
-                cmap = cmap,
-                **kwargs
+                mask=mask,
+                plot_range=plot_range,
+                cmap=cmap,
+                **kwargs,
             )
 
         # return
         if returncalc:
             return qx0_fit, qy0_fit, qx0_residuals, qy0_residuals
-
 
     def show_origin_fit(
         self,
@@ -602,49 +601,42 @@ class BraggVectorMethods:
         qy0_fit,
         qx0_residuals,
         qy0_residuals,
-        mask = None,
-        plot_range = None,
-        cmap = 'RdBu_r',
-        **kwargs
-        ):
-
+        mask=None,
+        plot_range=None,
+        cmap="RdBu_r",
+        **kwargs,
+    ):
         # apply mask
         if mask is not None:
             qx0_meas = np.ma.masked_array(qx0_meas, mask=np.logical_not(mask))
             qy0_meas = np.ma.masked_array(qy0_meas, mask=np.logical_not(mask))
-            qx0_residuals = np.ma.masked_array(
-                qx0_residuals, mask=np.logical_not(mask)
-            )
-            qy0_residuals = np.ma.masked_array(
-                qy0_residuals, mask=np.logical_not(mask)
-            )
+            qx0_residuals = np.ma.masked_array(qx0_residuals, mask=np.logical_not(mask))
+            qy0_residuals = np.ma.masked_array(qy0_residuals, mask=np.logical_not(mask))
         qx0_mean = np.mean(qx0_fit)
         qy0_mean = np.mean(qy0_fit)
 
         # set range
         if plot_range is None:
-            plot_range = max((
-                1.5 * np.max(np.abs(qx0_fit - qx0_mean)),
-                1.5 * np.max(np.abs(qy0_fit - qy0_mean))
-            ))
+            plot_range = max(
+                (
+                    1.5 * np.max(np.abs(qx0_fit - qx0_mean)),
+                    1.5 * np.max(np.abs(qy0_fit - qy0_mean)),
+                )
+            )
 
         # set figsize
-        imsize_ratio = np.sqrt(qx0_meas.shape[1]/qx0_meas.shape[0])
-        axsize = (3*imsize_ratio, 3/imsize_ratio)
+        imsize_ratio = np.sqrt(qx0_meas.shape[1] / qx0_meas.shape[0])
+        axsize = (3 * imsize_ratio, 3 / imsize_ratio)
 
         # plot
         show(
-            [[qx0_meas - qx0_mean,
-              qx0_fit - qx0_mean,
-              qx0_residuals
-            ],[
-              qy0_meas - qy0_mean,
-              qy0_fit - qy0_mean,
-              qy0_residuals
-            ]],
-            cmap = cmap,
-            axsize = axsize,
-            title = [
+            [
+                [qx0_meas - qx0_mean, qx0_fit - qx0_mean, qx0_residuals],
+                [qy0_meas - qy0_mean, qy0_fit - qy0_mean, qy0_residuals],
+            ],
+            cmap=cmap,
+            axsize=axsize,
+            title=[
                 "measured origin, x",
                 "fitorigin, x",
                 "residuals, x",
@@ -652,17 +644,13 @@ class BraggVectorMethods:
                 "fitorigin, y",
                 "residuals, y",
             ],
-            vmin = -1 * plot_range,
-            vmax = 1 * plot_range,
+            vmin=-1 * plot_range,
+            vmax=1 * plot_range,
             intensity_range="absolute",
-            **kwargs
+            **kwargs,
         )
 
         return
-
-
-
-
 
     def fit_p_ellipse(
         self, bvm, center, fitradii, mask=None, returncalc=False, **kwargs
