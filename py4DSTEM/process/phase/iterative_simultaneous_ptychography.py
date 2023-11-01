@@ -3357,3 +3357,32 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
             )
 
         return self
+
+    @property
+    def self_consistency_errors(self):
+        """Compute the self-consistency errors for each probe position"""
+
+        xp = self._xp
+        asnumpy = self._asnumpy
+
+        # Re-initialize fractional positions and vector patches, max_batch_size = None
+        self._positions_px_fractional = self._positions_px - xp.round(
+            self._positions_px
+        )
+
+        (
+            self._vectorized_patch_indices_row,
+            self._vectorized_patch_indices_col,
+        ) = self._extract_vectorized_patch_indices()
+
+        # Overlaps
+        _, _, overlap = self._warmup_overlap_projection(self._object, self._probe)
+        fourier_overlap = xp.fft.fft2(overlap[0])
+
+        # Normalized mean-squared errors
+        error = xp.sum(
+            xp.abs(self._amplitudes[0] - xp.abs(fourier_overlap)) ** 2, axis=(-2, -1)
+        )
+        error /= self._mean_diffraction_intensity
+
+        return asnumpy(error)
