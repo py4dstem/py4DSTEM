@@ -3004,7 +3004,7 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
         cmap = kwargs.pop("cmap", "magma")
 
         if common_color_scale:
-            vals = np.sort(rotated_object.mean(0).ravel())
+            vals = np.sort(rotated_object.ravel())
             ind_vmin = np.round((vals.shape[0] - 1) * 0.02).astype("int")
             ind_vmax = np.round((vals.shape[0] - 1) * 0.98).astype("int")
             ind_vmin = np.max([0, ind_vmin])
