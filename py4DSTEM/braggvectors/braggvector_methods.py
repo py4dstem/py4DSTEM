@@ -647,6 +647,7 @@ class BraggVectorMethods:
             vmin=-1 * plot_range,
             vmax=1 * plot_range,
             intensity_range="absolute",
+            show_cbar=True,
             **kwargs,
         )
 
