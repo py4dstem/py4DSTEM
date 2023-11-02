@@ -258,6 +258,8 @@ class MixedstateMultislicePtychographicReconstruction(PtychographicReconstructio
         sampling: Tuple[float, float],
         energy: float,
         slice_thicknesses: Sequence[float],
+        theta_x: float,
+        theta_y: float,
     ):
         """
         Precomputes propagator arrays complex wave-function will be convolved by,
@@ -656,6 +658,8 @@ class MixedstateMultislicePtychographicReconstruction(PtychographicReconstructio
             self.sampling,
             self._energy,
             self._slice_thicknesses,
+            self._theta_x,
+            self._theta_y,
         )
 
         # overlaps
