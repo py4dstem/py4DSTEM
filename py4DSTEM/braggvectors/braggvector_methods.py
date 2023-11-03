@@ -792,6 +792,21 @@ class BraggVectorMethods:
         else:
             return
 
+    def to_strainmap(self, name: str = None):
+        """
+        Generate a StrainMap object from the BraggVectors
+        equivalent to py4DSTEM.StrainMap(braggvectors=braggvectors)
+
+        Args:
+            name (str, optional): The name of the strainmap. Defaults to None which reverts to default name 'strainmap'.
+
+        Returns:
+            py4DSTEM.StrainMap: A py4DSTEM StrainMap object generated from the BraggVectors
+        """
+        from py4DSTEM.process.strain import StrainMap
+
+        return StrainMap(self, name) if name else StrainMap(self)
+
 
 ######### END BraggVectorMethods CLASS ########
 
