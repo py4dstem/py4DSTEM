@@ -404,7 +404,7 @@ class StrainMap(RealSlice, Data):
         Parameters
         ----------
         max_peak_spacing : number
-            The maximum allowable distance between a detected Bragg peak and
+            The maximum allowable distance in pixels between a detected Bragg peak and
             the indexed maxima found in `choose_basis_vectors` for the detected
             peak to be indexed
         returnfig : bool
@@ -678,7 +678,7 @@ class StrainMap(RealSlice, Data):
         color_gvects="r",
         legend_camera_length=1.6,
         scale_gvects=0.6,
-        layout=0,
+        layout="square",
         figsize=None,
         returnfig=False,
     ):
@@ -745,12 +745,13 @@ class StrainMap(RealSlice, Data):
             Toggles returning the figure
         """
         # Lookup table for different layouts
-        assert layout in (0, 1, 2)
+        assert layout in ("square", "horizontal", "vertical")
         layout_lookup = {
-            0: ["left", "right", "left", "right"],
-            1: ["bottom", "bottom", "bottom", "bottom"],
-            2: ["right", "right", "right", "right"],
+            "square": ["left", "right", "left", "right"],
+            "horizontal": ["bottom", "bottom", "bottom", "bottom"],
+            "vertical": ["right", "right", "right", "right"],
         }
+
         layout_p = layout_lookup[layout]
 
         # Set which colorbars to display
@@ -809,19 +810,19 @@ class StrainMap(RealSlice, Data):
         # chosen layout and the image shape
         if figsize is None:
             ratio = np.sqrt(self.rshape[1] / self.rshape[0])
-            if layout == 0:
+            if layout == "square":
                 figsize = (13 * ratio, 8 / ratio)
-            elif layout == 1:
+            elif layout == "horizontal":
                 figsize = (10 * ratio, 4 / ratio)
             else:
                 figsize = (4 * ratio, 10 / ratio)
 
         # set up layout
-        if layout == 0:
+        if layout == "square":
             fig, ((ax11, ax12, ax_legend1), (ax21, ax22, ax_legend2)) = plt.subplots(
                 2, 3, figsize=figsize
             )
-        elif layout == 1:
+        elif layout == "horizontal":
             figsize = (figsize[0] * np.sqrt(2), figsize[1] / np.sqrt(2))
             fig, (ax11, ax12, ax21, ax22, ax_legend) = plt.subplots(
                 1, 5, figsize=figsize
@@ -971,8 +972,8 @@ class StrainMap(RealSlice, Data):
 
         # Legend
 
-        # for layout 0, combine vertical plots on the right end
-        if layout == 0:
+        # for layout "square", combine vertical plots on the right end
+        if layout == "square":
             # get gridspec object
             gs = ax_legend1.get_gridspec()
             # remove last two axes
