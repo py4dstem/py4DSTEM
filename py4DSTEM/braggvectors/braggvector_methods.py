@@ -631,7 +631,7 @@ class BraggVectorMethods:
         axsize = kwargs.pop("axsize", axsize)
 
         # plot
-        show(
+        fig, ax = show(
             [
                 [qx0_meas - qx0_mean, qx0_fit - qx0_mean, qx0_residuals],
                 [qy0_meas - qy0_mean, qy0_fit - qy0_mean, qy0_residuals],
@@ -650,8 +650,10 @@ class BraggVectorMethods:
             vmax=1 * plot_range,
             intensity_range="absolute",
             show_cbar=True,
+            returnfig=True,
             **kwargs,
         )
+        plt.tight_layout()
 
         return
 
