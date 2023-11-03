@@ -82,9 +82,17 @@ class MixedstateMultislicePtychographicReconstruction(PtychographicReconstructio
     initial_scan_positions: np.ndarray, optional
         Probe positions in Å for each diffraction intensity
         If None, initialized to a grid scan
+    theta_x: float
+        x tilt of propagator (in degrees)
+    theta_y: float
+        y tilt of propagator (in degrees)
+    middle_focus: bool
+        if True, adds half the sample thickness to the defocus
     object_type: str, optional
         The object can be reconstructed as a real potential ('potential') or a complex
         object ('complex')
+    positions_mask: np.ndarray, optional
+        Boolean real space mask to select positions in datacube to skip for reconstruction
     verbose: bool, optional
         If True, class methods will inherit this and print additional information
     device: str, optional
@@ -114,7 +122,11 @@ class MixedstateMultislicePtychographicReconstruction(PtychographicReconstructio
         initial_object_guess: np.ndarray = None,
         initial_probe_guess: np.ndarray = None,
         initial_scan_positions: np.ndarray = None,
+        theta_x: float = 0,
+        theta_y: float = 0,
+        middle_focus: bool = False,
         object_type: str = "complex",
+        positions_mask: np.ndarray = None,
         verbose: bool = True,
         device: str = "cpu",
         name: str = "multi-slice_ptychographic_reconstruction",
@@ -162,6 +174,25 @@ class MixedstateMultislicePtychographicReconstruction(PtychographicReconstructio
             if (key not in polar_symbols) and (key not in polar_aliases.keys()):
                 raise ValueError("{} not a recognized parameter".format(key))
 
+        if np.isscalar(slice_thicknesses):
+            mean_slice_thickness = slice_thicknesses
+        else:
+            mean_slice_thickness = np.mean(slice_thicknesses)
+
+        if middle_focus:
+            if "defocus" in kwargs:
+                kwargs["defocus"] += mean_slice_thickness * num_slices / 2
+            elif "C10" in kwargs:
+                kwargs["C10"] -= mean_slice_thickness * num_slices / 2
+            elif polar_parameters is not None and "defocus" in polar_parameters:
+                polar_parameters["defocus"] = (
+                    polar_parameters["defocus"] + mean_slice_thickness * num_slices / 2
+                )
+            elif polar_parameters is not None and "C10" in polar_parameters:
+                polar_parameters["C10"] = (
+                    polar_parameters["C10"] - mean_slice_thickness * num_slices / 2
+                )
+
         self._polar_parameters = dict(zip(polar_symbols, [0.0] * len(polar_symbols)))
 
         if polar_parameters is None:
@@ -186,6 +217,13 @@ class MixedstateMultislicePtychographicReconstruction(PtychographicReconstructio
                 f"object_type must be either 'potential' or 'complex', not {object_type}"
             )
 
+        if positions_mask is not None and positions_mask.dtype != "bool":
+            warnings.warn(
+                ("`positions_mask` converted to `bool` array"),
+                UserWarning,
+            )
+            positions_mask = np.asarray(positions_mask, dtype="bool")
+
         self.set_save_defaults()
 
         # Data
@@ -201,6 +239,7 @@ class MixedstateMultislicePtychographicReconstruction(PtychographicReconstructio
         self._semiangle_cutoff_pixels = semiangle_cutoff_pixels
         self._rolloff = rolloff
         self._object_type = object_type
+        self._positions_mask = positions_mask
         self._object_padding_px = object_padding_px
         self._verbose = verbose
         self._device = device
@@ -210,6 +249,8 @@ class MixedstateMultislicePtychographicReconstruction(PtychographicReconstructio
         self._num_probes = num_probes
         self._num_slices = num_slices
         self._slice_thicknesses = slice_thicknesses
+        self._theta_x = theta_x
+        self._theta_y = theta_y
 
     def _precompute_propagator_arrays(
         self,
@@ -217,6 +258,8 @@ class MixedstateMultislicePtychographicReconstruction(PtychographicReconstructio
         sampling: Tuple[float, float],
         energy: float,
         slice_thicknesses: Sequence[float],
+        theta_x: float,
+        theta_y: float,
     ):
         """
         Precomputes propagator arrays complex wave-function will be convolved by,
@@ -232,6 +275,10 @@ class MixedstateMultislicePtychographicReconstruction(PtychographicReconstructio
             The electron energy of the wave functions in eV
         slice_thicknesses: Sequence[float]
             Array of slice thicknesses in A
+        theta_x: float
+            x tilt of propagator (in degrees)
+        theta_y: float
+            y tilt of propagator (in degrees)
 
         Returns
         -------
@@ -251,12 +298,22 @@ class MixedstateMultislicePtychographicReconstruction(PtychographicReconstructio
         propagators = xp.empty(
             (num_slices, kx.shape[0], ky.shape[0]), dtype=xp.complex64
         )
+
+        theta_x = np.deg2rad(theta_x)
+        theta_y = np.deg2rad(theta_y)
+
         for i, dz in enumerate(slice_thicknesses):
             propagators[i] = xp.exp(
                 1.0j * (-(kx**2)[:, None] * np.pi * wavelength * dz)
             )
             propagators[i] *= xp.exp(
                 1.0j * (-(ky**2)[None] * np.pi * wavelength * dz)
+            )
+            propagators[i] *= xp.exp(
+                1.0j * (2 * kx[:, None] * np.pi * dz * np.tan(theta_x))
+            )
+            propagators[i] *= xp.exp(
+                1.0j * (2 * ky[None] * np.pi * dz * np.tan(theta_y))
             )
 
         return propagators
@@ -445,7 +502,11 @@ class MixedstateMultislicePtychographicReconstruction(PtychographicReconstructio
             self._amplitudes,
             self._mean_diffraction_intensity,
         ) = self._normalize_diffraction_intensities(
-            self._intensities, self._com_fitted_x, self._com_fitted_y, crop_patterns
+            self._intensities,
+            self._com_fitted_x,
+            self._com_fitted_y,
+            crop_patterns,
+            self._positions_mask,
         )
 
         # explicitly delete namespace
@@ -454,7 +515,7 @@ class MixedstateMultislicePtychographicReconstruction(PtychographicReconstructio
         del self._intensities
 
         self._positions_px = self._calculate_scan_positions_in_pixels(
-            self._scan_positions
+            self._scan_positions, self._positions_mask
         )
 
         # handle semiangle specified in pixels
@@ -597,6 +658,8 @@ class MixedstateMultislicePtychographicReconstruction(PtychographicReconstructio
             self.sampling,
             self._energy,
             self._slice_thicknesses,
+            self._theta_x,
+            self._theta_y,
         )
 
         # overlaps
@@ -3060,6 +3123,7 @@ class MixedstateMultislicePtychographicReconstruction(PtychographicReconstructio
         common_color_scale: bool = True,
         padding: int = 0,
         num_cols: int = 3,
+        show_fft: bool = False,
         **kwargs,
     ):
         """
@@ -3075,12 +3139,20 @@ class MixedstateMultislicePtychographicReconstruction(PtychographicReconstructio
             Padding to leave uncropped
         num_cols: int, optional
             Number of GridSpec columns
+        show_fft: bool, optional
+            if True, plots fft of object slices
         """
 
         if ms_object is None:
             ms_object = self._object
 
         rotated_object = self._crop_rotate_object_fov(ms_object, padding=padding)
+        if show_fft:
+            rotated_object = np.abs(
+                np.fft.fftshift(
+                    np.fft.fft2(rotated_object, axes=(-2, -1)), axes=(-2, -1)
+                )
+            )
         rotated_shape = rotated_object.shape
 
         if np.iscomplexobj(rotated_object):
@@ -3098,8 +3170,21 @@ class MixedstateMultislicePtychographicReconstruction(PtychographicReconstructio
 
         axsize = kwargs.pop("axsize", (3, 3))
         cmap = kwargs.pop("cmap", "magma")
-        vmin = np.min(rotated_object) if common_color_scale else None
-        vmax = np.max(rotated_object) if common_color_scale else None
+
+        if common_color_scale:
+            vals = np.sort(rotated_object.ravel())
+            ind_vmin = np.round((vals.shape[0] - 1) * 0.02).astype("int")
+            ind_vmax = np.round((vals.shape[0] - 1) * 0.98).astype("int")
+            ind_vmin = np.max([0, ind_vmin])
+            ind_vmax = np.min([len(vals) - 1, ind_vmax])
+            vmin = vals[ind_vmin]
+            vmax = vals[ind_vmax]
+            if vmax == vmin:
+                vmin = vals[0]
+                vmax = vals[-1]
+        else:
+            vmax = None
+            vmin = None
         vmin = kwargs.pop("vmin", vmin)
         vmax = kwargs.pop("vmax", vmax)
 
