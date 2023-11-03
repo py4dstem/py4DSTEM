@@ -1554,6 +1554,7 @@ class StrainMap(RealSlice, Data):
             "g1g2_map",
             "strainmap_g1g2",
             "strainmap_rotated",
+            "mask",
         ):
             if hasattr(self, attr):
                 setattr(strainmap_copy, attr, getattr(self, attr))
