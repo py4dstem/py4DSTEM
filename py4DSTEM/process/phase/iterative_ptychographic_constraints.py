@@ -566,7 +566,7 @@ class PtychographicConstraints:
             xp=xp,
         )
 
-        fourier_probe = fourier_probe_abs * xp.exp(1.0j * fitted_angle)
+        fourier_probe = fourier_probe_abs * xp.exp(-1.0j * fitted_angle)
         current_probe = xp.fft.ifft2(fourier_probe)
 
         return current_probe
