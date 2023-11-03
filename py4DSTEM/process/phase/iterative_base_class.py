@@ -1132,6 +1132,7 @@ class PhaseReconstruction(Custom):
         com_fitted_x,
         com_fitted_y,
         crop_patterns,
+        positions_mask,
     ):
         """
         Fix diffraction intensities CoM, shift to origin, and take square root
@@ -1147,6 +1148,8 @@ class PhaseReconstruction(Custom):
         crop_patterns: bool
             if True, crop patterns to avoid wrap around of patterns
             when centering
+        positions_mask: np.ndarray, optional
+            Boolean real space mask to select positions in datacube to skip for reconstruction
 
         Returns
         -------
@@ -1160,6 +1163,11 @@ class PhaseReconstruction(Custom):
         mean_intensity = 0
 
         diffraction_intensities = self._asnumpy(diffraction_intensities)
+        if positions_mask is not None:
+            number_of_patterns = np.count_nonzero(self._positions_mask.ravel())
+        else:
+            number_of_patterns = np.prod(diffraction_intensities.shape[:2])
+
         if crop_patterns:
             crop_x = int(
                 np.minimum(
@@ -1178,8 +1186,7 @@ class PhaseReconstruction(Custom):
             region_of_interest_shape = (crop_w * 2, crop_w * 2)
             amplitudes = np.zeros(
                 (
-                    diffraction_intensities.shape[0],
-                    diffraction_intensities.shape[1],
+                    number_of_patterns,
                     crop_w * 2,
                     crop_w * 2,
                 ),
@@ -1195,13 +1202,19 @@ class PhaseReconstruction(Custom):
 
         else:
             region_of_interest_shape = diffraction_intensities.shape[-2:]
-            amplitudes = np.zeros(diffraction_intensities.shape, dtype=np.float32)
+            amplitudes = np.zeros(
+                (number_of_patterns,) + region_of_interest_shape, dtype=np.float32
+            )
 
         com_fitted_x = self._asnumpy(com_fitted_x)
         com_fitted_y = self._asnumpy(com_fitted_y)
 
+        counter = 0
         for rx in range(diffraction_intensities.shape[0]):
             for ry in range(diffraction_intensities.shape[1]):
+                if positions_mask is not None:
+                    if not self._positions_mask[rx, ry]:
+                        continue
                 intensities = get_shifted_ar(
                     diffraction_intensities[rx, ry],
                     -com_fitted_x[rx, ry],
@@ -1216,9 +1229,9 @@ class PhaseReconstruction(Custom):
                     )
 
                 mean_intensity += np.sum(intensities)
-                amplitudes[rx, ry] = np.sqrt(np.maximum(intensities, 0))
+                amplitudes[counter] = np.sqrt(np.maximum(intensities, 0))
+                counter += 1
 
-        amplitudes = xp.reshape(amplitudes, (-1,) + region_of_interest_shape)
         amplitudes = xp.asarray(amplitudes)
         mean_intensity /= amplitudes.shape[0]
 
@@ -1535,7 +1548,9 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
             else:
                 raise ValueError("{} not a recognized parameter".format(symbol))
 
-    def _calculate_scan_positions_in_pixels(self, positions: np.ndarray):
+    def _calculate_scan_positions_in_pixels(
+        self, positions: np.ndarray, positions_mask
+    ):
         """
         Method to compute the initial guess of scan positions in pixels.
 
@@ -1544,6 +1559,8 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
         positions: (J,2) np.ndarray or None
             Input probe positions in Å.
             If None, a raster scan using experimental parameters is constructed.
+        positions_mask: np.ndarray, optional
+            Boolean real space mask to select positions in datacube to skip for reconstruction
 
         Returns
         -------
@@ -1591,6 +1608,9 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
         else:
             positions = np.array([x.ravel(), y.ravel()]).T
         positions -= np.min(positions, axis=0)
+
+        if positions_mask is not None:
+            positions = positions[positions_mask.ravel()]
 
         if self._object_padding_px is None:
             float_padding = self._region_of_interest_shape / 2
@@ -2286,22 +2306,16 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
 
         figsize = kwargs.pop("figsize", (6, 6))
         cmap = kwargs.pop("cmap", "magma")
-        vmin = kwargs.pop("vmin", 0)
-        vmax = kwargs.pop("vmax", 1)
-        power = kwargs.pop("power", 0.2)
 
         pixelsize = 1 / (object_fft.shape[1] * self.sampling[1])
         show(
             object_fft,
             figsize=figsize,
             cmap=cmap,
-            vmin=vmin,
-            vmax=vmax,
             scalebar=True,
             pixelsize=pixelsize,
             ticks=False,
             pixelunits=r"$\AA^{-1}$",
-            power=power,
             **kwargs,
         )
 

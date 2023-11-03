@@ -66,6 +66,8 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
     object_padding_px: Tuple[int,int], optional
         Pixel dimensions to pad objects with
         If None, the padding is set to half the probe ROI dimensions
+    positions_mask: np.ndarray, optional
+        Boolean real space mask to select positions in datacube to skip for reconstruction
     initial_object_guess: np.ndarray, optional
         Initial guess for complex-valued object of dimensions (Px,Py)
         If None, initialized to 1.0j
@@ -102,6 +104,7 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
         vacuum_probe_intensity: np.ndarray = None,
         polar_parameters: Mapping[str, float] = None,
         object_padding_px: Tuple[int, int] = None,
+        positions_mask: np.ndarray = None,
         initial_object_guess: np.ndarray = None,
         initial_probe_guess: np.ndarray = None,
         initial_scan_positions: np.ndarray = None,
@@ -150,6 +153,12 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
             raise ValueError(
                 f"object_type must be either 'potential' or 'complex', not {object_type}"
             )
+        if positions_mask is not None and positions_mask.dtype != "bool":
+            warnings.warn(
+                ("`positions_mask` converted to `bool` array"),
+                UserWarning,
+            )
+            positions_mask = np.asarray(positions_mask, dtype="bool")
 
         self.set_save_defaults()
 
@@ -167,6 +176,7 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
         self._rolloff = rolloff
         self._object_type = object_type
         self._object_padding_px = object_padding_px
+        self._positions_mask = positions_mask
         self._verbose = verbose
         self._device = device
         self._preprocessed = False
@@ -404,7 +414,11 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
             amplitudes_0,
             mean_diffraction_intensity_0,
         ) = self._normalize_diffraction_intensities(
-            intensities_0, com_fitted_x_0, com_fitted_y_0, crop_patterns
+            intensities_0,
+            com_fitted_x_0,
+            com_fitted_y_0,
+            crop_patterns,
+            self._positions_mask,
         )
 
         # explicitly delete namescapes
@@ -485,7 +499,11 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
             amplitudes_1,
             mean_diffraction_intensity_1,
         ) = self._normalize_diffraction_intensities(
-            intensities_1, com_fitted_x_1, com_fitted_y_1, crop_patterns
+            intensities_1,
+            com_fitted_x_1,
+            com_fitted_y_1,
+            crop_patterns,
+            self._positions_mask,
         )
 
         # explicitly delete namescapes
@@ -567,7 +585,11 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
                 amplitudes_2,
                 mean_diffraction_intensity_2,
             ) = self._normalize_diffraction_intensities(
-                intensities_2, com_fitted_x_2, com_fitted_y_2, crop_patterns
+                intensities_2,
+                com_fitted_x_2,
+                com_fitted_y_2,
+                crop_patterns,
+                self._positions_mask,
             )
 
             # explicitly delete namescapes
@@ -607,7 +629,7 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
         self._region_of_interest_shape = np.array(self._amplitudes[0].shape[-2:])
 
         self._positions_px = self._calculate_scan_positions_in_pixels(
-            self._scan_positions
+            self._scan_positions, self._positions_mask
         )
 
         # handle semiangle specified in pixels

@@ -74,6 +74,8 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
     initial_scan_positions: np.ndarray, optional
         Probe positions in Å for each diffraction intensity
         If None, initialized to a grid scan
+    positions_mask: np.ndarray, optional
+        Boolean real space mask to select positions in datacube to skip for reconstruction
     verbose: bool, optional
         If True, class methods will inherit this and print additional information
     device: str, optional
@@ -102,6 +104,7 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
         initial_probe_guess: np.ndarray = None,
         initial_scan_positions: np.ndarray = None,
         object_type: str = "complex",
+        positions_mask: np.ndarray = None,
         verbose: bool = True,
         device: str = "cpu",
         name: str = "mixed-state_ptychographic_reconstruction",
@@ -161,6 +164,12 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
             raise ValueError(
                 f"object_type must be either 'potential' or 'complex', not {object_type}"
             )
+        if positions_mask is not None and positions_mask.dtype != "bool":
+            warnings.warn(
+                ("`positions_mask` converted to `bool` array"),
+                UserWarning,
+            )
+            positions_mask = np.asarray(positions_mask, dtype="bool")
 
         self.set_save_defaults()
 
@@ -178,6 +187,7 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
         self._rolloff = rolloff
         self._object_type = object_type
         self._object_padding_px = object_padding_px
+        self._positions_mask = positions_mask
         self._verbose = verbose
         self._device = device
         self._preprocessed = False
@@ -349,7 +359,11 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
             self._amplitudes,
             self._mean_diffraction_intensity,
         ) = self._normalize_diffraction_intensities(
-            self._intensities, self._com_fitted_x, self._com_fitted_y, crop_patterns
+            self._intensities,
+            self._com_fitted_x,
+            self._com_fitted_y,
+            crop_patterns,
+            self._positions_mask,
         )
 
         # explicitly delete namespace
@@ -358,7 +372,7 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
         del self._intensities
 
         self._positions_px = self._calculate_scan_positions_in_pixels(
-            self._scan_positions
+            self._scan_positions, self._positions_mask
         )
 
         # handle semiangle specified in pixels

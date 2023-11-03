@@ -93,6 +93,8 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
     object_type: str, optional
         The object can be reconstructed as a real potential ('potential') or a complex
         object ('complex')
+    positions_mask: np.ndarray, optional
+        Boolean real space mask to select positions in datacube to skip for reconstruction
     name: str, optional
         Class name
     kwargs:
@@ -115,6 +117,7 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
         polar_parameters: Mapping[str, float] = None,
         object_padding_px: Tuple[int, int] = None,
         object_type: str = "potential",
+        positions_mask: np.ndarray = None,
         initial_object_guess: np.ndarray = None,
         initial_probe_guess: np.ndarray = None,
         initial_scan_positions: Sequence[np.ndarray] = None,
@@ -163,6 +166,13 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
         if object_type != "potential":
             raise NotImplementedError()
 
+        if positions_mask is not None and positions_mask.dtype != "bool":
+            warnings.warn(
+                ("`positions_mask` converted to `bool` array"),
+                UserWarning,
+            )
+            positions_mask = np.asarray(positions_mask, dtype="bool")
+
         self.set_save_defaults()
 
         # Data
@@ -179,6 +189,7 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
         self._rolloff = rolloff
         self._object_type = object_type
         self._object_padding_px = object_padding_px
+        self._positions_mask = positions_mask
         self._verbose = verbose
         self._device = device
         self._preprocessed = False
@@ -595,7 +606,11 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
                 ],
                 mean_diffraction_intensity_temp,
             ) = self._normalize_diffraction_intensities(
-                intensities, com_fitted_x, com_fitted_y, crop_patterns
+                intensities,
+                com_fitted_x,
+                com_fitted_y,
+                crop_patterns,
+                self._positions_mask[tilt_index],
             )
 
             self._mean_diffraction_intensity.append(mean_diffraction_intensity_temp)
@@ -615,7 +630,7 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
                     tilt_index + 1
                 ]
             ] = self._calculate_scan_positions_in_pixels(
-                self._scan_positions[tilt_index]
+                self._scan_positions[tilt_index], self._positions_mask[tilt_index]
             )
 
         # handle semiangle specified in pixels
@@ -3288,22 +3303,16 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
 
         figsize = kwargs.pop("figsize", (6, 6))
         cmap = kwargs.pop("cmap", "magma")
-        vmin = kwargs.pop("vmin", 0)
-        vmax = kwargs.pop("vmax", 1)
-        power = kwargs.pop("power", 0.2)
 
         pixelsize = 1 / (object_fft.shape[1] * self.sampling[1])
         show(
             object_fft,
             figsize=figsize,
             cmap=cmap,
-            vmin=vmin,
-            vmax=vmax,
             scalebar=True,
             pixelsize=pixelsize,
             ticks=False,
             pixelunits=r"$\AA^{-1}$",
-            power=power,
             **kwargs,
         )
 
