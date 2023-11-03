@@ -1,13 +1,14 @@
 # BraggVectors methods
 
-import numpy as np
-from scipy.ndimage import gaussian_filter
-from warnings import warn
 import inspect
+from warnings import warn
 
-from emdfile import Array, Metadata, tqdmnd, _read_metadata
-from py4DSTEM.datacube import VirtualImage
+import matplotlib.pyplot as plt
+import numpy as np
+from emdfile import Array, Metadata, _read_metadata, tqdmnd
 from py4DSTEM import show
+from py4DSTEM.datacube import VirtualImage
+from scipy.ndimage import gaussian_filter
 
 
 class BraggVectorMethods:
@@ -627,6 +628,7 @@ class BraggVectorMethods:
         # set figsize
         imsize_ratio = np.sqrt(qx0_meas.shape[1] / qx0_meas.shape[0])
         axsize = (3 * imsize_ratio, 3 / imsize_ratio)
+        axsize = kwargs.pop("axsize", axsize)
 
         # plot
         show(

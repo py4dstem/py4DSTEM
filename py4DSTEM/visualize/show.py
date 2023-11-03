@@ -8,6 +8,7 @@ import numpy as np
 from matplotlib.axes import Axes
 from matplotlib.colors import is_color_like
 from matplotlib.figure import Figure
+from mpl_toolkits.axes_grid1.axes_divider import make_axes_locatable
 from py4DSTEM.data import Calibration, DiffractionSlice, RealSlice
 from py4DSTEM.visualize.overlay import (
     add_annuli,
@@ -608,7 +609,9 @@ def show(
                     mask_display, cmap=cmap, alpha=mask_alpha, vmin=vmin, vmax=vmax
                 )
             if show_cbar:
-                fig.colorbar(cax, ax=ax)
+                ax_divider = make_axes_locatable(ax)
+                c_axis = ax_divider.append_axes("right", size="7%")
+                fig.colorbar(cax, cax=c_axis)
         # ...or, plot its histogram
         else:
             hist, bin_edges = np.histogram(
