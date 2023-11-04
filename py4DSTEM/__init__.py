@@ -52,18 +52,69 @@ from py4DSTEM.braggvectors import (
     BraggVectorMap,
 )
 
+# TODO - classification
+# from py4DSTEM.process.classification import (
+#     BraggVectorClassification,
+#     ConvergenceWarning,
+#     DataCube,
+#     FastICA,
+#     Featurization,
+#     GaussianMixture,
+#     MinMaxScaler,
+#     NMF,
+#     PCA,
+#     PointListArray,
+#     RobustScaler,
+#     permutations,
+# )
+
+# diffraction
+from py4DSTEM.process.diffraction import Crystal
+
+# py4DSTEM.process.diffraction
+# ['Axes', 'Crystal', 'Crystal_Phase', 'Figure', 'Fraction', 'ListedColormap', 'Orientation', 'PointList', 'PointListArray', 'single_atom_scatter']
+
+
+# ptycho
+from py4DSTEM.process.phase import (
+    DPCReconstruction,
+    MixedstatePtychographicReconstruction,
+    MultislicePtychographicReconstruction,
+    OptimizationParameter,
+    OverlapMagneticTomographicReconstruction,
+    OverlapTomographicReconstruction,
+    ParallaxReconstruction,
+    PtychographyOptimizer,
+    SimultaneousPtychographicReconstruction,
+    SingleslicePtychographicReconstruction,
+)
+
+# polar
+from py4DSTEM.process.polar import PolarDatacube
+
+# from py4DSTEM.process import (
+#     PolarDatacube,
+# )
+
 # strain
 from py4DSTEM.process import StrainMap
 
-# TODO - crystal
-# TODO - ptycho
-# TODO - others
-
-# TODO - where
-from py4DSTEM.process import (
-    PolarDatacube,
-)
-
+# TODO WPF
+# from py4DSTEM.process.wholepatternfit import (
+#     ComplexOverlapKernelDiskLattice,
+#     DCBackground,
+#     Flag,
+#     GaussianBackground,
+#     GaussianRing,
+#     KernelDiskLattice,
+#     Parameter,
+#     SyntheticDiskLattice,
+#     SyntheticDiskMoire,
+#     WPFModel,
+#     WPFModelType,
+#     WholePatternFit,
+#     auto,
+# )
 
 ### more submodules
 # TODO
