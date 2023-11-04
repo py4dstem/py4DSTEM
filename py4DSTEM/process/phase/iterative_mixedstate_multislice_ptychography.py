@@ -3595,30 +3595,60 @@ class MixedstateMultislicePtychographicReconstruction(PtychographicReconstructio
         obj = self._crop_rotate_object_fov(np.sum(obj, axis=0))
         return np.abs(np.fft.fftshift(np.fft.fft2(np.fft.ifftshift(obj))))
 
-    @property
-    def self_consistency_errors(self):
+    def _return_self_consistency_errors(
+        self,
+        max_batch_size=None,
+    ):
         """Compute the self-consistency errors for each probe position"""
 
         xp = self._xp
         asnumpy = self._asnumpy
 
-        # Re-initialize fractional positions and vector patches, max_batch_size = None
-        self._positions_px_fractional = self._positions_px - xp.round(
-            self._positions_px
-        )
+        # Batch-size
+        if max_batch_size is None:
+            max_batch_size = self._num_diffraction_patterns
 
-        (
-            self._vectorized_patch_indices_row,
-            self._vectorized_patch_indices_col,
-        ) = self._extract_vectorized_patch_indices()
+        # Re-initialize fractional positions and vector patches
+        errors = np.array([])
+        positions_px = self._positions_px.copy()
 
-        # Overlaps
-        _, _, overlap = self._overlap_projection(self._object, self._probe)
-        fourier_overlap = xp.fft.fft2(overlap)
-        intensity_norm = xp.sqrt(xp.sum(xp.abs(fourier_overlap) ** 2, axis=1))
+        for start, end in generate_batches(
+            self._num_diffraction_patterns, max_batch=max_batch_size
+        ):
+            # batch indices
+            self._positions_px = positions_px[start:end]
+            self._positions_px_fractional = self._positions_px - xp.round(
+                self._positions_px
+            )
+            (
+                self._vectorized_patch_indices_row,
+                self._vectorized_patch_indices_col,
+            ) = self._extract_vectorized_patch_indices()
+            amplitudes = self._amplitudes[start:end]
 
-        # Normalized mean-squared errors
-        error = xp.sum(xp.abs(self._amplitudes - intensity_norm) ** 2, axis=(-2, -1))
-        error /= self._mean_diffraction_intensity
+            # Overlaps
+            _, _, overlap = self._overlap_projection(self._object, self._probe)
+            fourier_overlap = xp.fft.fft2(overlap)
+            intensity_norm = xp.sqrt(xp.sum(xp.abs(fourier_overlap) ** 2, axis=1))
 
-        return asnumpy(error)
+            # Normalized mean-squared errors
+            batch_errors = xp.sum(
+                xp.abs(amplitudes - intensity_norm) ** 2, axis=(-2, -1)
+            )
+            errors = np.hstack((errors, batch_errors))
+
+        self._positions_px = positions_px.copy()
+        errors /= self._mean_diffraction_intensity
+
+        return asnumpy(errors)
+
+    def _return_projected_cropped_potential(
+        self,
+    ):
+        """Utility function to accommodate multiple classes"""
+        if self._object_type == "complex":
+            projected_cropped_potential = np.angle(self.object_cropped).sum(0)
+        else:
+            projected_cropped_potential = self.object_cropped.sum(0)
+
+        return projected_cropped_potential

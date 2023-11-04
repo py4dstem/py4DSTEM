@@ -3426,3 +3426,14 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
 
         obj = self._crop_rotate_object_fov(np.sum(obj, axis=0))
         return np.abs(np.fft.fftshift(np.fft.fft2(np.fft.ifftshift(obj))))
+
+    def _return_projected_cropped_potential(
+        self,
+    ):
+        """Utility function to accommodate multiple classes"""
+        if self._object_type == "complex":
+            projected_cropped_potential = np.angle(self.object_cropped).sum(0)
+        else:
+            projected_cropped_potential = self.object_cropped.sum(0)
+
+        return projected_cropped_potential
