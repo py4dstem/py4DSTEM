@@ -1207,7 +1207,7 @@ class ParallaxReconstruction(PhaseReconstruction):
         # kernel density estimate
         sigma = kde_sigma * self._kde_upsample_factor
         pix_count = gaussian_filter(pix_count, sigma)
-        pix_count[pix_output == 0.0] = np.inf
+        pix_count[pix_count == 0.0] = np.inf
         pix_output = gaussian_filter(pix_output, sigma)
         pix_output /= pix_count
 
