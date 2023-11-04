@@ -351,6 +351,9 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
                 )
             )
 
+        # Ensure plot_center_of_mass is not in kwargs
+        kwargs.pop("plot_center_of_mass", None)
+
         # 1st measurement sets rotation angle and transposition
         (
             measurement_0,
@@ -3408,3 +3411,69 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
         error /= self._mean_diffraction_intensity
 
         return asnumpy(error)
+
+    def _return_self_consistency_errors(
+        self,
+        max_batch_size=None,
+    ):
+        """Compute the self-consistency errors for each probe position"""
+
+        xp = self._xp
+        asnumpy = self._asnumpy
+
+        # Batch-size
+        if max_batch_size is None:
+            max_batch_size = self._num_diffraction_patterns
+
+        # Re-initialize fractional positions and vector patches
+        errors = np.array([])
+        positions_px = self._positions_px.copy()
+
+        for start, end in generate_batches(
+            self._num_diffraction_patterns, max_batch=max_batch_size
+        ):
+            # batch indices
+            self._positions_px = positions_px[start:end]
+            self._positions_px_fractional = self._positions_px - xp.round(
+                self._positions_px
+            )
+            (
+                self._vectorized_patch_indices_row,
+                self._vectorized_patch_indices_col,
+            ) = self._extract_vectorized_patch_indices()
+            amplitudes = self._amplitudes[0][start:end]
+
+            # Overlaps
+            _, _, overlap = self._warmup_overlap_projection(self._object, self._probe)
+            fourier_overlap = xp.fft.fft2(overlap[0])
+
+            # Normalized mean-squared errors
+            batch_errors = xp.sum(
+                xp.abs(amplitudes - xp.abs(fourier_overlap)) ** 2, axis=(-2, -1)
+            )
+            errors = np.hstack((errors, batch_errors))
+
+        self._positions_px = positions_px.copy()
+        errors /= self._mean_diffraction_intensity
+
+        return asnumpy(errors)
+
+    def _return_projected_cropped_potential(
+        self,
+    ):
+        """Utility function to accommodate multiple classes"""
+        if self._object_type == "complex":
+            projected_cropped_potential = np.angle(self.object_cropped[0])
+        else:
+            projected_cropped_potential = self.object_cropped[0]
+
+        return projected_cropped_potential
+
+    @property
+    def object_cropped(self):
+        """Cropped and rotated object"""
+
+        obj_e, obj_m = self._object
+        obj_e = self._crop_rotate_object_fov(obj_e)
+        obj_m = self._crop_rotate_object_fov(obj_m)
+        return (obj_e, obj_m)
