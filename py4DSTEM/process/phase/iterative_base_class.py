@@ -2287,10 +2287,22 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
 
         return asnumpy(errors)
 
+    def _return_projected_cropped_potential(
+        self,
+    ):
+        """Utility function to accommodate multiple classes"""
+        if self._object_type == "complex":
+            projected_cropped_potential = np.angle(self.object_cropped)
+        else:
+            projected_cropped_potential = self.object_cropped
+
+        return projected_cropped_potential
+
     def show_uncertainty_visualization(
         self,
         errors=None,
         max_batch_size=None,
+        projected_cropped_potential=None,
         kde_sigma=None,
         plot_histogram=True,
         plot_contours=False,
@@ -2300,6 +2312,9 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
 
         if errors is None:
             errors = self._return_self_consistency_errors(max_batch_size=max_batch_size)
+
+        if projected_cropped_potential is None:
+            projected_cropped_potential = self._return_projected_cropped_potential()
 
         if kde_sigma is None:
             kde_sigma = 0.5 * self._scan_sampling[0] / self.sampling[0]
@@ -2323,7 +2338,9 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
         padding = xp.min(rotated_points, axis=0).astype("int")
 
         # bilinear sampling
-        pixel_output = np.array(self.object_cropped.shape) + asnumpy(2 * padding)
+        pixel_output = np.array(projected_cropped_potential.shape) + asnumpy(
+            2 * padding
+        )
         pixel_size = pixel_output.prod()
 
         xa = rotated_points[:, 0]
@@ -2415,21 +2432,21 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
         vmin = kwargs.pop("vmin", None)
         vmax = kwargs.pop("vmax", None)
 
-        cropped_object_angle, vmin, vmax = return_scaled_histogram_ordering(
-            np.angle(self.object_cropped),
+        projected_cropped_potential, vmin, vmax = return_scaled_histogram_ordering(
+            projected_cropped_potential,
             vmin=vmin,
             vmax=vmax,
         )
 
         extent = [
             0,
-            self.sampling[1] * cropped_object_angle.shape[1],
-            self.sampling[0] * cropped_object_angle.shape[0],
+            self.sampling[1] * projected_cropped_potential.shape[1],
+            self.sampling[0] * projected_cropped_potential.shape[0],
             0,
         ]
 
         ax.imshow(
-            cropped_object_angle,
+            projected_cropped_potential,
             vmin=vmin,
             vmax=vmax,
             extent=extent,
