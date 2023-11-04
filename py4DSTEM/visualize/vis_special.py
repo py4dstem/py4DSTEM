@@ -839,3 +839,34 @@ def show_complex(
 
     if returnfig:
         return fig, ax
+
+
+def return_scaled_histogram_ordering(array, vmin=None, vmax=None, normalize=False):
+    if vmin is None:
+        vmin = 0.02
+    if vmax is None:
+        vmax = 0.98
+
+    vals = np.sort(array.ravel())
+    ind_vmin = np.round((vals.shape[0] - 1) * vmin).astype("int")
+    ind_vmax = np.round((vals.shape[0] - 1) * vmax).astype("int")
+    ind_vmin = np.max([0, ind_vmin])
+    ind_vmax = np.min([len(vals) - 1, ind_vmax])
+    vmin = vals[ind_vmin]
+    vmax = vals[ind_vmax]
+
+    if vmax == vmin:
+        vmin = vals[0]
+        vmax = vals[-1]
+
+    scaled_array = array.copy()
+    scaled_array = np.where(scaled_array < vmin, vmin, scaled_array)
+    scaled_array = np.where(scaled_array > vmax, vmax, scaled_array)
+
+    if normalize:
+        scaled_array -= scaled_array.min()
+        scaled_array /= scaled_array.max()
+        vmin = 0
+        vmax = 1
+
+    return scaled_array, vmin, vmax
