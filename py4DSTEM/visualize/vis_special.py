@@ -850,10 +850,10 @@ def return_scaled_histogram_ordering(array, vmin=None, vmax=None, normalize=Fals
     ----------
     array: np.array
         array to be plotted
-    vmin: float 
-        lower fraction cut off of pixel values 
+    vmin: float
+        lower fraction cut off of pixel values
     vmax: float
-        upper fraction cut off of pixel values 
+        upper fraction cut off of pixel values
     normalize: bool
         if True, rescales from 0 to 1
 
