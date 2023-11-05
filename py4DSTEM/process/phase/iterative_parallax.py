@@ -587,16 +587,27 @@ class ParallaxReconstruction(PhaseReconstruction):
         self.recon_BF = asnumpy(self._recon_BF)
 
         if plot_average_bf:
-            figsize = kwargs.pop("figsize", (6, 6))
+            figsize = kwargs.pop("figsize", (6, 12))
 
-            fig, ax = plt.subplots(figsize=figsize)
+            fig, ax = plt.subplots(1, 2, figsize=figsize)
 
-            self._visualize_figax(fig, ax, **kwargs)
+            self._visualize_figax(fig, ax[0], **kwargs)
 
-            ax.set_ylabel("x [A]")
-            ax.set_xlabel("y [A]")
-            ax.set_title("Average Bright Field Image")
+            ax[0].set_ylabel("x [A]")
+            ax[0].set_xlabel("y [A]")
+            ax[0].set_title("Average Bright Field Image")
 
+            reciprocal_extent = [
+                -0.5 * (self._reciprocal_sampling[1] * self._dp_mask.shape[1]),
+                0.5 * (self._reciprocal_sampling[1] * self._dp_mask.shape[1]),
+                0.5 * (self._reciprocal_sampling[0] * self._dp_mask.shape[0]),
+                -0.5 * (self._reciprocal_sampling[0] * self._dp_mask.shape[0]),
+            ]
+            ax[1].imshow(self._dp_mask, extent=reciprocal_extent, cmap="gray")
+            ax[1].set_title("DP mask")
+            ax[1].set_ylabel(r"$k_x$ [$A^{-1}$]")
+            ax[1].set_xlabel(r"$k_y$ [$A^{-1}$]")
+            plt.tight_layout()
         self._preprocessed = True
 
         if self._device == "gpu":
