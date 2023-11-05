@@ -842,6 +842,31 @@ def show_complex(
 
 
 def return_scaled_histogram_ordering(array, vmin=None, vmax=None, normalize=False):
+    """
+    Utility function for calculating min and max values for plotting array
+    based on distribution of pixel values
+
+    Parameters
+    ----------
+    array: np.array
+        array to be plotted
+    vmin: float 
+        lower fraction cut off of pixel values 
+    vmax: float
+        upper fraction cut off of pixel values 
+    normalize: bool
+        if True, rescales from 0 to 1
+
+    Returns
+    ----------
+    scaled_array: np.array
+        array clipped outside vmin and vmax
+    vmin: float
+        lower value to be plotted
+    vmax: float
+        upper value to be plotted
+    """
+
     if vmin is None:
         vmin = 0.02
     if vmax is None:
