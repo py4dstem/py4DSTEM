@@ -1,12 +1,14 @@
 # BraggVectors methods
 
-import numpy as np
-from scipy.ndimage import gaussian_filter
-from warnings import warn
 import inspect
+from warnings import warn
 
-from emdfile import Array, Metadata, tqdmnd, _read_metadata
+import matplotlib.pyplot as plt
+import numpy as np
+from emdfile import Array, Metadata, _read_metadata, tqdmnd
+from py4DSTEM import show
 from py4DSTEM.datacube import VirtualImage
+from scipy.ndimage import gaussian_filter
 
 
 class BraggVectorMethods:
@@ -518,6 +520,7 @@ class BraggVectorMethods:
         mask_check_data=True,
         plot=True,
         plot_range=None,
+        cmap="RdBu_r",
         returncalc=True,
         **kwargs,
     ):
@@ -537,6 +540,7 @@ class BraggVectorMethods:
             mask_check_data (bool):     Get mask from origin measurements equal to zero. (TODO - replace)
             plot (bool, optional): plot results
             plot_range (float):    min and max color range for plot (pixels)
+            cmap (colormap): plotting colormap
 
         Returns:
             (variable): Return value depends on returnfitp. If ``returnfitp==False``
@@ -567,74 +571,97 @@ class BraggVectorMethods:
             robust_thresh=robust_thresh,
         )
 
-        # try to add to calibration
+        # try to add update calibration metadata
         try:
-            self.calibration.set_origin([qx0_fit, qy0_fit])
+            self.calibration.set_origin((qx0_fit, qy0_fit))
+            self.setcal()
         except AttributeError:
             warn(
                 "No calibration found on this datacube - fit values are not being stored"
             )
             pass
+
+        # show
         if plot:
-            from py4DSTEM.visualize import show_image_grid
-
-            if mask is None:
-                qx0_meas, qy0_meas = q_meas
-                qx0_res_plot = qx0_residuals
-                qy0_res_plot = qy0_residuals
-            else:
-                qx0_meas = np.ma.masked_array(q_meas[0], mask=np.logical_not(mask))
-                qy0_meas = np.ma.masked_array(q_meas[1], mask=np.logical_not(mask))
-                qx0_res_plot = np.ma.masked_array(
-                    qx0_residuals, mask=np.logical_not(mask)
-                )
-                qy0_res_plot = np.ma.masked_array(
-                    qy0_residuals, mask=np.logical_not(mask)
-                )
-            qx0_mean = np.mean(qx0_fit)
-            qy0_mean = np.mean(qy0_fit)
-
-            if plot_range is None:
-                plot_range = 2 * np.max(qx0_fit - qx0_mean)
-
-            cmap = kwargs.get("cmap", "RdBu_r")
-            kwargs.pop("cmap", None)
-            axsize = kwargs.get("axsize", (6, 2))
-            kwargs.pop("axsize", None)
-
-            show_image_grid(
-                lambda i: [
-                    qx0_meas - qx0_mean,
-                    qx0_fit - qx0_mean,
-                    qx0_res_plot,
-                    qy0_meas - qy0_mean,
-                    qy0_fit - qy0_mean,
-                    qy0_res_plot,
-                ][i],
-                H=2,
-                W=3,
+            self.show_origin_fit(
+                q_meas[0],
+                q_meas[1],
+                qx0_fit,
+                qy0_fit,
+                qx0_residuals,
+                qy0_residuals,
+                mask=mask,
+                plot_range=plot_range,
                 cmap=cmap,
-                axsize=axsize,
-                title=[
-                    "measured origin, x",
-                    "fitorigin, x",
-                    "residuals, x",
-                    "measured origin, y",
-                    "fitorigin, y",
-                    "residuals, y",
-                ],
-                vmin=-1 * plot_range,
-                vmax=1 * plot_range,
-                intensity_range="absolute",
                 **kwargs,
             )
 
-        # update calibration metadata
-        self.calibration.set_origin((qx0_fit, qy0_fit))
-        self.setcal()
-
+        # return
         if returncalc:
             return qx0_fit, qy0_fit, qx0_residuals, qy0_residuals
+
+    def show_origin_fit(
+        self,
+        qx0_meas,
+        qy0_meas,
+        qx0_fit,
+        qy0_fit,
+        qx0_residuals,
+        qy0_residuals,
+        mask=None,
+        plot_range=None,
+        cmap="RdBu_r",
+        **kwargs,
+    ):
+        # apply mask
+        if mask is not None:
+            qx0_meas = np.ma.masked_array(qx0_meas, mask=np.logical_not(mask))
+            qy0_meas = np.ma.masked_array(qy0_meas, mask=np.logical_not(mask))
+            qx0_residuals = np.ma.masked_array(qx0_residuals, mask=np.logical_not(mask))
+            qy0_residuals = np.ma.masked_array(qy0_residuals, mask=np.logical_not(mask))
+        qx0_mean = np.mean(qx0_fit)
+        qy0_mean = np.mean(qy0_fit)
+
+        # set range
+        if plot_range is None:
+            plot_range = max(
+                (
+                    1.5 * np.max(np.abs(qx0_fit - qx0_mean)),
+                    1.5 * np.max(np.abs(qy0_fit - qy0_mean)),
+                )
+            )
+
+        # set figsize
+        imsize_ratio = np.sqrt(qx0_meas.shape[1] / qx0_meas.shape[0])
+        axsize = (3 * imsize_ratio, 3 / imsize_ratio)
+        axsize = kwargs.pop("axsize", axsize)
+
+        # plot
+        fig, ax = show(
+            [
+                [qx0_meas - qx0_mean, qx0_fit - qx0_mean, qx0_residuals],
+                [qy0_meas - qy0_mean, qy0_fit - qy0_mean, qy0_residuals],
+            ],
+            cmap=cmap,
+            axsize=axsize,
+            title=[
+                "measured origin, x",
+                "fitorigin, x",
+                "residuals, x",
+                "measured origin, y",
+                "fitorigin, y",
+                "residuals, y",
+            ],
+            vmin=-1 * plot_range,
+            vmax=1 * plot_range,
+            intensity_range="absolute",
+            show_cbar=True,
+            returnfig=True,
+            **kwargs,
+        )
+        plt.tight_layout()
+
+        return
 
     def fit_p_ellipse(
         self, bvm, center, fitradii, mask=None, returncalc=False, **kwargs
@@ -770,6 +797,21 @@ class BraggVectorMethods:
             return ans
         else:
             return
+
+    def to_strainmap(self, name: str = None):
+        """
+        Generate a StrainMap object from the BraggVectors
+        equivalent to py4DSTEM.StrainMap(braggvectors=braggvectors)
+
+        Args:
+            name (str, optional): The name of the strainmap. Defaults to None which reverts to default name 'strainmap'.
+
+        Returns:
+            py4DSTEM.StrainMap: A py4DSTEM StrainMap object generated from the BraggVectors
+        """
+        from py4DSTEM.process.strain import StrainMap
+
+        return StrainMap(self, name) if name else StrainMap(self)
 
 
 ######### END BraggVectorMethods CLASS ########
