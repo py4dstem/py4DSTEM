@@ -1,6 +1,5 @@
 from matplotlib import cm, colors as mcolors, pyplot as plt
 import numpy as np
-from matplotlib.colors import hsv_to_rgb
 from matplotlib.patches import Wedge
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.spatial import Voronoi
@@ -17,6 +16,7 @@ from py4DSTEM.visualize.overlay import (
 )
 from py4DSTEM.visualize.vis_grid import show_image_grid
 from py4DSTEM.visualize.vis_RQ import ax_addaxes, ax_addaxes_QtoR
+from colorspacious import cspace_convert
 
 
 def show_elliptical_fit(
@@ -156,16 +156,16 @@ def show_amorphous_ring_fit(
         mask=np.logical_not(mask),
         mask_color="empty",
         returnfig=True,
-        returnclipvals=True,
+        return_intensity_range=True,
         **kwargs,
     )
     show(
         fit,
         scaling=scaling,
         figax=(fig, ax),
-        clipvals="manual",
-        min=vmin,
-        max=vmax,
+        intensity_range="absolute",
+        vmin=vmin,
+        vmax=vmax,
         cmap=cmap_fit,
         mask=mask,
         mask_color="empty",
@@ -404,308 +404,6 @@ def show_class_BPs_grid(
         return fig, axs
 
 
-def show_strain(
-    strainmap,
-    vrange_exx,
-    vrange_theta,
-    vrange_exy=None,
-    vrange_eyy=None,
-    flip_theta=False,
-    bkgrd=True,
-    show_cbars=("exx", "eyy", "exy", "theta"),
-    bordercolor="k",
-    borderwidth=1,
-    titlesize=24,
-    ticklabelsize=16,
-    ticknumber=5,
-    unitlabelsize=24,
-    show_axes=True,
-    axes_x0=0,
-    axes_y0=0,
-    xaxis_x=1,
-    xaxis_y=0,
-    axes_length=10,
-    axes_width=1,
-    axes_color="r",
-    xaxis_space="Q",
-    labelaxes=True,
-    QR_rotation=0,
-    axes_labelsize=12,
-    axes_labelcolor="r",
-    axes_plots=("exx"),
-    cmap="RdBu_r",
-    layout=0,
-    figsize=(12, 12),
-    returnfig=False,
-):
-    """
-    Display a strain map, showing the 4 strain components (e_xx,e_yy,e_xy,theta), and
-    masking each image with strainmap.get_slice('mask')
-
-    Args:
-        strainmap (RealSlice):
-        vrange_exx (length 2 list or tuple):
-        vrange_theta (length 2 list or tuple):
-        vrange_exy (length 2 list or tuple):
-        vrange_eyy (length 2 list or tuple):
-        flip_theta (bool): if True, take negative of angle
-        bkgrd (bool):
-        show_cbars (tuple of strings): Show colorbars for the specified axes. Must be a
-            tuple containing any, all, or none of ('exx','eyy','exy','theta').
-        bordercolor (color):
-        borderwidth (number):
-        titlesize (number):
-        ticklabelsize (number):
-        ticknumber (number): number of ticks on colorbars
-        unitlabelsize (number):
-        show_axes (bool):
-        axes_x0 (number):
-        axes_y0 (number):
-        xaxis_x (number):
-        xaxis_y (number):
-        axes_length (number):
-        axes_width (number):
-        axes_color (color):
-        xaxis_space (string): must be 'Q' or 'R'
-        labelaxes (bool):
-        QR_rotation (number):
-        axes_labelsize (number):
-        axes_labelcolor (color):
-        axes_plots (tuple of strings): controls if coordinate axes showing the
-            orientation of the strain matrices are overlaid over any of the plots.
-            Must be a tuple of strings containing any, all, or none of
-            ('exx','eyy','exy','theta').
-        cmap (colormap):
-        layout=0 (int): determines the layout of the grid which the strain components
-            will be plotted in.  Must be in (0,1,2).  0=(2x2), 1=(1x4), 2=(4x1).
-        figsize (length 2 tuple of numbers):
-        returnfig (bool):
-    """
-    # Lookup table for different layouts
-    assert layout in (0, 1, 2)
-    layout_lookup = {
-        0: ["left", "right", "left", "right"],
-        1: ["bottom", "bottom", "bottom", "bottom"],
-        2: ["right", "right", "right", "right"],
-    }
-    layout_p = layout_lookup[layout]
-
-    # Contrast limits
-    if vrange_exy is None:
-        vrange_exy = vrange_exx
-    if vrange_eyy is None:
-        vrange_eyy = vrange_exx
-    for vrange in (vrange_exx, vrange_eyy, vrange_exy, vrange_theta):
-        assert len(vrange) == 2, "vranges must have length 2"
-    vmin_exx, vmax_exx = vrange_exx[0] / 100.0, vrange_exx[1] / 100.0
-    vmin_eyy, vmax_eyy = vrange_eyy[0] / 100.0, vrange_eyy[1] / 100.0
-    vmin_exy, vmax_exy = vrange_exy[0] / 100.0, vrange_exy[1] / 100.0
-    # theta is plotted in units of degrees
-    vmin_theta, vmax_theta = vrange_theta[0] / (180.0 / np.pi), vrange_theta[1] / (
-        180.0 / np.pi
-    )
-
-    # Get images
-    e_xx = np.ma.array(
-        strainmap.get_slice("e_xx").data, mask=strainmap.get_slice("mask").data == False
-    )
-    e_yy = np.ma.array(
-        strainmap.get_slice("e_yy").data, mask=strainmap.get_slice("mask").data == False
-    )
-    e_xy = np.ma.array(
-        strainmap.get_slice("e_xy").data, mask=strainmap.get_slice("mask").data == False
-    )
-    theta = np.ma.array(
-        strainmap.get_slice("theta").data,
-        mask=strainmap.get_slice("mask").data == False,
-    )
-    if flip_theta == True:
-        theta = -theta
-
-    # Plot
-    if layout == 0:
-        fig, ((ax11, ax12), (ax21, ax22)) = plt.subplots(2, 2, figsize=figsize)
-    elif layout == 1:
-        fig, (ax11, ax12, ax21, ax22) = plt.subplots(1, 4, figsize=figsize)
-    else:
-        fig, (ax11, ax12, ax21, ax22) = plt.subplots(4, 1, figsize=figsize)
-    cax11 = show(
-        e_xx,
-        figax=(fig, ax11),
-        vmin=vmin_exx,
-        vmax=vmax_exx,
-        intensity_range="absolute",
-        cmap=cmap,
-        returncax=True,
-    )
-    cax12 = show(
-        e_yy,
-        figax=(fig, ax12),
-        vmin=vmin_eyy,
-        vmax=vmax_eyy,
-        intensity_range="absolute",
-        cmap=cmap,
-        returncax=True,
-    )
-    cax21 = show(
-        e_xy,
-        figax=(fig, ax21),
-        vmin=vmin_exy,
-        vmax=vmax_exy,
-        intensity_range="absolute",
-        cmap=cmap,
-        returncax=True,
-    )
-    cax22 = show(
-        theta,
-        figax=(fig, ax22),
-        vmin=vmin_theta,
-        vmax=vmax_theta,
-        intensity_range="absolute",
-        cmap=cmap,
-        returncax=True,
-    )
-    ax11.set_title(r"$\epsilon_{xx}$", size=titlesize)
-    ax12.set_title(r"$\epsilon_{yy}$", size=titlesize)
-    ax21.set_title(r"$\epsilon_{xy}$", size=titlesize)
-    ax22.set_title(r"$\theta$", size=titlesize)
-
-    # Add black background
-    if bkgrd:
-        mask = np.ma.masked_where(
-            strainmap.get_slice("mask").data.astype(bool),
-            np.zeros_like(strainmap.get_slice("mask").data),
-        )
-        ax11.matshow(mask, cmap="gray")
-        ax12.matshow(mask, cmap="gray")
-        ax21.matshow(mask, cmap="gray")
-        ax22.matshow(mask, cmap="gray")
-
-    # Colorbars
-    show_cbars = np.array(
-        [
-            "exx" in show_cbars,
-            "eyy" in show_cbars,
-            "exy" in show_cbars,
-            "theta" in show_cbars,
-        ]
-    )
-    if np.any(show_cbars):
-        divider11 = make_axes_locatable(ax11)
-        divider12 = make_axes_locatable(ax12)
-        divider21 = make_axes_locatable(ax21)
-        divider22 = make_axes_locatable(ax22)
-        cbax11 = divider11.append_axes(layout_p[0], size="4%", pad=0.15)
-        cbax12 = divider12.append_axes(layout_p[1], size="4%", pad=0.15)
-        cbax21 = divider21.append_axes(layout_p[2], size="4%", pad=0.15)
-        cbax22 = divider22.append_axes(layout_p[3], size="4%", pad=0.15)
-        for ind, show_cbar, cax, cbax, vmin, vmax, tickside, tickunits in zip(
-            range(4),
-            show_cbars,
-            (cax11, cax12, cax21, cax22),
-            (cbax11, cbax12, cbax21, cbax22),
-            (vmin_exx, vmin_eyy, vmin_exy, vmin_theta),
-            (vmax_exx, vmax_eyy, vmax_exy, vmax_theta),
-            (layout_p[0], layout_p[1], layout_p[2], layout_p[3]),
-            ("% ", " %", "% ", r" $^\circ$"),
-        ):
-            if show_cbar:
-                ticks = np.linspace(vmin, vmax, ticknumber, endpoint=True)
-                if ind < 3:
-                    ticklabels = np.round(
-                        np.linspace(100 * vmin, 100 * vmax, ticknumber, endpoint=True),
-                        decimals=2,
-                    ).astype(str)
-                else:
-                    ticklabels = np.round(
-                        np.linspace(
-                            (180 / np.pi) * vmin,
-                            (180 / np.pi) * vmax,
-                            ticknumber,
-                            endpoint=True,
-                        ),
-                        decimals=2,
-                    ).astype(str)
-
-                if tickside in ("left", "right"):
-                    cb = plt.colorbar(
-                        cax, cax=cbax, ticks=ticks, orientation="vertical"
-                    )
-                    cb.ax.set_yticklabels(ticklabels, size=ticklabelsize)
-                    cbax.yaxis.set_ticks_position(tickside)
-                    cbax.set_ylabel(tickunits, size=unitlabelsize, rotation=0)
-                    cbax.yaxis.set_label_position(tickside)
-                else:
-                    cb = plt.colorbar(
-                        cax, cax=cbax, ticks=ticks, orientation="horizontal"
-                    )
-                    cb.ax.set_xticklabels(ticklabels, size=ticklabelsize)
-                    cbax.xaxis.set_ticks_position(tickside)
-                    cbax.set_xlabel(tickunits, size=unitlabelsize, rotation=0)
-                    cbax.xaxis.set_label_position(tickside)
-            else:
-                cbax.axis("off")
-
-    # Add coordinate axes
-    if show_axes:
-        assert xaxis_space in ("R", "Q"), "xaxis_space must be 'R' or 'Q'"
-        show_which_axes = np.array(
-            [
-                "exx" in axes_plots,
-                "eyy" in axes_plots,
-                "exy" in axes_plots,
-                "theta" in axes_plots,
-            ]
-        )
-        for _show, _ax in zip(show_which_axes, (ax11, ax12, ax21, ax22)):
-            if _show:
-                if xaxis_space == "R":
-                    ax_addaxes(
-                        _ax,
-                        xaxis_x,
-                        xaxis_y,
-                        axes_length,
-                        axes_x0,
-                        axes_y0,
-                        width=axes_width,
-                        color=axes_color,
-                        labelaxes=labelaxes,
-                        labelsize=axes_labelsize,
-                        labelcolor=axes_labelcolor,
-                    )
-                else:
-                    ax_addaxes_QtoR(
-                        _ax,
-                        xaxis_x,
-                        xaxis_y,
-                        axes_length,
-                        axes_x0,
-                        axes_y0,
-                        QR_rotation,
-                        width=axes_width,
-                        color=axes_color,
-                        labelaxes=labelaxes,
-                        labelsize=axes_labelsize,
-                        labelcolor=axes_labelcolor,
-                    )
-
-    # Add borders
-    if bordercolor is not None:
-        for ax in (ax11, ax12, ax21, ax22):
-            for s in ["bottom", "top", "left", "right"]:
-                ax.spines[s].set_color(bordercolor)
-                ax.spines[s].set_linewidth(borderwidth)
-            ax.set_xticks([])
-            ax.set_yticks([])
-
-    if not returnfig:
-        plt.show()
-        return
-    else:
-        axs = ((ax11, ax12), (ax21, ax22))
-        return fig, axs
-
-
 def show_pointlabels(
     ar, x, y, color="lightblue", size=20, alpha=1, returnfig=False, **kwargs
 ):
@@ -937,15 +635,20 @@ def show_selected_dps(
         )
 
 
-def Complex2RGB(complex_data, vmin=None, vmax=None, hue_start=0, invert=False):
+def Complex2RGB(complex_data, vmin=None, vmax=None, power=None, chroma_boost=1):
     """
     complex_data (array): complex array to plot
     vmin (float)        : minimum absolute value
     vmax (float)        : maximum absolute value
-    hue_start (float)   : rotational offset for colormap (degrees)
-    inverse (bool)      : if True, uses light color scheme
+    power (float)       : power to raise amplitude to
+    chroma_boost (float): boosts chroma for higher-contrast (~1-2.5)
     """
     amp = np.abs(complex_data)
+    phase = np.angle(complex_data)
+
+    if power is not None:
+        amp = amp**power
+
     if np.isclose(np.max(amp), np.min(amp)):
         if vmin is None:
             vmin = 0
@@ -966,36 +669,40 @@ def Complex2RGB(complex_data, vmin=None, vmax=None, hue_start=0, invert=False):
 
     amp = np.where(amp < vmin, vmin, amp)
     amp = np.where(amp > vmax, vmax, amp)
+    amp = ((amp - vmin) / vmax).clip(1e-16, 1)
 
-    phase = np.angle(complex_data) + np.deg2rad(hue_start)
-    amp /= np.max(amp)
-    rgb = np.zeros(phase.shape + (3,))
-    rgb[..., 0] = 0.5 * (np.sin(phase) + 1) * amp
-    rgb[..., 1] = 0.5 * (np.sin(phase + np.pi / 2) + 1) * amp
-    rgb[..., 2] = 0.5 * (-np.sin(phase) + 1) * amp
+    J = amp * 61.5  # Note we restrict luminance to the monotonic chroma cutoff
+    C = np.minimum(chroma_boost * 98 * J / 123, 110)
+    h = np.rad2deg(phase) + 180
 
-    return 1 - rgb if invert else rgb
+    JCh = np.stack((J, C, h), axis=-1)
+    rgb = cspace_convert(JCh, "JCh", "sRGB1").clip(0, 1)
+
+    return rgb
 
 
-def add_colorbar_arg(cax, vmin=None, vmax=None, hue_start=0, invert=False):
+def add_colorbar_arg(cax, chroma_boost=1, c=49, j=61.5):
     """
-    cax                 : axis to add cbar too
-    vmin (float)        : minimum absolute value
-    vmax (float)        : maximum absolute value
-    hue_start (float)   : rotational offset for colormap (degrees)
-    inverse (bool)      : if True, uses light color scheme
+    cax                 : axis to add cbar to
+    chroma_boost (float): boosts chroma for higher-contrast (~1-2.25)
+    c (float)           : constant chroma value
+    j (float)           : constant luminance value
     """
-    z = np.exp(1j * np.linspace(-np.pi, np.pi, 200))
-    rgb_vals = Complex2RGB(z, vmin=vmin, vmax=vmax, hue_start=hue_start, invert=invert)
+
+    h = np.linspace(0, 360, 256, endpoint=False)
+    J = np.full_like(h, j)
+    C = np.full_like(h, np.minimum(c * chroma_boost, 110))
+    JCh = np.stack((J, C, h), axis=-1)
+    rgb_vals = cspace_convert(JCh, "JCh", "sRGB1").clip(0, 1)
     newcmp = mcolors.ListedColormap(rgb_vals)
     norm = mcolors.Normalize(vmin=-np.pi, vmax=np.pi)
 
-    cb1 = plt.colorbar(cm.ScalarMappable(norm=norm, cmap=newcmp), cax=cax)
+    cb = plt.colorbar(cm.ScalarMappable(norm=norm, cmap=newcmp), cax=cax)
 
-    cb1.set_label("arg", rotation=0, ha="center", va="bottom")
-    cb1.ax.yaxis.set_label_coords(0.5, 1.01)
-    cb1.set_ticks(np.array([-np.pi, -np.pi / 2, 0, np.pi / 2, np.pi]))
-    cb1.set_ticklabels(
+    cb.set_label("arg", rotation=0, ha="center", va="bottom")
+    cb.ax.yaxis.set_label_coords(0.5, 1.01)
+    cb.set_ticks(np.array([-np.pi, -np.pi / 2, 0, np.pi / 2, np.pi]))
+    cb.set_ticklabels(
         [r"$-\pi$", r"$-\dfrac{\pi}{2}$", "$0$", r"$\dfrac{\pi}{2}$", r"$\pi$"]
     )
 
@@ -1004,13 +711,13 @@ def show_complex(
     ar_complex,
     vmin=None,
     vmax=None,
+    power=None,
+    chroma_boost=1,
     cbar=True,
     scalebar=False,
     pixelunits="pixels",
     pixelsize=1,
     returnfig=False,
-    hue_start=0,
-    invert=False,
     **kwargs,
 ):
     """
@@ -1023,13 +730,13 @@ def show_complex(
         vmax (float, optional)      : maximum absolute value
             if None, vmin/vmax are set to fractions of the distribution of pixel values in the array,
             e.g. vmin=0.02 will set the minumum display value to saturate the lower 2% of pixels
-        cbar (bool, optional)       : if True, include color wheel
+        power (float,optional)      : power to raise amplitude to
+        chroma_boost (float)        : boosts chroma for higher-contrast (~1-2.25)
+        cbar (bool, optional)       : if True, include color bar
         scalebar (bool, optional)   : if True, adds scale bar
         pixelunits (str, optional)  : units for scalebar
         pixelsize (float, optional) : size of one pixel in pixelunits for scalebar
         returnfig (bool, optional)  : if True, the function returns the tuple (figure,axis)
-        hue_start (float, optional) : rotational offset for colormap (degrees)
-        inverse (bool)              : if True, uses light color scheme
 
     Returns:
         if returnfig==False (default), the figure is plotted and nothing is returned.
@@ -1044,7 +751,7 @@ def show_complex(
     if isinstance(ar_complex, list):
         if isinstance(ar_complex[0], list):
             rgb = [
-                Complex2RGB(ar, vmin, vmax, hue_start=hue_start, invert=invert)
+                Complex2RGB(ar, vmin, vmax, power=power, chroma_boost=chroma_boost)
                 for sublist in ar_complex
                 for ar in sublist
             ]
@@ -1053,7 +760,7 @@ def show_complex(
 
         else:
             rgb = [
-                Complex2RGB(ar, vmin, vmax, hue_start=hue_start, invert=invert)
+                Complex2RGB(ar, vmin, vmax, power=power, chroma_boost=chroma_boost)
                 for ar in ar_complex
             ]
             if len(rgb[0].shape) == 4:
@@ -1064,7 +771,9 @@ def show_complex(
                 W = len(ar_complex)
         is_grid = True
     else:
-        rgb = Complex2RGB(ar_complex, vmin, vmax, hue_start=hue_start, invert=invert)
+        rgb = Complex2RGB(
+            ar_complex, vmin, vmax, power=power, chroma_boost=chroma_boost
+        )
         if len(rgb.shape) == 4:
             is_grid = True
             H = 1
@@ -1115,37 +824,74 @@ def show_complex(
             add_scalebar(ax, scalebar)
 
     # add color bar
-    if cbar == True:
-        ax0 = fig.add_axes([1, 0.35, 0.3, 0.3])
+    if cbar:
+        if is_grid:
+            for ax_flat in ax.flatten():
+                divider = make_axes_locatable(ax_flat)
+                ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
+                add_colorbar_arg(ax_cb, chroma_boost=chroma_boost)
+        else:
+            divider = make_axes_locatable(ax)
+            ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
+            add_colorbar_arg(ax_cb, chroma_boost=chroma_boost)
 
-        # create wheel
-        AA = 1000
-        kx = np.fft.fftshift(np.fft.fftfreq(AA))
-        ky = np.fft.fftshift(np.fft.fftfreq(AA))
-        kya, kxa = np.meshgrid(ky, kx)
-        kra = (kya**2 + kxa**2) ** 0.5
-        ktheta = np.arctan2(-kxa, kya)
-        ktheta = kra * np.exp(1j * ktheta)
+        fig.tight_layout()
 
-        # convert to hsv
-        rgb = Complex2RGB(ktheta, 0, 0.4, hue_start=hue_start, invert=invert)
-        ind = kra > 0.4
-        rgb[ind] = [1, 1, 1]
-
-        # plot
-        ax0.imshow(rgb)
-
-        # add axes
-        ax0.axhline(AA / 2, 0, AA, color="k")
-        ax0.axvline(AA / 2, 0, AA, color="k")
-        ax0.axis("off")
-
-        label_size = 16
-
-        ax0.text(AA, AA / 2, 1, fontsize=label_size)
-        ax0.text(AA / 2, 0, "i", fontsize=label_size)
-        ax0.text(AA / 2, AA, "-i", fontsize=label_size)
-        ax0.text(0, AA / 2, -1, fontsize=label_size)
-
-    if returnfig == True:
+    if returnfig:
         return fig, ax
+
+
+def return_scaled_histogram_ordering(array, vmin=None, vmax=None, normalize=False):
+    """
+    Utility function for calculating min and max values for plotting array
+    based on distribution of pixel values
+
+    Parameters
+    ----------
+    array: np.array
+        array to be plotted
+    vmin: float
+        lower fraction cut off of pixel values
+    vmax: float
+        upper fraction cut off of pixel values
+    normalize: bool
+        if True, rescales from 0 to 1
+
+    Returns
+    ----------
+    scaled_array: np.array
+        array clipped outside vmin and vmax
+    vmin: float
+        lower value to be plotted
+    vmax: float
+        upper value to be plotted
+    """
+
+    if vmin is None:
+        vmin = 0.02
+    if vmax is None:
+        vmax = 0.98
+
+    vals = np.sort(array.ravel())
+    ind_vmin = np.round((vals.shape[0] - 1) * vmin).astype("int")
+    ind_vmax = np.round((vals.shape[0] - 1) * vmax).astype("int")
+    ind_vmin = np.max([0, ind_vmin])
+    ind_vmax = np.min([len(vals) - 1, ind_vmax])
+    vmin = vals[ind_vmin]
+    vmax = vals[ind_vmax]
+
+    if vmax == vmin:
+        vmin = vals[0]
+        vmax = vals[-1]
+
+    scaled_array = array.copy()
+    scaled_array = np.where(scaled_array < vmin, vmin, scaled_array)
+    scaled_array = np.where(scaled_array > vmax, vmax, scaled_array)
+
+    if normalize:
+        scaled_array -= scaled_array.min()
+        scaled_array /= scaled_array.max()
+        vmin = 0
+        vmax = 1
+
+    return scaled_array, vmin, vmax

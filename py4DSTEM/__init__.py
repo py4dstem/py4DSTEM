@@ -97,7 +97,7 @@ from py4DSTEM.process.polar import PolarDatacube
 # )
 
 # strain
-from py4DSTEM.process import StrainMap
+from py4DSTEM.process.strain.strain import StrainMap
 
 # TODO WPF
 # from py4DSTEM.process.wholepatternfit import (

@@ -1,24 +1,25 @@
 """
 Module for reconstructing phase objects from 4DSTEM datasets using iterative methods,
-namely (single-slice) ptychography.
+namely multislice ptychography.
 """
 
 import warnings
-from typing import Mapping, Tuple
+from typing import Mapping, Sequence, Tuple, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
+import pylops
 from matplotlib.gridspec import GridSpec
 from mpl_toolkits.axes_grid1 import ImageGrid, make_axes_locatable
-from py4DSTEM.visualize.vis_special import Complex2RGB, add_colorbar_arg
+from py4DSTEM.visualize.vis_special import Complex2RGB, add_colorbar_arg, show_complex
 
 try:
     import cupy as cp
-except ModuleNotFoundError:
-    cp = np
+except ImportError:
+    cp = None
 
 from emdfile import Custom, tqdmnd
-from py4DSTEM.datacube import DataCube
+from py4DSTEM import DataCube
 from py4DSTEM.process.phase.iterative_base_class import PtychographicReconstruction
 from py4DSTEM.process.phase.utils import (
     ComplexProbe,
@@ -26,28 +27,37 @@ from py4DSTEM.process.phase.utils import (
     generate_batches,
     polar_aliases,
     polar_symbols,
+    spatial_frequencies,
 )
-from py4DSTEM.process.utils import get_CoM, get_shifted_ar
+from py4DSTEM.process.utils import electron_wavelength_angstrom, get_CoM, get_shifted_ar
+from scipy.ndimage import rotate
 
 warnings.simplefilter(action="always", category=UserWarning)
 
 
-class SingleslicePtychographicReconstruction(PtychographicReconstruction):
+class MixedstateMultislicePtychographicReconstruction(PtychographicReconstruction):
     """
-    Iterative Ptychographic Reconstruction Class.
+    Mixed-State Multislice Ptychographic Reconstruction Class.
 
     Diffraction intensities dimensions  : (Rx,Ry,Qx,Qy)
-    Reconstructed probe dimensions      : (Sx,Sy)
-    Reconstructed object dimensions     : (Px,Py)
+    Reconstructed probe dimensions      : (N,Sx,Sy)
+    Reconstructed object dimensions     : (T,Px,Py)
 
-    such that (Sx,Sy) is the region-of-interest (ROI) size of our probe
-    and (Px,Py) is the padded-object size we position our ROI around in.
+    such that (Sx,Sy) is the region-of-interest (ROI) size of our N probes
+    and (Px,Py) is the padded-object size we position our ROI around in
+    each of the T slices.
 
     Parameters
     ----------
     energy: float
         The electron energy of the wave functions in eV
-    datacube: DataCube
+    num_probes: int, optional
+        Number of mixed-state probes
+    num_slices: int
+        Number of slices to use in the forward model
+    slice_thicknesses: float or Sequence[float]
+        Slice thicknesses in angstroms. If float, all slices are assigned the same thickness
+    datacube: DataCube, optional
         Input 4D diffraction pattern intensities
     semiangle_cutoff: float, optional
         Semiangle cutoff for the initial probe guess in mrad
@@ -72,15 +82,21 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
     initial_scan_positions: np.ndarray, optional
         Probe positions in Å for each diffraction intensity
         If None, initialized to a grid scan
-    verbose: bool, optional
-        If True, class methods will inherit this and print additional information
-    device: str, optional
-        Calculation device will be perfomed on. Must be 'cpu' or 'gpu'
+    theta_x: float
+        x tilt of propagator (in degrees)
+    theta_y: float
+        y tilt of propagator (in degrees)
+    middle_focus: bool
+        if True, adds half the sample thickness to the defocus
     object_type: str, optional
         The object can be reconstructed as a real potential ('potential') or a complex
         object ('complex')
     positions_mask: np.ndarray, optional
         Boolean real space mask to select positions in datacube to skip for reconstruction
+    verbose: bool, optional
+        If True, class methods will inherit this and print additional information
+    device: str, optional
+        Calculation device will be perfomed on. Must be 'cpu' or 'gpu'
     name: str, optional
         Class name
     kwargs:
@@ -88,29 +104,50 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
     """
 
     # Class-specific Metadata
-    _class_specific_metadata = ()
+    _class_specific_metadata = ("_num_probes", "_num_slices", "_slice_thicknesses")
 
     def __init__(
         self,
         energy: float,
+        num_slices: int,
+        slice_thicknesses: Union[float, Sequence[float]],
+        num_probes: int = None,
         datacube: DataCube = None,
         semiangle_cutoff: float = None,
         semiangle_cutoff_pixels: float = None,
         rolloff: float = 2.0,
         vacuum_probe_intensity: np.ndarray = None,
         polar_parameters: Mapping[str, float] = None,
+        object_padding_px: Tuple[int, int] = None,
         initial_object_guess: np.ndarray = None,
         initial_probe_guess: np.ndarray = None,
         initial_scan_positions: np.ndarray = None,
-        object_padding_px: Tuple[int, int] = None,
+        theta_x: float = 0,
+        theta_y: float = 0,
+        middle_focus: bool = False,
         object_type: str = "complex",
         positions_mask: np.ndarray = None,
         verbose: bool = True,
         device: str = "cpu",
-        name: str = "ptychographic_reconstruction",
+        name: str = "multi-slice_ptychographic_reconstruction",
         **kwargs,
     ):
         Custom.__init__(self, name=name)
+
+        if initial_probe_guess is None or isinstance(initial_probe_guess, ComplexProbe):
+            if num_probes is None:
+                raise ValueError(
+                    (
+                        "If initial_probe_guess is None, or a ComplexProbe object, "
+                        "num_probes must be specified."
+                    )
+                )
+        else:
+            if len(initial_probe_guess.shape) != 3:
+                raise ValueError(
+                    "Specified initial_probe_guess must have dimensions (N,Sx,Sy)."
+                )
+            num_probes = initial_probe_guess.shape[0]
 
         if device == "cpu":
             self._xp = np
@@ -137,6 +174,25 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
             if (key not in polar_symbols) and (key not in polar_aliases.keys()):
                 raise ValueError("{} not a recognized parameter".format(key))
 
+        if np.isscalar(slice_thicknesses):
+            mean_slice_thickness = slice_thicknesses
+        else:
+            mean_slice_thickness = np.mean(slice_thicknesses)
+
+        if middle_focus:
+            if "defocus" in kwargs:
+                kwargs["defocus"] += mean_slice_thickness * num_slices / 2
+            elif "C10" in kwargs:
+                kwargs["C10"] -= mean_slice_thickness * num_slices / 2
+            elif polar_parameters is not None and "defocus" in polar_parameters:
+                polar_parameters["defocus"] = (
+                    polar_parameters["defocus"] + mean_slice_thickness * num_slices / 2
+                )
+            elif polar_parameters is not None and "C10" in polar_parameters:
+                polar_parameters["C10"] = (
+                    polar_parameters["C10"] - mean_slice_thickness * num_slices / 2
+                )
+
         self._polar_parameters = dict(zip(polar_symbols, [0.0] * len(polar_symbols)))
 
         if polar_parameters is None:
@@ -144,6 +200,17 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
 
         polar_parameters.update(kwargs)
         self._set_polar_parameters(polar_parameters)
+
+        slice_thicknesses = np.array(slice_thicknesses)
+        if slice_thicknesses.shape == ():
+            slice_thicknesses = np.tile(slice_thicknesses, num_slices - 1)
+        elif slice_thicknesses.shape[0] != (num_slices - 1):
+            raise ValueError(
+                (
+                    f"slice_thicknesses must have length {num_slices - 1}, "
+                    f"not {slice_thicknesses.shape[0]}."
+                )
+            )
 
         if object_type != "potential" and object_type != "complex":
             raise ValueError(
@@ -172,13 +239,104 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
         self._semiangle_cutoff_pixels = semiangle_cutoff_pixels
         self._rolloff = rolloff
         self._object_type = object_type
-        self._object_padding_px = object_padding_px
         self._positions_mask = positions_mask
+        self._object_padding_px = object_padding_px
         self._verbose = verbose
         self._device = device
         self._preprocessed = False
 
         # Class-specific Metadata
+        self._num_probes = num_probes
+        self._num_slices = num_slices
+        self._slice_thicknesses = slice_thicknesses
+        self._theta_x = theta_x
+        self._theta_y = theta_y
+
+    def _precompute_propagator_arrays(
+        self,
+        gpts: Tuple[int, int],
+        sampling: Tuple[float, float],
+        energy: float,
+        slice_thicknesses: Sequence[float],
+        theta_x: float,
+        theta_y: float,
+    ):
+        """
+        Precomputes propagator arrays complex wave-function will be convolved by,
+        for all slice thicknesses.
+
+        Parameters
+        ----------
+        gpts: Tuple[int,int]
+            Wavefunction pixel dimensions
+        sampling: Tuple[float,float]
+            Wavefunction sampling in A
+        energy: float
+            The electron energy of the wave functions in eV
+        slice_thicknesses: Sequence[float]
+            Array of slice thicknesses in A
+        theta_x: float
+            x tilt of propagator (in degrees)
+        theta_y: float
+            y tilt of propagator (in degrees)
+
+        Returns
+        -------
+        propagator_arrays: np.ndarray
+            (T,Sx,Sy) shape array storing propagator arrays
+        """
+        xp = self._xp
+
+        # Frequencies
+        kx, ky = spatial_frequencies(gpts, sampling)
+        kx = xp.asarray(kx, dtype=xp.float32)
+        ky = xp.asarray(ky, dtype=xp.float32)
+
+        # Propagators
+        wavelength = electron_wavelength_angstrom(energy)
+        num_slices = slice_thicknesses.shape[0]
+        propagators = xp.empty(
+            (num_slices, kx.shape[0], ky.shape[0]), dtype=xp.complex64
+        )
+
+        theta_x = np.deg2rad(theta_x)
+        theta_y = np.deg2rad(theta_y)
+
+        for i, dz in enumerate(slice_thicknesses):
+            propagators[i] = xp.exp(
+                1.0j * (-(kx**2)[:, None] * np.pi * wavelength * dz)
+            )
+            propagators[i] *= xp.exp(
+                1.0j * (-(ky**2)[None] * np.pi * wavelength * dz)
+            )
+            propagators[i] *= xp.exp(
+                1.0j * (2 * kx[:, None] * np.pi * dz * np.tan(theta_x))
+            )
+            propagators[i] *= xp.exp(
+                1.0j * (2 * ky[None] * np.pi * dz * np.tan(theta_y))
+            )
+
+        return propagators
+
+    def _propagate_array(self, array: np.ndarray, propagator_array: np.ndarray):
+        """
+        Propagates array by Fourier convolving array with propagator_array.
+
+        Parameters
+        ----------
+        array: np.ndarray
+            Wavefunction array to be convolved
+        propagator_array: np.ndarray
+            Propagator array to convolve array with
+
+        Returns
+        -------
+        propagated_array: np.ndarray
+            Fourier-convolved array
+        """
+        xp = self._xp
+
+        return xp.fft.ifft2(xp.fft.fft2(array) * propagator_array)
 
     def preprocess(
         self,
@@ -212,7 +370,7 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
         _normalize_diffraction_intensities()
         _calculate_scan_positions_in_px()
 
-        Additionally, it initializes an (Px,Py) array of 1.0j
+        Additionally, it initializes an (T,Px,Py) array of 1.0j
         and a complex probe using the specified polar parameters.
 
         Parameters
@@ -262,7 +420,7 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
 
         Returns
         --------
-        self: PtychographicReconstruction
+        self: MixedstateMultislicePtychographicReconstruction
             Self to accommodate chaining
         """
         xp = self._xp
@@ -378,9 +536,9 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
                 "int"
             )
             if self._object_type == "potential":
-                self._object = xp.zeros((p, q), dtype=xp.float32)
+                self._object = xp.zeros((self._num_slices, p, q), dtype=xp.float32)
             elif self._object_type == "complex":
-                self._object = xp.ones((p, q), dtype=xp.complex64)
+                self._object = xp.ones((self._num_slices, p, q), dtype=xp.complex64)
         else:
             if self._object_type == "potential":
                 self._object = xp.asarray(self._object, dtype=xp.float32)
@@ -389,7 +547,7 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
 
         self._object_initial = self._object.copy()
         self._object_type_initial = self._object_type
-        self._object_shape = self._object.shape
+        self._object_shape = self._object.shape[-2:]
 
         self._positions_px = xp.asarray(self._positions_px, dtype=xp.float32)
         self._positions_px_com = xp.mean(self._positions_px, axis=0)
@@ -411,67 +569,80 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
         ) = self._extract_vectorized_patch_indices()
 
         # Probe Initialization
-        if self._probe is None:
-            if self._vacuum_probe_intensity is not None:
-                self._semiangle_cutoff = np.inf
-                self._vacuum_probe_intensity = xp.asarray(
-                    self._vacuum_probe_intensity, dtype=xp.float32
+        if self._probe is None or isinstance(self._probe, ComplexProbe):
+            if self._probe is None:
+                if self._vacuum_probe_intensity is not None:
+                    self._semiangle_cutoff = np.inf
+                    self._vacuum_probe_intensity = xp.asarray(
+                        self._vacuum_probe_intensity, dtype=xp.float32
+                    )
+                    probe_x0, probe_y0 = get_CoM(
+                        self._vacuum_probe_intensity,
+                        device=self._device,
+                    )
+                    self._vacuum_probe_intensity = get_shifted_ar(
+                        self._vacuum_probe_intensity,
+                        -probe_x0,
+                        -probe_y0,
+                        bilinear=True,
+                        device=self._device,
+                    )
+                    if crop_patterns:
+                        self._vacuum_probe_intensity = self._vacuum_probe_intensity[
+                            self._crop_mask
+                        ].reshape(self._region_of_interest_shape)
+                _probe = (
+                    ComplexProbe(
+                        gpts=self._region_of_interest_shape,
+                        sampling=self.sampling,
+                        energy=self._energy,
+                        semiangle_cutoff=self._semiangle_cutoff,
+                        rolloff=self._rolloff,
+                        vacuum_probe_intensity=self._vacuum_probe_intensity,
+                        parameters=self._polar_parameters,
+                        device=self._device,
+                    )
+                    .build()
+                    ._array
                 )
-                probe_x0, probe_y0 = get_CoM(
-                    self._vacuum_probe_intensity,
-                    device=self._device,
-                )
-                self._vacuum_probe_intensity = get_shifted_ar(
-                    self._vacuum_probe_intensity,
-                    -probe_x0,
-                    -probe_y0,
-                    bilinear=True,
-                    device=self._device,
-                )
-                if crop_patterns:
-                    self._vacuum_probe_intensity = self._vacuum_probe_intensity[
-                        self._crop_mask
-                    ].reshape(self._region_of_interest_shape)
 
-            self._probe = (
-                ComplexProbe(
-                    gpts=self._region_of_interest_shape,
-                    sampling=self.sampling,
-                    energy=self._energy,
-                    semiangle_cutoff=self._semiangle_cutoff,
-                    rolloff=self._rolloff,
-                    vacuum_probe_intensity=self._vacuum_probe_intensity,
-                    parameters=self._polar_parameters,
-                    device=self._device,
-                )
-                .build()
-                ._array
-            )
-
-            # Normalize probe to match mean diffraction intensity
-            probe_intensity = xp.sum(xp.abs(xp.fft.fft2(self._probe)) ** 2)
-            self._probe *= xp.sqrt(self._mean_diffraction_intensity / probe_intensity)
-
-        else:
-            if isinstance(self._probe, ComplexProbe):
+            else:
                 if self._probe._gpts != self._region_of_interest_shape:
                     raise ValueError()
                 if hasattr(self._probe, "_array"):
-                    self._probe = self._probe._array
+                    _probe = self._probe._array
                 else:
                     self._probe._xp = xp
-                    self._probe = self._probe.build()._array
+                    _probe = self._probe.build()._array
 
-                # Normalize probe to match mean diffraction intensity
-                probe_intensity = xp.sum(xp.abs(xp.fft.fft2(self._probe)) ** 2)
-                self._probe *= xp.sqrt(
-                    self._mean_diffraction_intensity / probe_intensity
+            self._probe = xp.zeros(
+                (self._num_probes,) + tuple(self._region_of_interest_shape),
+                dtype=xp.complex64,
+            )
+            sx, sy = self._region_of_interest_shape
+            self._probe[0] = _probe
+
+            # Randomly shift phase of other probes
+            for i_probe in range(1, self._num_probes):
+                shift_x = xp.exp(
+                    -2j * np.pi * (xp.random.rand() - 0.5) * xp.fft.fftfreq(sx)
                 )
-            else:
-                self._probe = xp.asarray(self._probe, dtype=xp.complex64)
+                shift_y = xp.exp(
+                    -2j * np.pi * (xp.random.rand() - 0.5) * xp.fft.fftfreq(sy)
+                )
+                self._probe[i_probe] = (
+                    self._probe[i_probe - 1] * shift_x[:, None] * shift_y[None]
+                )
+
+            # Normalize probe to match mean diffraction intensity
+            probe_intensity = xp.sum(xp.abs(xp.fft.fft2(self._probe[0])) ** 2)
+            self._probe *= xp.sqrt(self._mean_diffraction_intensity / probe_intensity)
+
+        else:
+            self._probe = xp.asarray(self._probe, dtype=xp.complex64)
 
         self._probe_initial = self._probe.copy()
-        self._probe_initial_aperture = xp.abs(xp.fft.fft2(self._probe))
+        self._probe_initial_aperture = None  # Doesn't really make sense for mixed-state
 
         self._known_aberrations_array = ComplexProbe(
             energy=self._energy,
@@ -481,8 +652,18 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
             device=self._device,
         )._evaluate_ctf()
 
+        # Precomputed propagator arrays
+        self._propagator_arrays = self._precompute_propagator_arrays(
+            self._region_of_interest_shape,
+            self.sampling,
+            self._energy,
+            self._slice_thicknesses,
+            self._theta_x,
+            self._theta_y,
+        )
+
         # overlaps
-        shifted_probes = fft_shift(self._probe, self._positions_px_fractional, xp)
+        shifted_probes = fft_shift(self._probe[0], self._positions_px_fractional, xp)
         probe_intensities = xp.abs(shifted_probes) ** 2
         probe_overlap = self._sum_overlapping_patches_bincounts(probe_intensities)
         probe_overlap = self._gaussian_filter(probe_overlap, 1.0)
@@ -494,12 +675,25 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
         self._object_fov_mask_inverse = np.invert(self._object_fov_mask)
 
         if plot_probe_overlaps:
-            figsize = kwargs.pop("figsize", (9, 4))
+            figsize = kwargs.pop("figsize", (13, 4))
             chroma_boost = kwargs.pop("chroma_boost", 1)
 
             # initial probe
             complex_probe_rgb = Complex2RGB(
-                self.probe_centered,
+                self.probe_centered[0],
+                power=2,
+                chroma_boost=chroma_boost,
+            )
+
+            # propagated
+            propagated_probe = self._probe[0].copy()
+
+            for s in range(self._num_slices - 1):
+                propagated_probe = self._propagate_array(
+                    propagated_probe, self._propagator_arrays[s]
+                )
+            complex_propagated_rgb = Complex2RGB(
+                asnumpy(self._return_centered_probe(propagated_probe)),
                 power=2,
                 chroma_boost=chroma_boost,
             )
@@ -518,7 +712,7 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
                 0,
             ]
 
-            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=figsize)
+            fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=figsize)
 
             ax1.imshow(
                 complex_probe_rgb,
@@ -527,27 +721,42 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
 
             divider = make_axes_locatable(ax1)
             cax1 = divider.append_axes("right", size="5%", pad="2.5%")
-            add_colorbar_arg(cax1, chroma_boost=chroma_boost)
+            add_colorbar_arg(
+                cax1,
+                chroma_boost=chroma_boost,
+            )
             ax1.set_ylabel("x [A]")
             ax1.set_xlabel("y [A]")
-            ax1.set_title("Initial probe intensity")
+            ax1.set_title("Initial probe[0] intensity")
 
             ax2.imshow(
+                complex_propagated_rgb,
+                extent=probe_extent,
+            )
+
+            divider = make_axes_locatable(ax2)
+            cax2 = divider.append_axes("right", size="5%", pad="2.5%")
+            add_colorbar_arg(cax2, chroma_boost=chroma_boost)
+            ax2.set_ylabel("x [A]")
+            ax2.set_xlabel("y [A]")
+            ax2.set_title("Propagated probe[0] intensity")
+
+            ax3.imshow(
                 asnumpy(probe_overlap),
                 extent=extent,
-                cmap="gray",
+                cmap="Greys_r",
             )
-            ax2.scatter(
+            ax3.scatter(
                 self.positions[:, 1],
                 self.positions[:, 0],
                 s=2.5,
                 color=(1, 0, 0, 1),
             )
-            ax2.set_ylabel("x [A]")
-            ax2.set_xlabel("y [A]")
-            ax2.set_xlim((extent[0], extent[1]))
-            ax2.set_ylim((extent[2], extent[3]))
-            ax2.set_title("Object field of view")
+            ax3.set_ylabel("x [A]")
+            ax3.set_xlabel("y [A]")
+            ax3.set_xlim((extent[0], extent[1]))
+            ax3.set_ylim((extent[2], extent[3]))
+            ax3.set_title("Object field of view")
 
             fig.tight_layout()
 
@@ -572,17 +781,15 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
 
         Returns
         --------
-        shifted_probes:np.ndarray
-            fractionally-shifted probes
+        propagated_probes: np.ndarray
+            Shifted probes at each layer
         object_patches: np.ndarray
             Patched object view
-        overlap: np.ndarray
-            shifted_probes * object_patches
+        transmitted_probes: np.ndarray
+            Transmitted probes after N-1 propagations and N transmissions
         """
 
         xp = self._xp
-
-        shifted_probes = fft_shift(current_probe, self._positions_px_fractional, xp)
 
         if self._object_type == "potential":
             complex_object = xp.exp(1j * current_object)
@@ -590,14 +797,40 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
             complex_object = current_object
 
         object_patches = complex_object[
-            self._vectorized_patch_indices_row, self._vectorized_patch_indices_col
+            :,
+            self._vectorized_patch_indices_row,
+            self._vectorized_patch_indices_col,
         ]
 
-        overlap = shifted_probes * object_patches
+        num_probe_positions = object_patches.shape[1]
 
-        return shifted_probes, object_patches, overlap
+        propagated_shape = (
+            self._num_slices,
+            num_probe_positions,
+            self._num_probes,
+            self._region_of_interest_shape[0],
+            self._region_of_interest_shape[1],
+        )
+        propagated_probes = xp.empty(propagated_shape, dtype=object_patches.dtype)
+        propagated_probes[0] = fft_shift(
+            current_probe, self._positions_px_fractional, xp
+        )
 
-    def _gradient_descent_fourier_projection(self, amplitudes, overlap):
+        for s in range(self._num_slices):
+            # transmit
+            transmitted_probes = (
+                xp.expand_dims(object_patches[s], axis=1) * propagated_probes[s]
+            )
+
+            # propagate
+            if s + 1 < self._num_slices:
+                propagated_probes[s + 1] = self._propagate_array(
+                    transmitted_probes, self._propagator_arrays[s]
+                )
+
+        return propagated_probes, object_patches, transmitted_probes
+
+    def _gradient_descent_fourier_projection(self, amplitudes, transmitted_probes):
         """
         Ptychographic fourier projection method for GD method.
 
@@ -605,30 +838,40 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
         --------
         amplitudes: np.ndarray
             Normalized measured amplitudes
-        overlap: np.ndarray
-            object * probe overlap
+        transmitted_probes: np.ndarray
+            Transmitted probes after N-1 propagations and N transmissions
 
         Returns
         --------
         exit_waves:np.ndarray
-            Difference between modified and estimated exit waves
+            Exit wave difference
         error: float
             Reconstruction error
         """
 
         xp = self._xp
-        fourier_overlap = xp.fft.fft2(overlap)
-        error = xp.sum(xp.abs(amplitudes - xp.abs(fourier_overlap)) ** 2)
+        fourier_exit_waves = xp.fft.fft2(transmitted_probes)
+        intensity_norm = xp.sqrt(xp.sum(xp.abs(fourier_exit_waves) ** 2, axis=1))
+        error = xp.sum(xp.abs(amplitudes - intensity_norm) ** 2)
 
-        fourier_modified_overlap = amplitudes * xp.exp(1j * xp.angle(fourier_overlap))
-        modified_overlap = xp.fft.ifft2(fourier_modified_overlap)
+        intensity_norm[intensity_norm == 0.0] = np.inf
+        amplitude_modification = amplitudes / intensity_norm
 
-        exit_waves = modified_overlap - overlap
+        fourier_modified_overlap = amplitude_modification[:, None] * fourier_exit_waves
+        modified_exit_wave = xp.fft.ifft2(fourier_modified_overlap)
+
+        exit_waves = modified_exit_wave - transmitted_probes
 
         return exit_waves, error
 
     def _projection_sets_fourier_projection(
-        self, amplitudes, overlap, exit_waves, projection_a, projection_b, projection_c
+        self,
+        amplitudes,
+        transmitted_probes,
+        exit_waves,
+        projection_a,
+        projection_b,
+        projection_c,
     ):
         """
         Ptychographic fourier projection method for DM_AP and RAAR methods.
@@ -649,8 +892,8 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
         --------
         amplitudes: np.ndarray
             Normalized measured amplitudes
-        overlap: np.ndarray
-            object * probe overlap
+        transmitted_probes: np.ndarray
+            Transmitted probes after N-1 propagations and N transmissions
         exit_waves: np.ndarray
             previously estimated exit waves
         projection_a: float
@@ -660,7 +903,7 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
         Returns
         --------
         exit_waves:np.ndarray
-            Updated exit_waves
+            Updated exit wave difference
         error: float
             Reconstruction error
         """
@@ -670,22 +913,30 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
         projection_y = 1 - projection_c
 
         if exit_waves is None:
-            exit_waves = overlap.copy()
+            exit_waves = transmitted_probes.copy()
 
-        fourier_overlap = xp.fft.fft2(overlap)
-        error = xp.sum(xp.abs(amplitudes - xp.abs(fourier_overlap)) ** 2)
+        fourier_exit_waves = xp.fft.fft2(transmitted_probes)
+        intensity_norm = xp.sqrt(xp.sum(xp.abs(fourier_exit_waves) ** 2, axis=1))
+        error = xp.sum(xp.abs(amplitudes - intensity_norm) ** 2)
 
-        factor_to_be_projected = projection_c * overlap + projection_y * exit_waves
+        factor_to_be_projected = (
+            projection_c * transmitted_probes + projection_y * exit_waves
+        )
         fourier_projected_factor = xp.fft.fft2(factor_to_be_projected)
 
-        fourier_projected_factor = amplitudes * xp.exp(
-            1j * xp.angle(fourier_projected_factor)
+        intensity_norm_projected = xp.sqrt(
+            xp.sum(xp.abs(fourier_projected_factor) ** 2, axis=1)
         )
+        intensity_norm_projected[intensity_norm_projected == 0.0] = np.inf
+
+        amplitude_modification = amplitudes / intensity_norm_projected
+        fourier_projected_factor *= amplitude_modification[:, None]
+
         projected_factor = xp.fft.ifft2(fourier_projected_factor)
 
         exit_waves = (
             projection_x * exit_waves
-            + projection_a * overlap
+            + projection_a * transmitted_probes
             + projection_b * projected_factor
         )
 
@@ -724,25 +975,28 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
 
         Returns
         --------
-        shifted_probes:np.ndarray
-            fractionally-shifted probes
+        propagated_probes: np.ndarray
+            Shifted probes at each layer
         object_patches: np.ndarray
             Patched object view
-        overlap: np.ndarray
-            object * probe overlap
+        transmitted_probes: np.ndarray
+            Transmitted probes after N-1 propagations and N transmissions
         exit_waves:np.ndarray
             Updated exit_waves
         error: float
             Reconstruction error
         """
 
-        shifted_probes, object_patches, overlap = self._overlap_projection(
-            current_object, current_probe
-        )
+        (
+            propagated_probes,
+            object_patches,
+            transmitted_probes,
+        ) = self._overlap_projection(current_object, current_probe)
+
         if use_projection_scheme:
             exit_waves, error = self._projection_sets_fourier_projection(
                 amplitudes,
-                overlap,
+                transmitted_probes,
                 exit_waves,
                 projection_a,
                 projection_b,
@@ -751,17 +1005,17 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
 
         else:
             exit_waves, error = self._gradient_descent_fourier_projection(
-                amplitudes, overlap
+                amplitudes, transmitted_probes
             )
 
-        return shifted_probes, object_patches, overlap, exit_waves, error
+        return propagated_probes, object_patches, transmitted_probes, exit_waves, error
 
     def _gradient_descent_adjoint(
         self,
         current_object,
         current_probe,
         object_patches,
-        shifted_probes,
+        propagated_probes,
         exit_waves,
         step_size,
         normalization_min,
@@ -779,8 +1033,8 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
             Current probe estimate
         object_patches: np.ndarray
             Patched object view
-        shifted_probes:np.ndarray
-            fractionally-shifted probes
+        propagated_probes: np.ndarray
+            Shifted probes at each layer
         exit_waves:np.ndarray
             Updated exit_waves
         step_size: float, optional
@@ -799,53 +1053,75 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
         """
         xp = self._xp
 
-        probe_normalization = self._sum_overlapping_patches_bincounts(
-            xp.abs(shifted_probes) ** 2
-        )
-        probe_normalization = 1 / xp.sqrt(
-            1e-16
-            + ((1 - normalization_min) * probe_normalization) ** 2
-            + (normalization_min * xp.max(probe_normalization)) ** 2
-        )
+        for s in reversed(range(self._num_slices)):
+            probe = propagated_probes[s]
+            obj = object_patches[s]
 
-        if self._object_type == "potential":
-            current_object += step_size * (
-                self._sum_overlapping_patches_bincounts(
-                    xp.real(
-                        -1j
-                        * xp.conj(object_patches)
-                        * xp.conj(shifted_probes)
-                        * exit_waves
+            # object-update
+            probe_normalization = xp.zeros_like(current_object[s])
+            object_update = xp.zeros_like(current_object[s])
+
+            for i_probe in range(self._num_probes):
+                probe_normalization += self._sum_overlapping_patches_bincounts(
+                    xp.abs(probe[:, i_probe]) ** 2
+                )
+
+                if self._object_type == "potential":
+                    object_update += (
+                        step_size
+                        * self._sum_overlapping_patches_bincounts(
+                            xp.real(
+                                -1j
+                                * xp.conj(obj)
+                                * xp.conj(probe[:, i_probe])
+                                * exit_waves[:, i_probe]
+                            )
+                        )
                     )
-                )
-                * probe_normalization
-            )
-        elif self._object_type == "complex":
-            current_object += step_size * (
-                self._sum_overlapping_patches_bincounts(
-                    xp.conj(shifted_probes) * exit_waves
-                )
-                * probe_normalization
-            )
+                else:
+                    object_update += (
+                        step_size
+                        * self._sum_overlapping_patches_bincounts(
+                            xp.conj(probe[:, i_probe]) * exit_waves[:, i_probe]
+                        )
+                    )
 
-        if not fix_probe:
-            object_normalization = xp.sum(
-                (xp.abs(object_patches) ** 2),
-                axis=0,
-            )
-            object_normalization = 1 / xp.sqrt(
+            probe_normalization = 1 / xp.sqrt(
                 1e-16
-                + ((1 - normalization_min) * object_normalization) ** 2
-                + (normalization_min * xp.max(object_normalization)) ** 2
+                + ((1 - normalization_min) * probe_normalization) ** 2
+                + (normalization_min * xp.max(probe_normalization)) ** 2
             )
 
-            current_probe += step_size * (
-                xp.sum(
-                    xp.conj(object_patches) * exit_waves,
+            current_object[s] += object_update * probe_normalization
+
+            # back-transmit
+            exit_waves *= xp.expand_dims(xp.conj(obj), axis=1)  # / xp.abs(obj) ** 2
+
+            if s > 0:
+                # back-propagate
+                exit_waves = self._propagate_array(
+                    exit_waves, xp.conj(self._propagator_arrays[s - 1])
+                )
+            elif not fix_probe:
+                # probe-update
+                object_normalization = xp.sum(
+                    (xp.abs(obj) ** 2),
                     axis=0,
                 )
-                * object_normalization
-            )
+                object_normalization = 1 / xp.sqrt(
+                    1e-16
+                    + ((1 - normalization_min) * object_normalization) ** 2
+                    + (normalization_min * xp.max(object_normalization)) ** 2
+                )
+
+                current_probe += (
+                    step_size
+                    * xp.sum(
+                        exit_waves,
+                        axis=0,
+                    )
+                    * object_normalization[None]
+                )
 
         return current_object, current_probe
 
@@ -854,7 +1130,7 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
         current_object,
         current_probe,
         object_patches,
-        shifted_probes,
+        propagated_probes,
         exit_waves,
         normalization_min,
         fix_probe,
@@ -871,8 +1147,8 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
             Current probe estimate
         object_patches: np.ndarray
             Patched object view
-        shifted_probes:np.ndarray
-            fractionally-shifted probes
+        propagated_probes: np.ndarray
+            Shifted probes at each layer
         exit_waves:np.ndarray
             Updated exit_waves
         normalization_min: float, optional
@@ -889,53 +1165,73 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
         """
         xp = self._xp
 
-        probe_normalization = self._sum_overlapping_patches_bincounts(
-            xp.abs(shifted_probes) ** 2
-        )
-        probe_normalization = 1 / xp.sqrt(
-            1e-16
-            + ((1 - normalization_min) * probe_normalization) ** 2
-            + (normalization_min * xp.max(probe_normalization)) ** 2
-        )
+        # careful not to modify exit_waves in-place for projection set methods
+        exit_waves_copy = exit_waves.copy()
+        for s in reversed(range(self._num_slices)):
+            probe = propagated_probes[s]
+            obj = object_patches[s]
 
-        if self._object_type == "potential":
-            current_object = (
-                self._sum_overlapping_patches_bincounts(
-                    xp.real(
-                        -1j
-                        * xp.conj(object_patches)
-                        * xp.conj(shifted_probes)
-                        * exit_waves
+            # object-update
+            probe_normalization = xp.zeros_like(current_object[s])
+            object_update = xp.zeros_like(current_object[s])
+
+            for i_probe in range(self._num_probes):
+                probe_normalization += self._sum_overlapping_patches_bincounts(
+                    xp.abs(probe[:, i_probe]) ** 2
+                )
+
+                if self._object_type == "potential":
+                    object_update += self._sum_overlapping_patches_bincounts(
+                        xp.real(
+                            -1j
+                            * xp.conj(obj)
+                            * xp.conj(probe[:, i_probe])
+                            * exit_waves_copy[:, i_probe]
+                        )
                     )
-                )
-                * probe_normalization
-            )
-        elif self._object_type == "complex":
-            current_object = (
-                self._sum_overlapping_patches_bincounts(
-                    xp.conj(shifted_probes) * exit_waves
-                )
-                * probe_normalization
-            )
+                else:
+                    object_update += self._sum_overlapping_patches_bincounts(
+                        xp.conj(probe[:, i_probe]) * exit_waves_copy[:, i_probe]
+                    )
 
-        if not fix_probe:
-            object_normalization = xp.sum(
-                (xp.abs(object_patches) ** 2),
-                axis=0,
-            )
-            object_normalization = 1 / xp.sqrt(
+            probe_normalization = 1 / xp.sqrt(
                 1e-16
-                + ((1 - normalization_min) * object_normalization) ** 2
-                + (normalization_min * xp.max(object_normalization)) ** 2
+                + ((1 - normalization_min) * probe_normalization) ** 2
+                + (normalization_min * xp.max(probe_normalization)) ** 2
             )
 
-            current_probe = (
-                xp.sum(
-                    xp.conj(object_patches) * exit_waves,
+            current_object[s] = object_update * probe_normalization
+
+            # back-transmit
+            exit_waves_copy *= xp.expand_dims(
+                xp.conj(obj), axis=1
+            )  # / xp.abs(obj) ** 2
+
+            if s > 0:
+                # back-propagate
+                exit_waves_copy = self._propagate_array(
+                    exit_waves_copy, xp.conj(self._propagator_arrays[s - 1])
+                )
+
+            elif not fix_probe:
+                # probe-update
+                object_normalization = xp.sum(
+                    (xp.abs(obj) ** 2),
                     axis=0,
                 )
-                * object_normalization
-            )
+                object_normalization = 1 / xp.sqrt(
+                    1e-16
+                    + ((1 - normalization_min) * object_normalization) ** 2
+                    + (normalization_min * xp.max(object_normalization)) ** 2
+                )
+
+                current_probe = (
+                    xp.sum(
+                        exit_waves_copy,
+                        axis=0,
+                    )
+                    * object_normalization[None]
+                )
 
         return current_object, current_probe
 
@@ -944,7 +1240,7 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
         current_object,
         current_probe,
         object_patches,
-        shifted_probes,
+        propagated_probes,
         exit_waves,
         use_projection_scheme: bool,
         step_size: float,
@@ -952,7 +1248,7 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
         fix_probe: bool,
     ):
         """
-        Ptychographic adjoint operator.
+        Ptychographic adjoint operator for GD method.
         Computes object and probe update steps.
 
         Parameters
@@ -963,8 +1259,8 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
             Current probe estimate
         object_patches: np.ndarray
             Patched object view
-        shifted_probes:np.ndarray
-            fractionally-shifted probes
+        propagated_probes: np.ndarray
+            Shifted probes at each layer
         exit_waves:np.ndarray
             Updated exit_waves
         use_projection_scheme: bool,
@@ -989,7 +1285,7 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
                 current_object,
                 current_probe,
                 object_patches,
-                shifted_probes,
+                propagated_probes,
                 exit_waves,
                 normalization_min,
                 fix_probe,
@@ -999,7 +1295,7 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
                 current_object,
                 current_probe,
                 object_patches,
-                shifted_probes,
+                propagated_probes,
                 exit_waves,
                 step_size,
                 normalization_min,
@@ -1008,12 +1304,452 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
 
         return current_object, current_probe
 
+    def _position_correction(
+        self,
+        current_object,
+        current_probe,
+        transmitted_probes,
+        amplitudes,
+        current_positions,
+        positions_step_size,
+        constrain_position_distance,
+    ):
+        """
+        Position correction using estimated intensity gradient.
+
+        Parameters
+        --------
+        current_object: np.ndarray
+            Current object estimate
+        current_probe:np.ndarray
+            fractionally-shifted probes
+        transmitted_probes: np.ndarray
+            Transmitted probes after N-1 propagations and N transmissions
+        amplitudes: np.ndarray
+            Measured amplitudes
+        current_positions: np.ndarray
+            Current positions estimate
+        positions_step_size: float
+            Positions step size
+        constrain_position_distance: float
+            Distance to constrain position correction within original
+            field of view in A
+
+        Returns
+        --------
+        updated_positions: np.ndarray
+            Updated positions estimate
+        """
+
+        xp = self._xp
+
+        # Intensity gradient
+        exit_waves_fft = xp.fft.fft2(transmitted_probes)
+        exit_waves_fft_conj = xp.conj(exit_waves_fft)
+        estimated_intensity = xp.abs(exit_waves_fft) ** 2
+        measured_intensity = amplitudes**2
+
+        flat_shape = (transmitted_probes.shape[0], -1)
+        difference_intensity = (measured_intensity - estimated_intensity).reshape(
+            flat_shape
+        )
+
+        # Computing perturbed exit waves one at a time to save on memory
+
+        if self._object_type == "potential":
+            complex_object = xp.exp(1j * current_object)
+        else:
+            complex_object = current_object
+
+        # dx
+        obj_rolled_patches = complex_object[
+            :,
+            (self._vectorized_patch_indices_row + 1) % self._object_shape[0],
+            self._vectorized_patch_indices_col,
+        ]
+
+        propagated_probes_perturbed = xp.empty_like(obj_rolled_patches)
+        propagated_probes_perturbed[0] = fft_shift(
+            current_probe, self._positions_px_fractional, xp
+        )
+
+        for s in range(self._num_slices):
+            # transmit
+            transmitted_probes_perturbed = (
+                obj_rolled_patches[s] * propagated_probes_perturbed[s]
+            )
+
+            # propagate
+            if s + 1 < self._num_slices:
+                propagated_probes_perturbed[s + 1] = self._propagate_array(
+                    transmitted_probes_perturbed, self._propagator_arrays[s]
+                )
+
+        exit_waves_dx_fft = exit_waves_fft - xp.fft.fft2(transmitted_probes_perturbed)
+
+        # dy
+        obj_rolled_patches = complex_object[
+            :,
+            self._vectorized_patch_indices_row,
+            (self._vectorized_patch_indices_col + 1) % self._object_shape[1],
+        ]
+
+        propagated_probes_perturbed = xp.empty_like(obj_rolled_patches)
+        propagated_probes_perturbed[0] = fft_shift(
+            current_probe, self._positions_px_fractional, xp
+        )
+
+        for s in range(self._num_slices):
+            # transmit
+            transmitted_probes_perturbed = (
+                obj_rolled_patches[s] * propagated_probes_perturbed[s]
+            )
+
+            # propagate
+            if s + 1 < self._num_slices:
+                propagated_probes_perturbed[s + 1] = self._propagate_array(
+                    transmitted_probes_perturbed, self._propagator_arrays[s]
+                )
+
+        exit_waves_dy_fft = exit_waves_fft - xp.fft.fft2(transmitted_probes_perturbed)
+
+        partial_intensity_dx = 2 * xp.real(
+            exit_waves_dx_fft * exit_waves_fft_conj
+        ).reshape(flat_shape)
+        partial_intensity_dy = 2 * xp.real(
+            exit_waves_dy_fft * exit_waves_fft_conj
+        ).reshape(flat_shape)
+
+        coefficients_matrix = xp.dstack((partial_intensity_dx, partial_intensity_dy))
+
+        # positions_update = xp.einsum(
+        #    "idk,ik->id", xp.linalg.pinv(coefficients_matrix), difference_intensity
+        # )
+
+        coefficients_matrix_T = coefficients_matrix.conj().swapaxes(-1, -2)
+        positions_update = (
+            xp.linalg.inv(coefficients_matrix_T @ coefficients_matrix)
+            @ coefficients_matrix_T
+            @ difference_intensity[..., None]
+        )
+
+        if constrain_position_distance is not None:
+            constrain_position_distance /= xp.sqrt(
+                self.sampling[0] ** 2 + self.sampling[1] ** 2
+            )
+            x1 = (current_positions - positions_step_size * positions_update[..., 0])[
+                :, 0
+            ]
+            y1 = (current_positions - positions_step_size * positions_update[..., 0])[
+                :, 1
+            ]
+            x0 = self._positions_px_initial[:, 0]
+            y0 = self._positions_px_initial[:, 1]
+            if self._rotation_best_transpose:
+                x0, y0 = xp.array([y0, x0])
+                x1, y1 = xp.array([y1, x1])
+
+            if self._rotation_best_rad is not None:
+                rotation_angle = self._rotation_best_rad
+                x0, y0 = x0 * xp.cos(-rotation_angle) + y0 * xp.sin(
+                    -rotation_angle
+                ), -x0 * xp.sin(-rotation_angle) + y0 * xp.cos(-rotation_angle)
+                x1, y1 = x1 * xp.cos(-rotation_angle) + y1 * xp.sin(
+                    -rotation_angle
+                ), -x1 * xp.sin(-rotation_angle) + y1 * xp.cos(-rotation_angle)
+
+            outlier_ind = (x1 > (xp.max(x0) + constrain_position_distance)) + (
+                x1 < (xp.min(x0) - constrain_position_distance)
+            ) + (y1 > (xp.max(y0) + constrain_position_distance)) + (
+                y1 < (xp.min(y0) - constrain_position_distance)
+            ) > 0
+
+            positions_update[..., 0][outlier_ind] = 0
+
+        current_positions -= positions_step_size * positions_update[..., 0]
+
+        return current_positions
+
+    def _probe_center_of_mass_constraint(self, current_probe):
+        """
+        Ptychographic center of mass constraint.
+        Used for centering corner-centered probe intensity.
+
+        Parameters
+        --------
+        current_probe: np.ndarray
+            Current probe estimate
+
+        Returns
+        --------
+        constrained_probe: np.ndarray
+            Constrained probe estimate
+        """
+        xp = self._xp
+        probe_intensity = xp.abs(current_probe[0]) ** 2
+
+        probe_x0, probe_y0 = get_CoM(
+            probe_intensity, device=self._device, corner_centered=True
+        )
+        shifted_probe = fft_shift(current_probe, -xp.array([probe_x0, probe_y0]), xp)
+
+        return shifted_probe
+
+    def _probe_orthogonalization_constraint(self, current_probe):
+        """
+        Ptychographic probe-orthogonalization constraint.
+        Used to ensure mixed states are orthogonal to each other.
+        Adapted from https://github.com/AdvancedPhotonSource/tike/blob/main/src/tike/ptycho/probe.py#L690
+
+        Parameters
+        --------
+        current_probe: np.ndarray
+            Current probe estimate
+
+        Returns
+        --------
+        constrained_probe: np.ndarray
+            Orthogonalized probe estimate
+        """
+        xp = self._xp
+        n_probes = self._num_probes
+
+        # compute upper half of P* @ P
+        pairwise_dot_product = xp.empty((n_probes, n_probes), dtype=current_probe.dtype)
+
+        for i in range(n_probes):
+            for j in range(i, n_probes):
+                pairwise_dot_product[i, j] = xp.sum(
+                    current_probe[i].conj() * current_probe[j]
+                )
+
+        # compute eigenvectors (effectively cheaper way of computing V* from SVD)
+        _, evecs = xp.linalg.eigh(pairwise_dot_product, UPLO="U")
+        current_probe = xp.tensordot(evecs.T, current_probe, axes=1)
+
+        # sort by real-space intensity
+        intensities = xp.sum(xp.abs(current_probe) ** 2, axis=(-2, -1))
+        intensities_order = xp.argsort(intensities, axis=None)[::-1]
+        return current_probe[intensities_order]
+
+    def _object_butterworth_constraint(
+        self, current_object, q_lowpass, q_highpass, butterworth_order
+    ):
+        """
+        2D Butterworth filter
+        Used for low/high-pass filtering object.
+
+        Parameters
+        --------
+        current_object: np.ndarray
+            Current object estimate
+        q_lowpass: float
+            Cut-off frequency in A^-1 for low-pass butterworth filter
+        q_highpass: float
+            Cut-off frequency in A^-1 for high-pass butterworth filter
+        butterworth_order: float
+            Butterworth filter order. Smaller gives a smoother filter
+
+        Returns
+        --------
+        constrained_object: np.ndarray
+            Constrained object estimate
+        """
+        xp = self._xp
+        qx = xp.fft.fftfreq(current_object.shape[1], self.sampling[0])
+        qy = xp.fft.fftfreq(current_object.shape[2], self.sampling[1])
+        qya, qxa = xp.meshgrid(qy, qx)
+        qra = xp.sqrt(qxa**2 + qya**2)
+
+        env = xp.ones_like(qra)
+        if q_highpass:
+            env *= 1 - 1 / (1 + (qra / q_highpass) ** (2 * butterworth_order))
+        if q_lowpass:
+            env *= 1 / (1 + (qra / q_lowpass) ** (2 * butterworth_order))
+
+        current_object_mean = xp.mean(current_object)
+        current_object -= current_object_mean
+        current_object = xp.fft.ifft2(xp.fft.fft2(current_object) * env[None])
+        current_object += current_object_mean
+
+        if self._object_type == "potential":
+            current_object = xp.real(current_object)
+
+        return current_object
+
+    def _object_kz_regularization_constraint(
+        self, current_object, kz_regularization_gamma
+    ):
+        """
+        Arctan regularization filter
+
+        Parameters
+        --------
+        current_object: np.ndarray
+            Current object estimate
+        kz_regularization_gamma: float
+            Slice regularization strength
+
+        Returns
+        --------
+        constrained_object: np.ndarray
+            Constrained object estimate
+        """
+        xp = self._xp
+
+        current_object = xp.pad(
+            current_object, pad_width=((1, 0), (0, 0), (0, 0)), mode="constant"
+        )
+
+        qx = xp.fft.fftfreq(current_object.shape[1], self.sampling[0])
+        qy = xp.fft.fftfreq(current_object.shape[2], self.sampling[1])
+        qz = xp.fft.fftfreq(current_object.shape[0], self._slice_thicknesses[0])
+
+        kz_regularization_gamma *= self._slice_thicknesses[0] / self.sampling[0]
+
+        qza, qxa, qya = xp.meshgrid(qz, qx, qy, indexing="ij")
+        qz2 = qza**2 * kz_regularization_gamma**2
+        qr2 = qxa**2 + qya**2
+
+        w = 1 - 2 / np.pi * xp.arctan2(qz2, qr2)
+
+        current_object = xp.fft.ifftn(xp.fft.fftn(current_object) * w)
+        current_object = current_object[1:]
+
+        if self._object_type == "potential":
+            current_object = xp.real(current_object)
+
+        return current_object
+
+    def _object_identical_slices_constraint(self, current_object):
+        """
+        Strong regularization forcing all slices to be identical
+
+        Parameters
+        --------
+        current_object: np.ndarray
+            Current object estimate
+
+        Returns
+        --------
+        constrained_object: np.ndarray
+            Constrained object estimate
+        """
+        object_mean = current_object.mean(0, keepdims=True)
+        current_object[:] = object_mean
+
+        return current_object
+
+    def _object_denoise_tv_pylops(self, current_object, weights, iterations):
+        """
+        Performs second order TV denoising along x and y
+
+        Parameters
+        ----------
+        current_object: np.ndarray
+            Current object estimate
+        weights : [float, float]
+            Denoising weights[z weight, r weight]. The greater `weight`,
+            the more denoising.
+        iterations: float
+            Number of iterations to run in denoising algorithm.
+            `niter_out` in pylops
+
+        Returns
+        -------
+        constrained_object: np.ndarray
+            Constrained object estimate
+
+        """
+        xp = self._xp
+
+        if xp.iscomplexobj(current_object):
+            current_object_tv = current_object
+            warnings.warn(
+                ("TV denoising is currently only supported for potential objects."),
+                UserWarning,
+            )
+
+        else:
+            # zero pad at top and bottom slice
+            pad_width = ((1, 1), (0, 0), (0, 0))
+            current_object = xp.pad(
+                current_object, pad_width=pad_width, mode="constant"
+            )
+
+            # run tv denoising
+            nz, nx, ny = current_object.shape
+            niter_out = iterations
+            niter_in = 1
+            Iop = pylops.Identity(nx * ny * nz)
+
+            if weights[0] == 0:
+                xy_laplacian = pylops.Laplacian(
+                    (nz, nx, ny), axes=(1, 2), edge=False, kind="backward"
+                )
+                l1_regs = [xy_laplacian]
+
+                current_object_tv = pylops.optimization.sparsity.splitbregman(
+                    Op=Iop,
+                    y=current_object.ravel(),
+                    RegsL1=l1_regs,
+                    niter_outer=niter_out,
+                    niter_inner=niter_in,
+                    epsRL1s=[weights[1]],
+                    tol=1e-4,
+                    tau=1.0,
+                    show=False,
+                )[0]
+
+            elif weights[1] == 0:
+                z_gradient = pylops.FirstDerivative(
+                    (nz, nx, ny), axis=0, edge=False, kind="backward"
+                )
+                l1_regs = [z_gradient]
+
+                current_object_tv = pylops.optimization.sparsity.splitbregman(
+                    Op=Iop,
+                    y=current_object.ravel(),
+                    RegsL1=l1_regs,
+                    niter_outer=niter_out,
+                    niter_inner=niter_in,
+                    epsRL1s=[weights[0]],
+                    tol=1e-4,
+                    tau=1.0,
+                    show=False,
+                )[0]
+
+            else:
+                z_gradient = pylops.FirstDerivative(
+                    (nz, nx, ny), axis=0, edge=False, kind="backward"
+                )
+                xy_laplacian = pylops.Laplacian(
+                    (nz, nx, ny), axes=(1, 2), edge=False, kind="backward"
+                )
+                l1_regs = [z_gradient, xy_laplacian]
+
+                current_object_tv = pylops.optimization.sparsity.splitbregman(
+                    Op=Iop,
+                    y=current_object.ravel(),
+                    RegsL1=l1_regs,
+                    niter_outer=niter_out,
+                    niter_inner=niter_in,
+                    epsRL1s=weights,
+                    tol=1e-4,
+                    tau=1.0,
+                    show=False,
+                )[0]
+
+            # remove padding
+            current_object_tv = current_object_tv.reshape(current_object.shape)[1:-1]
+
+        return current_object_tv
+
     def _constraints(
         self,
         current_object,
         current_probe,
         current_positions,
-        pure_phase_object,
         fix_com,
         fit_probe_aberrations,
         fit_probe_aberrations_max_angular_order,
@@ -1034,12 +1770,20 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
         q_lowpass,
         q_highpass,
         butterworth_order,
-        tv_denoise,
-        tv_denoise_weight,
-        tv_denoise_inner_iter,
+        kz_regularization_filter,
+        kz_regularization_gamma,
+        identical_slices,
         object_positivity,
         shrinkage_rad,
         object_mask,
+        pure_phase_object,
+        tv_denoise_chambolle,
+        tv_denoise_weight_chambolle,
+        tv_denoise_pad_chambolle,
+        tv_denoise,
+        tv_denoise_weights,
+        tv_denoise_inner_iter,
+        orthogonalize_probe,
     ):
         """
         Ptychographic constraints operator.
@@ -1052,8 +1796,6 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
             Current probe estimate
         current_positions: np.ndarray
             Current positions estimate
-        pure_phase_object: bool
-            If True, object amplitude is set to unity
         fix_com: bool
             If True, probe CoM is fixed to the center
         fit_probe_aberrations: bool
@@ -1074,36 +1816,53 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
             Maximum pixel width of fitted sigmoid functions.
         constrain_probe_fourier_amplitude_constant_intensity: bool
             If True, the probe aperture is additionally constrained to a constant intensity.
-        fix_probe_aperture: bool,
-            If True, probe Fourier amplitude is replaced by initial probe aperture.
-        initial_probe_aperture: np.ndarray,
-            Initial probe aperture to use in replacing probe Fourier amplitude.
+        fix_probe_aperture: bool
+            If True, probe Fourier amplitude is replaced by initial_probe_aperture
+        initial_probe_aperture: np.ndarray
+            Initial probe aperture to use in replacing probe Fourier amplitude
         fix_positions: bool
             If True, positions are not updated
         gaussian_filter: bool
-            If True, applies real-space gaussian filter
+            If True, applies real-space gaussian filter in A
         gaussian_filter_sigma: float
-            Standard deviation of gaussian kernel in A
+            Standard deviation of gaussian kernel
         butterworth_filter: bool
-            If True, applies high-pass butteworth filter
+            If True, applies fourier-space butterworth filter
         q_lowpass: float
             Cut-off frequency in A^-1 for low-pass butterworth filter
         q_highpass: float
             Cut-off frequency in A^-1 for high-pass butterworth filter
         butterworth_order: float
             Butterworth filter order. Smaller gives a smoother filter
-        tv_denoise: bool
-            If True, applies TV denoising on object
-        tv_denoise_weight: float
-            Denoising weight. The greater `weight`, the more denoising.
-        tv_denoise_inner_iter: float
-            Number of iterations to run in inner loop of TV denoising
+        kz_regularization_filter: bool
+            If True, applies fourier-space arctan regularization filter
+        kz_regularization_gamma: float
+            Slice regularization strength
+        identical_slices: bool
+            If True, forces all object slices to be identical
         object_positivity: bool
-            If True, clips negative potential values
+            If True, forces object to be positive
         shrinkage_rad: float
             Phase shift in radians to be subtracted from the potential at each iteration
         object_mask: np.ndarray (boolean)
             If not None, used to calculate additional shrinkage using masked-mean of object
+        pure_phase_object: bool
+            If True, object amplitude is set to unity
+        tv_denoise_chambolle: bool
+            If True, performs TV denoising along z
+        tv_denoise_weight_chambolle: float
+            weight of tv denoising constraint
+        tv_denoise_pad_chambolle: bool
+            if True, pads object at top and bottom with zeros before applying denoising
+        tv_denoise: bool
+            If True, applies TV denoising on object
+        tv_denoise_weights: [float,float]
+            Denoising weights[z weight, r weight]. The greater `weight`,
+            the more denoising.
+        tv_denoise_inner_iter: float
+            Number of iterations to run in inner loop of TV denoising
+        orthogonalize_probe: bool
+            If True, probe will be orthogonalized
 
         Returns
         --------
@@ -1128,9 +1887,24 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
                 butterworth_order,
             )
 
-        if tv_denoise:
+        if identical_slices:
+            current_object = self._object_identical_slices_constraint(current_object)
+        elif kz_regularization_filter:
+            current_object = self._object_kz_regularization_constraint(
+                current_object, kz_regularization_gamma
+            )
+        elif tv_denoise:
             current_object = self._object_denoise_tv_pylops(
-                current_object, tv_denoise_weight, tv_denoise_inner_iter
+                current_object,
+                tv_denoise_weights,
+                tv_denoise_inner_iter,
+            )
+        elif tv_denoise_chambolle:
+            current_object = self._object_denoise_tv_chambolle(
+                current_object,
+                tv_denoise_weight_chambolle,
+                axis=0,
+                pad_object=tv_denoise_pad_chambolle,
             )
 
         if shrinkage_rad > 0.0 or object_mask is not None:
@@ -1150,31 +1924,18 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
         if fix_com:
             current_probe = self._probe_center_of_mass_constraint(current_probe)
 
+        # These constraints don't _really_ make sense for mixed-state
         if fix_probe_aperture:
-            current_probe = self._probe_aperture_constraint(
-                current_probe,
-                initial_probe_aperture,
-            )
+            raise NotImplementedError()
         elif constrain_probe_fourier_amplitude:
-            current_probe = self._probe_fourier_amplitude_constraint(
-                current_probe,
-                constrain_probe_fourier_amplitude_max_width_pixels,
-                constrain_probe_fourier_amplitude_constant_intensity,
-            )
-
+            raise NotImplementedError()
         if fit_probe_aberrations:
-            current_probe = self._probe_aberration_fitting_constraint(
-                current_probe,
-                fit_probe_aberrations_max_angular_order,
-                fit_probe_aberrations_max_radial_order,
-            )
-
+            raise NotImplementedError()
         if constrain_probe_amplitude:
-            current_probe = self._probe_amplitude_constraint(
-                current_probe,
-                constrain_probe_amplitude_relative_radius,
-                constrain_probe_amplitude_relative_width,
-            )
+            raise NotImplementedError()
+
+        if orthogonalize_probe:
+            current_probe = self._probe_orthogonalization_constraint(current_probe)
 
         if not fix_positions:
             current_positions = self._positions_center_of_mass_constraint(
@@ -1201,8 +1962,8 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
         step_size: float = 0.5,
         normalization_min: float = 1,
         positions_step_size: float = 0.9,
-        pure_phase_object_iter: int = 0,
         fix_com: bool = True,
+        orthogonalize_probe: bool = True,
         fix_probe_iter: int = 0,
         fix_probe_aperture_iter: int = 0,
         constrain_probe_amplitude_iter: int = 0,
@@ -1223,12 +1984,19 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
         q_lowpass: float = None,
         q_highpass: float = None,
         butterworth_order: float = 2,
-        tv_denoise_iter: int = np.inf,
-        tv_denoise_weight: float = None,
-        tv_denoise_inner_iter: float = 40,
+        kz_regularization_filter_iter: int = np.inf,
+        kz_regularization_gamma: Union[float, np.ndarray] = None,
+        identical_slices_iter: int = 0,
         object_positivity: bool = True,
         shrinkage_rad: float = 0.0,
         fix_potential_baseline: bool = True,
+        pure_phase_object_iter: int = 0,
+        tv_denoise_iter_chambolle=np.inf,
+        tv_denoise_weight_chambolle=None,
+        tv_denoise_pad_chambolle=True,
+        tv_denoise_iter=np.inf,
+        tv_denoise_weights=None,
+        tv_denoise_inner_iter=40,
         switch_object_iter: int = np.inf,
         store_iterations: bool = False,
         progress_bar: bool = True,
@@ -1267,8 +2035,6 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
             Probe normalization minimum as a fraction of the maximum overlap intensity
         positions_step_size: float, optional
             Positions update step size
-        pure_phase_object_iter: int, optional
-            Number of iterations where object amplitude is set to unity
         fix_com: bool, optional
             If True, fixes center of mass of probe
         fix_probe_iter: int, optional
@@ -1289,9 +2055,6 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
             If True, the probe aperture is additionally constrained to a constant intensity.
         fix_positions_iter: int, optional
             Number of iterations to run with fixed positions before updating positions estimate
-        constrain_position_distance: float, optional
-            Distance to constrain position correction within original
-            field of view in A
         global_affine_transformation: bool, optional
             If True, positions are assumed to be a global affine transform from initial scan
         gaussian_filter_sigma: float, optional
@@ -1312,18 +2075,33 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
             Cut-off frequency in A^-1 for high-pass butterworth filter
         butterworth_order: float
             Butterworth filter order. Smaller gives a smoother filter
-        tv_denoise_iter: int, optional
-            Number of iterations to run using tv denoise filter on object
-        tv_denoise_weight: float
-            Denoising weight. The greater `weight`, the more denoising.
-        tv_denoise_inner_iter: float
-            Number of iterations to run in inner loop of TV denoising
+        kz_regularization_filter_iter: int, optional
+            Number of iterations to run using kz regularization filter
+        kz_regularization_gamma, float, optional
+            kz regularization strength
+        identical_slices_iter: int, optional
+            Number of iterations to run using identical slices
         object_positivity: bool, optional
             If True, forces object to be positive
         shrinkage_rad: float
             Phase shift in radians to be subtracted from the potential at each iteration
         fix_potential_baseline: bool
             If true, the potential mean outside the FOV is forced to zero at each iteration
+        pure_phase_object_iter: int, optional
+            Number of iterations where object amplitude is set to unity
+        tv_denoise_iter_chambolle: bool
+            Number of iterations with TV denoisining
+        tv_denoise_weight_chambolle: float
+            weight of tv denoising constraint
+        tv_denoise_pad_chambolle: bool
+            if True, pads object at top and bottom with zeros before applying denoising
+        tv_denoise: bool
+            If True, applies TV denoising on object
+        tv_denoise_weights: [float,float]
+            Denoising weights[z weight, r weight]. The greater `weight`,
+            the more denoising.
+        tv_denoise_inner_iter: float
+            Number of iterations to run in inner loop of TV denoising
         switch_object_iter: int, optional
             Iteration to switch object type between 'complex' and 'potential' or between
             'potential' and 'complex'
@@ -1336,7 +2114,7 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
 
         Returns
         --------
-        self: PtychographicReconstruction
+        self: MultislicePtychographicReconstruction
             Self to accommodate chaining
         """
         asnumpy = self._asnumpy
@@ -1576,9 +2354,9 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
 
                 # forward operator
                 (
-                    shifted_probes,
+                    propagated_probes,
                     object_patches,
-                    overlap,
+                    self._transmitted_probes,
                     self._exit_waves,
                     batch_error,
                 ) = self._forward(
@@ -1597,7 +2375,7 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
                     self._object,
                     self._probe,
                     object_patches,
-                    shifted_probes,
+                    propagated_probes,
                     self._exit_waves,
                     use_projection_scheme=use_projection_scheme,
                     step_size=step_size,
@@ -1609,8 +2387,8 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
                 if a0 >= fix_positions_iter:
                     positions_px[start:end] = self._position_correction(
                         self._object,
-                        shifted_probes,
-                        overlap,
+                        self._probe[0],
+                        self._transmitted_probes[:, 0],
                         amplitudes,
                         self._positions_px,
                         positions_step_size,
@@ -1654,9 +2432,13 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
                 q_lowpass=q_lowpass,
                 q_highpass=q_highpass,
                 butterworth_order=butterworth_order,
-                tv_denoise=a0 < tv_denoise_iter and tv_denoise_weight is not None,
-                tv_denoise_weight=tv_denoise_weight,
-                tv_denoise_inner_iter=tv_denoise_inner_iter,
+                kz_regularization_filter=a0 < kz_regularization_filter_iter
+                and kz_regularization_gamma is not None,
+                kz_regularization_gamma=kz_regularization_gamma[a0]
+                if kz_regularization_gamma is not None
+                and isinstance(kz_regularization_gamma, np.ndarray)
+                else kz_regularization_gamma,
+                identical_slices=a0 < identical_slices_iter,
                 object_positivity=object_positivity,
                 shrinkage_rad=shrinkage_rad,
                 object_mask=self._object_fov_mask_inverse
@@ -1664,6 +2446,14 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
                 else None,
                 pure_phase_object=a0 < pure_phase_object_iter
                 and self._object_type == "complex",
+                tv_denoise_chambolle=a0 < tv_denoise_iter_chambolle
+                and tv_denoise_weight_chambolle is not None,
+                tv_denoise_weight_chambolle=tv_denoise_weight_chambolle,
+                tv_denoise_pad_chambolle=tv_denoise_pad_chambolle,
+                tv_denoise=a0 < tv_denoise_iter and tv_denoise_weights is not None,
+                tv_denoise_weights=tv_denoise_weights,
+                tv_denoise_inner_iter=tv_denoise_inner_iter,
+                orthogonalize_probe=orthogonalize_probe,
             )
 
             self.error_iterations.append(error.item())
@@ -1686,7 +2476,7 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
         self,
         fig,
         object_ax,
-        convergence_ax: None,
+        convergence_ax,
         cbar: bool,
         padding: int = 0,
         **kwargs,
@@ -1714,7 +2504,9 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
         else:
             obj = self.object
 
-        rotated_object = self._crop_rotate_object_fov(obj, padding=padding)
+        rotated_object = self._crop_rotate_object_fov(
+            np.sum(obj, axis=0), padding=padding
+        )
         rotated_shape = rotated_object.shape
 
         extent = [
@@ -1738,9 +2530,11 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
             fig.colorbar(im, cax=ax_cb)
 
         if convergence_ax is not None and hasattr(self, "error_iterations"):
+            errors = np.array(self.error_iterations)
             kwargs.pop("vmin", None)
             kwargs.pop("vmax", None)
             errors = self.error_iterations
+
             convergence_ax.semilogy(np.arange(len(errors)), errors, **kwargs)
 
     def _visualize_last_iteration(
@@ -1764,12 +2558,13 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
             If true, the normalized mean squared error (NMSE) plot is displayed
         cbar: bool, optional
             If true, displays a colorbar
-        plot_probe: bool, optional
-            If true, the reconstructed complex probe is displayed
+        plot_probe: bool
+            If true, the reconstructed probe intensity is also displayed
         plot_fourier_probe: bool, optional
             If true, the reconstructed complex Fourier probe is displayed
         padding : int, optional
             Pixels to pad by post rotating-cropping object
+
         """
         figsize = kwargs.pop("figsize", (8, 5))
         cmap = kwargs.pop("cmap", "magma")
@@ -1784,7 +2579,9 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
         else:
             obj = self.object
 
-        rotated_object = self._crop_rotate_object_fov(obj, padding=padding)
+        rotated_object = self._crop_rotate_object_fov(
+            np.sum(obj, axis=0), padding=padding
+        )
         rotated_shape = rotated_object.shape
 
         extent = [
@@ -1850,6 +2647,7 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
                 cmap=cmap,
                 **kwargs,
             )
+
             ax.set_ylabel("x [A]")
             ax.set_xlabel("y [A]")
             if self._object_type == "potential":
@@ -1870,19 +2668,16 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
             ax = fig.add_subplot(spec[0, 1])
             if plot_fourier_probe:
                 probe_array = Complex2RGB(
-                    self.probe_fourier,
-                    chroma_boost=chroma_boost,
+                    self.probe_fourier[0], chroma_boost=chroma_boost
                 )
-                ax.set_title("Reconstructed Fourier probe")
+                ax.set_title("Reconstructed Fourier probe[0]")
                 ax.set_ylabel("kx [mrad]")
                 ax.set_xlabel("ky [mrad]")
             else:
                 probe_array = Complex2RGB(
-                    self.probe,
-                    power=2,
-                    chroma_boost=chroma_boost,
+                    self.probe[0], power=2, chroma_boost=chroma_boost
                 )
-                ax.set_title("Reconstructed probe intensity")
+                ax.set_title("Reconstructed probe[0] intensity")
                 ax.set_ylabel("x [A]")
                 ax.set_xlabel("y [A]")
 
@@ -1958,8 +2753,8 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
         cbar: bool, optional
             If true, displays a colorbar
         plot_probe: bool
-            If true, the reconstructed complex probe is displayed
-        plot_fourier_probe: bool
+            If true, the reconstructed probe intensity is also displayed
+        plot_fourier_probe: bool, optional
             If true, the reconstructed complex Fourier probe is displayed
         padding : int, optional
             Pixels to pad by post rotating-cropping object
@@ -2019,7 +2814,9 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
                 object_type.append("phase")
             else:
                 object_type.append("potential")
-            objects.append(self._crop_rotate_object_fov(obj, padding=padding))
+            objects.append(
+                self._crop_rotate_object_fov(np.sum(obj, axis=0), padding=padding)
+            )
 
         if plot_probe or plot_fourier_probe:
             total_grids = (np.prod(iterations_grid) / 2).astype("int")
@@ -2092,7 +2889,6 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
         if plot_probe or plot_fourier_probe:
             kwargs.pop("vmin", None)
             kwargs.pop("vmax", None)
-
             grid = ImageGrid(
                 fig,
                 spec[1],
@@ -2107,22 +2903,21 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
                     probe_array = Complex2RGB(
                         asnumpy(
                             self._return_fourier_probe_from_centered_probe(
-                                probes[grid_range[n]]
+                                probes[grid_range[n]][0]
                             )
                         ),
                         chroma_boost=chroma_boost,
                     )
-                    ax.set_title(f"Iter: {grid_range[n]} Fourier probe")
+                    ax.set_title(f"Iter: {grid_range[n]} Fourier probe[0]")
                     ax.set_ylabel("kx [mrad]")
                     ax.set_xlabel("ky [mrad]")
-
                 else:
                     probe_array = Complex2RGB(
-                        probes[grid_range[n]],
+                        probes[grid_range[n]][0],
                         power=2,
                         chroma_boost=chroma_boost,
                     )
-                    ax.set_title(f"Iter: {grid_range[n]} probe intensity")
+                    ax.set_title(f"Iter: {grid_range[n]} probe[0]")
                     ax.set_ylabel("x [A]")
                     ax.set_xlabel("y [A]")
 
@@ -2209,5 +3004,651 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
                 padding=padding,
                 **kwargs,
             )
-
         return self
+
+    def show_fourier_probe(
+        self, probe=None, scalebar=True, pixelsize=None, pixelunits=None, **kwargs
+    ):
+        """
+        Plot probe in fourier space
+
+        Parameters
+        ----------
+        probe: complex array, optional
+            if None is specified, uses the `probe_fourier` property
+        scalebar: bool, optional
+            if True, adds scalebar to probe
+        pixelunits: str, optional
+            units for scalebar, default is A^-1
+        pixelsize: float, optional
+            default is probe reciprocal sampling
+        """
+        asnumpy = self._asnumpy
+
+        if probe is None:
+            probe = list(self.probe_fourier)
+        else:
+            if isinstance(probe, np.ndarray) and probe.ndim == 2:
+                probe = [probe]
+            probe = [asnumpy(self._return_fourier_probe(pr)) for pr in probe]
+
+        if pixelsize is None:
+            pixelsize = self._reciprocal_sampling[1]
+        if pixelunits is None:
+            pixelunits = r"$\AA^{-1}$"
+
+        chroma_boost = kwargs.pop("chroma_boost", 2)
+
+        show_complex(
+            probe if len(probe) > 1 else probe[0],
+            scalebar=scalebar,
+            pixelsize=pixelsize,
+            pixelunits=pixelunits,
+            ticks=False,
+            chroma_boost=chroma_boost,
+            **kwargs,
+        )
+
+    def show_transmitted_probe(
+        self,
+        plot_fourier_probe: bool = False,
+        **kwargs,
+    ):
+        """
+        Plots the min, max, and mean transmitted probe after propagation and transmission.
+
+        Parameters
+        ----------
+        plot_fourier_probe: boolean, optional
+            If True, the transmitted probes are also plotted in Fourier space
+        kwargs:
+            Passed to show_complex
+        """
+
+        xp = self._xp
+        asnumpy = self._asnumpy
+
+        transmitted_probe_intensities = xp.sum(
+            xp.abs(self._transmitted_probes[:, 0]) ** 2, axis=(-2, -1)
+        )
+        min_intensity_transmitted = self._transmitted_probes[
+            xp.argmin(transmitted_probe_intensities), 0
+        ]
+        max_intensity_transmitted = self._transmitted_probes[
+            xp.argmax(transmitted_probe_intensities), 0
+        ]
+        mean_transmitted = self._transmitted_probes[:, 0].mean(0)
+        probes = [
+            asnumpy(self._return_centered_probe(probe))
+            for probe in [
+                mean_transmitted,
+                min_intensity_transmitted,
+                max_intensity_transmitted,
+            ]
+        ]
+        title = [
+            "Mean Transmitted Probe",
+            "Min Intensity Transmitted Probe",
+            "Max Intensity Transmitted Probe",
+        ]
+
+        if plot_fourier_probe:
+            bottom_row = [
+                asnumpy(self._return_fourier_probe(probe))
+                for probe in [
+                    mean_transmitted,
+                    min_intensity_transmitted,
+                    max_intensity_transmitted,
+                ]
+            ]
+            probes = [probes, bottom_row]
+
+            title += [
+                "Mean Transmitted Fourier Probe",
+                "Min Intensity Transmitted Fourier Probe",
+                "Max Intensity Transmitted Fourier Probe",
+            ]
+
+        title = kwargs.get("title", title)
+        show_complex(
+            probes,
+            title=title,
+            **kwargs,
+        )
+
+    def show_slices(
+        self,
+        ms_object=None,
+        cbar: bool = True,
+        common_color_scale: bool = True,
+        padding: int = 0,
+        num_cols: int = 3,
+        show_fft: bool = False,
+        **kwargs,
+    ):
+        """
+        Displays reconstructed slices of object
+
+        Parameters
+        --------
+        ms_object: nd.array, optional
+            Object to plot slices of. If None, uses current object
+        cbar: bool, optional
+            If True, displays a colorbar
+        padding: int, optional
+            Padding to leave uncropped
+        num_cols: int, optional
+            Number of GridSpec columns
+        show_fft: bool, optional
+            if True, plots fft of object slices
+        """
+
+        if ms_object is None:
+            ms_object = self._object
+
+        rotated_object = self._crop_rotate_object_fov(ms_object, padding=padding)
+        if show_fft:
+            rotated_object = np.abs(
+                np.fft.fftshift(
+                    np.fft.fft2(rotated_object, axes=(-2, -1)), axes=(-2, -1)
+                )
+            )
+        rotated_shape = rotated_object.shape
+
+        if np.iscomplexobj(rotated_object):
+            rotated_object = np.angle(rotated_object)
+
+        extent = [
+            0,
+            self.sampling[1] * rotated_shape[2],
+            self.sampling[0] * rotated_shape[1],
+            0,
+        ]
+
+        num_rows = np.ceil(self._num_slices / num_cols).astype("int")
+        wspace = 0.35 if cbar else 0.15
+
+        axsize = kwargs.pop("axsize", (3, 3))
+        cmap = kwargs.pop("cmap", "magma")
+
+        if common_color_scale:
+            vals = np.sort(rotated_object.ravel())
+            ind_vmin = np.round((vals.shape[0] - 1) * 0.02).astype("int")
+            ind_vmax = np.round((vals.shape[0] - 1) * 0.98).astype("int")
+            ind_vmin = np.max([0, ind_vmin])
+            ind_vmax = np.min([len(vals) - 1, ind_vmax])
+            vmin = vals[ind_vmin]
+            vmax = vals[ind_vmax]
+            if vmax == vmin:
+                vmin = vals[0]
+                vmax = vals[-1]
+        else:
+            vmax = None
+            vmin = None
+        vmin = kwargs.pop("vmin", vmin)
+        vmax = kwargs.pop("vmax", vmax)
+
+        spec = GridSpec(
+            ncols=num_cols,
+            nrows=num_rows,
+            hspace=0.15,
+            wspace=wspace,
+        )
+
+        figsize = (axsize[0] * num_cols, axsize[1] * num_rows)
+        fig = plt.figure(figsize=figsize)
+
+        for flat_index, obj_slice in enumerate(rotated_object):
+            row_index, col_index = np.unravel_index(flat_index, (num_rows, num_cols))
+            ax = fig.add_subplot(spec[row_index, col_index])
+            im = ax.imshow(
+                obj_slice,
+                cmap=cmap,
+                vmin=vmin,
+                vmax=vmax,
+                extent=extent,
+                **kwargs,
+            )
+
+            ax.set_title(f"Slice index: {flat_index}")
+
+            if cbar:
+                divider = make_axes_locatable(ax)
+                ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
+                fig.add_axes(ax_cb)
+                fig.colorbar(im, cax=ax_cb)
+
+            if row_index < num_rows - 1:
+                ax.set_xticks([])
+            else:
+                ax.set_xlabel("y [A]")
+
+            if col_index > 0:
+                ax.set_yticks([])
+            else:
+                ax.set_ylabel("x [A]")
+
+        spec.tight_layout(fig)
+
+    def show_depth(
+        self,
+        x1: float,
+        x2: float,
+        y1: float,
+        y2: float,
+        specify_calibrated: bool = False,
+        gaussian_filter_sigma: float = None,
+        ms_object=None,
+        cbar: bool = False,
+        aspect: float = None,
+        plot_line_profile: bool = False,
+        **kwargs,
+    ):
+        """
+        Displays line profile depth section
+
+        Parameters
+        --------
+        x1, x2, y1, y2: floats (pixels)
+            Line profile for depth section runs from (x1,y1) to (x2,y2)
+            Specified in pixels unless specify_calibrated is True
+        specify_calibrated: bool (optional)
+            If True, specify x1, x2, y1, y2 in A values instead of pixels
+        gaussian_filter_sigma: float (optional)
+            Standard deviation of gaussian kernel in A
+        ms_object: np.array
+            Object to plot slices of. If None, uses current object
+        cbar: bool, optional
+            If True, displays a colorbar
+        aspect: float, optional
+            aspect ratio for depth profile plot
+        plot_line_profile: bool
+            If True, also plots line profile showing where depth profile is taken
+        """
+        if ms_object is not None:
+            ms_obj = ms_object
+        else:
+            ms_obj = self.object_cropped
+
+        if specify_calibrated:
+            x1 /= self.sampling[0]
+            x2 /= self.sampling[0]
+            y1 /= self.sampling[1]
+            y2 /= self.sampling[1]
+
+        if x2 == x1:
+            angle = 0
+        elif y2 == y1:
+            angle = np.pi / 2
+        else:
+            angle = np.arctan((x2 - x1) / (y2 - y1))
+
+        x0 = ms_obj.shape[1] / 2
+        y0 = ms_obj.shape[2] / 2
+
+        if (
+            x1 > ms_obj.shape[1]
+            or x2 > ms_obj.shape[1]
+            or y1 > ms_obj.shape[2]
+            or y2 > ms_obj.shape[2]
+        ):
+            raise ValueError("depth section must be in field of view of object")
+
+        from py4DSTEM.process.phase.utils import rotate_point
+
+        x1_0, y1_0 = rotate_point((x0, y0), (x1, y1), angle)
+        x2_0, y2_0 = rotate_point((x0, y0), (x2, y2), angle)
+
+        rotated_object = np.roll(
+            rotate(ms_obj, np.rad2deg(angle), reshape=False, axes=(-1, -2)),
+            int(x1_0),
+            axis=1,
+        )
+
+        if np.iscomplexobj(rotated_object):
+            rotated_object = np.angle(rotated_object)
+        if gaussian_filter_sigma is not None:
+            from scipy.ndimage import gaussian_filter
+
+            gaussian_filter_sigma /= self.sampling[0]
+            rotated_object = gaussian_filter(rotated_object, gaussian_filter_sigma)
+
+        plot_im = rotated_object[:, 0, int(y1_0) : int(y2_0)]
+
+        extent = [
+            0,
+            self.sampling[1] * plot_im.shape[1],
+            self._slice_thicknesses[0] * plot_im.shape[0],
+            0,
+        ]
+
+        figsize = kwargs.pop("figsize", (6, 6))
+        if not plot_line_profile:
+            fig, ax = plt.subplots(figsize=figsize)
+            im = ax.imshow(plot_im, cmap="magma", extent=extent)
+            if aspect is not None:
+                ax.set_aspect(aspect)
+            ax.set_xlabel("r [A]")
+            ax.set_ylabel("z [A]")
+            ax.set_title("Multislice depth profile")
+            if cbar:
+                divider = make_axes_locatable(ax)
+                ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
+                fig.add_axes(ax_cb)
+                fig.colorbar(im, cax=ax_cb)
+        else:
+            extent2 = [
+                0,
+                self.sampling[1] * ms_obj.shape[2],
+                self.sampling[0] * ms_obj.shape[1],
+                0,
+            ]
+            fig, ax = plt.subplots(2, 1, figsize=figsize)
+            ax[0].imshow(ms_obj.sum(0), cmap="gray", extent=extent2)
+            ax[0].plot(
+                [y1 * self.sampling[0], y2 * self.sampling[1]],
+                [x1 * self.sampling[0], x2 * self.sampling[1]],
+                color="red",
+            )
+            ax[0].set_xlabel("y [A]")
+            ax[0].set_ylabel("x [A]")
+            ax[0].set_title("Multislice depth profile location")
+
+            im = ax[1].imshow(plot_im, cmap="magma", extent=extent)
+            if aspect is not None:
+                ax[1].set_aspect(aspect)
+            ax[1].set_xlabel("r [A]")
+            ax[1].set_ylabel("z [A]")
+            ax[1].set_title("Multislice depth profile")
+            if cbar:
+                divider = make_axes_locatable(ax[1])
+                ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
+                fig.add_axes(ax_cb)
+                fig.colorbar(im, cax=ax_cb)
+            plt.tight_layout()
+
+    def tune_num_slices_and_thicknesses(
+        self,
+        num_slices_guess=None,
+        thicknesses_guess=None,
+        num_slices_step_size=1,
+        thicknesses_step_size=20,
+        num_slices_values=3,
+        num_thicknesses_values=3,
+        update_defocus=False,
+        max_iter=5,
+        plot_reconstructions=True,
+        plot_convergence=True,
+        return_values=False,
+        **kwargs,
+    ):
+        """
+        Run reconstructions over a parameters space of number of slices
+        and slice thicknesses. Should be run after the preprocess step.
+
+        Parameters
+        ----------
+        num_slices_guess: float, optional
+            initial starting guess for number of slices, rounds to nearest integer
+            if None, uses current initialized values
+        thicknesses_guess: float (A), optional
+            initial starting guess for thicknesses of slices assuming same
+            thickness for each slice
+            if None, uses current initialized values
+        num_slices_step_size: float, optional
+            size of change of number of slices for each step in parameter space
+        thicknesses_step_size: float (A), optional
+            size of change of slice thicknesses for each step in parameter space
+        num_slices_values: int, optional
+            number of number of slice values to test, must be >= 1
+        num_thicknesses_values: int,optional
+            number of thicknesses values to test, must be >= 1
+        update_defocus: bool, optional
+            if True, updates defocus based on estimated total thickness
+        max_iter: int, optional
+            number of iterations to run in ptychographic reconstruction
+        plot_reconstructions: bool, optional
+            if True, plot phase of reconstructed objects
+        plot_convergence: bool, optional
+            if True, plots error for each iteration for each reconstruction
+        return_values: bool, optional
+            if True, returns objects, convergence
+
+        Returns
+        -------
+        objects: list
+            reconstructed objects
+        convergence: np.ndarray
+            array of convergence values from reconstructions
+        """
+
+        # calculate number of slices and thicknesses values to test
+        if num_slices_guess is None:
+            num_slices_guess = self._num_slices
+        if thicknesses_guess is None:
+            thicknesses_guess = np.mean(self._slice_thicknesses)
+
+        if num_slices_values == 1:
+            num_slices_step_size = 0
+
+        if num_thicknesses_values == 1:
+            thicknesses_step_size = 0
+
+        num_slices = np.linspace(
+            num_slices_guess - num_slices_step_size * (num_slices_values - 1) / 2,
+            num_slices_guess + num_slices_step_size * (num_slices_values - 1) / 2,
+            num_slices_values,
+        )
+
+        thicknesses = np.linspace(
+            thicknesses_guess
+            - thicknesses_step_size * (num_thicknesses_values - 1) / 2,
+            thicknesses_guess
+            + thicknesses_step_size * (num_thicknesses_values - 1) / 2,
+            num_thicknesses_values,
+        )
+
+        if return_values:
+            convergence = []
+            objects = []
+
+        # current initialized values
+        current_verbose = self._verbose
+        current_num_slices = self._num_slices
+        current_thicknesses = self._slice_thicknesses
+        current_rotation_deg = self._rotation_best_rad * 180 / np.pi
+        current_transpose = self._rotation_best_transpose
+        current_defocus = -self._polar_parameters["C10"]
+
+        # Gridspec to plot on
+        if plot_reconstructions:
+            if plot_convergence:
+                spec = GridSpec(
+                    ncols=num_thicknesses_values,
+                    nrows=num_slices_values * 2,
+                    height_ratios=[1, 1 / 4] * num_slices_values,
+                    hspace=0.15,
+                    wspace=0.35,
+                )
+                figsize = kwargs.get(
+                    "figsize", (4 * num_thicknesses_values, 5 * num_slices_values)
+                )
+            else:
+                spec = GridSpec(
+                    ncols=num_thicknesses_values,
+                    nrows=num_slices_values,
+                    hspace=0.15,
+                    wspace=0.35,
+                )
+                figsize = kwargs.get(
+                    "figsize", (4 * num_thicknesses_values, 4 * num_slices_values)
+                )
+
+            fig = plt.figure(figsize=figsize)
+
+        progress_bar = kwargs.pop("progress_bar", False)
+        # run loop and plot along the way
+        self._verbose = False
+        for flat_index, (slices, thickness) in enumerate(
+            tqdmnd(num_slices, thicknesses, desc="Tuning angle and defocus")
+        ):
+            slices = int(slices)
+            self._num_slices = slices
+            self._slice_thicknesses = np.tile(thickness, slices - 1)
+            self._probe = None
+            self._object = None
+            if update_defocus:
+                defocus = current_defocus + slices / 2 * thickness
+                self._polar_parameters["C10"] = -defocus
+
+            self.preprocess(
+                plot_center_of_mass=False,
+                plot_rotation=False,
+                plot_probe_overlaps=False,
+                force_com_rotation=current_rotation_deg,
+                force_com_transpose=current_transpose,
+            )
+            self.reconstruct(
+                reset=True,
+                store_iterations=True if plot_convergence else False,
+                max_iter=max_iter,
+                progress_bar=progress_bar,
+                **kwargs,
+            )
+
+            if plot_reconstructions:
+                row_index, col_index = np.unravel_index(
+                    flat_index, (num_slices_values, num_thicknesses_values)
+                )
+
+                if plot_convergence:
+                    object_ax = fig.add_subplot(spec[row_index * 2, col_index])
+                    convergence_ax = fig.add_subplot(spec[row_index * 2 + 1, col_index])
+                    self._visualize_last_iteration_figax(
+                        fig,
+                        object_ax=object_ax,
+                        convergence_ax=convergence_ax,
+                        cbar=True,
+                    )
+                    convergence_ax.yaxis.tick_right()
+                else:
+                    object_ax = fig.add_subplot(spec[row_index, col_index])
+                    self._visualize_last_iteration_figax(
+                        fig,
+                        object_ax=object_ax,
+                        convergence_ax=None,
+                        cbar=True,
+                    )
+
+                object_ax.set_title(
+                    f" num slices = {slices:.0f}, slices thickness = {thickness:.1f} A \n error = {self.error:.3e}"
+                )
+                object_ax.set_xticks([])
+                object_ax.set_yticks([])
+
+            if return_values:
+                objects.append(self.object)
+                convergence.append(self.error_iterations.copy())
+
+        # initialize back to pre-tuning values
+        self._probe = None
+        self._object = None
+        self._num_slices = current_num_slices
+        self._slice_thicknesses = np.tile(current_thicknesses, current_num_slices - 1)
+        self._polar_parameters["C10"] = -current_defocus
+        self.preprocess(
+            force_com_rotation=current_rotation_deg,
+            force_com_transpose=current_transpose,
+            plot_center_of_mass=False,
+            plot_rotation=False,
+            plot_probe_overlaps=False,
+        )
+        self._verbose = current_verbose
+
+        if plot_reconstructions:
+            spec.tight_layout(fig)
+
+        if return_values:
+            return objects, convergence
+
+    def _return_object_fft(
+        self,
+        obj=None,
+    ):
+        """
+        Returns obj fft shifted to center of array
+
+        Parameters
+        ----------
+        obj: array, optional
+            if None is specified, uses self._object
+        """
+        asnumpy = self._asnumpy
+
+        if obj is None:
+            obj = self._object
+
+        obj = asnumpy(obj)
+        if np.iscomplexobj(obj):
+            obj = np.angle(obj)
+
+        obj = self._crop_rotate_object_fov(np.sum(obj, axis=0))
+        return np.abs(np.fft.fftshift(np.fft.fft2(np.fft.ifftshift(obj))))
+
+    def _return_self_consistency_errors(
+        self,
+        max_batch_size=None,
+    ):
+        """Compute the self-consistency errors for each probe position"""
+
+        xp = self._xp
+        asnumpy = self._asnumpy
+
+        # Batch-size
+        if max_batch_size is None:
+            max_batch_size = self._num_diffraction_patterns
+
+        # Re-initialize fractional positions and vector patches
+        errors = np.array([])
+        positions_px = self._positions_px.copy()
+
+        for start, end in generate_batches(
+            self._num_diffraction_patterns, max_batch=max_batch_size
+        ):
+            # batch indices
+            self._positions_px = positions_px[start:end]
+            self._positions_px_fractional = self._positions_px - xp.round(
+                self._positions_px
+            )
+            (
+                self._vectorized_patch_indices_row,
+                self._vectorized_patch_indices_col,
+            ) = self._extract_vectorized_patch_indices()
+            amplitudes = self._amplitudes[start:end]
+
+            # Overlaps
+            _, _, overlap = self._overlap_projection(self._object, self._probe)
+            fourier_overlap = xp.fft.fft2(overlap)
+            intensity_norm = xp.sqrt(xp.sum(xp.abs(fourier_overlap) ** 2, axis=1))
+
+            # Normalized mean-squared errors
+            batch_errors = xp.sum(
+                xp.abs(amplitudes - intensity_norm) ** 2, axis=(-2, -1)
+            )
+            errors = np.hstack((errors, batch_errors))
+
+        self._positions_px = positions_px.copy()
+        errors /= self._mean_diffraction_intensity
+
+        return asnumpy(errors)
+
+    def _return_projected_cropped_potential(
+        self,
+    ):
+        """Utility function to accommodate multiple classes"""
+        if self._object_type == "complex":
+            projected_cropped_potential = np.angle(self.object_cropped).sum(0)
+        else:
+            projected_cropped_potential = self.object_cropped.sum(0)
+
+        return projected_cropped_potential
