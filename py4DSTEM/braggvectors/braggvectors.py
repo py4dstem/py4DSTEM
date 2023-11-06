@@ -479,12 +479,12 @@ class CalibratedVectorGetter:
         # Q/R rotation
         if rotate:
             flip = cal.get_QR_flip()
-            theta = cal.get_QR_rotation_degrees()
+            theta = np.radians(cal.get_QR_rotation_degrees())
             assert flip is not None, "Requested calibration was not found!"
             assert theta is not None, "Requested calibration was not found!"
             # rotation matrix
             R = np.array(
-                [[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]]
+                [[np.cos(theta), np.sin(theta)], [-np.sin(theta), np.cos(theta)]]
             )
             # apply
             if flip:
