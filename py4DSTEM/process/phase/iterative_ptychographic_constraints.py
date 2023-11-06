@@ -1,4 +1,7 @@
+import warnings
+
 import numpy as np
+import pylops
 from py4DSTEM.process.phase.utils import (
     array_slice,
     estimate_global_transformation_ransac,
@@ -183,6 +186,63 @@ class PtychographicConstraints:
 
         return current_object
 
+    def _object_denoise_tv_pylops(self, current_object, weight, iterations):
+        """
+        Performs second order TV denoising along x and y
+
+        Parameters
+        ----------
+        current_object: np.ndarray
+            Current object estimate
+        weight : float
+            Denoising weight. The greater `weight`, the more denoising (at
+            the expense of fidelity to `input`).
+        iterations: float
+            Number of iterations to run in denoising algorithm.
+            `niter_out` in pylops
+
+        Returns
+        -------
+        constrained_object: np.ndarray
+            Constrained object estimate
+
+        """
+        xp = self._xp
+
+        if xp.iscomplexobj(current_object):
+            current_object_tv = current_object
+            warnings.warn(
+                ("TV denoising is currently only supported for potential objects."),
+                UserWarning,
+            )
+
+        else:
+            nx, ny = current_object.shape
+            niter_out = iterations
+            niter_in = 1
+            Iop = pylops.Identity(nx * ny)
+            xy_laplacian = pylops.Laplacian(
+                (nx, ny), axes=(0, 1), edge=False, kind="backward"
+            )
+
+            l1_regs = [xy_laplacian]
+
+            current_object_tv = pylops.optimization.sparsity.splitbregman(
+                Op=Iop,
+                y=current_object.ravel(),
+                RegsL1=l1_regs,
+                niter_outer=niter_out,
+                niter_inner=niter_in,
+                epsRL1s=[weight],
+                tol=1e-4,
+                tau=1.0,
+                show=False,
+            )[0]
+
+            current_object_tv = current_object_tv.reshape(current_object.shape)
+
+        return current_object_tv
+
     def _object_denoise_tv_chambolle(
         self,
         current_object,
@@ -229,90 +289,100 @@ class PtychographicConstraints:
         Adapted skimage.restoration.denoise_tv_chambolle.
         """
         xp = self._xp
-
-        current_object_sum = xp.sum(current_object)
-        if axis is None:
-            ndim = xp.arange(current_object.ndim).tolist()
-        elif isinstance(axis, tuple):
-            ndim = list(axis)
-        else:
-            ndim = [axis]
-
-        if pad_object:
-            pad_width = ((0, 0),) * current_object.ndim
-            pad_width = list(pad_width)
-            for ax in range(len(ndim)):
-                pad_width[ndim[ax]] = (1, 1)
-            current_object = xp.pad(
-                current_object, pad_width=pad_width, mode="constant"
+        if xp.iscomplexobj(current_object):
+            updated_object = current_object
+            warnings.warn(
+                ("TV denoising is currently only supported for potential objects."),
+                UserWarning,
             )
+        else:
+            current_object_sum = xp.sum(current_object)
+            if axis is None:
+                ndim = xp.arange(current_object.ndim).tolist()
+            elif isinstance(axis, tuple):
+                ndim = list(axis)
+            else:
+                ndim = [axis]
 
-        p = xp.zeros(
-            (current_object.ndim,) + current_object.shape, dtype=current_object.dtype
-        )
-        g = xp.zeros_like(p)
-        d = xp.zeros_like(current_object)
+            if pad_object:
+                pad_width = ((0, 0),) * current_object.ndim
+                pad_width = list(pad_width)
+                for ax in range(len(ndim)):
+                    pad_width[ndim[ax]] = (1, 1)
+                current_object = xp.pad(
+                    current_object, pad_width=pad_width, mode="constant"
+                )
 
-        i = 0
-        while i < max_num_iter:
-            if i > 0:
-                # d will be the (negative) divergence of p
-                d = -p.sum(0)
-                slices_d = [
-                    slice(None),
-                ] * current_object.ndim
-                slices_p = [
+            p = xp.zeros(
+                (current_object.ndim,) + current_object.shape,
+                dtype=current_object.dtype,
+            )
+            g = xp.zeros_like(p)
+            d = xp.zeros_like(current_object)
+
+            i = 0
+            while i < max_num_iter:
+                if i > 0:
+                    # d will be the (negative) divergence of p
+                    d = -p.sum(0)
+                    slices_d = [
+                        slice(None),
+                    ] * current_object.ndim
+                    slices_p = [
+                        slice(None),
+                    ] * (current_object.ndim + 1)
+                    for ax in range(len(ndim)):
+                        slices_d[ndim[ax]] = slice(1, None)
+                        slices_p[ndim[ax] + 1] = slice(0, -1)
+                        slices_p[0] = ndim[ax]
+                        d[tuple(slices_d)] += p[tuple(slices_p)]
+                        slices_d[ndim[ax]] = slice(None)
+                        slices_p[ndim[ax] + 1] = slice(None)
+                    updated_object = current_object + d
+                else:
+                    updated_object = current_object
+                E = (d**2).sum()
+
+                # g stores the gradients of updated_object along each axis
+                # e.g. g[0] is the first order finite difference along axis 0
+                slices_g = [
                     slice(None),
                 ] * (current_object.ndim + 1)
                 for ax in range(len(ndim)):
-                    slices_d[ndim[ax]] = slice(1, None)
-                    slices_p[ndim[ax] + 1] = slice(0, -1)
-                    slices_p[0] = ndim[ax]
-                    d[tuple(slices_d)] += p[tuple(slices_p)]
-                    slices_d[ndim[ax]] = slice(None)
-                    slices_p[ndim[ax] + 1] = slice(None)
-                updated_object = current_object + d
-            else:
-                updated_object = current_object
-            E = (d**2).sum()
-
-            # g stores the gradients of updated_object along each axis
-            # e.g. g[0] is the first order finite difference along axis 0
-            slices_g = [
-                slice(None),
-            ] * (current_object.ndim + 1)
-            for ax in range(len(ndim)):
-                slices_g[ndim[ax] + 1] = slice(0, -1)
-                slices_g[0] = ndim[ax]
-                g[tuple(slices_g)] = xp.diff(updated_object, axis=ndim[ax])
-                slices_g[ndim[ax] + 1] = slice(None)
-            if scaling is not None:
-                scaling /= xp.max(scaling)
-                g *= xp.array(scaling)[:, xp.newaxis, xp.newaxis]
-            norm = xp.sqrt((g**2).sum(axis=0))[xp.newaxis, ...]
-            E += weight * norm.sum()
-            tau = 1.0 / (2.0 * len(ndim))
-            norm *= tau / weight
-            norm += 1.0
-            p -= tau * g
-            p /= norm
-            E /= float(current_object.size)
-            if i == 0:
-                E_init = E
-                E_previous = E
-            else:
-                if xp.abs(E_previous - E) < eps * E_init:
-                    break
-                else:
+                    slices_g[ndim[ax] + 1] = slice(0, -1)
+                    slices_g[0] = ndim[ax]
+                    g[tuple(slices_g)] = xp.diff(updated_object, axis=ndim[ax])
+                    slices_g[ndim[ax] + 1] = slice(None)
+                if scaling is not None:
+                    scaling /= xp.max(scaling)
+                    g *= xp.array(scaling)[:, xp.newaxis, xp.newaxis]
+                norm = xp.sqrt((g**2).sum(axis=0))[xp.newaxis, ...]
+                E += weight * norm.sum()
+                tau = 1.0 / (2.0 * len(ndim))
+                norm *= tau / weight
+                norm += 1.0
+                p -= tau * g
+                p /= norm
+                E /= float(current_object.size)
+                if i == 0:
+                    E_init = E
                     E_previous = E
-            i += 1
+                else:
+                    if xp.abs(E_previous - E) < eps * E_init:
+                        break
+                    else:
+                        E_previous = E
+                i += 1
 
-        if pad_object:
-            for ax in range(len(ndim)):
-                slices = array_slice(ndim[ax], current_object.ndim, 1, -1)
-                updated_object = updated_object[slices]
+            if pad_object:
+                for ax in range(len(ndim)):
+                    slices = array_slice(ndim[ax], current_object.ndim, 1, -1)
+                    updated_object = updated_object[slices]
+            updated_object = (
+                updated_object / xp.sum(updated_object) * current_object_sum
+            )
 
-        return updated_object / xp.sum(updated_object) * current_object_sum
+        return updated_object
 
     def _probe_center_of_mass_constraint(self, current_probe):
         """
@@ -364,7 +434,7 @@ class PtychographicConstraints:
         erf = self._erf
 
         probe_intensity = xp.abs(current_probe) ** 2
-        # current_probe_sum = xp.sum(probe_intensity)
+        current_probe_sum = xp.sum(probe_intensity)
 
         X = xp.fft.fftfreq(current_probe.shape[0])[:, None]
         Y = xp.fft.fftfreq(current_probe.shape[1])[None]
@@ -374,10 +444,10 @@ class PtychographicConstraints:
         tophat_mask = 0.5 * (1 - erf(sigma * r / (1 - r**2)))
 
         updated_probe = current_probe * tophat_mask
-        # updated_probe_sum = xp.sum(xp.abs(updated_probe) ** 2)
-        # normalization = xp.sqrt(current_probe_sum / updated_probe_sum)
+        updated_probe_sum = xp.sum(xp.abs(updated_probe) ** 2)
+        normalization = xp.sqrt(current_probe_sum / updated_probe_sum)
 
-        return updated_probe  # * normalization
+        return updated_probe * normalization
 
     def _probe_fourier_amplitude_constraint(
         self,
@@ -406,7 +476,7 @@ class PtychographicConstraints:
         xp = self._xp
         asnumpy = self._asnumpy
 
-        # current_probe_sum = xp.sum(xp.abs(current_probe) ** 2)
+        current_probe_sum = xp.sum(xp.abs(current_probe) ** 2)
         current_probe_fft = xp.fft.fft2(current_probe)
 
         updated_probe_fft, _, _, _ = regularize_probe_amplitude(
@@ -419,10 +489,10 @@ class PtychographicConstraints:
 
         updated_probe_fft = xp.asarray(updated_probe_fft)
         updated_probe = xp.fft.ifft2(updated_probe_fft)
-        # updated_probe_sum = xp.sum(xp.abs(updated_probe) ** 2)
-        # normalization = xp.sqrt(current_probe_sum / updated_probe_sum)
+        updated_probe_sum = xp.sum(xp.abs(updated_probe) ** 2)
+        normalization = xp.sqrt(current_probe_sum / updated_probe_sum)
 
-        return updated_probe  # * normalization
+        return updated_probe * normalization
 
     def _probe_aperture_constraint(
         self,
@@ -444,16 +514,16 @@ class PtychographicConstraints:
         """
         xp = self._xp
 
-        # current_probe_sum = xp.sum(xp.abs(current_probe) ** 2)
+        current_probe_sum = xp.sum(xp.abs(current_probe) ** 2)
         current_probe_fft_phase = xp.angle(xp.fft.fft2(current_probe))
 
         updated_probe = xp.fft.ifft2(
             xp.exp(1j * current_probe_fft_phase) * initial_probe_aperture
         )
-        # updated_probe_sum = xp.sum(xp.abs(updated_probe) ** 2)
-        # normalization = xp.sqrt(current_probe_sum / updated_probe_sum)
+        updated_probe_sum = xp.sum(xp.abs(updated_probe) ** 2)
+        normalization = xp.sqrt(current_probe_sum / updated_probe_sum)
 
-        return updated_probe  # * normalization
+        return updated_probe * normalization
 
     def _probe_aberration_fitting_constraint(
         self,
@@ -485,16 +555,18 @@ class PtychographicConstraints:
         fourier_probe = xp.fft.fft2(current_probe)
         fourier_probe_abs = xp.abs(fourier_probe)
         sampling = self.sampling
+        energy = self._energy
 
         fitted_angle, _ = fit_aberration_surface(
             fourier_probe,
             sampling,
+            energy,
             max_angular_order,
             max_radial_order,
             xp=xp,
         )
 
-        fourier_probe = fourier_probe_abs * xp.exp(1.0j * fitted_angle)
+        fourier_probe = fourier_probe_abs * xp.exp(-1.0j * fitted_angle)
         current_probe = xp.fft.ifft2(fourier_probe)
 
         return current_probe
