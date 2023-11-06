@@ -79,6 +79,8 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
     object_type: str, optional
         The object can be reconstructed as a real potential ('potential') or a complex
         object ('complex')
+    positions_mask: np.ndarray, optional
+        Boolean real space mask to select positions in datacube to skip for reconstruction
     name: str, optional
         Class name
     kwargs:
@@ -102,6 +104,7 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
         initial_scan_positions: np.ndarray = None,
         object_padding_px: Tuple[int, int] = None,
         object_type: str = "complex",
+        positions_mask: np.ndarray = None,
         verbose: bool = True,
         device: str = "cpu",
         name: str = "ptychographic_reconstruction",
@@ -147,6 +150,13 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
                 f"object_type must be either 'potential' or 'complex', not {object_type}"
             )
 
+        if positions_mask is not None and positions_mask.dtype != "bool":
+            warnings.warn(
+                ("`positions_mask` converted to `bool` array"),
+                UserWarning,
+            )
+            positions_mask = np.asarray(positions_mask, dtype="bool")
+
         self.set_save_defaults()
 
         # Data
@@ -163,6 +173,7 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
         self._rolloff = rolloff
         self._object_type = object_type
         self._object_padding_px = object_padding_px
+        self._positions_mask = positions_mask
         self._verbose = verbose
         self._device = device
         self._preprocessed = False
@@ -333,7 +344,11 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
             self._amplitudes,
             self._mean_diffraction_intensity,
         ) = self._normalize_diffraction_intensities(
-            self._intensities, self._com_fitted_x, self._com_fitted_y, crop_patterns
+            self._intensities,
+            self._com_fitted_x,
+            self._com_fitted_y,
+            crop_patterns,
+            self._positions_mask,
         )
 
         # explicitly delete namespace
@@ -342,7 +357,7 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
         del self._intensities
 
         self._positions_px = self._calculate_scan_positions_in_pixels(
-            self._scan_positions
+            self._scan_positions, self._positions_mask
         )
 
         # handle semiangle specified in pixels

@@ -81,12 +81,16 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
         Probe positions in Å for each diffraction intensity
         If None, initialized to a grid scan
     theta_x: float
-            x tilt of propagator (in angles)
+        x tilt of propagator (in degrees)
     theta_y: float
-            y tilt of propagator (in angles)
+        y tilt of propagator (in degrees)
+    middle_focus: bool
+        if True, adds half the sample thickness to the defocus
     object_type: str, optional
         The object can be reconstructed as a real potential ('potential') or a complex
         object ('complex')
+    positions_mask: np.ndarray, optional
+        Boolean real space mask to select positions in datacube to skip for reconstruction
     verbose: bool, optional
         If True, class methods will inherit this and print additional information
     device: str, optional
@@ -117,7 +121,9 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
         initial_scan_positions: np.ndarray = None,
         theta_x: float = 0,
         theta_y: float = 0,
+        middle_focus: bool = False,
         object_type: str = "complex",
+        positions_mask: np.ndarray = None,
         verbose: bool = True,
         device: str = "cpu",
         name: str = "multi-slice_ptychographic_reconstruction",
@@ -150,6 +156,25 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
             if (key not in polar_symbols) and (key not in polar_aliases.keys()):
                 raise ValueError("{} not a recognized parameter".format(key))
 
+        if np.isscalar(slice_thicknesses):
+            mean_slice_thickness = slice_thicknesses
+        else:
+            mean_slice_thickness = np.mean(slice_thicknesses)
+
+        if middle_focus:
+            if "defocus" in kwargs:
+                kwargs["defocus"] += mean_slice_thickness * num_slices / 2
+            elif "C10" in kwargs:
+                kwargs["C10"] -= mean_slice_thickness * num_slices / 2
+            elif polar_parameters is not None and "defocus" in polar_parameters:
+                polar_parameters["defocus"] = (
+                    polar_parameters["defocus"] + mean_slice_thickness * num_slices / 2
+                )
+            elif polar_parameters is not None and "C10" in polar_parameters:
+                polar_parameters["C10"] = (
+                    polar_parameters["C10"] - mean_slice_thickness * num_slices / 2
+                )
+
         self._polar_parameters = dict(zip(polar_symbols, [0.0] * len(polar_symbols)))
 
         if polar_parameters is None:
@@ -173,6 +198,12 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
             raise ValueError(
                 f"object_type must be either 'potential' or 'complex', not {object_type}"
             )
+        if positions_mask is not None and positions_mask.dtype != "bool":
+            warnings.warn(
+                ("`positions_mask` converted to `bool` array"),
+                UserWarning,
+            )
+            positions_mask = np.asarray(positions_mask, dtype="bool")
 
         self.set_save_defaults()
 
@@ -189,6 +220,7 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
         self._semiangle_cutoff_pixels = semiangle_cutoff_pixels
         self._rolloff = rolloff
         self._object_type = object_type
+        self._positions_mask = positions_mask
         self._object_padding_px = object_padding_px
         self._verbose = verbose
         self._device = device
@@ -224,9 +256,9 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
         slice_thicknesses: Sequence[float]
             Array of slice thicknesses in A
         theta_x: float
-            x tilt of propagator (in angles)
+            x tilt of propagator (in degrees)
         theta_y: float
-            y tilt of propagator (in angles)
+            y tilt of propagator (in degrees)
 
         Returns
         -------
@@ -450,7 +482,11 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
             self._amplitudes,
             self._mean_diffraction_intensity,
         ) = self._normalize_diffraction_intensities(
-            self._intensities, self._com_fitted_x, self._com_fitted_y, crop_patterns
+            self._intensities,
+            self._com_fitted_x,
+            self._com_fitted_y,
+            crop_patterns,
+            self._positions_mask,
         )
 
         # explicitly delete namespace
@@ -459,7 +495,7 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
         del self._intensities
 
         self._positions_px = self._calculate_scan_positions_in_pixels(
-            self._scan_positions
+            self._scan_positions, self._positions_mask
         )
 
         # handle semiangle specified in pixels
@@ -2919,6 +2955,7 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
         common_color_scale: bool = True,
         padding: int = 0,
         num_cols: int = 3,
+        show_fft: bool = False,
         **kwargs,
     ):
         """
@@ -2934,12 +2971,20 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
             Padding to leave uncropped
         num_cols: int, optional
             Number of GridSpec columns
+        show_fft: bool, optional
+            if True, plots fft of object slices
         """
 
         if ms_object is None:
             ms_object = self._object
 
         rotated_object = self._crop_rotate_object_fov(ms_object, padding=padding)
+        if show_fft:
+            rotated_object = np.abs(
+                np.fft.fftshift(
+                    np.fft.fft2(rotated_object, axes=(-2, -1)), axes=(-2, -1)
+                )
+            )
         rotated_shape = rotated_object.shape
 
         if np.iscomplexobj(rotated_object):
@@ -2957,8 +3002,21 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
 
         axsize = kwargs.pop("axsize", (3, 3))
         cmap = kwargs.pop("cmap", "magma")
-        vmin = np.min(rotated_object) if common_color_scale else None
-        vmax = np.max(rotated_object) if common_color_scale else None
+
+        if common_color_scale:
+            vals = np.sort(rotated_object.ravel())
+            ind_vmin = np.round((vals.shape[0] - 1) * 0.02).astype("int")
+            ind_vmax = np.round((vals.shape[0] - 1) * 0.98).astype("int")
+            ind_vmin = np.max([0, ind_vmin])
+            ind_vmax = np.min([len(vals) - 1, ind_vmax])
+            vmin = vals[ind_vmin]
+            vmax = vals[ind_vmax]
+            if vmax == vmin:
+                vmin = vals[0]
+                vmax = vals[-1]
+        else:
+            vmax = None
+            vmin = None
         vmin = kwargs.pop("vmin", vmin)
         vmax = kwargs.pop("vmax", vmax)
 
@@ -3075,7 +3133,7 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
 
         rotated_object = np.roll(
             rotate(ms_obj, np.rad2deg(angle), reshape=False, axes=(-1, -2)),
-            int(x1_0),
+            -int(x1_0),
             axis=1,
         )
 
@@ -3368,3 +3426,14 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
 
         obj = self._crop_rotate_object_fov(np.sum(obj, axis=0))
         return np.abs(np.fft.fftshift(np.fft.fft2(np.fft.ifftshift(obj))))
+
+    def _return_projected_cropped_potential(
+        self,
+    ):
+        """Utility function to accommodate multiple classes"""
+        if self._object_type == "complex":
+            projected_cropped_potential = np.angle(self.object_cropped).sum(0)
+        else:
+            projected_cropped_potential = self.object_cropped.sum(0)
+
+        return projected_cropped_potential

@@ -1620,7 +1620,7 @@ def fit_aberration_surface(
 ):
     """ """
     probe_amp = xp.abs(complex_probe)
-    probe_angle = xp.angle(complex_probe)
+    probe_angle = -xp.angle(complex_probe)
 
     if xp is np:
         probe_angle = probe_angle.astype(np.float64)
