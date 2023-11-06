@@ -66,6 +66,8 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
     object_padding_px: Tuple[int,int], optional
         Pixel dimensions to pad objects with
         If None, the padding is set to half the probe ROI dimensions
+    positions_mask: np.ndarray, optional
+        Boolean real space mask to select positions in datacube to skip for reconstruction
     initial_object_guess: np.ndarray, optional
         Initial guess for complex-valued object of dimensions (Px,Py)
         If None, initialized to 1.0j
@@ -102,6 +104,7 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
         vacuum_probe_intensity: np.ndarray = None,
         polar_parameters: Mapping[str, float] = None,
         object_padding_px: Tuple[int, int] = None,
+        positions_mask: np.ndarray = None,
         initial_object_guess: np.ndarray = None,
         initial_probe_guess: np.ndarray = None,
         initial_scan_positions: np.ndarray = None,
@@ -150,6 +153,12 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
             raise ValueError(
                 f"object_type must be either 'potential' or 'complex', not {object_type}"
             )
+        if positions_mask is not None and positions_mask.dtype != "bool":
+            warnings.warn(
+                ("`positions_mask` converted to `bool` array"),
+                UserWarning,
+            )
+            positions_mask = np.asarray(positions_mask, dtype="bool")
 
         self.set_save_defaults()
 
@@ -167,6 +176,7 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
         self._rolloff = rolloff
         self._object_type = object_type
         self._object_padding_px = object_padding_px
+        self._positions_mask = positions_mask
         self._verbose = verbose
         self._device = device
         self._preprocessed = False
@@ -341,6 +351,9 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
                 )
             )
 
+        # Ensure plot_center_of_mass is not in kwargs
+        kwargs.pop("plot_center_of_mass", None)
+
         # 1st measurement sets rotation angle and transposition
         (
             measurement_0,
@@ -404,7 +417,11 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
             amplitudes_0,
             mean_diffraction_intensity_0,
         ) = self._normalize_diffraction_intensities(
-            intensities_0, com_fitted_x_0, com_fitted_y_0, crop_patterns
+            intensities_0,
+            com_fitted_x_0,
+            com_fitted_y_0,
+            crop_patterns,
+            self._positions_mask,
         )
 
         # explicitly delete namescapes
@@ -485,7 +502,11 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
             amplitudes_1,
             mean_diffraction_intensity_1,
         ) = self._normalize_diffraction_intensities(
-            intensities_1, com_fitted_x_1, com_fitted_y_1, crop_patterns
+            intensities_1,
+            com_fitted_x_1,
+            com_fitted_y_1,
+            crop_patterns,
+            self._positions_mask,
         )
 
         # explicitly delete namescapes
@@ -567,7 +588,11 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
                 amplitudes_2,
                 mean_diffraction_intensity_2,
             ) = self._normalize_diffraction_intensities(
-                intensities_2, com_fitted_x_2, com_fitted_y_2, crop_patterns
+                intensities_2,
+                com_fitted_x_2,
+                com_fitted_y_2,
+                crop_patterns,
+                self._positions_mask,
             )
 
             # explicitly delete namescapes
@@ -607,7 +632,7 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
         self._region_of_interest_shape = np.array(self._amplitudes[0].shape[-2:])
 
         self._positions_px = self._calculate_scan_positions_in_pixels(
-            self._scan_positions
+            self._scan_positions, self._positions_mask
         )
 
         # handle semiangle specified in pixels
@@ -3357,3 +3382,98 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
             )
 
         return self
+
+    @property
+    def self_consistency_errors(self):
+        """Compute the self-consistency errors for each probe position"""
+
+        xp = self._xp
+        asnumpy = self._asnumpy
+
+        # Re-initialize fractional positions and vector patches, max_batch_size = None
+        self._positions_px_fractional = self._positions_px - xp.round(
+            self._positions_px
+        )
+
+        (
+            self._vectorized_patch_indices_row,
+            self._vectorized_patch_indices_col,
+        ) = self._extract_vectorized_patch_indices()
+
+        # Overlaps
+        _, _, overlap = self._warmup_overlap_projection(self._object, self._probe)
+        fourier_overlap = xp.fft.fft2(overlap[0])
+
+        # Normalized mean-squared errors
+        error = xp.sum(
+            xp.abs(self._amplitudes[0] - xp.abs(fourier_overlap)) ** 2, axis=(-2, -1)
+        )
+        error /= self._mean_diffraction_intensity
+
+        return asnumpy(error)
+
+    def _return_self_consistency_errors(
+        self,
+        max_batch_size=None,
+    ):
+        """Compute the self-consistency errors for each probe position"""
+
+        xp = self._xp
+        asnumpy = self._asnumpy
+
+        # Batch-size
+        if max_batch_size is None:
+            max_batch_size = self._num_diffraction_patterns
+
+        # Re-initialize fractional positions and vector patches
+        errors = np.array([])
+        positions_px = self._positions_px.copy()
+
+        for start, end in generate_batches(
+            self._num_diffraction_patterns, max_batch=max_batch_size
+        ):
+            # batch indices
+            self._positions_px = positions_px[start:end]
+            self._positions_px_fractional = self._positions_px - xp.round(
+                self._positions_px
+            )
+            (
+                self._vectorized_patch_indices_row,
+                self._vectorized_patch_indices_col,
+            ) = self._extract_vectorized_patch_indices()
+            amplitudes = self._amplitudes[0][start:end]
+
+            # Overlaps
+            _, _, overlap = self._warmup_overlap_projection(self._object, self._probe)
+            fourier_overlap = xp.fft.fft2(overlap[0])
+
+            # Normalized mean-squared errors
+            batch_errors = xp.sum(
+                xp.abs(amplitudes - xp.abs(fourier_overlap)) ** 2, axis=(-2, -1)
+            )
+            errors = np.hstack((errors, batch_errors))
+
+        self._positions_px = positions_px.copy()
+        errors /= self._mean_diffraction_intensity
+
+        return asnumpy(errors)
+
+    def _return_projected_cropped_potential(
+        self,
+    ):
+        """Utility function to accommodate multiple classes"""
+        if self._object_type == "complex":
+            projected_cropped_potential = np.angle(self.object_cropped[0])
+        else:
+            projected_cropped_potential = self.object_cropped[0]
+
+        return projected_cropped_potential
+
+    @property
+    def object_cropped(self):
+        """Cropped and rotated object"""
+
+        obj_e, obj_m = self._object
+        obj_e = self._crop_rotate_object_fov(obj_e)
+        obj_m = self._crop_rotate_object_fov(obj_m)
+        return (obj_e, obj_m)

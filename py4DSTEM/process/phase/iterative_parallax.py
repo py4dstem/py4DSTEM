@@ -136,7 +136,7 @@ class ParallaxReconstruction(PhaseReconstruction):
         if hasattr(self, "aberration_C1"):
             recon_metadata |= {
                 "aberration_rotation_QR": self.rotation_Q_to_R_rads,
-                "aberration_transpose": self.transpose_detected,
+                "aberration_transpose": self.transpose,
                 "aberration_C1": self.aberration_C1,
                 "aberration_A1x": self.aberration_A1x,
                 "aberration_A1y": self.aberration_A1y,
@@ -236,7 +236,7 @@ class ParallaxReconstruction(PhaseReconstruction):
 
         if "aberration_C1" in reconstruction_md.keys:
             self.rotation_Q_to_R_rads = reconstruction_md["aberration_rotation_QR"]
-            self.transpose_detected = reconstruction_md["aberration_transpose"]
+            self.transpose = reconstruction_md["aberration_transpose"]
             self.aberration_C1 = reconstruction_md["aberration_C1"]
             self.aberration_A1x = reconstruction_md["aberration_A1x"]
             self.aberration_A1y = reconstruction_md["aberration_A1y"]
@@ -587,16 +587,27 @@ class ParallaxReconstruction(PhaseReconstruction):
         self.recon_BF = asnumpy(self._recon_BF)
 
         if plot_average_bf:
-            figsize = kwargs.pop("figsize", (6, 6))
+            figsize = kwargs.pop("figsize", (6, 12))
 
-            fig, ax = plt.subplots(figsize=figsize)
+            fig, ax = plt.subplots(1, 2, figsize=figsize)
 
-            self._visualize_figax(fig, ax, **kwargs)
+            self._visualize_figax(fig, ax[0], **kwargs)
 
-            ax.set_ylabel("x [A]")
-            ax.set_xlabel("y [A]")
-            ax.set_title("Average Bright Field Image")
+            ax[0].set_ylabel("x [A]")
+            ax[0].set_xlabel("y [A]")
+            ax[0].set_title("Average Bright Field Image")
 
+            reciprocal_extent = [
+                -0.5 * (self._reciprocal_sampling[1] * self._dp_mask.shape[1]),
+                0.5 * (self._reciprocal_sampling[1] * self._dp_mask.shape[1]),
+                0.5 * (self._reciprocal_sampling[0] * self._dp_mask.shape[0]),
+                -0.5 * (self._reciprocal_sampling[0] * self._dp_mask.shape[0]),
+            ]
+            ax[1].imshow(self._dp_mask, extent=reciprocal_extent, cmap="gray")
+            ax[1].set_title("DP mask")
+            ax[1].set_ylabel(r"$k_x$ [$A^{-1}$]")
+            ax[1].set_xlabel(r"$k_y$ [$A^{-1}$]")
+            plt.tight_layout()
         self._preprocessed = True
 
         if self._device == "gpu":
@@ -1098,26 +1109,46 @@ class ParallaxReconstruction(PhaseReconstruction):
         BF_size = np.array(self._stack_BF_no_window.shape[-2:])
 
         self._DF_upsample_limit = np.max(
-            self._region_of_interest_shape / self._scan_shape
+            2 * self._region_of_interest_shape / self._scan_shape
         )
         self._BF_upsample_limit = (
-            2 * self._kr.max() / self._reciprocal_sampling[0]
+            4 * self._kr.max() / self._reciprocal_sampling[0]
         ) / self._scan_shape.max()
         if self._device == "gpu":
             self._BF_upsample_limit = self._BF_upsample_limit.item()
 
         if kde_upsample_factor is None:
-            kde_upsample_factor = np.minimum(
-                self._BF_upsample_limit * 3 / 2, self._DF_upsample_limit
-            )
+            if self._BF_upsample_limit * 3 / 2 > self._DF_upsample_limit:
+                kde_upsample_factor = self._DF_upsample_limit
 
-            warnings.warn(
-                (
-                    f"Upsampling factor set to {kde_upsample_factor:.2f} (1.5 times the "
-                    f"bright-field upsampling limit of {self._BF_upsample_limit:.2f})."
-                ),
-                UserWarning,
-            )
+                warnings.warn(
+                    (
+                        f"Upsampling factor set to {kde_upsample_factor:.2f} (the "
+                        f"dark-field upsampling limit)."
+                    ),
+                    UserWarning,
+                )
+
+            elif self._BF_upsample_limit * 3 / 2 > 1:
+                kde_upsample_factor = self._BF_upsample_limit * 3 / 2
+
+                warnings.warn(
+                    (
+                        f"Upsampling factor set to {kde_upsample_factor:.2f} (1.5 times the "
+                        f"bright-field upsampling limit of {self._BF_upsample_limit:.2f})."
+                    ),
+                    UserWarning,
+                )
+            else:
+                kde_upsample_factor = self._DF_upsample_limit * 2 / 3
+
+                warnings.warn(
+                    (
+                        f"Upsampling factor set to {kde_upsample_factor:.2f} (2/3 times the "
+                        f"dark-field upsampling limit of {self._DF_upsample_limit:.2f})."
+                    ),
+                    UserWarning,
+                )
 
         if kde_upsample_factor < 1:
             raise ValueError("kde_upsample_factor must be larger than 1")
@@ -1187,7 +1218,7 @@ class ParallaxReconstruction(PhaseReconstruction):
         # kernel density estimate
         sigma = kde_sigma * self._kde_upsample_factor
         pix_count = gaussian_filter(pix_count, sigma)
-        pix_count[pix_output == 0.0] = np.inf
+        pix_count[pix_count == 0.0] = np.inf
         pix_output = gaussian_filter(pix_output, sigma)
         pix_output /= pix_count
 
@@ -1301,7 +1332,7 @@ class ParallaxReconstruction(PhaseReconstruction):
         plot_CTF_comparison: bool = None,
         plot_BF_shifts_comparison: bool = None,
         upsampled: bool = True,
-        force_transpose: bool = None,
+        force_transpose: bool = False,
     ):
         """
         Fit aberrations to the measured image shifts.
@@ -1342,17 +1373,13 @@ class ParallaxReconstruction(PhaseReconstruction):
 
         # Convert real space shifts to Angstroms
 
-        if force_transpose is None:
-            self.transpose_detected = False
-        else:
-            self.transpose_detected = force_transpose
-
         if force_transpose is True:
             self._xy_shifts_Ang = xp.flip(self._xy_shifts, axis=1) * xp.array(
                 self._scan_sampling
             )
         else:
             self._xy_shifts_Ang = self._xy_shifts * xp.array(self._scan_sampling)
+        self.transpose = force_transpose
 
         # Solve affine transformation
         m = asnumpy(
@@ -1369,9 +1396,15 @@ class ParallaxReconstruction(PhaseReconstruction):
                 np.mod(self.rotation_Q_to_R_rads, 2.0 * np.pi) - np.pi
             )
             m_aberration = -1.0 * m_aberration
+
         self.aberration_C1 = (m_aberration[0, 0] + m_aberration[1, 1]) / 2.0
-        self.aberration_A1x = (m_aberration[0, 0] - m_aberration[1, 1]) / 2.0
-        self.aberration_A1y = (m_aberration[1, 0] + m_aberration[0, 1]) / 2.0
+
+        if self.transpose:
+            self.aberration_A1x = -(m_aberration[0, 0] - m_aberration[1, 1]) / 2.0
+            self.aberration_A1y = (m_aberration[1, 0] + m_aberration[0, 1]) / 2.0
+        else:
+            self.aberration_A1x = (m_aberration[0, 0] - m_aberration[1, 1]) / 2.0
+            self.aberration_A1y = (m_aberration[1, 0] + m_aberration[0, 1]) / 2.0
 
         ### Second pass
 
@@ -1417,11 +1450,25 @@ class ParallaxReconstruction(PhaseReconstruction):
                 sx = self._scan_sampling[0] / self._kde_upsample_factor
                 sy = self._scan_sampling[1] / self._kde_upsample_factor
 
+                reciprocal_extent = [
+                    -0.5 / (self._scan_sampling[1] / self._kde_upsample_factor),
+                    0.5 / (self._scan_sampling[1] / self._kde_upsample_factor),
+                    0.5 / (self._scan_sampling[0] / self._kde_upsample_factor),
+                    -0.5 / (self._scan_sampling[0] / self._kde_upsample_factor),
+                ]
+
             else:
                 im_FFT = xp.abs(xp.fft.fft2(self._recon_BF))
                 sx = self._scan_sampling[0]
                 sy = self._scan_sampling[1]
                 upsampled = False
+
+                reciprocal_extent = [
+                    -0.5 / self._scan_sampling[1],
+                    0.5 / self._scan_sampling[1],
+                    0.5 / self._scan_sampling[0],
+                    -0.5 / self._scan_sampling[0],
+                ]
 
             # FFT coordinates
             qx = xp.fft.fftfreq(im_FFT.shape[0], sx)
@@ -1474,12 +1521,19 @@ class ParallaxReconstruction(PhaseReconstruction):
             sy = 1 / (self._reciprocal_sampling[1] * self._region_of_interest_shape[1])
             qx = xp.fft.fftfreq(self._region_of_interest_shape[0], sx)
             qy = xp.fft.fftfreq(self._region_of_interest_shape[1], sy)
-            qr2 = qx[:, None] ** 2 + qy[None, :] ** 2
+            qx, qy = np.meshgrid(qx, qy, indexing="ij")
 
-            u = qx[:, None] * self._wavelength
-            v = qy[None, :] * self._wavelength
+            # passive rotation basis by -theta
+            rotation_angle = -self.rotation_Q_to_R_rads
+            qx, qy = qx * np.cos(rotation_angle) + qy * np.sin(
+                rotation_angle
+            ), -qx * np.sin(rotation_angle) + qy * np.cos(rotation_angle)
+
+            qr2 = qx**2 + qy**2
+            u = qx * self._wavelength
+            v = qy * self._wavelength
             alpha = xp.sqrt(qr2) * self._wavelength
-            theta = xp.arctan2(qy[None, :], qx[:, None])
+            theta = xp.arctan2(qy, qx)
 
             # Aberration basis
             self._aberrations_basis = xp.zeros((alpha.size, self._aberrations_num))
@@ -1541,10 +1595,17 @@ class ParallaxReconstruction(PhaseReconstruction):
 
         # initial coefficients and plotting intensity range mask
         self._aberrations_coefs = np.zeros(self._aberrations_num)
-        ind = np.argmin(
-            np.abs(self._aberrations_mn[:, 0] - 1.0) + self._aberrations_mn[:, 1]
-        )
-        self._aberrations_coefs[ind] = self.aberration_C1
+
+        aberrations_mn_list = self._aberrations_mn.tolist()
+        if [1, 0, 0] in aberrations_mn_list:
+            ind_C1 = aberrations_mn_list.index([1, 0, 0])
+            self._aberrations_coefs[ind_C1] = self.aberration_C1
+
+        if [1, 2, 0] in aberrations_mn_list:
+            ind_A1x = aberrations_mn_list.index([1, 2, 0])
+            ind_A1y = aberrations_mn_list.index([1, 2, 1])
+            self._aberrations_coefs[ind_A1x] = self.aberration_A1x
+            self._aberrations_coefs[ind_A1y] = self.aberration_A1y
 
         # Refinement using CTF fitting / Thon rings
         if fit_CTF_FFT:
@@ -1597,54 +1658,84 @@ class ParallaxReconstruction(PhaseReconstruction):
             )
 
             # (Relative) untransposed fit
-            tf = AffineTransform(angle=self.rotation_Q_to_R_rads)
-            rotated_shifts = tf(self._xy_shifts_Ang, xp=xp).T.ravel()
+            raveled_shifts = self._xy_shifts_Ang.T.ravel()
             aberrations_coefs, res = xp.linalg.lstsq(
-                gradients, rotated_shifts, rcond=None
+                gradients, raveled_shifts, rcond=None
             )[:2]
 
-            if force_transpose is None:
-                # (Relative) transposed fit
-                transposed_shifts = xp.flip(self._xy_shifts_Ang, axis=1)
-                m_T = asnumpy(
-                    xp.linalg.lstsq(self._probe_angles, transposed_shifts, rcond=None)[
-                        0
-                    ]
+            self._aberrations_coefs = asnumpy(aberrations_coefs)
+
+            if self.transpose:
+                aberrations_to_flip = (self._aberrations_mn[:, 1] > 0) & (
+                    self._aberrations_mn[:, 2] == 0
                 )
-                m_rotation_T, _ = polar(m_T, side="right")
-                rotation_Q_to_R_rads_T = -1 * np.arctan2(
-                    m_rotation_T[1, 0], m_rotation_T[0, 0]
+                self._aberrations_coefs[aberrations_to_flip] *= -1
+
+            # Plot the measured/fitted shifts comparison
+            if plot_BF_shifts_comparison:
+                measured_shifts_sx = xp.zeros(
+                    self._region_of_interest_shape, dtype=xp.float32
                 )
-                if np.abs(
-                    np.mod(rotation_Q_to_R_rads_T + np.pi, 2.0 * np.pi) - np.pi
-                ) > (np.pi * 0.5):
-                    rotation_Q_to_R_rads_T = (
-                        np.mod(rotation_Q_to_R_rads_T, 2.0 * np.pi) - np.pi
+                measured_shifts_sx[
+                    self._xy_inds[:, 0], self._xy_inds[:, 1]
+                ] = self._xy_shifts_Ang[:, 0]
+
+                measured_shifts_sy = xp.zeros(
+                    self._region_of_interest_shape, dtype=xp.float32
+                )
+                measured_shifts_sy[
+                    self._xy_inds[:, 0], self._xy_inds[:, 1]
+                ] = self._xy_shifts_Ang[:, 1]
+
+                fitted_shifts = (
+                    xp.tensordot(gradients, xp.array(self._aberrations_coefs), axes=1)
+                    .reshape((2, -1))
+                    .T
+                )
+
+                fitted_shifts_sx = xp.zeros(
+                    self._region_of_interest_shape, dtype=xp.float32
+                )
+                fitted_shifts_sx[
+                    self._xy_inds[:, 0], self._xy_inds[:, 1]
+                ] = fitted_shifts[:, 0]
+
+                fitted_shifts_sy = xp.zeros(
+                    self._region_of_interest_shape, dtype=xp.float32
+                )
+                fitted_shifts_sy[
+                    self._xy_inds[:, 0], self._xy_inds[:, 1]
+                ] = fitted_shifts[:, 1]
+
+                max_shift = xp.max(
+                    xp.array(
+                        [
+                            xp.abs(measured_shifts_sx).max(),
+                            xp.abs(measured_shifts_sy).max(),
+                            xp.abs(fitted_shifts_sx).max(),
+                            xp.abs(fitted_shifts_sy).max(),
+                        ]
                     )
+                )
 
-                tf_T = AffineTransform(angle=rotation_Q_to_R_rads_T)
-                rotated_shifts_T = tf_T(transposed_shifts, xp=xp).T.ravel()
-                aberrations_coefs_T, res_T = xp.linalg.lstsq(
-                    gradients, rotated_shifts_T, rcond=None
-                )[:2]
-
-                # Compare fits
-                if res_T.sum() < res.sum():
-                    self.rotation_Q_to_R_rads = rotation_Q_to_R_rads_T
-                    self.transpose_detected = not self.transpose_detected
-                    self._aberrations_coefs = asnumpy(aberrations_coefs_T)
-                    self._rotated_shifts = rotated_shifts_T
-
-                    warnings.warn(
-                        (
-                            "Data transpose detected. "
-                            f"Overwriting rotation value to {np.rad2deg(rotation_Q_to_R_rads_T):.3f}"
-                        ),
-                        UserWarning,
-                    )
-            else:
-                self._aberrations_coefs = asnumpy(aberrations_coefs)
-                self._rotated_shifts = rotated_shifts
+                show(
+                    [
+                        [asnumpy(measured_shifts_sx), asnumpy(fitted_shifts_sx)],
+                        [asnumpy(measured_shifts_sy), asnumpy(fitted_shifts_sy)],
+                    ],
+                    cmap="PiYG",
+                    vmin=-max_shift,
+                    vmax=max_shift,
+                    intensity_range="absolute",
+                    axsize=(4, 4),
+                    ticks=False,
+                    title=[
+                        "Measured Vertical Shifts",
+                        "Fitted Vertical Shifts",
+                        "Measured Horizontal Shifts",
+                        "Fitted Horizontal Shifts",
+                    ],
+                )
 
         # Plot the CTF comparison between experiment and fit
         if plot_CTF_comparison:
@@ -1682,79 +1773,24 @@ class ParallaxReconstruction(PhaseReconstruction):
             im_plot[:, :, 2] -= im_CTF
             im_plot = np.clip(im_plot, 0, 1)
 
-            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 6))
-            ax1.imshow(im_plot, vmin=int_range[0], vmax=int_range[1])
+            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(8, 4))
+            ax1.imshow(
+                im_plot, vmin=int_range[0], vmax=int_range[1], extent=reciprocal_extent
+            )
+            ax2.imshow(
+                np.fft.fftshift(asnumpy(im_CTF_cos)),
+                cmap="gray",
+                extent=reciprocal_extent,
+            )
 
-            ax2.imshow(np.fft.fftshift(asnumpy(im_CTF_cos)), cmap="gray")
+            for ax in (ax1, ax2):
+                ax.set_ylabel(r"$k_x$ [$A^{-1}$]")
+                ax.set_xlabel(r"$k_y$ [$A^{-1}$]")
+
+            ax1.set_title("Aligned Bright Field FFT")
+            ax2.set_title("Fitted CTF Zero-Crossings")
 
             fig.tight_layout()
-
-        # Plot the measured/fitted shifts comparison
-        if plot_BF_shifts_comparison:
-            if not fit_BF_shifts:
-                raise ValueError()
-
-            measured_shifts_sx = xp.zeros(
-                self._region_of_interest_shape, dtype=xp.float32
-            )
-            measured_shifts_sx[
-                self._xy_inds[:, 0], self._xy_inds[:, 1]
-            ] = self._rotated_shifts[: self._xy_inds.shape[0]]
-
-            measured_shifts_sy = xp.zeros(
-                self._region_of_interest_shape, dtype=xp.float32
-            )
-            measured_shifts_sy[
-                self._xy_inds[:, 0], self._xy_inds[:, 1]
-            ] = self._rotated_shifts[self._xy_inds.shape[0] :]
-
-            fitted_shifts = xp.tensordot(
-                gradients, xp.array(self._aberrations_coefs), axes=1
-            )
-
-            fitted_shifts_sx = xp.zeros(
-                self._region_of_interest_shape, dtype=xp.float32
-            )
-            fitted_shifts_sx[self._xy_inds[:, 0], self._xy_inds[:, 1]] = fitted_shifts[
-                : self._xy_inds.shape[0]
-            ]
-
-            fitted_shifts_sy = xp.zeros(
-                self._region_of_interest_shape, dtype=xp.float32
-            )
-            fitted_shifts_sy[self._xy_inds[:, 0], self._xy_inds[:, 1]] = fitted_shifts[
-                self._xy_inds.shape[0] :
-            ]
-
-            max_shift = xp.max(
-                xp.array(
-                    [
-                        xp.abs(measured_shifts_sx).max(),
-                        xp.abs(measured_shifts_sy).max(),
-                        xp.abs(fitted_shifts_sx).max(),
-                        xp.abs(fitted_shifts_sy).max(),
-                    ]
-                )
-            )
-
-            show(
-                [
-                    [asnumpy(measured_shifts_sx), asnumpy(measured_shifts_sy)],
-                    [asnumpy(fitted_shifts_sx), asnumpy(fitted_shifts_sy)],
-                ],
-                cmap="PiYG",
-                vmin=-max_shift,
-                vmax=max_shift,
-                intensity_range="absolute",
-                axsize=(4, 4),
-                ticks=False,
-                title=[
-                    "Measured Vertical Shifts",
-                    "Measured Horizontal Shifts",
-                    "Fitted Vertical Shifts",
-                    "Fitted Horizontal Shifts",
-                ],
-            )
 
         self.aberration_dict = {
             tuple(self._aberrations_mn[a0]): {
@@ -1786,6 +1822,7 @@ class ParallaxReconstruction(PhaseReconstruction):
             )
             print(f"Aberration C1          =  {self.aberration_C1:.0f} Ang")
             print(f"Defocus dF             = {-1*self.aberration_C1:.0f} Ang")
+            print(f"Transpose              = {self.transpose}")
 
             if fit_CTF_FFT or fit_BF_shifts:
                 print()
@@ -2268,6 +2305,7 @@ class ParallaxReconstruction(PhaseReconstruction):
         self,
         scale_arrows=1,
         plot_arrow_freq=1,
+        plot_rotated_shifts=True,
         **kwargs,
     ):
         """
@@ -2284,10 +2322,22 @@ class ParallaxReconstruction(PhaseReconstruction):
         xp = self._xp
         asnumpy = self._asnumpy
 
-        figsize = kwargs.pop("figsize", (6, 6))
         color = kwargs.pop("color", (1, 0, 0, 1))
+        if plot_rotated_shifts and hasattr(self, "rotation_Q_to_R_rads"):
+            figsize = kwargs.pop("figsize", (8, 4))
+            fig, ax = plt.subplots(1, 2, figsize=figsize)
+            scaling_factor = (
+                xp.array(self._reciprocal_sampling)
+                / xp.array(self._scan_sampling)
+                * scale_arrows
+            )
+            rotated_shifts = self._xy_shifts_Ang * scaling_factor
 
-        fig, ax = plt.subplots(figsize=figsize)
+        else:
+            figsize = kwargs.pop("figsize", (4, 4))
+            fig, ax = plt.subplots(figsize=figsize)
+
+        shifts = self._xy_shifts * scale_arrows * self._reciprocal_sampling[0]
 
         dp_mask_ind = xp.nonzero(self._dp_mask)
         yy, xx = xp.meshgrid(
@@ -2297,29 +2347,68 @@ class ParallaxReconstruction(PhaseReconstruction):
         masked_ind = xp.logical_and(freq_mask, self._dp_mask)
         plot_ind = masked_ind[dp_mask_ind]
 
-        ax.quiver(
-            asnumpy(self._kxy[plot_ind, 1]),
-            asnumpy(self._kxy[plot_ind, 0]),
-            asnumpy(
-                self._xy_shifts[plot_ind, 1]
-                * scale_arrows
-                * self._reciprocal_sampling[0]
-            ),
-            asnumpy(
-                self._xy_shifts[plot_ind, 0]
-                * scale_arrows
-                * self._reciprocal_sampling[1]
-            ),
-            color=color,
-            angles="xy",
-            scale_units="xy",
-            scale=1,
-            **kwargs,
-        )
-
         kr_max = xp.max(self._kr)
-        ax.set_xlim([-1.2 * kr_max, 1.2 * kr_max])
-        ax.set_ylim([-1.2 * kr_max, 1.2 * kr_max])
+        if plot_rotated_shifts and hasattr(self, "rotation_Q_to_R_rads"):
+            ax[0].quiver(
+                asnumpy(self._kxy[plot_ind, 1]),
+                asnumpy(self._kxy[plot_ind, 0]),
+                asnumpy(shifts[plot_ind, 1]),
+                asnumpy(shifts[plot_ind, 0]),
+                color=color,
+                angles="xy",
+                scale_units="xy",
+                scale=1,
+                **kwargs,
+            )
+
+            ax[0].set_xlim([-1.2 * kr_max, 1.2 * kr_max])
+            ax[0].set_ylim([-1.2 * kr_max, 1.2 * kr_max])
+            ax[0].set_title("Measured Bright Field Shifts")
+            ax[0].set_ylabel(r"$k_x$ [$A^{-1}$]")
+            ax[0].set_xlabel(r"$k_y$ [$A^{-1}$]")
+            ax[0].set_aspect("equal")
+
+            # passive coordinate rotation
+            tf_T = AffineTransform(angle=-self.rotation_Q_to_R_rads)
+            rotated_kxy = tf_T(self._kxy[plot_ind], xp=xp)
+            ax[1].quiver(
+                asnumpy(rotated_kxy[:, 1]),
+                asnumpy(rotated_kxy[:, 0]),
+                asnumpy(rotated_shifts[plot_ind, 1]),
+                asnumpy(rotated_shifts[plot_ind, 0]),
+                angles="xy",
+                scale_units="xy",
+                scale=1,
+                **kwargs,
+            )
+
+            ax[1].set_xlim([-1.2 * kr_max, 1.2 * kr_max])
+            ax[1].set_ylim([-1.2 * kr_max, 1.2 * kr_max])
+            ax[1].set_title("Rotated Bright Field Shifts")
+            ax[1].set_ylabel(r"$k_x$ [$A^{-1}$]")
+            ax[1].set_xlabel(r"$k_y$ [$A^{-1}$]")
+            ax[1].set_aspect("equal")
+        else:
+            ax.quiver(
+                asnumpy(self._kxy[plot_ind, 1]),
+                asnumpy(self._kxy[plot_ind, 0]),
+                asnumpy(shifts[plot_ind, 1]),
+                asnumpy(shifts[plot_ind, 0]),
+                color=color,
+                angles="xy",
+                scale_units="xy",
+                scale=1,
+                **kwargs,
+            )
+
+            ax.set_xlim([-1.2 * kr_max, 1.2 * kr_max])
+            ax.set_ylim([-1.2 * kr_max, 1.2 * kr_max])
+            ax.set_title("Measured BF Shifts")
+            ax.set_ylabel(r"$k_x$ [$A^{-1}$]")
+            ax.set_xlabel(r"$k_y$ [$A^{-1}$]")
+            ax.set_aspect("equal")
+
+        fig.tight_layout()
 
     def visualize(
         self,
@@ -2345,3 +2434,21 @@ class ParallaxReconstruction(PhaseReconstruction):
         ax.set_title("Reconstructed Bright Field Image")
 
         return self
+
+    @property
+    def object_cropped(self):
+        """cropped object"""
+        if hasattr(self, "_recon_phase_corrected"):
+            if hasattr(self, "_kde_upsample_factor"):
+                return self._crop_padded_object(
+                    self._recon_phase_corrected, upsampled=True
+                )
+            else:
+                return self._crop_padded_object(self._recon_phase_corrected)
+        else:
+            if hasattr(self, "_kde_upsample_factor"):
+                return self._crop_padded_object(
+                    self._recon_BF_subpixel_aligned, upsampled=True
+                )
+            else:
+                return self._crop_padded_object(self._recon_BF)

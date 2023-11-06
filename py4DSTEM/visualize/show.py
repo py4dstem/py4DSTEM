@@ -366,7 +366,9 @@ def show(
             from py4DSTEM.visualize import show
 
             if show_fft:
-                ar = np.abs(np.fft.fftshift(np.fft.fft2(ar.copy())))
+                n0 = ar.shape
+                w0 = np.hanning(n0[1]) * np.hanning(n0[0])[:, None]
+                ar = np.abs(np.fft.fftshift(np.fft.fft2(w0 * ar.copy())))
             for a0 in range(num_images):
                 im = show(
                     ar[a0],

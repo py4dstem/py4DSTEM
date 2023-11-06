@@ -829,7 +829,7 @@ def show_complex(
             for ax_flat in ax.flatten():
                 divider = make_axes_locatable(ax_flat)
                 ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
-                add_colorbar_arg(ax_cb)
+                add_colorbar_arg(ax_cb, chroma_boost=chroma_boost)
         else:
             divider = make_axes_locatable(ax)
             ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
@@ -839,3 +839,59 @@ def show_complex(
 
     if returnfig:
         return fig, ax
+
+
+def return_scaled_histogram_ordering(array, vmin=None, vmax=None, normalize=False):
+    """
+    Utility function for calculating min and max values for plotting array
+    based on distribution of pixel values
+
+    Parameters
+    ----------
+    array: np.array
+        array to be plotted
+    vmin: float
+        lower fraction cut off of pixel values
+    vmax: float
+        upper fraction cut off of pixel values
+    normalize: bool
+        if True, rescales from 0 to 1
+
+    Returns
+    ----------
+    scaled_array: np.array
+        array clipped outside vmin and vmax
+    vmin: float
+        lower value to be plotted
+    vmax: float
+        upper value to be plotted
+    """
+
+    if vmin is None:
+        vmin = 0.02
+    if vmax is None:
+        vmax = 0.98
+
+    vals = np.sort(array.ravel())
+    ind_vmin = np.round((vals.shape[0] - 1) * vmin).astype("int")
+    ind_vmax = np.round((vals.shape[0] - 1) * vmax).astype("int")
+    ind_vmin = np.max([0, ind_vmin])
+    ind_vmax = np.min([len(vals) - 1, ind_vmax])
+    vmin = vals[ind_vmin]
+    vmax = vals[ind_vmax]
+
+    if vmax == vmin:
+        vmin = vals[0]
+        vmax = vals[-1]
+
+    scaled_array = array.copy()
+    scaled_array = np.where(scaled_array < vmin, vmin, scaled_array)
+    scaled_array = np.where(scaled_array > vmax, vmax, scaled_array)
+
+    if normalize:
+        scaled_array -= scaled_array.min()
+        scaled_array /= scaled_array.max()
+        vmin = 0
+        vmax = 1
+
+    return scaled_array, vmin, vmax
