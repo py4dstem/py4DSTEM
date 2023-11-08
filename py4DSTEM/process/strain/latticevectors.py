@@ -182,7 +182,7 @@ def fit_lattice_vectors(braggpeaks, x0=0, y0=0, minNumPeaks=5):
 
     # Remove unindexed peaks
     if "index_mask" in braggpeaks.dtype.names:
-        deletemask = braggpeaks.data["index_mask"] == False
+        deletemask = braggpeaks.data["index_mask"] is False
         braggpeaks.remove(deletemask)
 
     # Check to ensure enough peaks are present
@@ -461,7 +461,7 @@ def get_rotated_strain_map(unrotated_strain_map, xaxis_x, xaxis_y, flip_theta):
         + 2 * cost * sint * unrotated_strain_map.get_slice("e_xy").data
         + cost2 * unrotated_strain_map.get_slice("e_yy").data
     )
-    if flip_theta == True:
+    if flip_theta is True:
         rotated_strain_map.data[3, :, :] = -unrotated_strain_map.get_slice("theta").data
     else:
         rotated_strain_map.data[3, :, :] = unrotated_strain_map.get_slice("theta").data

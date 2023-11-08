@@ -312,7 +312,7 @@ def show(
         if returnfig==False (default), the figure is plotted and nothing is returned.
         if returnfig==True, return the figure and the axis.
     """
-    if scalebar == True:
+    if scalebar is True:
         scalebar = {}
 
     # Alias dep
@@ -415,7 +415,7 @@ def show(
         if (
             hasattr(ar, "calibration")
             and (ar.calibration is not None)
-            and (scalebar != False)
+            and (scalebar is not False)
         ):
             cal = ar.calibration
             er = ".calibration attribute must be a Calibration instance"

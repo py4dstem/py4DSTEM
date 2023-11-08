@@ -181,8 +181,7 @@ class Featurization(object):
                                 np.rint(
                                     (pointlist.data["qy"] / q_pixel_size) + Q_Ny / 2
                                 ).astype(int),
-                            ]
-                            == False
+                            ] is False
                         ),
                         True,
                         False,
@@ -330,7 +329,7 @@ class Featurization(object):
         """
         mms = MinMaxScaler()
         self.features = mms.fit_transform(self.features)
-        if return_scaled == True:
+        if return_scaled is True:
             return self.features
         else:
             return
@@ -345,7 +344,7 @@ class Featurization(object):
         """
         rs = RobustScaler()
         self.features = rs.fit_transform(self.features)
-        if return_scaled == True:
+        if return_scaled is True:
             return self.features
         else:
             return
@@ -358,7 +357,7 @@ class Featurization(object):
             return_scaled (bool): returns the scaled array
         """
         self.features += np.abs(self.features.min())
-        if return_scaled == True:
+        if return_scaled is True:
             return self.features
         else:
             return
@@ -372,7 +371,7 @@ class Featurization(object):
         """
         pca = PCA(n_components=components)
         self.pca = pca.fit_transform(self.features)
-        if return_results == True:
+        if return_results is True:
             return self.pca
         return
 
@@ -385,7 +384,7 @@ class Featurization(object):
         """
         ica = FastICA(n_components=components)
         self.ica = ica.fit_transform(self.features)
-        if return_results == True:
+        if return_results is True:
             return self.ica
         return
 
@@ -434,7 +433,7 @@ class Featurization(object):
             random_seed=random_seed,
             save_all_models=save_all_models,
         )
-        if return_results == True:
+        if return_results is True:
             return self.W
         return
 
@@ -455,7 +454,7 @@ class Featurization(object):
             num_models=num_models,
             random_seed=random_seed,
         )
-        if return_results == True:
+        if return_results is True:
             return self.gmm
         return
 
@@ -707,7 +706,7 @@ class Featurization(object):
                 )
 
             if len(separated_temp) > 0:
-                if clean == True:
+                if clean is True:
                     data_ndarray = np.dstack(separated_temp)
                     data_hard = (
                         data_ndarray.max(axis=2, keepdims=1) == data_ndarray
@@ -879,7 +878,7 @@ def _nmf_single(
         rng = np.random.RandomState(seed=42)
     else:
         seed = random_seed
-    if save_all_models == True:
+    if save_all_models is True:
         W = []
 
     # Big loop through all models
@@ -936,7 +935,7 @@ def _nmf_single(
             if n_comps <= 2:
                 break
 
-        if save_all_models == True:
+        if save_all_models is True:
             W.append(nmf_temp)
 
         elif (recon_error / counter) < err:
@@ -963,7 +962,7 @@ def _gmm_single(x, cv, components, num_models, random_seed=None, return_all=True
         gmm_labels OR best_gmm_labels:  Label list for all models or labels for best model
         gmm_proba OR best_gmm_proba:    Probability list of class belonging or probability for best model
     """
-    if return_all == True:
+    if return_all is True:
         gmm_list = []
         gmm_labels = []
         gmm_proba = []
@@ -986,18 +985,18 @@ def _gmm_single(x, cv, components, num_models, random_seed=None, return_all=True
                 labels = gmm.fit_predict(x)
                 bic_temp = gmm.bic(x)
 
-                if return_all == True:
+                if return_all is True:
                     gmm_list.append(gmm)
                     gmm_labels.append(labels)
                     gmm_proba.append(gmm.predict_proba(x))
 
-                elif return_all == False:
+                elif return_all is False:
                     if bic_temp < lowest_bic:
                         lowest_bic = bic_temp
                         best_gmm = gmm
                         best_gmm_labels = labels
                         best_gmm_proba = gmm.predict_proba(x)
 
-    if return_all == True:
+    if return_all is True:
         return gmm_list, gmm_labels, gmm_proba
     return best_gmm, best_gmm_labels, best_gmm_proba
