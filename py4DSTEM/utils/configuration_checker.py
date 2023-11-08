@@ -375,12 +375,12 @@ def check_cupy_gpu(gratuitously_verbose: bool, **kwargs):
     # check that CUDA is detected correctly
     cuda_availability = cp.cuda.is_available()
     if cuda_availability:
-        s = f" CUDA is Available "
+        s = " CUDA is Available "
         s = create_success(s)
         s = f"{s: <80}"
         print(s)
     else:
-        s = f" CUDA is Unavailable "
+        s = " CUDA is Unavailable "
         s = create_failure(s)
         s = f"{s: <80}"
         print(s)
