@@ -505,8 +505,8 @@ class StrainMap(RealSlice, Data):
                 ("qx", float),
                 ("qy", float),
                 ("intensity", float),
-                ("h", int),
-                ("k", int),
+                ("g1_ind", int),
+                ("g2_ind", int),
             ],
             shape=self.braggvectors.Rshape,
         )
@@ -542,8 +542,8 @@ class StrainMap(RealSlice, Data):
                                 pl.data["qx"][i],
                                 pl.data["qy"][i],
                                 pl.data["intensity"][i],
-                                self.braggdirections.data["h"][ind],
-                                self.braggdirections.data["k"][ind],
+                                self.braggdirections.data["g1_ind"][ind],
+                                self.braggdirections.data["g2_ind"][ind],
                             )
                         )
         self.bragg_vectors_indexed = indexed_braggpeaks
@@ -1510,11 +1510,14 @@ class StrainMap(RealSlice, Data):
             The display image
         bragg_directions : PointList
             The Bragg scattering directions.  Must have coordinates
-            'qx','qy','h', and 'k'. Optionally may also have 'l'.
+            ('qx','qy','h', and 'k') or ('qx','qy','g1_ind', and 'g2_ind'. Optionally may also have 'l'.
         """
         assert isinstance(bragg_directions, PointList)
-        for k in ("qx", "qy", "h", "k"):
-            assert k in bragg_directions.data.dtype.fields
+        # checking if it has h, k or g1_ind, g2_ind
+        assert (
+                all(key in bragg_directions.data.dtype.names for key in ("qx", "qy", "h", "k")) or
+                all(key in bragg_directions.data.dtype.names for key in ("qx", "qy", "g1_ind", "g2_ind"))
+            ), 'pointlist must contain ("qx", "qy", "h", "k") or ("qx", "qy", "g1_ind", "g2_ind") fields'
 
         if figax is None:
             fig, ax = show(ar, returnfig=True, **kwargs)
@@ -1533,6 +1536,7 @@ class StrainMap(RealSlice, Data):
             "pointsize": pointsize,
             "pointcolor": pointcolor,
         }
+        # this can take ("qx", "qy", "h", "k") or ("qx", "qy", "g1_ind", "g2_ind") fields 
         add_bragg_index_labels(ax, d)
 
         if returnfig:
