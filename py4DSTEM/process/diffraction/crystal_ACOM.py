@@ -1840,7 +1840,9 @@ def cluster_grains(
             xr = np.clip(x + np.arange(-1, 2, dtype="int"), 0, sig.shape[0] - 1)
             yr = np.clip(y + np.arange(-1, 2, dtype="int"), 0, sig.shape[1] - 1)
             inds_cand = inds_all[xr[:, None], yr[None], :].ravel()
-            inds_cand = np.delete(inds_cand, mark.ravel()[inds_cand] == False) # noqa: E712,E501
+            inds_cand = np.delete(
+                inds_cand, mark.ravel()[inds_cand] == False  # noqa: E712
+            )
 
             if inds_cand.size == 0:
                 grow = False
@@ -1893,7 +1895,7 @@ def cluster_grains(
 
                 inds_grain = np.append(inds_grain, inds_cand[keep])
                 inds_cand = np.unique(
-                    np.delete(inds_new, mark.ravel()[inds_new] == False) #noqa: E712
+                    np.delete(inds_new, mark.ravel()[inds_new] == False)  # noqa: E712
                 )
 
                 if inds_cand.size == 0:

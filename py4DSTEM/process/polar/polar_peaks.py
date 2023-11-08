@@ -167,7 +167,7 @@ def find_peaks_single_pattern(
     if remove_masked_peaks:
         peaks = np.delete(
             peaks,
-            mask_bool[peaks[:, 0], peaks[:, 1]] == False, # noqa: E712
+            mask_bool[peaks[:, 0], peaks[:, 1]] == False,  # noqa: E712
             axis=0,
         )
 
