@@ -1,8 +1,9 @@
 # Electron counting
 #
-# Includes functions for electron counting on either the CPU (electron_count) or the GPU
-# (electron_count_GPU).  For GPU electron counting, pytorch is used to interface between
-# numpy and the GPU, and the datacube is expected in numpy.memmap (memory mapped) form.
+# Includes functions for electron counting on either the CPU (electron_count)
+# or the GPU (electron_count_GPU).  For GPU electron counting, pytorch is used
+# to interface between numpy and the GPU, and the datacube is expected in
+# numpy.memmap (memory mapped) form.
 
 import numpy as np
 from scipy import optimize
@@ -25,17 +26,17 @@ def electron_count(
     Performs electron counting.
 
     The algorithm is as follows:
-    From a random sampling of frames, calculate an x-ray and background threshold value.
-    In each frame, subtract the dark reference, then apply the two thresholds. Find all
-    local maxima with respect to the nearest neighbor pixels. These are considered
-    electron strike events.
+    From a random sampling of frames, calculate an x-ray and background
+    threshold value. In each frame, subtract the dark reference, then apply the
+    two thresholds. Find all local maxima with respect to the nearest neighbor
+    pixels. These are considered electron strike events.
 
-    Thresholds are specified in units of standard deviations, either of a gaussian fit to
-    the histogram background noise (for thresh_bkgrnd) or of the histogram itself (for
-    thresh_xray). The background (lower) threshold is more important; we will always be
-    missing some real electron counts and incorrectly counting some noise as electron
-    strikes - this threshold controls their relative balance. The x-ray threshold may be
-    set fairly high.
+    Thresholds are specified in units of standard deviations, either of a
+    gaussian fit to the histogram background noise (for thresh_bkgrnd) or of
+    the histogram itself (for thresh_xray). The background (lower) threshold is
+    more important; we will always be missing some real electron counts and
+    incorrectly counting some noise as electron strikes - this threshold
+    controls their relative balance. The x-ray threshold may be set fairly high.
 
     Args:
         datacube: a 4D numpy.ndarray pointing to the datacube. Note: the R/Q axes are
