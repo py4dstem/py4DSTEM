@@ -47,7 +47,7 @@ def index_bragg_directions(x0, y0, gx, gy, g1, g2):
 
     # Get g1_ind,g2_ind
     g1_ind = M[:, 0]
-    g2_ind  = M[:, 1]
+    g2_ind = M[:, 1]
 
     # Store in a PointList
     coords = [("qx", float), ("qy", float), ("g1_ind", int), ("g2_ind", int)]
@@ -176,7 +176,10 @@ def fit_lattice_vectors(braggpeaks, x0=0, y0=0, minNumPeaks=5):
     """
     assert isinstance(braggpeaks, PointList)
     assert np.all(
-        [name in braggpeaks.dtype.names for name in ("qx", "qy", "intensity", "g1_ind", "g2_ind")]
+        [
+            name in braggpeaks.dtype.names
+            for name in ("qx", "qy", "intensity", "g1_ind", "g2_ind")
+        ]
     )
     braggpeaks = braggpeaks.copy()
 
@@ -246,7 +249,10 @@ def fit_lattice_vectors_all_DPs(braggpeaks, x0=0, y0=0, minNumPeaks=5):
     """
     assert isinstance(braggpeaks, PointListArray)
     assert np.all(
-        [name in braggpeaks.dtype.names for name in ("qx", "qy", "intensity", "g1_ind", "g2_ind")]
+        [
+            name in braggpeaks.dtype.names
+            for name in ("qx", "qy", "intensity", "g1_ind", "g2_ind")
+        ]
     )
 
     # Make RealSlice to contain outputs
@@ -272,7 +278,8 @@ def fit_lattice_vectors_all_DPs(braggpeaks, x0=0, y0=0, minNumPeaks=5):
         # Store data
         if g1x is not None:
             g1g2_map.get_slice("x0").data[Rx, Ry] = qx0
-            g1g2_map.get_slice("y0").data[Rx, Ry] = qy0 # Assume this is a correct change
+            # Assume this is a correct change
+            g1g2_map.get_slice("y0").data[Rx, Ry] = qy0
             g1g2_map.get_slice("g1x").data[Rx, Ry] = g1x
             g1g2_map.get_slice("g1y").data[Rx, Ry] = g1y
             g1g2_map.get_slice("g2x").data[Rx, Ry] = g2x
