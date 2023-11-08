@@ -392,9 +392,16 @@ class StrainMap(RealSlice, Data):
 
     def set_hkl(
             self,
-            g1_hkl,
-            g2_hkl,
+            g1_hkl:list[int,int,int] | tuple[int,int,int] | np.ndarray[int],
+            g2_hkl:list[int,int,int] | tuple[int,int,int] | np.ndarray[int],
     ):
+        """
+        calculate the [h,k,l] reflections from the `g1_ind`,`g2_ind` from known 'g1_hkl` and 'g2_hkl' reflections.
+        Creates 'bragg_vectors_indexed_hkl' attribute
+        Args:
+            g1_hkl (list[int] | tuple[int,int,int] | np.ndarray[int]): known [h,k,l] reflection for g1_vector 
+            g2_hkl (list[int] | tuple[int,int,int] | np.ndarray[int]): known [h,k,l] reflection for g1_vector 
+        """
         
         g1_hkl = np.array(g1_hkl)
         g2_hkl = np.array(g2_hkl)
