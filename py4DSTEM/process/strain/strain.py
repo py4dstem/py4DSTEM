@@ -1,7 +1,7 @@
 # Defines the Strain class
 
 import warnings
-from typing import Optional
+from typing import Optional, List, Tuple, Union
 
 import matplotlib.pyplot as plt
 from matplotlib.patches import Circle
@@ -392,8 +392,8 @@ class StrainMap(RealSlice, Data):
 
     def set_hkl(
         self,
-        g1_hkl: list[int, int, int] | tuple[int, int, int] | np.ndarray[int],
-        g2_hkl: list[int, int, int] | tuple[int, int, int] | np.ndarray[int],
+        g1_hkl: Union[List[int], Tuple[int, int, int], np.ndarray[np.int64]],
+        g2_hkl: Union[List[int], Tuple[int, int, int], np.ndarray[np.int64]],
     ):
         """
         calculate the [h,k,l] reflections from the `g1_ind`,`g2_ind` from known 'g1_hkl` and 'g2_hkl' reflections.
