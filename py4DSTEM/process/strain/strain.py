@@ -390,6 +390,78 @@ class StrainMap(RealSlice, Data):
         else:
             return
 
+    def set_hkl(
+            self,
+            g1_hkl,
+            g2_hkl,
+    ):
+        
+        g1_hkl = np.array(g1_hkl)
+        g2_hkl = np.array(g2_hkl)
+
+        # TODO check this is correct 
+        # calculate the direct beam 
+        direct_beam = np.cross(g1_hkl, g2_hkl)
+        direct_beam = direct_beam / np.gcd.reduce(direct_beam)
+
+        # Initialize a PLA
+        bvs_hkl = PointListArray(
+            shape = self.shape,
+            dtype = [
+                    ('qx',float),
+                    ('qy',float),
+                    ('intensity',float),
+                    ('h',int),
+                    ('k',int),
+                    ('l',int),
+                ]
+            )   
+        # loop over the probe posistions 
+        for Rx, Ry in tqdmnd(
+            self.shape[0],
+            self.shape[1],
+            desc="Converting (g1_ind,g2_ind) to (h,k,l)",
+            unit="DP",
+            unit_scale=True,
+        ):
+            # get a single indexed 
+            braggvectors_indexed_dp = self.bragg_vectors_indexed[Rx,Ry]
+            
+            # make a Pointlsit
+            bvs_hkl_curr= PointList(
+            data = np.empty(
+                len(braggvectors_indexed_dp),
+                dtype = bvs_hkl.dtype
+                )
+            )
+            # populate qx, qy and intensity fields
+            bvs_hkl_curr.data['qx'] = braggvectors_indexed_dp['qx']
+            bvs_hkl_curr.data['qy'] = braggvectors_indexed_dp['qy']
+            bvs_hkl_curr.data['intensity'] = braggvectors_indexed_dp['intensity']
+
+            # calcuate the hkl vectors
+            vectors_hkl = g1_hkl[:,np.newaxis]*braggvectors_indexed_dp['g1_ind'] +\
+            g2_hkl[:,np.newaxis]*braggvectors_indexed_dp['g2_ind'] 
+            # self.vectors_hkl = vectors_hkl
+            # I think 0,0,0 reflection will always be at index 0 but this will find it 
+            index = np.where((vectors_hkl == 0).all(axis=0))[0][0] # returns tuple and we want the zeroth index
+            # print(vectors_hkl.shape)
+            # print(direct_beam.shape)
+            vectors_hkl[:,index] = direct_beam
+            
+            # populate h,k,l fields
+            # print(vectors_hkl.shape)
+            # bvs_hkl_curr.data['h'] = vectors_hkl[0,:]
+            # bvs_hkl_curr.data['k'] = vectors_hkl[1,:]
+            # bvs_hkl_curr.data['l'] = vectors_hkl[2,:]
+            bvs_hkl_curr.data['h'],bvs_hkl_curr.data['k'],bvs_hkl_curr.data['l'] = np.vsplit(vectors_hkl,3)
+            
+            # add to the PLA
+            bvs_hkl[Rx,Ry] += bvs_hkl_curr
+        
+        # add the PLA to the Strainmap object
+        self.bragg_vectors_indexed_hkl = bvs_hkl
+
     def set_max_peak_spacing(
         self,
         max_peak_spacing,
