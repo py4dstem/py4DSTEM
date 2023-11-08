@@ -391,39 +391,39 @@ class StrainMap(RealSlice, Data):
             return
 
     def set_hkl(
-            self,
-            g1_hkl:list[int,int,int] | tuple[int,int,int] | np.ndarray[int],
-            g2_hkl:list[int,int,int] | tuple[int,int,int] | np.ndarray[int],
+        self,
+        g1_hkl: list[int, int, int] | tuple[int, int, int] | np.ndarray[int],
+        g2_hkl: list[int, int, int] | tuple[int, int, int] | np.ndarray[int],
     ):
         """
         calculate the [h,k,l] reflections from the `g1_ind`,`g2_ind` from known 'g1_hkl` and 'g2_hkl' reflections.
         Creates 'bragg_vectors_indexed_hkl' attribute
         Args:
-            g1_hkl (list[int] | tuple[int,int,int] | np.ndarray[int]): known [h,k,l] reflection for g1_vector 
-            g2_hkl (list[int] | tuple[int,int,int] | np.ndarray[int]): known [h,k,l] reflection for g1_vector 
+            g1_hkl (list[int] | tuple[int,int,int] | np.ndarray[int]): known [h,k,l] reflection for g1_vector
+            g2_hkl (list[int] | tuple[int,int,int] | np.ndarray[int]): known [h,k,l] reflection for g1_vector
         """
-        
+
         g1_hkl = np.array(g1_hkl)
         g2_hkl = np.array(g2_hkl)
 
-        # TODO check this is correct 
-        # calculate the direct beam 
+        # TODO check this is correct
+        # calculate the direct beam
         direct_beam = np.cross(g1_hkl, g2_hkl)
         direct_beam = direct_beam / np.gcd.reduce(direct_beam)
 
         # Initialize a PLA
         bvs_hkl = PointListArray(
-            shape = self.shape,
-            dtype = [
-                    ('qx',float),
-                    ('qy',float),
-                    ('intensity',float),
-                    ('h',int),
-                    ('k',int),
-                    ('l',int),
-                ]
-            )   
-        # loop over the probe posistions 
+            shape=self.shape,
+            dtype=[
+                ("qx", float),
+                ("qy", float),
+                ("intensity", float),
+                ("h", int),
+                ("k", int),
+                ("l", int),
+            ],
+        )
+        # loop over the probe posistions
         for Rx, Ry in tqdmnd(
             self.shape[0],
             self.shape[1],
@@ -431,41 +431,46 @@ class StrainMap(RealSlice, Data):
             unit="DP",
             unit_scale=True,
         ):
-            # get a single indexed 
-            braggvectors_indexed_dp = self.bragg_vectors_indexed[Rx,Ry]
-            
+            # get a single indexed
+            braggvectors_indexed_dp = self.bragg_vectors_indexed[Rx, Ry]
+
             # make a Pointlsit
-            bvs_hkl_curr= PointList(
-            data = np.empty(
-                len(braggvectors_indexed_dp),
-                dtype = bvs_hkl.dtype
-                )
+            bvs_hkl_curr = PointList(
+                data=np.empty(len(braggvectors_indexed_dp), dtype=bvs_hkl.dtype)
             )
             # populate qx, qy and intensity fields
-            bvs_hkl_curr.data['qx'] = braggvectors_indexed_dp['qx']
-            bvs_hkl_curr.data['qy'] = braggvectors_indexed_dp['qy']
-            bvs_hkl_curr.data['intensity'] = braggvectors_indexed_dp['intensity']
+            bvs_hkl_curr.data["qx"] = braggvectors_indexed_dp["qx"]
+            bvs_hkl_curr.data["qy"] = braggvectors_indexed_dp["qy"]
+            bvs_hkl_curr.data["intensity"] = braggvectors_indexed_dp["intensity"]
 
             # calcuate the hkl vectors
-            vectors_hkl = g1_hkl[:,np.newaxis]*braggvectors_indexed_dp['g1_ind'] +\
-            g2_hkl[:,np.newaxis]*braggvectors_indexed_dp['g2_ind'] 
+            vectors_hkl = (
+                g1_hkl[:, np.newaxis] * braggvectors_indexed_dp["g1_ind"]
+                + g2_hkl[:, np.newaxis] * braggvectors_indexed_dp["g2_ind"]
+            )
             # self.vectors_hkl = vectors_hkl
-            # I think 0,0,0 reflection will always be at index 0 but this will find it 
-            index = np.where((vectors_hkl == 0).all(axis=0))[0][0] # returns tuple and we want the zeroth index
+            # I think 0,0,0 reflection will always be at index 0 but this will find it
+            index = np.where((vectors_hkl == 0).all(axis=0))[0][
+                0
+            ]  # returns tuple and we want the zeroth index
             # print(vectors_hkl.shape)
             # print(direct_beam.shape)
-            vectors_hkl[:,index] = direct_beam
-            
+            vectors_hkl[:, index] = direct_beam
+
             # populate h,k,l fields
             # print(vectors_hkl.shape)
             # bvs_hkl_curr.data['h'] = vectors_hkl[0,:]
             # bvs_hkl_curr.data['k'] = vectors_hkl[1,:]
             # bvs_hkl_curr.data['l'] = vectors_hkl[2,:]
-            bvs_hkl_curr.data['h'],bvs_hkl_curr.data['k'],bvs_hkl_curr.data['l'] = np.vsplit(vectors_hkl,3)
-            
+            (
+                bvs_hkl_curr.data["h"],
+                bvs_hkl_curr.data["k"],
+                bvs_hkl_curr.data["l"],
+            ) = np.vsplit(vectors_hkl, 3)
+
             # add to the PLA
-            bvs_hkl[Rx,Ry] += bvs_hkl_curr
-        
+            bvs_hkl[Rx, Ry] += bvs_hkl_curr
+
         # add the PLA to the Strainmap object
         self.bragg_vectors_indexed_hkl = bvs_hkl
 
@@ -1593,10 +1598,12 @@ class StrainMap(RealSlice, Data):
         """
         assert isinstance(bragg_directions, PointList)
         # checking if it has h, k or g1_ind, g2_ind
-        assert (
-                all(key in bragg_directions.data.dtype.names for key in ("qx", "qy", "h", "k")) or
-                all(key in bragg_directions.data.dtype.names for key in ("qx", "qy", "g1_ind", "g2_ind"))
-            ), 'pointlist must contain ("qx", "qy", "h", "k") or ("qx", "qy", "g1_ind", "g2_ind") fields'
+        assert all(
+            key in bragg_directions.data.dtype.names for key in ("qx", "qy", "h", "k")
+        ) or all(
+            key in bragg_directions.data.dtype.names
+            for key in ("qx", "qy", "g1_ind", "g2_ind")
+        ), 'pointlist must contain ("qx", "qy", "h", "k") or ("qx", "qy", "g1_ind", "g2_ind") fields'
 
         if figax is None:
             fig, ax = show(ar, returnfig=True, **kwargs)
@@ -1615,7 +1622,7 @@ class StrainMap(RealSlice, Data):
             "pointsize": pointsize,
             "pointcolor": pointcolor,
         }
-        # this can take ("qx", "qy", "h", "k") or ("qx", "qy", "g1_ind", "g2_ind") fields 
+        # this can take ("qx", "qy", "h", "k") or ("qx", "qy", "g1_ind", "g2_ind") fields
         add_bragg_index_labels(ax, d)
 
         if returnfig:
