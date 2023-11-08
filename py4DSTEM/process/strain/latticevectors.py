@@ -33,7 +33,7 @@ def index_bragg_directions(x0, y0, gx, gy, g1, g2):
             * **k**: *(ndarray of ints)* second index of the bragg directions
             * **bragg_directions**: *(PointList)* a 4-coordinate PointList with the
               indexed bragg directions; coords 'qx' and 'qy' contain bragg_x and bragg_y
-              coords 'h' and 'k' contain h and k.
+              coords 'g1_ind' and 'g2_ind' contain g1_ind and g2_ind.
     """
     # Get beta, the matrix of lattice vectors
     beta = np.array([[g1[0], g2[0]], [g1[1], g2[1]]])
@@ -45,39 +45,39 @@ def index_bragg_directions(x0, y0, gx, gy, g1, g2):
     M = lstsq(beta, alpha, rcond=None)[0].T
     M = np.round(M).astype(int)
 
-    # Get h,k
-    h = M[:, 0]
-    k = M[:, 1]
+    # Get g1_ind,g2_ind
+    g1_ind = M[:, 0]
+    g2_ind  = M[:, 1]
 
     # Store in a PointList
-    coords = [("qx", float), ("qy", float), ("h", int), ("k", int)]
+    coords = [("qx", float), ("qy", float), ("g1_ind", int), ("g2_ind", int)]
     temp_array = np.zeros([], dtype=coords)
     bragg_directions = PointList(data=temp_array)
-    bragg_directions.add_data_by_field((gx, gy, h, k))
+    bragg_directions.add_data_by_field((gx, gy, g1_ind, g2_ind))
     mask = np.zeros(bragg_directions["qx"].shape[0])
     mask[0] = 1
     bragg_directions.remove(mask)
 
-    return h, k, bragg_directions
+    return g1_ind, g2_ind, bragg_directions
 
 
 def add_indices_to_braggvectors(
     braggpeaks, lattice, maxPeakSpacing, qx_shift=0, qy_shift=0, mask=None
 ):
     """
-    Using the peak positions (qx,qy) and indices (h,k) in the PointList lattice,
+    Using the peak positions (qx,qy) and indices (g1_ind,g2_ind) in the PointList lattice,
     identify the indices for each peak in the PointListArray braggpeaks.
     Return a new braggpeaks_indexed PointListArray, containing a copy of braggpeaks plus
-    three additional data columns -- 'h','k', and 'index_mask' -- specifying the peak
-    indices with the ints (h,k) and indicating whether the peak was successfully indexed
+    three additional data columns -- 'g1_ind','g2_ind', and 'index_mask' -- specifying the peak
+    indices with the ints (g1_ind,g2_ind) and indicating whether the peak was successfully indexed
     or not with the bool index_mask. If `mask` is specified, only the locations where
     mask is True are indexed.
 
     Args:
         braggpeaks (PointListArray): the braggpeaks to index. Must contain
             the coordinates 'qx', 'qy', and 'intensity'
-        lattice (PointList): the positions (qx,qy) of the (h,k) lattice points.
-            Must contain the coordinates 'qx', 'qy', 'h', and 'k'
+        lattice (PointList): the positions (qx,qy) of the (g1_ind,g2_ind) lattice points.
+            Must contain the coordinates 'qx', 'qy', 'g1_ind', and 'g2_ind'
         maxPeakSpacing (float): Maximum distance from the ideal lattice points
             to include a peak for indexing
         qx_shift,qy_shift (number): the shift of the origin in the `lattice` PointList
@@ -88,7 +88,7 @@ def add_indices_to_braggvectors(
 
     Returns:
         (PointListArray): The original braggpeaks pointlistarray, with new coordinates
-        'h', 'k', containing the indices of each indexable peak.
+        'g1_ind', 'g2_ind', containing the indices of each indexable peak.
     """
 
     # assert isinstance(braggpeaks,BraggVectors)
@@ -107,8 +107,8 @@ def add_indices_to_braggvectors(
         ("qx", float),
         ("qy", float),
         ("intensity", float),
-        ("h", int),
-        ("k", int),
+        ("g1_ind", int),
+        ("g2_ind", int),
     ]
 
     indexed_braggpeaks = PointListArray(
@@ -140,8 +140,8 @@ def add_indices_to_braggvectors(
                             pl.data["qx"][i],
                             pl.data["qy"][i],
                             pl.data["intensity"][i],
-                            lattice.data["h"][ind],
-                            lattice.data["k"][ind],
+                            lattice.data["g1_ind"][ind],
+                            lattice.data["g2_ind"][ind],
                         )
                     )
 
@@ -150,12 +150,12 @@ def add_indices_to_braggvectors(
 
 def fit_lattice_vectors(braggpeaks, x0=0, y0=0, minNumPeaks=5):
     """
-    Fits lattice vectors g1,g2 to braggpeaks given some known (h,k) indexing.
+    Fits lattice vectors g1,g2 to braggpeaks given some known (g1_ind,g2_ind) indexing.
 
     Args:
         braggpeaks (PointList): A 6 coordinate PointList containing the data to fit.
             Coords are 'qx','qy' (the bragg peak positions), 'intensity' (used as a
-            weighting factor when fitting), 'h','k' (indexing). May optionally also
+            weighting factor when fitting), 'g1_ind','g2_ind' (indexing). May optionally also
             contain 'index_mask' (bool), indicating which peaks have been successfully
             indixed and should be used.
         x0 (float): x-coord of the origin
@@ -176,22 +176,22 @@ def fit_lattice_vectors(braggpeaks, x0=0, y0=0, minNumPeaks=5):
     """
     assert isinstance(braggpeaks, PointList)
     assert np.all(
-        [name in braggpeaks.dtype.names for name in ("qx", "qy", "intensity", "h", "k")]
+        [name in braggpeaks.dtype.names for name in ("qx", "qy", "intensity", "g1_ind", "g2_ind")]
     )
     braggpeaks = braggpeaks.copy()
 
     # Remove unindexed peaks
     if "index_mask" in braggpeaks.dtype.names:
-        deletemask = braggpeaks.data["index_mask"] == False
+        deletemask = braggpeaks.data["index_mask"] is False
         braggpeaks.remove(deletemask)
 
     # Check to ensure enough peaks are present
     if braggpeaks.length < minNumPeaks:
         return None, None, None, None, None, None, None
 
-    # Get M, the matrix of (h,k) indices
-    h, k = braggpeaks.data["h"], braggpeaks.data["k"]
-    M = np.vstack((np.ones_like(h, dtype=int), h, k)).T
+    # Get M, the matrix of (g1_ind,g2_ind) indices
+    g1_ind, g2_ind = braggpeaks.data["g1_ind"], braggpeaks.data["g2_ind"]
+    M = np.vstack((np.ones_like(g1_ind, dtype=int), g1_ind, g2_ind)).T
 
     # Get alpha, the matrix of measured Bragg peak positions
     alpha = np.vstack((braggpeaks.data["qx"] - x0, braggpeaks.data["qy"] - y0)).T
@@ -223,7 +223,7 @@ def fit_lattice_vectors_all_DPs(braggpeaks, x0=0, y0=0, minNumPeaks=5):
     Args:
         braggpeaks (PointList): A 6 coordinate PointList containing the data to fit.
             Coords are 'qx','qy' (the bragg peak positions), 'intensity' (used as a
-            weighting factor when fitting), 'h','k' (indexing). May optionally also
+            weighting factor when fitting), 'g1_ind','g2_ind' (indexing). May optionally also
             contain 'index_mask' (bool), indicating which peaks have been successfully
             indixed and should be used.
         x0 (float): x-coord of the origin
@@ -246,7 +246,7 @@ def fit_lattice_vectors_all_DPs(braggpeaks, x0=0, y0=0, minNumPeaks=5):
     """
     assert isinstance(braggpeaks, PointListArray)
     assert np.all(
-        [name in braggpeaks.dtype.names for name in ("qx", "qy", "intensity", "h", "k")]
+        [name in braggpeaks.dtype.names for name in ("qx", "qy", "intensity", "g1_ind", "g2_ind")]
     )
 
     # Make RealSlice to contain outputs
@@ -272,7 +272,7 @@ def fit_lattice_vectors_all_DPs(braggpeaks, x0=0, y0=0, minNumPeaks=5):
         # Store data
         if g1x is not None:
             g1g2_map.get_slice("x0").data[Rx, Ry] = qx0
-            g1g2_map.get_slice("y0").data[Rx, Ry] = qx0
+            g1g2_map.get_slice("y0").data[Rx, Ry] = qy0 # Assume this is a correct change
             g1g2_map.get_slice("g1x").data[Rx, Ry] = g1x
             g1g2_map.get_slice("g1y").data[Rx, Ry] = g1y
             g1g2_map.get_slice("g2x").data[Rx, Ry] = g2x
