@@ -181,7 +181,8 @@ class Featurization(object):
                                 np.rint(
                                     (pointlist.data["qy"] / q_pixel_size) + Q_Ny / 2
                                 ).astype(int),
-                            ] is False
+                            ]
+                            is False
                         ),
                         True,
                         False,
