@@ -791,17 +791,17 @@ class StrainMap(RealSlice, Data):
 
         # Get images
         e_xx = np.ma.array(
-            self.get_slice("exx").data, mask=self.get_slice("mask").data is False
+            self.get_slice("exx").data, mask=self.get_slice("mask").data == False # noqa: E712,E501
         )
         e_yy = np.ma.array(
-            self.get_slice("eyy").data, mask=self.get_slice("mask").data is False
+            self.get_slice("eyy").data, mask=self.get_slice("mask").data == False # noqa: E712,E501
         )
         e_xy = np.ma.array(
-            self.get_slice("exy").data, mask=self.get_slice("mask").data is False
+            self.get_slice("exy").data, mask=self.get_slice("mask").data == False # noqa: E712,E501
         )
         theta = np.ma.array(
             self.get_slice("theta").data,
-            mask=self.get_slice("mask").data is False,
+            mask=self.get_slice("mask").data == False, # noqa: E712
         )
 
         ## Plot
