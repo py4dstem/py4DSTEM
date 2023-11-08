@@ -406,11 +406,6 @@ class StrainMap(RealSlice, Data):
         g1_hkl = np.array(g1_hkl)
         g2_hkl = np.array(g2_hkl)
 
-        # TODO check this is correct
-        # calculate the direct beam
-        direct_beam = np.cross(g1_hkl, g2_hkl)
-        direct_beam = direct_beam / np.gcd.reduce(direct_beam)
-
         # Initialize a PLA
         bvs_hkl = PointListArray(
             shape=self.shape,
@@ -449,13 +444,6 @@ class StrainMap(RealSlice, Data):
                 + g2_hkl[:, np.newaxis] * braggvectors_indexed_dp["g2_ind"]
             )
             # self.vectors_hkl = vectors_hkl
-            # I think 0,0,0 reflection will always be at index 0 but this will find it
-            index = np.where((vectors_hkl == 0).all(axis=0))[0][
-                0
-            ]  # returns tuple and we want the zeroth index
-            # print(vectors_hkl.shape)
-            # print(direct_beam.shape)
-            vectors_hkl[:, index] = direct_beam
 
             # populate h,k,l fields
             # print(vectors_hkl.shape)
