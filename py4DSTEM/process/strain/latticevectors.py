@@ -182,7 +182,7 @@ def fit_lattice_vectors(braggpeaks, x0=0, y0=0, minNumPeaks=5):
 
     # Remove unindexed peaks
     if "index_mask" in braggpeaks.dtype.names:
-        deletemask = braggpeaks.data["index_mask"] is False
+        deletemask = braggpeaks.data["index_mask"] == False # noqa:E712
         braggpeaks.remove(deletemask)
 
     # Check to ensure enough peaks are present
