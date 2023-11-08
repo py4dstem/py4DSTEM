@@ -231,10 +231,10 @@ def find_Bragg_disks(
         mode = "dc_ml"
 
     elif mode == "datacube":
-        if distributed is None and CUDA == False:
+        if distributed is None and CUDA is False:
             mode = "dc_CPU"
-        elif distributed is None and CUDA == True:
-            if CUDA_batched == False:
+        elif distributed is None and CUDA is True:
+            if CUDA_batched is False:
                 mode = "dc_GPU"
             else:
                 mode = "dc_GPU_batched"
@@ -271,7 +271,7 @@ def find_Bragg_disks(
         kws["data_file"] = data_file
         kws["cluster_path"] = cluster_path
     # ML arguments
-    if ML == True:
+    if ML is True:
         kws["CUDA"] = CUDA
         kws["model_path"] = ml_model_path
         kws["num_attempts"] = ml_num_attempts

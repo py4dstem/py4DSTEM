@@ -190,7 +190,7 @@ def get_module_states(state_dict: dict) -> dict:
 
         # check that all the depencies could be imported i.e. state == True
         # and set the state of the module to that
-        module_states[key] = all(temp_lst) == True
+        module_states[key] = all(temp_lst) is True
 
     return module_states
 
@@ -338,7 +338,7 @@ def check_module_functionality(state_dict: dict) -> None:
 
         # check that all the depencies could be imported i.e. state == True
         # and set the state of the module to that
-        module_states[key] = all(temp_lst) == True
+        module_states[key] = all(temp_lst) is True
 
     # Print out the state of all the modules in colour code
     for key, val in module_states.items():

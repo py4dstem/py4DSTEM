@@ -594,8 +594,8 @@ class BraggVectorClassification(object):
             W_merge = W_merge[:, 1:]
             H_merge = H_merge[1:, :]
 
-            W_ = np.hstack((W_[:, merged == False], W_merge))
-            H_ = np.vstack((H_[merged == False, :], H_merge))
+            W_ = np.hstack((W_[:, merged is False], W_merge))
+            H_ = np.vstack((H_[merged is False, :], H_merge))
             Nc_ = W_.shape[1]
 
             if len(merge_candidates) == 0:

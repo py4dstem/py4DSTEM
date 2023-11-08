@@ -233,7 +233,7 @@ def find_Bragg_disks_aiml_CUDA(
             datacube.R_N, int(t2 / 3600), int(t2 / 60), int(t2 % 60)
         )
     )
-    if global_threshold == True:
+    if global_threshold is True:
         from py4DSTEM.braggvectors import universal_threshold
 
         peaks = universal_threshold(
@@ -496,7 +496,7 @@ def get_maxima_2D_cp(
         if minSpacing > 0:
             deletemask = np.zeros(len(maxima), dtype=bool)
             for i in range(len(maxima)):
-                if deletemask[i] == False:
+                if deletemask[i] is False:
                     tooClose = (
                         (maxima["x"] - maxima["x"][i]) ** 2
                         + (maxima["y"] - maxima["y"][i]) ** 2

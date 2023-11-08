@@ -261,9 +261,9 @@ def beta_parallel_disk_detection(
     if close_dask_client:
         dask_client.close()
         return peaks
-    elif close_dask_client == False and return_dask_client == True:
+    elif close_dask_client is False and return_dask_client is True:
         return peaks, dask_client
-    elif close_dask_client and return_dask_client == False:
+    elif close_dask_client and return_dask_client is False:
         return peaks
     else:
         print(
