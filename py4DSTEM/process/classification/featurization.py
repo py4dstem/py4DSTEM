@@ -679,7 +679,7 @@ class Featurization(object):
                         )
                     else:
                         large_labelled_image = labelled_image
-                elif method == None:
+                elif method is None:
                     labelled_image = label(image)
                     if np.sum(labelled_image) > size:
                         large_labelled_image = remove_small_objects(
@@ -874,7 +874,7 @@ def _nmf_single(
     """
     # Prepare error, random seed
     err = np.inf
-    if random_seed == None:
+    if random_seed is None:
         rng = np.random.RandomState(seed=42)
     else:
         seed = random_seed
@@ -883,7 +883,7 @@ def _nmf_single(
 
     # Big loop through all models
     for i in range(num_models):
-        if random_seed == None:
+        if random_seed is None:
             seed = rng.randint(5000)
         n_comps = max_components
         recon_error, counter = 0, 0
@@ -968,12 +968,12 @@ def _gmm_single(x, cv, components, num_models, random_seed=None, return_all=True
         gmm_proba = []
     lowest_bic = np.infty
     bic_temp = 0
-    if random_seed == None:
+    if random_seed is None:
         rng = np.random.RandomState(seed=42)
     else:
         seed = random_seed
     for n in range(num_models):
-        if random_seed == None:
+        if random_seed is None:
             seed = rng.randint(5000)
         for j in range(len(components)):
             for cv_type in cv:
