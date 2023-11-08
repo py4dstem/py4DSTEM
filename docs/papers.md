@@ -9,17 +9,23 @@ Please email clophus@lbl.gov if you have used py4DSTEM for analysis and your pap
 
 
 
-### 2022 (13)
-
+### 2022 (16)
 
 
 [Disentangling multiple scattering with deep learning: application to strain mapping from electron diffraction patterns](https://doi.org/10.1038/s41524-022-00939-9), J Munshi*, A Rakowski*, et al., npj Computational Materials 8, 254 (2022)
+
+[Flexible CO2 Sensor Architecture with Selective Nitrogen Functionalities by One-Step Laser-Induced Conversion of Versatile Organic Ink](https://doi.org/10.1002/adfm.202207406), H Wang et al., Advanced Functional Materials 32, 2207406 (2022)
 
 [Defect Contrast with 4D-STEM: Understanding Crystalline Order with Virtual Detectors and Beam Modification](https://doi.org/10.1093/micmic/ozad045) SM Ribet et al., Microscopy and Microanalysis 29, 1087 (2023).
 
 [Structural heterogeneity in non-crystalline TexSe1−x thin films](https://doi.org/10.1063/5.0094600), B Sari et al., Applied Physics Letters 121, 012101 (2022)
 
 [Cryogenic 4D-STEM analysis of an amorphouscrystalline polymer blend: Combined nanocrystalline and amorphous phase mapping](https://doi.org/10.1016/j.isci.2022.103882), J Donohue et al., iScience 25, 103882 (2022)
+
+[Hydrogen-assisted decohesion associated with nanosized grain boundary κ-carbides in a high-Mn lightweight steel](https://doi.org/10.1016/j.actamat.2022.118392), MN Elkot et al., Acta Materialia
+ 241, 118392 (2022)
+
+[4D-STEM Ptychography for Electron-Beam-Sensitive Materials](https://doi.org/10.1021/acscentsci.2c01137), G Li et al., ACS Central Science 8, 1579 (2022)
 
 [Developing a Chemical and Structural Understanding of the Surface Oxide in a Niobium Superconducting Qubit](https://doi.org/10.1021/acsnano.2c07913), AA Murthy et al., ACS Nano 16, 17257 (2022)
 
