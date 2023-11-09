@@ -103,12 +103,12 @@ def find_Bragg_disks_aiml_single_DP(
     """
     try:
         import crystal4D
-    except:
-        raise ImportError("Import Error: Please install crystal4D before proceeding")
+    except ModuleNotFoundError:
+        raise ModuleNotFoundError("Import Error: Please install crystal4D before proceeding")
     try:
         import tensorflow as tf
-    except:
-        raise ImportError(
+    except ModuleNotFoundError:
+        raise ModuleNotFoundError(
             "Please install tensorflow before proceeding - please check "
             + "https://www.tensorflow.org/install"
             + "for more information"
@@ -256,8 +256,8 @@ def find_Bragg_disks_aiml_selected(
 
     try:
         import crystal4D
-    except:
-        raise ImportError("Import Error: Please install crystal4D before proceeding")
+    except ModuleNotFoundError:
+        raise ModuleNotFoundError("Import Error: Please install crystal4D before proceeding")
 
     assert len(Rx) == len(Ry)
     peaks = []
@@ -433,8 +433,8 @@ def find_Bragg_disks_aiml_serial(
 
     try:
         import crystal4D
-    except:
-        raise ImportError("Import Error: Please install crystal4D before proceeding")
+    except ModuleNotFoundError:
+        raise ModuleNotFoundError("Import Error: Please install crystal4D before proceeding")
 
     # Make the peaks PointListArray
     # dtype = [('qx',float),('qy',float),('intensity',float)]
@@ -643,8 +643,8 @@ def find_Bragg_disks_aiml(
     """
     try:
         import crystal4D
-    except:
-        raise ImportError("Please install crystal4D before proceeding")
+    except ModuleNotFoundError:
+        raise ModuleNotFoundError("Please install crystal4D before proceeding")
 
     def _parse_distributed(distributed):
         import os
@@ -840,7 +840,8 @@ def _integrate_disks(DP, maxima_x, maxima_y, maxima_int, int_window_radius=1):
         disks.append(np.average(disk))
     try:
         disks = disks / max(disks)
-    except:
+    # TODO work out what exception would go here
+    except Exception:
         pass
     return (maxima_x, maxima_y, disks)
 
@@ -878,8 +879,8 @@ def _get_latest_model(model_path=None):
 
     try:
         import tensorflow as tf
-    except:
-        raise ImportError(
+    except ModuleNotFoundError:
+        raise ModuleNotFoundError(
             "Please install tensorflow before proceeding - please check "
             + "https://www.tensorflow.org/install"
             + "for more information"
@@ -891,8 +892,12 @@ def _get_latest_model(model_path=None):
     if model_path is None:
         try:
             os.mkdir("./tmp")
-        except:
+        except FileExistsError:
             pass
+        except Exception as e:
+            # TODO work out if I want to pass or raise 
+            pass
+            # raise e
         # download the json file with the meta data
         download_file_from_google_drive("FCU-Net", "./tmp/model_metadata.json")
         with open("./tmp/model_metadata.json") as f:
@@ -905,8 +910,12 @@ def _get_latest_model(model_path=None):
             with open("./tmp/model_metadata_old.json") as f_old:
                 metaold = json.load(f_old)
                 file_id_old = metaold["file_id"]
-        except:
+        # TODO Double check this is correct Error 
+        except FileNotFoundError:
             file_id_old = file_id
+        except Exception:
+            file_id_old = file_id
+
 
         if os.path.exists(file_path) and file_id == file_id_old:
             print(
@@ -921,7 +930,8 @@ def _get_latest_model(model_path=None):
             download_file_from_google_drive(file_id, filename)
             try:
                 shutil.unpack_archive(filename, "./tmp", format="zip")
-            except:
+            # TODO Work work what specific exception
+            except Exception:
                 pass
             model_path = file_path
             os.rename("./tmp/model_metadata.json", "./tmp/model_metadata_old.json")
