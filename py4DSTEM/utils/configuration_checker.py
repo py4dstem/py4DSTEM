@@ -392,7 +392,7 @@ def check_cupy_gpu(gratuitously_verbose: bool, **kwargs):
             d = cp.cuda.Device(i)
             hasattr(d, "attributes")
         # TODO work out what error is raised
-        except AttributeError or Exception:
+        except (AttributeError, Exception):
             num_gpus_detected = i
             break
 
