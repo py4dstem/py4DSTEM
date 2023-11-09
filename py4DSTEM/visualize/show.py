@@ -8,6 +8,7 @@ import numpy as np
 from matplotlib.axes import Axes
 from matplotlib.colors import is_color_like
 from matplotlib.figure import Figure
+from mpl_toolkits.axes_grid1.axes_divider import make_axes_locatable
 from py4DSTEM.data import Calibration, DiffractionSlice, RealSlice
 from py4DSTEM.visualize.overlay import (
     add_annuli,
@@ -25,7 +26,7 @@ from py4DSTEM.visualize.overlay import (
 
 def show(
     ar,
-    figsize=(8, 8),
+    figsize=(5, 5),
     cmap="gray",
     scaling="none",
     intensity_range="ordered",
@@ -75,6 +76,7 @@ def show(
     theta=None,
     title=None,
     show_fft=False,
+    show_cbar=False,
     **kwargs
 ):
     """
@@ -302,7 +304,8 @@ def show(
             does not add a scalebar.  If a dict is passed, it is propagated to the add_scalebar function
             which will attempt to use it to overlay a scalebar. If True, uses calibraiton or pixelsize/pixelunits
             for scalebar. If False, no scalebar is added.
-        show_fft (Bool): if True, plots 2D-fft of array
+        show_fft (bool): if True, plots 2D-fft of array
+        show_cbar (bool) : if True, adds cbar
         **kwargs: any keywords accepted by matplotlib's ax.matshow()
 
     Returns:
@@ -366,7 +369,9 @@ def show(
             from py4DSTEM.visualize import show
 
             if show_fft:
-                ar = np.abs(np.fft.fftshift(np.fft.fft2(ar.copy())))
+                n0 = ar.shape
+                w0 = np.hanning(n0[1]) * np.hanning(n0[0])[:, None]
+                ar = np.abs(np.fft.fftshift(np.fft.fft2(w0 * ar.copy())))
             for a0 in range(num_images):
                 im = show(
                     ar[a0],
@@ -605,6 +610,10 @@ def show(
                 ax.matshow(
                     mask_display, cmap=cmap, alpha=mask_alpha, vmin=vmin, vmax=vmax
                 )
+            if show_cbar:
+                ax_divider = make_axes_locatable(ax)
+                c_axis = ax_divider.append_axes("right", size="7%")
+                fig.colorbar(cax, cax=c_axis)
         # ...or, plot its histogram
         else:
             hist, bin_edges = np.histogram(
