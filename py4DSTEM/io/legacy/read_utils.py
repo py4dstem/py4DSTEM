@@ -20,9 +20,7 @@ def is_py4DSTEM_version13(filepath):
         for k in f.keys():
             if "emd_group_type" in f[k].attrs:
                 if f[k].attrs["emd_group_type"] == "root":
-                    if all(
-                        x in f[k].attrs for x in ("version_major", "version_minor")
-                    ):
+                    if all(x in f[k].attrs for x in ("version_major", "version_minor")):
                         if (
                             int(f[k].attrs["version_major"]),
                             int(f[k].attrs["version_minor"]),
