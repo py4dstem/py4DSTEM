@@ -304,7 +304,7 @@ def import_tester(m: str) -> bool:
     # try and import the module
     try:
         importlib.import_module(m)
-    except:
+    except ModuleNotFoundError:
         state = False
 
     return state
@@ -391,7 +391,8 @@ def check_cupy_gpu(gratuitously_verbose: bool, **kwargs):
         try:
             d = cp.cuda.Device(i)
             hasattr(d, "attributes")
-        except:
+        # TODO work out what error is raised
+        except (AttributeError, Exception):
             num_gpus_detected = i
             break
 

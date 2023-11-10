@@ -21,8 +21,8 @@ except ModuleNotFoundError:
 
 try:
     import tensorflow as tf
-except:
-    raise ImportError(
+except ModuleNotFoundError:
+    raise ModuleNotFoundError(
         "Please install tensorflow before proceeding - please check "
         + "https://www.tensorflow.org/install"
         + "for more information"
@@ -636,7 +636,8 @@ def upsampled_correlation_cp(imageCorr, upsampleFactor, xyShift):
         )
         dx = (icc[2, 1] - icc[0, 1]) / (4 * icc[1, 1] - 2 * icc[2, 1] - 2 * icc[0, 1])
         dy = (icc[1, 2] - icc[1, 0]) / (4 * icc[1, 1] - 2 * icc[1, 2] - 2 * icc[1, 0])
-    except:
+    # TODO I think this is just the IndexError
+    except Exception:
         dx, dy = (
             0,
             0,
@@ -732,6 +733,7 @@ def _integrate_disks_cp(DP, maxima_x, maxima_y, maxima_int, int_window_radius=1)
         disks.append(np.average(disk))
     try:
         disks = disks / max(disks)
-    except:
+    # TODO work out what exception to use, ZeroDivisionError
+    except Exception:
         pass
     return (maxima_x, maxima_y, disks)

@@ -602,8 +602,8 @@ def refine_peaks_local(
                         self.peaks[rx, ry]["qr"][a0] = p0[2] / q_step
                         self.peaks[rx, ry]["sigma_annular"][a0] = p0[3] / t_step
                         self.peaks[rx, ry]["sigma_radial"][a0] = p0[4] / q_step
-
-                    except:
+                    # TODO work out what error is raised
+                    except Exception:
                         pass
 
             else:
@@ -643,8 +643,8 @@ def refine_peaks_local(
                         self.peaks[rx, ry]["qr"][a0] = p0[2] / q_step
                         self.peaks[rx, ry]["sigma_annular"][a0] = p0[3] / t_step
                         self.peaks[rx, ry]["sigma_radial"][a0] = p0[4] / q_step
-
-                    except:
+                    # TODO work out what exception is raised
+                    except Exception:
                         pass
 
 
@@ -1044,7 +1044,8 @@ def refine_peaks(
                 ),
                 name="peaks_polar",
             )
-        except:
+        # TODO work out what exception is raised
+        except Exception:
             # if fitting has failed, we will still output the last iteration
             # TODO - add a flag for unconverged fits
             coefs_peaks = np.reshape(coefs_all[(3 * num_rings + 3) :], (5, num_peaks)).T

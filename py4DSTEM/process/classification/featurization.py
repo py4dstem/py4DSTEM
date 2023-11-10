@@ -477,7 +477,8 @@ class Featurization(object):
                     datacube.data.shape[2],
                     datacube.data.shape[3],
                 )
-            except:
+            # TODO Work out if its a ValueError
+            except Exception:
                 raise ValueError(
                     "Datacube must have same R_Nx and R_Ny dimensions as Featurization instance."
                 )
