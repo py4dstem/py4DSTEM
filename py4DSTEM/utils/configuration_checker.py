@@ -304,7 +304,7 @@ def import_tester(m: str) -> bool:
     # try and import the module
     try:
         importlib.import_module(m)
-    except ModuleNotFoundError:
+    except Exception:
         state = False
 
     return state
