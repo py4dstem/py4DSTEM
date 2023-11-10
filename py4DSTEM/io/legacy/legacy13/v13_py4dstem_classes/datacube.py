@@ -144,7 +144,7 @@ class DataCube(Array):
 
     @Q_pixel_units.setter
     def Q_pixel_units(self, x):
-        if type(x) is not list:
+        if not isinstance(x, list):
             x = [x, x]
         self.dim_units[2] = x[0]
         self.dim_units[3] = x[1]
