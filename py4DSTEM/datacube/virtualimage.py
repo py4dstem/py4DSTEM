@@ -415,7 +415,7 @@ class DataCubeVirtualImager:
                     image = self.tree(k)
                     break
                 # TODO check what error is produced when passing nonexistant key to tree
-                except (KeyError, AttributeError):
+                except AssertionError:
                     pass
             if image is None:
                 image = self[0, 0]
