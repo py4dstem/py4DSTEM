@@ -115,7 +115,7 @@ class K2DataArray(Sequence):
         try:
             R_Ny = gtg.allTags[".SI Dimensions.Size Y"]
             R_Nx = gtg.allTags[".SI Dimensions.Size X"]
-        except (ValueError,KeyError):
+        except ValueError:
             print("Warning: scan shape not detected. Please check/set manually.")
             R_Nx = self._guess_number_frames() // 32
             R_Ny = 1
@@ -125,7 +125,7 @@ class K2DataArray(Sequence):
             Q_Nx = gtg.allTags[".SI Image Tags.Acquisition.Parameters.Detector.height"]
             Q_Ny = gtg.allTags[".SI Image Tags.Acquisition.Parameters.Detector.width"]
         # TODO check this is the correct error type
-        except ValueError:
+        except (ValueError, KeyError):
             print("Warning: diffraction pattern shape not detected!")
             print("Assuming 1920x1792 as the diffraction pattern size!")
             Q_Nx = 1792
