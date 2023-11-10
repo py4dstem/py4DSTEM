@@ -166,7 +166,9 @@ def bin_data_diffraction(datacube, bin_factor, dtype=None):
 
     """
     # validate inputs
-    assert type(bin_factor) is int, f"Error: binning factor {bin_factor} is not an int."
+    assert isinstance(
+        bin_factor, int
+    ), f"Error: binning factor {bin_factor} is not an int."
     if bin_factor == 1:
         return datacube
     if dtype is None:
@@ -225,7 +227,9 @@ def bin_data_mmap(datacube, bin_factor, dtype=np.float32):
 
     """
     # validate inputs
-    assert type(bin_factor) is int, f"Error: binning factor {bin_factor} is not an int."
+    assert isinstance(
+        bin_factor, int
+    ), f"Error: binning factor {bin_factor} is not an int."
     if bin_factor == 1:
         return datacube
 
@@ -268,7 +272,9 @@ def bin_data_real(datacube, bin_factor):
     Performs diffraction space binning of data by bin_factor.
     """
     # validate inputs
-    assert type(bin_factor) is int, f"Bin factor {bin_factor} is not an int."
+    assert isinstance(
+        bin_factor, int
+    ), f"Error: binning factor {bin_factor} is not an int."
     if bin_factor <= 1:
         return datacube
 

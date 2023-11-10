@@ -653,7 +653,7 @@ class DataCube(
                 "dp_mean" in self.treekeys
             ), "calculate .get_dp_mean() or pass a `dp` arg"
             DP = self.tree("dp_mean").data
-        elif type(dp) == str:
+        elif isinstance(dp, str):
             assert dp in self.treekeys, f"mode {dp} not found in the tree"
             DP = self.tree(dp)
         elif type(dp) == np.ndarray:
