@@ -4,18 +4,14 @@ from matplotlib.patches import Wedge
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.spatial import Voronoi
 
-from emdfile import PointList
 from py4DSTEM.visualize import show
 from py4DSTEM.visualize.overlay import (
     add_pointlabels,
-    add_vector,
-    add_bragg_index_labels,
     add_ellipses,
     add_points,
     add_scalebar,
 )
 from py4DSTEM.visualize.vis_grid import show_image_grid
-from py4DSTEM.visualize.vis_RQ import ax_addaxes, ax_addaxes_QtoR
 from colorspacious import cspace_convert
 
 
@@ -31,7 +27,7 @@ def show_elliptical_fit(
     linewidth_ann=2,
     linewidth_ell=2,
     returnfig=False,
-    **kwargs
+    **kwargs,
 ):
     """
     Plots an elliptical curve over its annular fit region.
@@ -97,7 +93,7 @@ def show_amorphous_ring_fit(
     ellipse_alpha=0.7,
     ellipse_lw=2,
     returnfig=False,
-    **kwargs
+    **kwargs,
 ):
     """
     Display a diffraction pattern with a fit to its amorphous ring, interleaving
@@ -225,7 +221,7 @@ def show_qprofile(
     ticklabelsize=14,
     grid=True,
     label=None,
-    **kwargs
+    **kwargs,
 ):
     """
     Plots a diffraction space radial profile.
@@ -302,7 +298,7 @@ def show_voronoi(
     color_lines="w",
     max_dist=None,
     returnfig=False,
-    **kwargs
+    **kwargs,
 ):
     """
     words
@@ -375,7 +371,7 @@ def show_class_BPs_grid(
     axsize=(6, 6),
     titlesize=0,
     get_bordercolor=None,
-    **kwargs
+    **kwargs,
 ):
     """
     words
@@ -430,7 +426,7 @@ def select_point(
     color_selected="r",
     size=20,
     returnfig=False,
-    **kwargs
+    **kwargs,
 ):
     """
     Show enumerated index labels for a set of points, with one selected point highlighted
@@ -555,7 +551,7 @@ def show_selected_dps(
     HW=None,
     figsize_im=(6, 6),
     figsize_dp=(4, 4),
-    **kwargs
+    **kwargs,
 ):
     """
     Shows two plots: first, a real space image overlaid with colored dots
@@ -581,7 +577,7 @@ def show_selected_dps(
     assert isinstance(datacube, DataCube)
     N = len(positions)
     assert all(
-        [len(x) == 2 for x in positions]
+        len(x) == 2 for x in positions
     ), "Improperly formated argument `positions`"
     if bragg_pos is not None:
         show_disk_pos = True
@@ -604,7 +600,7 @@ def show_selected_dps(
         H = int(np.ceil(N / W))
     else:
         H, W = HW
-    assert all([isinstance(x, (int, np.integer)) for x in (H, W)])
+    assert all(isinstance(x, (int, np.integer)) for x in (H, W))
 
     x = [i[0] for i in positions]
     y = [i[1] for i in positions]
@@ -718,7 +714,7 @@ def show_complex(
     pixelunits="pixels",
     pixelsize=1,
     returnfig=False,
-    **kwargs
+    **kwargs,
 ):
     """
     Function to plot complex arrays

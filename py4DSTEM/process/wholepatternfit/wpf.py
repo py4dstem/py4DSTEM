@@ -575,7 +575,7 @@ class WholePatternFit:
         self.upper_bound = np.array([param.upper_bound for param in unique_params])
         self.lower_bound = np.array([param.lower_bound for param in unique_params])
 
-        self.hasJacobian = all([m.hasJacobian for m in self.model])
+        self.hasJacobian = all(m.hasJacobian for m in self.model)
 
         self.nParams = self.x0.shape[0]
 

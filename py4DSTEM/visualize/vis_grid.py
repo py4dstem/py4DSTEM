@@ -205,7 +205,7 @@ def show_image_grid(
             ax = axs[i, j]
             N = i * W + j
             # make titles
-            if type(title) == list:
+            if isinstance(title, list):
                 print_title = title[N]
             else:
                 print_title = None
@@ -285,7 +285,7 @@ def show_image_grid(
                     )
             except IndexError:
                 ax.axis("off")
-    if type(title) == str:
+    if isinstance(title, str):
         fig.suptitle(title)
     if suptitle:
         fig.suptitle(suptitle)

@@ -1,9 +1,7 @@
 # Defines the BraggVectors class
 
 
-from typing import Optional, Union
 import numpy as np
-import h5py
 
 from py4DSTEM.io.legacy.legacy13.v13_emd_classes import PointListArray
 from py4DSTEM.io.legacy.legacy13.v13_emd_classes.tree import Tree

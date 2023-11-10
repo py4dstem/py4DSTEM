@@ -1,11 +1,11 @@
 #### this file contains a function/s that will check if various
 # libaries/compute options are available
 import importlib
-from operator import mod
 
 # list of modules we expect/may expect to be installed
 #  as part of a standard py4DSTEM installation
 # this needs to be the import name e.g. import mp_api not mp-api
+# TODO use importlib.metadata.requirements to populate
 modules = [
     "crystal4D",
     "cupy",

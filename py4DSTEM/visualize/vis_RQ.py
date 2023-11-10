@@ -1,6 +1,5 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib.axes import Axes
 
 from py4DSTEM.visualize.show import show, show_points
 
@@ -15,7 +14,7 @@ def show_selected_dp(
     pointsize=50,
     pointcolor="r",
     scaling="log",
-    **kwargs
+    **kwargs,
 ):
     """ """
     dp = datacube.data[rx, ry, :, :]

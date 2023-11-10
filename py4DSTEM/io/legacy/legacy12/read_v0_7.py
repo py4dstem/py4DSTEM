@@ -2,12 +2,10 @@
 
 import h5py
 import numpy as np
-from os.path import splitext
 from py4DSTEM.io.legacy.read_utils import (
     is_py4DSTEM_file,
     get_py4DSTEM_topgroups,
     get_py4DSTEM_version,
-    version_is_geq,
 )
 from py4DSTEM.io.legacy.legacy12.read_utils_v0_7 import get_py4DSTEM_dataobject_info
 from emdfile import PointList, PointListArray
@@ -97,7 +95,7 @@ def read_v0_7(fp, **kwargs):
         ), "Error: data must be specified with strings or integers only."
         if not isinstance(data_id, (int, str)):
             assert all(
-                [isinstance(d, (int, str)) for d in data_id]
+                isinstance(d, (int, str)) for d in data_id
             ), "Error: data must be specified with strings or integers only."
 
     # Parse optional arguments
@@ -248,7 +246,7 @@ def get_data_from_str(fp, tg, data_id, mem="RAM", binfactor=1, bindtype=None):
 def get_data_from_list(fp, tg, data_id, mem="RAM", binfactor=1, bindtype=None):
     """Accepts a fp to a valid py4DSTEM file and a list or tuple specifying data, and returns the data."""
     assert isinstance(data_id, (list, tuple))
-    assert all([isinstance(d, (int, str)) for d in data_id])
+    assert all(isinstance(d, (int, str)) for d in data_id)
     data = []
     for el in data_id:
         if isinstance(el, int):

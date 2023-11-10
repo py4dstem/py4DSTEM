@@ -8,8 +8,7 @@ from time import time
 
 from emdfile import tqdmnd
 from py4DSTEM.braggvectors.braggvectors import BraggVectors
-from emdfile import PointList, PointListArray
-from py4DSTEM.data import QPoints
+from emdfile import PointList
 from py4DSTEM.braggvectors.kernels import kernels
 from py4DSTEM.braggvectors.diskdetection_aiml import _get_latest_model
 
@@ -265,7 +264,7 @@ def _find_Bragg_disks_aiml_single_DP_CUDA(
     blocks=None,
     threads=None,
     model_path=None,
-    **kwargs
+    **kwargs,
 ):
     """
     Finds the Bragg disks in single DP by AI/ML method. This method utilizes FCU-Net

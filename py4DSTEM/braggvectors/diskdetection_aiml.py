@@ -4,16 +4,14 @@ Functions for finding Braggdisks using AI/ML method using tensorflow
 """
 
 import os
-import glob
 import json
 import shutil
 import numpy as np
+from importlib.util import find_spec
 
-from scipy.ndimage import gaussian_filter
 from time import time
-from numbers import Number
 
-from emdfile import tqdmnd, PointList, PointListArray
+from emdfile import tqdmnd
 from py4DSTEM.braggvectors.braggvectors import BraggVectors
 from py4DSTEM.data import QPoints
 from py4DSTEM.process.utils import get_maxima_2D
@@ -101,12 +99,8 @@ def find_Bragg_disks_aiml_single_DP(
     Returns:
         (PointList): the Bragg peak positions and correlation intensities
     """
-    try:
-        import crystal4D
-    except ModuleNotFoundError:
-        raise ModuleNotFoundError(
-            "Import Error: Please install crystal4D before proceeding"
-        )
+    if find_spec("crystal4D") is None:
+        raise ImportError("Import Error: Please install crystal4D before proceeding")
     try:
         import tensorflow as tf
     except ModuleNotFoundError:
@@ -256,12 +250,8 @@ def find_Bragg_disks_aiml_selected(
         correlation intensities at each scan position (Rx,Ry).
     """
 
-    try:
-        import crystal4D
-    except ModuleNotFoundError:
-        raise ModuleNotFoundError(
-            "Import Error: Please install crystal4D before proceeding"
-        )
+    if find_spec("crystal4D") is None:
+        raise ImportError("Import Error: Please install crystal4D before proceeding")
 
     assert len(Rx) == len(Ry)
     peaks = []
@@ -435,12 +425,8 @@ def find_Bragg_disks_aiml_serial(
         (PointListArray): the Bragg peak positions and correlation intensities
     """
 
-    try:
-        import crystal4D
-    except ModuleNotFoundError:
-        raise ModuleNotFoundError(
-            "Import Error: Please install crystal4D before proceeding"
-        )
+    if find_spec("crystal4D") is None:
+        raise ImportError("Import Error: Please install crystal4D before proceeding")
 
     # Make the peaks PointListArray
     # dtype = [('qx',float),('qy',float),('intensity',float)]
@@ -565,7 +551,7 @@ def find_Bragg_disks_aiml(
     model_path=None,
     distributed=None,
     CUDA=True,
-    **kwargs
+    **kwargs,
 ):
     """
     Finds the Bragg disks in all diffraction patterns of datacube by AI/ML method. This method
@@ -647,10 +633,8 @@ def find_Bragg_disks_aiml(
     Returns:
         (PointListArray): the Bragg peak positions and correlation intensities
     """
-    try:
-        import crystal4D
-    except ModuleNotFoundError:
-        raise ModuleNotFoundError("Please install crystal4D before proceeding")
+    if find_spec("crystal4D") is None:
+        raise ImportError("Please install crystal4D before proceeding")
 
     def _parse_distributed(distributed):
         import os

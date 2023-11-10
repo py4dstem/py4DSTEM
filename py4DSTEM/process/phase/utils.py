@@ -294,12 +294,12 @@ class ComplexProbe:
         alpha = xp.array(alpha)
 
         array = xp.zeros(alpha.shape, dtype=np.float32)
-        if any([p[symbol] != 0.0 for symbol in ("C10", "C12", "phi12")]):
+        if any(p[symbol] != 0.0 for symbol in ("C10", "C12", "phi12")):
             array += (
                 1 / 2 * alpha2 * (p["C10"] + p["C12"] * xp.cos(2 * (phi - p["phi12"])))
             )
 
-        if any([p[symbol] != 0.0 for symbol in ("C21", "phi21", "C23", "phi23")]):
+        if any(p[symbol] != 0.0 for symbol in ("C21", "phi21", "C23", "phi23")):
             array += (
                 1
                 / 3
@@ -311,9 +311,7 @@ class ComplexProbe:
                 )
             )
 
-        if any(
-            [p[symbol] != 0.0 for symbol in ("C30", "C32", "phi32", "C34", "phi34")]
-        ):
+        if any(p[symbol] != 0.0 for symbol in ("C30", "C32", "phi32", "C34", "phi34")):
             array += (
                 1
                 / 4
@@ -326,10 +324,8 @@ class ComplexProbe:
             )
 
         if any(
-            [
-                p[symbol] != 0.0
-                for symbol in ("C41", "phi41", "C43", "phi43", "C45", "phi41")
-            ]
+            p[symbol] != 0.0
+            for symbol in ("C41", "phi41", "C43", "phi43", "C45", "phi41")
         ):
             array += (
                 1
@@ -344,10 +340,8 @@ class ComplexProbe:
             )
 
         if any(
-            [
-                p[symbol] != 0.0
-                for symbol in ("C50", "C52", "phi52", "C54", "phi54", "C56", "phi56")
-            ]
+            p[symbol] != 0.0
+            for symbol in ("C50", "C52", "phi52", "C54", "phi54", "C56", "phi56")
         ):
             array += (
                 1
@@ -1048,7 +1042,7 @@ def fourier_rotate_real_volume(array, angle, axes=(0, 1), xp=np):
     if len(axes) != 2:
         raise ValueError("axes should contain exactly two values")
 
-    if not all([float(ax).is_integer() for ax in axes]):
+    if not all(float(ax).is_integer() for ax in axes):
         raise ValueError("axes should contain only integer values")
 
     if axes[0] < 0:

@@ -1,7 +1,4 @@
 import numpy as np
-import matplotlib.pyplot as plt
-import h5py
-import time
 import dill
 
 import dask
@@ -9,16 +6,11 @@ import dask.array as da
 import dask.config
 from dask import delayed
 from dask.distributed import Client, LocalCluster
-from dask.diagnostics import ProgressBar
 
-# import dask.bag as db
-
-# import distributed
 from distributed.protocol.serialize import register_serialization_family
 import distributed
 
-import py4DSTEM
-from emdfile import PointListArray, PointList
+from emdfile import PointListArray
 from py4DSTEM.braggvectors.diskdetection import _find_Bragg_disks_single_DP_FK
 
 
@@ -100,7 +92,7 @@ def beta_parallel_disk_detection(
     close_dask_client=False,
     return_dask_client=True,
     *args,
-    **kwargs
+    **kwargs,
 ):
     """
     This is not fully validated currently so may not work, please report bugs on the py4DSTEM github page.
@@ -225,7 +217,7 @@ def beta_parallel_disk_detection(
             probe_kernel_FT=dask_probe_delayed[0, 0],
             # probe_kernel_FT=delayed_probe_kernel_FT,
             *args,
-            **kwargs
+            **kwargs,
         )  # passing through args from earlier or should I use
         # corrPower=corrPower,
         # sigma=sigma_gaussianFilter,

@@ -1,18 +1,16 @@
 import matplotlib.pyplot as plt
-from matplotlib.figure import Figure
-from matplotlib.axes import Axes
 import matplotlib.tri as mtri
-from mpl_toolkits.mplot3d import Axes3D, art3d
+from mpl_toolkits.mplot3d import art3d
 from scipy.signal import medfilt
 from scipy.ndimage import gaussian_filter
 from scipy.ndimage.morphology import distance_transform_edt
-from skimage.morphology import dilation, erosion
+from skimage.morphology import erosion
 
 import warnings
 import numpy as np
 from typing import Union, Optional
 
-from emdfile import tqdmnd, PointList, PointListArray
+from emdfile import tqdmnd, PointList
 from py4DSTEM.process.diffraction.utils import calc_1D_profile
 
 
@@ -2093,7 +2091,7 @@ def plot_ring_pattern(
     figsize=(10, 10),
     returnfig=False,
     input_fig_handle=None,
-    **kwargs
+    **kwargs,
 ):
     """
     2D plot of diffraction rings

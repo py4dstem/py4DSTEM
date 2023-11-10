@@ -35,7 +35,9 @@ def tdesign(degree):
 
     assert degree <= 21, "Degree must be 21 or less."
     assert degree >= 1, "Degree should be at least 1."
-    assert type(degree) is int, "Degree should be an integer."
+    assert isinstance(
+        degree, int
+    ), f"Degree should be an integer, {type(degree)} passed."
 
     vecs = _tdesigns[degree - 1]
 
