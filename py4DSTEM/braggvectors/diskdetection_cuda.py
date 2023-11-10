@@ -618,8 +618,8 @@ def upsampled_correlation(imageCorr, upsampleFactor, xyShift):
             dy = (icc[1, 2] - icc[1, 0]) / (
                 4 * icc[1, 1] - 2 * icc[1, 2] - 2 * icc[1, 0]
             )
-        # TODO Work out what exception to use 
-        except (IndexError, Exception):
+        # TODO Work out what exception to use  IndexError
+        except Exception:
             dx, dy = (
                 0,
                 0,
