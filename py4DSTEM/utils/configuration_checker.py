@@ -386,15 +386,8 @@ def check_cupy_gpu(gratuitously_verbose: bool, **kwargs):
         print(s)
 
     # Count how many GPUs Cupy can detect
-    # probably should change this to a while loop ...
-    for i in range(24):
-        try:
-            d = cp.cuda.Device(i)
-            hasattr(d, "attributes")
-        # TODO work out what error is raised
-        except (AttributeError, Exception):
-            num_gpus_detected = i
-            break
+    num_gpus_detected = cp.cuda.runtime.getDeviceCount()
+
 
     # print how many GPUs were detected, filter for a couple of special conditons
     if num_gpus_detected == 0:
