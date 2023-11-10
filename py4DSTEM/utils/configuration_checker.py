@@ -388,7 +388,6 @@ def check_cupy_gpu(gratuitously_verbose: bool, **kwargs):
     # Count how many GPUs Cupy can detect
     num_gpus_detected = cp.cuda.runtime.getDeviceCount()
 
-
     # print how many GPUs were detected, filter for a couple of special conditons
     if num_gpus_detected == 0:
         s = " Detected no GPUs "
