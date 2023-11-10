@@ -98,7 +98,7 @@ def find_Bragg_disks_aiml_single_DP(
 
     Returns:
         (PointList): the Bragg peak positions and correlation intensities
-    """    
+    """
     if find_spec("crystal4D") is None:
         raise ImportError("Import Error: Please install crystal4D before proceeding")
     try:
@@ -251,7 +251,6 @@ def find_Bragg_disks_aiml_selected(
     """
 
     if find_spec("crystal4D") is None:
-
         raise ImportError("Import Error: Please install crystal4D before proceeding")
 
     assert len(Rx) == len(Ry)

@@ -4,7 +4,6 @@ import numpy as np
 from scipy.optimize import leastsq
 
 
-
 def get_Q_pixel_size(q_meas, q_known, units="A"):
     """
     Computes the size of the Q-space pixels.

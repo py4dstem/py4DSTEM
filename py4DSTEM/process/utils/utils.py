@@ -11,7 +11,9 @@ from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
 import matplotlib.font_manager as fm
 
 from emdfile import tqdmnd
-from py4DSTEM.preprocess.utils import make_Fourier_coords2D # TODO this is defined later
+from py4DSTEM.preprocess.utils import (
+    make_Fourier_coords2D,
+)  # TODO this is defined later
 
 try:
     from IPython.display import clear_output
