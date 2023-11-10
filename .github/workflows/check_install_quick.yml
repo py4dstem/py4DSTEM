@@ -20,7 +20,7 @@ jobs:
                 allow_failure: [false]
                 runs-on: [ubuntu-latest] 
                 architecture: [x86_64]
-                python-version: ["3.10", "3.12"]
+                python-version: ["3.9", "3.12"]
                 # Currently no public runners available for this but this or arm64 should work next time
                 # include:
                 #     - python-version: "3.10"
