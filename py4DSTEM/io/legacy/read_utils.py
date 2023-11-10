@@ -100,8 +100,8 @@ def get_N_dataobjects(filepath, topgroup="4DSTEM_experiment"):
         N_pla = len(f[topgroup]["data/pointlistarrays"].keys())
         try:
             N_coords = len(f[topgroup]["data/coordinates"].keys())
-        # TODO work out what exception will be raised 
-        except (ValueError, AttributeError, Exception):
+        # TODO work out what exception will be raised ValueError, AttributeError
+        except Exception:
             N_coords = 0
         N_do = N_dc + N_cdc + N_ds + N_rs + N_pl + N_pla + N_coords
         return N_dc, N_cdc, N_ds, N_rs, N_pl, N_pla, N_coords, N_do
