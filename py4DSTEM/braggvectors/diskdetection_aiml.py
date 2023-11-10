@@ -104,7 +104,9 @@ def find_Bragg_disks_aiml_single_DP(
     try:
         import crystal4D
     except ModuleNotFoundError:
-        raise ModuleNotFoundError("Import Error: Please install crystal4D before proceeding")
+        raise ModuleNotFoundError(
+            "Import Error: Please install crystal4D before proceeding"
+        )
     try:
         import tensorflow as tf
     except ModuleNotFoundError:
@@ -257,7 +259,9 @@ def find_Bragg_disks_aiml_selected(
     try:
         import crystal4D
     except ModuleNotFoundError:
-        raise ModuleNotFoundError("Import Error: Please install crystal4D before proceeding")
+        raise ModuleNotFoundError(
+            "Import Error: Please install crystal4D before proceeding"
+        )
 
     assert len(Rx) == len(Ry)
     peaks = []
@@ -434,7 +438,9 @@ def find_Bragg_disks_aiml_serial(
     try:
         import crystal4D
     except ModuleNotFoundError:
-        raise ModuleNotFoundError("Import Error: Please install crystal4D before proceeding")
+        raise ModuleNotFoundError(
+            "Import Error: Please install crystal4D before proceeding"
+        )
 
     # Make the peaks PointListArray
     # dtype = [('qx',float),('qy',float),('intensity',float)]
@@ -895,7 +901,7 @@ def _get_latest_model(model_path=None):
         except FileExistsError:
             pass
         except Exception as e:
-            # TODO work out if I want to pass or raise 
+            # TODO work out if I want to pass or raise
             pass
             # raise e
         # download the json file with the meta data
@@ -910,12 +916,11 @@ def _get_latest_model(model_path=None):
             with open("./tmp/model_metadata_old.json") as f_old:
                 metaold = json.load(f_old)
                 file_id_old = metaold["file_id"]
-        # TODO Double check this is correct Error 
+        # TODO Double check this is correct Error
         except FileNotFoundError:
             file_id_old = file_id
         except Exception:
             file_id_old = file_id
-
 
         if os.path.exists(file_path) and file_id == file_id_old:
             print(

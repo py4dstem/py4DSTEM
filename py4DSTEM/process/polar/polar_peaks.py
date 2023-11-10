@@ -602,7 +602,7 @@ def refine_peaks_local(
                         self.peaks[rx, ry]["qr"][a0] = p0[2] / q_step
                         self.peaks[rx, ry]["sigma_annular"][a0] = p0[3] / t_step
                         self.peaks[rx, ry]["sigma_radial"][a0] = p0[4] / q_step
-                    # TODO work out what error is raised 
+                    # TODO work out what error is raised
                     except Exception:
                         pass
 
@@ -643,7 +643,7 @@ def refine_peaks_local(
                         self.peaks[rx, ry]["qr"][a0] = p0[2] / q_step
                         self.peaks[rx, ry]["sigma_annular"][a0] = p0[3] / t_step
                         self.peaks[rx, ry]["sigma_radial"][a0] = p0[4] / q_step
-                    # TODO work out what exception is raised 
+                    # TODO work out what exception is raised
                     except Exception:
                         pass
 
