@@ -17,7 +17,7 @@ def show_model_grid(self, x=None, **plot_kwargs):
     cols = int(np.ceil(np.sqrt(N)))
     rows = (N + 1) // cols
 
-    kwargs = dict(constrained_layout=True)
+    kwargs = {"constrained_layout": True}
     kwargs.update(plot_kwargs)
     fig, ax = plt.subplots(rows, cols, **kwargs)
 
@@ -213,7 +213,7 @@ def show_lattice_points(
 def show_fit_metrics(self, returnfig=False, **subplots_kwargs):
     assert hasattr(self, "fit_metrics"), "Please run fitting first!"
 
-    kwargs = dict(figsize=(14, 12), constrained_layout=True)
+    kwargs = {"figsize": (14, 12), "constrained_layout": True}
     kwargs.update(subplots_kwargs)
     fig, ax = plt.subplots(2, 2, **kwargs)
     im = ax[0, 0].matshow(self.fit_metrics["cost"].data, norm=mpl_c.LogNorm())

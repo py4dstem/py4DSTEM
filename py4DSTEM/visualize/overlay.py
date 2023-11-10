@@ -61,7 +61,7 @@ def add_rectangles(ax, d):
     kws = [
         k for k in d.keys() if k not in ("lims", "color", "fill", "alpha", "linewidth")
     ]
-    kwargs = dict()
+    kwargs = {}
     for k in kws:
         kwargs[k] = d[k]
 
@@ -145,7 +145,7 @@ def add_circles(ax, d):
         for k in d.keys()
         if k not in ("center", "R", "color", "fill", "alpha", "linewidth")
     ]
-    kwargs = dict()
+    kwargs = {}
     for k in kws:
         kwargs[k] = d[k]
 
@@ -247,7 +247,7 @@ def add_annuli(ax, d):
         for k in d.keys()
         if k not in ("center", "radii", "color", "fill", "alpha", "linewidth")
     ]
-    kwargs = dict()
+    kwargs = {}
     for k in kws:
         kwargs[k] = d[k]
 
@@ -387,7 +387,7 @@ def add_ellipses(ax, d):
             "linestyle",
         )
     ]
-    kwargs = dict()
+    kwargs = {}
     for k in kws:
         kwargs[k] = d[k]
 
@@ -470,7 +470,7 @@ def add_points(ax, d):
         for k in d.keys()
         if k not in ("x", "y", "s", "scale", "pointcolor", "alpha", "open_circles")
     ]
-    kwargs = dict()
+    kwargs = {}
     for k in kws:
         kwargs[k] = d[k]
 
@@ -521,7 +521,7 @@ def add_pointlabels(ax, d):
     kws = [
         k for k in d.keys() if k not in ("x", "y", "size", "color", "alpha", "labels")
     ]
-    kwargs = dict()
+    kwargs = {}
     for k in kws:
         kwargs[k] = d[k]
 
@@ -649,7 +649,7 @@ def add_vector(ax, d):
             "labelcolor",
         )
     ]
-    kwargs = dict()
+    kwargs = {}
     for k in kws:
         kwargs[k] = d[k]
 
@@ -701,7 +701,7 @@ def add_grid_overlay(ax, d):
         for k in d.keys()
         if k not in ("x0", "y0", "xL", "yL", "color", "alpha", "linewidth")
     ]
-    kwargs = dict()
+    kwargs = {}
     for k in kws:
         kwargs[k] = d[k]
 
@@ -798,7 +798,7 @@ def add_scalebar(ax, d):
             "ticks",
         )
     ]
-    kwargs = dict()
+    kwargs = {}
     for k in kws:
         kwargs[k] = d[k]
 
@@ -937,7 +937,7 @@ def add_cartesian_grid(ax, d):
             "alpha",
         )
     ]
-    kwargs = dict()
+    kwargs = {}
     for k in kws:
         kwargs[k] = d[k]
 
@@ -1103,7 +1103,7 @@ def add_polarelliptical_grid(ax, d):
             "alpha",
         )
     ]
-    kwargs = dict()
+    kwargs = {}
     for k in kws:
         kwargs[k] = d[k]
 
