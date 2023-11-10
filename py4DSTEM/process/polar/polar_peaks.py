@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from scipy.ndimage import gaussian_filter, gaussian_filter1d
 from scipy.signal import peak_prominences
 from skimage.feature import peak_local_max
-from scipy.optimize import curve_fit, leastsq
+from scipy.optimize import curve_fit
 import warnings
 
 # from emdfile import tqdmnd, PointList, PointListArray

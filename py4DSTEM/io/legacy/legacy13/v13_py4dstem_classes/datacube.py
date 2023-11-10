@@ -6,7 +6,6 @@ from py4DSTEM.io.legacy.legacy13.v13_py4dstem_classes.parenttree import ParentTr
 
 from typing import Optional, Union
 import numpy as np
-import h5py
 
 
 class DataCube(Array):

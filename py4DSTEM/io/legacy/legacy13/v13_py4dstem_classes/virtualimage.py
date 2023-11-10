@@ -6,7 +6,6 @@ from py4DSTEM.io.legacy.legacy13.v13_emd_classes.metadata import Metadata
 
 from typing import Optional, Union
 import numpy as np
-import h5py
 
 
 class VirtualImage(RealSlice):

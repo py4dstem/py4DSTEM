@@ -1,7 +1,6 @@
 # Utility functions
 
 import h5py
-import numpy as np
 
 
 def get_py4DSTEM_topgroups(filepath):

@@ -12,7 +12,7 @@ from scipy.ndimage import (
 )
 from typing import Optional, Union
 
-from emdfile import Array, Metadata, Node, Root, tqdmnd
+from emdfile import Array, Metadata, Node, tqdmnd
 from py4DSTEM.data import Data, Calibration
 from py4DSTEM.datacube.virtualimage import DataCubeVirtualImager
 from py4DSTEM.datacube.virtualdiffraction import DataCubeVirtualDiffraction

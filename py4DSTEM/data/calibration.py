@@ -1,9 +1,7 @@
 # Defines the Calibration class, which stores calibration metadata
 
 import numpy as np
-from numbers import Number
 from typing import Optional
-from warnings import warn
 
 from emdfile import Metadata, Root
 from py4DSTEM.data.propagating_calibration import call_calibrate

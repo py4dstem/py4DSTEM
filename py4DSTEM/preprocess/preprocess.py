@@ -11,7 +11,6 @@ import warnings
 import numpy as np
 from py4DSTEM.preprocess.utils import bin2D, get_shifted_ar
 from emdfile import tqdmnd
-from scipy.ndimage import median_filter
 
 ### Editing datacube shape ###
 

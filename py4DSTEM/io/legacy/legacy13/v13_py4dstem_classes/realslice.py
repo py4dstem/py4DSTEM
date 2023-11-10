@@ -2,7 +2,6 @@ from py4DSTEM.io.legacy.legacy13.v13_emd_classes.array import Array
 
 from typing import Optional, Union
 import numpy as np
-import h5py
 
 
 class RealSlice(Array):

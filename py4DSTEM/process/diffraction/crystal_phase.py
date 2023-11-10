@@ -5,8 +5,7 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 
 from emdfile import tqdmnd, PointListArray
-from py4DSTEM.visualize import show, show_image_grid
-from py4DSTEM.process.diffraction.crystal_viz import plot_diffraction_pattern
+from py4DSTEM.visualize import show_image_grid
 
 
 class Crystal_Phase:

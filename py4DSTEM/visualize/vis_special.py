@@ -4,18 +4,14 @@ from matplotlib.patches import Wedge
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.spatial import Voronoi
 
-from emdfile import PointList
 from py4DSTEM.visualize import show
 from py4DSTEM.visualize.overlay import (
     add_pointlabels,
-    add_vector,
-    add_bragg_index_labels,
     add_ellipses,
     add_points,
     add_scalebar,
 )
 from py4DSTEM.visualize.vis_grid import show_image_grid
-from py4DSTEM.visualize.vis_RQ import ax_addaxes, ax_addaxes_QtoR
 from colorspacious import cspace_convert
 
 

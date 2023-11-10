@@ -3,15 +3,13 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib.figure import Figure
-from matplotlib.axes import Axes
 from scipy.ndimage import gaussian_filter1d
 
 from matplotlib.colors import hsv_to_rgb
 from matplotlib.colors import rgb_to_hsv
 from matplotlib.colors import ListedColormap
 
-from emdfile import tqdmnd, PointList, PointListArray
+from emdfile import tqdmnd, PointListArray
 
 
 def make_orientation_histogram(

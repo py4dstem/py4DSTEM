@@ -1,9 +1,7 @@
-from typing import Optional
 import numpy as np
 
 import matplotlib.pyplot as plt
 import matplotlib.colors as mpl_c
-from matplotlib.gridspec import GridSpec
 
 from py4DSTEM.process.wholepatternfit.wp_models import WPFModelType
 

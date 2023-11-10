@@ -2,10 +2,7 @@
 
 import numpy as np
 from scipy.optimize import leastsq
-from typing import Union, Optional
 
-from emdfile import tqdmnd
-from py4DSTEM.process.utils import get_CoM
 
 
 def get_Q_pixel_size(q_meas, q_known, units="A"):
