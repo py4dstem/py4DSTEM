@@ -101,7 +101,7 @@ def read_v0_12(fp, **kwargs):
         ), "Error: data must be specified with strings or integers only."
         if not isinstance(data_id, (int, np.int_, str)):
             assert all(
-                [isinstance(d, (int, np.int_, str)) for d in data_id]
+                isinstance(d, (int, np.int_, str)) for d in data_id
             ), "Error: data must be specified with strings or integers only."
 
         # Parse optional arguments
@@ -250,7 +250,7 @@ def get_data_from_str(filepath, tg, data_id, mem="RAM", binfactor=1, bindtype=No
 def get_data_from_list(filepath, tg, data_id, mem="RAM", binfactor=1, bindtype=None):
     """Accepts a filepath to a valid py4DSTEM file and a list or tuple specifying data, and returns the data."""
     assert isinstance(data_id, (list, tuple))
-    assert all([isinstance(d, (int, np.int_, str)) for d in data_id])
+    assert all(isinstance(d, (int, np.int_, str)) for d in data_id)
     data = []
     for el in data_id:
         if isinstance(el, (int, np.int_)):

@@ -26,7 +26,7 @@ def threshold_Braggpeaks(
             pattern
     """
     assert all(
-        [item in pointlistarray.dtype.fields for item in ["qx", "qy", "intensity"]]
+        item in pointlistarray.dtype.fields for item in ["qx", "qy", "intensity"]
     ), "pointlistarray must include the coordinates 'qx', 'qy', and 'intensity'."
     for Rx, Ry in tqdmnd(
         pointlistarray.shape[0],
@@ -113,7 +113,7 @@ def universal_threshold(
     assert isinstance(pointlistarray, PointListArray)
     assert metric in ("maximum", "average", "median", "manual")
     assert all(
-        [item in pointlistarray.dtype.fields for item in ["qx", "qy", "intensity"]]
+        item in pointlistarray.dtype.fields for item in ["qx", "qy", "intensity"]
     ), "pointlistarray must include the coordinates 'qx', 'qy', and 'intensity'."
     _pointlistarray = pointlistarray.copy()
     if name is None:
