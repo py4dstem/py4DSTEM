@@ -311,9 +311,7 @@ class ComplexProbe:
                 )
             )
 
-        if any(
-            p[symbol] != 0.0 for symbol in ("C30", "C32", "phi32", "C34", "phi34")
-        ):
+        if any(p[symbol] != 0.0 for symbol in ("C30", "C32", "phi32", "C34", "phi34")):
             array += (
                 1
                 / 4
@@ -327,7 +325,7 @@ class ComplexProbe:
 
         if any(
             p[symbol] != 0.0
-                for symbol in ("C41", "phi41", "C43", "phi43", "C45", "phi41")
+            for symbol in ("C41", "phi41", "C43", "phi43", "C45", "phi41")
         ):
             array += (
                 1
@@ -343,7 +341,7 @@ class ComplexProbe:
 
         if any(
             p[symbol] != 0.0
-                for symbol in ("C50", "C52", "phi52", "C54", "phi54", "C56", "phi56")
+            for symbol in ("C50", "C52", "phi52", "C54", "phi54", "C56", "phi56")
         ):
             array += (
                 1
