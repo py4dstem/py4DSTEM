@@ -3,8 +3,8 @@ import matplotlib.tri as mtri
 from mpl_toolkits.mplot3d import art3d
 from scipy.signal import medfilt
 from scipy.ndimage import gaussian_filter
-from scipy.ndimage.morphology import distance_transform_edt
-from skimage.morphology import erosion
+from scipy.ndimage import distance_transform_edt
+from skimage.morphology import dilation, erosion
 
 import warnings
 import numpy as np
