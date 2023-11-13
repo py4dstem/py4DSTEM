@@ -3145,7 +3145,9 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
             gaussian_filter_sigma /= self.sampling[0]
             rotated_object = gaussian_filter(rotated_object, gaussian_filter_sigma)
 
-        plot_im = rotated_object[:, 0, int(y1_0) : int(y2_0)]
+        plot_im = rotated_object[
+            :, 0, np.max((0, int(y1_0))) : np.min((int(y2_0), rotated_object.shape[2]))
+        ]
 
         extent = [
             0,
