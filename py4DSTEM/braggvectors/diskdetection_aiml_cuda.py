@@ -265,7 +265,7 @@ def _find_Bragg_disks_aiml_single_DP_CUDA(
     blocks=None,
     threads=None,
     model_path=None,
-    **kwargs
+    **kwargs,
 ):
     """
     Finds the Bragg disks in single DP by AI/ML method. This method utilizes FCU-Net

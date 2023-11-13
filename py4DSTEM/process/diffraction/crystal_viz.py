@@ -2093,7 +2093,7 @@ def plot_ring_pattern(
     figsize=(10, 10),
     returnfig=False,
     input_fig_handle=None,
-    **kwargs
+    **kwargs,
 ):
     """
     2D plot of diffraction rings

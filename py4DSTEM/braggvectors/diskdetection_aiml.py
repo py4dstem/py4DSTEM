@@ -559,7 +559,7 @@ def find_Bragg_disks_aiml(
     model_path=None,
     distributed=None,
     CUDA=True,
-    **kwargs
+    **kwargs,
 ):
     """
     Finds the Bragg disks in all diffraction patterns of datacube by AI/ML method. This method
