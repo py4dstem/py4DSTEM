@@ -70,7 +70,7 @@ from py4DSTEM.process import classification
 # )
 
 # diffraction
-from py4DSTEM.process.diffraction import Crystal
+from py4DSTEM.process.diffraction import Crystal, Orientation
 
 # py4DSTEM.process.diffraction
 # ['Axes', 'Crystal', 'Crystal_Phase', 'Figure', 'Fraction', 'ListedColormap', 'Orientation', 'PointList', 'PointListArray', 'single_atom_scatter']
