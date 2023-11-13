@@ -52,8 +52,8 @@ from py4DSTEM.braggvectors import (
     BraggVectorMap,
 )
 
-# TODO - classification
-# from py4DSTEM.process.classification import (
+from py4DSTEM.process import classification 
+# import (
 #     BraggVectorClassification,
 #     ConvergenceWarning,
 #     DataCube,
@@ -76,18 +76,19 @@ from py4DSTEM.process.diffraction import Crystal
 
 
 # ptycho
-from py4DSTEM.process.phase import (
-    DPCReconstruction,
-    MixedstatePtychographicReconstruction,
-    MultislicePtychographicReconstruction,
-    OptimizationParameter,
-    OverlapMagneticTomographicReconstruction,
-    OverlapTomographicReconstruction,
-    ParallaxReconstruction,
-    PtychographyOptimizer,
-    SimultaneousPtychographicReconstruction,
-    SingleslicePtychographicReconstruction,
-)
+from py4DSTEM.process import phase 
+# import (
+#     DPCReconstruction,
+#     MixedstatePtychographicReconstruction,
+#     MultislicePtychographicReconstruction,
+#     OptimizationParameter,
+#     OverlapMagneticTomographicReconstruction,
+#     OverlapTomographicReconstruction,
+#     ParallaxReconstruction,
+#     PtychographyOptimizer,
+#     SimultaneousPtychographicReconstruction,
+#     SingleslicePtychographicReconstruction,
+# )
 
 # polar
 from py4DSTEM.process.polar import PolarDatacube
@@ -100,7 +101,8 @@ from py4DSTEM.process.polar import PolarDatacube
 from py4DSTEM.process.strain.strain import StrainMap
 
 # TODO WPF
-# from py4DSTEM.process.wholepatternfit import (
+from py4DSTEM.process import wholepatternfit
+#  import (
 #     ComplexOverlapKernelDiskLattice,
 #     DCBackground,
 #     Flag,
