@@ -52,7 +52,8 @@ from py4DSTEM.braggvectors import (
     BraggVectorMap,
 )
 
-from py4DSTEM.process import classification 
+from py4DSTEM.process import classification
+
 # import (
 #     BraggVectorClassification,
 #     ConvergenceWarning,
@@ -76,7 +77,8 @@ from py4DSTEM.process.diffraction import Crystal
 
 
 # ptycho
-from py4DSTEM.process import phase 
+from py4DSTEM.process import phase
+
 # import (
 #     DPCReconstruction,
 #     MixedstatePtychographicReconstruction,
@@ -102,6 +104,7 @@ from py4DSTEM.process.strain.strain import StrainMap
 
 # TODO WPF
 from py4DSTEM.process import wholepatternfit
+
 #  import (
 #     ComplexOverlapKernelDiskLattice,
 #     DCBackground,
