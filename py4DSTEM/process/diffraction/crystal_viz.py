@@ -2120,7 +2120,7 @@ def plot_ring_pattern(
         ax = ax_parent[0]
 
     for a1 in range(radii.shape[0]):
-        if intensity_constant == True:
+        if intensity_constant is True:
             ax.plot(
                 radii[a1] * np.sin(theta),
                 radii[a1] * np.cos(theta),
