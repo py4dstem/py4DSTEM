@@ -107,7 +107,7 @@ def fit_2D(
                 fit_mean_square_error
                 > np.mean(fit_mean_square_error) * robust_thresh**2
             )
-            mask[_mask] is False
+            mask[_mask] = False
 
         # perform fitting
         popt, pcov = curve_fit(
