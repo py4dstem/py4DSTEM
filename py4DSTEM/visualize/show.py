@@ -312,7 +312,7 @@ def show(
         if returnfig==False (default), the figure is plotted and nothing is returned.
         if returnfig==True, return the figure and the axis.
     """
-    if scalebar == True:
+    if scalebar is True:
         scalebar = {}
 
     # Alias dep
@@ -415,7 +415,7 @@ def show(
         if (
             hasattr(ar, "calibration")
             and (ar.calibration is not None)
-            and (scalebar != False)
+            and (scalebar is not False)
         ):
             cal = ar.calibration
             er = ".calibration attribute must be a Calibration instance"
@@ -493,12 +493,12 @@ def show(
         if np.all(np.isnan(_ar)):
             _ar[:, :] = 0
         if intensity_range == "absolute":
-            if vmin != None:
+            if vmin is not None:
                 if vmin > 0.0:
                     vmin = np.log(vmin)
                 else:
                     vmin = np.min(_ar[_mask])
-            if vmax != None:
+            if vmax is not None:
                 vmax = np.log(vmax)
     elif scaling == "power":
         if power_offset is False:
@@ -514,9 +514,9 @@ def show(
                 _ar = np.power(ar.copy(), power)
             _mask = np.ones_like(_ar.data, dtype=bool)
             if intensity_range == "absolute":
-                if vmin != None:
+                if vmin is not None:
                     vmin = np.power(vmin, power)
-                if vmax != None:
+                if vmax is not None:
                     vmax = np.power(vmax, power)
     else:
         raise Exception
