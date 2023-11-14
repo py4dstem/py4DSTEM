@@ -12,7 +12,6 @@ select =
     E901,
     E902,
     E999,
-    E501
 exclude = 
     test/*,
     setup.py,
