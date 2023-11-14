@@ -11,6 +11,5 @@ select =
     E113,
     E901,
     E902,
-    E999, 
-    E501
+    E999
 src = py4DSTEM
