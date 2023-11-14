@@ -12,7 +12,9 @@ select =
     E901,
     E902,
     E999,
-exclude = 
+exclude =  # it seems like these are ignored in github actions so configured in action yaml
     test,
+    docs
+    images
     setup.py,
     *__init__.py
