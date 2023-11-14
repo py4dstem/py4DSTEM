@@ -1,6 +1,7 @@
 # Functions for calculating diffraction patterns, matching them to experiments, and creating orientation and phase maps.
 
 import numpy as np
+from scipy.ndimage import gaussian_filter
 import matplotlib.pyplot as plt
 from matplotlib.patches import Circle
 from fractions import Fraction
@@ -883,6 +884,9 @@ class Crystal:
         self,
         im_size = (256,256),
         pixel_size_Ang = 0.1,
+        potential_radius_Ang =  3.0,
+        sigma_image_blur_Ang = 0.1,
+        plot_result = False,
         orientation: Optional[Orientation] = None,
         ind_orientation: Optional[int] = 0,
         orientation_matrix: Optional[np.ndarray] = None,
@@ -963,6 +967,7 @@ class Crystal:
         abc_atoms[:,inds_tile[0]] += a_ind.ravel()
         abc_atoms[:,inds_tile[1]] += b_ind.ravel()
         xyz_atoms_ang = abc_atoms @ self.lat_real.T
+        atoms_ID_all = self.numbers[atoms_ind.ravel()]
 
         # Project into projected potential image plane
         x = (xyz_atoms_ang @ proj_x) / pixel_size_Ang + im_size[0]/2.0
@@ -975,34 +980,64 @@ class Crystal:
         ))
         x = np.delete(x, atoms_del)
         y = np.delete(y, atoms_del)
+        atoms_ID_all = np.delete(atoms_ID_all, atoms_del)
+
+        # Coordinate system for atomic projected potentials
+        potential_radius = np.ceil(potential_radius_Ang / pixel_size_Ang)
+        R = np.arange(0.5-potential_radius,potential_radius+0.5)
+        R_ind = R.astype('int')
+        R_2D = np.sqrt(R[:,None]**2 + R[None,:]**2)
 
         # Lookup table for atomic projected potentials
-
-
-
+        atoms_ID = np.unique(self.numbers)
+        atoms_lookup = np.zeros((
+            atoms_ID.shape[0],
+            R_2D.shape[0],
+            R_2D.shape[1],
+            ))
+        for a0 in range(atoms_ID.shape[0]):
+            atom_sf = single_atom_scatter([atoms_ID[a0]])
+            atoms_lookup[a0,:,:] = atom_sf.projected_potential(atoms_ID[a0], R_2D)
 
         # initialize potential
         im_potential = np.zeros(im_size)
-        # # im_potential[10:20,10:20] = 1
 
+        # Add atoms to potential image
+        for a0 in range(atoms_ID_all.shape[0]):
+            ind = np.argmin(np.abs(atoms_ID - atoms_ID_all[a0]))
 
-        # Add atoms to potential
+            x_ind = np.clip(
+                np.round(x[a0]).astype('int') + R_ind,
+                0,
+                im_size[0]-1)
+            y_ind = np.clip(
+                np.round(y[a0]).astype('int') + R_ind,
+                0,
+                im_size[1]-1)
 
+            im_potential[x_ind[None,:],y_ind[:,None]] += atoms_lookup[ind]
 
-        # test plotting
-        fig,ax = plt.subplots(figsize = (6,6))
-        ax.imshow(
-            im_potential,
-            cmap = 'gray',
-            )
-        ax.scatter(y,x)
-        ax.set_axis_off()
-        ax.set_aspect('equal')
+        # if needed, apply gaussian blurring
+        if sigma_image_blur_Ang > 0:
+            sigma_image_blur = sigma_image_blur_Ang / pixel_size_Ang
+            im_potential = gaussian_filter(
+                im_potential,
+                sigma_image_blur,
+                mode = 'nearest',
+                )
+
+        if plot_result:
+            # test plotting
+            fig,ax = plt.subplots(figsize = (6,6))
+            ax.imshow(
+                im_potential,
+                cmap = 'gray',
+                )
+            # ax.scatter(y,x)
+            ax.set_axis_off()
+            ax.set_aspect('equal')
 
         return im_potential
-
-
-
 
     # Vector conversions and other utilities for Crystal classes
     def cartesian_to_lattice(self, vec_cartesian):

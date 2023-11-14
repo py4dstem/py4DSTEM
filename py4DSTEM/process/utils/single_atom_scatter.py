@@ -1,6 +1,6 @@
 import numpy as np
 import os
-
+from scipy.special import kn
 
 class single_atom_scatter(object):
     """
@@ -45,6 +45,35 @@ class single_atom_scatter(object):
             return h**2 / (2 * np.pi * me * qe) * 1e18 * fe
         elif units == "A":
             return fe
+
+    def projected_potential(self, Z, R):
+        ai = self.e_scattering_factors[Z - 1, 0:10:2]
+        bi = self.e_scattering_factors[Z - 1, 1:10:2]
+
+        # Planck's constant in Js
+        h = 6.62607004e-34
+        # Electron rest mass in kg
+        me = 9.10938356e-31
+        # Electron charge in Coulomb
+        qe = 1.60217662e-19
+        # Permittivity of vacuum
+        eps_0 = 8.85418782e-12
+        # Bohr's constant 
+        a_0 = 5.29177210903e-11
+
+        fe = np.zeros_like(R)
+        for i in range(5):
+            # fe += ai[i] * (2 + bi[i] * gsq) / (1 + bi[i] * gsq) ** 2
+            pre = 2*np.pi/bi[i]**0.5
+            fe += (ai[i] / bi[i]**1.5) * \
+                (kn(0, pre * R) + R * kn(1, pre * R))
+
+        # kappa = (4*np.pi*eps_0) / (2*np.pi*a_0*me)
+        return fe * 2 * np.pi**2# / kappa
+        # if units == "VA":
+        #     return h**2 / (2 * np.pi * me * qe) * 1e18 * fe
+        # elif units == "A":
+        #     return fe * 2 * np.pi**2 / kappa
 
     def get_scattering_factor(
         self, elements=None, composition=None, q_coords=None, units=None
