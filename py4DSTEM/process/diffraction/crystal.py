@@ -876,6 +876,121 @@ class Crystal:
         if return_calc is True:
             return radii_unique, intensity_unique
 
+
+
+
+    def generate_projected_potential(
+        self,
+        im_size = (256,256),
+        pixel_size_Ang = 0.1,
+        orientation: Optional[Orientation] = None,
+        ind_orientation: Optional[int] = 0,
+        orientation_matrix: Optional[np.ndarray] = None,
+        zone_axis_lattice: Optional[np.ndarray] = None,
+        proj_x_lattice: Optional[np.ndarray] = None,
+        zone_axis_cartesian: Optional[np.ndarray] = None,
+        proj_x_cartesian: Optional[np.ndarray] = None,
+    ):
+        """
+        Generate a single diffraction pattern, return all peaks as a pointlist.
+
+        Parameters
+        ----------
+        edge_blend: int, optional
+            Pixels to blend image at the border
+
+        Returns
+        --------
+            orientation (Orientation):       an Orientation class object
+            
+        Returns:
+        im_potential: (np.array)       
+
+        """
+
+        # Determine image size in Angstroms
+        im_size = np.array(im_size)
+        im_size_Ang = im_size * pixel_size_Ang
+
+        # Parse orientation inputs
+        if orientation is not None:
+            if ind_orientation is None:
+                orientation_matrix = orientation.matrix[0]
+            else:
+                orientation_matrix = orientation.matrix[ind_orientation]
+        elif orientation_matrix is None:
+            orientation_matrix = self.parse_orientation(
+                zone_axis_lattice, proj_x_lattice, zone_axis_cartesian, proj_x_cartesian
+            )
+        # projection directions of potential image
+        proj_x = orientation_matrix[:,0] \
+            / np.linalg.norm(orientation_matrix[:,0])
+        proj_y = orientation_matrix[:,1] \
+            / np.linalg.norm(orientation_matrix[:,1])
+        proj_z = orientation_matrix[:,2] \
+            / np.linalg.norm(orientation_matrix[:,2])
+
+        # Determine unit cell axes to tile over
+        uvw = self.lat_real / \
+            np.linalg.norm(self.lat_real, axis = 1)
+        test = np.abs(uvw @ proj_z)
+        inds_tile = np.argsort(test)[:2]
+        m_tile = self.lat_real[inds_tile,:]
+
+        # Determine tiling range
+        p = np.array([
+            [-im_size_Ang[0]*0.5,-im_size_Ang[1]*0.5, 0.0],
+            [ im_size_Ang[0]*0.5,-im_size_Ang[1]*0.5, 0.0],
+            [ im_size_Ang[0]*0.5, im_size_Ang[1]*0.5, 0.0],
+            [-im_size_Ang[0]*0.5, im_size_Ang[1]*0.5, 0.0],
+        ])
+
+        ab = np.floor(np.linalg.lstsq(
+            m_tile.T,
+            p.T, 
+            rcond=None)[0])
+        a_range = np.array((np.min(ab[0]),np.max(ab[0])))
+        b_range = np.array((np.min(ab[1]),np.max(ab[1])))
+
+        # Tile unit cell
+        a_ind, b_ind, atoms_ind = np.meshgrid(
+            np.arange(a_range[0],a_range[1]),
+            np.arange(b_range[0],b_range[1]),
+            np.arange(self.positions.shape[0]),
+        )
+        abc_atoms = self.positions[atoms_ind.ravel(),:]
+        abc_atoms[:,inds_tile[0]] += a_ind.ravel()
+        abc_atoms[:,inds_tile[1]] += b_ind.ravel()
+        xyz_atoms_ang = abc_atoms @ self.lat_real.T
+        # xyz_atoms_pixels = xyz_atoms_ang / pixel_size_Ang \ 
+        #     + im_size/2.0
+
+        # Project into projected potential image plane
+        x = proj_x
+
+        # # Lookup table for atomic projected potentials
+
+        # # initialize
+        im_potential = np.zeros(im_size)
+        # # im_potential[10:20,10:20] = 1
+
+
+        # Add atoms to potential
+
+
+        # test plotting
+        fig,ax = plt.subplots(figsize = (6,6))
+        ax.imshow(
+            im_potential,
+            cmap = 'gray',
+            )
+        ax.set_axis_off()
+
+        return im_potential
+
+
+
+
     # Vector conversions and other utilities for Crystal classes
     def cartesian_to_lattice(self, vec_cartesian):
         vec_lattice = self.lat_inv @ vec_cartesian
