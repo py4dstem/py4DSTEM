@@ -154,7 +154,7 @@ def fit_origin(
                 robust=robust,
                 robust_steps=robust_steps,
                 robust_thresh=robust_thresh,
-                data_mask=mask is True,
+                data_mask=mask == True,  # noqa E712
             )
             popt_y, pcov_y, qy0_fit, _ = fit_2D(
                 f,
@@ -162,7 +162,7 @@ def fit_origin(
                 robust=robust,
                 robust_steps=robust_steps,
                 robust_thresh=robust_thresh,
-                data_mask=mask is True,
+                data_mask=mask == True,  # noqa E712
             )
 
     # Compute residuals
