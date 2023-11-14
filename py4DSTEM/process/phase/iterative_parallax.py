@@ -603,7 +603,9 @@ class ParallaxReconstruction(PhaseReconstruction):
                 0.5 * (self._reciprocal_sampling[0] * self._dp_mask.shape[0]),
                 -0.5 * (self._reciprocal_sampling[0] * self._dp_mask.shape[0]),
             ]
-            ax[1].imshow(self._dp_mask, extent=reciprocal_extent, cmap="gray")
+            ax[1].imshow(
+                self._asnumpy(self._dp_mask), extent=reciprocal_extent, cmap="gray"
+            )
             ax[1].set_title("DP mask")
             ax[1].set_ylabel(r"$k_x$ [$A^{-1}$]")
             ax[1].set_xlabel(r"$k_y$ [$A^{-1}$]")
