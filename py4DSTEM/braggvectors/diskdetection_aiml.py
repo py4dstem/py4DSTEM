@@ -7,7 +7,6 @@ import os
 import json
 import shutil
 import numpy as np
-from importlib.util import find_spec
 
 from time import time
 
@@ -99,7 +98,9 @@ def find_Bragg_disks_aiml_single_DP(
     Returns:
         (PointList): the Bragg peak positions and correlation intensities
     """
-    if find_spec("crystal4D") is None:
+    try:
+        import crystal4D
+    except ModuleNotFoundError:
         raise ImportError("Import Error: Please install crystal4D before proceeding")
     try:
         import tensorflow as tf
@@ -250,7 +251,9 @@ def find_Bragg_disks_aiml_selected(
         correlation intensities at each scan position (Rx,Ry).
     """
 
-    if find_spec("crystal4D") is None:
+    try:
+        import crystal4D
+    except ModuleNotFoundError:
         raise ImportError("Import Error: Please install crystal4D before proceeding")
 
     assert len(Rx) == len(Ry)
@@ -425,7 +428,9 @@ def find_Bragg_disks_aiml_serial(
         (PointListArray): the Bragg peak positions and correlation intensities
     """
 
-    if find_spec("crystal4D") is None:
+    try:
+        import crystal4D
+    except ModuleNotFoundError:
         raise ImportError("Import Error: Please install crystal4D before proceeding")
 
     # Make the peaks PointListArray
@@ -633,8 +638,10 @@ def find_Bragg_disks_aiml(
     Returns:
         (PointListArray): the Bragg peak positions and correlation intensities
     """
-    if find_spec("crystal4D") is None:
-        raise ImportError("Please install crystal4D before proceeding")
+    try:
+        import crystal4D
+    except ModuleNotFoundError:
+        raise ImportError("Import Error: Please install crystal4D before proceeding")
 
     def _parse_distributed(distributed):
         import os
