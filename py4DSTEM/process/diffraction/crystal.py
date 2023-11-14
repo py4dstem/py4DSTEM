@@ -938,19 +938,20 @@ class Crystal:
         m_tile = self.lat_real[inds_tile,:]
 
         # Determine tiling range
-        p = np.array([
+        p_corners = np.array([
             [-im_size_Ang[0]*0.5,-im_size_Ang[1]*0.5, 0.0],
             [ im_size_Ang[0]*0.5,-im_size_Ang[1]*0.5, 0.0],
             [ im_size_Ang[0]*0.5, im_size_Ang[1]*0.5, 0.0],
             [-im_size_Ang[0]*0.5, im_size_Ang[1]*0.5, 0.0],
         ])
-
-        ab = np.floor(np.linalg.lstsq(
+        p_corners_proj = p_corners @ \
+            np.linalg.inv(np.vstack((proj_x, proj_y, proj_z)))
+        ab = np.round(np.linalg.lstsq(
             m_tile.T,
-            p.T, 
+            p_corners_proj.T, 
             rcond=None)[0])
-        a_range = np.array((np.min(ab[0]),np.max(ab[0])))
-        b_range = np.array((np.min(ab[1]),np.max(ab[1])))
+        a_range = np.array((np.min(ab[0])-1,np.max(ab[0])+1))
+        b_range = np.array((np.min(ab[1])-1,np.max(ab[1])+1))
 
         # Tile unit cell
         a_ind, b_ind, atoms_ind = np.meshgrid(
@@ -962,15 +963,25 @@ class Crystal:
         abc_atoms[:,inds_tile[0]] += a_ind.ravel()
         abc_atoms[:,inds_tile[1]] += b_ind.ravel()
         xyz_atoms_ang = abc_atoms @ self.lat_real.T
-        # xyz_atoms_pixels = xyz_atoms_ang / pixel_size_Ang \ 
-        #     + im_size/2.0
 
         # Project into projected potential image plane
-        x = proj_x
+        x = (xyz_atoms_ang @ proj_x) / pixel_size_Ang + im_size[0]/2.0
+        y = (xyz_atoms_ang @ proj_y) / pixel_size_Ang + im_size[1]/2.0
+        atoms_del = np.logical_or.reduce((
+            x < 0,
+            y < 0,
+            x > im_size[0],
+            y > im_size[1],
+        ))
+        x = np.delete(x, atoms_del)
+        y = np.delete(y, atoms_del)
 
-        # # Lookup table for atomic projected potentials
+        # Lookup table for atomic projected potentials
 
-        # # initialize
+
+
+
+        # initialize potential
         im_potential = np.zeros(im_size)
         # # im_potential[10:20,10:20] = 1
 
@@ -984,7 +995,9 @@ class Crystal:
             im_potential,
             cmap = 'gray',
             )
+        ax.scatter(y,x)
         ax.set_axis_off()
+        ax.set_aspect('equal')
 
         return im_potential
 
