@@ -23,4 +23,6 @@ jobs:
           VALIDATE_PYTHON_FLAKE8: true
           DEFAULT_BRANCH: "dev"
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # FILTER_REGEX_EXCLUDE: .*test/.* # exclude test dirs
+          FILTER_REGEX_INCLUDE: .*py4DSTEM/.* # only look for py4DSTEM
 
