@@ -1,2 +1,19 @@
 [flake8]
-select: "F402,F404,F812,F823,F831,F821,F822,E112,E113,E901,E902,E999,E501"
+select = 
+    F402, 
+    F404,
+    F812,
+    F823,
+    F831,
+    F821,
+    F822,
+    E112,
+    E113,
+    E901,
+    E902,
+    E999,
+    E501
+exclude = 
+    test/*,
+    setup.py,
+    *__init__.py
