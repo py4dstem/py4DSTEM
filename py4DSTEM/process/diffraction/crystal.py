@@ -966,7 +966,8 @@ class Crystal:
         abc_atoms = self.positions[atoms_ind.ravel(),:]
         abc_atoms[:,inds_tile[0]] += a_ind.ravel()
         abc_atoms[:,inds_tile[1]] += b_ind.ravel()
-        xyz_atoms_ang = abc_atoms @ self.lat_real.T
+        # NOTE - should this be self.lat_real.T?
+        xyz_atoms_ang = abc_atoms @ self.lat_real
         atoms_ID_all = self.numbers[atoms_ind.ravel()]
 
         # Project into projected potential image plane
