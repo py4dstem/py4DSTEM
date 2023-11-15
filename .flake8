@@ -8,6 +8,7 @@ extend-ignore:
     E203,
     E204,
     E231,
+    E265,
     E266,
     E303,
     E402,
