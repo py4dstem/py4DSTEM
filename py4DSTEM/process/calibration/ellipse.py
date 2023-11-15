@@ -63,8 +63,8 @@ def fit_ellipse_1D(ar, center=None, fitradii=None, mask=None):
     rr = np.sqrt((xx - x0) ** 2 + (yy - y0) ** 2)
     _mask = (rr > ri) * (rr <= ro)
     if mask is not None:
-        _mask *= mask is False
-    xs, ys = np.nonzero(_mask)
+        _mask *= mask == False # noqa: E712
+    xs, ys = np.nonzero(_mask)  
     vals = ar[_mask]
 
     # Get initial parameters guess
