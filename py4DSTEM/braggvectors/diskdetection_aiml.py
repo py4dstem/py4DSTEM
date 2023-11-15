@@ -528,7 +528,7 @@ def find_Bragg_disks_aiml_serial(
         )
     )
 
-    if global_threshold == True:
+    if global_threshold is True:
         from py4DSTEM.braggvectors import universal_threshold
 
         peaks = universal_threshold(
@@ -559,7 +559,7 @@ def find_Bragg_disks_aiml(
     model_path=None,
     distributed=None,
     CUDA=True,
-    **kwargs
+    **kwargs,
 ):
     """
     Finds the Bragg disks in all diffraction patterns of datacube by AI/ML method. This method

@@ -385,7 +385,7 @@ class RawVectorGetter:
     def __repr__(self):
         space = " " * len(self.__class__.__name__) + "  "
         string = f"{self.__class__.__name__}( "
-        string += f"Retrieves raw bragg vectors. Get vectors for scan position x,y with [x,y]. )"
+        string += "Retrieves raw bragg vectors. Get vectors for scan position x,y with [x,y]. )"
         return string
 
 

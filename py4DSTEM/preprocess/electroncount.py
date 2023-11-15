@@ -403,7 +403,7 @@ def counted_pointlistarray_to_datacube(counted_pointlistarray, shape, subpixel=F
         (4D array of bools): a 4D array of bools, with true indicating an electron strike.
     """
     assert len(shape) == 4
-    assert subpixel == False, "subpixel mode not presently supported."
+    assert subpixel is False, "subpixel mode not presently supported."
     R_Nx, R_Ny, Q_Nx, Q_Ny = shape
     counted_datacube = np.zeros((R_Nx, R_Nx, Q_Nx, Q_Ny), dtype=bool)
 
