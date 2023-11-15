@@ -38,7 +38,9 @@ def _make_v14_test_file():
     alpha, qx0, qy0 = py4DSTEM.process.probe.get_probe_size(probe.probe)
 
     # prepare the probe kernel
-    kern = probe.get_kernel(mode="sigmoid", origin=(qx0, qy0), radii=(alpha, 2 * alpha))  # noqa: F841
+    kern = probe.get_kernel(
+        mode="sigmoid", origin=(qx0, qy0), radii=(alpha, 2 * alpha)
+    )  # noqa: F841
 
     # Set disk detection parameters
     detect_params = {
