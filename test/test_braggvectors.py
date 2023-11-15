@@ -52,7 +52,7 @@ class TestDiskDetectionBasic:
     # tests
 
     def test_BraggVectors_import(self):
-        from py4DSTEM.braggvectors import BraggVectors
+        from py4DSTEM.braggvectors import BraggVectors  # noqa: F401
 
         pass
 
@@ -67,7 +67,7 @@ class TestDiskDetectionBasic:
             68,
         )
 
-        disks_selected = self.datacube.find_Bragg_disks(
+        disks_selected = self.datacube.find_Bragg_disks(  # noqa: F841
             data=(rxs, rys),
             template=self.probe.kernel,
             **self.detect_params,

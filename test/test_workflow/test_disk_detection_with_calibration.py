@@ -41,7 +41,7 @@ class TestDiskDetectionWithCalibration:
     # tests
 
     def test_disk_detection(self):
-        braggpeaks = self.datacube.find_Bragg_disks(
+        braggpeaks = self.datacube.find_Bragg_disks(  # noqa: F841
             template=self.probe.kernel,
             **self.detect_params,
         )

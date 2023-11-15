@@ -31,7 +31,7 @@ class TestBasics:
     # virtual diffraction and imaging
 
     def test_virt_diffraction(self):
-        dp_mean = self.datacube.get_dp_mean()
+        dp_mean = self.datacube.get_dp_mean()  # noqa: F841
         self.datacube.get_dp_max()
 
     def test_virt_imaging_bf(self):

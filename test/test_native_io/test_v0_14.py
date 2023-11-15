@@ -38,7 +38,7 @@ def _make_v14_test_file():
     alpha, qx0, qy0 = py4DSTEM.process.probe.get_probe_size(probe.probe)
 
     # prepare the probe kernel
-    kern = probe.get_kernel(mode="sigmoid", origin=(qx0, qy0), radii=(alpha, 2 * alpha))
+    kern = probe.get_kernel(mode="sigmoid", origin=(qx0, qy0), radii=(alpha, 2 * alpha))  # noqa: F841
 
     # Set disk detection parameters
     detect_params = {
@@ -54,7 +54,7 @@ def _make_v14_test_file():
     }
 
     # compute
-    braggpeaks = datacube.find_Bragg_disks(
+    braggpeaks = datacube.find_Bragg_disks(  # noqa: F841
         template=probe.kernel,
         **detect_params,
     )
