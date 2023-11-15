@@ -52,7 +52,7 @@ class Crystal_Phase:
             map_scale_values (float):   Value to scale correlations by
         """
         phase_maps = []
-        if map_scale_values == None:
+        if map_scale_values is None:
             map_scale_values = [1] * len(self.orientation_maps)
         corr_sum = np.sum(
             [
@@ -75,7 +75,7 @@ class Crystal_Phase:
             for p in range(len(self.orientation_maps))
         ]
 
-        if cmap == None:
+        if cmap is None:
             cm = plt.get_cmap("rainbow")
             cmap = [
                 cm(1.0 * i / len(self.orientation_maps))
@@ -276,7 +276,7 @@ class Crystal_Phase:
         if len(pointlist["qx"]) > 0:
             if mask_peaks is not None:
                 for i in range(len(mask_peaks)):
-                    if mask_peaks[i] == None:
+                    if mask_peaks[i] is None:
                         continue
                     inds_mask = np.where(
                         pointlist_peak_intensity_matches[:, mask_peaks[i]] != 0

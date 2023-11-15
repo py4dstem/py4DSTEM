@@ -1,2 +1,0 @@
-[flake8]
-extend-ignore: "E501,,E114,E115,E116,E201,E202,E203,E231,E266"
