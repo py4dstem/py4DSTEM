@@ -2,7 +2,7 @@
 
 
 import argparse
-from os.path import join, exists
+from os.path import exists
 from os import makedirs
 
 from py4DSTEM import _TESTPATH as testpath
