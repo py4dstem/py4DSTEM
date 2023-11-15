@@ -51,14 +51,14 @@ class TestDiskDetectionBasic:
             68,
         )
 
-        disks_selected = self.datacube.find_Bragg_disks(
+        disks_selected = self.datacube.find_Bragg_disks(  # noqa: F841
             data=(rxs, rys),
             template=self.probe.kernel,
             **self.detect_params,
         )
 
     def test_disk_detection(self):
-        braggpeaks = self.datacube.find_Bragg_disks(
+        braggpeaks = self.datacube.find_Bragg_disks(  # noqa: F841
             template=self.probe.kernel,
             **self.detect_params,
         )

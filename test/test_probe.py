@@ -1,7 +1,6 @@
 import py4DSTEM
 from py4DSTEM import Probe
 import numpy as np
-from os.path import join
 
 # set filepath
 path = py4DSTEM._TESTPATH + "/small_datacube.dm4"

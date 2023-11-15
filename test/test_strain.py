@@ -1,7 +1,6 @@
 import py4DSTEM
 from py4DSTEM import StrainMap
 from os.path import join
-from numpy import zeros
 
 
 # set filepath

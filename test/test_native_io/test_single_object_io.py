@@ -1,14 +1,11 @@
 import numpy as np
-from os.path import join, exists
-from os import remove
+from os.path import join
 from numpy import array_equal
 
 import py4DSTEM
 from py4DSTEM import save, read
-import emdfile as emd
 
 from py4DSTEM import (
-    Calibration,
     DiffractionSlice,
     RealSlice,
     QPoints,
