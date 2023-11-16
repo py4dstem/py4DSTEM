@@ -1,8 +1,4 @@
-<<<<<<< HEAD
-name: Check for errors with flake8
-=======
 name: Lint with super-linter@v5-slim
->>>>>>> parent of 340238f0 (removing old linter)
 
 on:
   push:
