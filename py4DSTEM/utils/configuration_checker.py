@@ -244,7 +244,7 @@ def print_import_states(import_states: dict) -> None:
     print with colours if the library could be imported or not
     takes dict
         "numpy" : True ->  prints success
-        "pymatgen" : Fasle -> prints failure
+        "pymatgen" : False -> prints failure
 
     """
     # m is the name of the import module
