@@ -304,12 +304,12 @@ def perform_extra_checks(
     Returns:
         _type_: _description_
     """
-
-    # print a output module
-    extra_checks_message = "Running Extra Checks"
-    extra_checks_message = create_bold(extra_checks_message)
-    print(f"{extra_checks_message}")
-    # For modules that import run any extra checks
+    if gratuitously_verbose:
+        # print a output module
+        extra_checks_message = "Running Extra Checks"
+        extra_checks_message = create_bold(extra_checks_message)
+        print(f"{extra_checks_message}")
+        # For modules that import run any extra checks
     # get all the dependencies
     dependencies = requires("py4DSTEM")
     # Extract only the module names with versions
@@ -328,15 +328,22 @@ def perform_extra_checks(
                 print(s)
                 func(verbose=verbose, gratuitously_verbose=gratuitously_verbose)
             else:
-                s = create_underline(key.capitalize())
-                print(s)
-                # check
-                generic_versions(key, depends_with_requires=depends_with_requirements)
+                #     s = create_underline(key.capitalize())
+                #     print(s)
+                #     # check
+                #     generic_versions(key, depends_with_requires=depends_with_requirements)
                 # if gratuitously_verbose print out all modules without checks
                 if gratuitously_verbose:
                     s = create_underline(key.capitalize())
                     print(s)
-                    print_no_extra_checks(key)
+                    # check
+                    generic_versions(
+                        key, depends_with_requires=depends_with_requirements
+                    )
+
+                    # s = create_underline(key.capitalize())
+                    # print(s)
+                    # print_no_extra_checks(key)
                 else:
                     pass
 
