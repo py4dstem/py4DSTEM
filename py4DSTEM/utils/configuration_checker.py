@@ -45,26 +45,36 @@ def get_modules_dict():
     # set the dictionary for modules and packages to go into
     modules_dict = {
         "base": [],
-        "acom": [],
-        "aiml": [],
-        "aiml-cuda": [],
-        "cuda": [],
-        "numba": [],
+        # "acom": [],
+        # "aiml": [],
+        # "aiml-cuda": [],
+        # "cuda": [],
+        # "numba": [],
     }
     # loop over the dependencies
     for depend in dependencies:
         # all the optional have extra in the name
         # if its not there append it to base
         if "extra" not in depend:
+            # String looks like: 'numpy>=1.19'
             modules_dict["base"].append(depend)
 
-        # if it has extra
+        # if it has extra in the string
         else:
-            # loop over the keys and check if its in there
-            for key in modules_dict.keys():
-                if key in depend:
-                    modules_dict[key].append(depend)
-
+            # get the name of the optional name
+            # depend looks like this 'numba>=0.49.1; extra == "numba"'
+            # grab whatever is in the double quotes i.e. numba
+            optional_name = re.search(r'"(.*?)"', depend).group(1)
+            # if the optional name is not in the dict as a key i.e. first requirement of hte optional dependency
+            if optional_name not in modules_dict:
+                modules_dict[optional_name] = [depend]
+            # if the optional_name is already in the dict then just append it to the list
+            else:
+                modules_dict[optional_name].append(depend)
+            # # loop over the keys and check if its in there
+            # for key in modules_dict.keys():
+            #     if key in depend:
+            #         modules_dict[key].append(depend)
     # STRIP all the versioning and semi-colons
     # Define a regular expression pattern for splitting on '>', '>=', '='
     delimiter_pattern = re.compile(r">=|>|==|<|<=")
