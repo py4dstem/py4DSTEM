@@ -45,13 +45,9 @@ def get_modules_dict():
     dependencies = requires(package_name)
 
     # set the dictionary for modules and packages to go into
+    # optional dependencies will be added as they are discovered
     modules_dict = {
         "base": [],
-        # "acom": [],
-        # "aiml": [],
-        # "aiml-cuda": [],
-        # "cuda": [],
-        # "numba": [],
     }
     # loop over the dependencies
     for depend in dependencies:
@@ -73,10 +69,6 @@ def get_modules_dict():
             # if the optional_name is already in the dict then just append it to the list
             else:
                 modules_dict[optional_name].append(depend)
-            # # loop over the keys and check if its in there
-            # for key in modules_dict.keys():
-            #     if key in depend:
-            #         modules_dict[key].append(depend)
     # STRIP all the versioning and semi-colons
     # Define a regular expression pattern for splitting on '>', '>=', '='
     delimiter_pattern = re.compile(r">=|>|==|<|<=")
@@ -328,10 +320,6 @@ def perform_extra_checks(
                 print(s)
                 func(verbose=verbose, gratuitously_verbose=gratuitously_verbose)
             else:
-                #     s = create_underline(key.capitalize())
-                #     print(s)
-                #     # check
-                #     generic_versions(key, depends_with_requires=depends_with_requirements)
                 # if gratuitously_verbose print out all modules without checks
                 if gratuitously_verbose:
                     s = create_underline(key.capitalize())
@@ -340,10 +328,6 @@ def perform_extra_checks(
                     generic_versions(
                         key, depends_with_requires=depends_with_requirements
                     )
-
-                    # s = create_underline(key.capitalize())
-                    # print(s)
-                    # print_no_extra_checks(key)
                 else:
                     pass
 
