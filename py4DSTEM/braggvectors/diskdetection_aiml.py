@@ -101,7 +101,9 @@ def find_Bragg_disks_aiml_single_DP(
     try:
         import crystal4D
     except ModuleNotFoundError:
-        raise ImportError("Import Error: Please install crystal4D before proceeding")
+        raise ModuleNotFoundError(
+            "Import Error: Please install crystal4D before proceeding"
+        )
     try:
         import tensorflow as tf
     except ModuleNotFoundError:
@@ -254,7 +256,9 @@ def find_Bragg_disks_aiml_selected(
     try:
         import crystal4D
     except ModuleNotFoundError:
-        raise ImportError("Import Error: Please install crystal4D before proceeding")
+        raise ModuleNotFoundError(
+            "Import Error: Please install crystal4D before proceeding"
+        )
 
     assert len(Rx) == len(Ry)
     peaks = []
@@ -431,7 +435,9 @@ def find_Bragg_disks_aiml_serial(
     try:
         import crystal4D
     except ModuleNotFoundError:
-        raise ImportError("Import Error: Please install crystal4D before proceeding")
+        raise ModuleNotFoundError(
+            "Import Error: Please install crystal4D before proceeding"
+        )
 
     # Make the peaks PointListArray
     # dtype = [('qx',float),('qy',float),('intensity',float)]
@@ -641,7 +647,9 @@ def find_Bragg_disks_aiml(
     try:
         import crystal4D
     except ModuleNotFoundError:
-        raise ImportError("Import Error: Please install crystal4D before proceeding")
+        raise ModuleNotFoundError(
+            "Import Error: Please install crystal4D before proceeding"
+        )
 
     def _parse_distributed(distributed):
         import os
