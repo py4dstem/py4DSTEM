@@ -516,7 +516,6 @@ def check_cupy_gpu(gratuitously_verbose: bool, **kwargs):
     return None
 
 
-# TODO add generic version which will print version
 def print_no_extra_checks(m: str):
     """
     This function prints a warning style message that the module m
