@@ -845,7 +845,7 @@ def _integrate_disks(DP, maxima_x, maxima_y, maxima_int, int_window_radius=1):
         disks.append(np.average(disk))
     try:
         disks = disks / max(disks)
-    # TODO work out what exception would go here
+    # possibly a ZeroDivideError
     except Exception:
         pass
     return (maxima_x, maxima_y, disks)
@@ -900,7 +900,6 @@ def _get_latest_model(model_path=None):
         except FileExistsError:
             pass
         except Exception as e:
-            # TODO work out if I want to pass or raise
             pass
             # raise e
         # download the json file with the meta data
@@ -915,10 +914,8 @@ def _get_latest_model(model_path=None):
             with open("./tmp/model_metadata_old.json") as f_old:
                 metaold = json.load(f_old)
                 file_id_old = metaold["file_id"]
-        # TODO Double check this is correct Error
-        except FileNotFoundError:
-            file_id_old = file_id
-        except Exception:
+        # I think just FileNotFoundError
+        except (FileNotFoundError, Exception):
             file_id_old = file_id
 
         if os.path.exists(file_path) and file_id == file_id_old:
@@ -934,7 +931,6 @@ def _get_latest_model(model_path=None):
             download_file_from_google_drive(file_id, filename)
             try:
                 shutil.unpack_archive(filename, "./tmp", format="zip")
-            # TODO Work work what specific exception
             except Exception:
                 pass
             model_path = file_path
