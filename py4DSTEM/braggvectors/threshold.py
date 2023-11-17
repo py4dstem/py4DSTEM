@@ -1,7 +1,6 @@
 # Bragg peaks thresholding fns
 
 import numpy as np
-import numpy.typing as npt
 from emdfile import tqdmnd, PointListArray
 
 
@@ -158,7 +157,7 @@ def universal_threshold(
         # Remove peaks that are too close together
         if maxNumPeaks is not False:
             r2 = minPeakSpacing**2
-            deletemask: npt.NDArray = np.zeros(pointlist.length, dtype=bool)
+            deletemask = np.zeros(pointlist.length, dtype=bool)
             for i in range(pointlist.length):
                 if deletemask[i] == False:  # noqa: E712
                     tooClose = (
