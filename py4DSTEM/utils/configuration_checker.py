@@ -1,8 +1,10 @@
 #### this file contains a function/s that will check if various
 # libaries/compute options are available
 import importlib
-from importlib.metadata import requires
+from importlib.metadata import requires, import_module
+import importlib
 import re
+from importlib.util import find_spec
 
 # need a mapping of pypi/conda names to import names
 import_mapping_dict = {
@@ -289,7 +291,7 @@ def print_module_states(module_states: dict) -> None:
     return None
 
 
-def perfrom_extra_checks(
+def perform_extra_checks(
     import_states: dict, verbose: bool, gratuitously_verbose: bool, **kwargs
 ) -> None:
     """_summary_
@@ -308,6 +310,14 @@ def perfrom_extra_checks(
     extra_checks_message = create_bold(extra_checks_message)
     print(f"{extra_checks_message}")
     # For modules that import run any extra checks
+    # get all the dependencies
+    dependencies = requires("py4DSTEM")
+    # Extract only the module names with versions
+    depends_with_requirements = [
+        dependency.split(";")[0] for dependency in dependencies
+    ]
+    # print(depends_with_requirements)
+    # need to go from
     for key, val in import_states.items():
         if val:
             # s = create_underline(key.capitalize())
@@ -318,6 +328,10 @@ def perfrom_extra_checks(
                 print(s)
                 func(verbose=verbose, gratuitously_verbose=gratuitously_verbose)
             else:
+                s = create_underline(key.capitalize())
+                print(s)
+                # check
+                generic_versions(key, depends_with_requires=depends_with_requirements)
                 # if gratuitously_verbose print out all modules without checks
                 if gratuitously_verbose:
                     s = create_underline(key.capitalize())
@@ -399,6 +413,45 @@ def check_module_functionality(state_dict: dict) -> None:
 
 
 #### ADDTIONAL CHECKS ####
+
+
+def generic_versions(module: str, depends_with_requires: list[str]) -> None:
+    # module will be like numpy, skimage
+    # depends_with_requires look like: numpy >= 19.0, scikit-image
+    # get module_translated_name
+    # mapping scikit-image : skimage
+    for key, value in import_mapping_dict.items():
+        # if skimage == skimage get scikit-image
+        # print(f"{key = } - {value = } - {module = }")
+        if module in value:
+            module_depend_name = key
+            break
+        else:
+            # if cant find mapping set the search name to the same
+            module_depend_name = module
+    # print(f"{module_depend_name = }")
+    # find the requirement
+    for depend in depends_with_requires:
+        if module_depend_name in depend:
+            spec_required = depend
+    # print(f"{spec_required = }")
+    # get the version installed
+    spec_installed = find_spec(module)
+    if spec_installed is None:
+        s = f"{module} unable to import - {spec_required} required"
+        s = create_failure(s)
+        s = f"{s: <80}"
+        print(s)
+
+    else:
+        try:
+            version = importlib.metadata.version(module)
+        except Exception:
+            version = "Couldn't test version"
+        s = f"{module} imported: {version = } - {spec_required} required"
+        s = create_warning(s)
+        s = f"{s: <80}"
+        print(s)
 
 
 def check_cupy_gpu(gratuitously_verbose: bool, **kwargs):
@@ -484,7 +537,9 @@ def print_no_extra_checks(m: str):
 
 
 # dict of extra check functions
-funcs_dict = {"cupy": check_cupy_gpu}
+funcs_dict = {
+    "cupy": check_cupy_gpu,
+}
 
 
 #### main function used to check the configuration of the installation
@@ -529,7 +584,7 @@ def check_config(
 
         print_import_states(states_dict)
 
-        perfrom_extra_checks(
+        perform_extra_checks(
             import_states=states_dict,
             verbose=verbose,
             gratuitously_verbose=gratuitously_verbose,
