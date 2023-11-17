@@ -648,10 +648,6 @@ class Crystal:
             print("Accelerating voltage not set. Assuming 300 keV!")
             self.setup_diffraction(300e3)
 
-        # Tolerance for angular tests
-        # TODO should this be used somewhere ?
-        tol = 1e-6  # noqa: F841
-
         # Parse orientation inputs
         if orientation is not None:
             if ind_orientation is None:
@@ -805,10 +801,7 @@ class Crystal:
             )
 
         # check accelerating voltage
-        if hasattr(self, "accel_voltage"):
-            # TODO should this be used somewhere ?
-            accelerating_voltage = self.accel_voltage  # noqa: F841
-        else:
+        if not hasattr(self, "accel_voltage"):
             self.accel_voltage = 300e3
             print("Accelerating voltage not set. Assuming 300 keV!")
 
