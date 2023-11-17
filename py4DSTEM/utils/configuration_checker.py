@@ -1,8 +1,7 @@
 #### this file contains a function/s that will check if various
 # libaries/compute options are available
 import importlib
-from importlib.metadata import requires, import_module
-import importlib
+from importlib.metadata import requires
 import re
 from importlib.util import find_spec
 
