@@ -435,7 +435,7 @@ def generic_versions(module: str, depends_with_requires: list[str]) -> None:
 
     else:
         try:
-            version = importlib.metadata.version(module)
+            version = importlib.metadata.version(module_depend_name)
         except Exception:
             version = "Couldn't test version"
         s = f"{module} imported: {version = } - {spec_required} required"
