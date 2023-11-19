@@ -182,7 +182,7 @@ class Featurization(object):
                                     (pointlist.data["qy"] / q_pixel_size) + Q_Ny / 2
                                 ).astype(int),
                             ]
-                            is False
+                            == False  # noqa: E712
                         ),
                         True,
                         False,

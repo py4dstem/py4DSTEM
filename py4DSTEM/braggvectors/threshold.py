@@ -1,7 +1,6 @@
 # Bragg peaks thresholding fns
 
 import numpy as np
-
 from emdfile import tqdmnd, PointListArray
 
 
@@ -52,7 +51,7 @@ def threshold_Braggpeaks(
             r2 = minPeakSpacing**2
             deletemask = np.zeros(pointlist.length, dtype=bool)
             for i in range(pointlist.length):
-                if deletemask[i] is False:
+                if deletemask[i] == False:  # noqa: E712
                     tooClose = (
                         (pointlist.data["qx"] - pointlist.data["qx"][i]) ** 2
                         + (pointlist.data["qy"] - pointlist.data["qy"][i]) ** 2
@@ -160,7 +159,7 @@ def universal_threshold(
             r2 = minPeakSpacing**2
             deletemask = np.zeros(pointlist.length, dtype=bool)
             for i in range(pointlist.length):
-                if deletemask[i] is False:
+                if deletemask[i] == False:  # noqa: E712
                     tooClose = (
                         (pointlist.data["qx"] - pointlist.data["qx"][i]) ** 2
                         + (pointlist.data["qy"] - pointlist.data["qy"][i]) ** 2
