@@ -153,12 +153,6 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
             raise ValueError(
                 f"object_type must be either 'potential' or 'complex', not {object_type}"
             )
-        if positions_mask is not None and positions_mask.dtype != "bool":
-            warnings.warn(
-                ("`positions_mask` converted to `bool` array"),
-                UserWarning,
-            )
-            positions_mask = np.asarray(positions_mask, dtype="bool")
 
         self.set_save_defaults()
 
@@ -339,6 +333,27 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
                 f"simultaneous_measurements_mode must be either '-+', '-0+', or '0+', not {self._simultaneous_measurements_mode}"
             )
 
+        if self._positions_mask is not None:
+            self._positions_mask = np.asarray(self._positions_mask)
+
+            if self._positions_mask.ndim == 2:
+                warnings.warn(
+                    "2D `positions_mask` assumed the same for all measurements.",
+                    UserWarning,
+                )
+                self._positions_mask = np.tile(
+                    self._positions_mask, (self._num_sim_measurements, 1, 1)
+                )
+
+            if self._positions_mask.dtype != "bool":
+                warnings.warn(
+                    "`positions_mask` converted to `bool` array.",
+                    UserWarning,
+                )
+                self._positions_mask = self._positions_mask.astype("bool")
+        else:
+            self._positions_mask = [None] * self._num_sim_measurements
+
         if force_com_shifts is None:
             force_com_shifts = [None, None, None]
         elif len(force_com_shifts) == self._num_sim_measurements:
@@ -421,7 +436,7 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
             com_fitted_x_0,
             com_fitted_y_0,
             crop_patterns,
-            self._positions_mask,
+            self._positions_mask[0],
         )
 
         # explicitly delete namescapes
@@ -506,7 +521,7 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
             com_fitted_x_1,
             com_fitted_y_1,
             crop_patterns,
-            self._positions_mask,
+            self._positions_mask[1],
         )
 
         # explicitly delete namescapes
@@ -592,7 +607,7 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
                 com_fitted_x_2,
                 com_fitted_y_2,
                 crop_patterns,
-                self._positions_mask,
+                self._positions_mask[2],
             )
 
             # explicitly delete namescapes
@@ -632,8 +647,8 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
         self._region_of_interest_shape = np.array(self._amplitudes[0].shape[-2:])
 
         self._positions_px = self._calculate_scan_positions_in_pixels(
-            self._scan_positions, self._positions_mask
-        )
+            self._scan_positions, self._positions_mask[0]
+        )  # TO-DO: generaltize to per-dataset probe positions
 
         # handle semiangle specified in pixels
         if self._semiangle_cutoff_pixels:
