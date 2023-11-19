@@ -1168,7 +1168,7 @@ class PhaseReconstruction(Custom):
 
         diffraction_intensities = self._asnumpy(diffraction_intensities)
         if positions_mask is not None:
-            number_of_patterns = np.count_nonzero(self._positions_mask.ravel())
+            number_of_patterns = np.count_nonzero(positions_mask.ravel())
         else:
             number_of_patterns = np.prod(diffraction_intensities.shape[:2])
 
@@ -1217,7 +1217,7 @@ class PhaseReconstruction(Custom):
         for rx in range(diffraction_intensities.shape[0]):
             for ry in range(diffraction_intensities.shape[1]):
                 if positions_mask is not None:
-                    if not self._positions_mask[rx, ry]:
+                    if not positions_mask[rx, ry]:
                         continue
                 intensities = get_shifted_ar(
                     diffraction_intensities[rx, ry],
@@ -1348,6 +1348,14 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
             data=metadata,
         )
 
+        # saving multiple None positions_mask fix
+        if self._positions_mask is None:
+            positions_mask = None
+        elif self._positions_mask[0] is None:
+            positions_mask = None
+        else:
+            positions_mask = self._positions_mask
+
         # preprocessing metadata
         self.metadata = Metadata(
             name="preprocess_metadata",
@@ -1359,7 +1367,7 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
                 "num_diffraction_patterns": self._num_diffraction_patterns,
                 "sampling": self.sampling,
                 "angular_sampling": self.angular_sampling,
-                "positions_mask": self._positions_mask,
+                "positions_mask": positions_mask,
             },
         )
 

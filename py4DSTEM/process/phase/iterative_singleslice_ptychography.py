@@ -150,13 +150,6 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
                 f"object_type must be either 'potential' or 'complex', not {object_type}"
             )
 
-        if positions_mask is not None and positions_mask.dtype != "bool":
-            warnings.warn(
-                ("`positions_mask` converted to `bool` array"),
-                UserWarning,
-            )
-            positions_mask = np.asarray(positions_mask, dtype="bool")
-
         self.set_save_defaults()
 
         # Data
@@ -281,6 +274,13 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
                     "Please run ptycho.attach_datacube(DataCube) first."
                 )
             )
+
+        if self._positions_mask is not None and self._positions_mask.dtype != "bool":
+            warnings.warn(
+                ("`positions_mask` converted to `bool` array"),
+                UserWarning,
+            )
+            self._positions_mask = np.asarray(self._positions_mask, dtype="bool")
 
         (
             self._datacube,
