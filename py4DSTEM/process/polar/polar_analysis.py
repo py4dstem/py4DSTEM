@@ -411,7 +411,6 @@ def calculate_pair_dist_function(
     if density is not None:
         pdf = pdf_reduced.copy()
         pdf[1:] /= 4 * np.pi * density * r[1:] * (r[1] - r[0])
-        pdf *= 2 / np.pi
         pdf += 1
 
         # damp and clip values below zero
