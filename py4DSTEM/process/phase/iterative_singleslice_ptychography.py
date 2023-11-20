@@ -14,8 +14,8 @@ from py4DSTEM.visualize.vis_special import Complex2RGB, add_colorbar_arg
 
 try:
     import cupy as cp
-except ImportError:
-    cp = None
+except ModuleNotFoundError:
+    cp = np
 
 from emdfile import Custom, tqdmnd
 from py4DSTEM.datacube import DataCube
@@ -79,6 +79,8 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
     object_type: str, optional
         The object can be reconstructed as a real potential ('potential') or a complex
         object ('complex')
+    positions_mask: np.ndarray, optional
+        Boolean real space mask to select positions in datacube to skip for reconstruction
     name: str, optional
         Class name
     kwargs:
@@ -102,6 +104,7 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
         initial_scan_positions: np.ndarray = None,
         object_padding_px: Tuple[int, int] = None,
         object_type: str = "complex",
+        positions_mask: np.ndarray = None,
         verbose: bool = True,
         device: str = "cpu",
         name: str = "ptychographic_reconstruction",
@@ -147,6 +150,13 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
                 f"object_type must be either 'potential' or 'complex', not {object_type}"
             )
 
+        if positions_mask is not None and positions_mask.dtype != "bool":
+            warnings.warn(
+                ("`positions_mask` converted to `bool` array"),
+                UserWarning,
+            )
+            positions_mask = np.asarray(positions_mask, dtype="bool")
+
         self.set_save_defaults()
 
         # Data
@@ -163,6 +173,7 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
         self._rolloff = rolloff
         self._object_type = object_type
         self._object_padding_px = object_padding_px
+        self._positions_mask = positions_mask
         self._verbose = verbose
         self._device = device
         self._preprocessed = False
@@ -188,6 +199,7 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
         force_angular_sampling: float = None,
         force_reciprocal_sampling: float = None,
         object_fov_mask: np.ndarray = None,
+        crop_patterns: bool = False,
         **kwargs,
     ):
         """
@@ -245,6 +257,8 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
         object_fov_mask: np.ndarray (boolean)
             Boolean mask of FOV. Used to calculate additional shrinkage of object
             If None, probe_overlap intensity is thresholded
+        crop_patterns: bool
+            if True, crop patterns to avoid wrap around of patterns when centering
 
         Returns
         --------
@@ -333,6 +347,8 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
             self._intensities,
             self._com_fitted_x,
             self._com_fitted_y,
+            crop_patterns,
+            self._positions_mask,
         )
 
         # explicitly delete namespace
@@ -341,7 +357,7 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
         del self._intensities
 
         self._positions_px = self._calculate_scan_positions_in_pixels(
-            self._scan_positions
+            self._scan_positions, self._positions_mask
         )
 
         # handle semiangle specified in pixels
@@ -412,6 +428,11 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
                     bilinear=True,
                     device=self._device,
                 )
+                if crop_patterns:
+                    self._vacuum_probe_intensity = self._vacuum_probe_intensity[
+                        self._crop_mask
+                    ].reshape(self._region_of_interest_shape)
+
             self._probe = (
                 ComplexProbe(
                     gpts=self._region_of_interest_shape,
@@ -474,19 +495,13 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
 
         if plot_probe_overlaps:
             figsize = kwargs.pop("figsize", (9, 4))
-            cmap = kwargs.pop("cmap", "Greys_r")
-            vmin = kwargs.pop("vmin", None)
-            vmax = kwargs.pop("vmax", None)
-            hue_start = kwargs.pop("hue_start", 0)
-            invert = kwargs.pop("invert", False)
+            chroma_boost = kwargs.pop("chroma_boost", 1)
 
             # initial probe
             complex_probe_rgb = Complex2RGB(
                 self.probe_centered,
-                vmin=vmin,
-                vmax=vmax,
-                hue_start=hue_start,
-                invert=invert,
+                power=2,
+                chroma_boost=chroma_boost,
             )
 
             extent = [
@@ -508,23 +523,19 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
             ax1.imshow(
                 complex_probe_rgb,
                 extent=probe_extent,
-                **kwargs,
             )
 
             divider = make_axes_locatable(ax1)
             cax1 = divider.append_axes("right", size="5%", pad="2.5%")
-            add_colorbar_arg(
-                cax1, vmin=vmin, vmax=vmax, hue_start=hue_start, invert=invert
-            )
+            add_colorbar_arg(cax1, chroma_boost=chroma_boost)
             ax1.set_ylabel("x [A]")
             ax1.set_xlabel("y [A]")
-            ax1.set_title("Initial Probe")
+            ax1.set_title("Initial probe intensity")
 
             ax2.imshow(
                 asnumpy(probe_overlap),
                 extent=extent,
-                cmap=cmap,
-                **kwargs,
+                cmap="gray",
             )
             ax2.scatter(
                 self.positions[:, 1],
@@ -536,7 +547,7 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
             ax2.set_xlabel("y [A]")
             ax2.set_xlim((extent[0], extent[1]))
             ax2.set_ylim((extent[2], extent[3]))
-            ax2.set_title("Object Field of View")
+            ax2.set_title("Object field of view")
 
             fig.tight_layout()
 
@@ -1023,6 +1034,9 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
         q_lowpass,
         q_highpass,
         butterworth_order,
+        tv_denoise,
+        tv_denoise_weight,
+        tv_denoise_inner_iter,
         object_positivity,
         shrinkage_rad,
         object_mask,
@@ -1078,6 +1092,12 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
             Cut-off frequency in A^-1 for high-pass butterworth filter
         butterworth_order: float
             Butterworth filter order. Smaller gives a smoother filter
+        tv_denoise: bool
+            If True, applies TV denoising on object
+        tv_denoise_weight: float
+            Denoising weight. The greater `weight`, the more denoising.
+        tv_denoise_inner_iter: float
+            Number of iterations to run in inner loop of TV denoising
         object_positivity: bool
             If True, clips negative potential values
         shrinkage_rad: float
@@ -1106,6 +1126,11 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
                 q_lowpass,
                 q_highpass,
                 butterworth_order,
+            )
+
+        if tv_denoise:
+            current_object = self._object_denoise_tv_pylops(
+                current_object, tv_denoise_weight, tv_denoise_inner_iter
             )
 
         if shrinkage_rad > 0.0 or object_mask is not None:
@@ -1198,6 +1223,9 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
         q_lowpass: float = None,
         q_highpass: float = None,
         butterworth_order: float = 2,
+        tv_denoise_iter: int = np.inf,
+        tv_denoise_weight: float = None,
+        tv_denoise_inner_iter: float = 40,
         object_positivity: bool = True,
         shrinkage_rad: float = 0.0,
         fix_potential_baseline: bool = True,
@@ -1284,6 +1312,12 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
             Cut-off frequency in A^-1 for high-pass butterworth filter
         butterworth_order: float
             Butterworth filter order. Smaller gives a smoother filter
+        tv_denoise_iter: int, optional
+            Number of iterations to run using tv denoise filter on object
+        tv_denoise_weight: float
+            Denoising weight. The greater `weight`, the more denoising.
+        tv_denoise_inner_iter: float
+            Number of iterations to run in inner loop of TV denoising
         object_positivity: bool, optional
             If True, forces object to be positive
         shrinkage_rad: float
@@ -1486,6 +1520,8 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
             ) = self._extract_vectorized_patch_indices()
             self._exit_waves = None
             self._object_type = self._object_type_initial
+            if hasattr(self, "_tf"):
+                del self._tf
         elif reset is None:
             if hasattr(self, "error"):
                 warnings.warn(
@@ -1618,6 +1654,9 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
                 q_lowpass=q_lowpass,
                 q_highpass=q_highpass,
                 butterworth_order=butterworth_order,
+                tv_denoise=a0 < tv_denoise_iter and tv_denoise_weight is not None,
+                tv_denoise_weight=tv_denoise_weight,
+                tv_denoise_inner_iter=tv_denoise_inner_iter,
                 object_positivity=object_positivity,
                 shrinkage_rad=shrinkage_rad,
                 object_mask=self._object_fov_mask_inverse
@@ -1734,8 +1773,11 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
         """
         figsize = kwargs.pop("figsize", (8, 5))
         cmap = kwargs.pop("cmap", "magma")
-        invert = kwargs.pop("invert", False)
-        hue_start = kwargs.pop("hue_start", 0)
+
+        if plot_fourier_probe:
+            chroma_boost = kwargs.pop("chroma_boost", 2)
+        else:
+            chroma_boost = kwargs.pop("chroma_boost", 1)
 
         if self._object_type == "complex":
             obj = np.angle(self.object)
@@ -1828,29 +1870,31 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
             ax = fig.add_subplot(spec[0, 1])
             if plot_fourier_probe:
                 probe_array = Complex2RGB(
-                    self.probe_fourier, hue_start=hue_start, invert=invert
+                    self.probe_fourier,
+                    chroma_boost=chroma_boost,
                 )
                 ax.set_title("Reconstructed Fourier probe")
                 ax.set_ylabel("kx [mrad]")
                 ax.set_xlabel("ky [mrad]")
             else:
                 probe_array = Complex2RGB(
-                    self.probe, hue_start=hue_start, invert=invert
+                    self.probe,
+                    power=2,
+                    chroma_boost=chroma_boost,
                 )
-                ax.set_title("Reconstructed probe")
+                ax.set_title("Reconstructed probe intensity")
                 ax.set_ylabel("x [A]")
                 ax.set_xlabel("y [A]")
 
             im = ax.imshow(
                 probe_array,
                 extent=probe_extent,
-                **kwargs,
             )
 
             if cbar:
                 divider = make_axes_locatable(ax)
                 ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
-                add_colorbar_arg(ax_cb, hue_start=hue_start, invert=invert)
+                add_colorbar_arg(ax_cb, chroma_boost=chroma_boost)
 
         else:
             ax = fig.add_subplot(spec[0])
@@ -1883,10 +1927,10 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
                 ax = fig.add_subplot(spec[1])
             ax.semilogy(np.arange(errors.shape[0]), errors, **kwargs)
             ax.set_ylabel("NMSE")
-            ax.set_xlabel("Iteration Number")
+            ax.set_xlabel("Iteration number")
             ax.yaxis.tick_right()
 
-        fig.suptitle(f"Normalized Mean Squared Error: {self.error:.3e}")
+        fig.suptitle(f"Normalized mean squared error: {self.error:.3e}")
         spec.tight_layout(fig)
 
     def _visualize_all_iterations(
@@ -1957,9 +2001,12 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
             else (3 * iterations_grid[1], 3 * iterations_grid[0])
         )
         figsize = kwargs.pop("figsize", auto_figsize)
-        cmap = kwargs.pop("cmap", "inferno")
-        invert = kwargs.pop("invert", False)
-        hue_start = kwargs.pop("hue_start", 0)
+        cmap = kwargs.pop("cmap", "magma")
+
+        if plot_fourier_probe:
+            chroma_boost = kwargs.pop("chroma_boost", 2)
+        else:
+            chroma_boost = kwargs.pop("chroma_boost", 1)
 
         errors = np.array(self.error_iterations)
 
@@ -2063,8 +2110,7 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
                                 probes[grid_range[n]]
                             )
                         ),
-                        hue_start=hue_start,
-                        invert=invert,
+                        chroma_boost=chroma_boost,
                     )
                     ax.set_title(f"Iter: {grid_range[n]} Fourier probe")
                     ax.set_ylabel("kx [mrad]")
@@ -2072,21 +2118,23 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
 
                 else:
                     probe_array = Complex2RGB(
-                        probes[grid_range[n]], hue_start=hue_start, invert=invert
+                        probes[grid_range[n]],
+                        power=2,
+                        chroma_boost=chroma_boost,
                     )
-                    ax.set_title(f"Iter: {grid_range[n]} probe")
+                    ax.set_title(f"Iter: {grid_range[n]} probe intensity")
                     ax.set_ylabel("x [A]")
                     ax.set_xlabel("y [A]")
 
                 im = ax.imshow(
                     probe_array,
                     extent=probe_extent,
-                    **kwargs,
                 )
 
                 if cbar:
                     add_colorbar_arg(
-                        grid.cbar_axes[n], hue_start=hue_start, invert=invert
+                        grid.cbar_axes[n],
+                        chroma_boost=chroma_boost,
                     )
 
         if plot_convergence:
@@ -2098,7 +2146,7 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
                 ax2 = fig.add_subplot(spec[1])
             ax2.semilogy(np.arange(errors.shape[0]), errors, **kwargs)
             ax2.set_ylabel("NMSE")
-            ax2.set_xlabel("Iteration Number")
+            ax2.set_xlabel("Iteration number")
             ax2.yaxis.tick_right()
 
         spec.tight_layout(fig)

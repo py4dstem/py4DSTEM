@@ -3,7 +3,6 @@ import numpy as np
 from py4DSTEM.process.utils import get_CoM
 
 
-
 def get_probe_size(DP, thresh_lower=0.01, thresh_upper=0.99, N=100):
     """
     Gets the center and radius of the probe in the diffraction plane.
@@ -37,7 +36,7 @@ def get_probe_size(DP, thresh_lower=0.01, thresh_upper=0.99, N=100):
     from py4DSTEM.braggvectors import Probe
 
     # parse input
-    if isinstance(DP,Probe):
+    if isinstance(DP, Probe):
         DP = DP.probe
 
     thresh_vals = np.linspace(thresh_lower, thresh_upper, N)
@@ -61,6 +60,3 @@ def get_probe_size(DP, thresh_lower=0.01, thresh_upper=0.99, N=100):
     x0, y0 = get_CoM(DP * mask)
 
     return r, x0, y0
-
-
-

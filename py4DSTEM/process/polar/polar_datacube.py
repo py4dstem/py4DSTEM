@@ -1,7 +1,6 @@
 import numpy as np
 from py4DSTEM.datacube import DataCube
-from scipy.ndimage import binary_opening,binary_closing, gaussian_filter1d
-
+from scipy.ndimage import binary_opening, binary_closing, gaussian_filter1d
 
 
 class PolarDatacube:
@@ -13,16 +12,16 @@ class PolarDatacube:
     def __init__(
         self,
         datacube,
-        qmin = 0.0,
-        qmax = None,
-        qstep = 1.0,
-        n_annular = 180,
-        qscale = None,
-        mask = None,
-        mask_thresh = 0.1,
-        ellipse = True,
-        two_fold_symmetry = False,
-        ):
+        qmin=0.0,
+        qmax=None,
+        qstep=1.0,
+        n_annular=180,
+        qscale=None,
+        mask=None,
+        mask_thresh=0.1,
+        ellipse=True,
+        two_fold_symmetry=False,
+    ):
         """
         Parameters
         ----------
@@ -57,12 +56,12 @@ class PolarDatacube:
         """
 
         # attach datacube
-        assert(isinstance(datacube,DataCube))
+        assert isinstance(datacube, DataCube)
         self._datacube = datacube
         self._datacube.polar = self
 
         # check for calibrations
-        assert(hasattr(self._datacube,'calibration')), "No .calibration found"
+        assert hasattr(self._datacube, "calibration"), "No .calibration found"
         self.calibration = self._datacube.calibration
 
         # setup data getter
@@ -75,14 +74,14 @@ class PolarDatacube:
         if qmax is None:
             qmax = np.min(self._datacube.Qshape) / np.sqrt(2)
         self._n_annular = n_annular
-        self.two_fold_symmetry = two_fold_symmetry #implicitly calls set_annular_bins
-        self.set_radial_bins(qmin,qmax,qstep)
+        self.two_fold_symmetry = two_fold_symmetry  # implicitly calls set_annular_bins
+        self.set_radial_bins(qmin, qmax, qstep)
 
         # cartesian
-        self._xa,self._ya = np.meshgrid(
+        self._xa, self._ya = np.meshgrid(
             np.arange(self._datacube.Q_Nx),
             np.arange(self._datacube.Q_Ny),
-            indexing = 'ij'
+            indexing="ij",
         )
 
         # ellipse
@@ -95,9 +94,15 @@ class PolarDatacube:
         pass
 
     from py4DSTEM.process.polar.polar_analysis import (
-        calculate_FEM_global,
-        plot_FEM_global,
+        calculate_radial_statistics,
+        calculate_pair_dist_function,
         calculate_FEM_local,
+        plot_radial_mean,
+        plot_radial_var_norm,
+        plot_background_fits,
+        plot_sf_estimate,
+        plot_reduced_pdf,
+        plot_pdf,
     )
     from py4DSTEM.process.polar.polar_peaks import (
         find_peaks_single_pattern,
@@ -110,7 +115,6 @@ class PolarDatacube:
         make_orientation_histogram,
     )
 
-
     # sampling methods + properties
     def set_radial_bins(
         self,
@@ -122,11 +126,7 @@ class PolarDatacube:
         self._qmax = qmax
         self._qstep = qstep
 
-        self.radial_bins = np.arange(
-            self._qmin,
-            self._qmax,
-            self._qstep
-        )
+        self.radial_bins = np.arange(self._qmin, self._qmax, self._qstep)
         self._radial_step = self._datacube.calibration.get_Q_pixel_size() * self._qstep
         self.set_polar_shape()
         self.qscale = self._qscale
@@ -134,46 +134,31 @@ class PolarDatacube:
     @property
     def qmin(self):
         return self._qmin
+
     @qmin.setter
     def qmin(self, x):
-        self.set_radial_bins(
-            x,
-            self._qmax,
-            self._qstep
-        )
+        self.set_radial_bins(x, self._qmax, self._qstep)
 
     @property
     def qmax(self):
         return self._qmax
+
     @qmin.setter
     def qmax(self, x):
-        self.set_radial_bins(
-            self._qmin,
-            x,
-            self._qstep
-        )
+        self.set_radial_bins(self._qmin, x, self._qstep)
 
     @property
     def qstep(self):
         return self._qstep
+
     @qstep.setter
     def qstep(self, x):
-        self.set_radial_bins(
-            self._qmin,
-            self._qmax,
-            x
-        )
+        self.set_radial_bins(self._qmin, self._qmax, x)
 
-    def set_annular_bins(
-        self,
-        n_annular
-    ):
+    def set_annular_bins(self, n_annular):
         self._n_annular = n_annular
         self._annular_bins = np.linspace(
-            0,
-            self._annular_range,
-            self._n_annular,
-            endpoint = False
+            0, self._annular_range, self._n_annular, endpoint=False
         )
         self._annular_step = self.annular_bins[1] - self.annular_bins[0]
         self.set_polar_shape()
@@ -181,15 +166,20 @@ class PolarDatacube:
     @property
     def annular_bins(self):
         return self._annular_bins
+
     @property
     def annular_step(self):
         return self._annular_step
+
     @property
     def two_fold_symmetry(self):
         return self._two_fold_symmetry
+
     @two_fold_symmetry.setter
-    def two_fold_symmetry(self,x):
-        assert(isinstance(x,bool)), f"two_fold_symmetry must be boolean, not type {type(x)}"
+    def two_fold_symmetry(self, x):
+        assert isinstance(
+            x, bool
+        ), f"two_fold_symmetry must be boolean, not type {type(x)}"
         self._two_fold_symmetry = x
         if x:
             self._annular_range = np.pi
@@ -200,55 +190,55 @@ class PolarDatacube:
     @property
     def n_annular(self):
         return self._n_annular
+
     @n_annular.setter
     def n_annular(self, x):
         self.set_annular_bins(x)
 
     def set_polar_shape(self):
-        if hasattr(self,'radial_bins') and hasattr(self,'annular_bins'):
+        if hasattr(self, "radial_bins") and hasattr(self, "annular_bins"):
             # set shape
-            self.polar_shape = np.array((
-                self.annular_bins.shape[0],
-                self.radial_bins.shape[0]
-            ))
+            self.polar_shape = np.array(
+                (self.annular_bins.shape[0], self.radial_bins.shape[0])
+            )
             self.polar_size = np.prod(self.polar_shape)
             # set KDE params
-            self._annular_bin_step = 1 / (self._annular_step * (self.radial_bins + self.qstep * 0.5))
+            self._annular_bin_step = 1 / (
+                self._annular_step * (self.radial_bins + self.qstep * 0.5)
+            )
             self._sigma_KDE = self._annular_bin_step * 0.5
             # set array indices
             self._annular_indices = np.arange(self.polar_shape[0]).astype(int)
             self._radial_indices = np.arange(self.polar_shape[1]).astype(int)
 
-
     # coordinate grid properties
     @property
     def tt(self):
         return self._annular_bins
+
     @property
     def tt_deg(self):
-        return self._annular_bins * 180/np.pi
+        return self._annular_bins * 180 / np.pi
+
     @property
     def qq(self):
         return self.radial_bins * self.calibration.get_Q_pixel_size()
-
-
 
     # scaling property
     @property
     def qscale(self):
         return self._qscale
+
     @qscale.setter
-    def qscale(self,x):
+    def qscale(self, x):
         self._qscale = x
         if x is not None:
-            self._qscale_ar = (self.qq / self.qq[-1])**x
-
+            self._qscale_ar = (self.qq / self.qq[-1]) ** x
 
     # expose raw data
     @property
     def data_raw(self):
         return self._datacube
-
 
     # expose transformed data
     @property
@@ -256,36 +246,36 @@ class PolarDatacube:
         return self._polar_data_getter
 
     def _set_polar_data_getter(self):
-        self._polar_data_getter = PolarDataGetter(
-            polarcube = self
-        )
-
+        self._polar_data_getter = PolarDataGetter(polarcube=self)
 
     # mask properties
     @property
     def mask(self):
         return self._mask
+
     @mask.setter
-    def mask(self,x):
+    def mask(self, x):
         if x is None:
             self._mask = x
         else:
-            assert(x.shape == self._datacube.Qshape), "Mask shape must match diffraction space"
+            assert (
+                x.shape == self._datacube.Qshape
+            ), "Mask shape must match diffraction space"
             self._mask = x
-            self._mask_polar = self.transform(
-                x
-            )
+            self._mask_polar = self.transform(x)
+
     @property
     def mask_polar(self):
         return self._mask_polar
+
     @property
     def mask_thresh(self):
         return self._mask_thresh
+
     @mask_thresh.setter
-    def mask_thresh(self,x):
+    def mask_thresh(self, x):
         self._mask_thresh = x
         self.mask = self.mask
-
 
     # expose transformation
     @property
@@ -315,52 +305,41 @@ class PolarDatacube:
         """
         return self._polar_data_getter._transform
 
-
     def __repr__(self):
-        space = ' '*len(self.__class__.__name__)+'  '
+        space = " " * len(self.__class__.__name__) + "  "
         string = f"{self.__class__.__name__}( "
-        string += "Retrieves diffraction images in polar coordinates, using .data[x,y] )"
+        string += (
+            "Retrieves diffraction images in polar coordinates, using .data[x,y] )"
+        )
         return string
 
 
-
-
-
-
 class PolarDataGetter:
-
     def __init__(
         self,
         polarcube,
     ):
         self._polarcube = polarcube
 
-
-    def __getitem__(self,pos):
-
+    def __getitem__(self, pos):
         # unpack scan position
-        x,y = pos
+        x, y = pos
         # get the data
-        cartesian_data = self._polarcube._datacube[x,y]
+        cartesian_data = self._polarcube._datacube[x, y]
         # transform
-        ans = self._transform(
-            cartesian_data,
-            origin = [x,y],
-            returnval = 'masked'
-        )
+        ans = self._transform(cartesian_data, origin=[x, y], returnval="masked")
         # return
         return ans
-
 
     def _transform(
         self,
         cartesian_data,
-        origin = None,
-        ellipse = None,
-        mask = None,
-        mask_thresh = None,
-        returnval = 'masked',
-        ):
+        origin=None,
+        ellipse=None,
+        mask=None,
+        mask_thresh=None,
+        returnval="masked",
+    ):
         """
         Return a transformed copy of the diffraction pattern `cartesian_data`.
 
@@ -408,46 +387,44 @@ class PolarDataGetter:
         # get calibrations
         if origin is None:
             origin = self._polarcube.calibration.get_origin_mean()
-        elif isinstance(origin,list):
-            origin = self._polarcube.calibration.get_origin(origin[0],origin[1])
-        elif isinstance(origin,tuple):
+        elif isinstance(origin, list):
+            origin = self._polarcube.calibration.get_origin(origin[0], origin[1])
+        elif isinstance(origin, tuple):
             pass
         else:
             raise Exception(f"Invalid type for `origin`, {type(origin)}")
 
         if ellipse is None:
             ellipse = self._polarcube.calibration.get_ellipse()
-        elif isinstance(ellipse,tuple):
+        elif isinstance(ellipse, tuple):
             pass
         else:
             raise Exception(f"Invalid type for `ellipse`, {type(ellipse)}")
 
-
         # combine passed mask with default mask
         mask0 = self._polarcube.mask
         if mask is None and mask0 is None:
-            mask = np.ones_like(cartesian_data,dtype=bool)
+            mask = np.ones_like(cartesian_data, dtype=bool)
         elif mask is None:
             mask = mask0
         elif mask0 is None:
             mask = mask
         else:
-            mask = mask*mask0
+            mask = mask * mask0
 
         if mask_thresh is None:
             mask_thresh = self._polarcube.mask_thresh
 
-
         # transform data
         ans = self._transform_array(
-            cartesian_data * mask.astype('float'),
+            cartesian_data * mask.astype("float"),
             origin,
             ellipse,
         )
 
         # transform normalization array
         ans_norm = self._transform_array(
-            mask.astype('float'),
+            mask.astype("float"),
             origin,
             ellipse,
         )
@@ -460,76 +437,66 @@ class PolarDataGetter:
         ans = np.divide(
             ans,
             ans_norm,
-            out = np.full_like(ans, np.nan),
-            where = np.logical_not(mask_bool),
+            out=np.full_like(ans, np.nan),
+            where=np.logical_not(mask_bool),
         )
 
         # radial power law scaling of output
         if self._polarcube.qscale is not None:
-            ans *= self._polarcube._qscale_ar[np.newaxis,:]
+            ans *= self._polarcube._qscale_ar[np.newaxis, :]
 
         # return
-        if returnval == 'masked':
-            ans = np.ma.array(
-                data = ans,
-                mask = mask_bool
-            )
+        if returnval == "masked":
+            ans = np.ma.array(data=ans, mask=mask_bool)
             return ans
-        elif returnval == 'nan':
+        elif returnval == "nan":
             ans[mask_bool] = np.nan
             return ans
-        elif returnval == 'all':
+        elif returnval == "all":
             return ans, ans_norm, norm_array, mask_bool
-        elif returnval == 'zeros':
+        elif returnval == "zeros":
             ans[mask_bool] = 0
             return ans
-        elif returnval == 'all_zeros':
+        elif returnval == "all_zeros":
             ans[mask_bool] = 0
             return ans, ans_norm, norm_array, mask_bool
         else:
             raise Exception(f"Unexpected value {returnval} encountered for `returnval`")
-
 
     def _transform_array(
         self,
         data,
         origin,
         ellipse,
-        ):
-
+    ):
         # set origin
         x = self._polarcube._xa - origin[0]
         y = self._polarcube._ya - origin[1]
 
         # circular
         if (ellipse is None) or (self._polarcube.ellipse) is False:
-
             # get polar coords
             rr = np.sqrt(x**2 + y**2)
-            tt = np.mod(
-                np.arctan2(y, x),
-                self._polarcube._annular_range)
+            tt = np.mod(np.arctan2(y, x), self._polarcube._annular_range)
 
         # elliptical
         else:
             # unpack ellipse
-            a,b,theta = ellipse
+            a, b, theta = ellipse
 
             # Get polar coords
-            xc = x*np.cos(theta) + y*np.sin(theta)
-            yc = (y*np.cos(theta) - x*np.sin(theta))*(a/b)
-            rr = (b/a) * np.hypot(xc,yc)
-            tt = np.mod(
-                np.arctan2(yc,xc) + theta,
-                self._polarcube._annular_range)
+            xc = x * np.cos(theta) + y * np.sin(theta)
+            yc = (y * np.cos(theta) - x * np.sin(theta)) * (a / b)
+            rr = (b / a) * np.hypot(xc, yc)
+            tt = np.mod(np.arctan2(yc, xc) + theta, self._polarcube._annular_range)
 
         # transform to bin sampling
         r_ind = (rr - self._polarcube.radial_bins[0]) / self._polarcube.qstep
         t_ind = tt / self._polarcube.annular_step
 
         # get integers and increments
-        r_ind_floor = np.floor(r_ind).astype('int')
-        t_ind_floor = np.floor(t_ind).astype('int')
+        r_ind_floor = np.floor(r_ind).astype("int")
+        t_ind_floor = np.floor(t_ind).astype("int")
         dr = r_ind - r_ind_floor
         dt = t_ind - t_ind_floor
 
@@ -539,29 +506,37 @@ class PolarDataGetter:
             r_ind_floor < self._polarcube.polar_shape[1],
         )
         im = np.bincount(
-            r_ind_floor[sub] + \
-            np.mod(t_ind_floor[sub],self._polarcube.polar_shape[0]) * self._polarcube.polar_shape[1],
-            weights = data[sub] * (1 - dr[sub]) * (1 - dt[sub]),
-            minlength = self._polarcube.polar_size,
+            r_ind_floor[sub]
+            + np.mod(t_ind_floor[sub], self._polarcube.polar_shape[0])
+            * self._polarcube.polar_shape[1],
+            weights=data[sub] * (1 - dr[sub]) * (1 - dt[sub]),
+            minlength=self._polarcube.polar_size,
         )
         im += np.bincount(
-            r_ind_floor[sub] + \
-            np.mod(t_ind_floor[sub] + 1,self._polarcube.polar_shape[0]) * self._polarcube.polar_shape[1],
-            weights = data[sub] * (1 - dr[sub]) * (    dt[sub]),
-            minlength = self._polarcube.polar_size,
+            r_ind_floor[sub]
+            + np.mod(t_ind_floor[sub] + 1, self._polarcube.polar_shape[0])
+            * self._polarcube.polar_shape[1],
+            weights=data[sub] * (1 - dr[sub]) * (dt[sub]),
+            minlength=self._polarcube.polar_size,
         )
-        sub = np.logical_and(r_ind_floor >= -1, r_ind_floor < self._polarcube.polar_shape[1]-1)
-        im += np.bincount(
-            r_ind_floor[sub] + 1 + \
-            np.mod(t_ind_floor[sub],self._polarcube.polar_shape[0]) * self._polarcube.polar_shape[1],
-            weights = data[sub] * (    dr[sub]) * (1 - dt[sub]),
-            minlength = self._polarcube.polar_size,
+        sub = np.logical_and(
+            r_ind_floor >= -1, r_ind_floor < self._polarcube.polar_shape[1] - 1
         )
         im += np.bincount(
-            r_ind_floor[sub] + 1 + \
-            np.mod(t_ind_floor[sub] + 1,self._polarcube.polar_shape[0]) * self._polarcube.polar_shape[1],
-            weights = data[sub] * (    dr[sub]) * (    dt[sub]),
-            minlength = self._polarcube.polar_size,
+            r_ind_floor[sub]
+            + 1
+            + np.mod(t_ind_floor[sub], self._polarcube.polar_shape[0])
+            * self._polarcube.polar_shape[1],
+            weights=data[sub] * (dr[sub]) * (1 - dt[sub]),
+            minlength=self._polarcube.polar_size,
+        )
+        im += np.bincount(
+            r_ind_floor[sub]
+            + 1
+            + np.mod(t_ind_floor[sub] + 1, self._polarcube.polar_shape[0])
+            * self._polarcube.polar_shape[1],
+            weights=data[sub] * (dr[sub]) * (dt[sub]),
+            minlength=self._polarcube.polar_size,
         )
 
         # reshape to 2D
@@ -572,20 +547,17 @@ class PolarDataGetter:
             # Use 5% (= exp(-(1/2*.1669)^2)) cutoff value
             # for adjacent pixel in kernel
             if self._polarcube._sigma_KDE[a0] > 0.1669:
-                ans[:,a0] = gaussian_filter1d(
-                    ans[:,a0],
-                    sigma = self._polarcube._sigma_KDE[a0],
-                    mode = 'wrap',
-                    )
+                ans[:, a0] = gaussian_filter1d(
+                    ans[:, a0],
+                    sigma=self._polarcube._sigma_KDE[a0],
+                    mode="wrap",
+                )
 
         # return
         return ans
 
-
-
-
     def __repr__(self):
-        space = ' '*len(self.__class__.__name__)+'  '
+        space = " " * len(self.__class__.__name__) + "  "
         string = f"{self.__class__.__name__}( "
         string += "Retrieves the diffraction pattern at scan position (x,y) in polar coordinates when sliced with [x,y]."
         return string

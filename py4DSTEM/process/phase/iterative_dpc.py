@@ -13,8 +13,8 @@ from mpl_toolkits.axes_grid1 import ImageGrid, make_axes_locatable
 
 try:
     import cupy as cp
-except ImportError:
-    cp = None
+except ModuleNotFoundError:
+    cp = np
 
 from emdfile import Array, Custom, Metadata, _read_metadata, tqdmnd
 from py4DSTEM.data import Calibration
@@ -195,9 +195,9 @@ class DPCReconstruction(PhaseReconstruction):
             "datacube": dc,
             "initial_object_guess": np.asarray(obj),
             "energy": instance_md["energy"],
-            "verbose": instance_md["verbose"],
             "name": instance_md["name"],
-            "device": instance_md["device"],
+            "verbose": True,  # for compatibility
+            "device": "cpu",  # for compatibility
         }
 
         return kwargs
@@ -718,24 +718,26 @@ class DPCReconstruction(PhaseReconstruction):
         xp = self._xp
         asnumpy = self._asnumpy
 
-        if reset is None and hasattr(self, "error"):
-            warnings.warn(
-                (
-                    "Continuing reconstruction from previous result. "
-                    "Use reset=True for a fresh start."
-                ),
-                UserWarning,
-            )
-
         # Restart
         if store_iterations and (not hasattr(self, "object_phase_iterations") or reset):
             self.object_phase_iterations = []
-            self.error_iterations = []
 
         if reset:
             self.error = np.inf
+            self.error_iterations = []
             self._step_size = step_size if step_size is not None else 0.5
             self._padded_object_phase = self._padded_object_phase_initial.copy()
+        elif reset is None:
+            if hasattr(self, "error"):
+                warnings.warn(
+                    (
+                        "Continuing reconstruction from previous result. "
+                        "Use reset=True for a fresh start."
+                    ),
+                    UserWarning,
+                )
+            else:
+                self.error_iterations = []
 
         self.error = getattr(self, "error", np.inf)
 
@@ -770,7 +772,8 @@ class DPCReconstruction(PhaseReconstruction):
             if (new_error > self.error) and backtrack:
                 self._padded_object_phase = previous_iteration
                 self._step_size /= 2
-                print(f"Iteration {a0}, step reduced to {self._step_size}")
+                if self._verbose:
+                    print(f"Iteration {a0}, step reduced to {self._step_size}")
                 continue
             self.error = new_error
 
@@ -796,6 +799,7 @@ class DPCReconstruction(PhaseReconstruction):
                 anti_gridding=anti_gridding,
             )
 
+            self.error_iterations.append(self.error.item())
             if store_iterations:
                 self.object_phase_iterations.append(
                     asnumpy(
@@ -804,13 +808,13 @@ class DPCReconstruction(PhaseReconstruction):
                         ].copy()
                     )
                 )
-                self.error_iterations.append(self.error.item())
 
         if self._step_size < stopping_criterion:
-            warnings.warn(
-                f"Step-size has decreased below stopping criterion {stopping_criterion}.",
-                UserWarning,
-            )
+            if self._verbose:
+                warnings.warn(
+                    f"Step-size has decreased below stopping criterion {stopping_criterion}.",
+                    UserWarning,
+                )
 
         # crop result
         self._object_phase = self._padded_object_phase[
@@ -840,7 +844,7 @@ class DPCReconstruction(PhaseReconstruction):
             If true, the NMSE error plot is displayed
         """
 
-        figsize = kwargs.pop("figsize", (8, 8))
+        figsize = kwargs.pop("figsize", (5, 6))
         cmap = kwargs.pop("cmap", "magma")
 
         if plot_convergence:
@@ -862,7 +866,7 @@ class DPCReconstruction(PhaseReconstruction):
         im = ax1.imshow(self.object_phase, extent=extent, cmap=cmap, **kwargs)
         ax1.set_ylabel(f"x [{self._scan_units[0]}]")
         ax1.set_xlabel(f"y [{self._scan_units[1]}]")
-        ax1.set_title(f"DPC Phase Reconstruction - NMSE error: {self.error:.3e}")
+        ax1.set_title(f"DPC phase reconstruction - NMSE error: {self.error:.3e}")
 
         if cbar:
             divider = make_axes_locatable(ax1)
@@ -870,11 +874,11 @@ class DPCReconstruction(PhaseReconstruction):
             fig.add_axes(ax_cb)
             fig.colorbar(im, cax=ax_cb)
 
-        if plot_convergence and hasattr(self, "_error_iterations"):
-            errors = self._error_iterations
+        if plot_convergence:
+            errors = self.error_iterations
             ax2 = fig.add_subplot(spec[1])
             ax2.semilogy(np.arange(len(errors)), errors, **kwargs)
-            ax2.set_xlabel("Iteration Number")
+            ax2.set_xlabel("Iteration number")
             ax2.set_ylabel("Log NMSE error")
             ax2.yaxis.tick_right()
 
@@ -979,7 +983,7 @@ class DPCReconstruction(PhaseReconstruction):
         if plot_convergence:
             ax2 = fig.add_subplot(spec[1])
             ax2.semilogy(np.arange(len(errors)), errors, **kwargs)
-            ax2.set_xlabel("Iteration Number")
+            ax2.set_xlabel("Iteration number")
             ax2.set_ylabel("Log NMSE error")
             ax2.yaxis.tick_right()
 
@@ -990,7 +994,7 @@ class DPCReconstruction(PhaseReconstruction):
         fig=None,
         iterations_grid: Tuple[int, int] = None,
         plot_convergence: bool = True,
-        cbar: bool = False,
+        cbar: bool = True,
         **kwargs,
     ):
         """

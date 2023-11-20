@@ -5,12 +5,10 @@ from typing import Optional
 from warnings import warn
 
 from py4DSTEM.data import DiffractionSlice, Data
-from scipy.ndimage import (
-    binary_opening, binary_dilation, distance_transform_edt)
+from scipy.ndimage import binary_opening, binary_dilation, distance_transform_edt
 
 
-
-class Probe(DiffractionSlice,Data):
+class Probe(DiffractionSlice, Data):
     """
     Stores a vacuum probe.
 
@@ -26,11 +24,7 @@ class Probe(DiffractionSlice,Data):
 
     """
 
-    def __init__(
-        self,
-        data: np.ndarray,
-        name: Optional[str] = 'probe'
-        ):
+    def __init__(self, data: np.ndarray, name: Optional[str] = "probe"):
         """
         Accepts:
             data (2D or 3D np.ndarray): the vacuum probe, or
@@ -42,67 +36,50 @@ class Probe(DiffractionSlice,Data):
         """
         # if only the probe is passed, make space for the kernel
         if data.ndim == 2:
-            data = np.stack([
-                data,
-                np.zeros_like(data)
-            ])
+            data = np.stack([data, np.zeros_like(data)])
 
         # initialize as a DiffractionSlice
         DiffractionSlice.__init__(
-            self,
-            name = name,
-            data = data,
-            slicelabels = [
-                'probe',
-                'kernel'
-            ]
+            self, name=name, data=data, slicelabels=["probe", "kernel"]
         )
-
 
     ## properties
 
     @property
     def probe(self):
-        return self.get_slice('probe').data
+        return self.get_slice("probe").data
+
     @probe.setter
-    def probe(self,x):
-        assert(x.shape == (self.data.shape[1:]))
-        self.data[0,:,:] = x
+    def probe(self, x):
+        assert x.shape == (self.data.shape[1:])
+        self.data[0, :, :] = x
+
     @property
     def kernel(self):
-        return self.get_slice('kernel').data
-    @kernel.setter
-    def kernel(self,x):
-        assert(x.shape == (self.data.shape[1:]))
-        self.data[1,:,:] = x
+        return self.get_slice("kernel").data
 
+    @kernel.setter
+    def kernel(self, x):
+        assert x.shape == (self.data.shape[1:])
+        self.data[1, :, :] = x
 
     # read
     @classmethod
-    def _get_constructor_args(cls,group):
+    def _get_constructor_args(cls, group):
         """
         Returns a dictionary of args/values to pass to the class constructor
         """
         ar_constr_args = DiffractionSlice._get_constructor_args(group)
         args = {
-            'data' : ar_constr_args['data'],
-            'name' : ar_constr_args['name'],
+            "data": ar_constr_args["data"],
+            "name": ar_constr_args["name"],
         }
         return args
-
-
 
     # generation methods
 
     @classmethod
-    def from_vacuum_data(
-        cls,
-        data,
-        mask = None,
-        threshold = 0.2,
-        expansion = 12,
-        opening = 3
-        ):
+    def from_vacuum_data(cls, data, mask=None, threshold=0.2, expansion=12, opening=3):
         """
         Generates and returns a vacuum probe Probe instance from either a
         2D vacuum image or a 3D stack of vacuum diffraction patterns.
@@ -134,9 +111,9 @@ class Probe(DiffractionSlice,Data):
         probe : Probe
             the vacuum probe
         """
-        assert(isinstance(data,np.ndarray))
+        assert isinstance(data, np.ndarray)
         if data.ndim == 3:
-            probe = np.average(data,axis=0)
+            probe = np.average(data, axis=0)
         elif data.ndim == 2:
             probe = data
         else:
@@ -145,23 +122,24 @@ class Probe(DiffractionSlice,Data):
         if mask is not None:
             probe *= mask
 
-        mask = probe > np.max(probe)*threshold
+        mask = probe > np.max(probe) * threshold
         mask = binary_opening(mask, iterations=opening)
         mask = binary_dilation(mask, iterations=1)
-        mask = np.cos((np.pi/2)*np.minimum(
-            distance_transform_edt(np.logical_not(mask)) / expansion, 1))**2
+        mask = (
+            np.cos(
+                (np.pi / 2)
+                * np.minimum(
+                    distance_transform_edt(np.logical_not(mask)) / expansion, 1
+                )
+            )
+            ** 2
+        )
 
-        probe = cls(probe*mask)
+        probe = cls(probe * mask)
         return probe
 
-
     @classmethod
-    def generate_synthetic_probe(
-        cls,
-        radius,
-        width,
-        Qshape
-        ):
+    def generate_synthetic_probe(cls, radius, width, Qshape):
         """
         Makes a synthetic probe, with the functional form of a disk blurred by a
         sigmoid (a logistic function).
@@ -183,20 +161,18 @@ class Probe(DiffractionSlice,Data):
             the probe
         """
         # Make coords
-        Q_Nx,Q_Ny = Qshape
-        qy,qx = np.meshgrid(np.arange(Q_Ny),np.arange(Q_Nx))
-        qy,qx = qy - Q_Ny/2., qx-Q_Nx/2.
-        qr = np.sqrt(qx**2+qy**2)
+        Q_Nx, Q_Ny = Qshape
+        qy, qx = np.meshgrid(np.arange(Q_Ny), np.arange(Q_Nx))
+        qy, qx = qy - Q_Ny / 2.0, qx - Q_Nx / 2.0
+        qr = np.sqrt(qx**2 + qy**2)
 
         # Shift zero to disk edge
         qr = qr - radius
 
         # Calculate logistic function
-        probe = 1/(1+np.exp(4*qr/width))
+        probe = 1 / (1 + np.exp(4 * qr / width))
 
         return cls(probe)
-
-
 
     # calibration methods
 
@@ -207,7 +183,7 @@ class Probe(DiffractionSlice,Data):
         N=100,
         returncalc=True,
         data=None,
-        ):
+    ):
         """
         Finds the center and radius of an average probe image.
 
@@ -254,7 +230,7 @@ class Probe(DiffractionSlice,Data):
 
         # get binary images and compute a radius for each
         immax = np.max(im)
-        for i,val in enumerate(thresh_vals):
+        for i, val in enumerate(thresh_vals):
             mask = im > immax * val
             r_vals[i] = np.sqrt(np.sum(mask) / np.pi)
 
@@ -269,33 +245,23 @@ class Probe(DiffractionSlice,Data):
         x0, y0 = get_CoM(im * mask)
 
         # Store metadata and return
-        ans = r,x0,y0
+        ans = r, x0, y0
         if data is None:
             try:
                 self.calibration.set_probe_param(ans)
             except AttributeError:
-                warn(f"Couldn't store the probe parameters in metadata as no calibration was found for this Probe instance, {self}")
+                warn(
+                    f"Couldn't store the probe parameters in metadata as no calibration was found for this Probe instance, {self}"
+                )
                 pass
         if returncalc:
             return ans
 
-
-
-
-
-
-
-
     # Kernel generation methods
 
     def get_kernel(
-        self,
-        mode = 'flat',
-        origin = None,
-        data = None,
-        returncalc = True,
-        **kwargs
-        ):
+        self, mode="flat", origin=None, data=None, returncalc=True, **kwargs
+    ):
         """
         Creates a cross-correlation kernel from the vacuum probe.
 
@@ -339,22 +305,17 @@ class Probe(DiffractionSlice,Data):
         kernel : 2D array
         """
 
-        modes = [
-            'flat',
-            'gaussian',
-            'sigmoid',
-            'sigmoid_log'
-        ]
+        modes = ["flat", "gaussian", "sigmoid", "sigmoid_log"]
 
         # parse args
         assert mode in modes, f"mode must be in {modes}. Received {mode}"
 
         # get function
         function_dict = {
-            'flat' : self.get_probe_kernel_flat,
-            'gaussian' : self.get_probe_kernel_edge_gaussian,
-            'sigmoid' : self._get_probe_kernel_edge_sigmoid_sine_squared,
-            'sigmoid_log' : self._get_probe_kernel_edge_sigmoid_sine_squared
+            "flat": self.get_probe_kernel_flat,
+            "gaussian": self.get_probe_kernel_edge_gaussian,
+            "sigmoid": self._get_probe_kernel_edge_sigmoid_sine_squared,
+            "sigmoid_log": self._get_probe_kernel_edge_sigmoid_sine_squared,
         }
         fn = function_dict[mode]
 
@@ -368,18 +329,14 @@ class Probe(DiffractionSlice,Data):
                 if x is None:
                     origin = None
                 else:
-                    r,x,y = x
-                    origin = (x,y)
+                    r, x, y = x
+                    origin = (x, y)
 
         # get the data
         probe = data if data is not None else self.probe
 
         # compute
-        kern = fn(
-            probe,
-            origin = origin,
-            **kwargs
-        )
+        kern = fn(probe, origin=origin, **kwargs)
 
         # add to the Probe
         self.kernel = kern
@@ -388,14 +345,8 @@ class Probe(DiffractionSlice,Data):
         if returncalc:
             return kern
 
-
-
     @staticmethod
-    def get_probe_kernel_flat(
-        probe,
-        origin=None,
-        bilinear=False
-        ):
+    def get_probe_kernel_flat(probe, origin=None, bilinear=False):
         """
         Creates a cross-correlation kernel from the vacuum probe by normalizing
         and shifting the center.
@@ -424,12 +375,13 @@ class Probe(DiffractionSlice,Data):
         # Get CoM
         if origin is None:
             from py4DSTEM.process.calibration import get_probe_size
-            _,xCoM,yCoM = get_probe_size(probe)
+
+            _, xCoM, yCoM = get_probe_size(probe)
         else:
-            xCoM,yCoM = origin
+            xCoM, yCoM = origin
 
         # Normalize
-        probe = probe/np.sum(probe)
+        probe = probe / np.sum(probe)
 
         # Shift center to corners of array
         probe_kernel = get_shifted_ar(probe, -xCoM, -yCoM, bilinear=bilinear)
@@ -437,14 +389,13 @@ class Probe(DiffractionSlice,Data):
         # Return
         return probe_kernel
 
-
     @staticmethod
     def get_probe_kernel_edge_gaussian(
         probe,
         sigma,
         origin=None,
         bilinear=True,
-        ):
+    ):
         """
         Creates a cross-correlation kernel from the probe, subtracting a
         gaussian from the normalized probe such that the kernel integrates to
@@ -476,37 +427,40 @@ class Probe(DiffractionSlice,Data):
         # Get CoM
         if origin is None:
             from py4DSTEM.process.calibration import get_probe_size
-            _,xCoM,yCoM = get_probe_size(probe)
+
+            _, xCoM, yCoM = get_probe_size(probe)
         else:
-            xCoM,yCoM = origin
+            xCoM, yCoM = origin
 
         # Shift probe to origin
         probe_kernel = get_shifted_ar(probe, -xCoM, -yCoM, bilinear=bilinear)
 
         # Generate normalization kernel
         # Coordinates
-        qy,qx = np.meshgrid(
-            np.mod(np.arange(Q_Ny) + Q_Ny//2, Q_Ny) - Q_Ny//2,
-            np.mod(np.arange(Q_Nx) + Q_Nx//2, Q_Nx) - Q_Nx//2)
-        qr2 = (qx**2 + qy**2)
+        qy, qx = np.meshgrid(
+            np.mod(np.arange(Q_Ny) + Q_Ny // 2, Q_Ny) - Q_Ny // 2,
+            np.mod(np.arange(Q_Nx) + Q_Nx // 2, Q_Nx) - Q_Nx // 2,
+        )
+        qr2 = qx**2 + qy**2
         # Calculate Gaussian normalization kernel
-        qstd2 = np.sum(qr2*probe_kernel) / np.sum(probe_kernel)
-        kernel_norm = np.exp(-qr2 / (2*qstd2*sigma**2))
+        qstd2 = np.sum(qr2 * probe_kernel) / np.sum(probe_kernel)
+        kernel_norm = np.exp(-qr2 / (2 * qstd2 * sigma**2))
 
         # Output normalized kernel
-        probe_kernel = probe_kernel/np.sum(probe_kernel) - kernel_norm/np.sum(kernel_norm)
+        probe_kernel = probe_kernel / np.sum(probe_kernel) - kernel_norm / np.sum(
+            kernel_norm
+        )
 
         return probe_kernel
-
 
     @staticmethod
     def get_probe_kernel_edge_sigmoid(
         probe,
         radii,
         origin=None,
-        type='sine_squared',
+        type="sine_squared",
         bilinear=True,
-        ):
+    ):
         """
         Creates a convolution kernel from an average probe, subtracting an annular
         trench about the probe such that the kernel integrates to zero, then
@@ -535,47 +489,48 @@ class Probe(DiffractionSlice,Data):
         from py4DSTEM.process.utils import get_shifted_ar
 
         # parse inputs
-        if isinstance(probe,Probe):
+        if isinstance(probe, Probe):
             probe = probe.probe
 
-        valid_types = ('logistic','sine_squared')
-        assert(type in valid_types), "type must be in {}".format(valid_types)
+        valid_types = ("logistic", "sine_squared")
+        assert type in valid_types, "type must be in {}".format(valid_types)
         Q_Nx, Q_Ny = probe.shape
-        ri,ro = radii
+        ri, ro = radii
 
         # Get CoM
         if origin is None:
             from py4DSTEM.process.calibration import get_probe_size
-            _,xCoM,yCoM = get_probe_size(probe)
+
+            _, xCoM, yCoM = get_probe_size(probe)
         else:
-            xCoM,yCoM = origin
+            xCoM, yCoM = origin
 
         # Shift probe to origin
         probe_kernel = get_shifted_ar(probe, -xCoM, -yCoM, bilinear=bilinear)
 
         # Generate normalization kernel
         # Coordinates
-        qy,qx = np.meshgrid(
-            np.mod(np.arange(Q_Ny) + Q_Ny//2, Q_Ny) - Q_Ny//2,
-            np.mod(np.arange(Q_Nx) + Q_Nx//2, Q_Nx) - Q_Nx//2)
+        qy, qx = np.meshgrid(
+            np.mod(np.arange(Q_Ny) + Q_Ny // 2, Q_Ny) - Q_Ny // 2,
+            np.mod(np.arange(Q_Nx) + Q_Nx // 2, Q_Nx) - Q_Nx // 2,
+        )
         qr = np.sqrt(qx**2 + qy**2)
         # Calculate sigmoid
-        if type == 'logistic':
-            r0 = 0.5*(ro+ri)
-            sigma = 0.25*(ro-ri)
-            sigmoid = 1/(1+np.exp((qr-r0)/sigma))
-        elif type == 'sine_squared':
+        if type == "logistic":
+            r0 = 0.5 * (ro + ri)
+            sigma = 0.25 * (ro - ri)
+            sigmoid = 1 / (1 + np.exp((qr - r0) / sigma))
+        elif type == "sine_squared":
             sigmoid = (qr - ri) / (ro - ri)
             sigmoid = np.minimum(np.maximum(sigmoid, 0.0), 1.0)
-            sigmoid = np.cos((np.pi/2)*sigmoid)**2
+            sigmoid = np.cos((np.pi / 2) * sigmoid) ** 2
         else:
             raise Exception("type must be in {}".format(valid_types))
 
         # Output normalized kernel
-        probe_kernel = probe_kernel/np.sum(probe_kernel) - sigmoid/np.sum(sigmoid)
+        probe_kernel = probe_kernel / np.sum(probe_kernel) - sigmoid / np.sum(sigmoid)
 
         return probe_kernel
-
 
     def _get_probe_kernel_edge_sigmoid_sine_squared(
         self,
@@ -583,12 +538,12 @@ class Probe(DiffractionSlice,Data):
         radii,
         origin=None,
         **kwargs,
-        ):
+    ):
         return self.get_probe_kernel_edge_sigmoid(
             probe,
             radii,
-            origin = origin,
-            type='sine_squared',
+            origin=origin,
+            type="sine_squared",
             **kwargs,
         )
 
@@ -598,20 +553,7 @@ class Probe(DiffractionSlice,Data):
         radii,
         origin=None,
         **kwargs,
-        ):
+    ):
         return self.get_probe_kernel_edge_sigmoid(
-            probe,
-            radii,
-            origin = origin,
-            type='logistic',
-            **kwargs
+            probe, radii, origin=origin, type="logistic", **kwargs
         )
-
-
-
-
-
-
-
-
-

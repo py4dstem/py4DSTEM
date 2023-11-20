@@ -1,7 +1,7 @@
 # Functions for finding Bragg disks using AI/ML pipeline
-'''
+"""
 Functions for finding Braggdisks using AI/ML method using tensorflow
-'''
+"""
 
 import os
 import glob
@@ -17,24 +17,29 @@ from emdfile import tqdmnd, PointList, PointListArray
 from py4DSTEM.braggvectors.braggvectors import BraggVectors
 from py4DSTEM.data import QPoints
 from py4DSTEM.process.utils import get_maxima_2D
+
 # from py4DSTEM.braggvectors import universal_threshold
 
-def find_Bragg_disks_aiml_single_DP(DP, probe,
-                                     num_attempts = 5,
-                                     int_window_radius = 1,
-                                     predict = True,
-                                     sigma = 0,
-                                     edgeBoundary = 20,
-                                     minRelativeIntensity = 0.005,
-                                     minAbsoluteIntensity = 0,
-                                     relativeToPeak = 0,
-                                     minPeakSpacing = 60,
-                                     maxNumPeaks = 70,
-                                     subpixel = 'multicorr',
-                                     upsample_factor = 16,
-                                     filter_function = None,
-                                     peaks = None,
-                                     model_path = None):
+
+def find_Bragg_disks_aiml_single_DP(
+    DP,
+    probe,
+    num_attempts=5,
+    int_window_radius=1,
+    predict=True,
+    sigma=0,
+    edgeBoundary=20,
+    minRelativeIntensity=0.005,
+    minAbsoluteIntensity=0,
+    relativeToPeak=0,
+    minPeakSpacing=60,
+    maxNumPeaks=70,
+    subpixel="multicorr",
+    upsample_factor=16,
+    filter_function=None,
+    peaks=None,
+    model_path=None,
+):
     """
     Finds the Bragg disks in single DP by AI/ML method. This method utilizes FCU-Net
     to predict Bragg disks from diffraction images.
@@ -103,40 +108,62 @@ def find_Bragg_disks_aiml_single_DP(DP, probe,
     try:
         import tensorflow as tf
     except:
-        raise ImportError("Please install tensorflow before proceeding - please check " + "https://www.tensorflow.org/install" + "for more information")
+        raise ImportError(
+            "Please install tensorflow before proceeding - please check "
+            + "https://www.tensorflow.org/install"
+            + "for more information"
+        )
 
-    assert subpixel in [ 'none', 'poly', 'multicorr' ], "Unrecognized subpixel option {}, subpixel must be 'none', 'poly', or 'multicorr'".format(subpixel)
+    assert subpixel in [
+        "none",
+        "poly",
+        "multicorr",
+    ], "Unrecognized subpixel option {}, subpixel must be 'none', 'poly', or 'multicorr'".format(
+        subpixel
+    )
 
     # Perform any prefiltering
-    if filter_function: assert callable(filter_function), "filter_function must be callable"
+    if filter_function:
+        assert callable(filter_function), "filter_function must be callable"
     DP = DP if filter_function is None else filter_function(DP)
 
     if predict:
-        assert(len(DP.shape)==2), "Dimension of single diffraction should be 2 (Qx, Qy)"
-        assert(len(probe.shape)==2), "Dimension of probe should be 2 (Qx, Qy)"
-        model = _get_latest_model(model_path = model_path)
+        assert (
+            len(DP.shape) == 2
+        ), "Dimension of single diffraction should be 2 (Qx, Qy)"
+        assert len(probe.shape) == 2, "Dimension of probe should be 2 (Qx, Qy)"
+        model = _get_latest_model(model_path=model_path)
         DP = tf.expand_dims(tf.expand_dims(DP, axis=0), axis=-1)
         probe = tf.expand_dims(tf.expand_dims(probe, axis=0), axis=-1)
-        prediction = np.zeros(shape = (1, DP.shape[1],DP.shape[2],1))
+        prediction = np.zeros(shape=(1, DP.shape[1], DP.shape[2], 1))
 
-        for i in tqdmnd(num_attempts, desc='Neural network is predicting atomic potential', unit='ATTEMPTS',unit_scale=True):
-            prediction += model.predict([DP,probe])
-        print('Averaging over {} attempts \n'.format(num_attempts))
-        pred = prediction[0,:,:,0]/num_attempts
+        for i in tqdmnd(
+            num_attempts,
+            desc="Neural network is predicting atomic potential",
+            unit="ATTEMPTS",
+            unit_scale=True,
+        ):
+            prediction += model.predict([DP, probe])
+        print("Averaging over {} attempts \n".format(num_attempts))
+        pred = prediction[0, :, :, 0] / num_attempts
     else:
-        assert(len(DP.shape)==2), "Dimension of single diffraction should be 2 (Qx, Qy)"
+        assert (
+            len(DP.shape) == 2
+        ), "Dimension of single diffraction should be 2 (Qx, Qy)"
         pred = DP
 
-    maxima = get_maxima_2D(pred,
-                                                 sigma = sigma,
-                                                 minRelativeIntensity=minRelativeIntensity,
-                                                 minAbsoluteIntensity=minAbsoluteIntensity,
-                                                 edgeBoundary=edgeBoundary,
-                                                 relativeToPeak=relativeToPeak,
-                                                 maxNumPeaks=maxNumPeaks,
-                                                 minSpacing = minPeakSpacing,
-                                                 subpixel=subpixel,
-                                                 upsample_factor=upsample_factor)
+    maxima = get_maxima_2D(
+        pred,
+        sigma=sigma,
+        minRelativeIntensity=minRelativeIntensity,
+        minAbsoluteIntensity=minAbsoluteIntensity,
+        edgeBoundary=edgeBoundary,
+        relativeToPeak=relativeToPeak,
+        maxNumPeaks=maxNumPeaks,
+        minSpacing=minPeakSpacing,
+        subpixel=subpixel,
+        upsample_factor=upsample_factor,
+    )
 
     # maxima_x, maxima_y, maxima_int = _integrate_disks(pred, maxima_x,maxima_y,maxima_int,int_window_radius=int_window_radius)
 
@@ -151,22 +178,27 @@ def find_Bragg_disks_aiml_single_DP(DP, probe,
     return maxima
 
 
-def find_Bragg_disks_aiml_selected(datacube, probe, Rx, Ry,
-                                   num_attempts = 5,
-                                   int_window_radius = 1,
-                                   batch_size = 1,
-                                   predict =True,
-                                   sigma = 0,
-                                   edgeBoundary = 20,
-                                   minRelativeIntensity = 0.005,
-                                   minAbsoluteIntensity = 0,
-                                   relativeToPeak = 0,
-                                   minPeakSpacing = 60,
-                                   maxNumPeaks = 70,
-                                   subpixel = 'multicorr',
-                                   upsample_factor = 16,
-                                   filter_function = None,
-                                   model_path = None):
+def find_Bragg_disks_aiml_selected(
+    datacube,
+    probe,
+    Rx,
+    Ry,
+    num_attempts=5,
+    int_window_radius=1,
+    batch_size=1,
+    predict=True,
+    sigma=0,
+    edgeBoundary=20,
+    minRelativeIntensity=0.005,
+    minAbsoluteIntensity=0,
+    relativeToPeak=0,
+    minPeakSpacing=60,
+    maxNumPeaks=70,
+    subpixel="multicorr",
+    upsample_factor=16,
+    filter_function=None,
+    model_path=None,
+):
     """
     Finds the Bragg disks in the diffraction patterns of datacube at scan positions
     (Rx,Ry) by AI/ML method. This method utilizes FCU-Net to predict Bragg
@@ -212,7 +244,7 @@ def find_Bragg_disks_aiml_selected(datacube, probe, Rx, Ry,
             detected peaks are added to, and must have the appropriate coords
             ('qx','qy','intensity').
         model_path (str): filepath for the model weights (Tensorflow model) to load from.
-            By default, if the model_path is not provided, py4DSTEM will search for the 
+            By default, if the model_path is not provided, py4DSTEM will search for the
             latest model stored on cloud using metadata json file. It is not recommended to
             keep track of the model path and advised to keep this argument unchanged (None)
             to always search for the latest updated training model weights.
@@ -227,78 +259,109 @@ def find_Bragg_disks_aiml_selected(datacube, probe, Rx, Ry,
     except:
         raise ImportError("Import Error: Please install crystal4D before proceeding")
 
-    assert(len(Rx)==len(Ry))
+    assert len(Rx) == len(Ry)
     peaks = []
 
     if predict:
-        model = _get_latest_model(model_path = model_path)
-        t0= time()
-        probe = np.expand_dims(np.repeat(np.expand_dims(probe, axis=0),
-                                             len(Rx), axis=0), axis=-1)
-        DP = np.expand_dims(np.expand_dims(datacube.data[Rx[0],Ry[0],:,:], axis=0), axis=-1)
+        model = _get_latest_model(model_path=model_path)
+        t0 = time()
+        probe = np.expand_dims(
+            np.repeat(np.expand_dims(probe, axis=0), len(Rx), axis=0), axis=-1
+        )
+        DP = np.expand_dims(
+            np.expand_dims(datacube.data[Rx[0], Ry[0], :, :], axis=0), axis=-1
+        )
         total_DP = len(Rx)
-        for i in range(1,len(Rx)):
-            DP_ = np.expand_dims(np.expand_dims(datacube.data[Rx[i],Ry[i],:,:], axis=0), axis=-1)
-            DP = np.concatenate([DP,DP_], axis=0)
+        for i in range(1, len(Rx)):
+            DP_ = np.expand_dims(
+                np.expand_dims(datacube.data[Rx[i], Ry[i], :, :], axis=0), axis=-1
+            )
+            DP = np.concatenate([DP, DP_], axis=0)
 
-        prediction = np.zeros(shape = (total_DP, datacube.Q_Nx, datacube.Q_Ny, 1))
+        prediction = np.zeros(shape=(total_DP, datacube.Q_Nx, datacube.Q_Ny, 1))
 
         image_num = len(Rx)
-        batch_num = int(image_num//batch_size)
+        batch_num = int(image_num // batch_size)
 
-        for att in tqdmnd(num_attempts, desc='Neural network is predicting structure factors', unit='ATTEMPTS',unit_scale=True):
+        for att in tqdmnd(
+            num_attempts,
+            desc="Neural network is predicting structure factors",
+            unit="ATTEMPTS",
+            unit_scale=True,
+        ):
             for i in range(batch_num):
-                prediction[i*batch_size:(i+1)*batch_size] += model.predict([DP[i*batch_size:(i+1)*batch_size],probe[i*batch_size:(i+1)*batch_size]], verbose=0)
-            if (i+1)*batch_size < image_num:
-                prediction[(i+1)*batch_size:] += model.predict([DP[(i+1)*batch_size:],probe[(i+1)*batch_size:]], verbose=0)
+                prediction[i * batch_size : (i + 1) * batch_size] += model.predict(
+                    [
+                        DP[i * batch_size : (i + 1) * batch_size],
+                        probe[i * batch_size : (i + 1) * batch_size],
+                    ],
+                    verbose=0,
+                )
+            if (i + 1) * batch_size < image_num:
+                prediction[(i + 1) * batch_size :] += model.predict(
+                    [DP[(i + 1) * batch_size :], probe[(i + 1) * batch_size :]],
+                    verbose=0,
+                )
 
-        prediction = prediction/num_attempts
+        prediction = prediction / num_attempts
 
     # Loop over selected diffraction patterns
-    for Rx in tqdmnd(image_num,desc='Finding Bragg Disks using AI/ML',unit='DP',unit_scale=True):
-        DP = prediction[Rx,:,:,0]
-        _peaks =  find_Bragg_disks_aiml_single_DP(DP, probe,
-                                                   int_window_radius = int_window_radius,
-                                                   predict = False,
-                                                   sigma = sigma,
-                                                   edgeBoundary=edgeBoundary,
-                                                   minRelativeIntensity=minRelativeIntensity,
-                                                   minAbsoluteIntensity=minAbsoluteIntensity,
-                                                   relativeToPeak=relativeToPeak,
-                                                   minPeakSpacing=minPeakSpacing,
-                                                   maxNumPeaks=maxNumPeaks,
-                                                   subpixel=subpixel,
-                                                   upsample_factor=upsample_factor,
-                                                   filter_function=filter_function,
-                                                   model_path=model_path)
+    for Rx in tqdmnd(
+        image_num, desc="Finding Bragg Disks using AI/ML", unit="DP", unit_scale=True
+    ):
+        DP = prediction[Rx, :, :, 0]
+        _peaks = find_Bragg_disks_aiml_single_DP(
+            DP,
+            probe,
+            int_window_radius=int_window_radius,
+            predict=False,
+            sigma=sigma,
+            edgeBoundary=edgeBoundary,
+            minRelativeIntensity=minRelativeIntensity,
+            minAbsoluteIntensity=minAbsoluteIntensity,
+            relativeToPeak=relativeToPeak,
+            minPeakSpacing=minPeakSpacing,
+            maxNumPeaks=maxNumPeaks,
+            subpixel=subpixel,
+            upsample_factor=upsample_factor,
+            filter_function=filter_function,
+            model_path=model_path,
+        )
         peaks.append(_peaks)
-    t2 = time()-t0
-    print("Analyzed {} diffraction patterns in {}h {}m {}s".format(image_num, int(t2/3600),
-                                                                   int(t2/60), int(t2%60)))
+    t2 = time() - t0
+    print(
+        "Analyzed {} diffraction patterns in {}h {}m {}s".format(
+            image_num, int(t2 / 3600), int(t2 / 60), int(t2 % 60)
+        )
+    )
 
     peaks = tuple(peaks)
     return peaks
 
-def find_Bragg_disks_aiml_serial(datacube, probe,
-                                 num_attempts = 5,
-                                 int_window_radius = 1,
-                                 predict =True,
-                                 batch_size = 2,
-                                 sigma = 0,
-                                 edgeBoundary = 20,
-                                 minRelativeIntensity = 0.005,
-                                 minAbsoluteIntensity = 0,
-                                 relativeToPeak = 0,
-                                 minPeakSpacing = 60,
-                                 maxNumPeaks = 70,
-                                 subpixel = 'multicorr',
-                                 upsample_factor = 16,
-                                 global_threshold = False,
-                                 minGlobalIntensity = 0.005,
-                                 metric = 'mean',
-                                 filter_function = None,
-                                 name = 'braggpeaks_raw',
-                                 model_path = None,):
+
+def find_Bragg_disks_aiml_serial(
+    datacube,
+    probe,
+    num_attempts=5,
+    int_window_radius=1,
+    predict=True,
+    batch_size=2,
+    sigma=0,
+    edgeBoundary=20,
+    minRelativeIntensity=0.005,
+    minAbsoluteIntensity=0,
+    relativeToPeak=0,
+    minPeakSpacing=60,
+    maxNumPeaks=70,
+    subpixel="multicorr",
+    upsample_factor=16,
+    global_threshold=False,
+    minGlobalIntensity=0.005,
+    metric="mean",
+    filter_function=None,
+    name="braggpeaks_raw",
+    model_path=None,
+):
     """
     Finds the Bragg disks in all diffraction patterns of datacube from AI/ML method.
     When hist = True, returns histogram of intensities in the entire datacube.
@@ -378,85 +441,126 @@ def find_Bragg_disks_aiml_serial(datacube, probe,
     peaks = BraggVectors(datacube.Rshape, datacube.Qshape)
 
     # check that the filtered DP is the right size for the probe kernel:
-    if filter_function: assert callable(filter_function), "filter_function must be callable"
-    DP = datacube.data[0,0,:,:] if filter_function is None else filter_function(datacube.data[0,0,:,:])
-    #assert np.all(DP.shape == probe.shape), 'Probe kernel shape must match filtered DP shape'
+    if filter_function:
+        assert callable(filter_function), "filter_function must be callable"
+    DP = (
+        datacube.data[0, 0, :, :]
+        if filter_function is None
+        else filter_function(datacube.data[0, 0, :, :])
+    )
+    # assert np.all(DP.shape == probe.shape), 'Probe kernel shape must match filtered DP shape'
 
     if predict:
-        t0=time()
-        model = _get_latest_model(model_path = model_path)
-        probe = np.expand_dims(np.repeat(np.expand_dims(probe, axis=0),
-                                             datacube.R_N, axis=0), axis=-1)
-        DP = np.expand_dims(np.reshape(datacube.data,
-                                      (datacube.R_N,datacube.Q_Nx,datacube.Q_Ny)), axis = -1)
+        t0 = time()
+        model = _get_latest_model(model_path=model_path)
+        probe = np.expand_dims(
+            np.repeat(np.expand_dims(probe, axis=0), datacube.R_N, axis=0), axis=-1
+        )
+        DP = np.expand_dims(
+            np.reshape(datacube.data, (datacube.R_N, datacube.Q_Nx, datacube.Q_Ny)),
+            axis=-1,
+        )
 
-        prediction = np.zeros(shape = (datacube.R_N, datacube.Q_Nx, datacube.Q_Ny, 1))
+        prediction = np.zeros(shape=(datacube.R_N, datacube.Q_Nx, datacube.Q_Ny, 1))
 
         image_num = datacube.R_N
-        batch_num = int(image_num//batch_size)
+        batch_num = int(image_num // batch_size)
 
-        for att in tqdmnd(num_attempts, desc='Neural network is predicting structure factors', unit='ATTEMPTS',unit_scale=True):
+        for att in tqdmnd(
+            num_attempts,
+            desc="Neural network is predicting structure factors",
+            unit="ATTEMPTS",
+            unit_scale=True,
+        ):
             for i in range(batch_num):
-                prediction[i*batch_size:(i+1)*batch_size] += model.predict([DP[i*batch_size:(i+1)*batch_size],probe[i*batch_size:(i+1)*batch_size]], verbose =0)
-            if (i+1)*batch_size < image_num:
-                prediction[(i+1)*batch_size:] += model.predict([DP[(i+1)*batch_size:],probe[(i+1)*batch_size:]], verbose =0)
+                prediction[i * batch_size : (i + 1) * batch_size] += model.predict(
+                    [
+                        DP[i * batch_size : (i + 1) * batch_size],
+                        probe[i * batch_size : (i + 1) * batch_size],
+                    ],
+                    verbose=0,
+                )
+            if (i + 1) * batch_size < image_num:
+                prediction[(i + 1) * batch_size :] += model.predict(
+                    [DP[(i + 1) * batch_size :], probe[(i + 1) * batch_size :]],
+                    verbose=0,
+                )
 
-        prediction = prediction/num_attempts
+        prediction = prediction / num_attempts
 
-        prediction = np.reshape(np.transpose(prediction, (0,3,1,2)),
-                                (datacube.R_Nx, datacube.R_Ny, datacube.Q_Nx, datacube.Q_Ny))
+        prediction = np.reshape(
+            np.transpose(prediction, (0, 3, 1, 2)),
+            (datacube.R_Nx, datacube.R_Ny, datacube.Q_Nx, datacube.Q_Ny),
+        )
 
     # Loop over all diffraction patterns
-    for (Rx,Ry) in tqdmnd(datacube.R_Nx,datacube.R_Ny,desc='Finding Bragg Disks using AI/ML',unit='DP',unit_scale=True):
-        DP_ = prediction[Rx,Ry,:,:]
-        find_Bragg_disks_aiml_single_DP(DP_, probe,
-                                         num_attempts = num_attempts,
-                                         int_window_radius = int_window_radius,
-                                         predict = False,
-                                         sigma = sigma,
-                                         edgeBoundary=edgeBoundary,
-                                         minRelativeIntensity=minRelativeIntensity,
-                                         minAbsoluteIntensity=minAbsoluteIntensity,
-                                         relativeToPeak=relativeToPeak,
-                                         minPeakSpacing=minPeakSpacing,
-                                         maxNumPeaks=maxNumPeaks,
-                                         subpixel=subpixel,
-                                         upsample_factor=upsample_factor,
-                                         filter_function=filter_function,
-                                         peaks = peaks.vectors_uncal.get_pointlist(Rx,Ry),
-                                         model_path=model_path)
-    t2 = time()-t0
-    print("Analyzed {} diffraction patterns in {}h {}m {}s".format(datacube.R_N, int(t2/3600),
-                                                                   int(t2/60), int(t2%60)))
+    for Rx, Ry in tqdmnd(
+        datacube.R_Nx,
+        datacube.R_Ny,
+        desc="Finding Bragg Disks using AI/ML",
+        unit="DP",
+        unit_scale=True,
+    ):
+        DP_ = prediction[Rx, Ry, :, :]
+        find_Bragg_disks_aiml_single_DP(
+            DP_,
+            probe,
+            num_attempts=num_attempts,
+            int_window_radius=int_window_radius,
+            predict=False,
+            sigma=sigma,
+            edgeBoundary=edgeBoundary,
+            minRelativeIntensity=minRelativeIntensity,
+            minAbsoluteIntensity=minAbsoluteIntensity,
+            relativeToPeak=relativeToPeak,
+            minPeakSpacing=minPeakSpacing,
+            maxNumPeaks=maxNumPeaks,
+            subpixel=subpixel,
+            upsample_factor=upsample_factor,
+            filter_function=filter_function,
+            peaks=peaks.vectors_uncal.get_pointlist(Rx, Ry),
+            model_path=model_path,
+        )
+    t2 = time() - t0
+    print(
+        "Analyzed {} diffraction patterns in {}h {}m {}s".format(
+            datacube.R_N, int(t2 / 3600), int(t2 / 60), int(t2 % 60)
+        )
+    )
 
     if global_threshold == True:
         from py4DSTEM.braggvectors import universal_threshold
 
-        peaks = universal_threshold(peaks, minGlobalIntensity, metric, minPeakSpacing,
-                                    maxNumPeaks)
+        peaks = universal_threshold(
+            peaks, minGlobalIntensity, metric, minPeakSpacing, maxNumPeaks
+        )
     peaks.name = name
     return peaks
 
-def find_Bragg_disks_aiml(datacube, probe,
-                          num_attempts = 5,
-                          int_window_radius = 1,
-                          predict = True,
-                          batch_size = 8,
-                          sigma = 0,
-                          edgeBoundary = 20,
-                          minRelativeIntensity = 0.005,
-                          minAbsoluteIntensity = 0,
-                          relativeToPeak = 0,
-                          minPeakSpacing = 60,
-                          maxNumPeaks = 70,
-                          subpixel = 'multicorr',
-                          upsample_factor = 16,
-                          name = 'braggpeaks_raw',
-                          filter_function = None,
-                          model_path = None,
-                          distributed = None,
-                          CUDA = True,
-                          **kwargs):
+
+def find_Bragg_disks_aiml(
+    datacube,
+    probe,
+    num_attempts=5,
+    int_window_radius=1,
+    predict=True,
+    batch_size=8,
+    sigma=0,
+    edgeBoundary=20,
+    minRelativeIntensity=0.005,
+    minAbsoluteIntensity=0,
+    relativeToPeak=0,
+    minPeakSpacing=60,
+    maxNumPeaks=70,
+    subpixel="multicorr",
+    upsample_factor=16,
+    name="braggpeaks_raw",
+    filter_function=None,
+    model_path=None,
+    distributed=None,
+    CUDA=True,
+    **kwargs
+):
     """
     Finds the Bragg disks in all diffraction patterns of datacube by AI/ML method. This method
     utilizes FCU-Net to predict Bragg disks from diffraction images.
@@ -549,10 +653,13 @@ def find_Bragg_disks_aiml(datacube, probe,
             if "client_file" in distributed["ipyparallel"]:
                 connect = distributed["ipyparallel"]["client_file"]
             else:
-                raise KeyError("Within distributed[\"ipyparallel\"], missing key for \"client_file\"")
+                raise KeyError(
+                    'Within distributed["ipyparallel"], missing key for "client_file"'
+                )
 
             try:
                 import ipyparallel as ipp
+
                 c = ipp.Client(url_file=connect, timeout=30)
 
                 if len(c.ids) == 0:
@@ -563,18 +670,25 @@ def find_Bragg_disks_aiml(datacube, probe,
             if "client" in distributed["dask"]:
                 connect = distributed["dask"]["client"]
             else:
-                raise KeyError("Within distributed[\"dask\"], missing key for \"client\"")
+                raise KeyError('Within distributed["dask"], missing key for "client"')
         else:
             raise KeyError(
-                "Within distributed, you must specify 'ipyparallel' or 'dask'!")
+                "Within distributed, you must specify 'ipyparallel' or 'dask'!"
+            )
 
         if "data_file" not in distributed:
-            raise KeyError("Missing input data file path to distributed!  Required key 'data_file'")
+            raise KeyError(
+                "Missing input data file path to distributed!  Required key 'data_file'"
+            )
 
         data_file = distributed["data_file"]
 
         if not isinstance(data_file, str):
-            raise TypeError("Expected string for distributed key 'data_file', received {}".format(type(data_file)))
+            raise TypeError(
+                "Expected string for distributed key 'data_file', received {}".format(
+                    type(data_file)
+                )
+            )
         if len(data_file.strip()) == 0:
             raise ValueError("Empty data file path from distributed key 'data_file'")
         elif not os.path.exists(data_file):
@@ -585,14 +699,27 @@ def find_Bragg_disks_aiml(datacube, probe,
 
             if not isinstance(cluster_path, str):
                 raise TypeError(
-                    "distributed key 'cluster_path' must be of type str, received {}".format(type(cluster_path)))
+                    "distributed key 'cluster_path' must be of type str, received {}".format(
+                        type(cluster_path)
+                    )
+                )
 
             if len(cluster_path.strip()) == 0:
-                raise ValueError("distributed key 'cluster_path' cannot be an empty string!")
+                raise ValueError(
+                    "distributed key 'cluster_path' cannot be an empty string!"
+                )
             elif not os.path.exists(cluster_path):
-                raise FileNotFoundError("distributed key 'cluster_path' does not exist: {}".format(cluster_path))
+                raise FileNotFoundError(
+                    "distributed key 'cluster_path' does not exist: {}".format(
+                        cluster_path
+                    )
+                )
             elif not os.path.isdir(cluster_path):
-                raise NotADirectoryError("distributed key 'cluster_path' is not a directory: {}".format(cluster_path))
+                raise NotADirectoryError(
+                    "distributed key 'cluster_path' is not a directory: {}".format(
+                        cluster_path
+                    )
+                )
         else:
             cluster_path = None
 
@@ -600,96 +727,123 @@ def find_Bragg_disks_aiml(datacube, probe,
 
     if distributed is None:
         import warnings
+
         if not CUDA:
             if _check_cuda_device_available():
-                warnings.warn('WARNING: CUDA = False is selected but py4DSTEM found available CUDA device to speed up. Going ahead anyway with non-CUDA mode (CPU only). You may want to abort and switch to CUDA = True to speed things up... \n')
+                warnings.warn(
+                    "WARNING: CUDA = False is selected but py4DSTEM found available CUDA device to speed up. Going ahead anyway with non-CUDA mode (CPU only). You may want to abort and switch to CUDA = True to speed things up... \n"
+                )
             if num_attempts > 1:
-                warnings.warn('WARNING: num_attempts > 1 will take significant amount of time with Non-CUDA mode ...')
-            return find_Bragg_disks_aiml_serial(datacube,
-                                                probe,
-                                                num_attempts = num_attempts,
-                                                int_window_radius = int_window_radius,
-                                                predict = predict,
-                                                batch_size = batch_size,
-                                                sigma = sigma,
-                                                edgeBoundary=edgeBoundary,
-                                                minRelativeIntensity=minRelativeIntensity,
-                                                minAbsoluteIntensity=minAbsoluteIntensity,
-                                                relativeToPeak=relativeToPeak,
-                                                minPeakSpacing=minPeakSpacing,
-                                                maxNumPeaks=maxNumPeaks,
-                                                subpixel=subpixel,
-                                                upsample_factor=upsample_factor,
-                                                model_path=model_path,
-                                                name=name,
-                                                filter_function=filter_function)
+                warnings.warn(
+                    "WARNING: num_attempts > 1 will take significant amount of time with Non-CUDA mode ..."
+                )
+            return find_Bragg_disks_aiml_serial(
+                datacube,
+                probe,
+                num_attempts=num_attempts,
+                int_window_radius=int_window_radius,
+                predict=predict,
+                batch_size=batch_size,
+                sigma=sigma,
+                edgeBoundary=edgeBoundary,
+                minRelativeIntensity=minRelativeIntensity,
+                minAbsoluteIntensity=minAbsoluteIntensity,
+                relativeToPeak=relativeToPeak,
+                minPeakSpacing=minPeakSpacing,
+                maxNumPeaks=maxNumPeaks,
+                subpixel=subpixel,
+                upsample_factor=upsample_factor,
+                model_path=model_path,
+                name=name,
+                filter_function=filter_function,
+            )
         elif _check_cuda_device_available():
-            from py4DSTEM.braggvectors.diskdetection_aiml_cuda import find_Bragg_disks_aiml_CUDA
-            return find_Bragg_disks_aiml_CUDA(datacube,
-                                              probe,
-                                              num_attempts = num_attempts,
-                                              int_window_radius = int_window_radius,
-                                              predict = predict,
-                                              batch_size = batch_size,
-                                              sigma = sigma,
-                                              edgeBoundary=edgeBoundary,
-                                              minRelativeIntensity=minRelativeIntensity,
-                                              minAbsoluteIntensity=minAbsoluteIntensity,
-                                              relativeToPeak=relativeToPeak,
-                                              minPeakSpacing=minPeakSpacing,
-                                              maxNumPeaks=maxNumPeaks,
-                                              subpixel=subpixel,
-                                              upsample_factor=upsample_factor,
-                                              model_path=model_path,
-                                              name=name,
-                                              filter_function=filter_function)
+            from py4DSTEM.braggvectors.diskdetection_aiml_cuda import (
+                find_Bragg_disks_aiml_CUDA,
+            )
+
+            return find_Bragg_disks_aiml_CUDA(
+                datacube,
+                probe,
+                num_attempts=num_attempts,
+                int_window_radius=int_window_radius,
+                predict=predict,
+                batch_size=batch_size,
+                sigma=sigma,
+                edgeBoundary=edgeBoundary,
+                minRelativeIntensity=minRelativeIntensity,
+                minAbsoluteIntensity=minAbsoluteIntensity,
+                relativeToPeak=relativeToPeak,
+                minPeakSpacing=minPeakSpacing,
+                maxNumPeaks=maxNumPeaks,
+                subpixel=subpixel,
+                upsample_factor=upsample_factor,
+                model_path=model_path,
+                name=name,
+                filter_function=filter_function,
+            )
         else:
             import warnings
-            warnings.warn('WARNING: py4DSTEM attempted to speed up the process using GPUs but no CUDA enabled devices are found. Switching back to Non-CUDA (CPU only) mode (Note it will take significant amount of time to get AIML predictions for disk detection using CPUs!!!!) \n')
+
+            warnings.warn(
+                "WARNING: py4DSTEM attempted to speed up the process using GPUs but no CUDA enabled devices are found. Switching back to Non-CUDA (CPU only) mode (Note it will take significant amount of time to get AIML predictions for disk detection using CPUs!!!!) \n"
+            )
             if num_attempts > 1:
-                warnings.warn('WARNING: num_attempts > 1 will take significant amount of time with Non-CUDA mode ...')
-            return find_Bragg_disks_aiml_serial(datacube,
-                                                probe,
-                                                num_attempts = num_attempts,
-                                                int_window_radius = int_window_radius,
-                                                predict = predict,
-                                                batch_size = batch_size,
-                                                sigma = sigma,
-                                                edgeBoundary=edgeBoundary,
-                                                minRelativeIntensity=minRelativeIntensity,
-                                                minAbsoluteIntensity=minAbsoluteIntensity,
-                                                relativeToPeak=relativeToPeak,
-                                                minPeakSpacing=minPeakSpacing,
-                                                maxNumPeaks=maxNumPeaks,
-                                                subpixel=subpixel,
-                                                upsample_factor=upsample_factor,
-                                                model_path=model_path,
-                                                name=name,
-                                                filter_function=filter_function)
+                warnings.warn(
+                    "WARNING: num_attempts > 1 will take significant amount of time with Non-CUDA mode ..."
+                )
+            return find_Bragg_disks_aiml_serial(
+                datacube,
+                probe,
+                num_attempts=num_attempts,
+                int_window_radius=int_window_radius,
+                predict=predict,
+                batch_size=batch_size,
+                sigma=sigma,
+                edgeBoundary=edgeBoundary,
+                minRelativeIntensity=minRelativeIntensity,
+                minAbsoluteIntensity=minAbsoluteIntensity,
+                relativeToPeak=relativeToPeak,
+                minPeakSpacing=minPeakSpacing,
+                maxNumPeaks=maxNumPeaks,
+                subpixel=subpixel,
+                upsample_factor=upsample_factor,
+                model_path=model_path,
+                name=name,
+                filter_function=filter_function,
+            )
 
     elif isinstance(distributed, dict):
-        raise Exception("{} is not yet implemented for aiml pipeline".format(type(distributed)))
+        raise Exception(
+            "{} is not yet implemented for aiml pipeline".format(type(distributed))
+        )
     else:
-        raise Exception("Expected type dict or None for distributed, instead found : {}".format(type(distributed)))
+        raise Exception(
+            "Expected type dict or None for distributed, instead found : {}".format(
+                type(distributed)
+            )
+        )
 
-def _integrate_disks(DP, maxima_x,maxima_y,maxima_int,int_window_radius=1):
+
+def _integrate_disks(DP, maxima_x, maxima_y, maxima_int, int_window_radius=1):
     """
     Integrate DP over the circular patch of pixel with radius
     """
     disks = []
     img_size = DP.shape[0]
-    for x,y,i in zip(maxima_x,maxima_y,maxima_int):
-        r1,r2 = np.ogrid[-x:img_size-x, -y:img_size-y]
+    for x, y, i in zip(maxima_x, maxima_y, maxima_int):
+        r1, r2 = np.ogrid[-x : img_size - x, -y : img_size - y]
         mask = r1**2 + r2**2 <= int_window_radius**2
         mask_arr = np.zeros((img_size, img_size))
         mask_arr[mask] = 1
-        disk = DP*mask_arr
+        disk = DP * mask_arr
         disks.append(np.average(disk))
     try:
-        disks = disks/max(disks)
+        disks = disks / max(disks)
     except:
         pass
-    return (maxima_x,maxima_y,disks)
+    return (maxima_x, maxima_y, disks)
+
 
 def _check_cuda_device_available():
     """
@@ -698,14 +852,15 @@ def _check_cuda_device_available():
 
     import tensorflow as tf
 
-    tf_recog_gpus = tf.config.experimental.list_physical_devices('GPU')
+    tf_recog_gpus = tf.config.experimental.list_physical_devices("GPU")
 
-    if len(tf_recog_gpus) >0:
+    if len(tf_recog_gpus) > 0:
         return True
     else:
         return False
 
-def _get_latest_model(model_path = None):
+
+def _get_latest_model(model_path=None):
     """
     get the latest tensorflow model and model weights for disk detection
 
@@ -720,56 +875,67 @@ def _get_latest_model(model_path = None):
          model:    Trained tensorflow model for disk detection
     """
     import crystal4D
+
     try:
         import tensorflow as tf
     except:
-        raise ImportError("Please install tensorflow before proceeding - please check " + "https://www.tensorflow.org/install" + "for more information")
+        raise ImportError(
+            "Please install tensorflow before proceeding - please check "
+            + "https://www.tensorflow.org/install"
+            + "for more information"
+        )
     from py4DSTEM.io.google_drive_downloader import download_file_from_google_drive
+
     tf.keras.backend.clear_session()
 
     if model_path is None:
         try:
-            os.mkdir('./tmp')
+            os.mkdir("./tmp")
         except:
             pass
         # download the json file with the meta data
-        download_file_from_google_drive('FCU-Net','./tmp/model_metadata.json')
-        with open('./tmp/model_metadata.json') as f:
+        download_file_from_google_drive("FCU-Net", "./tmp/model_metadata.json")
+        with open("./tmp/model_metadata.json") as f:
             metadata = json.load(f)
-            file_id = metadata['file_id']
-            file_path = metadata['file_path']
-            file_type = metadata['file_type']
+            file_id = metadata["file_id"]
+            file_path = metadata["file_path"]
+            file_type = metadata["file_type"]
 
         try:
-            with open('./tmp/model_metadata_old.json') as f_old:
+            with open("./tmp/model_metadata_old.json") as f_old:
                 metaold = json.load(f_old)
-                file_id_old = metaold['file_id']
+                file_id_old = metaold["file_id"]
         except:
             file_id_old = file_id
 
         if os.path.exists(file_path) and file_id == file_id_old:
-            print('Latest model weight is already available in the local system. Loading the model... \n')
+            print(
+                "Latest model weight is already available in the local system. Loading the model... \n"
+            )
             model_path = file_path
-            os.remove('./tmp/model_metadata_old.json')
-            os.rename('./tmp/model_metadata.json', './tmp/model_metadata_old.json')
+            os.remove("./tmp/model_metadata_old.json")
+            os.rename("./tmp/model_metadata.json", "./tmp/model_metadata_old.json")
         else:
-            print('Checking the latest model on the cloud... \n')
+            print("Checking the latest model on the cloud... \n")
             filename = file_path + file_type
-            download_file_from_google_drive(file_id,filename)
+            download_file_from_google_drive(file_id, filename)
             try:
-                shutil.unpack_archive(filename, './tmp' ,format="zip")
+                shutil.unpack_archive(filename, "./tmp", format="zip")
             except:
                 pass
             model_path = file_path
-            os.rename('./tmp/model_metadata.json', './tmp/model_metadata_old.json')
-            print('Loading the model... \n')
+            os.rename("./tmp/model_metadata.json", "./tmp/model_metadata_old.json")
+            print("Loading the model... \n")
 
         model = tf.keras.models.load_model(
             model_path,
-            custom_objects={'lrScheduler': crystal4D.utils.utils.lrScheduler(128)})
+            custom_objects={"lrScheduler": crystal4D.utils.utils.lrScheduler(128)},
+        )
     else:
-        print('Loading the user provided model... \n')
-        model = tf.keras.models.load_model(model_path,
-                                           custom_objects={'lrScheduler': crystal4D.utils.utils.lrScheduler(128)})
+        print("Loading the user provided model... \n")
+        model = tf.keras.models.load_model(
+            model_path,
+            custom_objects={"lrScheduler": crystal4D.utils.utils.lrScheduler(128)},
+        )
 
     return model
