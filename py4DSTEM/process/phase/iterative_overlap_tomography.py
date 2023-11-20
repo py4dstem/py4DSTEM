@@ -2594,6 +2594,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
         plot_convergence: bool,
         plot_probe: bool,
         plot_fourier_probe: bool,
+        remove_initial_probe_aberrations: bool,
         projection_angle_deg: float,
         projection_axes: Tuple[int, int],
         x_lims: Tuple[int, int],
@@ -2615,6 +2616,8 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
             If true, the reconstructed probe intensity is also displayed
         plot_fourier_probe: bool, optional
             If true, the reconstructed complex Fourier probe is displayed
+        remove_initial_probe_aberrations: bool, optional
+            If true, when plotting fourier probe, removes initial probe
         projection_angle_deg: float
             Angle in degrees to rotate 3D array around prior to projection
         projection_axes: tuple(int,int)
@@ -2624,13 +2627,13 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
         y_lims: tuple(float,float)
             min/max y indices
         """
+        xp = self._xp
+        asnumpy = self._asnumpy
+
         figsize = kwargs.pop("figsize", (8, 5))
         cmap = kwargs.pop("cmap", "magma")
 
-        if plot_fourier_probe:
-            chroma_boost = kwargs.pop("chroma_boost", 2)
-        else:
-            chroma_boost = kwargs.pop("chroma_boost", 1)
+        chroma_boost = kwargs.pop("chroma_boost", 1)
 
         asnumpy = self._asnumpy
 
@@ -2731,10 +2734,16 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
 
             ax = fig.add_subplot(spec[0, 1])
             if plot_fourier_probe:
+                probe_array = self.probe_fourier
+                if remove_initial_probe_aberrations:
+                    probe_array *= asnumpy(
+                        xp.fft.ifftshift(xp.conjugate(self._known_aberrations_array))
+                    )
                 probe_array = Complex2RGB(
-                    self.probe_fourier,
+                    probe_array,
                     chroma_boost=chroma_boost,
                 )
+
                 ax.set_title("Reconstructed Fourier probe")
                 ax.set_ylabel("kx [mrad]")
                 ax.set_xlabel("ky [mrad]")
@@ -2802,6 +2811,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
         plot_convergence: bool,
         plot_probe: bool,
         plot_fourier_probe: bool,
+        remove_initial_probe_aberrations: bool,
         iterations_grid: Tuple[int, int],
         projection_angle_deg: float,
         projection_axes: Tuple[int, int],
@@ -2824,6 +2834,9 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
             If true, the reconstructed probe intensity is also displayed
         plot_fourier_probe: bool, optional
             If true, the reconstructed complex Fourier probe is displayed
+        remove_initial_probe_aberrations: bool, optional
+            If true, when plotting fourier probe, removes initial probe
+            to visualize changes
         iterations_grid: Tuple[int,int]
             Grid dimensions to plot reconstruction iterations
         projection_angle_deg: float
@@ -2836,6 +2849,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
             min/max y indices
         """
         asnumpy = self._asnumpy
+        xp = self._xp
 
         if not hasattr(self, "object_iterations"):
             raise ValueError(
@@ -2877,10 +2891,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
         figsize = kwargs.pop("figsize", auto_figsize)
         cmap = kwargs.pop("cmap", "magma")
 
-        if plot_fourier_probe:
-            chroma_boost = kwargs.pop("chroma_boost", 2)
-        else:
-            chroma_boost = kwargs.pop("chroma_boost", 1)
+        chroma_boost = kwargs.pop("chroma_boost", 1)
 
         errors = np.array(self.error_iterations)
 
@@ -2989,14 +3000,21 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
 
             for n, ax in enumerate(grid):
                 if plot_fourier_probe:
-                    probe_array = Complex2RGB(
-                        asnumpy(
-                            self._return_fourier_probe_from_centered_probe(
-                                probes[grid_range[n]]
-                            )
-                        ),
-                        chroma_boost=chroma_boost,
+                    probe_array = asnumpy(
+                        self._return_fourier_probe_from_centered_probe(
+                            probes[grid_range[n]]
+                        )
                     )
+
+                    if remove_initial_probe_aberrations:
+                        probe_array *= asnumpy(
+                            xp.fft.ifftshift(
+                                xp.conjugate(self._known_aberrations_array)
+                            )
+                        )
+
+                    probe_array = Complex2RGB(probe_array, chroma_boost=chroma_boost)
+
                     ax.set_title(f"Iter: {grid_range[n]} Fourier probe")
                     ax.set_ylabel("kx [mrad]")
                     ax.set_xlabel("ky [mrad]")
@@ -3042,6 +3060,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
         plot_convergence: bool = True,
         plot_probe: bool = True,
         plot_fourier_probe: bool = False,
+        remove_initial_probe_aberrations: bool = False,
         cbar: bool = True,
         projection_angle_deg: float = None,
         projection_axes: Tuple[int, int] = (0, 2),
@@ -3064,6 +3083,9 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
             If true, the reconstructed probe intensity is also displayed
         plot_fourier_probe: bool, optional
             If true, the reconstructed complex Fourier probe is displayed
+        remove_initial_probe_aberrations: bool, optional
+            If true, when plotting fourier probe, removes initial probe
+            to visualize changes
         iterations_grid: Tuple[int,int]
             Grid dimensions to plot reconstruction iterations
         projection_angle_deg: float
@@ -3087,6 +3109,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                 plot_convergence=plot_convergence,
                 plot_probe=plot_probe,
                 plot_fourier_probe=plot_fourier_probe,
+                remove_initial_probe_aberrations=remove_initial_probe_aberrations,
                 cbar=cbar,
                 projection_angle_deg=projection_angle_deg,
                 projection_axes=projection_axes,
@@ -3101,6 +3124,7 @@ class OverlapTomographicReconstruction(PtychographicReconstruction):
                 iterations_grid=iterations_grid,
                 plot_probe=plot_probe,
                 plot_fourier_probe=plot_fourier_probe,
+                remove_initial_probe_aberrations=remove_initial_probe_aberrations,
                 cbar=cbar,
                 projection_angle_deg=projection_angle_deg,
                 projection_axes=projection_axes,
