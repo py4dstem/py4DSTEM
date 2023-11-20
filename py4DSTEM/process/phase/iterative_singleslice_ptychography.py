@@ -472,13 +472,6 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
 
         self._probe_initial = self._probe.copy()
         self._probe_initial_aperture = xp.abs(xp.fft.fft2(self._probe))
-        self._initial_aberrations_array = ComplexProbe(
-            energy=self._energy,
-            gpts=self._region_of_interest_shape,
-            sampling=self.sampling,
-            parameters=self._polar_parameters,
-            device=self._device,
-        )._evaluate_ctf()
         self._known_aberrations_array = ComplexProbe(
             energy=self._energy,
             gpts=self._region_of_interest_shape,
@@ -1783,6 +1776,7 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
         """
         xp = self._xp
         asnumpy = self._asnumpy
+
         figsize = kwargs.pop("figsize", (8, 5))
         cmap = kwargs.pop("cmap", "magma")
 
@@ -1881,7 +1875,7 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
                 probe_array = self.probe_fourier
                 if remove_initial_probe_aberrations:
                     probe_array *= asnumpy(
-                        xp.fft.ifftshift(xp.conjugate(self._initial_aberrations_array))
+                        xp.fft.ifftshift(xp.conjugate(self._known_aberrations_array))
                     )
                 probe_array = Complex2RGB(
                     probe_array,
@@ -2130,7 +2124,7 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
                     if remove_initial_probe_aberrations:
                         probe_array *= asnumpy(
                             xp.fft.ifftshift(
-                                xp.conjugate(self._initial_aberrations_array)
+                                xp.conjugate(self._known_aberrations_array)
                             )
                         )
 

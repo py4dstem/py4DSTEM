@@ -3071,6 +3071,7 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
         plot_convergence: bool,
         plot_probe: bool,
         plot_fourier_probe: bool,
+        remove_initial_probe_aberrations: bool,
         padding: int,
         **kwargs,
     ):
@@ -3089,9 +3090,15 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
             If true, the reconstructed complex probe is displayed
         plot_fourier_probe: bool, optional
             If true, the reconstructed complex Fourier probe is displayed
+        remove_initial_probe_aberrations: bool, optional
+            If true, when plotting fourier probe, removes initial probe
+            to visualize changes
         padding : int, optional
             Pixels to pad by post rotating-cropping object
         """
+        xp = self._xp
+        asnumpy = self._asnumpy
+
         figsize = kwargs.pop("figsize", (12, 5))
         cmap_e = kwargs.pop("cmap_e", "magma")
         cmap_m = kwargs.pop("cmap_m", "PuOr")
@@ -3116,10 +3123,7 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
         vmin_m = kwargs.pop("vmin_m", min_m)
         vmax_m = kwargs.pop("vmax_m", max_m)
 
-        if plot_fourier_probe:
-            chroma_boost = kwargs.pop("chroma_boost", 2)
-        else:
-            chroma_boost = kwargs.pop("chroma_boost", 1)
+        chroma_boost = kwargs.pop("chroma_boost", 1)
 
         extent = [
             0,
@@ -3224,8 +3228,13 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
             # Probe
             ax = fig.add_subplot(spec[0, 2])
             if plot_fourier_probe:
+                probe_array = self.probe_fourier
+                if remove_initial_probe_aberrations:
+                    probe_array *= asnumpy(
+                        xp.fft.ifftshift(xp.conjugate(self._known_aberrations_array))
+                    )
                 probe_array = Complex2RGB(
-                    self.probe_fourier,
+                    probe_array,
                     chroma_boost=chroma_boost,
                 )
                 ax.set_title("Reconstructed Fourier probe")
@@ -3311,6 +3320,7 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
         plot_convergence: bool,
         plot_probe: bool,
         plot_fourier_probe: bool,
+        remove_initial_probe_aberrations: bool,
         iterations_grid: Tuple[int, int],
         padding: int,
         **kwargs,
@@ -3332,6 +3342,9 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
             If true, the reconstructed complex probe is displayed
         plot_fourier_probe: bool, optional
             If true, the reconstructed complex Fourier probe is displayed
+        remove_initial_probe_aberrations: bool, optional
+            If true, when plotting fourier probe, removes initial probe
+            to visualize changes
         padding : int, optional
             Pixels to pad by post rotating-cropping object
         """
@@ -3344,6 +3357,7 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
         plot_convergence: bool = True,
         plot_probe: bool = True,
         plot_fourier_probe: bool = False,
+        remove_initial_probe_aberrations: bool = False,
         cbar: bool = True,
         padding: int = 0,
         **kwargs,
@@ -3365,6 +3379,9 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
             If true, the reconstructed complex probe is displayed
         plot_fourier_probe: bool, optional
             If true, the reconstructed complex Fourier probe is displayed
+        remove_initial_probe_aberrations: bool, optional
+            If true, when plotting fourier probe, removes initial probe
+            to visualize changes
         padding : int, optional
             Pixels to pad by post rotating-cropping object
 
@@ -3380,6 +3397,7 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
                 plot_convergence=plot_convergence,
                 plot_probe=plot_probe,
                 plot_fourier_probe=plot_fourier_probe,
+                remove_initial_probe_aberrations=remove_initial_probe_aberrations,
                 cbar=cbar,
                 padding=padding,
                 **kwargs,
@@ -3391,6 +3409,7 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
                 iterations_grid=iterations_grid,
                 plot_probe=plot_probe,
                 plot_fourier_probe=plot_fourier_probe,
+                remove_initial_probe_aberrations=remove_initial_probe_aberrations,
                 cbar=cbar,
                 padding=padding,
                 **kwargs,
