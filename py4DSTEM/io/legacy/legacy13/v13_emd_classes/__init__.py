@@ -5,5 +5,3 @@ from py4DSTEM.io.legacy.legacy13.v13_emd_classes.array import *
 from py4DSTEM.io.legacy.legacy13.v13_emd_classes.pointlist import *
 from py4DSTEM.io.legacy.legacy13.v13_emd_classes.pointlistarray import *
 from py4DSTEM.io.legacy.legacy13.v13_emd_classes.io import *
-
-

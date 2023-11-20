@@ -8,14 +8,15 @@ from typing import Mapping, Sequence, Tuple, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
+import pylops
 from matplotlib.gridspec import GridSpec
 from mpl_toolkits.axes_grid1 import ImageGrid, make_axes_locatable
 from py4DSTEM.visualize.vis_special import Complex2RGB, add_colorbar_arg, show_complex
 
 try:
     import cupy as cp
-except ImportError:
-    cp = None
+except ModuleNotFoundError:
+    cp = np
 
 from emdfile import Custom, tqdmnd
 from py4DSTEM import DataCube
@@ -29,6 +30,7 @@ from py4DSTEM.process.phase.utils import (
     spatial_frequencies,
 )
 from py4DSTEM.process.utils import electron_wavelength_angstrom, get_CoM, get_shifted_ar
+from scipy.ndimage import rotate
 
 warnings.simplefilter(action="always", category=UserWarning)
 
@@ -78,9 +80,17 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
     initial_scan_positions: np.ndarray, optional
         Probe positions in Å for each diffraction intensity
         If None, initialized to a grid scan
+    theta_x: float
+        x tilt of propagator (in degrees)
+    theta_y: float
+        y tilt of propagator (in degrees)
+    middle_focus: bool
+        if True, adds half the sample thickness to the defocus
     object_type: str, optional
         The object can be reconstructed as a real potential ('potential') or a complex
         object ('complex')
+    positions_mask: np.ndarray, optional
+        Boolean real space mask to select positions in datacube to skip for reconstruction
     verbose: bool, optional
         If True, class methods will inherit this and print additional information
     device: str, optional
@@ -109,7 +119,11 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
         initial_object_guess: np.ndarray = None,
         initial_probe_guess: np.ndarray = None,
         initial_scan_positions: np.ndarray = None,
+        theta_x: float = 0,
+        theta_y: float = 0,
+        middle_focus: bool = False,
         object_type: str = "complex",
+        positions_mask: np.ndarray = None,
         verbose: bool = True,
         device: str = "cpu",
         name: str = "multi-slice_ptychographic_reconstruction",
@@ -142,6 +156,25 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
             if (key not in polar_symbols) and (key not in polar_aliases.keys()):
                 raise ValueError("{} not a recognized parameter".format(key))
 
+        if np.isscalar(slice_thicknesses):
+            mean_slice_thickness = slice_thicknesses
+        else:
+            mean_slice_thickness = np.mean(slice_thicknesses)
+
+        if middle_focus:
+            if "defocus" in kwargs:
+                kwargs["defocus"] += mean_slice_thickness * num_slices / 2
+            elif "C10" in kwargs:
+                kwargs["C10"] -= mean_slice_thickness * num_slices / 2
+            elif polar_parameters is not None and "defocus" in polar_parameters:
+                polar_parameters["defocus"] = (
+                    polar_parameters["defocus"] + mean_slice_thickness * num_slices / 2
+                )
+            elif polar_parameters is not None and "C10" in polar_parameters:
+                polar_parameters["C10"] = (
+                    polar_parameters["C10"] - mean_slice_thickness * num_slices / 2
+                )
+
         self._polar_parameters = dict(zip(polar_symbols, [0.0] * len(polar_symbols)))
 
         if polar_parameters is None:
@@ -165,6 +198,12 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
             raise ValueError(
                 f"object_type must be either 'potential' or 'complex', not {object_type}"
             )
+        if positions_mask is not None and positions_mask.dtype != "bool":
+            warnings.warn(
+                ("`positions_mask` converted to `bool` array"),
+                UserWarning,
+            )
+            positions_mask = np.asarray(positions_mask, dtype="bool")
 
         self.set_save_defaults()
 
@@ -181,6 +220,7 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
         self._semiangle_cutoff_pixels = semiangle_cutoff_pixels
         self._rolloff = rolloff
         self._object_type = object_type
+        self._positions_mask = positions_mask
         self._object_padding_px = object_padding_px
         self._verbose = verbose
         self._device = device
@@ -189,6 +229,8 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
         # Class-specific Metadata
         self._num_slices = num_slices
         self._slice_thicknesses = slice_thicknesses
+        self._theta_x = theta_x
+        self._theta_y = theta_y
 
     def _precompute_propagator_arrays(
         self,
@@ -196,6 +238,8 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
         sampling: Tuple[float, float],
         energy: float,
         slice_thicknesses: Sequence[float],
+        theta_x: float,
+        theta_y: float,
     ):
         """
         Precomputes propagator arrays complex wave-function will be convolved by,
@@ -211,6 +255,10 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
             The electron energy of the wave functions in eV
         slice_thicknesses: Sequence[float]
             Array of slice thicknesses in A
+        theta_x: float
+            x tilt of propagator (in degrees)
+        theta_y: float
+            y tilt of propagator (in degrees)
 
         Returns
         -------
@@ -230,12 +278,22 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
         propagators = xp.empty(
             (num_slices, kx.shape[0], ky.shape[0]), dtype=xp.complex64
         )
+
+        theta_x = np.deg2rad(theta_x)
+        theta_y = np.deg2rad(theta_y)
+
         for i, dz in enumerate(slice_thicknesses):
             propagators[i] = xp.exp(
                 1.0j * (-(kx**2)[:, None] * np.pi * wavelength * dz)
             )
             propagators[i] *= xp.exp(
                 1.0j * (-(ky**2)[None] * np.pi * wavelength * dz)
+            )
+            propagators[i] *= xp.exp(
+                1.0j * (2 * kx[:, None] * np.pi * dz * np.tan(theta_x))
+            )
+            propagators[i] *= xp.exp(
+                1.0j * (2 * ky[None] * np.pi * dz * np.tan(theta_y))
             )
 
         return propagators
@@ -279,6 +337,7 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
         force_angular_sampling: float = None,
         force_reciprocal_sampling: float = None,
         object_fov_mask: np.ndarray = None,
+        crop_patterns: bool = False,
         **kwargs,
     ):
         """
@@ -336,6 +395,8 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
         object_fov_mask: np.ndarray (boolean)
             Boolean mask of FOV. Used to calculate additional shrinkage of object
             If None, probe_overlap intensity is thresholded
+        crop_patterns: bool
+            if True, crop patterns to avoid wrap around of patterns when centering
 
         Returns
         --------
@@ -424,6 +485,8 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
             self._intensities,
             self._com_fitted_x,
             self._com_fitted_y,
+            crop_patterns,
+            self._positions_mask,
         )
 
         # explicitly delete namespace
@@ -432,7 +495,7 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
         del self._intensities
 
         self._positions_px = self._calculate_scan_positions_in_pixels(
-            self._scan_positions
+            self._scan_positions, self._positions_mask
         )
 
         # handle semiangle specified in pixels
@@ -503,6 +566,10 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
                     bilinear=True,
                     device=self._device,
                 )
+                if crop_patterns:
+                    self._vacuum_probe_intensity = self._vacuum_probe_intensity[
+                        self._crop_mask
+                    ].reshape(self._region_of_interest_shape)
 
             self._probe = (
                 ComplexProbe(
@@ -559,6 +626,8 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
             self.sampling,
             self._energy,
             self._slice_thicknesses,
+            self._theta_x,
+            self._theta_y,
         )
 
         # overlaps
@@ -575,19 +644,13 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
 
         if plot_probe_overlaps:
             figsize = kwargs.pop("figsize", (13, 4))
-            cmap = kwargs.pop("cmap", "Greys_r")
-            vmin = kwargs.pop("vmin", None)
-            vmax = kwargs.pop("vmax", None)
-            hue_start = kwargs.pop("hue_start", 0)
-            invert = kwargs.pop("invert", False)
+            chroma_boost = kwargs.pop("chroma_boost", 1)
 
             # initial probe
             complex_probe_rgb = Complex2RGB(
                 self.probe_centered,
-                vmin=vmin,
-                vmax=vmax,
-                hue_start=hue_start,
-                invert=invert,
+                power=2,
+                chroma_boost=chroma_boost,
             )
 
             # propagated
@@ -599,10 +662,8 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
                 )
             complex_propagated_rgb = Complex2RGB(
                 asnumpy(self._return_centered_probe(propagated_probe)),
-                vmin=vmin,
-                vmax=vmax,
-                hue_start=hue_start,
-                invert=invert,
+                power=2,
+                chroma_boost=chroma_boost,
             )
 
             extent = [
@@ -624,38 +685,34 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
             ax1.imshow(
                 complex_probe_rgb,
                 extent=probe_extent,
-                **kwargs,
             )
 
             divider = make_axes_locatable(ax1)
             cax1 = divider.append_axes("right", size="5%", pad="2.5%")
-            add_colorbar_arg(
-                cax1, vmin=vmin, vmax=vmax, hue_start=hue_start, invert=invert
-            )
+            add_colorbar_arg(cax1, chroma_boost=chroma_boost)
             ax1.set_ylabel("x [A]")
             ax1.set_xlabel("y [A]")
-            ax1.set_title("Initial Probe")
+            ax1.set_title("Initial probe intensity")
 
             ax2.imshow(
                 complex_propagated_rgb,
                 extent=probe_extent,
-                **kwargs,
             )
 
             divider = make_axes_locatable(ax2)
             cax2 = divider.append_axes("right", size="5%", pad="2.5%")
             add_colorbar_arg(
-                cax2, vmin=vmin, vmax=vmax, hue_start=hue_start, invert=invert
+                cax2,
+                chroma_boost=chroma_boost,
             )
             ax2.set_ylabel("x [A]")
             ax2.set_xlabel("y [A]")
-            ax2.set_title("Propagated Probe")
+            ax2.set_title("Propagated probe intensity")
 
             ax3.imshow(
                 asnumpy(probe_overlap),
                 extent=extent,
-                cmap=cmap,
-                **kwargs,
+                cmap="Greys_r",
             )
             ax3.scatter(
                 self.positions[:, 1],
@@ -667,7 +724,7 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
             ax3.set_xlabel("y [A]")
             ax3.set_xlim((extent[0], extent[1]))
             ax3.set_ylim((extent[2], extent[3]))
-            ax3.set_title("Object Field of View")
+            ax3.set_title("Object field of view")
 
             fig.tight_layout()
 
@@ -974,7 +1031,7 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
                 )
 
             # back-transmit
-            exit_waves *= xp.conj(obj) #/ xp.abs(obj) ** 2
+            exit_waves *= xp.conj(obj)  # / xp.abs(obj) ** 2
 
             if s > 0:
                 # back-propagate
@@ -1076,7 +1133,7 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
                 )
 
             # back-transmit
-            exit_waves_copy *= xp.conj(obj) # / xp.abs(obj) ** 2
+            exit_waves_copy *= xp.conj(obj)  # / xp.abs(obj) ** 2
 
             if s > 0:
                 # back-propagate
@@ -1449,6 +1506,111 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
 
         return current_object
 
+    def _object_denoise_tv_pylops(self, current_object, weights, iterations):
+        """
+        Performs second order TV denoising along x and y
+
+        Parameters
+        ----------
+        current_object: np.ndarray
+            Current object estimate
+        weights : [float, float]
+            Denoising weights[z weight, r weight]. The greater `weight`,
+            the more denoising.
+        iterations: float
+            Number of iterations to run in denoising algorithm.
+            `niter_out` in pylops
+
+        Returns
+        -------
+        constrained_object: np.ndarray
+            Constrained object estimate
+
+        """
+        xp = self._xp
+
+        if xp.iscomplexobj(current_object):
+            current_object_tv = current_object
+            warnings.warn(
+                ("TV denoising is currently only supported for potential objects."),
+                UserWarning,
+            )
+
+        else:
+            # zero pad at top and bottom slice
+            pad_width = ((1, 1), (0, 0), (0, 0))
+            current_object = xp.pad(
+                current_object, pad_width=pad_width, mode="constant"
+            )
+
+            # run tv denoising
+            nz, nx, ny = current_object.shape
+            niter_out = iterations
+            niter_in = 1
+            Iop = pylops.Identity(nx * ny * nz)
+
+            if weights[0] == 0:
+                xy_laplacian = pylops.Laplacian(
+                    (nz, nx, ny), axes=(1, 2), edge=False, kind="backward"
+                )
+                l1_regs = [xy_laplacian]
+
+                current_object_tv = pylops.optimization.sparsity.splitbregman(
+                    Op=Iop,
+                    y=current_object.ravel(),
+                    RegsL1=l1_regs,
+                    niter_outer=niter_out,
+                    niter_inner=niter_in,
+                    epsRL1s=[weights[1]],
+                    tol=1e-4,
+                    tau=1.0,
+                    show=False,
+                )[0]
+
+            elif weights[1] == 0:
+                z_gradient = pylops.FirstDerivative(
+                    (nz, nx, ny), axis=0, edge=False, kind="backward"
+                )
+                l1_regs = [z_gradient]
+
+                current_object_tv = pylops.optimization.sparsity.splitbregman(
+                    Op=Iop,
+                    y=current_object.ravel(),
+                    RegsL1=l1_regs,
+                    niter_outer=niter_out,
+                    niter_inner=niter_in,
+                    epsRL1s=[weights[0]],
+                    tol=1e-4,
+                    tau=1.0,
+                    show=False,
+                )[0]
+
+            else:
+                z_gradient = pylops.FirstDerivative(
+                    (nz, nx, ny), axis=0, edge=False, kind="backward"
+                )
+                xy_laplacian = pylops.Laplacian(
+                    (nz, nx, ny), axes=(1, 2), edge=False, kind="backward"
+                )
+                l1_regs = [z_gradient, xy_laplacian]
+
+                current_object_tv = pylops.optimization.sparsity.splitbregman(
+                    Op=Iop,
+                    y=current_object.ravel(),
+                    RegsL1=l1_regs,
+                    niter_outer=niter_out,
+                    niter_inner=niter_in,
+                    epsRL1s=weights,
+                    tol=1e-4,
+                    tau=1.0,
+                    show=False,
+                )[0]
+
+            # remove padding
+            current_object_tv = current_object_tv.reshape(current_object.shape)[1:-1]
+
+        return current_object_tv
+
     def _constraints(
         self,
         current_object,
@@ -1481,9 +1643,12 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
         shrinkage_rad,
         object_mask,
         pure_phase_object,
+        tv_denoise_chambolle,
+        tv_denoise_weight_chambolle,
+        tv_denoise_pad_chambolle,
         tv_denoise,
-        tv_denoise_weight,
-        tv_denoise_pad,
+        tv_denoise_weights,
+        tv_denoise_inner_iter,
     ):
         """
         Ptychographic constraints operator.
@@ -1548,12 +1713,19 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
             If not None, used to calculate additional shrinkage using masked-mean of object
         pure_phase_object: bool
             If True, object amplitude is set to unity
-        tv_denoise: bool
+        tv_denoise_chambolle: bool
             If True, performs TV denoising along z
-        tv_denoise_weight: float
+        tv_denoise_weight_chambolle: float
             weight of tv denoising constraint
-        tv_denoise_pad: bool
+        tv_denoise_pad_chambolle: bool
             if True, pads object at top and bottom with zeros before applying denoising
+        tv_denoise: bool
+            If True, applies TV denoising on object
+        tv_denoise_weights: [float,float]
+            Denoising weights[z weight, r weight]. The greater `weight`,
+            the more denoising.
+        tv_denoise_inner_iter: float
+            Number of iterations to run in inner loop of TV denoising
 
         Returns
         --------
@@ -1585,13 +1757,17 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
                 current_object, kz_regularization_gamma
             )
         elif tv_denoise:
-            if self._object_type == "complex":
-                raise NotImplementedError()
+            current_object = self._object_denoise_tv_pylops(
+                current_object,
+                tv_denoise_weights,
+                tv_denoise_inner_iter,
+            )
+        elif tv_denoise_chambolle:
             current_object = self._object_denoise_tv_chambolle(
                 current_object,
-                tv_denoise_weight,
+                tv_denoise_weight_chambolle,
                 axis=0,
-                pad_object=tv_denoise_pad,
+                pad_object=tv_denoise_pad_chambolle,
             )
 
         if shrinkage_rad > 0.0 or object_mask is not None:
@@ -1690,9 +1866,12 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
         shrinkage_rad: float = 0.0,
         fix_potential_baseline: bool = True,
         pure_phase_object_iter: int = 0,
+        tv_denoise_iter_chambolle=np.inf,
+        tv_denoise_weight_chambolle=None,
+        tv_denoise_pad_chambolle=True,
         tv_denoise_iter=np.inf,
-        tv_denoise_weight=None,
-        tv_denoise_pad=True,
+        tv_denoise_weights=None,
+        tv_denoise_inner_iter=40,
         switch_object_iter: int = np.inf,
         store_iterations: bool = False,
         progress_bar: bool = True,
@@ -1751,6 +1930,8 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
             If True, the probe aperture is additionally constrained to a constant intensity.
         fix_positions_iter: int, optional
             Number of iterations to run with fixed positions before updating positions estimate
+        constrain_position_distance: float
+            Distance to constrain position correction within original field of view in A
         global_affine_transformation: bool, optional
             If True, positions are assumed to be a global affine transform from initial scan
         gaussian_filter_sigma: float, optional
@@ -1785,12 +1966,19 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
             If true, the potential mean outside the FOV is forced to zero at each iteration
         pure_phase_object_iter: int, optional
             Number of iterations where object amplitude is set to unity
-        tv_denoise_iter: bool
+        tv_denoise_iter_chambolle: bool
             Number of iterations with TV denoisining
-        tv_denoise_weight: float
+        tv_denoise_weight_chambolle: float
             weight of tv denoising constraint
-        tv_denoise_pad: bool
+        tv_denoise_pad_chambolle: bool
             if True, pads object at top and bottom with zeros before applying denoising
+        tv_denoise: bool
+            If True, applies TV denoising on object
+        tv_denoise_weights: [float,float]
+            Denoising weights[z weight, r weight]. The greater `weight`,
+            the more denoising.
+        tv_denoise_inner_iter: float
+            Number of iterations to run in inner loop of TV denoising
         switch_object_iter: int, optional
             Iteration to switch object type between 'complex' and 'potential' or between
             'potential' and 'complex'
@@ -1987,6 +2175,8 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
             ) = self._extract_vectorized_patch_indices()
             self._exit_waves = None
             self._object_type = self._object_type_initial
+            if hasattr(self, "_tf"):
+                del self._tf
         elif reset is None:
             if hasattr(self, "error"):
                 warnings.warn(
@@ -2123,7 +2313,7 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
                 and kz_regularization_gamma is not None,
                 kz_regularization_gamma=kz_regularization_gamma[a0]
                 if kz_regularization_gamma is not None
-                and type(kz_regularization_gamma) == np.ndarray
+                and isinstance(kz_regularization_gamma, np.ndarray)
                 else kz_regularization_gamma,
                 identical_slices=a0 < identical_slices_iter,
                 object_positivity=object_positivity,
@@ -2133,9 +2323,13 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
                 else None,
                 pure_phase_object=a0 < pure_phase_object_iter
                 and self._object_type == "complex",
-                tv_denoise=a0 < tv_denoise_iter and tv_denoise_weight is not None,
-                tv_denoise_weight=tv_denoise_weight,
-                tv_denoise_pad=tv_denoise_pad,
+                tv_denoise_chambolle=a0 < tv_denoise_iter_chambolle
+                and tv_denoise_weight_chambolle is not None,
+                tv_denoise_weight_chambolle=tv_denoise_weight_chambolle,
+                tv_denoise_pad_chambolle=tv_denoise_pad_chambolle,
+                tv_denoise=a0 < tv_denoise_iter and tv_denoise_weights is not None,
+                tv_denoise_weights=tv_denoise_weights,
+                tv_denoise_inner_iter=tv_denoise_inner_iter,
             )
 
             self.error_iterations.append(error.item())
@@ -2250,8 +2444,11 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
         """
         figsize = kwargs.pop("figsize", (8, 5))
         cmap = kwargs.pop("cmap", "magma")
-        invert = kwargs.pop("invert", False)
-        hue_start = kwargs.pop("hue_start", 0)
+
+        if plot_fourier_probe:
+            chroma_boost = kwargs.pop("chroma_boost", 2)
+        else:
+            chroma_boost = kwargs.pop("chroma_boost", 1)
 
         if self._object_type == "complex":
             obj = np.angle(self.object)
@@ -2347,29 +2544,29 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
             ax = fig.add_subplot(spec[0, 1])
             if plot_fourier_probe:
                 probe_array = Complex2RGB(
-                    self.probe_fourier, hue_start=hue_start, invert=invert
+                    self.probe_fourier,
+                    chroma_boost=chroma_boost,
                 )
                 ax.set_title("Reconstructed Fourier probe")
                 ax.set_ylabel("kx [mrad]")
                 ax.set_xlabel("ky [mrad]")
             else:
                 probe_array = Complex2RGB(
-                    self.probe, hue_start=hue_start, invert=invert
+                    self.probe, power=2, chroma_boost=chroma_boost
                 )
-                ax.set_title("Reconstructed probe")
+                ax.set_title("Reconstructed probe intensity")
                 ax.set_ylabel("x [A]")
                 ax.set_xlabel("y [A]")
 
             im = ax.imshow(
                 probe_array,
                 extent=probe_extent,
-                **kwargs,
             )
 
             if cbar:
                 divider = make_axes_locatable(ax)
                 ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
-                add_colorbar_arg(ax_cb, hue_start=hue_start, invert=invert)
+                add_colorbar_arg(ax_cb, chroma_boost=chroma_boost)
 
         else:
             ax = fig.add_subplot(spec[0])
@@ -2402,10 +2599,10 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
                 ax = fig.add_subplot(spec[1])
             ax.semilogy(np.arange(errors.shape[0]), errors, **kwargs)
             ax.set_ylabel("NMSE")
-            ax.set_xlabel("Iteration Number")
+            ax.set_xlabel("Iteration number")
             ax.yaxis.tick_right()
 
-        fig.suptitle(f"Normalized Mean Squared Error: {self.error:.3e}")
+        fig.suptitle(f"Normalized mean squared error: {self.error:.3e}")
         spec.tight_layout(fig)
 
     def _visualize_all_iterations(
@@ -2477,8 +2674,11 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
         )
         figsize = kwargs.pop("figsize", auto_figsize)
         cmap = kwargs.pop("cmap", "magma")
-        invert = kwargs.pop("invert", False)
-        hue_start = kwargs.pop("hue_start", 0)
+
+        if plot_fourier_probe:
+            chroma_boost = kwargs.pop("chroma_boost", 2)
+        else:
+            chroma_boost = kwargs.pop("chroma_boost", 1)
 
         errors = np.array(self.error_iterations)
 
@@ -2583,29 +2783,28 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
                                 probes[grid_range[n]]
                             )
                         ),
-                        hue_start=hue_start,
-                        invert=invert,
+                        chroma_boost=chroma_boost,
                     )
                     ax.set_title(f"Iter: {grid_range[n]} Fourier probe")
                     ax.set_ylabel("kx [mrad]")
                     ax.set_xlabel("ky [mrad]")
                 else:
                     probe_array = Complex2RGB(
-                        probes[grid_range[n]], hue_start=hue_start, invert=invert
+                        probes[grid_range[n]], power=2, chroma_boost=chroma_boost
                     )
-                    ax.set_title(f"Iter: {grid_range[n]} probe")
+                    ax.set_title(f"Iter: {grid_range[n]} probe intensity")
                     ax.set_ylabel("x [A]")
                     ax.set_xlabel("y [A]")
 
                 im = ax.imshow(
                     probe_array,
                     extent=probe_extent,
-                    **kwargs,
                 )
 
                 if cbar:
                     add_colorbar_arg(
-                        grid.cbar_axes[n], hue_start=hue_start, invert=invert
+                        grid.cbar_axes[n],
+                        chroma_boost=chroma_boost,
                     )
 
         if plot_convergence:
@@ -2617,7 +2816,7 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
                 ax2 = fig.add_subplot(spec[1])
             ax2.semilogy(np.arange(errors.shape[0]), errors, **kwargs)
             ax2.set_ylabel("NMSE")
-            ax2.set_xlabel("Iteration Number")
+            ax2.set_xlabel("Iteration number")
             ax2.yaxis.tick_right()
 
         spec.tight_layout(fig)
@@ -2756,6 +2955,7 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
         common_color_scale: bool = True,
         padding: int = 0,
         num_cols: int = 3,
+        show_fft: bool = False,
         **kwargs,
     ):
         """
@@ -2771,12 +2971,20 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
             Padding to leave uncropped
         num_cols: int, optional
             Number of GridSpec columns
+        show_fft: bool, optional
+            if True, plots fft of object slices
         """
 
         if ms_object is None:
             ms_object = self._object
 
         rotated_object = self._crop_rotate_object_fov(ms_object, padding=padding)
+        if show_fft:
+            rotated_object = np.abs(
+                np.fft.fftshift(
+                    np.fft.fft2(rotated_object, axes=(-2, -1)), axes=(-2, -1)
+                )
+            )
         rotated_shape = rotated_object.shape
 
         if np.iscomplexobj(rotated_object):
@@ -2794,8 +3002,21 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
 
         axsize = kwargs.pop("axsize", (3, 3))
         cmap = kwargs.pop("cmap", "magma")
-        vmin = np.min(rotated_object) if common_color_scale else None
-        vmax = np.max(rotated_object) if common_color_scale else None
+
+        if common_color_scale:
+            vals = np.sort(rotated_object.ravel())
+            ind_vmin = np.round((vals.shape[0] - 1) * 0.02).astype("int")
+            ind_vmax = np.round((vals.shape[0] - 1) * 0.98).astype("int")
+            ind_vmin = np.max([0, ind_vmin])
+            ind_vmax = np.min([len(vals) - 1, ind_vmax])
+            vmin = vals[ind_vmin]
+            vmax = vals[ind_vmax]
+            if vmax == vmin:
+                vmin = vals[0]
+                vmax = vals[-1]
+        else:
+            vmax = None
+            vmin = None
         vmin = kwargs.pop("vmin", vmin)
         vmax = kwargs.pop("vmax", vmax)
 
@@ -2840,6 +3061,143 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
                 ax.set_ylabel("x [A]")
 
         spec.tight_layout(fig)
+
+    def show_depth(
+        self,
+        x1: float,
+        x2: float,
+        y1: float,
+        y2: float,
+        specify_calibrated: bool = False,
+        gaussian_filter_sigma: float = None,
+        ms_object=None,
+        cbar: bool = False,
+        aspect: float = None,
+        plot_line_profile: bool = False,
+        **kwargs,
+    ):
+        """
+        Displays line profile depth section
+
+        Parameters
+        --------
+        x1, x2, y1, y2: floats (pixels)
+            Line profile for depth section runs from (x1,y1) to (x2,y2)
+            Specified in pixels unless specify_calibrated is True
+        specify_calibrated: bool (optional)
+            If True, specify x1, x2, y1, y2 in A values instead of pixels
+        gaussian_filter_sigma: float (optional)
+            Standard deviation of gaussian kernel in A
+        ms_object: np.array
+            Object to plot slices of. If None, uses current object
+        cbar: bool, optional
+            If True, displays a colorbar
+        aspect: float, optional
+            aspect ratio for depth profile plot
+        plot_line_profile: bool
+            If True, also plots line profile showing where depth profile is taken
+        """
+        if ms_object is not None:
+            ms_obj = ms_object
+        else:
+            ms_obj = self.object_cropped
+
+        if specify_calibrated:
+            x1 /= self.sampling[0]
+            x2 /= self.sampling[0]
+            y1 /= self.sampling[1]
+            y2 /= self.sampling[1]
+
+        if x2 == x1:
+            angle = 0
+        elif y2 == y1:
+            angle = np.pi / 2
+        else:
+            angle = np.arctan((x2 - x1) / (y2 - y1))
+
+        x0 = ms_obj.shape[1] / 2
+        y0 = ms_obj.shape[2] / 2
+
+        if (
+            x1 > ms_obj.shape[1]
+            or x2 > ms_obj.shape[1]
+            or y1 > ms_obj.shape[2]
+            or y2 > ms_obj.shape[2]
+        ):
+            raise ValueError("depth section must be in field of view of object")
+
+        from py4DSTEM.process.phase.utils import rotate_point
+
+        x1_0, y1_0 = rotate_point((x0, y0), (x1, y1), angle)
+        x2_0, y2_0 = rotate_point((x0, y0), (x2, y2), angle)
+
+        rotated_object = np.roll(
+            rotate(ms_obj, np.rad2deg(angle), reshape=False, axes=(-1, -2)),
+            -int(x1_0),
+            axis=1,
+        )
+
+        if np.iscomplexobj(rotated_object):
+            rotated_object = np.angle(rotated_object)
+        if gaussian_filter_sigma is not None:
+            from scipy.ndimage import gaussian_filter
+
+            gaussian_filter_sigma /= self.sampling[0]
+            rotated_object = gaussian_filter(rotated_object, gaussian_filter_sigma)
+
+        plot_im = rotated_object[:, 0, int(y1_0) : int(y2_0)]
+
+        extent = [
+            0,
+            self.sampling[1] * plot_im.shape[1],
+            self._slice_thicknesses[0] * plot_im.shape[0],
+            0,
+        ]
+        figsize = kwargs.pop("figsize", (6, 6))
+        if not plot_line_profile:
+            fig, ax = plt.subplots(figsize=figsize)
+            im = ax.imshow(plot_im, cmap="magma", extent=extent)
+            if aspect is not None:
+                ax.set_aspect(aspect)
+            ax.set_xlabel("r [A]")
+            ax.set_ylabel("z [A]")
+            ax.set_title("Multislice depth profile")
+            if cbar:
+                divider = make_axes_locatable(ax)
+                ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
+                fig.add_axes(ax_cb)
+                fig.colorbar(im, cax=ax_cb)
+        else:
+            extent2 = [
+                0,
+                self.sampling[1] * ms_obj.shape[2],
+                self.sampling[0] * ms_obj.shape[1],
+                0,
+            ]
+
+            fig, ax = plt.subplots(2, 1, figsize=figsize)
+            ax[0].imshow(ms_obj.sum(0), cmap="gray", extent=extent2)
+            ax[0].plot(
+                [y1 * self.sampling[0], y2 * self.sampling[1]],
+                [x1 * self.sampling[0], x2 * self.sampling[1]],
+                color="red",
+            )
+            ax[0].set_xlabel("y [A]")
+            ax[0].set_ylabel("x [A]")
+            ax[0].set_title("Multislice depth profile location")
+
+            im = ax[1].imshow(plot_im, cmap="magma", extent=extent)
+            if aspect is not None:
+                ax[1].set_aspect(aspect)
+            ax[1].set_xlabel("r [A]")
+            ax[1].set_ylabel("z [A]")
+            ax[1].set_title("Multislice depth profile")
+            if cbar:
+                divider = make_axes_locatable(ax[1])
+                ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
+                fig.add_axes(ax_cb)
+                fig.colorbar(im, cax=ax_cb)
+            plt.tight_layout()
 
     def tune_num_slices_and_thicknesses(
         self,
@@ -3068,3 +3426,14 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
 
         obj = self._crop_rotate_object_fov(np.sum(obj, axis=0))
         return np.abs(np.fft.fftshift(np.fft.fft2(np.fft.ifftshift(obj))))
+
+    def _return_projected_cropped_potential(
+        self,
+    ):
+        """Utility function to accommodate multiple classes"""
+        if self._object_type == "complex":
+            projected_cropped_potential = np.angle(self.object_cropped).sum(0)
+        else:
+            projected_cropped_potential = self.object_cropped.sum(0)
+
+        return projected_cropped_potential

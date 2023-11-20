@@ -2,23 +2,16 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.patches import Circle
 from fractions import Fraction
 from typing import Union, Optional
-from copy import deepcopy
-from scipy.optimize import curve_fit
 import sys
 
-from emdfile import tqdmnd, PointList, PointListArray
+from emdfile import PointList
 from py4DSTEM.process.utils import single_atom_scatter, electron_wavelength_angstrom
 
-from py4DSTEM.process.diffraction.crystal_viz import plot_diffraction_pattern
-from py4DSTEM.process.diffraction.crystal_viz import plot_ring_pattern
-from py4DSTEM.process.diffraction.utils import Orientation, calc_1D_profile
-try:
-    from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
-    from pymatgen.core.structure import Structure
-except ImportError:
-    pass
+from py4DSTEM.process.diffraction.utils import Orientation
+
 
 class Crystal:
     """
@@ -35,6 +28,8 @@ class Crystal:
         orientation_plan,
         match_orientations,
         match_single_pattern,
+        cluster_grains,
+        cluster_orientation_map,
         calculate_strain,
         save_ang_file,
         symmetry_reduce_directions,
@@ -50,11 +45,13 @@ class Crystal:
         plot_orientation_plan,
         plot_orientation_maps,
         plot_fiber_orientation_maps,
+        plot_clusters,
+        plot_cluster_size,
     )
 
     from py4DSTEM.process.diffraction.crystal_calibrate import (
         calibrate_pixel_size,
-        calibrate_unit_cell
+        calibrate_unit_cell,
     )
 
     # Dynamical diffraction calculations are implemented in crystal_bloch.py
@@ -73,11 +70,12 @@ class Crystal:
         """
         Args:
             positions (np.array): fractional coordinates of each atom in the cell
-            numbers (np.array): Z number for each atom in the cell
+            numbers (np.array): Z number for each atom in the cell, if one number passed it is used for all atom positions
             cell (np.array): specify the unit cell, using a variable number of parameters
                 1 number: the lattice parameter for a cubic cell
                 3 numbers: the three lattice parameters for an orthorhombic cell
                 6 numbers: the a,b,c lattice parameters and ɑ,β,ɣ angles for any cell
+                3x3 array: row vectors containing the (u,v,w) lattice vectors.
 
         """
         # Initialize Crystal
@@ -92,7 +90,10 @@ class Crystal:
         else:
             raise Exception("Number of positions and atomic numbers do not match")
 
-        # unit cell, as either [a a a 90 90 90], [a b c 90 90 90], or [a b c alpha beta gamma]
+        # unit cell, as one of:
+        # [a a a 90 90 90]
+        # [a b c 90 90 90]
+        # [a b c alpha beta gamma]
         cell = np.asarray(cell, dtype="float_")
         if np.size(cell) == 1:
             self.cell = np.hstack([cell, cell, cell, 90, 90, 90])
@@ -100,46 +101,161 @@ class Crystal:
             self.cell = np.hstack([cell, 90, 90, 90])
         elif np.size(cell) == 6:
             self.cell = cell
+        elif np.shape(cell)[0] == 3 and np.shape(cell)[1] == 3:
+            self.lat_real = np.array(cell)
+            a = np.linalg.norm(self.lat_real[0, :])
+            b = np.linalg.norm(self.lat_real[1, :])
+            c = np.linalg.norm(self.lat_real[2, :])
+            alpha = np.rad2deg(
+                np.arccos(
+                    np.clip(
+                        np.sum(self.lat_real[1, :] * self.lat_real[2, :]) / b / c, -1, 1
+                    )
+                )
+            )
+            beta = np.rad2deg(
+                np.arccos(
+                    np.clip(
+                        np.sum(self.lat_real[0, :] * self.lat_real[2, :]) / a / c, -1, 1
+                    )
+                )
+            )
+            gamma = np.rad2deg(
+                np.arccos(
+                    np.clip(
+                        np.sum(self.lat_real[0, :] * self.lat_real[1, :]) / a / b, -1, 1
+                    )
+                )
+            )
+            self.cell = (a, b, c, alpha, beta, gamma)
         else:
-            raise Exception("Cell cannot contain " + np.size(cell) + " elements")
-        
+            raise Exception("Cell cannot contain " + np.size(cell) + " entries")
+
         # pymatgen flag
-        self.pymatgen_available = False
-        
+        if "pymatgen" in sys.modules:
+            self.pymatgen_available = True
+        else:
+            self.pymatgen_available = False
         # Calculate lattice parameters
         self.calculate_lattice()
-        
+
     def calculate_lattice(self):
-        # calculate unit cell lattice vectors
-        a = self.cell[0]
-        b = self.cell[1]
-        c = self.cell[2]
-        alpha = np.deg2rad(self.cell[3])
-        beta = np.deg2rad(self.cell[4])
-        gamma = np.deg2rad(self.cell[5])
-        f = np.cos(beta) * np.cos(gamma) - np.cos(alpha)
-        vol = a*b*c*np.sqrt(1 \
-            + 2*np.cos(alpha)*np.cos(beta)*np.cos(gamma) \
-            - np.cos(alpha)**2 - np.cos(beta)**2 - np.cos(gamma)**2)
-        self.lat_real = np.array(
-            [
-                [a,               0,                 0],
-                [b*np.cos(gamma), b*np.sin(gamma),   0],
-                [c*np.cos(beta), -c*f/np.sin(gamma), vol/(a*b*np.sin(gamma))],
-            ]
-        )
+        if not hasattr(self, "lat_real"):
+            # calculate unit cell lattice vectors
+            a = self.cell[0]
+            b = self.cell[1]
+            c = self.cell[2]
+            alpha = np.deg2rad(self.cell[3])
+            beta = np.deg2rad(self.cell[4])
+            gamma = np.deg2rad(self.cell[5])
+            f = np.cos(beta) * np.cos(gamma) - np.cos(alpha)
+            vol = (
+                a
+                * b
+                * c
+                * np.sqrt(
+                    1
+                    + 2 * np.cos(alpha) * np.cos(beta) * np.cos(gamma)
+                    - np.cos(alpha) ** 2
+                    - np.cos(beta) ** 2
+                    - np.cos(gamma) ** 2
+                )
+            )
+            self.lat_real = np.array(
+                [
+                    [a, 0, 0],
+                    [b * np.cos(gamma), b * np.sin(gamma), 0],
+                    [
+                        c * np.cos(beta),
+                        -c * f / np.sin(gamma),
+                        vol / (a * b * np.sin(gamma)),
+                    ],
+                ]
+            )
 
         # Inverse lattice, metric tensors
         self.metric_real = self.lat_real @ self.lat_real.T
         self.metric_inv = np.linalg.inv(self.metric_real)
         self.lat_inv = self.metric_inv @ self.lat_real
 
-        # pymatgen flag
-        if 'pymatgen' in sys.modules:
-            self.pymatgen_available = True            
+    def get_strained_crystal(
+        self,
+        exx=0.0,
+        eyy=0.0,
+        ezz=0.0,
+        exy=0.0,
+        exz=0.0,
+        eyz=0.0,
+        deformation_matrix=None,
+        return_deformation_matrix=False,
+    ):
+        """
+        This method returns new Crystal class with strain applied. The directions of (x,y,z)
+        are with respect to the default Crystal orientation, which can be checked with
+        print(Crystal.lat_real) applied to the original Crystal.
+
+        Strains are given in fractional values, so exx = 0.01 is 1% strain along the x direction.
+        Deformation matrix should be of the form:
+            deformation_matrix = np.array([
+                [1.0+exx,   1.0*exy,    1.0*exz],
+                [1.0*exy,   1.0+eyy,    1.0*eyz],
+                [1.0*exz,   1.0*eyz,    1.0+ezz],
+            ])
+
+        Parameters
+        --------
+
+        exx (float):
+            fractional strain along the xx direction
+        eyy (float):
+            fractional strain along the yy direction
+        ezz (float):
+            fractional strain along the zz direction
+        exy (float):
+            fractional strain along the xy direction
+        exz (float):
+            fractional strain along the xz direction
+        eyz (float):
+            fractional strain along the yz direction
+        deformation_matrix (np.ndarray):
+            3x3 array describing deformation matrix
+        return_deformation_matrix (bool):
+            boolean switch to return deformation matrix
+
+        Returns
+        --------
+        return_deformation_matrix == False:
+            strained_crystal (py4DSTEM.Crystal)
+        return_deformation_matrix == True:
+            (strained_crystal, deformation_matrix)
+        """
+
+        # deformation matrix
+        if deformation_matrix is None:
+            deformation_matrix = np.array(
+                [
+                    [1.0 + exx, 1.0 * exy, 1.0 * exz],
+                    [1.0 * exy, 1.0 + eyy, 1.0 * eyz],
+                    [1.0 * exz, 1.0 * eyz, 1.0 + ezz],
+                ]
+            )
+
+        # new unit cell
+        lat_new = self.lat_real @ deformation_matrix
+
+        # make new crystal class
+        from py4DSTEM.process.diffraction import Crystal
+
+        crystal_strained = Crystal(
+            positions=self.positions.copy(),
+            numbers=self.numbers.copy(),
+            cell=lat_new,
+        )
+
+        if return_deformation_matrix:
+            return crystal_strained, deformation_matrix
         else:
-            self.pymatgen_available = False
-        
+            return crystal_strained
 
     def from_CIF(CIF, conventional_standard_structure=True):
         """
@@ -203,10 +319,12 @@ class Crystal:
 
         """
         import pymatgen as mg
+
         if structure is not None:
             if isinstance(structure, str):
                 from mp_api.client import MPRester
-                with  MPRester(MP_key) as mpr:
+
+                with MPRester(MP_key) as mpr:
                     structure = mpr.get_structure_by_material_id(structure)
 
             assert isinstance(
@@ -222,7 +340,8 @@ class Crystal:
             )
         else:
             from mp_api.client import MPRester
-            with MPRester(MP_key) as mpr: 
+
+            with MPRester(MP_key) as mpr:
                 if formula is None:
                     raise Exception(
                         "Atleast a formula needs to be provided to query from MP database!!"
@@ -242,7 +361,10 @@ class Crystal:
                     ]
                 selected = query[
                     np.argmin(
-                        [query[i]["structure"].lattice.volume for i in range(len(query))]
+                        [
+                            query[i]["structure"].lattice.volume
+                            for i in range(len(query))
+                        ]
                     )
                 ]
                 structure = (
@@ -279,7 +401,6 @@ class Crystal:
         from_cartesian=False,
         conventional_standard_structure=True,
     ):
-
         """
         Create a Crystal using pymatgen to generate unit cell manually from user inputs
 
@@ -371,9 +492,7 @@ class Crystal:
 
         return Crystal.from_pymatgen_structure(structure)
 
-    def setup_diffraction(
-        self, accelerating_voltage: float
-    ):
+    def setup_diffraction(self, accelerating_voltage: float):
         """
         Set up attributes used for diffraction calculations without going
         through the full ACOM pipeline.
@@ -390,9 +509,20 @@ class Crystal:
         """
         Calculate structure factors for all hkl indices up to max scattering vector k_max
 
-        Args:
-            k_max (numpy float):                max scattering vector to include (1/Angstroms)
-            tol_structure_factor (numpy float): tolerance for removing low-valued structure factors
+        Parameters
+        --------
+
+        k_max: float
+            max scattering vector to include (1/Angstroms)
+        tol_structure_factor: float
+            tolerance for removing low-valued structure factors
+        return_intensities: bool
+            return the intensities and positions of all structure factor peaks.
+
+        Returns
+        --------
+        (q_SF, I_SF)
+            Tuple of the q vectors and intensities of each structure factor.
         """
 
         # Store k_max
@@ -424,7 +554,7 @@ class Crystal:
         )
         hkl = np.vstack([xa.ravel(), ya.ravel(), za.ravel()])
         # g_vec_all = self.lat_inv @ hkl
-        g_vec_all =  (hkl.T @ self.lat_inv).T
+        g_vec_all = (hkl.T @ self.lat_inv).T
 
         # Delete lattice vectors outside of k_max
         keep = np.linalg.norm(g_vec_all, axis=0) <= self.k_max
@@ -492,17 +622,17 @@ class Crystal:
         tol_excitation_error_mult: float = 3,
         tol_intensity: float = 1e-4,
         k_max: Optional[float] = None,
-        keep_qz = False,
+        keep_qz=False,
         return_orientation_matrix=False,
     ):
         """
         Generate a single diffraction pattern, return all peaks as a pointlist.
 
         Args:
-            orientation (Orientation):       an Orientation class object 
+            orientation (Orientation):       an Orientation class object
             ind_orientation                  If input is an Orientation class object with multiple orientations,
                                              this input can be used to select a specific orientation.
-            
+
             orientation_matrix (array):      (3,3) orientation matrix, where columns represent projection directions.
             zone_axis_lattice (array):        (3,) projection direction in lattice indices
             proj_x_lattice (array):           (3,) x-axis direction in lattice indices
@@ -525,12 +655,9 @@ class Crystal:
             orientation_matrix (array):      3x3 orientation matrix (optional)
         """
 
-        if not (hasattr(self, "wavelength") and hasattr(
-            self, "accel_voltage"
-        )):
+        if not (hasattr(self, "wavelength") and hasattr(self, "accel_voltage")):
             print("Accelerating voltage not set. Assuming 300 keV!")
             self.setup_diffraction(300e3)
-
 
         # Tolerance for angular tests
         tol = 1e-6
@@ -543,10 +670,8 @@ class Crystal:
                 orientation_matrix = orientation.matrix[ind_orientation]
         elif orientation_matrix is None:
             orientation_matrix = self.parse_orientation(
-                zone_axis_lattice,
-                proj_x_lattice,
-                zone_axis_cartesian,
-                proj_x_cartesian)
+                zone_axis_lattice, proj_x_lattice, zone_axis_cartesian, proj_x_cartesian
+            )
 
         # Get foil normal direction
         if foil_normal_lattice is not None:
@@ -560,13 +685,14 @@ class Crystal:
         # Rotate crystal into desired projection
         g = orientation_matrix.T @ self.g_vec_all
 
-
         # Calculate excitation errors
         if foil_normal is None:
             sg = self.excitation_errors(g)
         else:
-            foil_normal = (orientation_matrix.T \
-                @ (-1*foil_normal[:,None]/np.linalg.norm(foil_normal))).ravel()
+            foil_normal = (
+                orientation_matrix.T
+                @ (-1 * foil_normal[:, None] / np.linalg.norm(foil_normal))
+            ).ravel()
             sg = self.excitation_errors(g, foil_normal)
 
         # Threshold for inclusion in diffraction pattern
@@ -575,14 +701,14 @@ class Crystal:
 
         # Maximum scattering angle cutoff
         if k_max is not None:
-            keep_kmax = np.linalg.norm(g,axis=0) <= k_max
+            keep_kmax = np.linalg.norm(g, axis=0) <= k_max
             keep = np.logical_and(keep, keep_kmax)
 
         g_diff = g[:, keep]
 
         # Diffracted peak intensities and labels
         g_int = self.struct_factors_int[keep] * np.exp(
-            (sg[keep] ** 2) / (-2 * sigma_excitation_error ** 2)
+            (sg[keep] ** 2) / (-2 * sigma_excitation_error**2)
         )
         hkl = self.hkl[:, keep]
 
@@ -590,8 +716,8 @@ class Crystal:
         keep_int = g_int > tol_intensity
 
         # Output peaks
-        gx_proj = g_diff[0,keep_int]
-        gy_proj = g_diff[1,keep_int]
+        gx_proj = g_diff[0, keep_int]
+        gy_proj = g_diff[1, keep_int]
 
         # Diffracted peak labels
         h = hkl[0, keep_int]
@@ -600,8 +726,9 @@ class Crystal:
 
         # Output as PointList
         if keep_qz:
-            gz_proj = g_diff[2,keep_int]
-            pl_dtype = np.dtype([
+            gz_proj = g_diff[2, keep_int]
+            pl_dtype = np.dtype(
+                [
                     ("qx", "float64"),
                     ("qy", "float64"),
                     ("qz", "float64"),
@@ -609,36 +736,29 @@ class Crystal:
                     ("h", "int"),
                     ("k", "int"),
                     ("l", "int"),
-                ])
-            bragg_peaks = PointList(
-                np.array([],dtype=pl_dtype)
+                ]
             )
+            bragg_peaks = PointList(np.array([], dtype=pl_dtype))
             if np.any(keep_int):
                 bragg_peaks.add_data_by_field(
-                                              [
-                                              gx_proj,
-                                              gy_proj,
-                                              gz_proj,
-                                              g_int[keep_int],
-                                              h,k,l])
+                    [gx_proj, gy_proj, gz_proj, g_int[keep_int], h, k, l]
+                )
         else:
-            pl_dtype = np.dtype([
+            pl_dtype = np.dtype(
+                [
                     ("qx", "float64"),
                     ("qy", "float64"),
                     ("intensity", "float64"),
                     ("h", "int"),
                     ("k", "int"),
                     ("l", "int"),
-                ])
-            bragg_peaks = PointList(
-                np.array([],dtype=pl_dtype)
+                ]
             )
+            bragg_peaks = PointList(np.array([], dtype=pl_dtype))
             if np.any(keep_int):
-                bragg_peaks.add_data_by_field([
-                                              gx_proj,
-                                              gy_proj,
-                                              g_int[keep_int],
-                                              h,k,l])
+                bragg_peaks.add_data_by_field(
+                    [gx_proj, gy_proj, g_int[keep_int], h, k, l]
+                )
 
         if return_orientation_matrix:
             return bragg_peaks, orientation_matrix
@@ -646,112 +766,115 @@ class Crystal:
             return bragg_peaks
 
     def generate_ring_pattern(
-        self, 
-        k_max = 2.0,
-        use_bloch = False,
-        thickness = None,
-        bloch_params = None,
-        orientation_plan_params = None,
-        sigma_excitation_error = 0.02,
-        tol_intensity = 1e-3,
-        plot_rings = True,
-        plot_params = {},
-        return_calc = True,
+        self,
+        k_max=2.0,
+        use_bloch=False,
+        thickness=None,
+        bloch_params=None,
+        orientation_plan_params=None,
+        sigma_excitation_error=0.02,
+        tol_intensity=1e-3,
+        plot_rings=True,
+        plot_params={},
+        return_calc=True,
     ):
         """
         Calculate polycrystalline diffraction pattern from structure
-        
-        Args: 
+
+        Args:
             k_max (float):                  Maximum scattering vector
             use_bloch (bool):               if true, use dynamic instead of kinematic approach
-            thickness (float):              thickness in Ångström to evaluate diffraction patterns, 
+            thickness (float):              thickness in Ångström to evaluate diffraction patterns,
                                             only needed for dynamical calculations
-            bloch_params (dict):            optional, parameters to calculate dynamical structure factor, 
+            bloch_params (dict):            optional, parameters to calculate dynamical structure factor,
                                             see calculate_dynamical_structure_factors doc strings
-            orientation_plan_params (dict): optional, parameters to calculate orientation plan, 
+            orientation_plan_params (dict): optional, parameters to calculate orientation plan,
                                             see orientation_plan doc strings
-            sigma_excitation_error (float): sigma value for envelope applied to s_g (excitation errors) 
+            sigma_excitation_error (float): sigma value for envelope applied to s_g (excitation errors)
                                             in units of inverse Angstroms
             tol_intensity (np float):       tolerance in intensity units for inclusion of diffraction spots
             plot_rings(bool):               if true, plot diffraction rings with plot_ring_pattern
-            return_calc (bool):             return radii and intensities 
+            return_calc (bool):             return radii and intensities
 
-        Returns: 
+        Returns:
             radii_unique (np array):        radii of ring pattern in units of scattering vector k
             intensity_unique (np array):    intensity of rings weighted by frequency of diffraciton spots
-        """ 
-       
-        if use_bloch: 
-            assert (thickness is not None), "provide thickness for dynamical diffraction calculation"
-            assert hasattr(self, "Ug_dict"), "run calculate_dynamical_structure_factors first"
-            
+        """
+
+        if use_bloch:
+            assert (
+                thickness is not None
+            ), "provide thickness for dynamical diffraction calculation"
+            assert hasattr(
+                self, "Ug_dict"
+            ), "run calculate_dynamical_structure_factors first"
+
         if not hasattr(self, "struct_factors"):
             self.calculate_structure_factors(
-                k_max = k_max, 
+                k_max=k_max,
             )
-    
-        #check accelerating voltage 
-        if hasattr(self, "accel_voltage"): 
+
+        # check accelerating voltage
+        if hasattr(self, "accel_voltage"):
             accelerating_voltage = self.accel_voltage
-        else: 
+        else:
             self.accel_voltage = 300e3
             print("Accelerating voltage not set. Assuming 300 keV!")
-        
-        #check orientation plan
+
+        # check orientation plan
         if not hasattr(self, "orientation_vecs"):
-            if orientation_plan_params is None: 
+            if orientation_plan_params is None:
                 orientation_plan_params = {
-                    'zone_axis_range': 'auto',
-                    'angle_step_zone_axis': 4, 
-                    'angle_step_in_plane': 4,
-                }    
+                    "zone_axis_range": "auto",
+                    "angle_step_zone_axis": 4,
+                    "angle_step_in_plane": 4,
+                }
             self.orientation_plan(
                 **orientation_plan_params,
             )
 
-        #calculate intensity and radius for rings 
+        # calculate intensity and radius for rings
         radii = []
         intensity = []
         for a0 in range(self.orientation_vecs.shape[0]):
             if use_bloch:
                 beams = self.generate_diffraction_pattern(
-                    zone_axis_lattice = self.orientation_vecs[a0],
-                    sigma_excitation_error = sigma_excitation_error, 
-                    tol_intensity = tol_intensity, 
-                    k_max = k_max
+                    zone_axis_lattice=self.orientation_vecs[a0],
+                    sigma_excitation_error=sigma_excitation_error,
+                    tol_intensity=tol_intensity,
+                    k_max=k_max,
                 )
                 pattern = self.generate_dynamical_diffraction_pattern(
-                    beams = beams,
-                    zone_axis_lattice = self.orientation_vecs[a0],
-                    thickness = thickness,
+                    beams=beams,
+                    zone_axis_lattice=self.orientation_vecs[a0],
+                    thickness=thickness,
                 )
-            else:  
+            else:
                 pattern = self.generate_diffraction_pattern(
-                    zone_axis_lattice = self.orientation_vecs[a0],
-                    sigma_excitation_error = sigma_excitation_error, 
-                    tol_intensity = tol_intensity, 
-                    k_max = k_max
+                    zone_axis_lattice=self.orientation_vecs[a0],
+                    sigma_excitation_error=sigma_excitation_error,
+                    tol_intensity=tol_intensity,
+                    k_max=k_max,
                 )
 
-            intensity.append(pattern['intensity'])
-            radii.append((pattern['qx']**2 +  pattern['qy']**2)**0.5)
-        
+            intensity.append(pattern["intensity"])
+            radii.append((pattern["qx"] ** 2 + pattern["qy"] ** 2) ** 0.5)
+
         intensity = np.concatenate(intensity)
         radii = np.concatenate(radii)
 
-        radii_unique,idx,inv,cts = np.unique(radii, return_counts=True, return_index=True,return_inverse=True)
-        intensity_unique = np.bincount(inv,weights=intensity)
+        radii_unique, idx, inv, cts = np.unique(
+            radii, return_counts=True, return_index=True, return_inverse=True
+        )
+        intensity_unique = np.bincount(inv, weights=intensity)
 
         if plot_rings == True:
-            from py4DSTEM.process.diffraction.crystal_viz import plot_ring_pattern 
-            plot_ring_pattern(radii_unique, 
-                intensity_unique, 
-                **plot_params
-            )
+            from py4DSTEM.process.diffraction.crystal_viz import plot_ring_pattern
 
-        if return_calc == True: 
+            plot_ring_pattern(radii_unique, intensity_unique, **plot_params)
+
+        if return_calc == True:
             return radii_unique, intensity_unique
-
 
     # Vector conversions and other utilities for Crystal classes
     def cartesian_to_lattice(self, vec_cartesian):
@@ -763,22 +886,26 @@ class Crystal:
         return vec_cartesian / np.linalg.norm(vec_cartesian)
 
     def hexagonal_to_lattice(self, vec_hexagonal):
-        return np.array([
-            2.0*vec_hexagonal[0] + vec_hexagonal[1],
-            2.0*vec_hexagonal[1] + vec_hexagonal[0] ,
-            vec_hexagonal[3]
-            ])
+        return np.array(
+            [
+                2.0 * vec_hexagonal[0] + vec_hexagonal[1],
+                2.0 * vec_hexagonal[1] + vec_hexagonal[0],
+                vec_hexagonal[3],
+            ]
+        )
 
     def lattice_to_hexagonal(self, vec_lattice):
-        return np.array([
-            (2.0*vec_lattice[0] - vec_lattice[1])/3.0,
-            (2.0*vec_lattice[1] - vec_lattice[0])/3.0,
-            (-vec_lattice[0] - vec_lattice[1])/3.0,
-            vec_lattice[2]
-            ])
+        return np.array(
+            [
+                (2.0 * vec_lattice[0] - vec_lattice[1]) / 3.0,
+                (2.0 * vec_lattice[1] - vec_lattice[0]) / 3.0,
+                (-vec_lattice[0] - vec_lattice[1]) / 3.0,
+                vec_lattice[2],
+            ]
+        )
 
     def cartesian_to_miller(self, vec_cartesian):
-        vec_miller = self.lat_real.T @ self.metric_inv @ vec_cartesian 
+        vec_miller = self.lat_real.T @ self.metric_inv @ vec_cartesian
         return vec_miller / np.linalg.norm(vec_miller)
 
     def miller_to_cartesian(self, vec_miller):
@@ -786,21 +913,21 @@ class Crystal:
         return vec_cartesian / np.linalg.norm(vec_cartesian)
 
     def rational_ind(
-        self, 
+        self,
         vec,
-        tol_den = 1000,
-        ):
-        # This function rationalizes the indices of a vector, up to 
+        tol_den=1000,
+    ):
+        # This function rationalizes the indices of a vector, up to
         # some tolerance. Returns integers to prevent rounding errors.
-        vec = np.array(vec,dtype='float64')
+        vec = np.array(vec, dtype="float64")
         sub = np.abs(vec) > 0
         if np.sum(sub) > 0:
             for ind in np.argwhere(sub):
                 frac = Fraction(vec[ind[0]]).limit_denominator(tol_den)
                 vec *= np.round(frac.denominator)
-            vec = np.round(vec \
-                / np.gcd.reduce(np.round(np.abs(vec[sub])).astype('int'))
-                ).astype('int')
+            vec = np.round(
+                vec / np.gcd.reduce(np.round(np.abs(vec[sub])).astype("int"))
+            ).astype("int")
 
         return vec
 
@@ -869,11 +996,11 @@ class Crystal:
     def calculate_bragg_peak_histogram(
         self,
         bragg_peaks,
-        bragg_k_power = 1.0,
-        bragg_intensity_power = 1.0,
-        k_min = 0.0,
-        k_max = None,
-        k_step = 0.005
+        bragg_k_power=1.0,
+        bragg_intensity_power=1.0,
+        k_min=0.0,
+        k_max=None,
+        k_step=0.005,
     ):
         """
         Prepare experimental bragg peaks for lattice parameter or unit cell fitting.
@@ -910,10 +1037,10 @@ class Crystal:
                 bragg_peaks.get_vectors(
                     rx,
                     ry,
-                    center = True,
-                    ellipse = ellipse,
-                    pixel = True,
-                    rotate = rotate,
+                    center=True,
+                    ellipse=ellipse,
+                    pixel=True,
+                    rotate=rotate,
                 ).data
                 for rx in range(bragg_peaks.shape[0])
                 for ry in range(bragg_peaks.shape[1])
@@ -940,7 +1067,520 @@ class Crystal:
             weights=dk[sub] * int_meas[sub],
             minlength=k_num,
         )
-        int_exp = (int_exp ** bragg_intensity_power) * (k ** bragg_k_power)
+        int_exp = (int_exp**bragg_intensity_power) * (k**bragg_k_power)
         int_exp /= np.max(int_exp)
         return k, int_exp
-    
+
+
+def generate_moire_diffraction_pattern(
+    bragg_peaks_0,
+    bragg_peaks_1,
+    thresh_0=0.0002,
+    thresh_1=0.0002,
+    exx_1=0.0,
+    eyy_1=0.0,
+    exy_1=0.0,
+    phi_1=0.0,
+    power=2.0,
+):
+    """
+    Calculate a Moire lattice from 2 parent diffraction patterns. The second lattice can be rotated
+    and strained with respect to the original lattice. Note that this strain is applied in real space,
+    and so the inverse of the calculated infinitestimal strain tensor is applied.
+
+    Parameters
+    --------
+    bragg_peaks_0: BraggVector
+        Bragg vectors for parent lattice 0.
+    bragg_peaks_1: BraggVector
+        Bragg vectors for parent lattice 1.
+    thresh_0: float
+        Intensity threshold for structure factors from lattice 0.
+    thresh_1: float
+        Intensity threshold for structure factors from lattice 1.
+    exx_1: float
+        Strain of lattice 1 in x direction (vertical) in real space.
+    eyy_1: float
+        Strain of lattice 1 in y direction (horizontal) in real space.
+    exy_1: float
+        Shear strain of lattice 1 in (x,y) direction (diagonal) in real space.
+    phi_1: float
+        Rotation of lattice 1 in real space.
+    power: float
+        Plotting power law (default is amplitude**2.0, i.e. intensity).
+
+    Returns
+    --------
+    parent_peaks_0, parent_peaks_1, moire_peaks: BraggVectors
+        Bragg vectors for the rotated & strained parent lattices
+        and the moire lattice
+
+    """
+
+    # get intenties of all peaks
+    int0 = bragg_peaks_0["intensity"] ** (power / 2.0)
+    int1 = bragg_peaks_1["intensity"] ** (power / 2.0)
+
+    # peaks above threshold
+    sub0 = int0 >= thresh_0
+    sub1 = int1 >= thresh_1
+
+    # Remove origin (assuming brightest peak)
+    ind0_or = np.argmax(bragg_peaks_0["intensity"])
+    ind1_or = np.argmax(bragg_peaks_1["intensity"])
+    sub0[ind0_or] = False
+    sub1[ind1_or] = False
+    int0_sub = int0[sub0]
+    int1_sub = int1[sub1]
+
+    # Get peaks
+    qx0 = bragg_peaks_0["qx"][sub0]
+    qy0 = bragg_peaks_0["qy"][sub0]
+    qx1_init = bragg_peaks_1["qx"][sub1]
+    qy1_init = bragg_peaks_1["qy"][sub1]
+
+    # peak labels
+    h0 = bragg_peaks_0["h"][sub0]
+    k0 = bragg_peaks_0["k"][sub0]
+    l0 = bragg_peaks_0["l"][sub0]
+    h1 = bragg_peaks_1["h"][sub1]
+    k1 = bragg_peaks_1["k"][sub1]
+    l1 = bragg_peaks_1["l"][sub1]
+
+    # apply strain tensor to lattice 1
+    m = np.array(
+        [
+            [np.cos(phi_1), -np.sin(phi_1)],
+            [np.sin(phi_1), np.cos(phi_1)],
+        ]
+    ) @ np.linalg.inv(
+        np.array(
+            [
+                [1 + exx_1, exy_1 * 0.5],
+                [exy_1 * 0.5, 1 + eyy_1],
+            ]
+        )
+    )
+    qx1 = m[0, 0] * qx1_init + m[0, 1] * qy1_init
+    qy1 = m[1, 0] * qx1_init + m[1, 1] * qy1_init
+
+    # Generate moire lattice
+    ind0, ind1 = np.meshgrid(
+        np.arange(np.sum(sub0)),
+        np.arange(np.sum(sub1)),
+        indexing="ij",
+    )
+    qx = qx0[ind0] + qx1[ind1]
+    qy = qy0[ind0] + qy1[ind1]
+    int_moire = (int0_sub[ind0] * int1_sub[ind1]) ** 0.5
+
+    # moire labels
+    m_h0 = h0[ind0]
+    m_k0 = k0[ind0]
+    m_l0 = l0[ind0]
+    m_h1 = h1[ind1]
+    m_k1 = k1[ind1]
+    m_l1 = l1[ind1]
+
+    # Convert thresholded and moire peaks to BraggVector class
+
+    pl_dtype_parent = np.dtype(
+        [
+            ("qx", "float"),
+            ("qy", "float"),
+            ("intensity", "float"),
+            ("h", "int"),
+            ("k", "int"),
+            ("l", "int"),
+        ]
+    )
+
+    bragg_parent_0 = PointList(np.array([], dtype=pl_dtype_parent))
+    bragg_parent_0.add_data_by_field(
+        [
+            qx0.ravel(),
+            qy0.ravel(),
+            int0_sub.ravel(),
+            h0.ravel(),
+            k0.ravel(),
+            l0.ravel(),
+        ]
+    )
+
+    bragg_parent_1 = PointList(np.array([], dtype=pl_dtype_parent))
+    bragg_parent_1.add_data_by_field(
+        [
+            qx1.ravel(),
+            qy1.ravel(),
+            int1_sub.ravel(),
+            h1.ravel(),
+            k1.ravel(),
+            l1.ravel(),
+        ]
+    )
+
+    pl_dtype = np.dtype(
+        [
+            ("qx", "float"),
+            ("qy", "float"),
+            ("intensity", "float"),
+            ("h0", "int"),
+            ("k0", "int"),
+            ("l0", "int"),
+            ("h1", "int"),
+            ("k1", "int"),
+            ("l1", "int"),
+        ]
+    )
+    bragg_moire = PointList(np.array([], dtype=pl_dtype))
+    bragg_moire.add_data_by_field(
+        [
+            qx.ravel(),
+            qy.ravel(),
+            int_moire.ravel(),
+            m_h0.ravel(),
+            m_k0.ravel(),
+            m_l0.ravel(),
+            m_h1.ravel(),
+            m_k1.ravel(),
+            m_l1.ravel(),
+        ]
+    )
+
+    return bragg_parent_0, bragg_parent_1, bragg_moire
+
+
+def plot_moire_diffraction_pattern(
+    bragg_parent_0,
+    bragg_parent_1,
+    bragg_moire,
+    int_range=(0, 5e-3),
+    k_max=1.0,
+    plot_subpixel=True,
+    labels=None,
+    marker_size_parent=16,
+    marker_size_moire=4,
+    text_size_parent=10,
+    text_size_moire=6,
+    add_labels_parent=False,
+    add_labels_moire=False,
+    dist_labels=0.03,
+    dist_check=0.06,
+    sep_labels=0.03,
+    figsize=(8, 6),
+    returnfig=False,
+):
+    """
+    Plot Moire lattice and parent lattices.
+
+    Parameters
+    --------
+    bragg_peaks_0: BraggVector
+        Bragg vectors for parent lattice 0.
+    bragg_peaks_1: BraggVector
+        Bragg vectors for parent lattice 1.
+    bragg_moire: BraggVector
+        Bragg vectors for moire lattice.
+    int_range: (float, float)
+        Plotting intensity range for the Moire peaks.
+    k_max: float
+        Max k value of the plotted Moire lattice.
+    plot_subpixel: bool
+        Apply subpixel corrections to the Bragg spot positions.
+        Matplotlib default scatter plot rounds to the nearest pixel.
+    labels: list
+        List of text labels for parent lattices
+    marker_size_parent: float
+        Size of plot markers for the two parent lattices.
+    marker_size_moire: float
+        Size of plot markers for the Moire lattice.
+    text_size_parent: float
+        Label text size for parent lattice.
+    text_size_moire: float
+        Label text size for Moire lattice.
+    add_labels_parent: bool
+        Plot the parent lattice index labels.
+    add_labels_moire: bool
+        Plot the parent lattice index labels for the Moire spots.
+    dist_labels: float
+        Distance to move the labels off the spots.
+    dist_check: float
+        Set to some distance to "push" the labels away from each other if they are within this distance.
+    sep_labels: float
+        Separation distance for labels which are "pushed" apart.
+    figsize: (float,float)
+        Size of output figure.
+    returnfig: bool
+        Return the (fix,ax) handles of the plot.
+
+    Returns
+    --------
+    fig, ax: matplotlib handles (optional)
+        Figure and axes handles for the moire plot.
+    """
+
+    # peak labels
+
+    if labels is None:
+        labels = ("crystal 0", "crystal 1")
+
+    def overline(x):
+        return str(x) if x >= 0 else (r"\overline{" + str(np.abs(x)) + "}")
+
+    # parent 1
+    qx0 = bragg_parent_0["qx"]
+    qy0 = bragg_parent_0["qy"]
+    h0 = bragg_parent_0["h"]
+    k0 = bragg_parent_0["k"]
+    l0 = bragg_parent_0["l"]
+
+    # parent 2
+    qx1 = bragg_parent_1["qx"]
+    qy1 = bragg_parent_1["qy"]
+    h1 = bragg_parent_1["h"]
+    k1 = bragg_parent_1["k"]
+    l1 = bragg_parent_1["l"]
+
+    # moire
+    qx = bragg_moire["qx"]
+    qy = bragg_moire["qy"]
+    m_h0 = bragg_moire["h0"]
+    m_k0 = bragg_moire["k0"]
+    m_l0 = bragg_moire["l0"]
+    m_h1 = bragg_moire["h1"]
+    m_k1 = bragg_moire["k1"]
+    m_l1 = bragg_moire["l1"]
+    int_moire = bragg_moire["intensity"]
+
+    fig = plt.figure(figsize=figsize)
+    ax = fig.add_axes([0.09, 0.09, 0.65, 0.9])
+    ax_labels = fig.add_axes([0.75, 0, 0.25, 1])
+
+    text_params_parent = {
+        "ha": "center",
+        "va": "center",
+        "family": "sans-serif",
+        "fontweight": "normal",
+        "size": text_size_parent,
+    }
+    text_params_moire = {
+        "ha": "center",
+        "va": "center",
+        "family": "sans-serif",
+        "fontweight": "normal",
+        "size": text_size_moire,
+    }
+
+    if plot_subpixel is False:
+        # moire
+        ax.scatter(
+            qy,
+            qx,
+            # color = (0,0,0,1),
+            c=int_moire,
+            s=marker_size_moire,
+            cmap="gray_r",
+            vmin=int_range[0],
+            vmax=int_range[1],
+            antialiased=True,
+        )
+
+        # parent lattices
+        ax.scatter(
+            qy0,
+            qx0,
+            color=(1, 0, 0, 1),
+            s=marker_size_parent,
+            antialiased=True,
+        )
+        ax.scatter(
+            qy1,
+            qx1,
+            color=(0, 0.7, 1, 1),
+            s=marker_size_parent,
+            antialiased=True,
+        )
+
+        # origin
+        ax.scatter(
+            0,
+            0,
+            color=(0, 0, 0, 1),
+            s=marker_size_parent,
+            antialiased=True,
+        )
+
+    else:
+        # moire peaks
+        int_all = np.clip(
+            (int_moire - int_range[0]) / (int_range[1] - int_range[0]), 0, 1
+        )
+        keep = np.logical_and.reduce(
+            (qx >= -k_max, qx <= k_max, qy >= -k_max, qy <= k_max)
+        )
+        for x, y, int_marker in zip(qx[keep], qy[keep], int_all[keep]):
+            ax.add_artist(
+                Circle(
+                    xy=(y, x),
+                    radius=np.sqrt(marker_size_moire) / 800.0,
+                    color=(1 - int_marker, 1 - int_marker, 1 - int_marker),
+                )
+            )
+        if add_labels_moire:
+            for a0 in range(qx.size):
+                if keep.ravel()[a0]:
+                    x0 = qx.ravel()[a0]
+                    y0 = qy.ravel()[a0]
+                    d2 = (qx.ravel() - x0) ** 2 + (qy.ravel() - y0) ** 2
+                    sub = d2 < dist_check**2
+                    xc = np.mean(qx.ravel()[sub])
+                    yc = np.mean(qy.ravel()[sub])
+                    xp = x0 - xc
+                    yp = y0 - yc
+                    if xp == 0 and yp == 0.0:
+                        xp = x0 - dist_labels
+                        yp = y0
+                    else:
+                        leng = np.linalg.norm((xp, yp))
+                        xp = x0 + xp * dist_labels / leng
+                        yp = y0 + yp * dist_labels / leng
+
+                    ax.text(
+                        yp,
+                        xp - sep_labels,
+                        "$"
+                        + overline(m_h0.ravel()[a0])
+                        + overline(m_k0.ravel()[a0])
+                        + overline(m_l0.ravel()[a0])
+                        + "$",
+                        c="r",
+                        **text_params_moire,
+                    )
+                    ax.text(
+                        yp,
+                        xp,
+                        "$"
+                        + overline(m_h1.ravel()[a0])
+                        + overline(m_k1.ravel()[a0])
+                        + overline(m_l1.ravel()[a0])
+                        + "$",
+                        c=(0, 0.7, 1.0),
+                        **text_params_moire,
+                    )
+
+        keep = np.logical_and.reduce(
+            (qx0 >= -k_max, qx0 <= k_max, qy0 >= -k_max, qy0 <= k_max)
+        )
+        for x, y in zip(qx0[keep], qy0[keep]):
+            ax.add_artist(
+                Circle(
+                    xy=(y, x),
+                    radius=np.sqrt(marker_size_parent) / 800.0,
+                    color=(1, 0, 0),
+                )
+            )
+        if add_labels_parent:
+            for a0 in range(qx0.size):
+                if keep.ravel()[a0]:
+                    xp = qx0.ravel()[a0] - dist_labels
+                    yp = qy0.ravel()[a0]
+                    ax.text(
+                        yp,
+                        xp,
+                        "$"
+                        + overline(h0.ravel()[a0])
+                        + overline(k0.ravel()[a0])
+                        + overline(l0.ravel()[a0])
+                        + "$",
+                        c="k",
+                        **text_params_parent,
+                    )
+
+        keep = np.logical_and.reduce(
+            (qx1 >= -k_max, qx1 <= k_max, qy1 >= -k_max, qy1 <= k_max)
+        )
+        for x, y in zip(qx1[keep], qy1[keep]):
+            ax.add_artist(
+                Circle(
+                    xy=(y, x),
+                    radius=np.sqrt(marker_size_parent) / 800.0,
+                    color=(0, 0.7, 1),
+                )
+            )
+        if add_labels_parent:
+            for a0 in range(qx1.size):
+                if keep.ravel()[a0]:
+                    xp = qx1.ravel()[a0] - dist_labels
+                    yp = qy1.ravel()[a0]
+                    ax.text(
+                        yp,
+                        xp,
+                        "$"
+                        + overline(h1.ravel()[a0])
+                        + overline(k1.ravel()[a0])
+                        + overline(l1.ravel()[a0])
+                        + "$",
+                        c="k",
+                        **text_params_parent,
+                    )
+
+        # origin
+        ax.add_artist(
+            Circle(
+                xy=(0, 0),
+                radius=np.sqrt(marker_size_parent) / 800.0,
+                color=(0, 0, 0),
+            )
+        )
+
+    ax.set_xlim((-k_max, k_max))
+    ax.set_ylim((-k_max, k_max))
+    ax.set_ylabel("$q_x$ (1/A)")
+    ax.set_xlabel("$q_y$ (1/A)")
+    ax.invert_yaxis()
+
+    # labels
+    ax_labels.scatter(
+        0,
+        0,
+        color=(1, 0, 0, 1),
+        s=marker_size_parent,
+    )
+    ax_labels.scatter(
+        0,
+        -1,
+        color=(0, 0.7, 1, 1),
+        s=marker_size_parent,
+    )
+    ax_labels.scatter(
+        0,
+        -2,
+        color=(0, 0, 0, 1),
+        s=marker_size_moire,
+    )
+    ax_labels.text(
+        0.4,
+        -0.2,
+        labels[0],
+        fontsize=14,
+    )
+    ax_labels.text(
+        0.4,
+        -1.2,
+        labels[1],
+        fontsize=14,
+    )
+    ax_labels.text(
+        0.4,
+        -2.2,
+        "Moiré lattice",
+        fontsize=14,
+    )
+
+    ax_labels.set_xlim((-1, 4))
+    ax_labels.set_ylim((-21, 1))
+
+    ax_labels.axis("off")
+
+    if returnfig:
+        return fig, ax

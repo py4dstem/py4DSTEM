@@ -13,7 +13,6 @@ def read_arina(
     dtype_bin: float = None,
     flatfield: np.ndarray = None,
 ):
-
     """
     File reader for arina 4D-STEM datasets
     Args:
