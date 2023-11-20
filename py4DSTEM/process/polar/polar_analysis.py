@@ -282,7 +282,7 @@ def calculate_pair_dist_function(
         The value of the PDF approaching the origin should be zero, however numerical
         instability may result in non-physical finite values there. This flag toggles
         damping the value of the PDF to zero near the origin.
-    enforce_positivity: 
+    enforce_positivity:
         Force all pdf values to be >0.
     density : number or None
         The density of the sample, if known.  If this is not provided, only the
