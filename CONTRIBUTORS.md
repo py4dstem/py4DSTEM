@@ -65,8 +65,7 @@ Thank you for your interest in contributing to py4DSTEM! We look forward to seei
     ```bash
    git clone https://github.com/<your-github-username>/py4DSTEM.git
     ```
-
-
+**_extra tips_:** Github has an excellent [tutorial](https://docs.github.com/en/get-started/quickstart/fork-a-repo) you can follow to learn mote about for steps one and two.
 
 3. **Create a new branch:** Create a new branch for your development work. This will prevent your changes from affecting the main branch of the repository. Use the following command, replacing `<branch-name>` with a name for your branch, using an informative name can be helpful e.g. `<fixing-virtual-image-bug>`:
 
