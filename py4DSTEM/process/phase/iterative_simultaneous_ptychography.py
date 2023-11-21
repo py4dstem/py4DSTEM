@@ -3096,9 +3096,6 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
         padding : int, optional
             Pixels to pad by post rotating-cropping object
         """
-        xp = self._xp
-        asnumpy = self._asnumpy
-
         figsize = kwargs.pop("figsize", (12, 5))
         cmap_e = kwargs.pop("cmap_e", "magma")
         cmap_m = kwargs.pop("cmap_m", "PuOr")
@@ -3228,11 +3225,11 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
             # Probe
             ax = fig.add_subplot(spec[0, 2])
             if plot_fourier_probe:
-                probe_array = self.probe_fourier
                 if remove_initial_probe_aberrations:
-                    probe_array *= asnumpy(
-                        xp.fft.ifftshift(xp.conjugate(self._known_aberrations_array))
-                    )
+                    probe_array = self.probe_fourier_residual
+                else:
+                    probe_array = self.probe_fourier
+
                 probe_array = Complex2RGB(
                     probe_array,
                     chroma_boost=chroma_boost,

@@ -1864,9 +1864,6 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
         padding : int, optional
             Pixels to pad by post rotating-cropping object
         """
-        xp = self._xp
-        asnumpy = self._asnumpy
-
         figsize = kwargs.pop("figsize", (8, 5))
         cmap = kwargs.pop("cmap", "magma")
 
@@ -1962,11 +1959,11 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
             ax = fig.add_subplot(spec[0, 1])
 
             if plot_fourier_probe:
-                probe_array = self.probe_fourier[0]
                 if remove_initial_probe_aberrations:
-                    probe_array *= asnumpy(
-                        xp.fft.ifftshift(xp.conjugate(self._known_aberrations_array))
-                    )
+                    probe_array = self.probe_fourier_residual[0]
+                else:
+                    probe_array = self.probe_fourier[0]
+
                 probe_array = Complex2RGB(
                     probe_array,
                     chroma_boost=chroma_boost,
@@ -2068,7 +2065,6 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
             Pixels to pad by post rotating-cropping object
         """
         asnumpy = self._asnumpy
-        xp = self._xp
 
         if not hasattr(self, "object_iterations"):
             raise ValueError(
@@ -2206,16 +2202,10 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
                 if plot_fourier_probe:
                     probe_array = asnumpy(
                         self._return_fourier_probe_from_centered_probe(
-                            probes[grid_range[n]][0]
+                            probes[grid_range[n]][0],
+                            remove_initial_probe_aberrations=remove_initial_probe_aberrations,
                         )
                     )
-
-                    if remove_initial_probe_aberrations:
-                        probe_array *= asnumpy(
-                            xp.fft.ifftshift(
-                                xp.conjugate(self._known_aberrations_array)
-                            )
-                        )
 
                     probe_array = Complex2RGB(probe_array, chroma_boost=chroma_boost)
 
@@ -2325,7 +2315,14 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
         return self
 
     def show_fourier_probe(
-        self, probe=None, scalebar=True, pixelsize=None, pixelunits=None, **kwargs
+        self,
+        probe=None,
+        remove_initial_probe_aberrations=False,
+        cbar=True,
+        scalebar=True,
+        pixelsize=None,
+        pixelunits=None,
+        **kwargs,
     ):
         """
         Plot probe in fourier space
@@ -2334,6 +2331,8 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
         ----------
         probe: complex array, optional
             if None is specified, uses the `probe_fourier` property
+        remove_initial_probe_aberrations: bool, optional
+            If True, removes initial probe aberrations from Fourier probe
         scalebar: bool, optional
             if True, adds scalebar to probe
         pixelunits: str, optional
@@ -2344,21 +2343,37 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
         asnumpy = self._asnumpy
 
         if probe is None:
-            probe = list(self.probe_fourier)
+            probe = list(
+                asnumpy(
+                    self._return_fourier_probe(
+                        probe,
+                        remove_initial_probe_aberrations=remove_initial_probe_aberrations,
+                    )
+                )
+            )
         else:
             if isinstance(probe, np.ndarray) and probe.ndim == 2:
                 probe = [probe]
-            probe = [asnumpy(self._return_fourier_probe(pr)) for pr in probe]
+            probe = [
+                asnumpy(
+                    self._return_fourier_probe(
+                        pr,
+                        remove_initial_probe_aberrations=remove_initial_probe_aberrations,
+                    )
+                )
+                for pr in probe
+            ]
 
         if pixelsize is None:
             pixelsize = self._reciprocal_sampling[1]
         if pixelunits is None:
             pixelunits = r"$\AA^{-1}$"
 
-        chroma_boost = kwargs.pop("chroma_boost", 2)
+        chroma_boost = kwargs.pop("chroma_boost", 1)
 
         show_complex(
             probe if len(probe) > 1 else probe[0],
+            cbar=cbar,
             scalebar=scalebar,
             pixelsize=pixelsize,
             pixelunits=pixelunits,
