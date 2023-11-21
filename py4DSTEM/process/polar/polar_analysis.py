@@ -218,6 +218,7 @@ def calculate_pair_dist_function(
     r_max=20.0,
     r_step=0.02,
     damp_origin_fluctuations=True,
+    enforce_positivity=True,
     density=None,
     plot_background_fits=False,
     plot_sf_estimate=False,
@@ -281,6 +282,8 @@ def calculate_pair_dist_function(
         The value of the PDF approaching the origin should be zero, however numerical
         instability may result in non-physical finite values there. This flag toggles
         damping the value of the PDF to zero near the origin.
+    enforce_positivity:
+        Force all pdf values to be >0.
     density : number or None
         The density of the sample, if known.  If this is not provided, only the
         reduced PDF is calculated.  If this value is provided, the PDF is also
@@ -411,13 +414,13 @@ def calculate_pair_dist_function(
     if density is not None:
         pdf = pdf_reduced.copy()
         pdf[1:] /= 4 * np.pi * density * r[1:] * (r[1] - r[0])
-        pdf *= 2 / np.pi
         pdf += 1
 
         # damp and clip values below zero
         if damp_origin_fluctuations:
             pdf *= r_mask
-        pdf = np.maximum(pdf, 0.0)
+        if enforce_positivity:
+            pdf = np.maximum(pdf, 0.0)
 
         # store results
         self.pdf = pdf
