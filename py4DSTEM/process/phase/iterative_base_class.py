@@ -2154,6 +2154,7 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
     def _return_fourier_probe(
         self,
         probe=None,
+        remove_initial_probe_aberrations=False,
     ):
         """
         Returns complex fourier probe shifted to center of array from
@@ -2163,6 +2164,8 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
         ----------
         probe: complex array, optional
             if None is specified, uses self._probe
+        remove_initial_probe_aberrations: bool, optional
+            If True, removes initial probe aberrations from Fourier probe
 
         Returns
         -------
@@ -2176,11 +2179,17 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
         else:
             probe = xp.asarray(probe, dtype=xp.complex64)
 
-        return xp.fft.fftshift(xp.fft.fft2(probe), axes=(-2, -1))
+        fourier_probe = xp.fft.fft2(probe)
+
+        if remove_initial_probe_aberrations:
+            fourier_probe *= xp.conjugate(self._known_aberrations_array)
+
+        return xp.fft.fftshift(fourier_probe, axes=(-2, -1))
 
     def _return_fourier_probe_from_centered_probe(
         self,
         probe=None,
+        remove_initial_probe_aberrations=False,
     ):
         """
         Returns complex fourier probe shifted to center of array from
@@ -2190,6 +2199,8 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
         ----------
         probe: complex array, optional
             if None is specified, uses self._probe
+        remove_initial_probe_aberrations: bool, optional
+            If True, removes initial probe aberrations from Fourier probe
 
         Returns
         -------
@@ -2197,7 +2208,10 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
             Fourier-transformed and center-shifted probe.
         """
         xp = self._xp
-        return self._return_fourier_probe(xp.fft.ifftshift(probe, axes=(-2, -1)))
+        return self._return_fourier_probe(
+            xp.fft.ifftshift(probe, axes=(-2, -1)),
+            remove_initial_probe_aberrations=remove_initial_probe_aberrations,
+        )
 
     def _return_centered_probe(
         self,
@@ -2490,6 +2504,7 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
     def show_fourier_probe(
         self,
         probe=None,
+        remove_initial_probe_aberrations=False,
         cbar=True,
         scalebar=True,
         pixelsize=None,
@@ -2503,6 +2518,8 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
         ----------
         probe: complex array, optional
             if None is specified, uses the `probe_fourier` property
+        remove_initial_probe_aberrations: bool, optional
+            If True, removes initial probe aberrations from Fourier probe
         cbar: bool, optional
             if True, adds colorbar
         scalebar: bool, optional
@@ -2514,10 +2531,11 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
         """
         asnumpy = self._asnumpy
 
-        if probe is None:
-            probe = self.probe_fourier
-        else:
-            probe = asnumpy(self._return_fourier_probe(probe))
+        probe = asnumpy(
+            self._return_fourier_probe(
+                probe, remove_initial_probe_aberrations=remove_initial_probe_aberrations
+            )
+        )
 
         if pixelsize is None:
             pixelsize = self._reciprocal_sampling[1]
@@ -2525,7 +2543,7 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
             pixelunits = r"$\AA^{-1}$"
 
         figsize = kwargs.pop("figsize", (6, 6))
-        chroma_boost = kwargs.pop("chroma_boost", 2)
+        chroma_boost = kwargs.pop("chroma_boost", 1)
 
         fig, ax = plt.subplots(figsize=figsize)
         show_complex(
@@ -2577,6 +2595,19 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
 
         asnumpy = self._asnumpy
         return asnumpy(self._return_fourier_probe(self._probe))
+
+    @property
+    def probe_fourier_residual(self):
+        """Current probe estimate in Fourier space"""
+        if not hasattr(self, "_probe"):
+            return None
+
+        asnumpy = self._asnumpy
+        return asnumpy(
+            self._return_fourier_probe(
+                self._probe, remove_initial_probe_aberrations=True
+            )
+        )
 
     @property
     def probe_centered(self):

@@ -1872,11 +1872,10 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
 
             ax = fig.add_subplot(spec[0, 1])
             if plot_fourier_probe:
-                probe_array = self.probe_fourier
                 if remove_initial_probe_aberrations:
-                    probe_array *= asnumpy(
-                        xp.fft.ifftshift(xp.conjugate(self._known_aberrations_array))
-                    )
+                    probe_array = self.probe_fourier_residual
+                else:
+                    probe_array = self.probe_fourier
                 probe_array = Complex2RGB(
                     probe_array,
                     chroma_boost=chroma_boost,
@@ -2117,16 +2116,10 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
                 if plot_fourier_probe:
                     probe_array = asnumpy(
                         self._return_fourier_probe_from_centered_probe(
-                            probes[grid_range[n]]
+                            probes[grid_range[n]],
+                            remove_initial_probe_aberrations=remove_initial_probe_aberrations,
                         )
                     )
-
-                    if remove_initial_probe_aberrations:
-                        probe_array *= asnumpy(
-                            xp.fft.ifftshift(
-                                xp.conjugate(self._known_aberrations_array)
-                            )
-                        )
 
                     probe_array = Complex2RGB(probe_array, chroma_boost=chroma_boost)
                     ax.set_title(f"Iter: {grid_range[n]} Fourier probe")
