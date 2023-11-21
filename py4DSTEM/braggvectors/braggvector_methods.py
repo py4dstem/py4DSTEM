@@ -99,12 +99,12 @@ class BraggVectorMethods:
         # then scale by the sampling factor
         else:
             # get pixel calibration
-            if self.calstate["pixel"] == True:
+            if self.calstate["pixel"] is True:
                 qpix = self.calibration.get_Q_pixel_size()
                 qx /= qpix
                 qy /= qpix
             # origin calibration
-            if self.calstate["center"] == True:
+            if self.calstate["center"] is True:
                 origin = self.calibration.get_origin_mean()
                 qx += origin[0]
                 qy += origin[1]
@@ -153,12 +153,12 @@ class BraggVectorMethods:
         ).reshape(Q_Nx, Q_Ny)
 
         # determine the resampled grid center and pixel size
-        if mode == "cal" and self.calstate["center"] == True:
+        if mode == "cal" and self.calstate["center"] is True:
             x0 = sampling * origin[0]
             y0 = sampling * origin[1]
         else:
             x0, y0 = 0, 0
-        if mode == "cal" and self.calstate["pixel"] == True:
+        if mode == "cal" and self.calstate["pixel"] is True:
             pixelsize = qpix / sampling
         else:
             pixelsize = 1 / sampling

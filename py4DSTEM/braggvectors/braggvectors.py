@@ -272,6 +272,7 @@ class BraggVectors(Custom, BraggVectorMethods, Data):
         braggvector_copy.set_raw_vectors(self._v_uncal.copy())
         for k in self.metadata.keys():
             braggvector_copy.metadata = self.metadata[k].copy()
+        braggvector_copy.setcal()
         return braggvector_copy
 
     # write
@@ -384,7 +385,7 @@ class RawVectorGetter:
     def __repr__(self):
         space = " " * len(self.__class__.__name__) + "  "
         string = f"{self.__class__.__name__}( "
-        string += f"Retrieves raw bragg vectors. Get vectors for scan position x,y with [x,y]. )"
+        string += "Retrieves raw bragg vectors. Get vectors for scan position x,y with [x,y]. )"
         return string
 
 

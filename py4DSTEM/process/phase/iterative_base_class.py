@@ -1359,6 +1359,7 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
                 "num_diffraction_patterns": self._num_diffraction_patterns,
                 "sampling": self.sampling,
                 "angular_sampling": self.angular_sampling,
+                "positions_mask": self._positions_mask,
             },
         )
 
@@ -1501,6 +1502,7 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
         self._angular_sampling = preprocess_md["angular_sampling"]
         self._region_of_interest_shape = preprocess_md["region_of_interest_shape"]
         self._num_diffraction_patterns = preprocess_md["num_diffraction_patterns"]
+        self._positions_mask = preprocess_md["positions_mask"]
 
         # Reconstruction metadata
         reconstruction_md = _read_metadata(group, "reconstruction_metadata")
@@ -1596,7 +1598,9 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
                 x = (x - np.ptp(x) / 2) / self.sampling[0]
                 y = (y - np.ptp(y) / 2) / self.sampling[1]
             x, y = np.meshgrid(x, y, indexing="ij")
-
+            if positions_mask is not None:
+                x = x[positions_mask]
+                y = y[positions_mask]
         else:
             positions -= np.mean(positions, axis=0)
             x = positions[:, 0] / self.sampling[1]
@@ -1612,9 +1616,6 @@ class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints)
         else:
             positions = np.array([x.ravel(), y.ravel()]).T
         positions -= np.min(positions, axis=0)
-
-        if positions_mask is not None:
-            positions = positions[positions_mask.ravel()]
 
         if self._object_padding_px is None:
             float_padding = self._region_of_interest_shape / 2
