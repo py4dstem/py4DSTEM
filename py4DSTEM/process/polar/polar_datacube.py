@@ -292,16 +292,36 @@ class PolarDatacube:
             these values directly. Length 2 list of ints uses the calibrated
             origin value at this scan position. None uses the calibrated mean
             origin.
+        ellipse : tuple or None
+            Variable behavior depending on the arg type. Length 3 tuples uses
+            these values directly (a,b,theta). None uses the calibrated value.
         mask : boolean array or None
             A mask applied to the data before transformation.  The value of
-            masked pixels (0's) in the output is determined by `returnval`. Note
-            that this mask is applied in combination with any mask at
-            PolarData.mask.
-        returnval : 'masked' or 'nan' or None
-            Controls the returned data. 'masked' returns a numpy masked array.
-            'nan' returns a normal numpy array with masked pixels set to np.nan.
-            None returns a 2-tuple of numpy arrays - the transformed data with
-            masked pixels set to 0, and the transformed mask.
+            masked pixels in the output is determined by `returnval`. Note that
+            this mask is applied in combination with any mask at PolarData.mask.
+        mask_thresh : number
+            Pixels in the transformed mask with values below this number are
+            considered masked, and will be populated by the values specified
+            by `returnval`.
+        returnval : 'masked' or 'nan' or 'all' or 'zeros' or 'all_zeros'
+            Controls the returned data, including how un-sampled points
+            are handled.
+              - 'masked' returns a numpy masked array.
+              - 'nan' returns a normal numpy array with unsampled pixels set to
+                np.nan.
+              - 'all' returns a 4-tuple of numpy arrays - the transformed data
+                with unsampled pixels set to 'nan', the normalization array, the
+                normalization array scaled to account for the q-dependent
+                sampling density, and the polar boolean mask
+              - 'zeros' returns a normal numpy with unsampled pixels set to 0
+              - 'all_zeros' returns the same 4-tuple as 'all', but with unsampled
+                pixels in the transformed data array set to zeros.
+
+         Returns
+        --------
+        variable
+            see `returnval`, above. Default is a masked array representing
+            the polar transformed data.
         """
         return self._polar_data_getter._transform
 
