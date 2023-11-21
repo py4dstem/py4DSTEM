@@ -2446,9 +2446,6 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
             Pixels to pad by post rotating-cropping object
 
         """
-        xp = self._xp
-        asnumpy = self._asnumpy
-
         figsize = kwargs.pop("figsize", (8, 5))
         cmap = kwargs.pop("cmap", "magma")
 
@@ -2547,11 +2544,11 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
 
             ax = fig.add_subplot(spec[0, 1])
             if plot_fourier_probe:
-                probe_array = self.probe_fourier
                 if remove_initial_probe_aberrations:
-                    probe_array *= asnumpy(
-                        xp.fft.ifftshift(xp.conjugate(self._known_aberrations_array))
-                    )
+                    probe_array = self.probe_fourier_residual
+                else:
+                    probe_array = self.probe_fourier
+
                 probe_array = Complex2RGB(
                     probe_array,
                     chroma_boost=chroma_boost,
@@ -2651,7 +2648,6 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
             Pixels to pad by post rotating-cropping object
         """
         asnumpy = self._asnumpy
-        xp = self._xp
 
         if not hasattr(self, "object_iterations"):
             raise ValueError(
@@ -2791,16 +2787,10 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
                 if plot_fourier_probe:
                     probe_array = asnumpy(
                         self._return_fourier_probe_from_centered_probe(
-                            probes[grid_range[n]]
+                            probes[grid_range[n]],
+                            remove_initial_probe_aberrations=remove_initial_probe_aberrations,
                         )
                     )
-
-                    if remove_initial_probe_aberrations:
-                        probe_array *= asnumpy(
-                            xp.fft.ifftshift(
-                                xp.conjugate(self._known_aberrations_array)
-                            )
-                        )
 
                     probe_array = Complex2RGB(probe_array, chroma_boost=chroma_boost)
 
@@ -2909,6 +2899,7 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
     def show_transmitted_probe(
         self,
         plot_fourier_probe: bool = False,
+        remove_initial_probe_aberrations=False,
         **kwargs,
     ):
         """
@@ -2951,7 +2942,12 @@ class MultislicePtychographicReconstruction(PtychographicReconstruction):
 
         if plot_fourier_probe:
             bottom_row = [
-                asnumpy(self._return_fourier_probe(probe))
+                asnumpy(
+                    self._return_fourier_probe(
+                        probe,
+                        remove_initial_probe_aberrations=remove_initial_probe_aberrations,
+                    )
+                )
                 for probe in [
                     mean_transmitted,
                     min_intensity_transmitted,

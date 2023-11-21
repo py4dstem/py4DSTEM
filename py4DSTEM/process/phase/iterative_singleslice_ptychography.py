@@ -1774,9 +1774,6 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
         padding : int, optional
             Pixels to pad by post rotating-cropping object
         """
-        xp = self._xp
-        asnumpy = self._asnumpy
-
         figsize = kwargs.pop("figsize", (8, 5))
         cmap = kwargs.pop("cmap", "magma")
 
@@ -1876,6 +1873,7 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
                     probe_array = self.probe_fourier_residual
                 else:
                     probe_array = self.probe_fourier
+
                 probe_array = Complex2RGB(
                     probe_array,
                     chroma_boost=chroma_boost,
@@ -1977,7 +1975,6 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
             Pixels to pad by post rotating-cropping object
         """
         asnumpy = self._asnumpy
-        xp = self._xp
 
         if not hasattr(self, "object_iterations"):
             raise ValueError(
