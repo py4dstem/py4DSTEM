@@ -1117,7 +1117,7 @@ class ComplexOverlapKernelDiskLattice(WPFModel):
         name="Complex Overlapped Disk Lattice",
         verbose=False,
     ):
-        return NotImplementedError(
+        raise NotImplementedError(
             "This model type has not been updated for use with the new architecture."
         )
 

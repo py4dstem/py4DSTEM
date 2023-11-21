@@ -276,7 +276,7 @@ class Crystal_Phase:
         if len(pointlist["qx"]) > 0:
             if mask_peaks is not None:
                 for i in range(len(mask_peaks)):
-                    if mask_peaks[i] is None:
+                    if mask_peaks[i] == None:  # noqa: E711
                         continue
                     inds_mask = np.where(
                         pointlist_peak_intensity_matches[:, mask_peaks[i]] != 0

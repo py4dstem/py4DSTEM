@@ -336,9 +336,9 @@ class K2DataArray(Sequence):
             for i in range(8):
                 sync = False
                 frame = 0
-                while sync is False:
+                while sync == False:  # noqa: E712
                     sync = self._bin_files[i][frame]["block"] == block_id
-                    if sync is False:
+                    if sync == False:  # noqa: E712
                         frame += 1
                 self._shutter_offsets[i] += frame
             print("Offsets are currently ", self._shutter_offsets)
@@ -358,7 +358,7 @@ class K2DataArray(Sequence):
                     sync = False
                     next_frame = stripe[j]["frame"]
 
-        if sync is False:
+        if sync == False:  # noqa: E712
             # the first frame is incomplete, so we need to seek the next one
             print(
                 f"First frame ({first_frame}) incomplete, seeking frame {next_frame}..."
@@ -366,12 +366,12 @@ class K2DataArray(Sequence):
             for i in range(8):
                 sync = False
                 frame = 0
-                while sync is False:
+                while sync == False:  # noqa: E712
                     sync = (
                         self._bin_files[i][self._shutter_offsets[i] + frame]["frame"]
                         == next_frame
                     )
-                    if sync is False:
+                    if sync == False:  # noqa: E712
                         frame += 1
                 self._shutter_offsets[i] += frame
             print("Offsets are now ", self._shutter_offsets)
@@ -387,7 +387,7 @@ class K2DataArray(Sequence):
                 ]
                 if np.any(stripe[:]["frame"] != first_frame):
                     sync = False
-            if sync is True:
+            if sync == True:  # noqa: E712
                 print("New frame is complete!")
             else:
                 print("Next frame also incomplete!!!! Data may be corrupt?")
@@ -397,7 +397,7 @@ class K2DataArray(Sequence):
         for i in range(8):
             shutter = False
             frame = 0
-            while shutter is False:
+            while shutter == False:  # noqa: E712
                 offset = self._shutter_offsets[i] + (frame * 32)
                 stripe = self._bin_files[i][offset : offset + 32]
                 shutter = stripe[0]["shutter"]
