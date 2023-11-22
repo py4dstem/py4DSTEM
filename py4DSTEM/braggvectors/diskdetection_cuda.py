@@ -5,6 +5,7 @@ Functions for finding Braggdisks using cupy
 
 import numpy as np
 import cupy as cp
+# TODO Wanted to double check these are good unprotected
 from cupyx.scipy.ndimage import gaussian_filter
 import cupyx.scipy.fft as cufft
 from time import time

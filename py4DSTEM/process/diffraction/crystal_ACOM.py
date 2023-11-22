@@ -14,7 +14,7 @@ from numpy.linalg import lstsq
 
 try:
     import cupy as cp
-except ModuleNotFoundError:
+except (ModuleNotFoundError,ImportError):
     cp = None
 
 
