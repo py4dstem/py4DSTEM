@@ -5,7 +5,7 @@ from scipy.ndimage import gaussian_filter
 
 try:
     import cupy as cp
-except ModuleNotFoundError:
+except (ModuleNotFoundError, ImportError):
     cp = np
 
 
