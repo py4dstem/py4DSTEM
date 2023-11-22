@@ -1,7 +1,6 @@
 import warnings
 
 import numpy as np
-import pylops
 from py4DSTEM.process.phase.utils import (
     array_slice,
     estimate_global_transformation_ransac,
@@ -10,7 +9,14 @@ from py4DSTEM.process.phase.utils import (
     regularize_probe_amplitude,
 )
 from py4DSTEM.process.utils import get_CoM
-
+try:
+    import cupy as cp
+except (ModuleNotFoundError,ImportError):
+    cp = np
+    import os
+    # make sure pylops doesn't try to use cupy
+    os.environ["CUPY_PYLOPS"] = "0"
+import pylops # this must follow the exception
 
 class PtychographicConstraints:
     """
