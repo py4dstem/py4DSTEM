@@ -14,7 +14,7 @@ from py4DSTEM.visualize.vis_special import Complex2RGB, add_colorbar_arg
 
 try:
     import cupy as cp
-except ModuleNotFoundError:
+except (ImportError, ModuleNotFoundError):
     cp = np
 
 from emdfile import Custom, tqdmnd

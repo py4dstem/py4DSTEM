@@ -8,7 +8,7 @@ from scipy.optimize import curve_fit
 try:
     import cupy as cp
     from cupyx.scipy.fft import rfft
-except ImportError:
+except (ImportError, ModuleNotFoundError):
     cp = None
     from scipy.fft import dstn, idstn
 
