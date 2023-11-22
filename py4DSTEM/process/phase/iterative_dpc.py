@@ -13,7 +13,7 @@ from mpl_toolkits.axes_grid1 import ImageGrid, make_axes_locatable
 
 try:
     import cupy as cp
-except (ModuleNotFoundError,ImportError):
+except (ModuleNotFoundError, ImportError):
     cp = np
 
 from emdfile import Array, Custom, Metadata, _read_metadata, tqdmnd

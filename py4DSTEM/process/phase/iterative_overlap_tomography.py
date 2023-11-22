@@ -16,12 +16,13 @@ from scipy.ndimage import rotate as rotate_np
 
 try:
     import cupy as cp
-except (ModuleNotFoundError,ImportError):
+except (ModuleNotFoundError, ImportError):
     cp = np
     import os
+
     # make sure pylops doesn't try to use cupy
     os.environ["CUPY_PYLOPS"] = "0"
-import pylops # this must follow the exception
+import pylops  # this must follow the exception
 
 from emdfile import Custom, tqdmnd
 from py4DSTEM import DataCube
