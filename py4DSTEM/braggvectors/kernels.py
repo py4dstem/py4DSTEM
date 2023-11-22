@@ -1,4 +1,3 @@
-# TODO check these are okay to leave unprotected
 import cupy as cp
 
 __all__ = ["kernels"]
