@@ -24,7 +24,7 @@ except ImportError:
 
 try:
     import cupy as cp
-except (ModuleNotFoundError,ImportError):
+except (ModuleNotFoundError, ImportError):
     cp = np
 
 
