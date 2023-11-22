@@ -17,7 +17,7 @@ from scipy.ndimage import rotate as rotate_np
 
 try:
     import cupy as cp
-except ModuleNotFoundError:
+except (ModuleNotFoundError,ImportError):
     cp = np
 
 from emdfile import Custom, tqdmnd
