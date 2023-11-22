@@ -8,7 +8,6 @@ from typing import Mapping, Sequence, Tuple, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
-import pylops
 from matplotlib.gridspec import GridSpec
 from mpl_toolkits.axes_grid1 import ImageGrid, make_axes_locatable
 from py4DSTEM.visualize.vis_special import Complex2RGB, add_colorbar_arg, show_complex
@@ -17,7 +16,10 @@ try:
     import cupy as cp
 except (ModuleNotFoundError,ImportError):
     cp = np
-
+    import os
+    # make sure pylops doesn't try to use cupy
+    os.environ["CUPY_PYLOPS"] = "0"
+import pylops # this must follow the exception
 from emdfile import Custom, tqdmnd
 from py4DSTEM import DataCube
 from py4DSTEM.process.phase.iterative_base_class import PtychographicReconstruction

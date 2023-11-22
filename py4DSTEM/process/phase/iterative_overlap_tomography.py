@@ -8,7 +8,6 @@ from typing import Mapping, Sequence, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
-import pylops
 from matplotlib.gridspec import GridSpec
 from mpl_toolkits.axes_grid1 import ImageGrid, make_axes_locatable
 from py4DSTEM.visualize import show
@@ -19,6 +18,10 @@ try:
     import cupy as cp
 except (ModuleNotFoundError,ImportError):
     cp = np
+    import os
+    # make sure pylops doesn't try to use cupy
+    os.environ["CUPY_PYLOPS"] = "0"
+import pylops # this must follow the exception
 
 from emdfile import Custom, tqdmnd
 from py4DSTEM import DataCube
