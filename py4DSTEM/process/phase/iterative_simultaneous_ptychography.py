@@ -153,12 +153,6 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
             raise ValueError(
                 f"object_type must be either 'potential' or 'complex', not {object_type}"
             )
-        if positions_mask is not None and positions_mask.dtype != "bool":
-            warnings.warn(
-                ("`positions_mask` converted to `bool` array"),
-                UserWarning,
-            )
-            positions_mask = np.asarray(positions_mask, dtype="bool")
 
         self.set_save_defaults()
 
@@ -339,6 +333,27 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
                 f"simultaneous_measurements_mode must be either '-+', '-0+', or '0+', not {self._simultaneous_measurements_mode}"
             )
 
+        if self._positions_mask is not None:
+            self._positions_mask = np.asarray(self._positions_mask)
+
+            if self._positions_mask.ndim == 2:
+                warnings.warn(
+                    "2D `positions_mask` assumed the same for all measurements.",
+                    UserWarning,
+                )
+                self._positions_mask = np.tile(
+                    self._positions_mask, (self._num_sim_measurements, 1, 1)
+                )
+
+            if self._positions_mask.dtype != "bool":
+                warnings.warn(
+                    "`positions_mask` converted to `bool` array.",
+                    UserWarning,
+                )
+                self._positions_mask = self._positions_mask.astype("bool")
+        else:
+            self._positions_mask = [None] * self._num_sim_measurements
+
         if force_com_shifts is None:
             force_com_shifts = [None, None, None]
         elif len(force_com_shifts) == self._num_sim_measurements:
@@ -421,7 +436,7 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
             com_fitted_x_0,
             com_fitted_y_0,
             crop_patterns,
-            self._positions_mask,
+            self._positions_mask[0],
         )
 
         # explicitly delete namescapes
@@ -506,7 +521,7 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
             com_fitted_x_1,
             com_fitted_y_1,
             crop_patterns,
-            self._positions_mask,
+            self._positions_mask[1],
         )
 
         # explicitly delete namescapes
@@ -592,7 +607,7 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
                 com_fitted_x_2,
                 com_fitted_y_2,
                 crop_patterns,
-                self._positions_mask,
+                self._positions_mask[2],
             )
 
             # explicitly delete namescapes
@@ -632,8 +647,8 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
         self._region_of_interest_shape = np.array(self._amplitudes[0].shape[-2:])
 
         self._positions_px = self._calculate_scan_positions_in_pixels(
-            self._scan_positions, self._positions_mask
-        )
+            self._scan_positions, self._positions_mask[0]
+        )  # TO-DO: generaltize to per-dataset probe positions
 
         # handle semiangle specified in pixels
         if self._semiangle_cutoff_pixels:
@@ -3056,6 +3071,7 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
         plot_convergence: bool,
         plot_probe: bool,
         plot_fourier_probe: bool,
+        remove_initial_probe_aberrations: bool,
         padding: int,
         **kwargs,
     ):
@@ -3074,6 +3090,9 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
             If true, the reconstructed complex probe is displayed
         plot_fourier_probe: bool, optional
             If true, the reconstructed complex Fourier probe is displayed
+        remove_initial_probe_aberrations: bool, optional
+            If true, when plotting fourier probe, removes initial probe
+            to visualize changes
         padding : int, optional
             Pixels to pad by post rotating-cropping object
         """
@@ -3101,10 +3120,7 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
         vmin_m = kwargs.pop("vmin_m", min_m)
         vmax_m = kwargs.pop("vmax_m", max_m)
 
-        if plot_fourier_probe:
-            chroma_boost = kwargs.pop("chroma_boost", 2)
-        else:
-            chroma_boost = kwargs.pop("chroma_boost", 1)
+        chroma_boost = kwargs.pop("chroma_boost", 1)
 
         extent = [
             0,
@@ -3209,8 +3225,13 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
             # Probe
             ax = fig.add_subplot(spec[0, 2])
             if plot_fourier_probe:
+                if remove_initial_probe_aberrations:
+                    probe_array = self.probe_fourier_residual
+                else:
+                    probe_array = self.probe_fourier
+
                 probe_array = Complex2RGB(
-                    self.probe_fourier,
+                    probe_array,
                     chroma_boost=chroma_boost,
                 )
                 ax.set_title("Reconstructed Fourier probe")
@@ -3296,6 +3317,7 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
         plot_convergence: bool,
         plot_probe: bool,
         plot_fourier_probe: bool,
+        remove_initial_probe_aberrations: bool,
         iterations_grid: Tuple[int, int],
         padding: int,
         **kwargs,
@@ -3317,6 +3339,9 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
             If true, the reconstructed complex probe is displayed
         plot_fourier_probe: bool, optional
             If true, the reconstructed complex Fourier probe is displayed
+        remove_initial_probe_aberrations: bool, optional
+            If true, when plotting fourier probe, removes initial probe
+            to visualize changes
         padding : int, optional
             Pixels to pad by post rotating-cropping object
         """
@@ -3329,6 +3354,7 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
         plot_convergence: bool = True,
         plot_probe: bool = True,
         plot_fourier_probe: bool = False,
+        remove_initial_probe_aberrations: bool = False,
         cbar: bool = True,
         padding: int = 0,
         **kwargs,
@@ -3350,6 +3376,9 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
             If true, the reconstructed complex probe is displayed
         plot_fourier_probe: bool, optional
             If true, the reconstructed complex Fourier probe is displayed
+        remove_initial_probe_aberrations: bool, optional
+            If true, when plotting fourier probe, removes initial probe
+            to visualize changes
         padding : int, optional
             Pixels to pad by post rotating-cropping object
 
@@ -3365,6 +3394,7 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
                 plot_convergence=plot_convergence,
                 plot_probe=plot_probe,
                 plot_fourier_probe=plot_fourier_probe,
+                remove_initial_probe_aberrations=remove_initial_probe_aberrations,
                 cbar=cbar,
                 padding=padding,
                 **kwargs,
@@ -3376,6 +3406,7 @@ class SimultaneousPtychographicReconstruction(PtychographicReconstruction):
                 iterations_grid=iterations_grid,
                 plot_probe=plot_probe,
                 plot_fourier_probe=plot_fourier_probe,
+                remove_initial_probe_aberrations=remove_initial_probe_aberrations,
                 cbar=cbar,
                 padding=padding,
                 **kwargs,

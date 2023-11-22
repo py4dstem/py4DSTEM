@@ -587,7 +587,7 @@ class ParallaxReconstruction(PhaseReconstruction):
         self.recon_BF = asnumpy(self._recon_BF)
 
         if plot_average_bf:
-            figsize = kwargs.pop("figsize", (6, 12))
+            figsize = kwargs.pop("figsize", (8, 4))
 
             fig, ax = plt.subplots(1, 2, figsize=figsize)
 
@@ -603,7 +603,9 @@ class ParallaxReconstruction(PhaseReconstruction):
                 0.5 * (self._reciprocal_sampling[0] * self._dp_mask.shape[0]),
                 -0.5 * (self._reciprocal_sampling[0] * self._dp_mask.shape[0]),
             ]
-            ax[1].imshow(self._dp_mask, extent=reciprocal_extent, cmap="gray")
+            ax[1].imshow(
+                self._asnumpy(self._dp_mask), extent=reciprocal_extent, cmap="gray"
+            )
             ax[1].set_title("DP mask")
             ax[1].set_ylabel(r"$k_x$ [$A^{-1}$]")
             ax[1].set_xlabel(r"$k_y$ [$A^{-1}$]")
@@ -1333,6 +1335,7 @@ class ParallaxReconstruction(PhaseReconstruction):
         plot_BF_shifts_comparison: bool = None,
         upsampled: bool = True,
         force_transpose: bool = False,
+        force_rotation_deg: float = None,
     ):
         """
         Fit aberrations to the measured image shifts.
@@ -1363,7 +1366,9 @@ class ParallaxReconstruction(PhaseReconstruction):
         upsampled: bool
             If True, and upsampled BF is available, uses that for CTF FFT fitting.
         force_transpose: bool
-            If True, and fit_BF_shifts is True, flips the measured x and y shifts
+            If True, flips the measured x and y shifts.
+        force_rotation_deg: float
+            If not None, sets the rotation angle to value in degrees.
 
         """
         xp = self._xp
@@ -1379,23 +1384,41 @@ class ParallaxReconstruction(PhaseReconstruction):
             )
         else:
             self._xy_shifts_Ang = self._xy_shifts * xp.array(self._scan_sampling)
+
         self.transpose = force_transpose
 
         # Solve affine transformation
         m = asnumpy(
             xp.linalg.lstsq(self._probe_angles, self._xy_shifts_Ang, rcond=None)[0]
         )
-        m_rotation, m_aberration = polar(m, side="right")
 
-        # Convert into rotation and aberration coefficients
-        self.rotation_Q_to_R_rads = -1 * np.arctan2(m_rotation[1, 0], m_rotation[0, 0])
-        if np.abs(np.mod(self.rotation_Q_to_R_rads + np.pi, 2.0 * np.pi) - np.pi) > (
-            np.pi * 0.5
-        ):
-            self.rotation_Q_to_R_rads = (
-                np.mod(self.rotation_Q_to_R_rads, 2.0 * np.pi) - np.pi
+        if force_rotation_deg is None:
+            m_rotation, m_aberration = polar(m, side="right")
+
+            if force_transpose:
+                m_rotation = m_rotation.T
+
+            # Convert into rotation and aberration coefficients
+
+            self.rotation_Q_to_R_rads = -1 * np.arctan2(
+                m_rotation[1, 0], m_rotation[0, 0]
             )
-            m_aberration = -1.0 * m_aberration
+            if np.abs(
+                np.mod(self.rotation_Q_to_R_rads + np.pi, 2.0 * np.pi) - np.pi
+            ) > (np.pi * 0.5):
+                self.rotation_Q_to_R_rads = (
+                    np.mod(self.rotation_Q_to_R_rads, 2.0 * np.pi) - np.pi
+                )
+                m_aberration = -1.0 * m_aberration
+        else:
+            self.rotation_Q_to_R_rads = np.deg2rad(force_rotation_deg)
+            c, s = np.cos(self.rotation_Q_to_R_rads), np.sin(self.rotation_Q_to_R_rads)
+
+            m_rotation = np.array([[c, -s], [s, c]])
+            if force_transpose:
+                m_rotation = m_rotation.T
+
+            m_aberration = m_rotation @ m
 
         self.aberration_C1 = (m_aberration[0, 0] + m_aberration[1, 1]) / 2.0
 

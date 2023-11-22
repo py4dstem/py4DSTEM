@@ -150,13 +150,6 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
                 f"object_type must be either 'potential' or 'complex', not {object_type}"
             )
 
-        if positions_mask is not None and positions_mask.dtype != "bool":
-            warnings.warn(
-                ("`positions_mask` converted to `bool` array"),
-                UserWarning,
-            )
-            positions_mask = np.asarray(positions_mask, dtype="bool")
-
         self.set_save_defaults()
 
         # Data
@@ -281,6 +274,13 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
                     "Please run ptycho.attach_datacube(DataCube) first."
                 )
             )
+
+        if self._positions_mask is not None and self._positions_mask.dtype != "bool":
+            warnings.warn(
+                ("`positions_mask` converted to `bool` array"),
+                UserWarning,
+            )
+            self._positions_mask = np.asarray(self._positions_mask, dtype="bool")
 
         (
             self._datacube,
@@ -472,7 +472,6 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
 
         self._probe_initial = self._probe.copy()
         self._probe_initial_aperture = xp.abs(xp.fft.fft2(self._probe))
-
         self._known_aberrations_array = ComplexProbe(
             energy=self._energy,
             gpts=self._region_of_interest_shape,
@@ -1750,6 +1749,7 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
         plot_convergence: bool,
         plot_probe: bool,
         plot_fourier_probe: bool,
+        remove_initial_probe_aberrations: bool,
         padding: int,
         **kwargs,
     ):
@@ -1768,16 +1768,16 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
             If true, the reconstructed complex probe is displayed
         plot_fourier_probe: bool, optional
             If true, the reconstructed complex Fourier probe is displayed
+        remove_initial_probe_aberrations: bool, optional
+            If true, when plotting fourier probe, removes initial probe
+            to visualize changes
         padding : int, optional
             Pixels to pad by post rotating-cropping object
         """
         figsize = kwargs.pop("figsize", (8, 5))
         cmap = kwargs.pop("cmap", "magma")
 
-        if plot_fourier_probe:
-            chroma_boost = kwargs.pop("chroma_boost", 2)
-        else:
-            chroma_boost = kwargs.pop("chroma_boost", 1)
+        chroma_boost = kwargs.pop("chroma_boost", 1)
 
         if self._object_type == "complex":
             obj = np.angle(self.object)
@@ -1869,10 +1869,16 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
 
             ax = fig.add_subplot(spec[0, 1])
             if plot_fourier_probe:
+                if remove_initial_probe_aberrations:
+                    probe_array = self.probe_fourier_residual
+                else:
+                    probe_array = self.probe_fourier
+
                 probe_array = Complex2RGB(
-                    self.probe_fourier,
+                    probe_array,
                     chroma_boost=chroma_boost,
                 )
+
                 ax.set_title("Reconstructed Fourier probe")
                 ax.set_ylabel("kx [mrad]")
                 ax.set_xlabel("ky [mrad]")
@@ -1940,6 +1946,7 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
         plot_convergence: bool,
         plot_probe: bool,
         plot_fourier_probe: bool,
+        remove_initial_probe_aberrations: bool,
         iterations_grid: Tuple[int, int],
         padding: int,
         **kwargs,
@@ -1961,6 +1968,9 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
             If true, the reconstructed complex probe is displayed
         plot_fourier_probe: bool
             If true, the reconstructed complex Fourier probe is displayed
+        remove_initial_probe_aberrations: bool, optional
+            If true, when plotting fourier probe, removes initial probe
+            to visualize changes
         padding : int, optional
             Pixels to pad by post rotating-cropping object
         """
@@ -2003,10 +2013,7 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
         figsize = kwargs.pop("figsize", auto_figsize)
         cmap = kwargs.pop("cmap", "magma")
 
-        if plot_fourier_probe:
-            chroma_boost = kwargs.pop("chroma_boost", 2)
-        else:
-            chroma_boost = kwargs.pop("chroma_boost", 1)
+        chroma_boost = kwargs.pop("chroma_boost", 1)
 
         errors = np.array(self.error_iterations)
 
@@ -2104,14 +2111,14 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
 
             for n, ax in enumerate(grid):
                 if plot_fourier_probe:
-                    probe_array = Complex2RGB(
-                        asnumpy(
-                            self._return_fourier_probe_from_centered_probe(
-                                probes[grid_range[n]]
-                            )
-                        ),
-                        chroma_boost=chroma_boost,
+                    probe_array = asnumpy(
+                        self._return_fourier_probe_from_centered_probe(
+                            probes[grid_range[n]],
+                            remove_initial_probe_aberrations=remove_initial_probe_aberrations,
+                        )
                     )
+
+                    probe_array = Complex2RGB(probe_array, chroma_boost=chroma_boost)
                     ax.set_title(f"Iter: {grid_range[n]} Fourier probe")
                     ax.set_ylabel("kx [mrad]")
                     ax.set_xlabel("ky [mrad]")
@@ -2158,6 +2165,7 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
         plot_convergence: bool = True,
         plot_probe: bool = True,
         plot_fourier_probe: bool = False,
+        remove_initial_probe_aberrations: bool = False,
         cbar: bool = True,
         padding: int = 0,
         **kwargs,
@@ -2179,6 +2187,9 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
             If true, the reconstructed probe intensity is also displayed
         plot_fourier_probe: bool, optional
             If true, the reconstructed complex Fourier probe is displayed
+        remove_initial_probe_aberrations: bool, optional
+            If true, when plotting fourier probe, removes initial probe
+            to visualize changes
         padding : int, optional
             Pixels to pad by post rotating-cropping object
 
@@ -2195,6 +2206,7 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
                 plot_probe=plot_probe,
                 plot_fourier_probe=plot_fourier_probe,
                 cbar=cbar,
+                remove_initial_probe_aberrations=remove_initial_probe_aberrations,
                 padding=padding,
                 **kwargs,
             )
@@ -2205,6 +2217,7 @@ class SingleslicePtychographicReconstruction(PtychographicReconstruction):
                 iterations_grid=iterations_grid,
                 plot_probe=plot_probe,
                 plot_fourier_probe=plot_fourier_probe,
+                remove_initial_probe_aberrations=remove_initial_probe_aberrations,
                 cbar=cbar,
                 padding=padding,
                 **kwargs,

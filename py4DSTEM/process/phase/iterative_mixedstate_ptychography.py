@@ -164,12 +164,6 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
             raise ValueError(
                 f"object_type must be either 'potential' or 'complex', not {object_type}"
             )
-        if positions_mask is not None and positions_mask.dtype != "bool":
-            warnings.warn(
-                ("`positions_mask` converted to `bool` array"),
-                UserWarning,
-            )
-            positions_mask = np.asarray(positions_mask, dtype="bool")
 
         self.set_save_defaults()
 
@@ -296,6 +290,13 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
                     "Please run ptycho.attach_datacube(DataCube) first."
                 )
             )
+
+        if self._positions_mask is not None and self._positions_mask.dtype != "bool":
+            warnings.warn(
+                ("`positions_mask` converted to `bool` array"),
+                UserWarning,
+            )
+            self._positions_mask = np.asarray(self._positions_mask, dtype="bool")
 
         (
             self._datacube,
@@ -1841,6 +1842,7 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
         plot_convergence: bool,
         plot_probe: bool,
         plot_fourier_probe: bool,
+        remove_initial_probe_aberrations: bool,
         padding: int,
         **kwargs,
     ):
@@ -1857,16 +1859,15 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
             If true, the reconstructed complex probe is displayed
         plot_fourier_probe: bool, optional
             If true, the reconstructed complex Fourier probe is displayed
+        remove_initial_probe_aberrations: bool, optional
+            If true, when plotting fourier probe, removes initial probe
         padding : int, optional
             Pixels to pad by post rotating-cropping object
         """
         figsize = kwargs.pop("figsize", (8, 5))
         cmap = kwargs.pop("cmap", "magma")
 
-        if plot_fourier_probe:
-            chroma_boost = kwargs.pop("chroma_boost", 2)
-        else:
-            chroma_boost = kwargs.pop("chroma_boost", 1)
+        chroma_boost = kwargs.pop("chroma_boost", 1)
 
         if self._object_type == "complex":
             obj = np.angle(self.object)
@@ -1958,10 +1959,16 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
             ax = fig.add_subplot(spec[0, 1])
 
             if plot_fourier_probe:
+                if remove_initial_probe_aberrations:
+                    probe_array = self.probe_fourier_residual[0]
+                else:
+                    probe_array = self.probe_fourier[0]
+
                 probe_array = Complex2RGB(
-                    self.probe_fourier[0],
+                    probe_array,
                     chroma_boost=chroma_boost,
                 )
+
                 ax.set_title("Reconstructed Fourier probe[0]")
                 ax.set_ylabel("kx [mrad]")
                 ax.set_xlabel("ky [mrad]")
@@ -2029,6 +2036,7 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
         plot_convergence: bool,
         plot_probe: bool,
         plot_fourier_probe: bool,
+        remove_initial_probe_aberrations: bool,
         iterations_grid: Tuple[int, int],
         padding: int,
         **kwargs,
@@ -2050,6 +2058,9 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
             If true, the reconstructed complex probe is displayed
         plot_fourier_probe: bool, optional
             If true, the reconstructed complex Fourier probe is displayed
+        remove_initial_probe_aberrations: bool, optional
+            If true, when plotting fourier probe, removes initial probe
+            to visualize changes
         padding : int, optional
             Pixels to pad by post rotating-cropping object
         """
@@ -2092,10 +2103,7 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
         figsize = kwargs.pop("figsize", auto_figsize)
         cmap = kwargs.pop("cmap", "magma")
 
-        if plot_fourier_probe:
-            chroma_boost = kwargs.pop("chroma_boost", 2)
-        else:
-            chroma_boost = kwargs.pop("chroma_boost", 1)
+        chroma_boost = kwargs.pop("chroma_boost", 1)
 
         errors = np.array(self.error_iterations)
 
@@ -2192,14 +2200,15 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
 
             for n, ax in enumerate(grid):
                 if plot_fourier_probe:
-                    probe_array = Complex2RGB(
-                        asnumpy(
-                            self._return_fourier_probe_from_centered_probe(
-                                probes[grid_range[n]][0]
-                            )
-                        ),
-                        chroma_boost=chroma_boost,
+                    probe_array = asnumpy(
+                        self._return_fourier_probe_from_centered_probe(
+                            probes[grid_range[n]][0],
+                            remove_initial_probe_aberrations=remove_initial_probe_aberrations,
+                        )
                     )
+
+                    probe_array = Complex2RGB(probe_array, chroma_boost=chroma_boost)
+
                     ax.set_title(f"Iter: {grid_range[n]} Fourier probe[0]")
                     ax.set_ylabel("kx [mrad]")
                     ax.set_xlabel("ky [mrad]")
@@ -2245,6 +2254,7 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
         plot_convergence: bool = True,
         plot_probe: bool = True,
         plot_fourier_probe: bool = False,
+        remove_initial_probe_aberrations: bool = False,
         cbar: bool = True,
         padding: int = 0,
         **kwargs,
@@ -2266,6 +2276,9 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
             If true, the reconstructed complex probe is displayed
         plot_fourier_probe: bool, optional
             If true, the reconstructed complex Fourier probe is displayed
+        remove_initial_probe_aberrations: bool, optional
+            If true, when plotting fourier probe, removes initial probe
+            to visualize changes
         padding : int, optional
             Pixels to pad by post rotating-cropping object
 
@@ -2281,6 +2294,7 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
                 plot_convergence=plot_convergence,
                 plot_probe=plot_probe,
                 plot_fourier_probe=plot_fourier_probe,
+                remove_initial_probe_aberrations=remove_initial_probe_aberrations,
                 cbar=cbar,
                 padding=padding,
                 **kwargs,
@@ -2292,6 +2306,7 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
                 iterations_grid=iterations_grid,
                 plot_probe=plot_probe,
                 plot_fourier_probe=plot_fourier_probe,
+                remove_initial_probe_aberrations=remove_initial_probe_aberrations,
                 cbar=cbar,
                 padding=padding,
                 **kwargs,
@@ -2300,7 +2315,14 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
         return self
 
     def show_fourier_probe(
-        self, probe=None, scalebar=True, pixelsize=None, pixelunits=None, **kwargs
+        self,
+        probe=None,
+        remove_initial_probe_aberrations=False,
+        cbar=True,
+        scalebar=True,
+        pixelsize=None,
+        pixelunits=None,
+        **kwargs,
     ):
         """
         Plot probe in fourier space
@@ -2309,6 +2331,8 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
         ----------
         probe: complex array, optional
             if None is specified, uses the `probe_fourier` property
+        remove_initial_probe_aberrations: bool, optional
+            If True, removes initial probe aberrations from Fourier probe
         scalebar: bool, optional
             if True, adds scalebar to probe
         pixelunits: str, optional
@@ -2319,21 +2343,37 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
         asnumpy = self._asnumpy
 
         if probe is None:
-            probe = list(self.probe_fourier)
+            probe = list(
+                asnumpy(
+                    self._return_fourier_probe(
+                        probe,
+                        remove_initial_probe_aberrations=remove_initial_probe_aberrations,
+                    )
+                )
+            )
         else:
             if isinstance(probe, np.ndarray) and probe.ndim == 2:
                 probe = [probe]
-            probe = [asnumpy(self._return_fourier_probe(pr)) for pr in probe]
+            probe = [
+                asnumpy(
+                    self._return_fourier_probe(
+                        pr,
+                        remove_initial_probe_aberrations=remove_initial_probe_aberrations,
+                    )
+                )
+                for pr in probe
+            ]
 
         if pixelsize is None:
             pixelsize = self._reciprocal_sampling[1]
         if pixelunits is None:
             pixelunits = r"$\AA^{-1}$"
 
-        chroma_boost = kwargs.pop("chroma_boost", 2)
+        chroma_boost = kwargs.pop("chroma_boost", 1)
 
         show_complex(
             probe if len(probe) > 1 else probe[0],
+            cbar=cbar,
             scalebar=scalebar,
             pixelsize=pixelsize,
             pixelunits=pixelunits,
