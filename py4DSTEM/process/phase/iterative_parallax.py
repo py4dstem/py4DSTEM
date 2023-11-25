@@ -1089,7 +1089,7 @@ class ParallaxReconstruction(PhaseReconstruction):
     ):
         """
         Upsample and subpixel-align BFs using the measured image shifts.
-        Uses kernel density estimation (KDE) to align upsampled BFs.
+        Uses kernel density estimation (KDE) to interpolate the upsampled BFs.
 
         Parameters
         ----------
@@ -1109,6 +1109,7 @@ class ParallaxReconstruction(PhaseReconstruction):
 
         xy_shifts = self._xy_shifts
         BF_size = np.array(self._stack_BF_no_window.shape[-2:])
+        # TODO - BF_size currently adds 2 pixels to x and y (pads by 1 outside)
 
         self._DF_upsample_limit = np.max(
             2 * self._region_of_interest_shape / self._scan_shape
@@ -1165,64 +1166,26 @@ class ParallaxReconstruction(PhaseReconstruction):
             )
 
         self._kde_upsample_factor = kde_upsample_factor
-        pixel_output = np.round(BF_size * self._kde_upsample_factor).astype("int")
-        pixel_size = pixel_output.prod()
+        pixel_output_shape = np.round(BF_size * self._kde_upsample_factor).astype("int")
+        pixel_size = pixel_output_shape.prod()
 
         # shifted coordinates
         x = xp.arange(BF_size[0])
         y = xp.arange(BF_size[1])
-
         xa, ya = xp.meshgrid(x, y, indexing="ij")
+
+        # Full set of coordinates
         xa = ((xa + xy_shifts[:, 0, None, None]) * self._kde_upsample_factor).ravel()
         ya = ((ya + xy_shifts[:, 1, None, None]) * self._kde_upsample_factor).ravel()
 
-        # bilinear sampling
-        xF = xp.floor(xa).astype("int")
-        yF = xp.floor(ya).astype("int")
-        dx = xa - xF
-        dy = ya - yF
-
-        # resampling
-        inds_1D = xp.ravel_multi_index(
-            xp.hstack(
-                [
-                    [xF, yF],
-                    [xF + 1, yF],
-                    [xF, yF + 1],
-                    [xF + 1, yF + 1],
-                ]
-            ),
-            pixel_output,
-            mode=["wrap", "wrap"],
+        # kernel density output of
+        pix_output = self.kernel_density_estimate(
+            xa,
+            ya,
+            self._stack_BF_no_window,
+            pixel_output_shape,
+            kde_sigma,
         )
-
-        weights = xp.hstack(
-            (
-                (1 - dx) * (1 - dy),
-                (dx) * (1 - dy),
-                (1 - dx) * (dy),
-                (dx) * (dy),
-            )
-        )
-
-        pix_count = xp.reshape(
-            xp.bincount(inds_1D, weights=weights, minlength=pixel_size), pixel_output
-        )
-        pix_output = xp.reshape(
-            xp.bincount(
-                inds_1D,
-                weights=weights * xp.tile(self._stack_BF_no_window.ravel(), 4),
-                minlength=pixel_size,
-            ),
-            pixel_output,
-        )
-
-        # kernel density estimate
-        sigma = kde_sigma * self._kde_upsample_factor
-        pix_count = gaussian_filter(pix_count, sigma)
-        pix_count[pix_count == 0.0] = np.inf
-        pix_output = gaussian_filter(pix_output, sigma)
-        pix_output /= pix_count
 
         self._recon_BF_subpixel_aligned = pix_output
         self.recon_BF_subpixel_aligned = asnumpy(self._recon_BF_subpixel_aligned)
@@ -1320,6 +1283,77 @@ class ParallaxReconstruction(PhaseReconstruction):
                     ax.xaxis.set_ticks_position("bottom")
 
             fig.tight_layout()
+
+    def kernel_density_estimate(
+        self,
+        xa,
+        ya,
+        intensities,
+        output_shape,
+        kde_sigma,
+        ):
+        """
+        kernel density estimate from a set coordinates (xa,ya) and intensity weights.
+        """
+        xp = self._xp
+        gaussian_filter = self._gaussian_filter
+
+
+        # bilinear sampling
+        xF = xp.floor(xa).astype("int")
+        yF = xp.floor(ya).astype("int")
+        dx = xa - xF
+        dy = ya - yF
+
+        # resampling
+        inds_1D = xp.ravel_multi_index(
+            xp.hstack(
+                [
+                    [xF, yF],
+                    [xF + 1, yF],
+                    [xF, yF + 1],
+                    [xF + 1, yF + 1],
+                ]
+            ),
+            output_shape,
+            mode=["clip", "clip"],
+        )
+
+        weights = xp.hstack(
+            (
+                (1 - dx) * (1 - dy),
+                (dx) * (1 - dy),
+                (1 - dx) * (dy),
+                (dx) * (dy),
+            )
+        )
+
+        pix_count = xp.reshape(
+            xp.bincount(
+                inds_1D, 
+                weights=weights, 
+                minlength=np.prod(output_shape),
+            ), 
+            output_shape,
+        )
+        pix_output = xp.reshape(
+            xp.bincount(
+                inds_1D,
+                weights=weights * xp.tile(intensities.ravel(), 4),
+                minlength=np.prod(output_shape),
+            ),
+            output_shape,
+        )
+
+        # kernel density estimate
+        sigma = kde_sigma * self._kde_upsample_factor
+        pix_count = gaussian_filter(pix_count, sigma)
+        pix_count[pix_count == 0.0] = np.inf
+        pix_output = gaussian_filter(pix_output, sigma)
+        pix_output /= pix_count
+
+        return pix_output
+
 
     def aberration_fit(
         self,
