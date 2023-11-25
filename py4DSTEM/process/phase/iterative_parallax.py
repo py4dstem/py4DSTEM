@@ -1083,8 +1083,13 @@ class ParallaxReconstruction(PhaseReconstruction):
         self,
         kde_upsample_factor=None,
         kde_sigma=0.125,
+        position_corr_num_iter = None,
+        position_corr_step_start = 2.0,
+        position_corr_step_stop = 0.1,
+        position_corr_step_reduce = 0.5,
         plot_upsampled_BF_comparison: bool = True,
         plot_upsampled_FFT_comparison: bool = False,
+        plot_position_corr_convergence: bool = True,
         **kwargs,
     ):
         """
@@ -1110,6 +1115,7 @@ class ParallaxReconstruction(PhaseReconstruction):
         xy_shifts = self._xy_shifts
         BF_size = np.array(self._stack_BF_no_window.shape[-2:])
         # TODO - BF_size currently adds 2 pixels to x and y (pads by 1 outside)
+        # This should be fixed.
 
         self._DF_upsample_limit = np.max(
             2 * self._region_of_interest_shape / self._scan_shape
@@ -1172,13 +1178,13 @@ class ParallaxReconstruction(PhaseReconstruction):
         # shifted coordinates
         x = xp.arange(BF_size[0])
         y = xp.arange(BF_size[1])
-        xa, ya = xp.meshgrid(x, y, indexing="ij")
+        xa_init, ya_init = xp.meshgrid(x, y, indexing="ij")
 
         # Full set of coordinates
-        xa = ((xa + xy_shifts[:, 0, None, None]) * self._kde_upsample_factor).ravel()
-        ya = ((ya + xy_shifts[:, 1, None, None]) * self._kde_upsample_factor).ravel()
+        xa = ((xa_init + xy_shifts[:, 0, None, None]) * self._kde_upsample_factor)
+        ya = ((ya_init + xy_shifts[:, 1, None, None]) * self._kde_upsample_factor)
 
-        # kernel density output of
+        # kernel density output the upsampled BF image
         pix_output = self.kernel_density_estimate(
             xa,
             ya,
@@ -1186,6 +1192,77 @@ class ParallaxReconstruction(PhaseReconstruction):
             pixel_output_shape,
             kde_sigma,
         )
+
+        # Perform probe position correction if needed
+        if position_corr_num_iter is not None:
+            # init position shift array
+            self.probe_dx = np.zeros_like(xa_init)
+            self.probe_dy = np.zeros_like(xa_init)
+
+            # step size of initial search, cost function
+            step = np.ones_like(xa_init)*position_corr_step_start
+            # score = np.zeros_like(xa_init)
+
+            # init scores and stats
+            scores = np.mean(np.abs(
+                self.kernel_density_sample(
+                    pix_output,
+                    xa,
+                    ya,
+                ) - self._stack_BF_no_window),
+                axis = 0,
+            )
+            position_corr_stats = np.zeros(position_corr_num_iter+1)
+
+            # gradient search directions
+            dxy = np.array((
+                -1.0, 0.0,
+                 1.0, 0.0,
+                 0.0, -1.0,
+                 0.0,  1.0,
+            ))
+            score_local = np.zeros((
+                dxy.shape[0],
+                scores.shape[0],
+                scores.shape[1],
+            ))
+
+            # main loop for position correction
+            for a0 in range(position_corr_num_iter):
+                
+
+
+                # # initial sampling positions
+                # xa = ((xa_init + \
+                #     self.probe_dx + \
+                #     xy_shifts[:, 0, None, None]) * self._kde_upsample_factor)
+                # ya = ((ya_init + \
+                #     self.probe_dy + \
+                #     xy_shifts[:, 1, None, None]) * self._kde_upsample_factor)
+
+
+
+                pass
+
+
+            if plot_position_corr_convergence:
+                fig,ax = plt.subplots(figsize=(8,8))
+
+                ax.imshow(scores)
+
+                # fig,ax = plt.subplots(figsize=(8,2))
+                # ax.scatter(
+                #     np.mean(self._stack_BF_no_window,axis=0).ravel(),
+                #     np.mean(scores,axis=0).ravel(),
+                #     # np.arange(position_corr_num_iter+1),
+                #     # np.arange(position_corr_num_iter+1),
+                #     facecolor = (1,0,0),
+                #     edgecolor = 'none',
+                #     alpha = 0.02,
+                # )
+                # ax.set_xlabel('iterations')
+                # ax.set_ylabel('position error')
+
 
         self._recon_BF_subpixel_aligned = pix_output
         self.recon_BF_subpixel_aligned = asnumpy(self._recon_BF_subpixel_aligned)
@@ -1284,6 +1361,62 @@ class ParallaxReconstruction(PhaseReconstruction):
 
             fig.tight_layout()
 
+
+    def kernel_density_sample(
+        self,
+        image,
+        xa,
+        ya,
+        ):
+        """
+        kernel density sampling of intensity from an image array.
+        """
+        xp = self._xp
+       
+        # bilinear sampling
+        xF = xp.floor(xa).astype("int")
+        yF = xp.floor(ya).astype("int")
+        dx = xa - xF
+        dy = ya - yF
+
+        # sampling
+        intensities = \
+        image.ravel()[
+            xp.ravel_multi_index(
+                [xF, yF],
+                image.shape,
+                mode=["clip", "clip"],
+            )
+        ] * (1-dx) * (1-dy) + \
+        image.ravel()[
+            xp.ravel_multi_index(
+                [xF+1, yF],
+                image.shape,
+                mode=["clip", "clip"],
+            )
+        ] * (  dx) * (1-dy) + \
+        image.ravel()[
+            xp.ravel_multi_index(
+                [xF, yF+1],
+                image.shape,
+                mode=["clip", "clip"],
+            )
+        ] * (1-dx) * (  dy) + \
+        image.ravel()[
+            xp.ravel_multi_index(
+                [xF+1, yF+1],
+                image.shape,
+                mode=["clip", "clip"],
+            )
+        ] * (  dx) * (  dy)
+
+
+
+        print(intensities.shape)
+
+        return intensities
+
+
     def kernel_density_estimate(
         self,
         xa,
@@ -1298,12 +1431,11 @@ class ParallaxReconstruction(PhaseReconstruction):
         xp = self._xp
         gaussian_filter = self._gaussian_filter
 
-
         # bilinear sampling
-        xF = xp.floor(xa).astype("int")
-        yF = xp.floor(ya).astype("int")
-        dx = xa - xF
-        dy = ya - yF
+        xF = xp.floor(xa.ravel()).astype("int")
+        yF = xp.floor(ya.ravel()).astype("int")
+        dx = xa.ravel() - xF
+        dy = ya.ravel() - yF 
 
         # resampling
         inds_1D = xp.ravel_multi_index(
