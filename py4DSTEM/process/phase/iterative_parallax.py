@@ -1086,7 +1086,7 @@ class ParallaxReconstruction(PhaseReconstruction):
         position_corr_num_iter = None,
         position_corr_step_start = 2.0,
         position_corr_step_stop = 0.1,
-        position_corr_step_reduce = 0.5,
+        position_corr_step_reduce = 0.75,
         plot_upsampled_BF_comparison: bool = True,
         plot_upsampled_FFT_comparison: bool = False,
         plot_position_corr_convergence: bool = True,
@@ -1176,8 +1176,8 @@ class ParallaxReconstruction(PhaseReconstruction):
         pixel_size = pixel_output_shape.prod()
 
         # shifted coordinates
-        x = xp.arange(BF_size[0])
-        y = xp.arange(BF_size[1])
+        x = xp.arange(BF_size[0], dtype='float')
+        y = xp.arange(BF_size[1], dtype='float')
         xa_init, ya_init = xp.meshgrid(x, y, indexing="ij")
 
         # Full set of coordinates
@@ -1201,7 +1201,6 @@ class ParallaxReconstruction(PhaseReconstruction):
 
             # step size of initial search, cost function
             step = np.ones_like(xa_init)*position_corr_step_start
-            # score = np.zeros_like(xa_init)
 
             # init scores and stats
             scores = np.mean(np.abs(
@@ -1213,15 +1212,16 @@ class ParallaxReconstruction(PhaseReconstruction):
                 axis = 0,
             )
             position_corr_stats = np.zeros(position_corr_num_iter+1)
+            position_corr_stats[0] = np.mean(scores)
 
             # gradient search directions
-            dxy = np.array((
-                -1.0, 0.0,
-                 1.0, 0.0,
-                 0.0, -1.0,
-                 0.0,  1.0,
-            ))
-            score_local = np.zeros((
+            dxy = np.array([
+                [-1.0,  0.0],
+                [ 1.0,  0.0],
+                [ 0.0, -1.0],
+                [ 0.0,  1.0],
+            ])
+            scores_test = np.zeros((
                 dxy.shape[0],
                 scores.shape[0],
                 scores.shape[1],
@@ -1229,40 +1229,63 @@ class ParallaxReconstruction(PhaseReconstruction):
 
             # main loop for position correction
             for a0 in range(position_corr_num_iter):
-                
+                # Evaluate scores for step directions and magnitudes
+                for a1 in range(dxy.shape[0]):
+                    xa = ((xa_init + self.probe_dx + dxy[a1,0]*step + xy_shifts[:, 0, None, None]) * self._kde_upsample_factor)
+                    ya = ((ya_init + self.probe_dy + dxy[a1,1]*step + xy_shifts[:, 1, None, None]) * self._kde_upsample_factor)
+                    scores_test[a1] = np.mean(np.abs(
+                        self.kernel_density_sample(
+                            pix_output,
+                            xa,
+                            ya,
+                        ) - self._stack_BF_no_window),
+                        axis = 0,
+                    )
 
+                # Check where cost function has improved
+                update = np.min(scores_test,axis=0) < scores
+                scores_ind = np.argmin(scores_test,axis=0)
 
-                # # initial sampling positions
-                # xa = ((xa_init + \
-                #     self.probe_dx + \
-                #     xy_shifts[:, 0, None, None]) * self._kde_upsample_factor)
-                # ya = ((ya_init + \
-                #     self.probe_dy + \
-                #     xy_shifts[:, 1, None, None]) * self._kde_upsample_factor)
+                # update the scores and probe shifts
+                for a1 in range(dxy.shape[0]):
+                    sub = np.logical_and(update, scores_ind==a1)
+                    self.probe_dx[sub] += dxy[a1,0]*step[sub]
+                    self.probe_dy[sub] += dxy[a1,1]*step[sub]
+                    # scores[sub] = scores_test[a1][sub]
 
+                # reduce gradient step for sites which did not improve
+                step[np.logical_not(update)] *= position_corr_step_reduce
 
-
-                pass
+                # update output image and cost function
+                xa = ((xa_init + self.probe_dx + xy_shifts[:, 0, None, None]) * self._kde_upsample_factor)
+                ya = ((ya_init + self.probe_dy + xy_shifts[:, 1, None, None]) * self._kde_upsample_factor)
+                pix_output = self.kernel_density_estimate(
+                    xa,
+                    ya,
+                    self._stack_BF_no_window,
+                    pixel_output_shape,
+                    kde_sigma,
+                )      
+                scores = np.mean(np.abs(
+                    self.kernel_density_sample(
+                        pix_output,
+                        xa,
+                        ya,
+                    ) - self._stack_BF_no_window),
+                    axis = 0,
+                )
+                position_corr_stats[a0+1] = np.mean(scores)
 
 
             if plot_position_corr_convergence:
-                fig,ax = plt.subplots(figsize=(8,8))
-
-                ax.imshow(scores)
-
-                # fig,ax = plt.subplots(figsize=(8,2))
-                # ax.scatter(
-                #     np.mean(self._stack_BF_no_window,axis=0).ravel(),
-                #     np.mean(scores,axis=0).ravel(),
-                #     # np.arange(position_corr_num_iter+1),
-                #     # np.arange(position_corr_num_iter+1),
-                #     facecolor = (1,0,0),
-                #     edgecolor = 'none',
-                #     alpha = 0.02,
-                # )
-                # ax.set_xlabel('iterations')
-                # ax.set_ylabel('position error')
-
+                fig,ax = plt.subplots(figsize=(8,2))
+                ax.plot(
+                    np.arange(position_corr_num_iter+1),
+                    position_corr_stats,
+                    color = (1,0,0),
+                )
+                ax.set_xlabel('iterations')
+                ax.set_ylabel('position error')
 
         self._recon_BF_subpixel_aligned = pix_output
         self.recon_BF_subpixel_aligned = asnumpy(self._recon_BF_subpixel_aligned)
@@ -1409,10 +1432,6 @@ class ParallaxReconstruction(PhaseReconstruction):
                 mode=["clip", "clip"],
             )
         ] * (  dx) * (  dy)
-
-
-
-        print(intensities.shape)
 
         return intensities
 
