@@ -1084,12 +1084,14 @@ class ParallaxReconstruction(PhaseReconstruction):
         kde_upsample_factor=None,
         kde_sigma=0.125,
         position_corr_num_iter = None,
-        position_corr_step_start = 2.0,
+        position_corr_step_start = 1.0,
         position_corr_step_stop = 0.1,
         position_corr_step_reduce = 0.75,
+        position_corr_sigma_reg = 1.0,
         plot_upsampled_BF_comparison: bool = True,
         plot_upsampled_FFT_comparison: bool = False,
         plot_position_corr_convergence: bool = True,
+        progress_bar: bool = True,
         **kwargs,
     ):
         """
@@ -1228,7 +1230,13 @@ class ParallaxReconstruction(PhaseReconstruction):
             ))
 
             # main loop for position correction
-            for a0 in range(position_corr_num_iter):
+            # for a0 in range(position_corr_num_iter):
+            for a0 in tqdmnd(
+                position_corr_num_iter,
+                desc="Correcting positions: ",
+                unit=" iterations",
+                disable=not progress_bar,
+                ):
                 # Evaluate scores for step directions and magnitudes
                 for a1 in range(dxy.shape[0]):
                     xa = ((xa_init + self.probe_dx + dxy[a1,0]*step + xy_shifts[:, 0, None, None]) * self._kde_upsample_factor)
@@ -1255,6 +1263,15 @@ class ParallaxReconstruction(PhaseReconstruction):
 
                 # reduce gradient step for sites which did not improve
                 step[np.logical_not(update)] *= position_corr_step_reduce
+
+                # apply regularization if needed
+                if position_corr_sigma_reg is not None:
+                    self.probe_dx = gaussian_filter(
+                        self.probe_dx,
+                        position_corr_sigma_reg,
+                        mode = 'nearest',
+                        )
+
 
                 # update output image and cost function
                 xa = ((xa_init + self.probe_dx + xy_shifts[:, 0, None, None]) * self._kde_upsample_factor)
