@@ -1271,6 +1271,11 @@ class ParallaxReconstruction(PhaseReconstruction):
                         position_corr_sigma_reg,
                         mode = 'nearest',
                         )
+                    self.probe_dy = gaussian_filter(
+                        self.probe_dy,
+                        position_corr_sigma_reg,
+                        mode = 'nearest',
+                        )
 
 
                 # update output image and cost function
