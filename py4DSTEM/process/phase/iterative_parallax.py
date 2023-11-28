@@ -21,6 +21,7 @@ from py4DSTEM.visualize import show
 from scipy.linalg import polar
 from scipy.optimize import minimize
 from scipy.special import comb
+from scipy.ndimage import distance_transform_edt
 
 try:
     import cupy as cp
@@ -251,6 +252,7 @@ class ParallaxReconstruction(PhaseReconstruction):
 
     def preprocess(
         self,
+        mask_real_space = None,
         edge_blend: int = 16,
         threshold_intensity: float = 0.8,
         normalize_images: bool = True,
@@ -266,6 +268,9 @@ class ParallaxReconstruction(PhaseReconstruction):
 
         Parameters
         ----------
+        mask_real_space: np.array, optional
+            If this array is provided, pixels in real space set to false will be 
+            set to zero in the virtual bright field images. 
         edge_blend: int, optional
             Pixels to blend image at the border
         threshold: float, optional
@@ -330,7 +335,7 @@ class ParallaxReconstruction(PhaseReconstruction):
                 "dp_mean must match the datacube shape. Try setting dp_mean = None."
             )
 
-        # descan correct
+        # descan correction
         if descan_correct:
             (
                 _,
@@ -384,7 +389,13 @@ class ParallaxReconstruction(PhaseReconstruction):
         self._probe_angles = self._kxy * self._wavelength
         self._kr = xp.sqrt(xp.sum(self._kxy**2, axis=1))
 
-        # Window function
+        # real space mask blending function
+        if mask_real_space is not None:
+            im_edge_dist = distance_transform_edt(mask_real_space)
+            self._window_mask = xp.minimum(im_edge_dist / edge_blend, 1.0)
+            self._window_mask = xp.sin(self._window_mask * (np.pi/2))**2
+
+        # edge window function
         x = xp.linspace(-1, 1, self._grid_scan_shape[0] + 1, dtype=xp.float32)[1:]
         x -= (x[1] - x[0]) / 2
         wx = (
@@ -408,6 +419,12 @@ class ParallaxReconstruction(PhaseReconstruction):
             ** 2
         )
         self._window_edge = wx[:, None] * wy[None, :]
+
+        # if needed, combine with the real space mask
+        if mask_real_space is not None:
+            self._window_edge *= self._window_mask
+
+        # derived window functions
         self._window_inv = 1 - self._window_edge
         self._window_pad = xp.zeros(
             (
@@ -442,6 +459,7 @@ class ParallaxReconstruction(PhaseReconstruction):
 
             if normalize_order == 0:
                 all_bfs /= xp.mean(all_bfs, axis=(1, 2))[:, None, None]
+
                 self._stack_BF[
                     :,
                     self._object_padding_px[0] // 2 : self._grid_scan_shape[0]
@@ -449,7 +467,8 @@ class ParallaxReconstruction(PhaseReconstruction):
                     self._object_padding_px[1] // 2 : self._grid_scan_shape[1]
                     + self._object_padding_px[1] // 2,
                 ] = (
-                    self._window_inv[None] + self._window_edge[None] * all_bfs
+                    self._window_inv[None] + \
+                    self._window_edge[None] * all_bfs
                 )
 
                 self._stack_BF_no_window[
@@ -1234,7 +1253,7 @@ class ParallaxReconstruction(PhaseReconstruction):
             for a0 in tqdmnd(
                 position_corr_num_iter,
                 desc="Correcting positions: ",
-                unit=" iterations",
+                unit=" iteration",
                 disable=not progress_bar,
                 ):
                 # Evaluate scores for step directions and magnitudes
