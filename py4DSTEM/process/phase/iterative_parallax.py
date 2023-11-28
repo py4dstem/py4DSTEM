@@ -485,13 +485,21 @@ class ParallaxReconstruction(PhaseReconstruction):
                 ya, xa = xp.meshgrid(y, x)
                 basis = np.vstack(
                     (
-                        xp.ones_like(xa),
+                        xp.ones_like(xa.ravel()),
                         xa.ravel(),
                         ya.ravel(),
                     )
                 ).T
+                weights = np.sqrt(self._window_edge).ravel()
+
                 for a0 in range(all_bfs.shape[0]):
-                    coefs = np.linalg.lstsq(basis, all_bfs[a0].ravel(), rcond=None)
+                    # coefs = np.linalg.lstsq(basis, all_bfs[a0].ravel(), rcond=None)
+                    # weighted least squares
+                    coefs = np.linalg.lstsq(
+                        weights[:,None] * basis, 
+                        weights         * all_bfs[a0].ravel(), 
+                        rcond=None,
+                    )
 
                     self._stack_BF[
                         a0,
@@ -512,6 +520,57 @@ class ParallaxReconstruction(PhaseReconstruction):
                         self._object_padding_px[1] // 2 : self._grid_scan_shape[1]
                         + self._object_padding_px[1] // 2,
                     ] = all_bfs[a0] / xp.reshape(basis @ coefs[0], all_bfs.shape[1:3])
+
+
+            elif normalize_order == 2:
+                x = xp.linspace(-0.5, 0.5, all_bfs.shape[1], xp.float32)
+                y = xp.linspace(-0.5, 0.5, all_bfs.shape[2], xp.float32)
+                ya, xa = xp.meshgrid(y, x)
+                basis = np.vstack(
+                    (
+                        1 * xa.ravel()**2 * ya.ravel()**2,
+                        2 * xa.ravel()**2 * ya.ravel()*(1-ya.ravel()),
+                        1 * xa.ravel()**2 * (1-ya.ravel())**2,
+                        2 * xa.ravel()*(1-xa.ravel()) * ya.ravel()**2,
+                        4 * xa.ravel()*(1-xa.ravel()) * ya.ravel()*(1-ya.ravel()),
+                        2 * xa.ravel()*(1-xa.ravel()) * (1-ya.ravel())**2,
+                        1 * (1-xa.ravel())**2 * ya.ravel()**2,
+                        2 * (1-xa.ravel())**2 * ya.ravel()*(1-ya.ravel()),
+                        1 * (1-xa.ravel())**2 * (1-ya.ravel())**2,
+                    )
+                ).T
+                weights = np.sqrt(self._window_edge).ravel()
+
+                for a0 in range(all_bfs.shape[0]):
+                    # coefs = np.linalg.lstsq(basis, all_bfs[a0].ravel(), rcond=None)
+                    # weighted least squares
+                    coefs = np.linalg.lstsq(
+                        weights[:,None] * basis, 
+                        weights         * all_bfs[a0].ravel(), 
+                        rcond=None,
+                    )
+
+                    self._stack_BF[
+                        a0,
+                        self._object_padding_px[0] // 2 : self._grid_scan_shape[0]
+                        + self._object_padding_px[0] // 2,
+                        self._object_padding_px[1] // 2 : self._grid_scan_shape[1]
+                        + self._object_padding_px[1] // 2,
+                    ] = self._window_inv[None] + self._window_edge[None] * all_bfs[
+                        a0
+                    ] / xp.reshape(
+                        basis @ coefs[0], all_bfs.shape[1:3]
+                    )
+
+                    self._stack_BF_no_window[
+                        a0,
+                        self._object_padding_px[0] // 2 : self._grid_scan_shape[0]
+                        + self._object_padding_px[0] // 2,
+                        self._object_padding_px[1] // 2 : self._grid_scan_shape[1]
+                        + self._object_padding_px[1] // 2,
+                    ] = all_bfs[a0] / xp.reshape(basis @ coefs[0], all_bfs.shape[1:3])
+
+
 
         else:
             all_means = xp.mean(all_bfs, axis=(1, 2))
