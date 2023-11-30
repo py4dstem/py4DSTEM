@@ -6,14 +6,12 @@ from typing import Optional
 import matplotlib.pyplot as plt
 from matplotlib.patches import Circle
 from matplotlib.collections import PatchCollection
-from mpl_toolkits.axes_grid1 import make_axes_locatable
 import numpy as np
 from py4DSTEM import PointList, PointListArray, tqdmnd
 from py4DSTEM.braggvectors import BraggVectors
 from py4DSTEM.data import Data, RealSlice
 from py4DSTEM.preprocess.utils import get_maxima_2D
 from py4DSTEM.process.strain.latticevectors import (
-    add_indices_to_braggvectors,
     fit_lattice_vectors_all_DPs,
     get_reference_g1g2,
     get_rotated_strain_map,
@@ -25,8 +23,6 @@ from py4DSTEM.visualize import (
     add_bragg_index_labels,
     add_pointlabels,
     add_vector,
-    ax_addaxes,
-    ax_addaxes_QtoR,
 )
 
 
