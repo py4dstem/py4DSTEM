@@ -926,6 +926,7 @@ def show_strain(
     layout="square",
     figsize=None,
     returnfig=False,
+    **kwargs,
 ):
     """
     Display a strain map, showing the 4 strain components
@@ -1099,6 +1100,7 @@ def show_strain(
         cmap=cmap,
         mask_color=mask_color,
         returncax=True,
+        **kwargs,
     )
     cax12 = show(
         e_yy,
@@ -1109,6 +1111,7 @@ def show_strain(
         cmap=cmap,
         mask_color=mask_color,
         returncax=True,
+        **kwargs,
     )
     cax21 = show(
         e_xy,
@@ -1119,6 +1122,7 @@ def show_strain(
         cmap=cmap,
         mask_color=mask_color,
         returncax=True,
+        **kwargs,
     )
     cax22 = show(
         theta,
@@ -1129,6 +1133,7 @@ def show_strain(
         cmap=cmap_theta,
         mask_color=mask_color,
         returncax=True,
+        **kwargs,
     )
     ax11.set_title(r"$\epsilon_{xx}$", size=titlesize)
     ax12.set_title(r"$\epsilon_{yy}$", size=titlesize)
