@@ -681,6 +681,7 @@ class DataCubeVirtualImager:
         origin,
         max_q,
         return_sum=True,
+        include_origin=True,
         **kwargs,
     ):
         """
@@ -696,6 +697,7 @@ class DataCubeVirtualImager:
             return_sum (bool): if False, return a 3D array, where each
                 slice contains a single disk; if False, return a single
                 2D masks of all disks
+            include_origin (bool) : if False, removes origin disk
 
         Returns:
             (2 or 3D array) the mask
@@ -722,15 +724,18 @@ class DataCubeVirtualImager:
         N = 0
         for h in range(-H, H + 1):
             for k in range(-K, K + 1):
-                v = h * g1 + k * g2
-                if np.sqrt(v.dot(v)) < max_q:
-                    center = origin + v
-                    mask[:, :, N] = self.make_detector(
-                        Qshape,
-                        mode="circle",
-                        geometry=(center, radius),
-                    )
-                    N += 1
+                if h == 0 and k == 0 and include_origin is False:
+                    continue
+                else:
+                    v = h * g1 + k * g2
+                    if np.sqrt(v.dot(v)) < max_q:
+                        center = origin + v
+                        mask[:, :, N] = self.make_detector(
+                            Qshape,
+                            mode="circle",
+                            geometry=(center, radius),
+                        )
+                        N += 1
 
         if return_sum:
             mask = np.sum(mask, axis=2)

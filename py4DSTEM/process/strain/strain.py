@@ -681,6 +681,7 @@ class StrainMap(RealSlice, Data):
         layout="square",
         figsize=None,
         returnfig=False,
+        **kwargs,
     ):
         """
         Display a strain map, showing the 4 strain components
@@ -776,6 +777,7 @@ class StrainMap(RealSlice, Data):
             layout=layout,
             figsize=figsize,
             returnfig=True,
+            **kwargs,
         )
 
         # show/return
