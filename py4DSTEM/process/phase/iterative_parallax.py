@@ -1176,9 +1176,9 @@ class ParallaxReconstruction(PhaseReconstruction):
         kde_sigma = 0.25,
         position_corr_num_iter = None,
         position_corr_step_start = 1.0,
-        position_corr_step_stop = 0.1,
+        position_corr_step_min = 0.1,
         position_corr_step_reduce = 0.75,
-        position_corr_sigma_reg = 1.0,
+        position_corr_sigma_reg = 0.5,
         plot_upsampled_BF_comparison: bool = True,
         plot_upsampled_FFT_comparison: bool = False,
         plot_position_corr_convergence: bool = True,
@@ -1350,6 +1350,9 @@ class ParallaxReconstruction(PhaseReconstruction):
 
                 # reduce gradient step for sites which did not improve
                 step[np.logical_not(update)] *= position_corr_step_reduce
+
+                # enforce minimum step size
+                step = np.maximum(step, position_corr_step_min)
 
                 # apply regularization if needed
                 if position_corr_sigma_reg is not None:
@@ -2088,10 +2091,14 @@ class ParallaxReconstruction(PhaseReconstruction):
             im_CTF = calculate_CTF_FFT(
                 self._aberrations_surface_shape_FFT, *self._aberrations_coefs
             )
-            im_CTF_cos = xp.cos(xp.abs(im_CTF)) ** 4
-            im_CTF[xp.abs(im_CTF) > (fit_max_thon_rings + 0.5) * np.pi] = np.pi / 2
-            im_CTF = xp.abs(xp.sin(im_CTF)) < 0.15
-            im_CTF[xp.logical_not(plot_mask)] = 0
+            # im_CTF_cos = xp.cos(xp.abs(im_CTF)) ** 4
+            # im_CTF[xp.abs(im_CTF) > (fit_max_thon_rings + 0.5) * np.pi] = np.pi / 2
+            # im_CTF = xp.abs(xp.sin(im_CTF)) < 0.15
+            # im_CTF[xp.logical_not(plot_mask)] = 0
+            # im_CTF_sin = xp.sin(im_CTF)
+            # im_CTF_plot = np.zeros((im_CTF_sin.shape[0],im_CTF_sin.shape[1],3))
+            # im_CTF_plot[:, :, 0] = 
+            im_CTF_plot = xp.abs(xp.sin(im_CTF))
 
             im_CTF = np.fft.fftshift(asnumpy(im_CTF * angular_mask))
             im_plot[:, :, 0] += im_CTF
@@ -2104,7 +2111,7 @@ class ParallaxReconstruction(PhaseReconstruction):
                 im_plot, vmin=int_range[0], vmax=int_range[1], extent=reciprocal_extent
             )
             ax2.imshow(
-                np.fft.fftshift(asnumpy(im_CTF_cos)),
+                np.fft.fftshift(asnumpy(im_CTF_plot)),
                 cmap="gray",
                 extent=reciprocal_extent,
             )
@@ -2114,7 +2121,7 @@ class ParallaxReconstruction(PhaseReconstruction):
                 ax.set_xlabel(r"$k_y$ [$A^{-1}$]")
 
             ax1.set_title("Aligned Bright Field FFT")
-            ax2.set_title("Fitted CTF Zero-Crossings")
+            ax2.set_title("Fitted CTF ")
 
             fig.tight_layout()
 
