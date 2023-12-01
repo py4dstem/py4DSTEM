@@ -395,7 +395,7 @@ class ParallaxReconstruction(PhaseReconstruction):
 
         # real space mask blending function
         if mask_real_space is not None:
-            im_edge_dist = distance_transform_edt(mask_real_space)
+            im_edge_dist = xp.array(distance_transform_edt(mask_real_space))
             self._window_mask = xp.minimum(im_edge_dist / edge_blend, 1.0)
             self._window_mask = xp.sin(self._window_mask * (np.pi/2))**2
 
@@ -1310,7 +1310,7 @@ class ParallaxReconstruction(PhaseReconstruction):
                 [ 0.0, -1.0],
                 [ 0.0,  1.0],
             ])
-            scores_test = np.zeros((
+            scores_test = xp.zeros((
                 dxy.shape[0],
                 scores.shape[0],
                 scores.shape[1],
@@ -1569,45 +1569,127 @@ class ParallaxReconstruction(PhaseReconstruction):
         dx = xa.ravel() - xF
         dy = ya.ravel() - yF 
 
-        # resampling
+        # resampling 01
         inds_1D = xp.ravel_multi_index(
-            xp.hstack(
-                [
-                    [xF    , yF    ],
-                    [xF + 1, yF    ],
-                    [xF    , yF + 1],
-                    [xF + 1, yF + 1],
-                ]
-            ),
+            [xF  , yF  ],
             output_shape,
-            mode=["clip", "clip"],
+            mode = ["clip", "clip"],
+        )
+        weights = (1 - dx) * (1 - dy)
+        pix_count = xp.bincount(
+            inds_1D, 
+            weights = weights, 
+            minlength = np.prod(output_shape),
+        )
+        pix_output = xp.bincount(
+            inds_1D, 
+            weights = weights * intensities.ravel(), 
+            minlength = np.prod(output_shape),
         )
 
-        weights = xp.hstack(
-            (
-                (1 - dx) * (1 - dy),
-                (dx)     * (1 - dy),
-                (1 - dx) * (dy),
-                (dx)     * (dy),
-            )
+        # resampling 02
+        inds_1D = xp.ravel_multi_index(
+            [xF+1, yF  ],
+            output_shape,
+            mode = ["clip", "clip"],
+        )
+        weights = (    dx) * (1 - dy)
+        pix_count += xp.bincount(
+            inds_1D, 
+            weights = weights, 
+            minlength = np.prod(output_shape),
+        )
+        pix_output += xp.bincount(
+            inds_1D, 
+            weights = weights * intensities.ravel(), 
+            minlength = np.prod(output_shape),
         )
 
+        # resampling 03
+        inds_1D = xp.ravel_multi_index(
+            [xF  , yF+1],
+            output_shape,
+            mode = ["clip", "clip"],
+        )
+        weights = (1 - dx) * (    dy)
+        pix_count += xp.bincount(
+            inds_1D, 
+            weights = weights, 
+            minlength = np.prod(output_shape),
+        )
+        pix_output += xp.bincount(
+            inds_1D, 
+            weights = weights * intensities.ravel(), 
+            minlength = np.prod(output_shape),
+        )
+
+        # resampling 04
+        inds_1D = xp.ravel_multi_index(
+            [xF+1, yF+1],
+            output_shape,
+            mode = ["clip", "clip"],
+        )
+        weights = (     dx) * (    dy)
+        pix_count += xp.bincount(
+            inds_1D, 
+            weights = weights, 
+            minlength = np.prod(output_shape),
+        )
+        pix_output += xp.bincount(
+            inds_1D, 
+            weights = weights * intensities.ravel(), 
+            minlength = np.prod(output_shape),
+        )
+
+        # reshape 1D arrays to 2D
         pix_count = xp.reshape(
-            xp.bincount(
-                inds_1D, 
-                weights=weights, 
-                minlength=np.prod(output_shape),
-            ), 
+            pix_count,
             output_shape,
         )
         pix_output = xp.reshape(
-            xp.bincount(
-                inds_1D,
-                weights=weights * xp.tile(intensities.ravel(), 4),
-                minlength=np.prod(output_shape),
-            ),
+            pix_output,
             output_shape,
         )
+
+
+        # inds_1D = xp.ravel_multi_index(
+        #     xp.hstack(
+        #         [
+        #             [xF    , yF    ],
+        #             [xF + 1, yF    ],
+        #             [xF    , yF + 1],
+        #             [xF + 1, yF + 1],
+        #         ]
+        #     ),
+        #     output_shape,
+        #     mode=["clip", "clip"],
+        # )
+
+        # weights = xp.hstack(
+        #     (
+        #         (1 - dx) * (1 - dy),
+        #         (dx)     * (1 - dy),
+        #         (1 - dx) * (dy),
+        #         (dx)     * (dy),
+        #     )
+        # )
+
+        # pix_count = xp.reshape(
+        #     xp.bincount(
+        #         inds_1D, 
+        #         weights=weights, 
+        #         minlength=np.prod(output_shape),
+        #     ), 
+        #     output_shape,
+        # )
+        # pix_output = xp.reshape(
+        #     xp.bincount(
+        #         inds_1D,
+        #         weights=weights * xp.tile(intensities.ravel(), 4),
+        #         minlength=np.prod(output_shape),
+        #     ),
+        #     output_shape,
+        # )
 
         # kernel density estimate
         sigma = kde_sigma * self._kde_upsample_factor
