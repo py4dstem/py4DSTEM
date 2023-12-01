@@ -253,7 +253,8 @@ class ParallaxReconstruction(PhaseReconstruction):
     def preprocess(
         self,
         mask_real_space = None,
-        edge_blend: int = 16,
+        edge_blend: float = 8.0,
+        apply_mask_to_output: bool = True,
         threshold_intensity: float = 0.8,
         normalize_images: bool = True,
         normalize_order=0,
@@ -271,8 +272,11 @@ class ParallaxReconstruction(PhaseReconstruction):
         mask_real_space: np.array, optional
             If this array is provided, pixels in real space set to false will be 
             set to zero in the virtual bright field images. 
-        edge_blend: int, optional
-            Pixels to blend image at the border
+        edge_blend: float, optional
+            Number of pixels to blend image at the border
+        apply_mask_to_output: bool, optional
+            If this value is set to true, output BF images will be masked by
+            the edge filter and mask_real_space if it is passed in.
         threshold: float, optional
             Fraction of max of dp_mean for bright-field pixels
         normalize_images: bool, optional
@@ -455,13 +459,13 @@ class ParallaxReconstruction(PhaseReconstruction):
             self._grid_scan_shape[1] + self._object_padding_px[1],
         )
         if normalize_images:
-            self._stack_BF = xp.ones(stack_shape, dtype=xp.float32)
-            self._stack_BF_no_window = xp.ones(stack_shape, xp.float32)
+            self._stack_BF_shifted = xp.ones(stack_shape, dtype=xp.float32)
+            self._stack_BF_unshifted = xp.ones(stack_shape, xp.float32)
 
             if normalize_order == 0:
                 all_bfs /= xp.mean(all_bfs, axis=(1, 2))[:, None, None]
 
-                self._stack_BF[
+                self._stack_BF_shifted[
                     :,
                     self._object_padding_px[0] // 2 : self._grid_scan_shape[0]
                     + self._object_padding_px[0] // 2,
@@ -472,13 +476,16 @@ class ParallaxReconstruction(PhaseReconstruction):
                     self._window_edge[None] * all_bfs
                 )
 
-                self._stack_BF_no_window[
-                    :,
-                    self._object_padding_px[0] // 2 : self._grid_scan_shape[0]
-                    + self._object_padding_px[0] // 2,
-                    self._object_padding_px[1] // 2 : self._grid_scan_shape[1]
-                    + self._object_padding_px[1] // 2,
-                ] = all_bfs
+                if apply_mask_to_output:
+                    self._stack_BF_unshifted = self._stack_BF_shifted.copy()
+                else:
+                    self._stack_BF_unshifted[
+                        :,
+                        self._object_padding_px[0] // 2 : self._grid_scan_shape[0]
+                        + self._object_padding_px[0] // 2,
+                        self._object_padding_px[1] // 2 : self._grid_scan_shape[1]
+                        + self._object_padding_px[1] // 2,
+                    ] = all_bfs
 
             elif normalize_order == 1:
                 x = xp.linspace(-0.5, 0.5, all_bfs.shape[1], xp.float32)
@@ -502,7 +509,7 @@ class ParallaxReconstruction(PhaseReconstruction):
                         rcond=None,
                     )
 
-                    self._stack_BF[
+                    self._stack_BF_shifted[
                         a0,
                         self._object_padding_px[0] // 2 : self._grid_scan_shape[0]
                         + self._object_padding_px[0] // 2,
@@ -514,13 +521,16 @@ class ParallaxReconstruction(PhaseReconstruction):
                         basis @ coefs[0], all_bfs.shape[1:3]
                     )
 
-                    self._stack_BF_no_window[
-                        a0,
-                        self._object_padding_px[0] // 2 : self._grid_scan_shape[0]
-                        + self._object_padding_px[0] // 2,
-                        self._object_padding_px[1] // 2 : self._grid_scan_shape[1]
-                        + self._object_padding_px[1] // 2,
-                    ] = all_bfs[a0] / xp.reshape(basis @ coefs[0], all_bfs.shape[1:3])
+                    if apply_mask_to_output:
+                        self._stack_BF_unshifted = self._stack_BF_shifted.copy()
+                    else:
+                        self._stack_BF_unshifted[
+                            a0,
+                            self._object_padding_px[0] // 2 : self._grid_scan_shape[0]
+                            + self._object_padding_px[0] // 2,
+                            self._object_padding_px[1] // 2 : self._grid_scan_shape[1]
+                            + self._object_padding_px[1] // 2,
+                        ] = all_bfs[a0] / xp.reshape(basis @ coefs[0], all_bfs.shape[1:3])
 
 
             elif normalize_order == 2:
@@ -551,7 +561,7 @@ class ParallaxReconstruction(PhaseReconstruction):
                         rcond=None,
                     )
 
-                    self._stack_BF[
+                    self._stack_BF_shifted[
                         a0,
                         self._object_padding_px[0] // 2 : self._grid_scan_shape[0]
                         + self._object_padding_px[0] // 2,
@@ -562,22 +572,22 @@ class ParallaxReconstruction(PhaseReconstruction):
                     ] / xp.reshape(
                         basis @ coefs[0], all_bfs.shape[1:3]
                     )
-
-                    self._stack_BF_no_window[
-                        a0,
-                        self._object_padding_px[0] // 2 : self._grid_scan_shape[0]
-                        + self._object_padding_px[0] // 2,
-                        self._object_padding_px[1] // 2 : self._grid_scan_shape[1]
-                        + self._object_padding_px[1] // 2,
-                    ] = all_bfs[a0] / xp.reshape(basis @ coefs[0], all_bfs.shape[1:3])
-
-
+                    if apply_mask_to_output:
+                        self._stack_BF_unshifted = self._stack_BF_shifted.copy()
+                    else:
+                        self._stack_BF_unshifted[
+                            a0,
+                            self._object_padding_px[0] // 2 : self._grid_scan_shape[0]
+                            + self._object_padding_px[0] // 2,
+                            self._object_padding_px[1] // 2 : self._grid_scan_shape[1]
+                            + self._object_padding_px[1] // 2,
+                        ] = all_bfs[a0] / xp.reshape(basis @ coefs[0], all_bfs.shape[1:3])
 
         else:
             all_means = xp.mean(all_bfs, axis=(1, 2))
-            self._stack_BF = xp.full(stack_shape, all_means[:, None, None])
-            self._stack_BF_no_window = xp.full(stack_shape, all_means[:, None, None])
-            self._stack_BF[
+            self._stack_BF_shifted = xp.full(stack_shape, all_means[:, None, None])
+            self._stack_BF_unshifted = xp.full(stack_shape, all_means[:, None, None])
+            self._stack_BF_shifted[
                 :,
                 self._object_padding_px[0] // 2 : self._grid_scan_shape[0]
                 + self._object_padding_px[0] // 2,
@@ -587,20 +597,22 @@ class ParallaxReconstruction(PhaseReconstruction):
                 self._window_inv[None] * all_means[:, None, None]
                 + self._window_edge[None] * all_bfs
             )
-
-            self._stack_BF_no_window[
-                :,
-                self._object_padding_px[0] // 2 : self._grid_scan_shape[0]
-                + self._object_padding_px[0] // 2,
-                self._object_padding_px[1] // 2 : self._grid_scan_shape[1]
-                + self._object_padding_px[1] // 2,
-            ] = all_bfs
+            if apply_mask_to_output:
+                self._stack_BF_unshifted = self._stack_BF_shifted.copy()
+            else:
+                self._stack_BF_unshifted[
+                    :,
+                    self._object_padding_px[0] // 2 : self._grid_scan_shape[0]
+                    + self._object_padding_px[0] // 2,
+                    self._object_padding_px[1] // 2 : self._grid_scan_shape[1]
+                    + self._object_padding_px[1] // 2,
+                ] = all_bfs
 
         # Fourier space operators for image shifts
-        qx = xp.fft.fftfreq(self._stack_BF.shape[1], d=1)
+        qx = xp.fft.fftfreq(self._stack_BF_shifted.shape[1], d=1)
         qx = xp.asarray(qx, dtype=xp.float32)
 
-        qy = xp.fft.fftfreq(self._stack_BF.shape[2], d=1)
+        qy = xp.fft.fftfreq(self._stack_BF_shifted.shape[2], d=1)
         qy = xp.asarray(qy, dtype=xp.float32)
 
         qxa, qya = xp.meshgrid(qx, qy, indexing="ij")
@@ -610,7 +622,7 @@ class ParallaxReconstruction(PhaseReconstruction):
         # Initialization utilities
         self._stack_mask = xp.tile(self._window_pad[None], (self._num_bf_images, 1, 1))
         if defocus_guess is not None:
-            Gs = xp.fft.fft2(self._stack_BF)
+            Gs = xp.fft.fft2(self._stack_BF_shifted)
 
             self._xy_shifts = (
                 -self._probe_angles * defocus_guess / xp.array(self._scan_sampling)
@@ -630,7 +642,7 @@ class ParallaxReconstruction(PhaseReconstruction):
                 self._qx_shift[None] * dx[:, None, None]
                 + self._qy_shift[None] * dy[:, None, None]
             )
-            self._stack_BF = xp.real(xp.fft.ifft2(Gs * shift_op))
+            self._stack_BF_shifted = xp.real(xp.fft.ifft2(Gs * shift_op))
             self._stack_mask = xp.real(
                 xp.fft.ifft2(xp.fft.fft2(self._stack_mask) * shift_op)
             )
@@ -639,7 +651,7 @@ class ParallaxReconstruction(PhaseReconstruction):
         else:
             self._xy_shifts = xp.zeros((self._num_bf_images, 2), dtype=xp.float32)
 
-        self._stack_mean = xp.mean(self._stack_BF)
+        self._stack_mean = xp.mean(self._stack_BF_shifted)
         self._mask_sum = xp.sum(self._window_edge) * self._num_bf_images
         self._recon_mask = xp.sum(self._stack_mask, axis=0)
 
@@ -647,18 +659,18 @@ class ParallaxReconstruction(PhaseReconstruction):
 
         self._recon_BF = (
             self._stack_mean * mask_inv
-            + xp.sum(self._stack_BF * self._stack_mask, axis=0)
+            + xp.sum(self._stack_BF_shifted * self._stack_mask, axis=0)
         ) / (self._recon_mask + mask_inv)
 
         self._recon_error = (
             xp.atleast_1d(
-                xp.sum(xp.abs(self._stack_BF - self._recon_BF[None]) * self._stack_mask)
+                xp.sum(xp.abs(self._stack_BF_shifted - self._recon_BF[None]) * self._stack_mask)
             )
             / self._mask_sum
         )
 
         self._recon_BF_initial = self._recon_BF.copy()
-        self._stack_BF_initial = self._stack_BF.copy()
+        self._stack_BF_shifted_initial = self._stack_BF_shifted.copy()
         self._stack_mask_initial = self._stack_mask.copy()
         self._recon_mask_initial = self._recon_mask.copy()
         self._xy_shifts_initial = self._xy_shifts.copy()
@@ -910,7 +922,7 @@ class ParallaxReconstruction(PhaseReconstruction):
 
         if reset:
             self._recon_BF = self._recon_BF_initial.copy()
-            self._stack_BF = self._stack_BF_initial.copy()
+            self._stack_BF_shifted = self._stack_BF_shifted_initial.copy()
             self._stack_mask = self._stack_mask_initial.copy()
             self._recon_mask = self._recon_mask_initial.copy()
             self._xy_shifts = self._xy_shifts_initial.copy()
@@ -1037,7 +1049,7 @@ class ParallaxReconstruction(PhaseReconstruction):
                     xy_inds[:, 1] == xy_vals[ind_align, 1],
                 )
 
-                G = xp.fft.fft2(xp.mean(self._stack_BF[sub], axis=0))
+                G = xp.fft.fft2(xp.mean(self._stack_BF_shifted[sub], axis=0))
 
                 # Get best fit alignment
                 xy_shift = align_images_fourier(
@@ -1049,17 +1061,17 @@ class ParallaxReconstruction(PhaseReconstruction):
 
                 dx = (
                     xp.mod(
-                        xy_shift[0] + self._stack_BF.shape[1] / 2,
-                        self._stack_BF.shape[1],
+                        xy_shift[0] + self._stack_BF_shifted.shape[1] / 2,
+                        self._stack_BF_shifted.shape[1],
                     )
-                    - self._stack_BF.shape[1] / 2
+                    - self._stack_BF_shifted.shape[1] / 2
                 )
                 dy = (
                     xp.mod(
-                        xy_shift[1] + self._stack_BF.shape[2] / 2,
-                        self._stack_BF.shape[2],
+                        xy_shift[1] + self._stack_BF_shifted.shape[2] / 2,
+                        self._stack_BF_shifted.shape[2],
                     )
-                    - self._stack_BF.shape[2] / 2
+                    - self._stack_BF_shifted.shape[2] / 2
                 )
 
                 # output shifts
@@ -1079,7 +1091,7 @@ class ParallaxReconstruction(PhaseReconstruction):
             shifts_update = xy_shifts_fit - self._xy_shifts
 
             # apply shifts
-            Gs = xp.fft.fft2(self._stack_BF)
+            Gs = xp.fft.fft2(self._stack_BF_shifted)
 
             dx = shifts_update[:, 0]
             dy = shifts_update[:, 1]
@@ -1091,13 +1103,13 @@ class ParallaxReconstruction(PhaseReconstruction):
                 + self._qy_shift[None] * dy[:, None, None]
             )
 
-            self._stack_BF = xp.real(xp.fft.ifft2(Gs * shift_op))
+            self._stack_BF_shifted = xp.real(xp.fft.ifft2(Gs * shift_op))
             self._stack_mask = xp.real(
                 xp.fft.ifft2(xp.fft.fft2(self._stack_mask) * shift_op)
             )
 
-            self._stack_BF = xp.asarray(
-                self._stack_BF, dtype=xp.float32
+            self._stack_BF_shifted = xp.asarray(
+                self._stack_BF_shifted, dtype=xp.float32
             )  # numpy fft upcasts?
             self._stack_mask = xp.asarray(
                 self._stack_mask, dtype=xp.float32
@@ -1108,7 +1120,7 @@ class ParallaxReconstruction(PhaseReconstruction):
             # Center the shifts
             xy_shifts_median = xp.round(xp.median(self._xy_shifts, axis=0)).astype(int)
             self._xy_shifts -= xy_shifts_median[None, :]
-            self._stack_BF = xp.roll(self._stack_BF, -xy_shifts_median, axis=(1, 2))
+            self._stack_BF_shifted = xp.roll(self._stack_BF_shifted, -xy_shifts_median, axis=(1, 2))
             self._stack_mask = xp.roll(self._stack_mask, -xy_shifts_median, axis=(1, 2))
 
             # Generate new estimate
@@ -1117,13 +1129,13 @@ class ParallaxReconstruction(PhaseReconstruction):
             mask_inv = 1 - np.clip(self._recon_mask, 0, 1)
             self._recon_BF = (
                 self._stack_mean * mask_inv
-                + xp.sum(self._stack_BF * self._stack_mask, axis=0)
+                + xp.sum(self._stack_BF_shifted * self._stack_mask, axis=0)
             ) / (self._recon_mask + mask_inv)
 
             self._recon_error = (
                 xp.atleast_1d(
                     xp.sum(
-                        xp.abs(self._stack_BF - self._recon_BF[None]) * self._stack_mask
+                        xp.abs(self._stack_BF_shifted - self._recon_BF[None]) * self._stack_mask
                     )
                 )
                 / self._mask_sum
@@ -1162,7 +1174,6 @@ class ParallaxReconstruction(PhaseReconstruction):
         self,
         kde_upsample_factor = None,
         kde_sigma = 0.25,
-        apply_mask_to_output = True,
         position_corr_num_iter = None,
         position_corr_step_start = 1.0,
         position_corr_step_stop = 0.1,
@@ -1184,8 +1195,6 @@ class ParallaxReconstruction(PhaseReconstruction):
             Real-space upsampling factor
         kde_sigma: float, optional
             KDE gaussian kernel bandwidth
-        apply_mask_to_output: bool, optional
-            Apply the edge / real space mask to the upsampled output
         plot_upsampled_BF_comparison: bool, optional
             If True, the pre/post alignment BF images are plotted for comparison
         plot_upsampled_FFT_comparison: bool, optional
@@ -1197,7 +1206,7 @@ class ParallaxReconstruction(PhaseReconstruction):
         gaussian_filter = self._gaussian_filter
 
         xy_shifts = self._xy_shifts
-        BF_size = np.array(self._stack_BF_no_window.shape[-2:])
+        BF_size = np.array(self._stack_BF_unshifted.shape[-2:])
 
         self._DF_upsample_limit = np.max(
             2 * self._region_of_interest_shape / self._scan_shape
@@ -1265,23 +1274,13 @@ class ParallaxReconstruction(PhaseReconstruction):
         # kernel density output the upsampled BF image
         xa = ((xa_init + xy_shifts[:, 0, None, None]) * self._kde_upsample_factor)
         ya = ((ya_init + xy_shifts[:, 1, None, None]) * self._kde_upsample_factor)
-        if apply_mask_to_output:
-            pix_output = self.kernel_density_estimate(
-                xa,
-                ya,
-                self._stack_BF_no_window * self._window_pad[None] \
-                + self._window_inv_pad[None],
-                pixel_output_shape,
-                kde_sigma,
-            )
-        else:
-            pix_output = self.kernel_density_estimate(
-                xa,
-                ya,
-                self._stack_BF_no_window,
-                pixel_output_shape,
-                kde_sigma,
-            )
+        pix_output = self.kernel_density_estimate(
+            xa,
+            ya,
+            self._stack_BF_unshifted,
+            pixel_output_shape,
+            kde_sigma,
+        )
 
         # Perform probe position correction if needed
         if position_corr_num_iter is not None:
@@ -1298,7 +1297,7 @@ class ParallaxReconstruction(PhaseReconstruction):
                     pix_output,
                     xa,
                     ya,
-                ) - self._stack_BF_no_window),
+                ) - self._stack_BF_unshifted),
                 axis = 0,
             )
             position_corr_stats = np.zeros(position_corr_num_iter+1)
@@ -1329,25 +1328,14 @@ class ParallaxReconstruction(PhaseReconstruction):
                 for a1 in range(dxy.shape[0]):
                     xa = ((xa_init + self.probe_dx + dxy[a1,0]*step + xy_shifts[:, 0, None, None]) * self._kde_upsample_factor)
                     ya = ((ya_init + self.probe_dy + dxy[a1,1]*step + xy_shifts[:, 1, None, None]) * self._kde_upsample_factor)
-                    if apply_mask_to_output:
-                        scores_test[a1] = np.mean(np.abs(
-                            self.kernel_density_sample(
-                                pix_output,
-                                xa,
-                                ya,
-                            ) - self._stack_BF_no_window * self._window_pad[None] \
-                            - self._window_inv_pad[None]),
-                            axis = 0,
-                        )
-                    else:
-                        scores_test[a1] = np.mean(np.abs(
-                            self.kernel_density_sample(
-                                pix_output,
-                                xa,
-                                ya,
-                            ) - self._stack_BF_no_window),
-                            axis = 0,
-                        )
+                    scores_test[a1] = np.mean(np.abs(
+                        self.kernel_density_sample(
+                            pix_output,
+                            xa,
+                            ya,
+                        ) - self._stack_BF_unshifted),
+                        axis = 0,
+                    )
 
                 # Check where cost function has improved
                 update = np.min(scores_test,axis=0) < scores
@@ -1378,71 +1366,23 @@ class ParallaxReconstruction(PhaseReconstruction):
                 # kernel density output the upsampled BF image
                 xa = ((xa_init + self.probe_dx + dxy[a1,0]*step + xy_shifts[:, 0, None, None]) * self._kde_upsample_factor)
                 ya = ((ya_init + self.probe_dy + dxy[a1,1]*step + xy_shifts[:, 1, None, None]) * self._kde_upsample_factor)
-                if apply_mask_to_output:
-                    pix_output = self.kernel_density_estimate(
+                pix_output = self.kernel_density_estimate(
+                    xa,
+                    ya,
+                    self._stack_BF_unshifted,
+                    pixel_output_shape,
+                    kde_sigma,
+                )
+
+                # update cost function and stats           
+                scores = np.mean(np.abs(
+                    self.kernel_density_sample(
+                        pix_output,
                         xa,
                         ya,
-                        self._stack_BF_no_window * self._window_pad[None] \
-                        + self._window_inv_pad[None],
-                        pixel_output_shape,
-                        kde_sigma,
-                    )
-                else:
-                    pix_output = self.kernel_density_estimate(
-                        xa,
-                        ya,
-                        self._stack_BF_no_window,
-                        pixel_output_shape,
-                        kde_sigma,
-                    )
-
-                # # update output image and cost function
-                # xa = ((xa_init + self.probe_dx + xy_shifts[:, 0, None, None]) * self._kde_upsample_factor)
-                # ya = ((ya_init + self.probe_dy + xy_shifts[:, 1, None, None]) * self._kde_upsample_factor)
-                # # kernel density output the upsampled BF image
-                # if use_mask:
-                #     pix_output = self.kernel_density_estimate(
-                #         xa,
-                #         ya,
-                #         self._stack_BF,
-                #         pixel_output_shape,
-                #         kde_sigma,
-                #     )
-                # else:
-                #     pix_output = self.kernel_density_estimate(
-                #         xa,
-                #         ya,
-                #         self._stack_BF_no_window,
-                #         pixel_output_shape,
-                #         kde_sigma,
-                #     )
-                # pix_output = self.kernel_density_estimate(
-                #     xa,
-                #     ya,
-                #     self._stack_BF_no_window,
-                #     pixel_output_shape,
-                #     kde_sigma,
-                # )      
-
-                if apply_mask_to_output:
-                    scores = np.mean(np.abs(
-                        self.kernel_density_sample(
-                            pix_output,
-                            xa,
-                            ya,
-                        ) - self._stack_BF_no_window) * self._window_pad[None] \
-                        + self._window_inv_pad[None],
-                        axis = 0,
-                    )
-                else:
-                    scores = np.mean(np.abs(
-                        self.kernel_density_sample(
-                            pix_output,
-                            xa,
-                            ya,
-                        ) - self._stack_BF_no_window),
-                        axis = 0,
-                    )
+                    ) - self._stack_BF_unshifted),
+                    axis = 0,
+                )
                 position_corr_stats[a0+1] = np.mean(scores)
 
 
@@ -2537,10 +2477,10 @@ class ParallaxReconstruction(PhaseReconstruction):
 
             # Parallax
             im_depth = xp.zeros_like(self._recon_BF, dtype="complex")
-            for a1 in range(self._stack_BF.shape[0]):
+            for a1 in range(self._stack_BF_shifted.shape[0]):
                 dx = self._probe_angles[a1, 0] * dz
                 dy = self._probe_angles[a1, 1] * dz
-                im_depth += xp.fft.fft2(self._stack_BF[a1]) * xp.exp(
+                im_depth += xp.fft.fft2(self._stack_BF_shifted[a1]) * xp.exp(
                     self._qx_shift * dx + self._qy_shift * dy
                 )
 
@@ -2555,7 +2495,7 @@ class ParallaxReconstruction(PhaseReconstruction):
 
             # apply correction to mean reconstructed BF image
             stack_depth[a0] = (
-                xp.real(xp.fft.ifft2(im_depth * CTF_corr)) / self._stack_BF.shape[0]
+                xp.real(xp.fft.ifft2(im_depth * CTF_corr)) / self._stack_BF_shifted.shape[0]
             )
 
             if plot_depth_sections:
