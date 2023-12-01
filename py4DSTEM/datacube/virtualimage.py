@@ -682,6 +682,7 @@ class DataCubeVirtualImager:
         max_q,
         return_sum=True,
         include_origin=True,
+        rotation_deg=0,
         **kwargs,
     ):
         """
@@ -698,12 +699,21 @@ class DataCubeVirtualImager:
                 slice contains a single disk; if False, return a single
                 2D masks of all disks
             include_origin (bool) : if False, removes origin disk
+            rotation_deg (float) : rotate g1 and g2 vectors
 
         Returns:
             (2 or 3D array) the mask
         """
         nas = np.asarray
         g1, g2, origin = nas(g1), nas(g2), nas(origin)
+
+        rotation_rad = np.deg2rad(rotation_deg)
+        cost = np.cos(rotation_rad)
+        sint = np.sin(rotation_rad)
+        rotation_matrix = np.array(((cost, sint), (-sint, cost)))
+
+        g1 = np.dot(g1, rotation_matrix)
+        g2 = np.dot(g2, rotation_matrix)
 
         # Get N,M, the maximum indices to tile out to
         L1 = np.sqrt(np.sum(g1**2))
