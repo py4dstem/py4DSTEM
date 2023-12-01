@@ -420,12 +420,11 @@ class ParallaxReconstruction(PhaseReconstruction):
         )
         self._window_edge = wx[:, None] * wy[None, :]
 
-        # if needed, combine with the real space mask
+        # if needed, combine edge mask with the input real space mask
         if mask_real_space is not None:
             self._window_edge *= self._window_mask
 
         # derived window functions
-        self._window_inv = 1 - self._window_edge
         self._window_pad = xp.zeros(
             (
                 self._grid_scan_shape[0] + self._object_padding_px[0],
@@ -439,6 +438,8 @@ class ParallaxReconstruction(PhaseReconstruction):
             self._object_padding_px[1] // 2 : self._grid_scan_shape[1]
             + self._object_padding_px[1] // 2,
         ] = self._window_edge
+        self._window_inv = 1 - self._window_edge
+        self._window_inv_pad = 1 - self._window_pad
 
         # Collect BF images
         all_bfs = xp.moveaxis(
@@ -1159,8 +1160,9 @@ class ParallaxReconstruction(PhaseReconstruction):
 
     def subpixel_alignment(
         self,
-        kde_upsample_factor=None,
-        kde_sigma=0.125,
+        kde_upsample_factor = None,
+        kde_sigma = 0.25,
+        apply_mask_to_output = True,
         position_corr_num_iter = None,
         position_corr_step_start = 1.0,
         position_corr_step_stop = 0.1,
@@ -1182,6 +1184,8 @@ class ParallaxReconstruction(PhaseReconstruction):
             Real-space upsampling factor
         kde_sigma: float, optional
             KDE gaussian kernel bandwidth
+        apply_mask_to_output: bool, optional
+            Apply the edge / real space mask to the upsampled output
         plot_upsampled_BF_comparison: bool, optional
             If True, the pre/post alignment BF images are plotted for comparison
         plot_upsampled_FFT_comparison: bool, optional
@@ -1194,8 +1198,6 @@ class ParallaxReconstruction(PhaseReconstruction):
 
         xy_shifts = self._xy_shifts
         BF_size = np.array(self._stack_BF_no_window.shape[-2:])
-        # TODO - BF_size currently adds 2 pixels to x and y (pads by 1 outside)
-        # This should be fixed.
 
         self._DF_upsample_limit = np.max(
             2 * self._region_of_interest_shape / self._scan_shape
@@ -1260,18 +1262,26 @@ class ParallaxReconstruction(PhaseReconstruction):
         y = xp.arange(BF_size[1], dtype='float')
         xa_init, ya_init = xp.meshgrid(x, y, indexing="ij")
 
-        # Full set of coordinates
+        # kernel density output the upsampled BF image
         xa = ((xa_init + xy_shifts[:, 0, None, None]) * self._kde_upsample_factor)
         ya = ((ya_init + xy_shifts[:, 1, None, None]) * self._kde_upsample_factor)
-
-        # kernel density output the upsampled BF image
-        pix_output = self.kernel_density_estimate(
-            xa,
-            ya,
-            self._stack_BF_no_window,
-            pixel_output_shape,
-            kde_sigma,
-        )
+        if apply_mask_to_output:
+            pix_output = self.kernel_density_estimate(
+                xa,
+                ya,
+                self._stack_BF_no_window * self._window_pad[None] \
+                + self._window_inv_pad[None],
+                pixel_output_shape,
+                kde_sigma,
+            )
+        else:
+            pix_output = self.kernel_density_estimate(
+                xa,
+                ya,
+                self._stack_BF_no_window,
+                pixel_output_shape,
+                kde_sigma,
+            )
 
         # Perform probe position correction if needed
         if position_corr_num_iter is not None:
@@ -1319,14 +1329,25 @@ class ParallaxReconstruction(PhaseReconstruction):
                 for a1 in range(dxy.shape[0]):
                     xa = ((xa_init + self.probe_dx + dxy[a1,0]*step + xy_shifts[:, 0, None, None]) * self._kde_upsample_factor)
                     ya = ((ya_init + self.probe_dy + dxy[a1,1]*step + xy_shifts[:, 1, None, None]) * self._kde_upsample_factor)
-                    scores_test[a1] = np.mean(np.abs(
-                        self.kernel_density_sample(
-                            pix_output,
-                            xa,
-                            ya,
-                        ) - self._stack_BF_no_window),
-                        axis = 0,
-                    )
+                    if apply_mask_to_output:
+                        scores_test[a1] = np.mean(np.abs(
+                            self.kernel_density_sample(
+                                pix_output,
+                                xa,
+                                ya,
+                            ) - self._stack_BF_no_window * self._window_pad[None] \
+                            - self._window_inv_pad[None]),
+                            axis = 0,
+                        )
+                    else:
+                        scores_test[a1] = np.mean(np.abs(
+                            self.kernel_density_sample(
+                                pix_output,
+                                xa,
+                                ya,
+                            ) - self._stack_BF_no_window),
+                            axis = 0,
+                        )
 
                 # Check where cost function has improved
                 update = np.min(scores_test,axis=0) < scores
@@ -1354,26 +1375,74 @@ class ParallaxReconstruction(PhaseReconstruction):
                         position_corr_sigma_reg,
                         mode = 'nearest',
                         )
-
-
-                # update output image and cost function
-                xa = ((xa_init + self.probe_dx + xy_shifts[:, 0, None, None]) * self._kde_upsample_factor)
-                ya = ((ya_init + self.probe_dy + xy_shifts[:, 1, None, None]) * self._kde_upsample_factor)
-                pix_output = self.kernel_density_estimate(
-                    xa,
-                    ya,
-                    self._stack_BF_no_window,
-                    pixel_output_shape,
-                    kde_sigma,
-                )      
-                scores = np.mean(np.abs(
-                    self.kernel_density_sample(
-                        pix_output,
+                # kernel density output the upsampled BF image
+                xa = ((xa_init + self.probe_dx + dxy[a1,0]*step + xy_shifts[:, 0, None, None]) * self._kde_upsample_factor)
+                ya = ((ya_init + self.probe_dy + dxy[a1,1]*step + xy_shifts[:, 1, None, None]) * self._kde_upsample_factor)
+                if apply_mask_to_output:
+                    pix_output = self.kernel_density_estimate(
                         xa,
                         ya,
-                    ) - self._stack_BF_no_window),
-                    axis = 0,
-                )
+                        self._stack_BF_no_window * self._window_pad[None] \
+                        + self._window_inv_pad[None],
+                        pixel_output_shape,
+                        kde_sigma,
+                    )
+                else:
+                    pix_output = self.kernel_density_estimate(
+                        xa,
+                        ya,
+                        self._stack_BF_no_window,
+                        pixel_output_shape,
+                        kde_sigma,
+                    )
+
+                # # update output image and cost function
+                # xa = ((xa_init + self.probe_dx + xy_shifts[:, 0, None, None]) * self._kde_upsample_factor)
+                # ya = ((ya_init + self.probe_dy + xy_shifts[:, 1, None, None]) * self._kde_upsample_factor)
+                # # kernel density output the upsampled BF image
+                # if use_mask:
+                #     pix_output = self.kernel_density_estimate(
+                #         xa,
+                #         ya,
+                #         self._stack_BF,
+                #         pixel_output_shape,
+                #         kde_sigma,
+                #     )
+                # else:
+                #     pix_output = self.kernel_density_estimate(
+                #         xa,
+                #         ya,
+                #         self._stack_BF_no_window,
+                #         pixel_output_shape,
+                #         kde_sigma,
+                #     )
+                # pix_output = self.kernel_density_estimate(
+                #     xa,
+                #     ya,
+                #     self._stack_BF_no_window,
+                #     pixel_output_shape,
+                #     kde_sigma,
+                # )      
+
+                if apply_mask_to_output:
+                    scores = np.mean(np.abs(
+                        self.kernel_density_sample(
+                            pix_output,
+                            xa,
+                            ya,
+                        ) - self._stack_BF_no_window) * self._window_pad[None] \
+                        + self._window_inv_pad[None],
+                        axis = 0,
+                    )
+                else:
+                    scores = np.mean(np.abs(
+                        self.kernel_density_sample(
+                            pix_output,
+                            xa,
+                            ya,
+                        ) - self._stack_BF_no_window),
+                        axis = 0,
+                    )
                 position_corr_stats[a0+1] = np.mean(scores)
 
 
@@ -1543,6 +1612,7 @@ class ParallaxReconstruction(PhaseReconstruction):
         intensities,
         output_shape,
         kde_sigma,
+        norm_bilinear = False,
         ):
         """
         kernel density estimate from a set coordinates (xa,ya) and intensity weights.
@@ -1560,9 +1630,9 @@ class ParallaxReconstruction(PhaseReconstruction):
         inds_1D = xp.ravel_multi_index(
             xp.hstack(
                 [
-                    [xF, yF],
-                    [xF + 1, yF],
-                    [xF, yF + 1],
+                    [xF    , yF    ],
+                    [xF + 1, yF    ],
+                    [xF    , yF + 1],
                     [xF + 1, yF + 1],
                 ]
             ),
@@ -1573,9 +1643,9 @@ class ParallaxReconstruction(PhaseReconstruction):
         weights = xp.hstack(
             (
                 (1 - dx) * (1 - dy),
-                (dx) * (1 - dy),
+                (dx)     * (1 - dy),
                 (1 - dx) * (dy),
-                (dx) * (dy),
+                (dx)     * (dy),
             )
         )
 
@@ -1599,9 +1669,17 @@ class ParallaxReconstruction(PhaseReconstruction):
         # kernel density estimate
         sigma = kde_sigma * self._kde_upsample_factor
         pix_count = gaussian_filter(pix_count, sigma)
-        pix_count[pix_count == 0.0] = np.inf
+        # pix_count[pix_count == 0.0] = np.inf
         pix_output = gaussian_filter(pix_output, sigma)
-        pix_output /= pix_count
+        sub = pix_count > 1e-3
+        pix_output[sub] /= pix_count[sub]
+        pix_output[np.logical_not(sub)] = 1
+
+        if norm_bilinear:
+            pix_fft = np.fft.fft2(pix_output)
+            pix_fft /= np.sinc(np.fft.fftfreq(pix_output.shape[0],d=1.0))[:,None]
+            pix_fft /= np.sinc(np.fft.fftfreq(pix_output.shape[1],d=1.0))[None]
+            pix_output = np.real(np.fft.ifft2(pix_fft))
 
         return pix_output
 
