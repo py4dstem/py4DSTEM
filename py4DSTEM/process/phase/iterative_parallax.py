@@ -1718,7 +1718,7 @@ class ParallaxReconstruction(PhaseReconstruction):
         fit_aberrations_min_radial_order: int = 2,
         fit_aberrations_min_angular_order: int = 0,
         fit_max_thon_rings: int = 6,
-        fit_power_alpha: float = 2.0,
+        fit_power_alpha: float = 0.0,
         plot_CTF_comparison: bool = None,
         plot_BF_shifts_comparison: bool = None,
         upsampled: bool = True,
@@ -2182,11 +2182,11 @@ class ParallaxReconstruction(PhaseReconstruction):
             # im_CTF_plot[:, :, 0] = 
             im_CTF_plot = xp.abs(xp.sin(im_CTF))
 
-            im_CTF = np.fft.fftshift(asnumpy(im_CTF * angular_mask))
-            im_plot[:, :, 0] += im_CTF
-            im_plot[:, :, 1] -= im_CTF
-            im_plot[:, :, 2] -= im_CTF
-            im_plot = np.clip(im_plot, 0, 1)
+            # im_CTF = np.fft.fftshift(asnumpy(im_CTF * angular_mask))
+            # im_plot[:, :, 0] += im_CTF
+            # im_plot[:, :, 1] -= im_CTF
+            # im_plot[:, :, 2] -= im_CTF
+            # im_plot = np.clip(im_plot, 0, 1)
 
             fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(8, 4))
             ax1.imshow(
