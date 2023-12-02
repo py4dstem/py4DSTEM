@@ -1178,7 +1178,7 @@ class ParallaxReconstruction(PhaseReconstruction):
         position_corr_step_start = 1.0,
         position_corr_step_min = 0.1,
         position_corr_step_reduce = 0.75,
-        position_corr_sigma_reg = 0.5,
+        position_corr_sigma_reg = 0.25,
         plot_upsampled_BF_comparison: bool = True,
         plot_upsampled_FFT_comparison: bool = False,
         plot_position_corr_convergence: bool = True,
