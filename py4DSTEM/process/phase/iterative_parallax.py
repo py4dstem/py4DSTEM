@@ -1310,6 +1310,16 @@ class ParallaxReconstruction(PhaseReconstruction):
                 [ 0.0, -1.0],
                 [ 0.0,  1.0],
             ])
+            # dxy = np.array([
+            #     [-1.0,  0.0],
+            #     [ 1.0,  0.0],
+            #     [ 0.0, -1.0],
+            #     [ 0.0,  1.0],
+            #     [-0.71, -0.71],
+            #     [ 0.71, -0.71],
+            #     [-0.71,  0.71],
+            #     [ 0.71,  0.71],
+            # ])
             scores_test = xp.zeros((
                 dxy.shape[0],
                 scores.shape[0],
