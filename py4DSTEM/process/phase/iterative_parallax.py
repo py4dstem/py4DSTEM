@@ -252,9 +252,7 @@ class ParallaxReconstruction(PhaseReconstruction):
 
     def preprocess(
         self,
-        mask_real_space = None,
         edge_blend: float = 8.0,
-        apply_mask_to_output: bool = True,
         threshold_intensity: float = 0.8,
         normalize_images: bool = True,
         normalize_order=0,
@@ -262,6 +260,8 @@ class ParallaxReconstruction(PhaseReconstruction):
         defocus_guess: float = None,
         rotation_guess: float = None,
         plot_average_bf: bool = True,
+        realspace_mask: np.ndarray = None,
+        apply_realspace_mask_to_stack: bool = True,
         **kwargs,
     ):
         """
@@ -269,14 +269,8 @@ class ParallaxReconstruction(PhaseReconstruction):
 
         Parameters
         ----------
-        mask_real_space: np.array, optional
-            If this array is provided, pixels in real space set to false will be 
-            set to zero in the virtual bright field images. 
         edge_blend: float, optional
             Number of pixels to blend image at the border
-        apply_mask_to_output: bool, optional
-            If this value is set to true, output BF images will be masked by
-            the edge filter and mask_real_space if it is passed in.
         threshold: float, optional
             Fraction of max of dp_mean for bright-field pixels
         normalize_images: bool, optional
@@ -294,6 +288,12 @@ class ParallaxReconstruction(PhaseReconstruction):
             If None, first iteration assumed to be 0
         plot_average_bf: bool, optional
             If True, plots the average bright field image, using defocus_guess
+        realspace_mask: np.array, optional
+            If this array is provided, pixels in real space set to false will be 
+            set to zero in the virtual bright field images. 
+        apply_realspace_mask_to_stack: bool, optional
+            If this value is set to true, output BF images will be masked by
+            the edge filter and realspace_mask if it is passed in.
 
         Returns
         --------
@@ -361,7 +361,9 @@ class ParallaxReconstruction(PhaseReconstruction):
             intensities = asnumpy(self._intensities)
             intensities_shifted = np.zeros_like(intensities)
 
-            center_x, center_y = self._region_of_interest_shape / 2
+            # center_x, center_y = self._region_of_interest_shape / 2
+            center_x = com_fitted_x.mean()
+            center_y = com_fitted_y.mean()
 
             for rx in range(intensities_shifted.shape[0]):
                 for ry in range(intensities_shifted.shape[1]):
@@ -394,8 +396,8 @@ class ParallaxReconstruction(PhaseReconstruction):
         self._kr = xp.sqrt(xp.sum(self._kxy**2, axis=1))
 
         # real space mask blending function
-        if mask_real_space is not None:
-            im_edge_dist = xp.array(distance_transform_edt(mask_real_space))
+        if realspace_mask is not None:
+            im_edge_dist = xp.array(distance_transform_edt(realspace_mask))
             self._window_mask = xp.minimum(im_edge_dist / edge_blend, 1.0)
             self._window_mask = xp.sin(self._window_mask * (np.pi/2))**2
 
@@ -425,7 +427,7 @@ class ParallaxReconstruction(PhaseReconstruction):
         self._window_edge = wx[:, None] * wy[None, :]
 
         # if needed, combine edge mask with the input real space mask
-        if mask_real_space is not None:
+        if realspace_mask is not None:
             self._window_edge *= self._window_mask
 
         # derived window functions
@@ -476,7 +478,7 @@ class ParallaxReconstruction(PhaseReconstruction):
                     self._window_edge[None] * all_bfs
                 )
 
-                if apply_mask_to_output:
+                if apply_realspace_mask_to_stack:
                     self._stack_BF_unshifted = self._stack_BF_shifted.copy()
                 else:
                     self._stack_BF_unshifted[
@@ -521,7 +523,7 @@ class ParallaxReconstruction(PhaseReconstruction):
                         basis @ coefs[0], all_bfs.shape[1:3]
                     )
 
-                    if apply_mask_to_output:
+                    if apply_realspace_mask_to_stack:
                         self._stack_BF_unshifted = self._stack_BF_shifted.copy()
                     else:
                         self._stack_BF_unshifted[
@@ -572,7 +574,7 @@ class ParallaxReconstruction(PhaseReconstruction):
                     ] / xp.reshape(
                         basis @ coefs[0], all_bfs.shape[1:3]
                     )
-                    if apply_mask_to_output:
+                    if apply_realspace_mask_to_stack:
                         self._stack_BF_unshifted = self._stack_BF_shifted.copy()
                     else:
                         self._stack_BF_unshifted[
@@ -597,7 +599,7 @@ class ParallaxReconstruction(PhaseReconstruction):
                 self._window_inv[None] * all_means[:, None, None]
                 + self._window_edge[None] * all_bfs
             )
-            if apply_mask_to_output:
+            if apply_realspace_mask_to_stack:
                 self._stack_BF_unshifted = self._stack_BF_shifted.copy()
             else:
                 self._stack_BF_unshifted[
@@ -1173,14 +1175,15 @@ class ParallaxReconstruction(PhaseReconstruction):
     def subpixel_alignment(
         self,
         kde_upsample_factor = None,
-        kde_sigma = 0.25,
+        kde_sigma_px = 0.125,
+        kde_lowpass_filter = False,
+        plot_upsampled_BF_comparison: bool = True,
+        plot_upsampled_FFT_comparison: bool = False,
         position_corr_num_iter = None,
         position_corr_step_start = 1.0,
         position_corr_step_min = 0.1,
         position_corr_step_reduce = 0.75,
         position_corr_sigma_reg = (0.25, 0.25),
-        plot_upsampled_BF_comparison: bool = True,
-        plot_upsampled_FFT_comparison: bool = False,
         plot_position_corr_convergence: bool = True,
         progress_bar: bool = True,
         **kwargs,
@@ -1193,8 +1196,10 @@ class ParallaxReconstruction(PhaseReconstruction):
         ----------
         kde_upsample_factor: int, optional
             Real-space upsampling factor
-        kde_sigma: float, optional
-            KDE gaussian kernel bandwidth
+        kde_sigma_px: float, optional
+            KDE gaussian kernel bandwidth in non-upsampled pixels
+        kde_lowpass_filter: bool, optional
+            If True, the resulting KDE upsampled image is lowpass-filtered using a sinc-function
         plot_upsampled_BF_comparison: bool, optional
             If True, the pre/post alignment BF images are plotted for comparison
         plot_upsampled_FFT_comparison: bool, optional
@@ -1214,6 +1219,7 @@ class ParallaxReconstruction(PhaseReconstruction):
         self._BF_upsample_limit = (
             4 * self._kr.max() / self._reciprocal_sampling[0]
         ) / self._scan_shape.max()
+
         if self._device == "gpu":
             self._BF_upsample_limit = self._BF_upsample_limit.item()
 
@@ -1274,12 +1280,13 @@ class ParallaxReconstruction(PhaseReconstruction):
         # kernel density output the upsampled BF image
         xa = ((xa_init + xy_shifts[:, 0, None, None]) * self._kde_upsample_factor)
         ya = ((ya_init + xy_shifts[:, 1, None, None]) * self._kde_upsample_factor)
-        pix_output = self.kernel_density_estimate(
+        pix_output = self._kernel_density_estimate(
             xa,
             ya,
             self._stack_BF_unshifted,
             pixel_output_shape,
-            kde_sigma,
+            kde_sigma_px,
+            lowpass_filter=kde_lowpass_filter,
         )
 
         # Perform probe position correction if needed
@@ -1293,7 +1300,7 @@ class ParallaxReconstruction(PhaseReconstruction):
 
             # init scores and stats
             scores = np.mean(np.abs(
-                self.kernel_density_sample(
+                self._bilinear_sample_array(
                     pix_output,
                     xa,
                     ya,
@@ -1339,7 +1346,7 @@ class ParallaxReconstruction(PhaseReconstruction):
                     xa = ((xa_init + self.probe_dx + dxy[a1,0]*step + xy_shifts[:, 0, None, None]) * self._kde_upsample_factor)
                     ya = ((ya_init + self.probe_dy + dxy[a1,1]*step + xy_shifts[:, 1, None, None]) * self._kde_upsample_factor)
                     scores_test[a1] = np.mean(np.abs(
-                        self.kernel_density_sample(
+                        self._bilinear_sample_array(
                             pix_output,
                             xa,
                             ya,
@@ -1379,17 +1386,18 @@ class ParallaxReconstruction(PhaseReconstruction):
                 # kernel density output the upsampled BF image
                 xa = ((xa_init + self.probe_dx + dxy[a1,0]*step + xy_shifts[:, 0, None, None]) * self._kde_upsample_factor)
                 ya = ((ya_init + self.probe_dy + dxy[a1,1]*step + xy_shifts[:, 1, None, None]) * self._kde_upsample_factor)
-                pix_output = self.kernel_density_estimate(
+                pix_output = self._kernel_density_estimate(
                     xa,
                     ya,
                     self._stack_BF_unshifted,
                     pixel_output_shape,
-                    kde_sigma,
+                    kde_sigma_px,
+                    lowpass_filter=kde_lowpass_filter,
                 )
 
                 # update cost function and stats           
                 scores = np.mean(np.abs(
-                    self.kernel_density_sample(
+                    self._bilinear_sample_array(
                         pix_output,
                         xa,
                         ya,
@@ -1507,14 +1515,29 @@ class ParallaxReconstruction(PhaseReconstruction):
             fig.tight_layout()
 
 
-    def kernel_density_sample(
+    def _bilinear_sample_array(
         self,
         image,
         xa,
         ya,
         ):
         """
-        kernel density sampling of intensity from an image array.
+        Bilinear sampling of intensities from an image array and pixel positions.
+        
+        Parameters
+        ----------
+        image: np.ndarray
+            Image array to sample from
+        xa: np.ndarray
+            Vertical positions of image array in pixels
+        ya: np.ndarray
+            Horizontal positions of image array in pixels
+
+        Returns
+        -------
+        intensities: np.ndarray
+            Bilinearly-sampled intensities of array at (xa,ya) positions
+
         """
         xp = self._xp
        
@@ -1530,45 +1553,65 @@ class ParallaxReconstruction(PhaseReconstruction):
             xp.ravel_multi_index(
                 [xF, yF],
                 image.shape,
-                mode=["clip", "clip"],
+                mode=["wrap", "wrap"],
             )
         ] * (1-dx) * (1-dy) + \
         image.ravel()[
             xp.ravel_multi_index(
                 [xF+1, yF],
                 image.shape,
-                mode=["clip", "clip"],
+                mode=["wrap", "wrap"],
             )
         ] * (  dx) * (1-dy) + \
         image.ravel()[
             xp.ravel_multi_index(
                 [xF, yF+1],
                 image.shape,
-                mode=["clip", "clip"],
+                mode=["wrap", "wrap"],
             )
         ] * (1-dx) * (  dy) + \
         image.ravel()[
             xp.ravel_multi_index(
                 [xF+1, yF+1],
                 image.shape,
-                mode=["clip", "clip"],
+                mode=["wrap", "wrap"],
             )
         ] * (  dx) * (  dy)
 
         return intensities
 
 
-    def kernel_density_estimate(
+    def _kernel_density_estimate(
         self,
         xa,
         ya,
         intensities,
         output_shape,
         kde_sigma,
-        norm_bilinear = False,
+        lowpass_filter = False,
         ):
         """
         kernel density estimate from a set coordinates (xa,ya) and intensity weights.
+
+        Parameters
+        ----------
+        xa: np.ndarray
+            Vertical positions of intensity array in pixels
+        ya: np.ndarray
+            Horizontal positions of intensity array in pixels
+        intensities: np.ndarray
+            Intensity array weights 
+        output_shape: (int,int)
+            Upsampled intensities shape
+        kde_sigma: float
+            KDE gaussian kernel bandwidth in non-upsampled pixels
+        lowpass_filter: bool, optional
+            If True, the resulting KDE upsampled image is lowpass-filtered using a sinc-function
+
+        Returns
+        -------
+        pix_output: np.ndarray
+            Upsampled intensity image
         """
         xp = self._xp
         gaussian_filter = self._gaussian_filter
@@ -1583,7 +1626,7 @@ class ParallaxReconstruction(PhaseReconstruction):
         inds_1D = xp.ravel_multi_index(
             [xF  , yF  ],
             output_shape,
-            mode = ["clip", "clip"],
+            mode = ["wrap", "wrap"],
         )
         weights = (1 - dx) * (1 - dy)
         pix_count = xp.bincount(
@@ -1601,7 +1644,7 @@ class ParallaxReconstruction(PhaseReconstruction):
         inds_1D = xp.ravel_multi_index(
             [xF+1, yF  ],
             output_shape,
-            mode = ["clip", "clip"],
+            mode = ["wrap", "wrap"],
         )
         weights = (    dx) * (1 - dy)
         pix_count += xp.bincount(
@@ -1619,7 +1662,7 @@ class ParallaxReconstruction(PhaseReconstruction):
         inds_1D = xp.ravel_multi_index(
             [xF  , yF+1],
             output_shape,
-            mode = ["clip", "clip"],
+            mode = ["wrap", "wrap"],
         )
         weights = (1 - dx) * (    dy)
         pix_count += xp.bincount(
@@ -1637,7 +1680,7 @@ class ParallaxReconstruction(PhaseReconstruction):
         inds_1D = xp.ravel_multi_index(
             [xF+1, yF+1],
             output_shape,
-            mode = ["clip", "clip"],
+            mode = ["wrap", "wrap"],
         )
         weights = (     dx) * (    dy)
         pix_count += xp.bincount(
@@ -1661,60 +1704,19 @@ class ParallaxReconstruction(PhaseReconstruction):
             output_shape,
         )
 
-
-        # inds_1D = xp.ravel_multi_index(
-        #     xp.hstack(
-        #         [
-        #             [xF    , yF    ],
-        #             [xF + 1, yF    ],
-        #             [xF    , yF + 1],
-        #             [xF + 1, yF + 1],
-        #         ]
-        #     ),
-        #     output_shape,
-        #     mode=["clip", "clip"],
-        # )
-
-        # weights = xp.hstack(
-        #     (
-        #         (1 - dx) * (1 - dy),
-        #         (dx)     * (1 - dy),
-        #         (1 - dx) * (dy),
-        #         (dx)     * (dy),
-        #     )
-        # )
-
-        # pix_count = xp.reshape(
-        #     xp.bincount(
-        #         inds_1D, 
-        #         weights=weights, 
-        #         minlength=np.prod(output_shape),
-        #     ), 
-        #     output_shape,
-        # )
-        # pix_output = xp.reshape(
-        #     xp.bincount(
-        #         inds_1D,
-        #         weights=weights * xp.tile(intensities.ravel(), 4),
-        #         minlength=np.prod(output_shape),
-        #     ),
-        #     output_shape,
-        # )
-
         # kernel density estimate
         sigma = kde_sigma * self._kde_upsample_factor
         pix_count = gaussian_filter(pix_count, sigma)
-        # pix_count[pix_count == 0.0] = np.inf
         pix_output = gaussian_filter(pix_output, sigma)
         sub = pix_count > 1e-3
         pix_output[sub] /= pix_count[sub]
         pix_output[np.logical_not(sub)] = 1
 
-        if norm_bilinear:
-            pix_fft = np.fft.fft2(pix_output)
-            pix_fft /= np.sinc(np.fft.fftfreq(pix_output.shape[0],d=1.0))[:,None]
-            pix_fft /= np.sinc(np.fft.fftfreq(pix_output.shape[1],d=1.0))[None]
-            pix_output = np.real(np.fft.ifft2(pix_fft))
+        if lowpass_filter:
+            pix_fft = xp.fft.fft2(pix_output)
+            pix_fft /= xp.sinc(xp.fft.fftfreq(pix_output.shape[0],d=1.0))[:,None]
+            pix_fft /= xp.sinc(xp.fft.fftfreq(pix_output.shape[1],d=1.0))[None]
+            pix_output = xp.real(xp.fft.ifft2(pix_fft))
 
         return pix_output
 
@@ -1728,7 +1730,7 @@ class ParallaxReconstruction(PhaseReconstruction):
         fit_aberrations_min_radial_order: int = 2,
         fit_aberrations_min_angular_order: int = 0,
         fit_max_thon_rings: int = 6,
-        fit_power_alpha: float = 0.0,
+        fit_power_alpha: float = 1.0,
         plot_CTF_comparison: bool = None,
         plot_BF_shifts_comparison: bool = None,
         upsampled: bool = True,
@@ -1855,14 +1857,6 @@ class ParallaxReconstruction(PhaseReconstruction):
             np.argsort(self._aberrations_mn[~sub, 0]), :
         ]
         self._aberrations_num = self._aberrations_mn.shape[0]
-
-        if plot_CTF_comparison is None:
-            if fit_CTF_FFT:
-                plot_CTF_comparison = True
-
-        if plot_BF_shifts_comparison is None:
-            if fit_BF_shifts:
-                plot_BF_shifts_comparison = True
 
         # Thon Rings Fitting
         if fit_CTF_FFT or plot_CTF_comparison:
@@ -2183,20 +2177,18 @@ class ParallaxReconstruction(PhaseReconstruction):
             im_CTF = calculate_CTF_FFT(
                 self._aberrations_surface_shape_FFT, *self._aberrations_coefs
             )
-            # im_CTF_cos = xp.cos(xp.abs(im_CTF)) ** 4
-            # im_CTF[xp.abs(im_CTF) > (fit_max_thon_rings + 0.5) * np.pi] = np.pi / 2
-            # im_CTF = xp.abs(xp.sin(im_CTF)) < 0.15
-            # im_CTF[xp.logical_not(plot_mask)] = 0
-            # im_CTF_sin = xp.sin(im_CTF)
-            # im_CTF_plot = np.zeros((im_CTF_sin.shape[0],im_CTF_sin.shape[1],3))
-            # im_CTF_plot[:, :, 0] = 
+            
             im_CTF_plot = xp.abs(xp.sin(im_CTF))
 
-            # im_CTF = np.fft.fftshift(asnumpy(im_CTF * angular_mask))
-            # im_plot[:, :, 0] += im_CTF
-            # im_plot[:, :, 1] -= im_CTF
-            # im_plot[:, :, 2] -= im_CTF
-            # im_plot = np.clip(im_plot, 0, 1)
+            im_CTF[xp.abs(im_CTF) > (fit_max_thon_rings + 0.5) * np.pi] = np.pi / 2
+            im_CTF = xp.abs(xp.sin(im_CTF)) < 0.15
+            im_CTF[xp.logical_not(plot_mask)] = 0
+
+            im_CTF = np.fft.fftshift(asnumpy(im_CTF * angular_mask))
+            im_plot[:, :, 0] += im_CTF
+            im_plot[:, :, 1] -= im_CTF
+            im_plot[:, :, 2] -= im_CTF
+            im_plot = np.clip(im_plot, 0, 1)
 
             fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(8, 4))
             ax1.imshow(
