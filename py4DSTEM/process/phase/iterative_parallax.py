@@ -19,9 +19,9 @@ from py4DSTEM.process.utils.cross_correlate import align_images_fourier
 from py4DSTEM.process.utils.utils import electron_wavelength_angstrom
 from py4DSTEM.visualize import show
 from scipy.linalg import polar
+from scipy.ndimage import distance_transform_edt
 from scipy.optimize import minimize
 from scipy.special import comb
-from scipy.ndimage import distance_transform_edt
 
 try:
     import cupy as cp
@@ -289,8 +289,8 @@ class ParallaxReconstruction(PhaseReconstruction):
         plot_average_bf: bool, optional
             If True, plots the average bright field image, using defocus_guess
         realspace_mask: np.array, optional
-            If this array is provided, pixels in real space set to false will be 
-            set to zero in the virtual bright field images. 
+            If this array is provided, pixels in real space set to false will be
+            set to zero in the virtual bright field images.
         apply_realspace_mask_to_stack: bool, optional
             If this value is set to true, output BF images will be masked by
             the edge filter and realspace_mask if it is passed in.
@@ -399,7 +399,7 @@ class ParallaxReconstruction(PhaseReconstruction):
         if realspace_mask is not None:
             im_edge_dist = xp.array(distance_transform_edt(realspace_mask))
             self._window_mask = xp.minimum(im_edge_dist / edge_blend, 1.0)
-            self._window_mask = xp.sin(self._window_mask * (np.pi/2))**2
+            self._window_mask = xp.sin(self._window_mask * (np.pi / 2)) ** 2
 
         # edge window function
         x = xp.linspace(-1, 1, self._grid_scan_shape[0] + 1, dtype=xp.float32)[1:]
@@ -474,8 +474,7 @@ class ParallaxReconstruction(PhaseReconstruction):
                     self._object_padding_px[1] // 2 : self._grid_scan_shape[1]
                     + self._object_padding_px[1] // 2,
                 ] = (
-                    self._window_inv[None] + \
-                    self._window_edge[None] * all_bfs
+                    self._window_inv[None] + self._window_edge[None] * all_bfs
                 )
 
                 if apply_realspace_mask_to_stack:
@@ -506,8 +505,8 @@ class ParallaxReconstruction(PhaseReconstruction):
                     # coefs = np.linalg.lstsq(basis, all_bfs[a0].ravel(), rcond=None)
                     # weighted least squares
                     coefs = np.linalg.lstsq(
-                        weights[:,None] * basis, 
-                        weights         * all_bfs[a0].ravel(), 
+                        weights[:, None] * basis,
+                        weights * all_bfs[a0].ravel(),
                         rcond=None,
                     )
 
@@ -532,8 +531,9 @@ class ParallaxReconstruction(PhaseReconstruction):
                             + self._object_padding_px[0] // 2,
                             self._object_padding_px[1] // 2 : self._grid_scan_shape[1]
                             + self._object_padding_px[1] // 2,
-                        ] = all_bfs[a0] / xp.reshape(basis @ coefs[0], all_bfs.shape[1:3])
-
+                        ] = all_bfs[a0] / xp.reshape(
+                            basis @ coefs[0], all_bfs.shape[1:3]
+                        )
 
             elif normalize_order == 2:
                 x = xp.linspace(-0.5, 0.5, all_bfs.shape[1], xp.float32)
@@ -541,15 +541,19 @@ class ParallaxReconstruction(PhaseReconstruction):
                 ya, xa = xp.meshgrid(y, x)
                 basis = np.vstack(
                     (
-                        1 * xa.ravel()**2 * ya.ravel()**2,
-                        2 * xa.ravel()**2 * ya.ravel()*(1-ya.ravel()),
-                        1 * xa.ravel()**2 * (1-ya.ravel())**2,
-                        2 * xa.ravel()*(1-xa.ravel()) * ya.ravel()**2,
-                        4 * xa.ravel()*(1-xa.ravel()) * ya.ravel()*(1-ya.ravel()),
-                        2 * xa.ravel()*(1-xa.ravel()) * (1-ya.ravel())**2,
-                        1 * (1-xa.ravel())**2 * ya.ravel()**2,
-                        2 * (1-xa.ravel())**2 * ya.ravel()*(1-ya.ravel()),
-                        1 * (1-xa.ravel())**2 * (1-ya.ravel())**2,
+                        1 * xa.ravel() ** 2 * ya.ravel() ** 2,
+                        2 * xa.ravel() ** 2 * ya.ravel() * (1 - ya.ravel()),
+                        1 * xa.ravel() ** 2 * (1 - ya.ravel()) ** 2,
+                        2 * xa.ravel() * (1 - xa.ravel()) * ya.ravel() ** 2,
+                        4
+                        * xa.ravel()
+                        * (1 - xa.ravel())
+                        * ya.ravel()
+                        * (1 - ya.ravel()),
+                        2 * xa.ravel() * (1 - xa.ravel()) * (1 - ya.ravel()) ** 2,
+                        1 * (1 - xa.ravel()) ** 2 * ya.ravel() ** 2,
+                        2 * (1 - xa.ravel()) ** 2 * ya.ravel() * (1 - ya.ravel()),
+                        1 * (1 - xa.ravel()) ** 2 * (1 - ya.ravel()) ** 2,
                     )
                 ).T
                 weights = np.sqrt(self._window_edge).ravel()
@@ -558,8 +562,8 @@ class ParallaxReconstruction(PhaseReconstruction):
                     # coefs = np.linalg.lstsq(basis, all_bfs[a0].ravel(), rcond=None)
                     # weighted least squares
                     coefs = np.linalg.lstsq(
-                        weights[:,None] * basis, 
-                        weights         * all_bfs[a0].ravel(), 
+                        weights[:, None] * basis,
+                        weights * all_bfs[a0].ravel(),
                         rcond=None,
                     )
 
@@ -583,7 +587,9 @@ class ParallaxReconstruction(PhaseReconstruction):
                             + self._object_padding_px[0] // 2,
                             self._object_padding_px[1] // 2 : self._grid_scan_shape[1]
                             + self._object_padding_px[1] // 2,
-                        ] = all_bfs[a0] / xp.reshape(basis @ coefs[0], all_bfs.shape[1:3])
+                        ] = all_bfs[a0] / xp.reshape(
+                            basis @ coefs[0], all_bfs.shape[1:3]
+                        )
 
         else:
             all_means = xp.mean(all_bfs, axis=(1, 2))
@@ -666,7 +672,10 @@ class ParallaxReconstruction(PhaseReconstruction):
 
         self._recon_error = (
             xp.atleast_1d(
-                xp.sum(xp.abs(self._stack_BF_shifted - self._recon_BF[None]) * self._stack_mask)
+                xp.sum(
+                    xp.abs(self._stack_BF_shifted - self._recon_BF[None])
+                    * self._stack_mask
+                )
             )
             / self._mask_sum
         )
@@ -1122,7 +1131,9 @@ class ParallaxReconstruction(PhaseReconstruction):
             # Center the shifts
             xy_shifts_median = xp.round(xp.median(self._xy_shifts, axis=0)).astype(int)
             self._xy_shifts -= xy_shifts_median[None, :]
-            self._stack_BF_shifted = xp.roll(self._stack_BF_shifted, -xy_shifts_median, axis=(1, 2))
+            self._stack_BF_shifted = xp.roll(
+                self._stack_BF_shifted, -xy_shifts_median, axis=(1, 2)
+            )
             self._stack_mask = xp.roll(self._stack_mask, -xy_shifts_median, axis=(1, 2))
 
             # Generate new estimate
@@ -1137,7 +1148,8 @@ class ParallaxReconstruction(PhaseReconstruction):
             self._recon_error = (
                 xp.atleast_1d(
                     xp.sum(
-                        xp.abs(self._stack_BF_shifted - self._recon_BF[None]) * self._stack_mask
+                        xp.abs(self._stack_BF_shifted - self._recon_BF[None])
+                        * self._stack_mask
                     )
                 )
                 / self._mask_sum
@@ -1174,16 +1186,16 @@ class ParallaxReconstruction(PhaseReconstruction):
 
     def subpixel_alignment(
         self,
-        kde_upsample_factor = None,
-        kde_sigma_px = 0.125,
-        kde_lowpass_filter = False,
+        kde_upsample_factor=None,
+        kde_sigma_px=0.125,
+        kde_lowpass_filter=False,
         plot_upsampled_BF_comparison: bool = True,
         plot_upsampled_FFT_comparison: bool = False,
-        position_corr_num_iter = None,
-        position_corr_step_start = 1.0,
-        position_corr_step_min = 0.1,
-        position_corr_step_reduce = 0.75,
-        position_corr_sigma_reg = (0.25, 0.25),
+        position_corr_num_iter=None,
+        position_corr_step_start=1.0,
+        position_corr_step_min=0.1,
+        position_corr_step_reduce=0.75,
+        position_corr_sigma_reg=(0.25, 0.25),
         plot_position_corr_convergence: bool = True,
         progress_bar: bool = True,
         **kwargs,
@@ -1270,16 +1282,15 @@ class ParallaxReconstruction(PhaseReconstruction):
 
         self._kde_upsample_factor = kde_upsample_factor
         pixel_output_shape = np.round(BF_size * self._kde_upsample_factor).astype("int")
-        pixel_size = pixel_output_shape.prod()
 
         # shifted coordinates
-        x = xp.arange(BF_size[0], dtype='float')
-        y = xp.arange(BF_size[1], dtype='float')
+        x = xp.arange(BF_size[0], dtype="float")
+        y = xp.arange(BF_size[1], dtype="float")
         xa_init, ya_init = xp.meshgrid(x, y, indexing="ij")
 
         # kernel density output the upsampled BF image
-        xa = ((xa_init + xy_shifts[:, 0, None, None]) * self._kde_upsample_factor)
-        ya = ((ya_init + xy_shifts[:, 1, None, None]) * self._kde_upsample_factor)
+        xa = (xa_init + xy_shifts[:, 0, None, None]) * self._kde_upsample_factor
+        ya = (ya_init + xy_shifts[:, 1, None, None]) * self._kde_upsample_factor
         pix_output = self._kernel_density_estimate(
             xa,
             ya,
@@ -1296,27 +1307,32 @@ class ParallaxReconstruction(PhaseReconstruction):
             self.probe_dy = np.zeros_like(xa_init)
 
             # step size of initial search, cost function
-            step = np.ones_like(xa_init)*position_corr_step_start
+            step = np.ones_like(xa_init) * position_corr_step_start
 
             # init scores and stats
-            scores = np.mean(np.abs(
-                self._bilinear_sample_array(
-                    pix_output,
-                    xa,
-                    ya,
-                ) - self._stack_BF_unshifted),
-                axis = 0,
+            scores = np.mean(
+                np.abs(
+                    self._bilinear_sample_array(
+                        pix_output,
+                        xa,
+                        ya,
+                    )
+                    - self._stack_BF_unshifted
+                ),
+                axis=0,
             )
-            position_corr_stats = np.zeros(position_corr_num_iter+1)
+            position_corr_stats = np.zeros(position_corr_num_iter + 1)
             position_corr_stats[0] = np.mean(scores)
 
             # gradient search directions
-            dxy = np.array([
-                [-1.0,  0.0],
-                [ 1.0,  0.0],
-                [ 0.0, -1.0],
-                [ 0.0,  1.0],
-            ])
+            dxy = np.array(
+                [
+                    [-1.0, 0.0],
+                    [1.0, 0.0],
+                    [0.0, -1.0],
+                    [0.0, 1.0],
+                ]
+            )
             # dxy = np.array([
             #     [-1.0,  0.0],
             #     [ 1.0,  0.0],
@@ -1327,11 +1343,13 @@ class ParallaxReconstruction(PhaseReconstruction):
             #     [-0.71,  0.71],
             #     [ 0.71,  0.71],
             # ])
-            scores_test = xp.zeros((
-                dxy.shape[0],
-                scores.shape[0],
-                scores.shape[1],
-            ))
+            scores_test = xp.zeros(
+                (
+                    dxy.shape[0],
+                    scores.shape[0],
+                    scores.shape[1],
+                )
+            )
 
             # main loop for position correction
             # for a0 in range(position_corr_num_iter):
@@ -1340,29 +1358,42 @@ class ParallaxReconstruction(PhaseReconstruction):
                 desc="Correcting positions: ",
                 unit=" iteration",
                 disable=not progress_bar,
-                ):
+            ):
                 # Evaluate scores for step directions and magnitudes
                 for a1 in range(dxy.shape[0]):
-                    xa = ((xa_init + self.probe_dx + dxy[a1,0]*step + xy_shifts[:, 0, None, None]) * self._kde_upsample_factor)
-                    ya = ((ya_init + self.probe_dy + dxy[a1,1]*step + xy_shifts[:, 1, None, None]) * self._kde_upsample_factor)
-                    scores_test[a1] = np.mean(np.abs(
-                        self._bilinear_sample_array(
-                            pix_output,
-                            xa,
-                            ya,
-                        ) - self._stack_BF_unshifted),
-                        axis = 0,
+                    xa = (
+                        xa_init
+                        + self.probe_dx
+                        + dxy[a1, 0] * step
+                        + xy_shifts[:, 0, None, None]
+                    ) * self._kde_upsample_factor
+                    ya = (
+                        ya_init
+                        + self.probe_dy
+                        + dxy[a1, 1] * step
+                        + xy_shifts[:, 1, None, None]
+                    ) * self._kde_upsample_factor
+                    scores_test[a1] = np.mean(
+                        np.abs(
+                            self._bilinear_sample_array(
+                                pix_output,
+                                xa,
+                                ya,
+                            )
+                            - self._stack_BF_unshifted
+                        ),
+                        axis=0,
                     )
 
                 # Check where cost function has improved
-                update = np.min(scores_test,axis=0) < scores
-                scores_ind = np.argmin(scores_test,axis=0)
+                update = np.min(scores_test, axis=0) < scores
+                scores_ind = np.argmin(scores_test, axis=0)
 
                 # update the scores and probe shifts
                 for a1 in range(dxy.shape[0]):
-                    sub = np.logical_and(update, scores_ind==a1)
-                    self.probe_dx[sub] += dxy[a1,0]*step[sub]
-                    self.probe_dy[sub] += dxy[a1,1]*step[sub]
+                    sub = np.logical_and(update, scores_ind == a1)
+                    self.probe_dx[sub] += dxy[a1, 0] * step[sub]
+                    self.probe_dy[sub] += dxy[a1, 1] * step[sub]
                     # scores[sub] = scores_test[a1][sub]
 
                 # reduce gradient step for sites which did not improve
@@ -1376,16 +1407,26 @@ class ParallaxReconstruction(PhaseReconstruction):
                     self.probe_dx = gaussian_filter(
                         self.probe_dx,
                         position_corr_sigma_reg,
-                        mode = 'nearest',
-                        )
+                        mode="nearest",
+                    )
                     self.probe_dy = gaussian_filter(
                         self.probe_dy,
                         position_corr_sigma_reg,
-                        mode = 'nearest',
-                        )
+                        mode="nearest",
+                    )
                 # kernel density output the upsampled BF image
-                xa = ((xa_init + self.probe_dx + dxy[a1,0]*step + xy_shifts[:, 0, None, None]) * self._kde_upsample_factor)
-                ya = ((ya_init + self.probe_dy + dxy[a1,1]*step + xy_shifts[:, 1, None, None]) * self._kde_upsample_factor)
+                xa = (
+                    xa_init
+                    + self.probe_dx
+                    + dxy[a1, 0] * step
+                    + xy_shifts[:, 0, None, None]
+                ) * self._kde_upsample_factor
+                ya = (
+                    ya_init
+                    + self.probe_dy
+                    + dxy[a1, 1] * step
+                    + xy_shifts[:, 1, None, None]
+                ) * self._kde_upsample_factor
                 pix_output = self._kernel_density_estimate(
                     xa,
                     ya,
@@ -1395,27 +1436,29 @@ class ParallaxReconstruction(PhaseReconstruction):
                     lowpass_filter=kde_lowpass_filter,
                 )
 
-                # update cost function and stats           
-                scores = np.mean(np.abs(
-                    self._bilinear_sample_array(
-                        pix_output,
-                        xa,
-                        ya,
-                    ) - self._stack_BF_unshifted),
-                    axis = 0,
+                # update cost function and stats
+                scores = np.mean(
+                    np.abs(
+                        self._bilinear_sample_array(
+                            pix_output,
+                            xa,
+                            ya,
+                        )
+                        - self._stack_BF_unshifted
+                    ),
+                    axis=0,
                 )
-                position_corr_stats[a0+1] = np.mean(scores)
-
+                position_corr_stats[a0 + 1] = np.mean(scores)
 
             if plot_position_corr_convergence:
-                fig,ax = plt.subplots(figsize=(8,2))
+                fig, ax = plt.subplots(figsize=(8, 2))
                 ax.plot(
-                    np.arange(position_corr_num_iter+1),
+                    np.arange(position_corr_num_iter + 1),
                     position_corr_stats,
-                    color = (1,0,0),
+                    color=(1, 0, 0),
                 )
-                ax.set_xlabel('iterations')
-                ax.set_ylabel('position error')
+                ax.set_xlabel("iterations")
+                ax.set_ylabel("position error")
 
         self._recon_BF_subpixel_aligned = pix_output
         self.recon_BF_subpixel_aligned = asnumpy(self._recon_BF_subpixel_aligned)
@@ -1514,16 +1557,15 @@ class ParallaxReconstruction(PhaseReconstruction):
 
             fig.tight_layout()
 
-
     def _bilinear_sample_array(
         self,
         image,
         xa,
         ya,
-        ):
+    ):
         """
         Bilinear sampling of intensities from an image array and pixel positions.
-        
+
         Parameters
         ----------
         image: np.ndarray
@@ -1540,7 +1582,7 @@ class ParallaxReconstruction(PhaseReconstruction):
 
         """
         xp = self._xp
-       
+
         # bilinear sampling
         xF = xp.floor(xa).astype("int")
         yF = xp.floor(ya).astype("int")
@@ -1548,38 +1590,46 @@ class ParallaxReconstruction(PhaseReconstruction):
         dy = ya - yF
 
         # sampling
-        intensities = \
-        image.ravel()[
-            xp.ravel_multi_index(
-                [xF, yF],
-                image.shape,
-                mode=["wrap", "wrap"],
-            )
-        ] * (1-dx) * (1-dy) + \
-        image.ravel()[
-            xp.ravel_multi_index(
-                [xF+1, yF],
-                image.shape,
-                mode=["wrap", "wrap"],
-            )
-        ] * (  dx) * (1-dy) + \
-        image.ravel()[
-            xp.ravel_multi_index(
-                [xF, yF+1],
-                image.shape,
-                mode=["wrap", "wrap"],
-            )
-        ] * (1-dx) * (  dy) + \
-        image.ravel()[
-            xp.ravel_multi_index(
-                [xF+1, yF+1],
-                image.shape,
-                mode=["wrap", "wrap"],
-            )
-        ] * (  dx) * (  dy)
+        intensities = (
+            image.ravel()[
+                xp.ravel_multi_index(
+                    [xF, yF],
+                    image.shape,
+                    mode=["wrap", "wrap"],
+                )
+            ]
+            * (1 - dx)
+            * (1 - dy)
+            + image.ravel()[
+                xp.ravel_multi_index(
+                    [xF + 1, yF],
+                    image.shape,
+                    mode=["wrap", "wrap"],
+                )
+            ]
+            * (dx)
+            * (1 - dy)
+            + image.ravel()[
+                xp.ravel_multi_index(
+                    [xF, yF + 1],
+                    image.shape,
+                    mode=["wrap", "wrap"],
+                )
+            ]
+            * (1 - dx)
+            * (dy)
+            + image.ravel()[
+                xp.ravel_multi_index(
+                    [xF + 1, yF + 1],
+                    image.shape,
+                    mode=["wrap", "wrap"],
+                )
+            ]
+            * (dx)
+            * (dy)
+        )
 
         return intensities
-
 
     def _kernel_density_estimate(
         self,
@@ -1588,8 +1638,8 @@ class ParallaxReconstruction(PhaseReconstruction):
         intensities,
         output_shape,
         kde_sigma,
-        lowpass_filter = False,
-        ):
+        lowpass_filter=False,
+    ):
         """
         kernel density estimate from a set coordinates (xa,ya) and intensity weights.
 
@@ -1600,7 +1650,7 @@ class ParallaxReconstruction(PhaseReconstruction):
         ya: np.ndarray
             Horizontal positions of intensity array in pixels
         intensities: np.ndarray
-            Intensity array weights 
+            Intensity array weights
         output_shape: (int,int)
             Upsampled intensities shape
         kde_sigma: float
@@ -1620,78 +1670,78 @@ class ParallaxReconstruction(PhaseReconstruction):
         xF = xp.floor(xa.ravel()).astype("int")
         yF = xp.floor(ya.ravel()).astype("int")
         dx = xa.ravel() - xF
-        dy = ya.ravel() - yF 
+        dy = ya.ravel() - yF
 
         # resampling 01
         inds_1D = xp.ravel_multi_index(
-            [xF  , yF  ],
+            [xF, yF],
             output_shape,
-            mode = ["wrap", "wrap"],
+            mode=["wrap", "wrap"],
         )
         weights = (1 - dx) * (1 - dy)
         pix_count = xp.bincount(
-            inds_1D, 
-            weights = weights, 
-            minlength = np.prod(output_shape),
+            inds_1D,
+            weights=weights,
+            minlength=np.prod(output_shape),
         )
         pix_output = xp.bincount(
-            inds_1D, 
-            weights = weights * intensities.ravel(), 
-            minlength = np.prod(output_shape),
+            inds_1D,
+            weights=weights * intensities.ravel(),
+            minlength=np.prod(output_shape),
         )
 
         # resampling 02
         inds_1D = xp.ravel_multi_index(
-            [xF+1, yF  ],
+            [xF + 1, yF],
             output_shape,
-            mode = ["wrap", "wrap"],
+            mode=["wrap", "wrap"],
         )
-        weights = (    dx) * (1 - dy)
+        weights = (dx) * (1 - dy)
         pix_count += xp.bincount(
-            inds_1D, 
-            weights = weights, 
-            minlength = np.prod(output_shape),
+            inds_1D,
+            weights=weights,
+            minlength=np.prod(output_shape),
         )
         pix_output += xp.bincount(
-            inds_1D, 
-            weights = weights * intensities.ravel(), 
-            minlength = np.prod(output_shape),
+            inds_1D,
+            weights=weights * intensities.ravel(),
+            minlength=np.prod(output_shape),
         )
 
         # resampling 03
         inds_1D = xp.ravel_multi_index(
-            [xF  , yF+1],
+            [xF, yF + 1],
             output_shape,
-            mode = ["wrap", "wrap"],
+            mode=["wrap", "wrap"],
         )
-        weights = (1 - dx) * (    dy)
+        weights = (1 - dx) * (dy)
         pix_count += xp.bincount(
-            inds_1D, 
-            weights = weights, 
-            minlength = np.prod(output_shape),
+            inds_1D,
+            weights=weights,
+            minlength=np.prod(output_shape),
         )
         pix_output += xp.bincount(
-            inds_1D, 
-            weights = weights * intensities.ravel(), 
-            minlength = np.prod(output_shape),
+            inds_1D,
+            weights=weights * intensities.ravel(),
+            minlength=np.prod(output_shape),
         )
 
         # resampling 04
         inds_1D = xp.ravel_multi_index(
-            [xF+1, yF+1],
+            [xF + 1, yF + 1],
             output_shape,
-            mode = ["wrap", "wrap"],
+            mode=["wrap", "wrap"],
         )
-        weights = (     dx) * (    dy)
+        weights = (dx) * (dy)
         pix_count += xp.bincount(
-            inds_1D, 
-            weights = weights, 
-            minlength = np.prod(output_shape),
+            inds_1D,
+            weights=weights,
+            minlength=np.prod(output_shape),
         )
         pix_output += xp.bincount(
-            inds_1D, 
-            weights = weights * intensities.ravel(), 
-            minlength = np.prod(output_shape),
+            inds_1D,
+            weights=weights * intensities.ravel(),
+            minlength=np.prod(output_shape),
         )
 
         # reshape 1D arrays to 2D
@@ -1714,12 +1764,11 @@ class ParallaxReconstruction(PhaseReconstruction):
 
         if lowpass_filter:
             pix_fft = xp.fft.fft2(pix_output)
-            pix_fft /= xp.sinc(xp.fft.fftfreq(pix_output.shape[0],d=1.0))[:,None]
-            pix_fft /= xp.sinc(xp.fft.fftfreq(pix_output.shape[1],d=1.0))[None]
+            pix_fft /= xp.sinc(xp.fft.fftfreq(pix_output.shape[0], d=1.0))[:, None]
+            pix_fft /= xp.sinc(xp.fft.fftfreq(pix_output.shape[1], d=1.0))[None]
             pix_output = xp.real(xp.fft.ifft2(pix_fft))
 
         return pix_output
-
 
     def aberration_fit(
         self,
@@ -2177,7 +2226,7 @@ class ParallaxReconstruction(PhaseReconstruction):
             im_CTF = calculate_CTF_FFT(
                 self._aberrations_surface_shape_FFT, *self._aberrations_coefs
             )
-            
+
             im_CTF_plot = xp.abs(xp.sin(im_CTF))
 
             im_CTF[xp.abs(im_CTF) > (fit_max_thon_rings + 0.5) * np.pi] = np.pi / 2
@@ -2586,7 +2635,8 @@ class ParallaxReconstruction(PhaseReconstruction):
 
             # apply correction to mean reconstructed BF image
             stack_depth[a0] = (
-                xp.real(xp.fft.ifft2(im_depth * CTF_corr)) / self._stack_BF_shifted.shape[0]
+                xp.real(xp.fft.ifft2(im_depth * CTF_corr))
+                / self._stack_BF_shifted.shape[0]
             )
 
             if plot_depth_sections:
