@@ -704,8 +704,7 @@ class DataCubeVirtualImager:
         Returns:
             (2 or 3D array) the mask
         """
-        nas = np.asarray
-        g1, g2, origin = nas(g1), nas(g2), nas(origin)
+        g1, g2, origin = np.asarray(g1), np.asarray(g2), np.asarray(origin)
 
         rotation_rad = np.deg2rad(rotation_deg)
         cost = np.cos(rotation_rad)
