@@ -926,36 +926,31 @@ class Crystal:
             orientation_matrix = self.parse_orientation(
                 zone_axis_lattice, proj_x_lattice, zone_axis_cartesian, proj_x_cartesian
             )
-        # projection directions of potential image
-        proj_x = orientation_matrix[:,0] \
-            / np.linalg.norm(orientation_matrix[:,0])
-        proj_y = orientation_matrix[:,1] \
-            / np.linalg.norm(orientation_matrix[:,1])
-        proj_z = orientation_matrix[:,2] \
-            / np.linalg.norm(orientation_matrix[:,2])
 
-        # Determine unit cell axes to tile over
-        uvw = self.lat_real / \
-            np.linalg.norm(self.lat_real, axis = 1)
-        test = np.abs(uvw @ proj_z)
-        inds_tile = np.argsort(test)[:2]
-        m_tile = self.lat_real[inds_tile,:]
+        # Rotate unit cell into projection direction
+        lat_real = self.lat_real.copy() @ orientation_matrix
+
+        # Determine unit cell axes to tile over, by selecting 2/3 with largest in-plane component
+        inds_tile = np.argsort(
+            np.linalg.norm(lat_real[:,0:2],axis=1)
+        )[1:3]
+        m_tile = lat_real[inds_tile,:]
 
         # Determine tiling range
         p_corners = np.array([
             [-im_size_Ang[0]*0.5,-im_size_Ang[1]*0.5, 0.0],
             [ im_size_Ang[0]*0.5,-im_size_Ang[1]*0.5, 0.0],
-            [ im_size_Ang[0]*0.5, im_size_Ang[1]*0.5, 0.0],
             [-im_size_Ang[0]*0.5, im_size_Ang[1]*0.5, 0.0],
+            [ im_size_Ang[0]*0.5, im_size_Ang[1]*0.5, 0.0],
         ])
-        p_corners_proj = p_corners @ \
-            np.linalg.inv(np.vstack((proj_x, proj_y, proj_z)))
-        ab = np.round(np.linalg.lstsq(
-            m_tile.T,
-            p_corners_proj.T, 
-            rcond=None)[0])
-        a_range = np.array((np.min(ab[0])-1,np.max(ab[0])+1))
-        b_range = np.array((np.min(ab[1])-1,np.max(ab[1])+1))
+        ab = np.linalg.lstsq(
+            m_tile[:,:2].T,
+            p_corners[:,:2].T, 
+            rcond=None
+        )[0]
+        ab = np.floor(ab)
+        a_range = np.array((np.min(ab[0])-1,np.max(ab[0])+2))
+        b_range = np.array((np.min(ab[1])-1,np.max(ab[1])+2))
 
         # Tile unit cell
         a_ind, b_ind, atoms_ind = np.meshgrid(
@@ -966,13 +961,12 @@ class Crystal:
         abc_atoms = self.positions[atoms_ind.ravel(),:]
         abc_atoms[:,inds_tile[0]] += a_ind.ravel()
         abc_atoms[:,inds_tile[1]] += b_ind.ravel()
-        # NOTE - should this be self.lat_real.T?
-        xyz_atoms_ang = abc_atoms @ self.lat_real
+        xyz_atoms_ang = abc_atoms @ lat_real
         atoms_ID_all = self.numbers[atoms_ind.ravel()]
 
-        # Project into projected potential image plane
-        x = (xyz_atoms_ang @ proj_x) / pixel_size_Ang + im_size[0]/2.0
-        y = (xyz_atoms_ang @ proj_y) / pixel_size_Ang + im_size[1]/2.0
+        # Center atoms on image plane
+        x = xyz_atoms_ang[:,0] / pixel_size_Ang + im_size[0]/2.0
+        y = xyz_atoms_ang[:,1] / pixel_size_Ang + im_size[1]/2.0
         atoms_del = np.logical_or.reduce((
             x < 0,
             y < 0,
@@ -1032,7 +1026,7 @@ class Crystal:
             fig,ax = plt.subplots(figsize = (6,6))
             ax.imshow(
                 im_potential,
-                cmap = 'gray',
+                cmap = 'turbo',
                 )
             # ax.scatter(y,x)
             ax.set_axis_off()
