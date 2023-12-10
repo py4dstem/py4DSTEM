@@ -15,7 +15,7 @@ from mpl_toolkits.axes_grid1.axes_divider import make_axes_locatable
 from py4DSTEM import Calibration, DataCube
 from py4DSTEM.preprocess.utils import get_shifted_ar
 from py4DSTEM.process.phase.iterative_base_class import PhaseReconstruction
-from py4DSTEM.process.phase.utils import AffineTransform
+from py4DSTEM.process.phase.utils import AffineTransform, bilinearly_interpolate_array, lanczos_interpolate_array, bilinear_kernel_density_estimate, lanczos_kernel_density_estimate, vectorized_fourier_resample, pixel_rolling_kernel_density_estimate
 from py4DSTEM.process.utils.cross_correlate import align_images_fourier
 from py4DSTEM.process.utils.utils import electron_wavelength_angstrom, fourier_resample
 from py4DSTEM.visualize import return_scaled_histogram_ordering, show
@@ -1191,7 +1191,7 @@ class ParallaxReconstruction(PhaseReconstruction):
         kde_sigma_px=0.125,
         kde_lowpass_filter=False,
         lanczos_interpolation_order=None,
-        additional_fourier_resampling_factor=None,
+        integer_pixel_rolling_alignment = False,
         plot_upsampled_BF_comparison: bool = True,
         plot_upsampled_FFT_comparison: bool = False,
         position_correction_num_iter=None,
@@ -1220,7 +1220,9 @@ class ParallaxReconstruction(PhaseReconstruction):
         kde_lowpass_filter: bool, optional
             If True, the resulting KDE upsampled image is lowpass-filtered using a sinc-function
         lanczos_interpolation_order: int, optional
-            If not None, Lanczos interpolation with the specified order is used instead of bilinear.
+            If not None, Lanczos interpolation with the specified order is used instead of bilinear
+        fourier_upsampling_additional_factor: int, optional
+            If not None, Fourier upsampling with integer rolling is used instead of bilinear/Lanczos
         plot_upsampled_BF_comparison: bool, optional
             If True, the pre/post alignment BF images are plotted for comparison
         plot_upsampled_FFT_comparison: bool, optional
@@ -1315,7 +1317,7 @@ class ParallaxReconstruction(PhaseReconstruction):
         pixel_output_shape = np.round(BF_size * self._kde_upsample_factor).astype("int")
 
         if (
-            additional_fourier_resampling_factor is None
+            not integer_pixel_rolling_alignment
             or position_correction_num_iter is not None
         ):
             # shifted coordinates
@@ -1337,12 +1339,16 @@ class ParallaxReconstruction(PhaseReconstruction):
                 lowpass_filter=kde_lowpass_filter,
             )
         else:
-            pix_output = self._fourier_resample_stack(
+            self._kde_upsample_factor = np.round(self._kde_upsample_factor).astype("int")
+
+            pix_output = pixel_rolling_kernel_density_estimate(
                 self._stack_BF_unshifted,
                 xy_shifts,
                 self._kde_upsample_factor,
-                additional_fourier_resampling_factor,
-            ).mean(0)
+                kde_sigma_px * self._kde_upsample_factor,
+                xp = xp,
+                gaussian_filter = gaussian_filter,
+            )
 
         # Perform probe position correction if needed
         if position_correction_num_iter is not None:
@@ -1827,134 +1833,6 @@ class ParallaxReconstruction(PhaseReconstruction):
 
             spec.tight_layout(fig)
 
-    def _bilinearly_interpolate_array(
-        self,
-        image,
-        xa,
-        ya,
-    ):
-        """
-        Bilinear sampling of intensities from an image array and pixel positions.
-
-        Parameters
-        ----------
-        image: np.ndarray
-            Image array to sample from
-        xa: np.ndarray
-            Vertical positions of image array in pixels
-        ya: np.ndarray
-            Horizontal positions of image array in pixels
-
-        Returns
-        -------
-        intensities: np.ndarray
-            Bilinearly-sampled intensities of array at (xa,ya) positions
-
-        """
-        xp = self._xp
-
-        xF = xp.floor(xa).astype("int")
-        yF = xp.floor(ya).astype("int")
-        dx = xa - xF
-        dy = ya - yF
-
-        all_inds = [
-            [xF, yF],
-            [xF + 1, yF],
-            [xF, yF + 1],
-            [xF + 1, yF + 1],
-        ]
-
-        all_weights = [
-            (1 - dx) * (1 - dy),
-            (dx) * (1 - dy),
-            (1 - dx) * (dy),
-            (dx) * (dy),
-        ]
-
-        raveled_image = image.ravel()
-        intensities = xp.zeros(xa.shape, dtype=xp.float32)
-        # filter_weights = xp.zeros(xa.shape, dtype=xp.float32)
-
-        for inds, weights in zip(all_inds, all_weights):
-            intensities += (
-                raveled_image[
-                    xp.ravel_multi_index(
-                        inds,
-                        image.shape,
-                        mode=["wrap", "wrap"],
-                    )
-                ]
-                * weights
-            )
-            # filter_weights += weights
-
-        return intensities  # / filter_weights # unnecessary, sums up to unity
-
-    def _lanczos_interpolate_array(
-        self,
-        image,
-        xa,
-        ya,
-        alpha,
-    ):
-        """
-        Lanczos sampling of intensities from an image array and pixel positions.
-
-        Parameters
-        ----------
-        image: np.ndarray
-            Image array to sample from
-        xa: np.ndarray
-            Vertical positions of image array in pixels
-        ya: np.ndarray
-            Horizontal positions of image array in pixels
-        alpha: int
-            Lanczos kernel order
-
-        Returns
-        -------
-        intensities: np.ndarray
-            Lanczos-sampled intensities of array at (xa,ya) positions
-
-        """
-        xp = self._xp
-
-        xF = xp.floor(xa).astype("int")
-        yF = xp.floor(ya).astype("int")
-        dx = xa - xF
-        dy = ya - yF
-
-        all_inds = []
-        all_weights = []
-
-        for i in range(-alpha + 1, alpha + 1):
-            for j in range(-alpha + 1, alpha + 1):
-                all_inds.append([xF + i, yF + j])
-                all_weights.append(
-                    (xp.sinc(i - dx) * xp.sinc((i - dx) / alpha))
-                    * (xp.sinc(j - dy) * xp.sinc((i - dy) / alpha))
-                )
-
-        raveled_image = image.ravel()
-        intensities = xp.zeros(xa.shape, dtype=xp.float32)
-        filter_weights = xp.zeros(xa.shape, dtype=xp.float32)
-
-        for inds, weights in zip(all_inds, all_weights):
-            intensities += (
-                raveled_image[
-                    xp.ravel_multi_index(
-                        inds,
-                        image.shape,
-                        mode=["wrap", "wrap"],
-                    )
-                ]
-                * weights
-            )
-            filter_weights += weights
-
-        return intensities / filter_weights
-
     def _interpolate_array(
         self,
         image,
@@ -1963,218 +1841,18 @@ class ParallaxReconstruction(PhaseReconstruction):
         lanczos_alpha,
     ):
         """ """
+
+        xp = self._xp
+
         if lanczos_alpha is not None:
-            return self._lanczos_interpolate_array(image, xa, ya, lanczos_alpha)
+            return lanczos_interpolate_array(image, xa, ya, lanczos_alpha,xp=xp)
         else:
-            return self._bilinearly_interpolate_array(
+            return bilinearly_interpolate_array(
                 image,
                 xa,
                 ya,
+                xp=xp,
             )
-
-    def _bilinear_kernel_density_estimate(
-        self,
-        xa,
-        ya,
-        intensities,
-        output_shape,
-        kde_sigma,
-        lowpass_filter=False,
-    ):
-        """
-        kernel density estimate from a set coordinates (xa,ya) and intensity weights.
-
-        Parameters
-        ----------
-        xa: np.ndarray
-            Vertical positions of intensity array in pixels
-        ya: np.ndarray
-            Horizontal positions of intensity array in pixels
-        intensities: np.ndarray
-            Intensity array weights
-        output_shape: (int,int)
-            Upsampled intensities shape
-        kde_sigma: float
-            KDE gaussian kernel bandwidth in non-upsampled pixels
-        lowpass_filter: bool, optional
-            If True, the resulting KDE upsampled image is lowpass-filtered using a sinc-function
-
-        Returns
-        -------
-        pix_output: np.ndarray
-            Upsampled intensity image
-        """
-        xp = self._xp
-        gaussian_filter = self._gaussian_filter
-
-        # bilinear sampling
-        xF = xp.floor(xa.ravel()).astype("int")
-        yF = xp.floor(ya.ravel()).astype("int")
-        dx = xa.ravel() - xF
-        dy = ya.ravel() - yF
-
-        all_inds = [
-            [xF, yF],
-            [xF + 1, yF],
-            [xF, yF + 1],
-            [xF + 1, yF + 1],
-        ]
-
-        all_weights = [
-            (1 - dx) * (1 - dy),
-            (dx) * (1 - dy),
-            (1 - dx) * (dy),
-            (dx) * (dy),
-        ]
-
-        raveled_intensities = intensities.ravel()
-        pix_count = xp.zeros(np.prod(output_shape), dtype=xp.float32)
-        pix_output = xp.zeros(np.prod(output_shape), dtype=xp.float32)
-
-        for inds, weights in zip(all_inds, all_weights):
-            inds_1D = xp.ravel_multi_index(
-                inds,
-                output_shape,
-                mode=["wrap", "wrap"],
-            )
-
-            pix_count += xp.bincount(
-                inds_1D,
-                weights=weights,
-                minlength=np.prod(output_shape),
-            )
-            pix_output += xp.bincount(
-                inds_1D,
-                weights=weights * raveled_intensities,
-                minlength=np.prod(output_shape),
-            )
-
-        # reshape 1D arrays to 2D
-        pix_count = xp.reshape(
-            pix_count,
-            output_shape,
-        )
-        pix_output = xp.reshape(
-            pix_output,
-            output_shape,
-        )
-
-        # kernel density estimate
-        pix_count = gaussian_filter(pix_count, kde_sigma)
-        pix_output = gaussian_filter(pix_output, kde_sigma)
-        sub = pix_count > 1e-3
-        pix_output[sub] /= pix_count[sub]
-        pix_output[np.logical_not(sub)] = 1
-
-        if lowpass_filter:
-            pix_fft = xp.fft.fft2(pix_output)
-            pix_fft /= xp.sinc(xp.fft.fftfreq(pix_output.shape[0], d=1.0))[:, None]
-            pix_fft /= xp.sinc(xp.fft.fftfreq(pix_output.shape[1], d=1.0))[None]
-            pix_output = xp.real(xp.fft.ifft2(pix_fft))
-
-        return pix_output
-
-    def _lanczos_kernel_density_estimate(
-        self,
-        xa,
-        ya,
-        intensities,
-        output_shape,
-        kde_sigma,
-        alpha,
-        lowpass_filter=False,
-    ):
-        """
-        kernel density estimate from a set coordinates (xa,ya) and intensity weights.
-
-        Parameters
-        ----------
-        xa: np.ndarray
-            Vertical positions of intensity array in pixels
-        ya: np.ndarray
-            Horizontal positions of intensity array in pixels
-        intensities: np.ndarray
-            Intensity array weights
-        output_shape: (int,int)
-            Upsampled intensities shape
-        kde_sigma: float
-            KDE gaussian kernel bandwidth in non-upsampled pixels
-        alpha: int
-            Lanczos kernel order
-        lowpass_filter: bool, optional
-            If True, the resulting KDE upsampled image is lowpass-filtered using a sinc-function
-
-        Returns
-        -------
-        pix_output: np.ndarray
-            Upsampled intensity image
-        """
-        xp = self._xp
-        gaussian_filter = self._gaussian_filter
-
-        # lanczos sampling
-        xF = xp.floor(xa.ravel()).astype("int")
-        yF = xp.floor(ya.ravel()).astype("int")
-        dx = xa.ravel() - xF
-        dy = ya.ravel() - yF
-
-        all_inds = []
-        all_weights = []
-
-        for i in range(-alpha + 1, alpha + 1):
-            for j in range(-alpha + 1, alpha + 1):
-                all_inds.append([xF + i, yF + j])
-                all_weights.append(
-                    (xp.sinc(i - dx) * xp.sinc((i - dx) / alpha))
-                    * (xp.sinc(j - dy) * xp.sinc((i - dy) / alpha))
-                )
-
-        raveled_intensities = intensities.ravel()
-        pix_count = xp.zeros(np.prod(output_shape), dtype=xp.float32)
-        pix_output = xp.zeros(np.prod(output_shape), dtype=xp.float32)
-
-        for inds, weights in zip(all_inds, all_weights):
-            inds_1D = xp.ravel_multi_index(
-                inds,
-                output_shape,
-                mode=["wrap", "wrap"],
-            )
-
-            pix_count += xp.bincount(
-                inds_1D,
-                weights=weights,
-                minlength=np.prod(output_shape),
-            )
-            pix_output += xp.bincount(
-                inds_1D,
-                weights=weights * raveled_intensities,
-                minlength=np.prod(output_shape),
-            )
-
-        # reshape 1D arrays to 2D
-        pix_count = xp.reshape(
-            pix_count,
-            output_shape,
-        )
-        pix_output = xp.reshape(
-            pix_output,
-            output_shape,
-        )
-
-        # kernel density estimate
-        pix_count = gaussian_filter(pix_count, kde_sigma)
-        pix_output = gaussian_filter(pix_output, kde_sigma)
-        sub = pix_count > 1e-3
-        pix_output[sub] /= pix_count[sub]
-        pix_output[np.logical_not(sub)] = 1
-
-        if lowpass_filter:
-            pix_fft = xp.fft.fft2(pix_output)
-            pix_fft /= xp.sinc(xp.fft.fftfreq(pix_output.shape[0], d=1.0))[:, None]
-            pix_fft /= xp.sinc(xp.fft.fftfreq(pix_output.shape[1], d=1.0))[None]
-            pix_output = xp.real(xp.fft.ifft2(pix_fft))
-
-        return pix_output
 
     def _kernel_density_estimate(
         self,
@@ -2187,8 +1865,12 @@ class ParallaxReconstruction(PhaseReconstruction):
         lowpass_filter=False,
     ):
         """ """
+
+        xp = self._xp
+        gaussian_filter = self._gaussian_filter
+
         if lanczos_alpha is not None:
-            return self._lanczos_kernel_density_estimate(
+            return lanczos_kernel_density_estimate(
                 xa,
                 ya,
                 intensities,
@@ -2196,18 +1878,53 @@ class ParallaxReconstruction(PhaseReconstruction):
                 kde_sigma,
                 lanczos_alpha,
                 lowpass_filter=lowpass_filter,
+                xp = xp,
+                gaussian_filter = gaussian_filter,
             )
         else:
-            return self._bilinear_kernel_density_estimate(
+            return bilinear_kernel_density_estimate(
                 xa,
                 ya,
                 intensities,
                 output_shape,
                 kde_sigma,
                 lowpass_filter=lowpass_filter,
+                xp = xp,
+                gaussian_filter = gaussian_filter,
             )
 
-    def _fourier_resample_stack(
+    def _vectorized_fourier_resample_stack(
+        self,
+        stack,
+        shifts,
+        upsampling_factor,
+        extra_factor,
+    ):
+        """ """
+        xp = self._xp
+        
+        upsampled_stack = vectorized_fourier_resample(
+            stack,
+            scale=upsampling_factor * extra_factor,
+            xp = xp,
+        )
+
+        upsampled_shifts = shifts * upsampling_factor * extra_factor
+        upsampled_shifts_int = xp.modf(upsampled_shifts)[-1].astype("int")
+
+        for BF_index in range(upsampled_stack.shape[0]):
+            shift = upsampled_shifts_int[BF_index]
+            upsampled_stack[BF_index] = xp.roll(upsampled_stack[BF_index], shift, axis=(0, 1))
+        
+        upsampled_stack = vectorized_fourier_resample(
+            upsampled_stack,
+            scale=1/extra_factor,
+            xp = xp,
+        )
+
+        return upsampled_stack
+
+    def _serial_fourier_resample_stack(
         self,
         stack,
         shifts,
@@ -2218,18 +1935,21 @@ class ParallaxReconstruction(PhaseReconstruction):
         xp = self._xp
         asnumpy = self._asnumpy
 
-        stack = asnumpy(stack)
-        upsampled_shape = np.array(stack.shape)
+        numpy_stack = asnumpy(stack)
+        numpy_shifts = asnumpy(shifts)
+
+        upsampled_shape = np.array(numpy_stack.shape)
         upsampled_shape *= (1, upsampling_factor, upsampling_factor)
 
-        upsampled_shifts = shifts * upsampling_factor * extra_factor
-        upsampled_shifts_int = asnumpy(xp.modf(upsampled_shifts)[-1].astype("int"))
+        upsampled_shifts = numpy_shifts * upsampling_factor * extra_factor
+        upsampled_shifts_int = np.modf(upsampled_shifts)[-1].astype("int")
 
         resampled_stack = xp.empty(upsampled_shape, dtype=xp.float32)
 
         for BF_index in tqdmnd(upsampled_shape[0]):
+
             resampled = fourier_resample(
-                stack[BF_index], upsampling_factor * extra_factor
+                numpy_stack[BF_index], upsampling_factor * extra_factor
             )
             shift = upsampled_shifts_int[BF_index]
 
@@ -2238,6 +1958,31 @@ class ParallaxReconstruction(PhaseReconstruction):
             resampled_stack[BF_index] = xp.asarray(resampled)
 
         return resampled_stack
+    
+    def _fourier_resample_stack(
+        self,
+        stack,
+        shifts,
+        upsampling_factor,
+        extra_factor,
+        vectorized = True,
+    ):
+        """ """
+
+        if vectorized:
+            return self._vectorized_fourier_resample_stack(
+                stack,
+                shifts,
+                upsampling_factor,
+                extra_factor
+                )
+        else:
+            return self._serial_fourier_resample_stack(
+                stack,
+                shifts,
+                upsampling_factor,
+                extra_factor
+                )
 
     def aberration_fit(
         self,

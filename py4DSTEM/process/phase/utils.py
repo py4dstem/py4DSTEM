@@ -1674,3 +1674,542 @@ def rotate_point(origin, point, angle):
     qx = ox + np.cos(angle) * (px - ox) - np.sin(angle) * (py - oy)
     qy = oy + np.sin(angle) * (px - ox) + np.cos(angle) * (py - oy)
     return qx, qy
+
+def bilinearly_interpolate_array(
+    image,
+    xa,
+    ya,
+    xp = np,
+):
+    """
+    Bilinear sampling of intensities from an image array and pixel positions.
+
+    Parameters
+    ----------
+    image: np.ndarray
+        Image array to sample from
+    xa: np.ndarray
+        Vertical positions of image array in pixels
+    ya: np.ndarray
+        Horizontal positions of image array in pixels
+
+    Returns
+    -------
+    intensities: np.ndarray
+        Bilinearly-sampled intensities of array at (xa,ya) positions
+
+    """
+    
+    xF = xp.floor(xa).astype("int")
+    yF = xp.floor(ya).astype("int")
+    dx = xa - xF
+    dy = ya - yF
+
+    all_inds = [
+        [xF, yF],
+        [xF + 1, yF],
+        [xF, yF + 1],
+        [xF + 1, yF + 1],
+    ]
+
+    all_weights = [
+        (1 - dx) * (1 - dy),
+        (dx) * (1 - dy),
+        (1 - dx) * (dy),
+        (dx) * (dy),
+    ]
+
+    raveled_image = image.ravel()
+    intensities = xp.zeros(xa.shape, dtype=xp.float32)
+    # filter_weights = xp.zeros(xa.shape, dtype=xp.float32)
+
+    for inds, weights in zip(all_inds, all_weights):
+        intensities += (
+            raveled_image[
+                xp.ravel_multi_index(
+                    inds,
+                    image.shape,
+                    mode=["wrap", "wrap"],
+                )
+            ]
+            * weights
+        )
+        # filter_weights += weights
+
+    return intensities  # / filter_weights # unnecessary, sums up to unity
+
+def lanczos_interpolate_array(
+    image,
+    xa,
+    ya,
+    alpha,
+    xp = np,
+):
+    """
+    Lanczos sampling of intensities from an image array and pixel positions.
+
+    Parameters
+    ----------
+    image: np.ndarray
+        Image array to sample from
+    xa: np.ndarray
+        Vertical positions of image array in pixels
+    ya: np.ndarray
+        Horizontal positions of image array in pixels
+    alpha: int
+        Lanczos kernel order
+
+    Returns
+    -------
+    intensities: np.ndarray
+        Lanczos-sampled intensities of array at (xa,ya) positions
+
+    """
+    xF = xp.floor(xa).astype("int")
+    yF = xp.floor(ya).astype("int")
+    dx = xa - xF
+    dy = ya - yF
+
+    all_inds = []
+    all_weights = []
+
+    for i in range(-alpha + 1, alpha + 1):
+        for j in range(-alpha + 1, alpha + 1):
+            all_inds.append([xF + i, yF + j])
+            all_weights.append(
+                (xp.sinc(i - dx) * xp.sinc((i - dx) / alpha))
+                * (xp.sinc(j - dy) * xp.sinc((i - dy) / alpha))
+            )
+
+    raveled_image = image.ravel()
+    intensities = xp.zeros(xa.shape, dtype=xp.float32)
+    filter_weights = xp.zeros(xa.shape, dtype=xp.float32)
+
+    for inds, weights in zip(all_inds, all_weights):
+        intensities += (
+            raveled_image[
+                xp.ravel_multi_index(
+                    inds,
+                    image.shape,
+                    mode=["wrap", "wrap"],
+                )
+            ]
+            * weights
+        )
+        filter_weights += weights
+
+    return intensities / filter_weights
+
+def pixel_rolling_kernel_density_estimate(
+    stack,
+    shifts,
+    upsampling_factor,
+    kde_sigma,
+    lowpass_filter=False,
+    xp = np,
+    gaussian_filter = gaussian_filter,
+):
+    """
+    kernel density estimate from a set coordinates (xa,ya) and intensity weights.
+
+    Parameters
+    ----------
+    stack: np.ndarray
+        Unshifted virtual BF images stack
+    shifts: np.ndarray
+        Cross-correlated virtual BF image shifts
+    upsampling_factor: int
+        Upsampling factor
+    kde_sigma: float
+        KDE gaussian kernel bandwidth in upsampled pixels
+    lowpass_filter: bool, optional
+        If True, the resulting KDE upsampled image is lowpass-filtered using a sinc-function
+
+    Returns
+    -------
+    pix_output: np.ndarray
+        Upsampled intensity image
+    """
+    upsampled_shape = np.array(stack.shape)
+    upsampled_shape *= (1, upsampling_factor, upsampling_factor)
+
+    upsampled_shifts = shifts * upsampling_factor
+    upsampled_shifts_int = xp.modf(upsampled_shifts)[-1].astype("int")
+
+    upsampled_stack = xp.zeros(upsampled_shape, dtype=xp.float32)
+    upsampled_stack[...,::upsampling_factor,::upsampling_factor] = stack
+
+    upsampled_counts = xp.zeros(upsampled_shape, dtype=xp.float32)
+    upsampled_counts[...,::upsampling_factor,::upsampling_factor] = 1
+
+    pix_output = xp.zeros(upsampled_shape[-2:],dtype=xp.float32)
+    pix_count = xp.zeros(upsampled_shape[-2:],dtype=xp.float32)
+
+    for BF_index in range(upsampled_stack.shape[0]):
+        shift = upsampled_shifts_int[BF_index]
+        pix_output += xp.roll(upsampled_stack[BF_index], shift, axis=(0, 1))
+        pix_count += xp.roll(upsampled_counts[BF_index], shift, axis=(0, 1))
+
+    # kernel density estimate
+    pix_count = gaussian_filter(pix_count, kde_sigma)
+    pix_output = gaussian_filter(pix_output, kde_sigma)
+
+    sub = pix_count > 1e-3
+    pix_output[sub] /= pix_count[sub]
+    pix_output[np.logical_not(sub)] = 1
+
+    if lowpass_filter:
+        pix_fft = xp.fft.fft2(pix_output)
+        pix_fft /= xp.sinc(xp.fft.fftfreq(pix_output.shape[0], d=1.0))[:, None]
+        pix_fft /= xp.sinc(xp.fft.fftfreq(pix_output.shape[1], d=1.0))[None]
+        pix_output = xp.real(xp.fft.ifft2(pix_fft))
+
+    return pix_output
+
+def bilinear_kernel_density_estimate(
+    xa,
+    ya,
+    intensities,
+    output_shape,
+    kde_sigma,
+    lowpass_filter=False,
+    xp = np,
+    gaussian_filter = gaussian_filter,
+):
+    """
+    kernel density estimate from a set coordinates (xa,ya) and intensity weights.
+
+    Parameters
+    ----------
+    xa: np.ndarray
+        Vertical positions of intensity array in pixels
+    ya: np.ndarray
+        Horizontal positions of intensity array in pixels
+    intensities: np.ndarray
+        Intensity array weights
+    output_shape: (int,int)
+        Upsampled intensities shape
+    kde_sigma: float
+        KDE gaussian kernel bandwidth in upsampled pixels
+    lowpass_filter: bool, optional
+        If True, the resulting KDE upsampled image is lowpass-filtered using a sinc-function
+
+    Returns
+    -------
+    pix_output: np.ndarray
+        Upsampled intensity image
+    """
+
+    # interpolation
+    xF = xp.floor(xa.ravel()).astype("int")
+    yF = xp.floor(ya.ravel()).astype("int")
+    dx = xa.ravel() - xF
+    dy = ya.ravel() - yF
+
+    all_inds = [
+        [xF, yF],
+        [xF + 1, yF],
+        [xF, yF + 1],
+        [xF + 1, yF + 1],
+    ]
+
+    all_weights = [
+        (1 - dx) * (1 - dy),
+        (dx) * (1 - dy),
+        (1 - dx) * (dy),
+        (dx) * (dy),
+    ]
+
+    raveled_intensities = intensities.ravel()
+    pix_count = xp.zeros(np.prod(output_shape), dtype=xp.float32)
+    pix_output = xp.zeros(np.prod(output_shape), dtype=xp.float32)
+
+    for inds, weights in zip(all_inds, all_weights):
+        inds_1D = xp.ravel_multi_index(
+            inds,
+            output_shape,
+            mode=["wrap", "wrap"],
+        )
+
+        pix_count += xp.bincount(
+            inds_1D,
+            weights=weights,
+            minlength=np.prod(output_shape),
+        )
+        pix_output += xp.bincount(
+            inds_1D,
+            weights=weights * raveled_intensities,
+            minlength=np.prod(output_shape),
+        )
+
+    # reshape 1D arrays to 2D
+    pix_count = xp.reshape(
+        pix_count,
+        output_shape,
+    )
+    pix_output = xp.reshape(
+        pix_output,
+        output_shape,
+    )
+
+    # kernel density estimate
+    pix_count = gaussian_filter(pix_count, kde_sigma)
+    pix_output = gaussian_filter(pix_output, kde_sigma)
+    sub = pix_count > 1e-3
+    pix_output[sub] /= pix_count[sub]
+    pix_output[np.logical_not(sub)] = 1
+
+    if lowpass_filter:
+        pix_fft = xp.fft.fft2(pix_output)
+        pix_fft /= xp.sinc(xp.fft.fftfreq(pix_output.shape[0], d=1.0))[:, None]
+        pix_fft /= xp.sinc(xp.fft.fftfreq(pix_output.shape[1], d=1.0))[None]
+        pix_output = xp.real(xp.fft.ifft2(pix_fft))
+
+    return pix_output
+
+def lanczos_kernel_density_estimate(
+    xa,
+    ya,
+    intensities,
+    output_shape,
+    kde_sigma,
+    alpha,
+    lowpass_filter=False,
+    xp = np,
+    gaussian_filter = gaussian_filter,
+):
+    """
+    kernel density estimate from a set coordinates (xa,ya) and intensity weights.
+
+    Parameters
+    ----------
+    xa: np.ndarray
+        Vertical positions of intensity array in pixels
+    ya: np.ndarray
+        Horizontal positions of intensity array in pixels
+    intensities: np.ndarray
+        Intensity array weights
+    output_shape: (int,int)
+        Upsampled intensities shape
+    kde_sigma: float
+        KDE gaussian kernel bandwidth in upsampled pixels
+    alpha: int
+        Lanczos kernel order
+    lowpass_filter: bool, optional
+        If True, the resulting KDE upsampled image is lowpass-filtered using a sinc-function
+
+    Returns
+    -------
+    pix_output: np.ndarray
+        Upsampled intensity image
+    """
+
+    # interpolation
+    xF = xp.floor(xa.ravel()).astype("int")
+    yF = xp.floor(ya.ravel()).astype("int")
+    dx = xa.ravel() - xF
+    dy = ya.ravel() - yF
+
+    all_inds = []
+    all_weights = []
+
+    for i in range(-alpha + 1, alpha + 1):
+        for j in range(-alpha + 1, alpha + 1):
+            all_inds.append([xF + i, yF + j])
+            all_weights.append(
+                (xp.sinc(i - dx) * xp.sinc((i - dx) / alpha))
+                * (xp.sinc(j - dy) * xp.sinc((i - dy) / alpha))
+            )
+
+    raveled_intensities = intensities.ravel()
+    pix_count = xp.zeros(np.prod(output_shape), dtype=xp.float32)
+    pix_output = xp.zeros(np.prod(output_shape), dtype=xp.float32)
+
+    for inds, weights in zip(all_inds, all_weights):
+        inds_1D = xp.ravel_multi_index(
+            inds,
+            output_shape,
+            mode=["wrap", "wrap"],
+        )
+
+        pix_count += xp.bincount(
+            inds_1D,
+            weights=weights,
+            minlength=np.prod(output_shape),
+        )
+        pix_output += xp.bincount(
+            inds_1D,
+            weights=weights * raveled_intensities,
+            minlength=np.prod(output_shape),
+        )
+
+    # reshape 1D arrays to 2D
+    pix_count = xp.reshape(
+        pix_count,
+        output_shape,
+    )
+    pix_output = xp.reshape(
+        pix_output,
+        output_shape,
+    )
+
+    # kernel density estimate
+    pix_count = gaussian_filter(pix_count, kde_sigma)
+    pix_output = gaussian_filter(pix_output, kde_sigma)
+    sub = pix_count > 1e-3
+    pix_output[sub] /= pix_count[sub]
+    pix_output[np.logical_not(sub)] = 1
+
+    if lowpass_filter:
+        pix_fft = xp.fft.fft2(pix_output)
+        pix_fft /= xp.sinc(xp.fft.fftfreq(pix_output.shape[0], d=1.0))[:, None]
+        pix_fft /= xp.sinc(xp.fft.fftfreq(pix_output.shape[1], d=1.0))[None]
+        pix_output = xp.real(xp.fft.ifft2(pix_fft))
+
+    return pix_output
+
+def vectorized_fourier_resample(
+    array,
+    scale=None,
+    output_size=None,
+    xp = np,
+):
+    """
+    """
+
+    array_size = np.array(array.shape)
+    input_size = array_size[-2:].copy()
+    
+    if scale is not None:
+        
+        scale = np.array(scale)
+        if scale.size == 1:
+            scale = np.tile(scale,2)
+
+        output_size = (input_size * scale).astype("int")
+    else:
+        if output_size is None:
+            raise ValueError()
+        if output_size.size != 2:
+            raise ValueError()
+        output_size = np.array(output_size)
+
+    scale_output = np.prod(output_size)/np.prod(input_size)
+
+    # x slices
+    if output_size[0] > input_size[0]:
+        # x dimension increases
+        x0 = (input_size[0] + 1) // 2
+        x1 = input_size[0] // 2
+
+        x_ul_out = slice(0, x0)
+        x_ul_in_ = slice(0, x0)
+
+        x_ll_out = slice(0 - x1 + output_size[0], output_size[0])
+        x_ll_in_ = slice(0 - x1 + input_size[0], input_size[0])
+
+        x_ur_out = slice(0, x0)
+        x_ur_in_ = slice(0, x0)
+
+        x_lr_out = slice(0 - x1 + output_size[0], output_size[0])
+        x_lr_in_ = slice(0 - x1 + input_size[0], input_size[0])
+
+    elif output_size[0] < input_size[0]:
+        # x dimension decreases
+        x0 = (output_size[0] + 1) // 2
+        x1 = output_size[0] // 2
+
+        x_ul_out = slice(0, x0)
+        x_ul_in_ = slice(0, x0)
+
+        x_ll_out = slice(0 - x1 + output_size[0], output_size[0])
+        x_ll_in_ = slice(0 - x1 + input_size[0], input_size[0])
+
+        x_ur_out = slice(0, x0)
+        x_ur_in_ = slice(0, x0)
+
+        x_lr_out = slice(0 - x1 + output_size[0], output_size[0])
+        x_lr_in_ = slice(0 - x1 + input_size[0], input_size[0])
+
+    else:
+        # x dimension does not change
+        x_ul_out = slice(None)
+        x_ul_in_ = slice(None)
+
+        x_ll_out = slice(None)
+        x_ll_in_ = slice(None)
+
+        x_ur_out = slice(None)
+        x_ur_in_ = slice(None)
+
+        x_lr_out = slice(None)
+        x_lr_in_ = slice(None)
+
+    # y slices
+    if output_size[1] > input_size[1]:
+        # y increases
+        y0 = (input_size[1] + 1) // 2
+        y1 = input_size[1] // 2
+
+        y_ul_out = slice(0, y0)
+        y_ul_in_ = slice(0, y0)
+
+        y_ll_out = slice(0, y0)
+        y_ll_in_ = slice(0, y0)
+
+        y_ur_out = slice(0 - y1 + output_size[1], output_size[1])
+        y_ur_in_ = slice(0 - y1 + input_size[1], input_size[1])
+
+        y_lr_out = slice(0 - y1 + output_size[1], output_size[1])
+        y_lr_in_ = slice(0 - y1 + input_size[1], input_size[1])
+
+    elif output_size[1] < input_size[1]:
+        # y decreases
+        y0 = (output_size[1] + 1) // 2
+        y1 = output_size[1] // 2
+
+        y_ul_out = slice(0, y0)
+        y_ul_in_ = slice(0, y0)
+
+        y_ll_out = slice(0, y0)
+        y_ll_in_ = slice(0, y0)
+
+        y_ur_out = slice(0 - y1 + output_size[1], output_size[1])
+        y_ur_in_ = slice(0 - y1 + input_size[1], input_size[1])
+
+        y_lr_out = slice(0 - y1 + output_size[1], output_size[1])
+        y_lr_in_ = slice(0 - y1 + input_size[1], input_size[1])
+
+    else:
+        # y dimension does not change
+        y_ul_out = slice(None)
+        y_ul_in_ = slice(None)
+
+        y_ll_out = slice(None)
+        y_ll_in_ = slice(None)
+
+        y_ur_out = slice(None)
+        y_ur_in_ = slice(None)
+
+        y_lr_out = slice(None)
+        y_lr_in_ = slice(None)
+
+
+    # image array
+    array_size[-2:] = output_size
+    array_resize = xp.zeros(array_size, dtype=xp.complex64)
+    array_fft = xp.fft.fft2(array)
+
+    # copy each quadrant into the resize array
+    array_resize[...,x_ul_out, y_ul_out] = array_fft[...,x_ul_in_, y_ul_in_]
+    array_resize[...,x_ll_out, y_ll_out] = array_fft[...,x_ll_in_, y_ll_in_]
+    array_resize[...,x_ur_out, y_ur_out] = array_fft[...,x_ur_in_, y_ur_in_]
+    array_resize[...,x_lr_out, y_lr_out] = array_fft[...,x_lr_in_, y_lr_in_]
+
+    # Back to real space
+    array_resize = xp.real(xp.fft.ifft2(array_resize)).astype(xp.float32)
+    
+    # Normalization
+    array_resize *= scale_output
+
+    return array_resize
