@@ -1190,7 +1190,7 @@ class ParallaxReconstruction(PhaseReconstruction):
         kde_upsample_factor=None,
         kde_sigma_px=0.125,
         kde_lowpass_filter=False,
-        lanczos_interpolation_alpha=None,
+        lanczos_interpolation_order=None,
         additional_fourier_resampling_factor=None,
         plot_upsampled_BF_comparison: bool = True,
         plot_upsampled_FFT_comparison: bool = False,
@@ -1219,7 +1219,7 @@ class ParallaxReconstruction(PhaseReconstruction):
             KDE gaussian kernel bandwidth in non-upsampled pixels
         kde_lowpass_filter: bool, optional
             If True, the resulting KDE upsampled image is lowpass-filtered using a sinc-function
-        lanczos_interpolation_alpha: int, optional
+        lanczos_interpolation_order: int, optional
             If not None, Lanczos interpolation with the specified order is used instead of bilinear.
         plot_upsampled_BF_comparison: bool, optional
             If True, the pre/post alignment BF images are plotted for comparison
@@ -1333,7 +1333,7 @@ class ParallaxReconstruction(PhaseReconstruction):
                 self._stack_BF_unshifted,
                 pixel_output_shape,
                 kde_sigma_px * self._kde_upsample_factor,
-                lanczos_alpha=lanczos_interpolation_alpha,
+                lanczos_alpha=lanczos_interpolation_order,
                 lowpass_filter=kde_lowpass_filter,
             )
         else:
@@ -1365,7 +1365,7 @@ class ParallaxReconstruction(PhaseReconstruction):
                             pix_output,
                             xa,
                             ya,
-                            lanczos_alpha=lanczos_interpolation_alpha,
+                            lanczos_alpha=lanczos_interpolation_order,
                         )
                         - self._stack_BF_unshifted
                     ),
@@ -1438,7 +1438,7 @@ class ParallaxReconstruction(PhaseReconstruction):
                                 pix_output,
                                 xa,
                                 ya,
-                                lanczos_alpha=lanczos_interpolation_alpha,
+                                lanczos_alpha=lanczos_interpolation_order,
                             )
                             - self._stack_BF_unshifted
                         ),
@@ -1486,7 +1486,7 @@ class ParallaxReconstruction(PhaseReconstruction):
                                     pix_output,
                                     xa,
                                     ya,
-                                    lanczos_alpha=lanczos_interpolation_alpha,
+                                    lanczos_alpha=lanczos_interpolation_order,
                                 )
                                 - self._stack_BF_unshifted
                             ),
@@ -1590,7 +1590,7 @@ class ParallaxReconstruction(PhaseReconstruction):
                     self._stack_BF_unshifted,
                     pixel_output_shape,
                     kde_sigma_px * self._kde_upsample_factor,
-                    lanczos_alpha=lanczos_interpolation_alpha,
+                    lanczos_alpha=lanczos_interpolation_order,
                     lowpass_filter=kde_lowpass_filter,
                 )
 
@@ -1602,7 +1602,7 @@ class ParallaxReconstruction(PhaseReconstruction):
                                 pix_output,
                                 xa,
                                 ya,
-                                lanczos_alpha=lanczos_interpolation_alpha,
+                                lanczos_alpha=lanczos_interpolation_order,
                             )
                             - self._stack_BF_unshifted
                         ),
