@@ -1874,7 +1874,7 @@ class ParallaxReconstruction(PhaseReconstruction):
 
         raveled_image = image.ravel()
         intensities = xp.zeros(xa.shape, dtype=xp.float32)
-        filter_weights = xp.zeros(xa.shape, dtype=xp.float32)
+        # filter_weights = xp.zeros(xa.shape, dtype=xp.float32)
 
         for inds, weights in zip(all_inds, all_weights):
             intensities += (
@@ -1887,9 +1887,9 @@ class ParallaxReconstruction(PhaseReconstruction):
                 ]
                 * weights
             )
-            filter_weights += weights
+            # filter_weights += weights
 
-        return intensities / filter_weights
+        return intensities  # / filter_weights # unnecessary, sums up to unity
 
     def _lanczos_interpolate_array(
         self,
