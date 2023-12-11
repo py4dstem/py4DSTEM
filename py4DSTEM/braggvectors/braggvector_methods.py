@@ -815,10 +815,10 @@ class BraggVectorMethods:
 
     def plot(
         self,
-        index: tuple[int,int] | list[int],
-        cal: str = 'cal',
+        index: tuple[int, int] | list[int],
+        cal: str = "cal",
         returnfig: bool = False,
-        **kwargs
+        **kwargs,
     ):
         """
         Plot Bragg vector, from a specified index.
@@ -828,7 +828,7 @@ class BraggVectorMethods:
         Parameters
         ----------
         index : tuple[int,int] | list[int]
-            index for which Bragg vectors to plot 
+            index for which Bragg vectors to plot
         cal : str, optional
             Choice to plot calibrated or raw Bragg vectors must be 'raw' or 'cal', by default 'cal'
         returnfig : bool, optional
@@ -839,25 +839,29 @@ class BraggVectorMethods:
         tuple (figure, axes)
             matplotlib figure, axes returned if `returnfig` is True
         """
-        assert cal.lower() in ('cal', 'raw'), f"'cal' must be in ('cal', 'raw') {cal = } passed"
+        assert cal.lower() in (
+            "cal",
+            "raw",
+        ), f"'cal' must be in ('cal', 'raw') {cal = } passed"
         from py4DSTEM.process.diffraction import plot_diffraction_pattern
 
-        if cal == 'cal':
+        if cal == "cal":
             pl = self.cal[index]
-        else: 
+        else:
             pl = self.raw[index]
-        
+
         if returnfig:
             return plot_diffraction_pattern(
-                pl, 
+                pl,
                 returnfig=returnfig,
                 **kwargs,
-                )
-        else: 
+            )
+        else:
             plot_diffraction_pattern(
-                pl, 
+                pl,
                 **kwargs,
-                )
+            )
+
 
 ######### END BraggVectorMethods CLASS ########
 
