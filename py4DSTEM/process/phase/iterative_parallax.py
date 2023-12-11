@@ -1741,7 +1741,9 @@ class ParallaxReconstruction(PhaseReconstruction):
                 ky = xp.fft.fftfreq(ny, d=1)
                 k = xp.fft.fftshift(xp.sqrt(kx[:, None] ** 2 + ky[None, :] ** 2))
 
-                recon_fft = xp.fft.fftshift(xp.abs(xp.fft.fft2(self._recon_BF)))
+                recon_fft = xp.fft.fftshift(
+                    xp.abs(xp.fft.fft2(self._recon_BF)) / np.prod(self._recon_BF.shape)
+                )
                 sx, sy = recon_fft.shape
 
                 pad_x_post = (nx - sx) // 2
@@ -1761,6 +1763,7 @@ class ParallaxReconstruction(PhaseReconstruction):
                     upsampled_fft_reference = asnumpy(
                         xp.fft.fftshift(
                             xp.abs(xp.fft.fft2(recon_BF_subpixel_aligned_reference))
+                            / (nx * ny)
                         )
                         * k
                     )
@@ -1768,6 +1771,7 @@ class ParallaxReconstruction(PhaseReconstruction):
                     upsampled_fft = asnumpy(
                         xp.fft.fftshift(
                             xp.abs(xp.fft.fft2(self._recon_BF_subpixel_aligned))
+                            / (nx * ny)
                         )
                         * k
                     )
@@ -1776,6 +1780,7 @@ class ParallaxReconstruction(PhaseReconstruction):
                     upsampled_fft_reference = asnumpy(
                         xp.fft.fftshift(
                             xp.abs(xp.fft.fft2(self._recon_BF_subpixel_aligned))
+                            / (nx * ny)
                         )
                         * k
                     )
