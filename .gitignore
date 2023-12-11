@@ -3,6 +3,8 @@
 .pydevproject
 *.swp
 *.ipynb_checkpoints*
+.vscode/
+pyrightconfig.json
 
 # Folders #
 .idea/
@@ -10,8 +12,7 @@ __pycache__/
 *.egg-info/
 build/
 dist/
-#py4DSTEM/sample_code/
-py4DSTEM/test/testdata/
+test/unit_test_data/
 sample_code/data/*h5
 sample_code/data/*dm3
 .vscode
@@ -44,7 +45,7 @@ sample_code/data/*dm3
 *.db
 *.eps
 *.asv
-*.svg
+#*.svg
 *.emf
 
 # Compiled source #
@@ -85,4 +86,3 @@ sample_code/data/*dm3
 .Trashes
 ehthumbs.db
 Thumbs.db
-Untitled.ipynb

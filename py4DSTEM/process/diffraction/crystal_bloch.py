@@ -1,15 +1,15 @@
 import warnings
 import numpy as np
+import numpy.lib.recfunctions as rfn
 from scipy import linalg
 from typing import Union, Optional, Dict, Tuple, List
 from time import time
 from tqdm import tqdm
 from dataclasses import dataclass
 
-from ...io.datastructure import PointList
-from ..utils import electron_wavelength_angstrom, single_atom_scatter
-from ..dpc import get_interaction_constant
-from .WK_scattering_factors import compute_WK_factor
+from emdfile import PointList
+from py4DSTEM.process.utils import electron_wavelength_angstrom, single_atom_scatter
+from py4DSTEM.process.diffraction.WK_scattering_factors import compute_WK_factor
 
 
 @dataclass
@@ -23,8 +23,10 @@ def calculate_dynamical_structure_factors(
     accelerating_voltage: float,
     method: str = "WK-CP",
     k_max: float = 2.0,
-    thermal_sigma: float = None,
-    tol_structure_factor: float = 1.0e-4,
+    thermal_sigma: Optional[Union[float, dict]] = None,
+    tol_structure_factor: float = 0.0,
+    recompute_kinematic_structure_factors=True,
+    g_vec_precision=None,
     verbose=True,
 ):
     """
@@ -51,13 +53,25 @@ def calculate_dynamical_structure_factors(
         k_max (float):                  max scattering length to compute structure factors to.
                                         Setting this to 2x the k_max used in generating the beamsn
                                         included in a simulation will retain all possible couplings
-        thermal_sigma (float):  RMS atomic diplacement for attenuating form factors to account for thermal
+        thermal_sigma (float or dict{int->float}):  RMS atomic diplacement for attenuating form factors to account for thermal
                                         broadening of the potential, only used when a "WK" method is
                                         selected. Required when WK-P or WK-CP are selected.
                                         Units are Å. (This is often written as 〈u〉in papers)
+                                        To specify different 〈u〉 for each element, pass a dictionary
+                                        with Z as the key, mapping to the appropriate float value
         tol_structure_factor (float):   tolerance for removing low-valued structure factors. Reflections
                                         with structure factor below the tolerance will have zero coupling
                                         in the dynamical calculations (i.e. they are the ignored weak beams)
+        recompute_kinematic_structure_factors (bool): When True, recomputes the kinematic structure
+                                        factors using the same tol_structure_factor, and with k_max
+                                        set to *half* the k_max for the dynamical factors. The factor
+                                        of half ensures that every beam in a simulation can couple to
+                                        every other beam (no high-angle couplings in the Bloch matrix
+                                        are set to zero.)
+        g_vec_precision (optional int): If specified, rounds |g| to this many decimal places so that
+                                        automatic caching of the atomic form factors is not slowed
+                                        down due to floating point errors. Setting this to 3 can give
+                                        substantial speedup at the cost of some reduced accuracy
 
         See WK_scattering_factors.py for details on the Weickenmeier-Kohl form factors.
     """
@@ -71,9 +85,23 @@ def calculate_dynamical_structure_factors(
         "WK-CP",
     ), "Invalid method specified."
 
+    if "WK" in method:
+        assert (
+            thermal_sigma is not None
+        ), "thermal_sigma must be specifed when using W-K potentials"
+
     # Calculate the reciprocal lattice points to include based on k_max
 
     k_max = np.asarray(k_max)
+
+    if recompute_kinematic_structure_factors:
+        if hasattr(self, "struct_factors"):
+            print("Warning: overriding existing structure factors...")
+        self.calculate_structure_factors(
+            k_max=k_max / 2.0,
+            tol_structure_factor=tol_structure_factor,
+            return_intensities=False,
+        )
 
     # Inverse lattice vectors
     lat_inv = np.linalg.inv(self.lat_real)
@@ -111,92 +139,92 @@ def calculate_dynamical_structure_factors(
     g_vec_all = g_vec_all[:, keep]
     g_vec_leng = np.linalg.norm(g_vec_all, axis=0)
 
-    # We do not precompute form factors here, instead we rely on using
-    # automatic caching of the form factors.
-
     lobato_lookup = single_atom_scatter()
 
-    from functools import lru_cache
+    m0c2 = 5.109989461e5  # electron rest mass, in eV
+    relativistic_factor = (m0c2 + accelerating_voltage) / m0c2
 
-    @lru_cache(maxsize=2 ** 12)
-    def get_f_e(q, Z, B, method):
+    def get_f_e(q, Z, thermal_sigma, method):
         if method == "Lobato":
             # Real lobato factors
-            lobato_lookup.get_scattering_factor([Z], [1.0], [q], units="VA")
-            return np.complex128(lobato_lookup.fe)
+            lobato_lookup.get_scattering_factor([Z], [1.0], q, units="A")
+            return np.complex128(relativistic_factor / np.pi * lobato_lookup.fe)
         elif method == "Lobato-absorptive":
             # Fake absorptive Lobato factors
-            lobato_lookup.get_scattering_factor([Z], [1.0], [q], units="VA")
-            return np.complex128(lobato_lookup.fe + 0.1j * lobato_lookup.fe)
+            lobato_lookup.get_scattering_factor([Z], [1.0], q, units="A")
+            return np.complex128(
+                relativistic_factor / np.pi * lobato_lookup.fe * (1.0 + 0.1j)
+            )
         elif method == "WK":
             # Real WK factor
             return compute_WK_factor(
-                float(q),
-                int(Z),
-                float(accelerating_voltage),
-                float(thermal_sigma),
+                q,
+                Z,
+                accelerating_voltage,
+                thermal_sigma,
                 include_core=False,
                 include_phonon=False,
             )
         elif method == "WK-C":
             # WK, core only
             return compute_WK_factor(
-                float(q),
-                int(Z),
-                float(accelerating_voltage),
-                float(thermal_sigma),
+                q,
+                Z,
+                accelerating_voltage,
+                thermal_sigma,
                 include_core=True,
                 include_phonon=False,
             )
         elif method == "WK-P":
             # WK, phonon only
             return compute_WK_factor(
-                float(q),
-                int(Z),
-                float(accelerating_voltage),
-                float(thermal_sigma),
+                q,
+                Z,
+                accelerating_voltage,
+                thermal_sigma,
                 include_core=False,
                 include_phonon=True,
             )
         elif method == "WK-CP":
             # WK, core + phonon
             return compute_WK_factor(
-                float(q),
-                int(Z),
-                float(accelerating_voltage),
-                float(thermal_sigma),
+                q,
+                Z,
+                accelerating_voltage,
+                thermal_sigma,
                 include_core=True,
                 include_phonon=True,
             )
 
-    # Calculate structure factors
-    struct_factors = np.zeros(np.size(g_vec_leng, 0), dtype="complex128")
-    for i_hkl in tqdm(
-        range(hkl.shape[1]),
-        desc=f"Computing {method} lookup table",
-        disable=not verbose,
-    ):
-        Freal = 0.0
-        Fimag = 0.0
-        for i_pos in range(self.positions.shape[0]):
-            # Get the appropriate atomic form factor:
-            fe = get_f_e(g_vec_leng[i_hkl], self.numbers[i_pos], thermal_sigma, method)
+    # find unique values of Z and |g| for computing atomic form factors
+    Z_unique, Z_inverse = np.unique(self.numbers, return_inverse=True)
+    g_unique, g_inverse = np.unique(
+        np.round(g_vec_leng, g_vec_precision) if g_vec_precision else g_vec_leng,
+        return_inverse=True,
+    )
 
-            # accumulate the real and imag portions separately (?)
-            Freal += np.real(fe) * np.exp(
-                (2.0j * np.pi) * (hkl[:, i_hkl] @ self.positions[i_pos])
-            )
-            Fimag += np.imag(fe) * np.exp(
-                (2.0j * np.pi) * (hkl[:, i_hkl] @ self.positions[i_pos])
-            )
-        struct_factors[i_hkl] = Freal + 1.0j * Fimag
+    f_e_uniq = np.zeros((Z_unique.size, g_unique.size), dtype=np.complex128)
+
+    for idx, Z in enumerate(Z_unique):
+        # get element-specific thermal displacements, if given
+        sigma = thermal_sigma[Z] if isinstance(thermal_sigma, dict) else thermal_sigma
+        f_e_uniq[idx, :] = get_f_e(g_unique, Z, sigma, method)
+
+    # flesh out the dense array of atomic scattering factors
+    f_e = f_e_uniq[np.ix_(Z_inverse, g_inverse)]
+
+    # Calculate structure factors
+    struct_factors = np.sum(
+        f_e * np.exp(2.0j * np.pi * np.squeeze(self.positions[:, None, :] @ hkl)),
+        axis=0,
+    )
 
     # Divide by unit cell volume
     unit_cell_volume = np.abs(np.linalg.det(self.lat_real))
     struct_factors /= unit_cell_volume
 
     # Remove structure factors below tolerance level
-    keep = np.abs(struct_factors) > tol_structure_factor
+    keep = np.abs(struct_factors) >= tol_structure_factor
     hkl = hkl[:, keep]
 
     g_vec_all = g_vec_all[:, keep]
@@ -213,9 +241,6 @@ def calculate_dynamical_structure_factors(
         for i in range(hkl.shape[1])
     }
 
-    # Clear cached scattering factors to free up RAM
-    get_f_e.cache_clear()
-
 
 def generate_dynamical_diffraction_pattern(
     self,
@@ -228,6 +253,9 @@ def generate_dynamical_diffraction_pattern(
     verbose: bool = False,
     always_return_list: bool = False,
     dynamical_matrix_cache: Optional[DynamicalMatrixCache] = None,
+    return_complex: bool = False,
+    return_eigenvectors: bool = False,
+    return_Smatrix: bool = False,
 ) -> Union[PointList, List[PointList]]:
     """
     Generate a dynamical diffraction pattern (or thickness series of patterns)
@@ -262,30 +290,42 @@ def generate_dynamical_diffraction_pattern(
                                         computed and stored. Subsequent calls will use the cached matrix
                                         for the off-diagonal components of the A matrix and overwrite
                                         the diagonal elements. This is used for CBED calculations.
-
+        return_complex (bool):          When True, returns both the complex amplitude and intensity. Defaults to (False)
     Returns:
         bragg_peaks (PointList):         Bragg peaks with fields [qx, qy, intensity, h, k, l]
             or
         [bragg_peaks,...] (PointList):   If thickness is a list/array, or always_return_list is True,
                                         a list of PointLists is returned.
+        if return_complex = True:
+            bragg_peaks (PointList):         Bragg peaks with fields [qx, qy, intensity, amplitude, h, k, l]
+                or
+            [bragg_peaks,...] (PointList):   If thickness is a list/array, or always_return_list is True,
+                                            a list of PointLists is returned.
+        if return_Smatrix = True:
+            [S_matrix, ...], psi_0:     Returns a list of S-matrices for each thickness (this is always a list),
+                                        and the vector representing the incident plane wave. The beams of the
+                                        S-matrix have the same order as in the input `beams`.
 
     """
     t0 = time()  # start timer for matrix setup
 
-    n_beams = beams.length
+    n_beams = beams.data.shape[0]
 
     beam_g, beam_h = np.meshgrid(np.arange(n_beams), np.arange(n_beams))
 
     # Parse input orientations:
-    zone_axis_rotation_matrix = self.parse_orientation(zone_axis_lattice=zone_axis_lattice, 
-                                       zone_axis_cartesian=zone_axis_cartesian)
+    zone_axis_rotation_matrix = self.parse_orientation(
+        zone_axis_lattice=zone_axis_lattice, zone_axis_cartesian=zone_axis_cartesian
+    )
     if foil_normal_lattice is not None or foil_normal_cartesian is not None:
-        foil_normal = self.parse_orientation(zone_axis_lattice=foil_normal_lattice,
-                                             zone_axis_cartesian=foil_normal_cartesian)
+        foil_normal = self.parse_orientation(
+            zone_axis_lattice=foil_normal_lattice,
+            zone_axis_cartesian=foil_normal_cartesian,
+        )
     else:
         foil_normal = zone_axis_rotation_matrix
 
-    foil_normal = foil_normal[:,2]
+    foil_normal = foil_normal[:, 2]
 
     # Note the difference in notation versus kinematic function:
     # k0 is the scalar magnitude of the wavevector, rather than
@@ -336,18 +376,9 @@ def generate_dynamical_diffraction_pattern(
 
     # Compute the diagonal entries of \hat{A}: 2 k_0 s_g [5.51]
     g = (hkl @ self.lat_inv) @ zone_axis_rotation_matrix
-    sg = self.excitation_errors(g.T, foil_normal=-foil_normal @ zone_axis_rotation_matrix)
-
-    # import matplotlib.pyplot as plt
-    # sgp = np.sign(sg) >= 0
-    # c = np.zeros_like(g)
-    # c[sgp,:] = np.array([1,0,0])
-    # c[~sgp,:] = np.array([0,0,1])
-    # fig,ax = plt.subplots(dpi=200)
-    # ax.scatter(g[:,0],g[:,1],np.abs(sg)*100,c=c)
-    # ax.axis('equal')
-    # plt.show()
-
+    sg = self.excitation_errors(
+        g.T, foil_normal=-foil_normal @ zone_axis_rotation_matrix
+    )
 
     # Fill in the diagonal, completing the structure mattrx
     np.fill_diagonal(U_gmh, 2 * k0 * sg + 1.0j * np.imag(self.Ug_dict[(0, 0, 0)]))
@@ -363,7 +394,8 @@ def generate_dynamical_diffraction_pattern(
     t0 = time()  # start timer for eigendecomposition
 
     v, C = linalg.eig(U_gmh)  # decompose!
-    gamma = v / (2.0 * k0 * zone_axis_rotation_matrix[:,2] @ foil_normal)  # divide by 2 k_n
+    gamma_fac = 2.0 * k0 * zone_axis_rotation_matrix[:, 2] @ foil_normal
+    gamma = v / gamma_fac  # divide by 2 k_n
 
     # precompute the inverse of C
     C_inv = np.linalg.inv(C)
@@ -381,27 +413,59 @@ def generate_dynamical_diffraction_pattern(
     psi_0 = np.zeros((n_beams,))
     psi_0[int(np.where((hkl == [0, 0, 0]).all(axis=1))[0])] = 1.0
 
-    # calculate the diffraction intensities for each thichness matrix
+    # calculate the diffraction intensities (and amplitudes) for each thichness matrix
     # I = |psi|^2 ; psi = C @ E(z) @ C^-1 @ psi_0, where E(z) is the thickness matrix
-    intensities = [
-        np.abs(C @ (np.exp(2.0j * np.pi * z * gamma) * (C_inv @ psi_0))) ** 2
-        for z in np.atleast_1d(thickness)
-    ]
+    if return_Smatrix:
+        Smatrices = [
+            C @ np.diag(np.exp(2.0j * np.pi * z * gamma)) @ C_inv
+            for z in np.atleast_1d(thickness)
+        ]
+        return (
+            (Smatrices, psi_0, (C, C_inv, gamma, gamma_fac))
+            if return_eigenvectors
+            else (Smatrices, psi_0)
+        )
+    elif return_complex:
+        # calculate the amplitudes
+        amplitudes = [
+            C @ (np.exp(2.0j * np.pi * z * gamma) * (C_inv @ psi_0))
+            for z in np.atleast_1d(thickness)
+        ]
+
+        # Do this first to avoid handling structured array
+        intensities = np.abs(amplitudes) ** 2
+
+        # convert amplitudes as a structured array
+        # do we want complex64 or complex 32.
+        amplitudes = np.array(amplitudes, dtype=([("amplitude", "<c16")]))
+    else:
+        intensities = [
+            np.abs(C @ (np.exp(2.0j * np.pi * z * gamma) * (C_inv @ psi_0))) ** 2
+            for z in np.atleast_1d(thickness)
+        ]
 
     # make new pointlists for each thickness case and copy intensities
     pls = []
     for i in range(len(intensities)):
         newpl = beams.copy()
-        newpl.data["intensity"] = intensities[i]
+        if return_complex:
+            # overwrite the kinematical intensities with the dynamical intensities
+            newpl.data["intensity"] = intensities[i]
+            # merge amplitudes into the list
+            newpl.data = rfn.merge_arrays(
+                (newpl.data, amplitudes[i]), asrecarray=False, flatten=True
+            )
+        else:
+            newpl.data["intensity"] = intensities[i]
         pls.append(newpl)
 
     if verbose:
         print(f"Assembling outputs took {1000*(time()-t0):.3f} ms.")
 
     if len(pls) == 1 and not always_return_list:
-        return pls[0]
+        return pls[0] if not return_eigenvectors else (pls[0], gamma, C)
     else:
-        return pls
+        return pls if not return_eigenvectors else (pls, gamma, C)
 
 
 def generate_CBED(
@@ -420,6 +484,8 @@ def generate_CBED(
     verbose: bool = False,
     progress_bar: bool = True,
     return_mask: bool = False,
+    two_beam_zone_axis_lattice: np.ndarray = None,
+    return_probe: bool = False,
 ) -> Union[np.ndarray, List[np.ndarray], Dict[Tuple[int], np.ndarray]]:
     """
     Generate a dynamical CBED pattern using the Bloch wave method.
@@ -444,12 +510,18 @@ def generate_CBED(
         LACBED (bool)                   Return each diffraction disk as a separate image, in a dictionary
                                         keyed by tuples of (h,k,l).
         proj_x_axis (np float vector):   3 element vector defining image x axis (vertical)
+        two_beam_zone_axis_lattice      When only two beams are present in the "beams" PointList,
+                                        the computation of the projected crystallographic directions
+                                        becomes ambiguous. In this case, you must specify the indices of
+                                        the zone axis used to generate the beams.
+        return_probe (bool):            If True, the probe (np.ndarray) will be returned in additon to the CBED
 
     Returns:
         If thickness is a scalar: CBED pattern as np.ndarray
         If thickness is a sequence: CBED patterns for each thickness value as a list of np.ndarrays
         If LACBED is True and thickness is scalar: Dictionary with tuples of ints (h,k,l) as keys, mapping to np.ndarray.
         If LACBED is True and thickness is a sequence: List of dictionaries, structured as above.
+        If return_probe is True: will return a tuple (<CBED/LACBED object>, Probe)
     """
 
     alpha_rad = alpha_mrad / 1000.0
@@ -460,17 +532,38 @@ def generate_CBED(
     )
     qxy = np.vstack((beams.data["qx"], beams.data["qy"])).T.astype(np.float64)
 
-    proj = np.linalg.lstsq(qxy, hkl, rcond=-1)[0]
-    hkl_proj_x = proj[0] / np.linalg.norm(proj[0])
-    hkl_proj_y = proj[1] / np.linalg.norm(proj[1])
+    # If there are only two beams, augment the list with a third perpendicular spot
+    if qxy.shape[0] == 2:
+        assert (
+            two_beam_zone_axis_lattice is not None
+        ), "When only two beams are present, two_beam_zone_axis_lattice must be specified."
+        hkl_reflection = hkl[1] if np.all(qxy[0] == 0.0) else hkl[0]
+        qxy_reflection = qxy[1] if np.all(qxy[0] == 0.0) else qxy[0]
+        orthogonal_spot = np.cross(two_beam_zone_axis_lattice, hkl_reflection)
+        hkl_augmented = np.vstack((hkl, orthogonal_spot))
+        qxy_augmented = np.vstack((qxy, np.flipud(qxy_reflection)))
+        proj = np.linalg.lstsq(qxy_augmented, hkl_augmented, rcond=-1)[0]
+        hkl_proj_x = proj[0] / np.linalg.norm(proj[0])
+    # Otherwise calculate them based on the pattern
+    else:
+        proj = np.linalg.lstsq(qxy, hkl, rcond=-1)[0]
+        hkl_proj_x = proj[0] / np.linalg.norm(proj[0])
 
     # get unit vector in zone axis direction and projected x and y Cartesian directions:
-    zone_axis_rotation_matrix = self.parse_orientation(zone_axis_lattice=zone_axis_lattice,
-                                       zone_axis_cartesian=zone_axis_cartesian,
-                                       proj_x_lattice=hkl_proj_x)
-    ZA = np.array(zone_axis_rotation_matrix[:,2]) / np.linalg.norm(np.array(zone_axis_rotation_matrix[:,2]))
-    proj_x = zone_axis_rotation_matrix[:,0] / np.linalg.norm(zone_axis_rotation_matrix[:,0])
-    proj_y = zone_axis_rotation_matrix[:,1] / np.linalg.norm(zone_axis_rotation_matrix[:,1])
+    zone_axis_rotation_matrix = self.parse_orientation(
+        zone_axis_lattice=zone_axis_lattice,
+        zone_axis_cartesian=zone_axis_cartesian,
+        proj_x_lattice=hkl_proj_x,
+    )
+    ZA = np.array(zone_axis_rotation_matrix[:, 2]) / np.linalg.norm(
+        np.array(zone_axis_rotation_matrix[:, 2])
+    )
+    proj_x = zone_axis_rotation_matrix[:, 0] / np.linalg.norm(
+        zone_axis_rotation_matrix[:, 0]
+    )
+    proj_y = zone_axis_rotation_matrix[:, 1] / np.linalg.norm(
+        zone_axis_rotation_matrix[:, 1]
+    )
 
     # the foil normal should be the zone axis if unspecified
     if foil_normal_lattice is None:
@@ -531,7 +624,7 @@ def generate_CBED(
     thickness = np.atleast_1d(thickness)
 
     if LACBED:
-        # In LACBED mode, the DP datastructure is a list of dicts mapping tuples of ints to numpy arrays
+        # In LACBED mode, the DP classes is a list of dicts mapping tuples of ints to numpy arrays
         DP = [
             {
                 (d["h"], d["k"], d["l"]): np.zeros(DP_size, dtype=dtype)
@@ -540,8 +633,11 @@ def generate_CBED(
             for _ in range(len(thickness))
         ]
     else:
-        # In CBED mode, the DP datastructure is a list of arrays
+        # In CBED mode, the DP classes is a list of arrays
         DP = [np.zeros(DP_size, dtype=dtype) for _ in range(len(thickness))]
+
+    if return_probe:
+        probe = np.zeros(DP_size, dtype=dtype)
 
     mask = np.zeros(DP_size, dtype=np.bool_)
 
@@ -557,6 +653,8 @@ def generate_CBED(
             always_return_list=True,
             dynamical_matrix_cache=Ugmh_cache,
         )
+        if return_probe:
+            probe[tx_pixels[i] + qx0, ty_pixels[i] + qy0] = 1
 
         if LACBED:
             # loop over each thickness
@@ -586,7 +684,13 @@ def generate_CBED(
             for patt, sim in zip(DP, bloch):
                 patt[xpix, ypix] += sim.data["intensity"][keep_mask]
 
-    if return_mask:
-        return (DP[0], mask) if len(thickness) == 1 else (DP, mask)
+    if not return_probe:
+        if return_mask:
+            return (DP[0], mask) if len(thickness) == 1 else (DP, mask)
+        else:
+            return DP[0] if len(thickness) == 1 else DP
     else:
-        return DP[0] if len(thickness) == 1 else DP
+        if return_mask:
+            return (DP[0], probe, mask) if len(thickness) == 1 else (DP, probe, mask)
+        else:
+            return (DP[0], probe) if len(thickness) == 1 else (DP, probe)

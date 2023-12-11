@@ -1,4 +1,4 @@
-'''
+"""
 loosely based on multicorr.py found at:
 https://github.com/ercius/openNCEM/blob/master/ncempy/algo/multicorr.py
 
@@ -9,12 +9,18 @@ modified by SEZ, May 2019 to integrate with py4DSTEM utility functions
  * eliminated the factor-2 FFT upsample step in favor of using parabolic
  for first-pass subpixel (since parabolic is so fast)
  * rewrote the matrix multiply DFT to be more pythonic
-'''
+"""
 
 import numpy as np
 
-def upsampled_correlation(imageCorr, upsampleFactor, xyShift):
-    '''
+try:
+    import cupy as cp
+except (ModuleNotFoundError, ImportError):
+    cp = np
+
+
+def upsampled_correlation(imageCorr, upsampleFactor, xyShift, device="cpu"):
+    """
     Refine the correlation peak of imageCorr around xyShift by DFT upsampling.
 
     There are two approaches to Fourier upsampling for subpixel refinement: (a) one
@@ -59,54 +65,85 @@ def upsampled_correlation(imageCorr, upsampleFactor, xyShift):
 
     Returns:
         (2-element np array): Refined location of the peak in image coordinates.
-    '''
+    """
+
+    if device == "cpu":
+        xp = np
+    elif device == "gpu":
+        xp = cp
 
     assert upsampleFactor > 2
 
-    xyShift[0] = np.round(xyShift[0] * upsampleFactor) / upsampleFactor
-    xyShift[1] = np.round(xyShift[1] * upsampleFactor) / upsampleFactor
+    xyShift[0] = xp.round(xyShift[0] * upsampleFactor) / upsampleFactor
+    xyShift[1] = xp.round(xyShift[1] * upsampleFactor) / upsampleFactor
 
-    globalShift = np.fix(np.ceil(upsampleFactor * 1.5)/2)
+    globalShift = xp.fix(xp.ceil(upsampleFactor * 1.5) / 2)
 
-    upsampleCenter = globalShift - upsampleFactor*xyShift
+    upsampleCenter = xp.asarray(globalShift - upsampleFactor * xyShift)
 
-    imageCorrUpsample = np.conj(dftUpsample(np.conj(imageCorr), upsampleFactor, upsampleCenter ))
+    imageCorrUpsample = xp.conj(
+        dftUpsample(xp.conj(imageCorr), upsampleFactor, upsampleCenter, device=device)
+    )
 
-    xySubShift = np.unravel_index(imageCorrUpsample.argmax(), imageCorrUpsample.shape)
+    xySubShift = xp.asarray(
+        xp.unravel_index(imageCorrUpsample.argmax(), imageCorrUpsample.shape)
+    )
 
     # add a subpixel shift via parabolic fitting
     try:
-        icc = np.real(imageCorrUpsample[xySubShift[0] - 1 : xySubShift[0] + 2, xySubShift[1] - 1 : xySubShift[1] + 2])
-        dx = (icc[2,1] - icc[0,1]) / (4 * icc[1,1] - 2 * icc[2,1] - 2 * icc[0,1])
-        dy = (icc[1,2] - icc[1,0]) / (4 * icc[1,1] - 2 * icc[1,2] - 2 * icc[1,0])
+        icc = xp.real(
+            imageCorrUpsample[
+                xySubShift[0] - 1 : xySubShift[0] + 2,
+                xySubShift[1] - 1 : xySubShift[1] + 2,
+            ]
+        )
+        dx = (icc[2, 1] - icc[0, 1]) / (4 * icc[1, 1] - 2 * icc[2, 1] - 2 * icc[0, 1])
+        dy = (icc[1, 2] - icc[1, 0]) / (4 * icc[1, 1] - 2 * icc[1, 2] - 2 * icc[1, 0])
     except:
-        dx, dy = 0, 0 # this is the case when the peak is near the edge and one of the above values does not exist
+        dx, dy = (
+            0,
+            0,
+        )  # this is the case when the peak is near the edge and one of the above values does not exist
 
     xySubShift = xySubShift - globalShift
 
-    xyShift = xyShift + (xySubShift + np.array([dx, dy])) / upsampleFactor
+    xyShift = xyShift + (xySubShift + xp.array([dx, dy])) / upsampleFactor
 
     return xyShift
 
-def upsampleFFT(cc):
-    '''
+
+def upsampleFFT(cc, device="cpu"):
+    """
     Zero-padding FFT upsampling. Returns the real IFFT of the input with 2x
     upsampling. This may have an error for matrices with an odd size. Takes
     a complex np array as input.
-    '''
+    """
+    if device == "cpu":
+        xp = np
+    elif device == "gpu":
+        xp = cp
+
     sz = cc.shape
-    ups = np.zeros((sz[0]*2,sz[1]*2),dtype=complex)
+    ups = xp.zeros((sz[0] * 2, sz[1] * 2), dtype=complex)
 
-    ups[:int(np.ceil(sz[0]/2)),:int(np.ceil(sz[1]/2))] = cc[:int(np.ceil(sz[0]/2)),:int(np.ceil(sz[1]/2))]
-    ups[-int(np.ceil(sz[0]/2)):,:int(np.ceil(sz[1]/2))] = cc[-int(np.ceil(sz[0]/2)):,:int(np.ceil(sz[1]/2))]
-    ups[:int(np.ceil(sz[0]/2)),-int(np.ceil(sz[1]/2)):] = cc[:int(np.ceil(sz[0]/2)),-int(np.ceil(sz[1]/2)):]
-    ups[-int(np.ceil(sz[0]/2)):,-int(np.ceil(sz[1]/2)):] = cc[-int(np.ceil(sz[0]/2)):,-int(np.ceil(sz[1]/2)):]
+    ups[: int(np.ceil(sz[0] / 2)), : int(np.ceil(sz[1] / 2))] = cc[
+        : int(np.ceil(sz[0] / 2)), : int(np.ceil(sz[1] / 2))
+    ]
+    ups[-int(np.ceil(sz[0] / 2)) :, : int(np.ceil(sz[1] / 2))] = cc[
+        -int(np.ceil(sz[0] / 2)) :, : int(np.ceil(sz[1] / 2))
+    ]
+    ups[: int(np.ceil(sz[0] / 2)), -int(np.ceil(sz[1] / 2)) :] = cc[
+        : int(np.ceil(sz[0] / 2)), -int(np.ceil(sz[1] / 2)) :
+    ]
+    ups[-int(np.ceil(sz[0] / 2)) :, -int(np.ceil(sz[1] / 2)) :] = cc[
+        -int(np.ceil(sz[0] / 2)) :, -int(np.ceil(sz[1] / 2)) :
+    ]
 
-    return np.real(np.fft.ifft2(ups))
+    return xp.real(xp.fft.ifft2(ups))
 
 
-def dftUpsample(imageCorr, upsampleFactor, xyShift):
-    '''
+def dftUpsample(imageCorr, upsampleFactor, xyShift, device="cpu"):
+    """
     This performs a matrix multiply DFT around a small neighboring region of the inital
     correlation peak. By using the matrix multiply DFT to do the Fourier upsampling, the
     efficiency is greatly improved. This is adapted from the subfuction dftups found in
@@ -132,22 +169,32 @@ def dftUpsample(imageCorr, upsampleFactor, xyShift):
     Returns:
         (ndarray):
             Upsampled image from region around correlation peak.
-    '''
+    """
+    if device == "cpu":
+        xp = np
+    elif device == "gpu":
+        xp = cp
+
     imageSize = imageCorr.shape
     pixelRadius = 1.5
     numRow = np.ceil(pixelRadius * upsampleFactor)
     numCol = numRow
 
-    colKern = np.exp(
-    (-1j * 2 * np.pi / (imageSize[1] * upsampleFactor))
-    * np.outer( (np.fft.ifftshift( (np.arange(imageSize[1])) ) - np.floor(imageSize[1]/2)),  (np.arange(numCol) - xyShift[1]))
+    colKern = xp.exp(
+        (-1j * 2 * np.pi / (imageSize[1] * upsampleFactor))
+        * xp.outer(
+            (xp.fft.ifftshift((xp.arange(imageSize[1]))) - xp.floor(imageSize[1] / 2)),
+            (xp.arange(numCol) - xyShift[1]),
+        )
     )
 
-    rowKern = np.exp(
-    (-1j * 2 * np.pi / (imageSize[0] * upsampleFactor))
-    * np.outer( (np.arange(numRow) - xyShift[0]), (np.fft.ifftshift(np.arange(imageSize[0])) - np.floor(imageSize[0]/2)))
+    rowKern = xp.exp(
+        (-1j * 2 * np.pi / (imageSize[0] * upsampleFactor))
+        * xp.outer(
+            (xp.arange(numRow) - xyShift[0]),
+            (xp.fft.ifftshift(xp.arange(imageSize[0])) - xp.floor(imageSize[0] / 2)),
+        )
     )
 
-    imageUpsample = np.real(rowKern @ imageCorr @ colKern)
+    imageUpsample = xp.real(rowKern @ imageCorr @ colKern)
     return imageUpsample
-

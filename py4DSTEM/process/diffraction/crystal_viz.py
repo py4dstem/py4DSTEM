@@ -4,13 +4,16 @@ from matplotlib.axes import Axes
 import matplotlib.tri as mtri
 from mpl_toolkits.mplot3d import Axes3D, art3d
 from scipy.signal import medfilt
+from scipy.ndimage import gaussian_filter
+from scipy.ndimage import distance_transform_edt
+from skimage.morphology import dilation, erosion
 
 import warnings
 import numpy as np
 from typing import Union, Optional
 
-from ...io.datastructure import PointList, PointListArray
-from ..utils import tqdmnd
+from emdfile import tqdmnd, PointList, PointListArray
+from py4DSTEM.process.diffraction.utils import calc_1D_profile
 
 
 def plot_structure(
@@ -55,20 +58,20 @@ def plot_structure(
     # projection directions
     if orientation_matrix is None:
         orientation_matrix = self.parse_orientation(
-            zone_axis_lattice,
-            proj_x_lattice,
-            zone_axis_cartesian,
-            proj_x_cartesian)
+            zone_axis_lattice, proj_x_lattice, zone_axis_cartesian, proj_x_cartesian
+        )
 
     # matplotlib camera orientation
-    if np.abs(abs(orientation_matrix[2,2])-1) < 1e-6:
-        el = 90.0 * np.sign(orientation_matrix[2,2])
+    if np.abs(abs(orientation_matrix[2, 2]) - 1) < 1e-6:
+        el = 90.0 * np.sign(orientation_matrix[2, 2])
     else:
-        el = (np.rad2deg(np.arctan(orientation_matrix[2,2] \
-            / np.sqrt(orientation_matrix[0,2] ** 2 
-            + orientation_matrix[1,2] ** 2)))
+        el = np.rad2deg(
+            np.arctan(
+                orientation_matrix[2, 2]
+                / np.sqrt(orientation_matrix[0, 2] ** 2 + orientation_matrix[1, 2] ** 2)
+            )
         )
-    az = np.rad2deg(np.arctan2(orientation_matrix[0,2], orientation_matrix[1,2]))
+    az = np.rad2deg(np.arctan2(orientation_matrix[0, 2], orientation_matrix[1, 2]))
     # TODO roll is not yet implemented in matplot version 3.4.3
     # matplotlib x projection direction (i.e. estimate the roll angle)
     # init_y = np.cross(proj_z,np.array([0,1e-6,0]))
@@ -107,16 +110,9 @@ def plot_structure(
     # 3D plotting
     fig = plt.figure(figsize=figsize)
     if perspective_axes:
-        ax = fig.add_subplot(
-            projection="3d", 
-            elev=el, 
-            azim=az)
+        ax = fig.add_subplot(projection="3d", elev=el, azim=az)
     else:
-        ax = fig.add_subplot(
-            projection="3d", 
-            elev=el, 
-            azim=az,
-            proj_type='ortho')
+        ax = fig.add_subplot(projection="3d", elev=el, azim=az, proj_type="ortho")
 
     # unit cell
     p = np.vstack([[0, 0, 0], u, u + v, v, w, u + w, u + v + w, v + w])
@@ -153,7 +149,7 @@ def plot_structure(
             zs=xyz[sub, 2],  # + d[2],
             s=size_marker,
             linewidth=2,
-            color=atomic_colors(ID_plot),
+            facecolors=atomic_colors(ID_plot),
             edgecolor=[0, 0, 0],
         )
 
@@ -227,21 +223,20 @@ def plot_structure_factors(
     # projection directions
     if orientation_matrix is None:
         orientation_matrix = self.parse_orientation(
-            zone_axis_lattice,
-            proj_x_lattice,
-            zone_axis_cartesian,
-            proj_x_cartesian)
+            zone_axis_lattice, proj_x_lattice, zone_axis_cartesian, proj_x_cartesian
+        )
 
     # matplotlib camera orientation
-    if np.abs(abs(orientation_matrix[2,2])-1) < 1e-6:
-        el = 90.0 * np.sign(orientation_matrix[2,2])
+    if np.abs(abs(orientation_matrix[2, 2]) - 1) < 1e-6:
+        el = 90.0 * np.sign(orientation_matrix[2, 2])
     else:
-        el = (np.rad2deg(np.arctan(
-            orientation_matrix[2,2] / np.sqrt(
-            orientation_matrix[0,2] ** 2 +
-            orientation_matrix[1,2] ** 2)))
+        el = np.rad2deg(
+            np.arctan(
+                orientation_matrix[2, 2]
+                / np.sqrt(orientation_matrix[0, 2] ** 2 + orientation_matrix[1, 2] ** 2)
+            )
         )
-    az = np.rad2deg(np.arctan2(orientation_matrix[0,2], orientation_matrix[1,2]))
+    az = np.rad2deg(np.arctan2(orientation_matrix[0, 2], orientation_matrix[1, 2]))
 
     # TODO roll is not yet implemented in matplot version 3.4.3
     # matplotlib x projection direction (i.e. estimate the roll angle)
@@ -255,16 +250,9 @@ def plot_structure_factors(
     # 3D plotting
     fig = plt.figure(figsize=figsize)
     if perspective_axes:
-        ax = fig.add_subplot(
-            projection="3d", 
-            elev=el, 
-            azim=az)
+        ax = fig.add_subplot(projection="3d", elev=el, azim=az)
     else:
-        ax = fig.add_subplot(
-            projection="3d", 
-            elev=el, 
-            azim=az,
-            proj_type='ortho')
+        ax = fig.add_subplot(projection="3d", elev=el, azim=az, proj_type="ortho")
 
     # plot all structure factor points
     ax.scatter(
@@ -296,12 +284,158 @@ def plot_structure_factors(
         return fig, ax
 
 
+def plot_scattering_intensity(
+    self,
+    k_min=0.0,
+    k_max=None,
+    k_step=0.001,
+    k_broadening=0.0,
+    k_power_scale=0.0,
+    int_power_scale=0.5,
+    int_scale=1.0,
+    remove_origin=True,
+    bragg_peaks=None,
+    bragg_k_power=0.0,
+    bragg_intensity_power=1.0,
+    bragg_k_broadening=0.005,
+    figsize: Union[list, tuple, np.ndarray] = (10, 4),
+    returnfig: bool = False,
+):
+    """
+    1D plot of the structure factors
+
+    Parameters
+    --------
+
+    k_min: float
+        min k value for profile range.
+    k_max: float
+        max k value for profile range.
+    k_step: float
+        Step size of k in profile range.
+    k_broadening: float
+        Broadening of simulated pattern.
+    k_power_scale: float
+        Scale SF intensities by k**k_power_scale.
+    int_power_scale: float
+        Scale SF intensities**int_power_scale.
+    int_scale: float
+        Scale output profile by this value.
+    remove_origin: bool
+        Remove origin from plot.
+    bragg_peaks: BraggVectors
+        Passed in bragg_peaks for comparison with simulated pattern.
+    bragg_k_power: float
+        bragg_peaks scaled by k**bragg_k_power.
+    bragg_intensity_power: float
+        bragg_peaks scaled by intensities**bragg_intensity_power.
+    bragg_k_broadening: float
+        Broadening applied to bragg_peaks.
+    figsize: list, tuple, np.ndarray
+        Figure size for plot.
+    returnfig (bool):
+        Return figure and axes handles if this is True.
+
+    Returns
+    --------
+    fig, ax (optional)
+        figure and axes handles
+    """
+
+    # k coordinates
+    if k_max is None:
+        k_max = self.k_max
+    k = np.arange(k_min, k_max + k_step, k_step)
+    k_num = k.shape[0]
+
+    # get discrete plot from structure factor amplitudes
+    int_sf_plot = calc_1D_profile(
+        k,
+        self.g_vec_leng,
+        (self.struct_factors_int**int_power_scale)
+        * (self.g_vec_leng**k_power_scale),
+        remove_origin=True,
+        k_broadening=k_broadening,
+        int_scale=int_scale,
+    )
+
+    # If Bragg peaks are passed in, compute 1D integral
+    if bragg_peaks is not None:
+        # set rotate and ellipse based on their availability
+        rotate = bragg_peaks.calibration.get_QR_rotation_degrees()
+        ellipse = bragg_peaks.calibration.get_ellipse()
+        rotate = False if rotate is None else True
+        ellipse = False if ellipse is None else True
+
+        # concatenate all peaks
+        bigpl = np.concatenate(
+            [
+                bragg_peaks.get_vectors(
+                    rx,
+                    ry,
+                    center=True,
+                    ellipse=ellipse,
+                    pixel=True,
+                    rotate=rotate,
+                ).data
+                for rx in range(bragg_peaks.shape[0])
+                for ry in range(bragg_peaks.shape[1])
+            ]
+        )
+
+        # get radial positions and intensity
+        qr = np.sqrt(bigpl["qx"] ** 2 + bigpl["qy"] ** 2)
+        int_meas = bigpl["intensity"]
+
+        # get discrete plot from structure factor amplitudes
+        int_exp = np.zeros_like(k)
+        k_px = (qr - k_min) / k_step
+        kf = np.floor(k_px).astype("int")
+        dk = k_px - kf
+
+        sub = np.logical_and(kf >= 0, kf < k_num)
+        int_exp = np.bincount(
+            np.floor(k_px[sub]).astype("int"),
+            weights=(1 - dk[sub]) * int_meas[sub],
+            minlength=k_num,
+        )
+        sub = np.logical_and(k_px >= -1, k_px < k_num - 1)
+        int_exp += np.bincount(
+            np.floor(k_px[sub] + 1).astype("int"),
+            weights=dk[sub] * int_meas[sub],
+            minlength=k_num,
+        )
+
+        if bragg_k_broadening > 0.0:
+            int_exp = gaussian_filter(
+                int_exp, bragg_k_broadening / k_step, mode="constant"
+            )
+
+        int_exp_plot = (int_exp**bragg_intensity_power) * (k**bragg_k_power)
+        int_exp_plot /= np.max(int_exp_plot)
+
+    # Plotting
+    fig, ax = plt.subplots(1, 1, figsize=figsize)
+    if bragg_peaks is not None:
+        ax.fill_between(k, int_exp_plot, facecolor=(1.0, 0.0, 0.0, 0.2))
+        ax.plot(k, int_exp_plot, c=(1.0, 0.0, 0.0, 0.8), linewidth=2)
+    ax.fill_between(k, int_sf_plot, facecolor=(0.0, 0.0, 0.0, 0.2))
+    ax.plot(k, int_sf_plot, c=(0.0, 0.0, 0.0, 0.8), linewidth=2)
+    # Appearance
+    ax.set_xlabel("Scattering Vector k [1/A]", fontsize=14)
+    ax.set_yticks([])
+    ax.set_ylabel("Magnitude", fontsize=14)
+
+    if returnfig:
+        return fig, ax
+
+
 def plot_orientation_zones(
     self,
     azim_elev: Optional[Union[list, tuple, np.ndarray]] = None,
     proj_dir_lattice: Optional[Union[list, tuple, np.ndarray]] = None,
     proj_dir_cartesian: Optional[Union[list, tuple, np.ndarray]] = None,
-    tol_den = 10,
+    tol_den=10,
     marker_size: float = 20,
     plot_limit: Union[list, tuple, np.ndarray] = np.array([-1.1, 1.1]),
     figsize: Union[list, tuple, np.ndarray] = (8, 8),
@@ -327,13 +461,13 @@ def plot_orientation_zones(
     """
 
     if azim_elev is not None:
-        proj_dir =  azim_elev
+        proj_dir = azim_elev
     elif proj_dir_lattice is not None:
-        proj_dir =  self.lattice_to_cartesian(proj_dir_lattice)
+        proj_dir = self.lattice_to_cartesian(proj_dir_lattice)
     elif proj_dir_cartesian is not None:
         proj_dir = proj_dir_cartesian
     else:
-        proj_dir = np.mean(self.orientation_zone_axis_range,axis=0)
+        proj_dir = np.mean(self.orientation_zone_axis_range, axis=0)
 
     if np.size(proj_dir) == 2:
         el = proj_dir[0]
@@ -385,7 +519,7 @@ def plot_orientation_zones(
     # x = r * np.sin(theta)
     # y = r * np.cos(theta)
 
-    warnings.filterwarnings("ignore", module="matplotlib\..*")
+    warnings.filterwarnings("ignore", module=r"matplotlib\..*")
     line_params = {"linewidth": 2, "alpha": 0.1, "c": "k"}
     for phi in np.arange(0, 180, 5):
         ax.plot3D(
@@ -404,36 +538,38 @@ def plot_orientation_zones(
     )
 
     # zone axis range labels
-    if np.abs(self.cell[5]-120.0) < 1e-6:
+    if np.abs(self.cell[5] - 120.0) < 1e-6:
         label_0 = self.rational_ind(
             self.lattice_to_hexagonal(
-            self.cartesian_to_lattice(
-            self.orientation_zone_axis_range[0, :])),
-            tol_den=tol_den)
+                self.cartesian_to_lattice(self.orientation_zone_axis_range[0, :])
+            ),
+            tol_den=tol_den,
+        )
         label_1 = self.rational_ind(
             self.lattice_to_hexagonal(
-            self.cartesian_to_lattice(
-            self.orientation_zone_axis_range[1, :])),
-            tol_den=tol_den)
+                self.cartesian_to_lattice(self.orientation_zone_axis_range[1, :])
+            ),
+            tol_den=tol_den,
+        )
         label_2 = self.rational_ind(
             self.lattice_to_hexagonal(
-            self.cartesian_to_lattice(
-            self.orientation_zone_axis_range[2, :])),
-            tol_den=tol_den)
+                self.cartesian_to_lattice(self.orientation_zone_axis_range[2, :])
+            ),
+            tol_den=tol_den,
+        )
     else:
         label_0 = self.rational_ind(
-            self.cartesian_to_lattice(
-            self.orientation_zone_axis_range[0, :]),
-            tol_den=tol_den)
+            self.cartesian_to_lattice(self.orientation_zone_axis_range[0, :]),
+            tol_den=tol_den,
+        )
         label_1 = self.rational_ind(
-            self.cartesian_to_lattice(
-            self.orientation_zone_axis_range[1, :]),
-            tol_den=tol_den)
+            self.cartesian_to_lattice(self.orientation_zone_axis_range[1, :]),
+            tol_den=tol_den,
+        )
         label_2 = self.rational_ind(
-            self.cartesian_to_lattice(
-            self.orientation_zone_axis_range[2, :]),
-            tol_den=tol_den)
-
+            self.cartesian_to_lattice(self.orientation_zone_axis_range[2, :]),
+            tol_den=tol_den,
+        )
 
     # # label_0 = self.cartesian_to_crystal(self.orientation_zone_axis_range[0, :])
     # # if self.cartesian_directions:
@@ -444,10 +580,7 @@ def plot_orientation_zones(
     # label_0 = label_0 / np.min(np.abs(label_0[np.abs(label_0) > 0]))
     # label_0 = np.round(label_0, decimals=3)
 
-    if (
-        self.orientation_full is False and
-        self.orientation_half is False
-        ):
+    if self.orientation_full is False and self.orientation_half is False:
         # # label_1 = self.cartesian_to_crystal(
         # #     self.orientation_zone_axis_range[1, :]
         # #     )
@@ -513,10 +646,7 @@ def plot_orientation_zones(
         ha="center",
         **text_params,
     )
-    if (
-        self.orientation_full is False and
-        self.orientation_half is False
-    ):
+    if self.orientation_full is False and self.orientation_half is False:
         ax.text(
             self.orientation_vecs[inds[1], 1] * text_scale_pos,
             self.orientation_vecs[inds[1], 0] * text_scale_pos,
@@ -568,7 +698,7 @@ def plot_orientation_plan(
     zone_axis_cartesian: Optional[np.ndarray] = None,
     figsize: Union[list, tuple, np.ndarray] = (14, 6),
     returnfig: bool = False,
-    ):
+):
     """
     3D scatter plot of the structure factors using magnitude^2,
     i.e. intensity.
@@ -589,11 +719,11 @@ def plot_orientation_plan(
             zone_axis_lattice=zone_axis_lattice,
             proj_x_lattice=None,
             zone_axis_cartesian=zone_axis_cartesian,
-            proj_x_cartesian=None)
-        index_plot = np.argmin(np.sum(np.abs(
-            self.orientation_vecs - orientation_matrix[:,2]), axis=1)) 
-
-
+            proj_x_cartesian=None,
+        )
+        index_plot = np.argmin(
+            np.sum(np.abs(self.orientation_vecs - orientation_matrix[:, 2]), axis=1)
+        )
 
     # if zone_axis_plot is not None:
     #     zone_axis_plot = np.array(zone_axis_plot, dtype="float")
@@ -642,12 +772,20 @@ def plot_orientation_plan(
     #     #     self.orientation_ref_perp[index_plot, :, :])) / self.orientation_ref_max
     # else:
     # im_plot = self.orientation_ref[index_plot, :, :] / self.orientation_ref_max
-    im_plot = (
-        np.real(np.fft.ifft(self.orientation_ref[index_plot, :, :], axis=1)).astype(
-            "float"
+    if self.CUDA:
+        im_plot = (
+            np.real(
+                np.fft.ifft(self.orientation_ref[index_plot, :, :].get(), axis=1)
+            ).astype("float")
+            / self.orientation_ref_max
         )
-        / self.orientation_ref_max
-    )
+    else:
+        im_plot = (
+            np.real(np.fft.ifft(self.orientation_ref[index_plot, :, :], axis=1)).astype(
+                "float"
+            )
+            / self.orientation_ref_max
+        )
 
     # coordinates
     x = self.orientation_gamma * 180 / np.pi
@@ -713,6 +851,7 @@ def plot_diffraction_pattern(
     shift_labels: float = 0.08,
     shift_marker: float = 0.005,
     min_marker_size: float = 1e-6,
+    max_marker_size: float = 1000,
     figsize: Union[list, tuple, np.ndarray] = (12, 6),
     returnfig: bool = False,
     input_fig_handle=None,
@@ -729,8 +868,10 @@ def plot_diffraction_pattern(
         plot_range_kx_ky (float):       2 element numpy vector giving the plot range
         add_labels (bool):              flag to add hkl labels to peaks
         min_marker_size (float):        minimum marker size for the comparison peaks
+        max_marker_size (float):        maximum marker size for the comparison peaks
         figsize (2 element float):      size scaling of figure axes
         returnfig (bool):               set to True to return figure and axes handles
+        input_fig_handle (fig,ax)       Tuple containing a figure / axes handle for the plot.
     """
 
     # 2D plotting
@@ -750,6 +891,9 @@ def plot_diffraction_pattern(
             bragg_peaks.data["intensity"] ** (power_markers / 2)
         )
 
+    # Apply marker size limits to primary plot
+    marker_size = np.clip(marker_size, min_marker_size, max_marker_size)
+
     if bragg_peaks_compare is None:
         ax.scatter(
             bragg_peaks.data["qy"], bragg_peaks.data["qx"], s=marker_size, facecolor="k"
@@ -759,15 +903,17 @@ def plot_diffraction_pattern(
             scale_markers_compare = scale_markers
 
         if power_markers == 2:
-            marker_size_compare = np.maximum(
+            marker_size_compare = np.clip(
                 scale_markers_compare * bragg_peaks_compare.data["intensity"],
                 min_marker_size,
+                max_marker_size,
             )
         else:
-            marker_size_compare = np.maximum(
+            marker_size_compare = np.clip(
                 scale_markers_compare
                 * (bragg_peaks_compare.data["intensity"] ** (power_markers / 2)),
                 min_marker_size,
+                max_marker_size,
             )
 
         ax.scatter(
@@ -785,13 +931,19 @@ def plot_diffraction_pattern(
             facecolor="k",
         )
 
+    ax.set_xlabel("$q_y$ [Å$^{-1}$]")
+    ax.set_ylabel("$q_x$ [Å$^{-1}$]")
+
     if plot_range_kx_ky is not None:
+        plot_range_kx_ky = np.array(plot_range_kx_ky)
+        if plot_range_kx_ky.ndim == 0:
+            plot_range_kx_ky = np.array((plot_range_kx_ky, plot_range_kx_ky))
         ax.set_xlim((-plot_range_kx_ky[0], plot_range_kx_ky[0]))
         ax.set_ylim((-plot_range_kx_ky[1], plot_range_kx_ky[1]))
     else:
-        k_range = 1.05*np.sqrt(np.max(
-            bragg_peaks.data["qx"]**2 + 
-            bragg_peaks.data["qy"]**2))
+        k_range = 1.05 * np.sqrt(
+            np.max(bragg_peaks.data["qx"] ** 2 + bragg_peaks.data["qy"] ** 2)
+        )
         ax.set_xlim((-k_range, k_range))
         ax.set_ylim((-k_range, k_range))
 
@@ -839,25 +991,28 @@ def plot_diffraction_pattern(
 
 def plot_orientation_maps(
     self,
-    orientation_map,
-    orientation_ind: int = None,
+    orientation_map=None,
+    orientation_ind: int = 0,
     dir_in_plane_degrees: float = 0.0,
     corr_range: np.ndarray = np.array([0, 5]),
     corr_normalize: bool = True,
     scale_legend: bool = None,
     figsize: Union[list, tuple, np.ndarray] = (16, 5),
     figbound: Union[list, tuple, np.ndarray] = (0.01, 0.005),
-    camera_dist = None,
-    plot_limit = None,
-    swap_axes_xy_limits = False,
+    show_axes: bool = True,
+    camera_dist=None,
+    plot_limit=None,
+    plot_layout=0,
+    swap_axes_xy_limits=False,
     returnfig: bool = False,
-    progress_bar = False,
-    ):
+    progress_bar=False,
+):
     """
-    Generate and plot the orientation maps
+    Plot the orientation maps.
 
     Args:
         orientation_map (OrientationMap):   Class containing orientation matrices, correlation values, etc.
+                                            Optional - can reference internally stored OrientationMap.
         orientation_ind (int):              Which orientation match to plot if num_matches > 1
         dir_in_plane_degrees (float):       In-plane angle to plot in degrees.  Default is 0 / x-axis / vertical down.
         corr_range (np.ndarray):            Correlation intensity range for the plot
@@ -865,8 +1020,11 @@ def plot_orientation_maps(
         scale_legend (float):               2 elements, x and y scaling of legend panel
         figsize (array):                    2 elements defining figure size
         figbound (array):                   2 elements defining figure boundary
+        show_axes (bool):                   Flag setting whether orienation map axes are visible.
         camera_dist (float):                distance of camera from legend
-        plot_limit (array):                 2x3 array defining plot boundaries of egend
+        plot_limit (array):                 2x3 array defining plot boundaries of legend
+        plot_layout (int):                  subplot layout: 0 - 1 row, 3 col
+                                                            1 - 3 row, 1 col
         swap_axes_xy_limits (bool):         swap x and y boundaries for legend (not sure why we need this in some cases)
         returnfig (bool):                   set to True to return figure and axes handles
         progress_bar (bool):                Enable progressbar when calculating orientation images.
@@ -882,11 +1040,11 @@ def plot_orientation_maps(
     """
 
     # Inputs
+    if orientation_map is None:
+        orientation_map = self.orientation_map
+
     # Legend size
     leg_size = np.array([300, 300], dtype="int")
-
-    if orientation_ind is None:
-        orientation_ind = 0
 
     # Color of the 3 corners
     color_basis = np.array(
@@ -898,7 +1056,7 @@ def plot_orientation_maps(
     )
 
     # Generate reflection operators for symmetry reduction
-    A_ref = np.zeros((3,3,3))
+    A_ref = np.zeros((3, 3, 3))
     # A_ref[0] = np.array([
     #     [-1, 0, 0],
     #     [ 0,-1. 0],
@@ -906,42 +1064,44 @@ def plot_orientation_maps(
     for a0 in range(3):
         if a0 == 0:
             v = np.cross(
-                self.orientation_zone_axis_range[1,:],
-                self.orientation_zone_axis_range[0,:])
+                self.orientation_zone_axis_range[1, :],
+                self.orientation_zone_axis_range[0, :],
+            )
         elif a0 == 1:
             v = np.cross(
-                self.orientation_zone_axis_range[2,:],
-                self.orientation_zone_axis_range[1,:])
+                self.orientation_zone_axis_range[2, :],
+                self.orientation_zone_axis_range[1, :],
+            )
         elif a0 == 2:
             v = np.cross(
-                self.orientation_zone_axis_range[0,:],
-                self.orientation_zone_axis_range[2,:])
+                self.orientation_zone_axis_range[0, :],
+                self.orientation_zone_axis_range[2, :],
+            )
         v = v / np.linalg.norm(v)
 
-        A_ref[a0] = np.array([
-            [ 1-2*v[0]**2, -2*v[0]*v[1], -2*v[0]*v[2]],
-            [-2*v[0]*v[1],  1-2*v[1]**2, -2*v[1]*v[2]],
-            [-2*v[0]*v[2], -2*v[1]*v[2],  1-2*v[2]**2],
-            ])
+        A_ref[a0] = np.array(
+            [
+                [1 - 2 * v[0] ** 2, -2 * v[0] * v[1], -2 * v[0] * v[2]],
+                [-2 * v[0] * v[1], 1 - 2 * v[1] ** 2, -2 * v[1] * v[2]],
+                [-2 * v[0] * v[2], -2 * v[1] * v[2], 1 - 2 * v[2] ** 2],
+            ]
+        )
 
     # init
     dir_in_plane = np.deg2rad(dir_in_plane_degrees)
     ct = np.cos(dir_in_plane)
     st = np.sin(dir_in_plane)
-    basis_x = np.zeros((orientation_map.num_x,orientation_map.num_y,3))
-    basis_z = np.zeros((orientation_map.num_x,orientation_map.num_y,3))
-    rgb_x = np.zeros((orientation_map.num_x,orientation_map.num_y,3))
-    rgb_z = np.zeros((orientation_map.num_x,orientation_map.num_y,3))
+    basis_x = np.zeros((orientation_map.num_x, orientation_map.num_y, 3))
+    basis_y = np.zeros((orientation_map.num_x, orientation_map.num_y, 3))
+    basis_z = np.zeros((orientation_map.num_x, orientation_map.num_y, 3))
+    rgb_x = np.zeros((orientation_map.num_x, orientation_map.num_y, 3))
+    rgb_z = np.zeros((orientation_map.num_x, orientation_map.num_y, 3))
 
-    # Basis for fitting orientation projections 
+    # Basis for fitting orientation projections
     A = np.linalg.inv(self.orientation_zone_axis_range).T
-    # A = self.orientation_zone_axis_range
-    # print(np.round(A,decimals=3))
-    # A = np.linalg.inv(self.orientation_zone_axis_range).T
-    # A = self.orientation_zone_axis_range
 
     # Correlation masking
-    corr = orientation_map.corr[:,:,orientation_ind]
+    corr = orientation_map.corr[:, :, orientation_ind]
     if corr_normalize:
         corr = corr / np.mean(corr)
     mask = (corr - corr_range[0]) / (corr_range[1] - corr_range[0])
@@ -954,37 +1114,62 @@ def plot_orientation_maps(
         desc="Generating orientation maps",
         unit=" PointList",
         disable=not progress_bar,
-        ):
-
+    ):
         if self.pymatgen_available:
-            basis_x[rx,ry,:] = A @ orientation_map.family[rx,ry,orientation_ind,:,0]
-            basis_z[rx,ry,:] = A @ orientation_map.family[rx,ry,orientation_ind,:,2]
+            basis_x[rx, ry, :] = (
+                A @ orientation_map.family[rx, ry, orientation_ind, :, 0]
+            )
+            basis_y[rx, ry, :] = (
+                A @ orientation_map.family[rx, ry, orientation_ind, :, 1]
+            )
+            basis_x[rx, ry, :] = basis_x[rx, ry, :] * ct + basis_y[rx, ry, :] * st
+
+            basis_z[rx, ry, :] = (
+                A @ orientation_map.family[rx, ry, orientation_ind, :, 2]
+            )
         else:
-            basis_z[rx,ry,:] = A @ orientation_map.matrix[rx,ry,orientation_ind,:,2]
-    basis_x = np.clip(basis_x,0,1)
-    basis_z = np.clip(basis_z,0,1)
+            basis_z[rx, ry, :] = (
+                A @ orientation_map.matrix[rx, ry, orientation_ind, :, 2]
+            )
+    basis_x = np.clip(basis_x, 0, 1)
+    basis_z = np.clip(basis_z, 0, 1)
 
     # Convert to RGB images
-    basis_x_scale = mask[:,:,None] * basis_x / np.max(basis_x,axis=2)[:,:,None]
-    rgb_x = basis_x_scale[:,:,0][:,:,None]*color_basis[0,:][None,None,:] \
-        + basis_x_scale[:,:,1][:,:,None]*color_basis[1,:][None,None,:] \
-        + basis_x_scale[:,:,2][:,:,None]*color_basis[2,:][None,None,:]
-    basis_z_scale = mask[:,:,None] * basis_z / np.max(basis_z,axis=2)[:,:,None]
-    rgb_z = basis_z_scale[:,:,0][:,:,None]*color_basis[0,:][None,None,:] \
-        + basis_z_scale[:,:,1][:,:,None]*color_basis[1,:][None,None,:] \
-        + basis_z_scale[:,:,2][:,:,None]*color_basis[2,:][None,None,:]
+    basis_x_max = np.max(basis_x, axis=2)
+    sub = basis_x_max > 0
+    basis_x_scale = basis_x * mask[:, :, None]
+    for a0 in range(3):
+        basis_x_scale[:, :, a0][sub] /= basis_x_max[sub]
+        basis_x_scale[:, :, a0][np.logical_not(sub)] = 0
+    rgb_x = (
+        basis_x_scale[:, :, 0][:, :, None] * color_basis[0, :][None, None, :]
+        + basis_x_scale[:, :, 1][:, :, None] * color_basis[1, :][None, None, :]
+        + basis_x_scale[:, :, 2][:, :, None] * color_basis[2, :][None, None, :]
+    )
+
+    basis_z_max = np.max(basis_z, axis=2)
+    sub = basis_z_max > 0
+    basis_z_scale = basis_z * mask[:, :, None]
+    for a0 in range(3):
+        basis_z_scale[:, :, a0][sub] /= basis_z_max[sub]
+        basis_z_scale[:, :, a0][np.logical_not(sub)] = 0
+    rgb_z = (
+        basis_z_scale[:, :, 0][:, :, None] * color_basis[0, :][None, None, :]
+        + basis_z_scale[:, :, 1][:, :, None] * color_basis[1, :][None, None, :]
+        + basis_z_scale[:, :, 2][:, :, None] * color_basis[2, :][None, None, :]
+    )
 
     # Legend init
     # projection vector
-    cam_dir = np.mean(self.orientation_zone_axis_range,axis=0)
+    cam_dir = np.mean(self.orientation_zone_axis_range, axis=0)
     cam_dir = cam_dir / np.linalg.norm(cam_dir)
-    az = np.rad2deg(np.arctan2(cam_dir[0],cam_dir[1]))
+    az = np.rad2deg(np.arctan2(cam_dir[0], cam_dir[1]))
     # el = np.rad2deg(np.arccos(cam_dir[2]))
     el = np.rad2deg(np.arcsin(cam_dir[2]))
     # coloring
-    wx = self.orientation_inds[:,0] / self.orientation_zone_axis_steps
-    wy = self.orientation_inds[:,1] / self.orientation_zone_axis_steps
-    w0 = 1 - wx - 0.5*wy
+    wx = self.orientation_inds[:, 0] / self.orientation_zone_axis_steps
+    wy = self.orientation_inds[:, 1] / self.orientation_zone_axis_steps
+    w0 = 1 - wx - 0.5 * wy
     w1 = wx - wy
     w2 = wy
     # w0 = 1 - w1/2 - w2/2
@@ -993,35 +1178,40 @@ def plot_orientation_maps(
     w0 = w0 / w_scale
     w1 = w1 / w_scale
     w2 = w2 / w_scale
-    rgb_legend = np.clip( 
-        w0[:,None]*color_basis[0,:] + \
-        w1[:,None]*color_basis[1,:] + \
-        w2[:,None]*color_basis[2,:],
-        0,1)
+    rgb_legend = np.clip(
+        w0[:, None] * color_basis[0, :]
+        + w1[:, None] * color_basis[1, :]
+        + w2[:, None] * color_basis[2, :],
+        0,
+        1,
+    )
 
-    if np.abs(self.cell[5]-120.0) < 1e-6:
+    if np.abs(self.cell[5] - 120.0) < 1e-6:
         label_0 = self.rational_ind(
             self.lattice_to_hexagonal(
-            self.cartesian_to_lattice(
-            self.orientation_zone_axis_range[0, :])))
+                self.cartesian_to_lattice(self.orientation_zone_axis_range[0, :])
+            )
+        )
         label_1 = self.rational_ind(
             self.lattice_to_hexagonal(
-            self.cartesian_to_lattice(
-            self.orientation_zone_axis_range[1, :])))
+                self.cartesian_to_lattice(self.orientation_zone_axis_range[1, :])
+            )
+        )
         label_2 = self.rational_ind(
             self.lattice_to_hexagonal(
-            self.cartesian_to_lattice(
-            self.orientation_zone_axis_range[2, :])))
+                self.cartesian_to_lattice(self.orientation_zone_axis_range[2, :])
+            )
+        )
     else:
         label_0 = self.rational_ind(
-            self.cartesian_to_lattice(
-            self.orientation_zone_axis_range[0, :]))
+            self.cartesian_to_lattice(self.orientation_zone_axis_range[0, :])
+        )
         label_1 = self.rational_ind(
-            self.cartesian_to_lattice(
-            self.orientation_zone_axis_range[1, :]))
+            self.cartesian_to_lattice(self.orientation_zone_axis_range[1, :])
+        )
         label_2 = self.rational_ind(
-            self.cartesian_to_lattice(
-            self.orientation_zone_axis_range[2, :]))
+            self.cartesian_to_lattice(self.orientation_zone_axis_range[2, :])
+        )
 
     inds_legend = np.array(
         [
@@ -1036,27 +1226,35 @@ def plot_orientation_maps(
     v0 = self.orientation_vecs[inds_legend[0], :]
     v1 = self.orientation_vecs[inds_legend[1], :]
     v2 = self.orientation_vecs[inds_legend[2], :]
-    n = np.cross(v0,cam_dir)
+    n = np.cross(v0, cam_dir)
     if np.sum(v1 * n) < np.sum(v2 * n):
-        ha_1 = 'left'
-        ha_2 = 'right'
+        ha_1 = "left"
+        ha_2 = "right"
     else:
-        ha_1 = 'right'
-        ha_2 = 'left'
-
+        ha_1 = "right"
+        ha_2 = "left"
 
     # plotting frame
     # fig, ax = plt.subplots(1, 3, figsize=figsize)
     fig = plt.figure(figsize=figsize)
-    ax_x = fig.add_axes(
-        [0.0+figbound[0], 0.0, 0.4-2*+figbound[0], 1.0])
-    ax_z = fig.add_axes(
-        [0.4+figbound[0], 0.0, 0.4-2*+figbound[0], 1.0])
-    ax_l = fig.add_axes(
-        [0.8+figbound[0], 0.0, 0.2-2*+figbound[0], 1.0],
-        projection='3d',
-        elev=el,
-        azim=az)
+    if plot_layout == 0:
+        ax_x = fig.add_axes([0.0 + figbound[0], 0.0, 0.4 - 2 * +figbound[0], 1.0])
+        ax_z = fig.add_axes([0.4 + figbound[0], 0.0, 0.4 - 2 * +figbound[0], 1.0])
+        ax_l = fig.add_axes(
+            [0.8 + figbound[0], 0.0, 0.2 - 2 * +figbound[0], 1.0],
+            projection="3d",
+            elev=el,
+            azim=az,
+        )
+    elif plot_layout == 1:
+        ax_x = fig.add_axes([0.0, 0.0 + figbound[0], 1.0, 0.4 - 2 * +figbound[0]])
+        ax_z = fig.add_axes([0.0, 0.4 + figbound[0], 1.0, 0.4 - 2 * +figbound[0]])
+        ax_l = fig.add_axes(
+            [0.0, 0.8 + figbound[0], 1.0, 0.2 - 2 * +figbound[0]],
+            projection="3d",
+            elev=el,
+            azim=az,
+        )
 
     # orientation images
     if self.pymatgen_available:
@@ -1064,36 +1262,47 @@ def plot_orientation_maps(
     else:
         ax_x.imshow(np.ones_like(rgb_z))
         ax_x.text(
-            rgb_z.shape[1]/2,
-            rgb_z.shape[0]/2-10,
-            'in-plane orientation',
+            rgb_z.shape[1] / 2,
+            rgb_z.shape[0] / 2 - 10,
+            "in-plane orientation",
             fontsize=14,
-            horizontalalignment='center')
+            horizontalalignment="center",
+        )
         ax_x.text(
-            rgb_z.shape[1]/2,
-            rgb_z.shape[0]/2+0,
-            'for this crystal system',
+            rgb_z.shape[1] / 2,
+            rgb_z.shape[0] / 2 + 0,
+            "for this crystal system",
             fontsize=14,
-            horizontalalignment='center')
+            horizontalalignment="center",
+        )
         ax_x.text(
-            rgb_z.shape[1]/2,
-            rgb_z.shape[0]/2+10,
-            'requires pymatgen',
+            rgb_z.shape[1] / 2,
+            rgb_z.shape[0] / 2 + 10,
+            "requires pymatgen",
             fontsize=14,
-            horizontalalignment='center')
+            horizontalalignment="center",
+        )
     ax_z.imshow(rgb_z)
 
+    # Labels for orientation images
+    ax_x.set_title("In-Plane Orientation", size=20)
+    ax_z.set_title("Out-of-Plane Orientation", size=20)
+    if show_axes is False:
+        ax_x.axis("off")
+        ax_z.axis("off")
+
     # Triangulate faces
-    p = self.orientation_vecs[:,(1,0,2)]
+    p = self.orientation_vecs[:, (1, 0, 2)]
     tri = mtri.Triangulation(
-        self.orientation_inds[:,1]-self.orientation_inds[:,0]*1e-3,
-        self.orientation_inds[:,0]-self.orientation_inds[:,1]*1e-3)
+        self.orientation_inds[:, 1] - self.orientation_inds[:, 0] * 1e-3,
+        self.orientation_inds[:, 0] - self.orientation_inds[:, 1] * 1e-3,
+    )
     # convert rgb values of pixels to faces
     rgb_faces = (
-        rgb_legend[tri.triangles[:,0],:] + \
-        rgb_legend[tri.triangles[:,1],:] + \
-        rgb_legend[tri.triangles[:,2],:] \
-        ) / 3
+        rgb_legend[tri.triangles[:, 0], :]
+        + rgb_legend[tri.triangles[:, 1], :]
+        + rgb_legend[tri.triangles[:, 2], :]
+    ) / 3
     # Add triangulated surface plot to axes
     pc = art3d.Poly3DCollection(
         p[tri.triangles],
@@ -1113,12 +1322,15 @@ def plot_orientation_maps(
         # plot_limit = (plot_limit - np.mean(plot_limit, axis=0)) * 1.5 + np.mean(
         #     plot_limit, axis=0
         # )
-        plot_limit[:,0] = (plot_limit[:,0] - np.mean(plot_limit[:,0]))*1.5 \
-            + np.mean(plot_limit[:,0])
-        plot_limit[:,1] = (plot_limit[:,2] - np.mean(plot_limit[:,1]))*1.5 \
-            + np.mean(plot_limit[:,1])
-        plot_limit[:,2] = (plot_limit[:,1] - np.mean(plot_limit[:,2]))*1.1 \
-            + np.mean(plot_limit[:,2])
+        plot_limit[:, 0] = (
+            plot_limit[:, 0] - np.mean(plot_limit[:, 0])
+        ) * 1.5 + np.mean(plot_limit[:, 0])
+        plot_limit[:, 1] = (
+            plot_limit[:, 2] - np.mean(plot_limit[:, 1])
+        ) * 1.5 + np.mean(plot_limit[:, 1])
+        plot_limit[:, 2] = (
+            plot_limit[:, 1] - np.mean(plot_limit[:, 2])
+        ) * 1.1 + np.mean(plot_limit[:, 2])
 
     # ax_l.view_init(elev=el, azim=az)
     # Appearance
@@ -1130,7 +1342,7 @@ def plot_orientation_maps(
     else:
         ax_l.axes.set_xlim3d(left=plot_limit[0, 1], right=plot_limit[1, 1])
         ax_l.axes.set_ylim3d(bottom=plot_limit[0, 0], top=plot_limit[1, 0])
-        ax_l.axes.set_zlim3d(bottom=plot_limit[0, 2], top=plot_limit[1, 2])        
+        ax_l.axes.set_zlim3d(bottom=plot_limit[0, 2], top=plot_limit[1, 2])
     axisEqual3D(ax_l)
     if camera_dist is not None:
         ax_l.dist = camera_dist
@@ -1146,16 +1358,20 @@ def plot_orientation_maps(
         "size": 14,
     }
     format_labels = "{0:.2g}"
-    vec = self.orientation_vecs[inds_legend[0], :] - cam_dir 
+    vec = self.orientation_vecs[inds_legend[0], :] - cam_dir
     vec = vec / np.linalg.norm(vec)
-    if np.abs(self.cell[5]-120.0) > 1e-6:
+    if np.abs(self.cell[5] - 120.0) > 1e-6:
         ax_l.text(
             self.orientation_vecs[inds_legend[0], 1] + vec[1] * text_scale_pos,
             self.orientation_vecs[inds_legend[0], 0] + vec[0] * text_scale_pos,
             self.orientation_vecs[inds_legend[0], 2] + vec[2] * text_scale_pos,
-              '[' + format_labels.format(label_0[0])
-            + ' ' + format_labels.format(label_0[1])
-            + ' ' + format_labels.format(label_0[2]) + ']',
+            "["
+            + format_labels.format(label_0[0])
+            + " "
+            + format_labels.format(label_0[1])
+            + " "
+            + format_labels.format(label_0[2])
+            + "]",
             None,
             zorder=11,
             ha="center",
@@ -1163,28 +1379,37 @@ def plot_orientation_maps(
         )
     else:
         ax_l.text(
-        self.orientation_vecs[inds_legend[0], 1] + vec[1] * text_scale_pos,
-        self.orientation_vecs[inds_legend[0], 0] + vec[0] * text_scale_pos,
-        self.orientation_vecs[inds_legend[0], 2] + vec[2] * text_scale_pos,
-          '[' + format_labels.format(label_0[0])
-        + ' ' + format_labels.format(label_0[1])
-        + ' ' + format_labels.format(label_0[2])
-        + ' ' + format_labels.format(label_0[3]) + ']',
-        None,
-        zorder=11,
-        ha="center",
-        **text_params,
+            self.orientation_vecs[inds_legend[0], 1] + vec[1] * text_scale_pos,
+            self.orientation_vecs[inds_legend[0], 0] + vec[0] * text_scale_pos,
+            self.orientation_vecs[inds_legend[0], 2] + vec[2] * text_scale_pos,
+            "["
+            + format_labels.format(label_0[0])
+            + " "
+            + format_labels.format(label_0[1])
+            + " "
+            + format_labels.format(label_0[2])
+            + " "
+            + format_labels.format(label_0[3])
+            + "]",
+            None,
+            zorder=11,
+            ha="center",
+            **text_params,
         )
-    vec = self.orientation_vecs[inds_legend[1], :] - cam_dir 
+    vec = self.orientation_vecs[inds_legend[1], :] - cam_dir
     vec = vec / np.linalg.norm(vec)
-    if np.abs(self.cell[5]-120.0) > 1e-6:
+    if np.abs(self.cell[5] - 120.0) > 1e-6:
         ax_l.text(
             self.orientation_vecs[inds_legend[1], 1] + vec[1] * text_scale_pos,
             self.orientation_vecs[inds_legend[1], 0] + vec[0] * text_scale_pos,
             self.orientation_vecs[inds_legend[1], 2] + vec[2] * text_scale_pos,
-              '[' + format_labels.format(label_1[0])
-            + ' ' + format_labels.format(label_1[1])
-            + ' ' + format_labels.format(label_1[2]) + ']',
+            "["
+            + format_labels.format(label_1[0])
+            + " "
+            + format_labels.format(label_1[1])
+            + " "
+            + format_labels.format(label_1[2])
+            + "]",
             None,
             zorder=12,
             ha=ha_1,
@@ -1195,25 +1420,34 @@ def plot_orientation_maps(
             self.orientation_vecs[inds_legend[1], 1] + vec[1] * text_scale_pos,
             self.orientation_vecs[inds_legend[1], 0] + vec[0] * text_scale_pos,
             self.orientation_vecs[inds_legend[1], 2] + vec[2] * text_scale_pos,
-              '[' + format_labels.format(label_1[0])
-            + ' ' + format_labels.format(label_1[1])
-            + ' ' + format_labels.format(label_1[2])
-            + ' ' + format_labels.format(label_1[3]) + ']',
+            "["
+            + format_labels.format(label_1[0])
+            + " "
+            + format_labels.format(label_1[1])
+            + " "
+            + format_labels.format(label_1[2])
+            + " "
+            + format_labels.format(label_1[3])
+            + "]",
             None,
             zorder=12,
             ha=ha_1,
             **text_params,
         )
-    vec = self.orientation_vecs[inds_legend[2], :] - cam_dir 
+    vec = self.orientation_vecs[inds_legend[2], :] - cam_dir
     vec = vec / np.linalg.norm(vec)
-    if np.abs(self.cell[5]-120.0) > 1e-6:
+    if np.abs(self.cell[5] - 120.0) > 1e-6:
         ax_l.text(
             self.orientation_vecs[inds_legend[2], 1] + vec[1] * text_scale_pos,
             self.orientation_vecs[inds_legend[2], 0] + vec[0] * text_scale_pos,
             self.orientation_vecs[inds_legend[2], 2] + vec[2] * text_scale_pos,
-              '[' + format_labels.format(label_2[0])
-            + ' ' + format_labels.format(label_2[1])
-            + ' ' + format_labels.format(label_2[2]) + ']',
+            "["
+            + format_labels.format(label_2[0])
+            + " "
+            + format_labels.format(label_2[1])
+            + " "
+            + format_labels.format(label_2[2])
+            + "]",
             None,
             zorder=13,
             ha=ha_2,
@@ -1224,10 +1458,15 @@ def plot_orientation_maps(
             self.orientation_vecs[inds_legend[2], 1] + vec[1] * text_scale_pos,
             self.orientation_vecs[inds_legend[2], 0] + vec[0] * text_scale_pos,
             self.orientation_vecs[inds_legend[2], 2] + vec[2] * text_scale_pos,
-              '[' + format_labels.format(label_2[0])
-            + ' ' + format_labels.format(label_2[1])
-            + ' ' + format_labels.format(label_2[2])
-            + ' ' + format_labels.format(label_2[3]) + ']',
+            "["
+            + format_labels.format(label_2[0])
+            + " "
+            + format_labels.format(label_2[1])
+            + " "
+            + format_labels.format(label_2[2])
+            + " "
+            + format_labels.format(label_2[3])
+            + "]",
             None,
             zorder=13,
             ha=ha_2,
@@ -1236,480 +1475,35 @@ def plot_orientation_maps(
 
     plt.show()
 
-
-
-    # collection = art3d.PolyCollection(self.orientation_vecs)
-    # ax_l.add_collection(collection)
-
-    # print(tri.)
-    # print(type(tri))
-    # ax_l.plot_trisurf(
-    #     self.orientation_vecs[:,1],
-    #     self.orientation_vecs[:,0],
-    #     self.orientation_vecs[:,2],
-    #     triangles=tri.triangles, 
-    #     color=rgb_legend)
-    # maskedTris = tri.get_masked_triangles()
-    # verts = np.stack((tri.x[maskedTris], tri.y[maskedTris]), axis=-1)
-    # collection = art3d.PolyCollection(verts)
-    # # collection.set_vertexcolor(rgb_legend)
-    # ax_l.add_collection(collection)
-    # shading='gouraud'
-    # pc = art3d.Poly3DCollection(
-    #     self.orientation_vecs,
-    #     alpha=1,
-    # )
-    # ax_l.add_collection(pc)
-
-
-    # art3d.Poly3DCollection
-
-    # plt.gca().autoscale_view()
-    # ax_l.plot_surface(
-    #     self.orientation_vecs[:,1], 
-    #     self.orientation_vecs[:,0], 
-    #     self.orientation_vecs[:,2], 
-    #     )
-
-
-
-    # # Generate crystal basis images.
-    # # Each channel represents one vector of self.orientation_zone_axis_range.
-    # # for ax in range(1):
-    # #     for ay in range(1):
-    # count_max = 1
-    # for rx, ry in tqdmnd(
-    #     orientation_map.num_x,
-    #     10,#orientation_map.num_y,
-    #     desc="Generating orientation maps",
-    #     unit=" PointList",
-    #     disable=not progress_bar,
-    #     ):
-    #     if orientation_map.corr[rx,ry] > 0:
-
-    #         # Reflect the in-plane direction into orientation triangle
-    #         v = orientation_map.matrix[rx,ry,orientation_ind,:,0] * ct \
-    #             + orientation_map.matrix[rx,ry,orientation_ind,:,1] * st
-    #         w = np.linalg.solve(A, v)
-    #         if np.min(w) < 0:        
-    #             count = 0
-    #             while count < count_max:
-    #                 if np.min(w) < 0:
-    #                     v0 = v @ A_ref[0]
-    #                     v1 = v @ A_ref[1]
-    #                     v2 = v @ A_ref[2]
-    #                     w0 = np.linalg.solve(A, v0)
-    #                     w1 = np.linalg.solve(A, v1)
-    #                     w2 = np.linalg.solve(A, v2)
-    #                     ind = np.argmax([
-    #                         np.mean(w0),
-    #                         np.mean(w1),
-    #                         np.mean(w2)])
-    #                     if ind == 0:
-    #                         v = v0
-    #                         w = w0
-    #                     elif ind == 1:
-    #                         v = v1
-    #                         w = w1
-    #                     else:
-    #                         v = v2
-    #                         w = w2
-    #                     # for a0 in range(A_ref.shape[0])
-    #                     #     v_test = v @ A_ref[a0]
-    #                     #     w_test = p.linalg.solve(A, v_test)
-    #                     #     if a0 == 0:
-    #                     #         v = v_test
-    #                     #         w = w_test
-    #                     #     else:
-    #                     #         if np.mean(w_test) > np.mean(w):
-    #                     #             v = v_test
-    #                     #             w = w_test
-    #                 else:
-    #                     count = count_max
-    #         dir_x[rx,ry] = w
-
-    #         # Reflect the out-of-plane direction into orientation triangle
-    #         v = orientation_map.matrix[rx,ry,orientation_ind,:,2]
-    #         w = np.linalg.solve(A, v)
-    #         if np.min(w) < 0:        
-    #             count = 0
-    #             while count < count_max:
-    #                 if np.min(w) < 0:
-    #                     v0 = v @ A_ref[0]
-    #                     v1 = v @ A_ref[1]
-    #                     v2 = v @ A_ref[2]
-    #                     w0 = np.linalg.solve(A, v0)
-    #                     w1 = np.linalg.solve(A, v1)
-    #                     w2 = np.linalg.solve(A, v2)
-    #                     ind = np.argmax([
-    #                         np.mean(w0),
-    #                         np.mean(w1),
-    #                         np.mean(w2)])
-    #                     if ind == 0:
-    #                         v = v0
-    #                         w = w0
-    #                     elif ind == 1:
-    #                         v = v1
-    #                         w = w1
-    #                     else:
-    #                         v = v2
-    #                         w = w2
-    #                 else:
-    #                     count = count_max
-    #         dir_z[rx,ry] = w
-
-
-    # # Basis for fitting fiber texture
-    # if self.orientation_fiber:
-    #     p1_proj = (
-    #         np.dot(
-    #             self.orientation_zone_axis_range[1, :],
-    #             self.orientation_zone_axis_range[0, :],
-    #         )
-    #         * self.orientation_zone_axis_range[0, :]
-    #     )
-    #     p2_proj = (
-    #         np.dot(
-    #             self.orientation_zone_axis_range[2, :],
-    #             self.orientation_zone_axis_range[0, :],
-    #         )
-    #         * self.orientation_zone_axis_range[0, :]
-    #     )
-    #     p1_sub = self.orientation_zone_axis_range[1, :] - p1_proj
-    #     p2_sub = self.orientation_zone_axis_range[2, :] - p2_proj
-    #     B = np.vstack((self.orientation_zone_axis_range[0, :], p1_sub, p2_sub)).T
-
-    # # initalize image arrays
-    # images_orientation = np.zeros(
-    #     (orientation_matrices.shape[0], orientation_matrices.shape[1], 3, 3)
-    # )
-
-    # # in-plane rotation array if needed
-    # if orientation_rotate_xy is not None:
-    #     m = np.array(
-    #         [
-    #             [np.cos(orientation_rotate_xy), -np.sin(orientation_rotate_xy), 0],
-    #             [np.sin(orientation_rotate_xy), np.cos(orientation_rotate_xy), 0],
-    #             [0, 0, 1],
-    #         ]
-    #     )
-
-    # # loop over all pixels and calculate weights
-    # for ax in range(orientation_matrices.shape[0]):
-    #     for ay in range(orientation_matrices.shape[1]):
-    #         if orientation_matrices.ndim == 4:
-    #             orient = orientation_matrices[ax, ay, :, :]
-    #         else:
-    #             orient = orientation_matrices[ax, ay, :, :, orientation_index_plot]
-
-    #         # Rotate in-plane if needed
-    #         if orientation_rotate_xy is not None:
-    #             orient = m @ orient
-
-    #         if self.orientation_fiber:
-    #             # in-plane rotation
-    #             # w = np.linalg.solve(A, orient[:, 0])
-    #             w = np.linalg.solve(B, orient[:, 0])
-
-    #             h = np.mod(
-    #                 np.arctan2(w[2], w[1])
-    #                 * 180
-    #                 / np.pi
-    #                 / self.orientation_fiber_angles[1],
-    #                 1,
-    #             )
-    #             w0 = np.maximum(1 - 3 * np.abs(np.mod(3 / 6 - h, 1) - 1 / 2), 0)
-    #             w1 = np.maximum(1 - 3 * np.abs(np.mod(5 / 6 - h, 1) - 1 / 2), 0)
-    #             w2 = np.maximum(1 - 3 * np.abs(np.mod(7 / 6 - h, 1) - 1 / 2), 0)
-    #             w_scale = 1 / (1 - np.exp(-np.max((w0, w1, w2))))
-
-    #             rgb = (
-    #                 color_basis[0, :] * w0 * w_scale
-    #                 + color_basis[1, :] * w1 * w_scale
-    #                 + color_basis[2, :] * w2 * w_scale
-    #             )
-    #             images_orientation[ax, ay, :, 0] = rgb
-
-    #             # zone axis
-    #             w = np.linalg.solve(A, orient[:, 2])
-    #             w = w / (1 - np.exp(-np.max(w)))
-    #             rgb = (
-    #                 color_basis[0, :] * w[0]
-    #                 + color_basis[1, :] * w[1]
-    #                 + color_basis[2, :] * w[2]
-    #             )
-    #             images_orientation[ax, ay, :, 2] = rgb
-
-    #         else:
-    #             for a0 in range(3):
-    #                 # Cubic sorting for now - needs to be updated with symmetries
-    #                 # w = np.linalg.solve(A,orient[:,a0])
-    #                 w = np.linalg.solve(A, np.sort(np.abs(orient[:, a0])))
-    #                 # w = np.linalg.solve(A, orient[:, a0])
-    #                 w = w / (1 - np.exp(-np.max(w)))
-
-    #                 rgb = (
-    #                     color_basis[0, :] * w[0]
-    #                     + color_basis[1, :] * w[1]
-    #                     + color_basis[2, :] * w[2]
-    #                 )
-    #                 images_orientation[ax, ay, :, a0] = rgb
-
-    # # clip range
-    # images_orientation = np.clip(images_orientation, 0, 1)
-
-    # # Masking
-    # if corr_all is not None:
-    #     if orientation_matrices.ndim == 4:
-    #         if corr_normalize:
-    #             mask = corr_all / np.mean(corr_all)
-    #         else:
-    #             mask = corr_all
-    #     else:
-    #         if corr_normalize:
-    #             mask = corr_all[:, :, orientation_index_plot] / np.mean(
-    #                 corr_all[:, :, orientation_index_plot]
-    #             )
-    #         else:
-    #             mask = corr_all[:, :, orientation_index_plot]
-
-    #     mask = (mask - corr_range[0]) / (corr_range[1] - corr_range[0])
-    #     mask = np.clip(mask, 0, 1)
-
-    #     for a0 in range(3):
-    #         for a1 in range(3):
-    #             images_orientation[:, :, a0, a1] *= mask
-
-    # # Draw legend for zone axis
-    # x = np.linspace(0, 1, leg_size[0])
-    # y = np.linspace(0, 1, leg_size[1])
-    # ya, xa = np.meshgrid(y, x)
-    # mask_legend = np.logical_and(2 * xa > ya, 2 * xa < 2 - ya)
-    # w0 = 1 - xa - 0.5 * ya
-    # w1 = xa - 0.5 * ya
-    # w2 = ya
-
-    # w_scale = np.maximum(np.maximum(w0, w1), w2)
-    # # w_scale = w0 + w1 + w2
-    # # w_scale = (w0**4 + w1**4 + w2**4)**0.25
-    # w_scale = 1 - np.exp(-w_scale)
-    # w0 = w0 / w_scale  # * mask_legend
-    # w1 = w1 / w_scale  # * mask_legend
-    # w2 = w2 / w_scale  # * mask_legend
-
-    # im_legend = np.zeros((leg_size[0], leg_size[1], 3))
-    # for a0 in range(3):
-    #     im_legend[:, :, a0] = (
-    #         w0 * color_basis[0, a0] + w1 * color_basis[1, a0] + w2 * color_basis[2, a0]
-    #     )
-    #     im_legend[:, :, a0] *= mask_legend
-    #     im_legend[:, :, a0] += 1 - mask_legend
-    # im_legend = np.clip(im_legend, 0, 1)
-
-    # if self.orientation_fiber:
-    #     # Draw legend for in-plane rotation
-    #     x = np.linspace(-1, 1, leg_size[0])
-    #     y = np.linspace(-1, 1, leg_size[1])
-    #     ya, xa = np.meshgrid(y, x)
-    #     mask_legend = xa ** 2 + ya ** 2 <= 1
-
-    #     h = np.mod(
-    #         np.arctan2(ya, xa) * 180 / np.pi / self.orientation_fiber_angles[1], 1
-    #     )
-    #     w0 = np.maximum(1 - 3 * np.abs(np.mod(3 / 6 - h, 1) - 1 / 2), 0)
-    #     w1 = np.maximum(1 - 3 * np.abs(np.mod(5 / 6 - h, 1) - 1 / 2), 0)
-    #     w2 = np.maximum(1 - 3 * np.abs(np.mod(7 / 6 - h, 1) - 1 / 2), 0)
-
-    #     w_scale = np.maximum(np.maximum(w0, w1), w2)
-    #     # w_scale = w0 + w1 + w2
-    #     # w_scale = (w0**4 + w1**4 + w2**4)**0.25
-    #     w_scale = 1 - np.exp(-w_scale)
-    #     w0 = w0 / w_scale  # * mask_legend
-    #     w1 = w1 / w_scale  # * mask_legend
-    #     w2 = w2 / w_scale  # * mask_legend
-
-    #     inplane_legend = np.zeros((leg_size[0], leg_size[1], 3))
-    #     for a0 in range(3):
-    #         inplane_legend[:, :, a0] = (
-    #             w0 * color_basis[0, a0]
-    #             + w1 * color_basis[1, a0]
-    #             + w2 * color_basis[2, a0]
-    #         )
-    #         inplane_legend[:, :, a0] *= mask_legend
-    #         inplane_legend[:, :, a0] += 1 - mask_legend
-    #     inplane_legend = np.clip(inplane_legend, 0, 1)
-
-    # # plotting
-    # if figlayout[0] == 1 and figlayout[1] == 4:
-    #     fig, ax = plt.subplots(1, 4, figsize=figsize)
-    # elif figlayout[0] == 2 and figlayout[1] == 2:
-    #     fig, ax = plt.subplots(2, 2, figsize=figsize)
-    #     ax = np.array(
-    #         [
-    #             ax[0, 0],
-    #             ax[0, 1],
-    #             ax[1, 0],
-    #             ax[1, 1],
-    #         ]
-    #     )
-    # elif figlayout[0] == 4 and figlayout[1] == 1:
-    #     fig, ax = plt.subplots(4, 1, figsize=figsize)
-
-    # ax[0].imshow(images_orientation[:, :, :, 0])
-    # if self.orientation_fiber:
-    #     ax[1].imshow(inplane_legend, aspect="auto")
-    # else:
-    #     ax[1].imshow(images_orientation[:, :, :, 1])
-    # ax[2].imshow(images_orientation[:, :, :, 2])
-
-    # if self.orientation_fiber:
-    #     ax[0].set_title("In-Plane Rotation", size=20)
-    #     # ax[1].imshow(im_legend, aspect="auto")
-
-    # else:
-    #     ax[0].set_title("Orientation of x-axis", size=20)
-    #     ax[1].set_title("Orientation of y-axis", size=20)
-    # ax[2].set_title("Zone Axis", size=20)
-    # ax[0].xaxis.tick_top()
-    # ax[1].xaxis.tick_top()
-    # ax[2].xaxis.tick_top()
-
-    # # Legend
-    # ax[3].imshow(im_legend, aspect="auto")
-
-    # label_0 = self.orientation_zone_axis_range[0, :]
-    # label_0 = np.round(label_0 * 1e3) * 1e-3
-    # label_0 = label_0 / np.min(np.abs(label_0[np.abs(label_0) > 0]))
-
-    # label_1 = self.orientation_zone_axis_range[1, :]
-    # label_1 = np.round(label_1 * 1e3) * 1e-3
-    # label_1 = label_1 / np.min(np.abs(label_1[np.abs(label_1) > 0]))
-
-    # label_2 = self.orientation_zone_axis_range[2, :]
-    # label_2 = np.round(label_2 * 1e3) * 1e-3
-    # label_2 = label_2 / np.min(np.abs(label_2[np.abs(label_2) > 0]))
-
-    # ax[3].yaxis.tick_right()
-    # ax[3].set_yticks([(leg_size[0] - 1) / 2])
-    # ax[3].set_yticklabels([str(label_2)])
-
-    # ax3a = ax[3].twiny()
-    # ax3b = ax[3].twiny()
-
-    # ax3a.set_xticks([0])
-    # ax3a.set_xticklabels([str(label_0)])
-    # ax3a.xaxis.tick_top()
-    # ax3b.set_xticks([0])
-    # ax3b.set_xticklabels([str(label_1)])
-    # ax3b.xaxis.tick_bottom()
-    # ax[3].set_xticks([])
-
-    # # ax[3].xaxis.label.set_color('none')
-    # ax[3].spines["left"].set_color("none")
-    # ax[3].spines["right"].set_color("none")
-    # ax[3].spines["top"].set_color("none")
-    # ax[3].spines["bottom"].set_color("none")
-
-    # ax3a.spines["left"].set_color("none")
-    # ax3a.spines["right"].set_color("none")
-    # ax3a.spines["top"].set_color("none")
-    # ax3a.spines["bottom"].set_color("none")
-
-    # ax3b.spines["left"].set_color("none")
-    # ax3b.spines["right"].set_color("none")
-    # ax3b.spines["top"].set_color("none")
-    # ax3b.spines["bottom"].set_color("none")
-
-    # ax[3].tick_params(labelsize=16)
-    # ax3a.tick_params(labelsize=16)
-    # ax3b.tick_params(labelsize=16)
-
-    # if self.orientation_fiber:
-    #     ax[1].axis("off")
-
-    # if scale_legend is not None:
-    #     pos = ax[3].get_position()
-    #     pos_new = [
-    #         pos.x0,
-    #         pos.y0 + pos.height * (1 - scale_legend[1]) / 2,
-    #         pos.width * scale_legend[0],
-    #         pos.height * scale_legend[1],
-    #     ]
-    #     ax[3].set_position(pos_new)
-
-    #     if self.orientation_fiber:
-    #         pos = ax[1].get_position()
-    #         if np.size(scale_legend) == 2:
-    #             pos_new = [
-    #                 pos.x0,
-    #                 pos.y0 + pos.height * (1 - scale_legend[1]) / 2,
-    #                 pos.width * scale_legend[0],
-    #                 pos.height * scale_legend[1],
-    #             ]
-    #         elif np.size(scale_legend) == 4:
-    #             pos_new = [
-    #                 pos.x0,
-    #                 pos.y0 + pos.height * (1 - scale_legend[3]) / 2,
-    #                 pos.width * scale_legend[2],
-    #                 pos.height * scale_legend[3],
-    #             ]
-    #         ax[1].set_position(pos_new)
-
-
-    images_orientation = np.zeros((
-        orientation_map.num_x,
-        orientation_map.num_y,
-        3,2))
+    images_orientation = np.zeros((orientation_map.num_x, orientation_map.num_y, 3, 2))
     if self.pymatgen_available:
-        images_orientation[:,:,:,0] = rgb_x
-    images_orientation[:,:,:,0] = rgb_z
+        images_orientation[:, :, :, 0] = rgb_x
+    images_orientation[:, :, :, 1] = rgb_z
 
     if returnfig:
-        ax = [ax_x,ax_z,ax_l]
+        ax = [ax_x, ax_z, ax_l]
         return images_orientation, fig, ax
     else:
         return images_orientation
 
 
-# def crystal_to_cartesian(self, zone_axis):
-#     vec_cart = zone_axis @ self.lat_real
-#     return vec_cart / np.linalg.norm(vec_cart)
-
-# def cartesian_to_crystal(self, vec_cart):
-#     zone_axis = vec_cart @ np.linalg.inv(self.lat_real)
-#     return zone_axis / np.linalg.norm(zone_axis)
-
-
-# def cartesian_to_crystal(self, zone_axis):
-#     vec_cart = zone_axis @ self.lat_real
-#     return vec_cart / np.linalg.norm(vec_cart)
-
-
-# def crystal_to_cartesian(self, vec_cart):
-#     zone_axis = vec_cart @ np.linalg.inv(self.lat_real)
-#     return zone_axis / np.linalg.norm(zone_axis)
-
-
-
-
-
-
 def plot_fiber_orientation_maps(
     self,
     orientation_map,
-    orientation_ind: int = None,
+    orientation_ind: int = 0,
     symmetry_order: int = None,
     symmetry_mirror: bool = False,
     dir_in_plane_degrees: float = 0.0,
-    corr_range: np.ndarray = np.array([0, 5]),
+    corr_range: np.ndarray = np.array([0, 2]),
     corr_normalize: bool = True,
+    show_axes: bool = True,
     medfilt_size: int = None,
-    cmap_out_of_plane: 'string' = 'plasma',
+    cmap_out_of_plane: str = "plasma",
     leg_size: int = 200,
     figsize: Union[list, tuple, np.ndarray] = (12, 8),
     figbound: Union[list, tuple, np.ndarray] = (0.005, 0.04),
     returnfig: bool = False,
-    ):
+):
     """
     Generate and plot the orientation maps from fiber texture plots.
 
@@ -1719,6 +1513,7 @@ def plot_fiber_orientation_maps(
         dir_in_plane_degrees (float):       Reference in-plane angle (degrees).  Default is 0 / x-axis / vertical down.
         corr_range (np.ndarray):            Correlation intensity range for the plot
         corr_normalize (bool):              If true, set mean correlation to 1.
+        show_axes (bool):                   Flag setting whether orienation map axes are visible.
         figsize (array):                    2 elements defining figure size
         figbound (array):                   2 elements defining figure boundary
         returnfig (bool):                   set to True to return figure and axes handles
@@ -1734,21 +1529,23 @@ def plot_fiber_orientation_maps(
     """
 
     # angular colormap
-    basis = np.array([
-        [1.0, 0.2, 0.2],
-        [1.0, 0.7, 0.0],
-        [0.0, 0.8, 0.0],
-        [0.0, 0.8, 1.0],
-        [0.2, 0.4, 1.0],
-        [0.9, 0.2, 1.0],
-    ])
+    basis = np.array(
+        [
+            [1.0, 0.2, 0.2],
+            [1.0, 0.7, 0.0],
+            [0.0, 0.8, 0.0],
+            [0.0, 0.8, 1.0],
+            [0.2, 0.4, 1.0],
+            [0.9, 0.2, 1.0],
+        ]
+    )
 
     # Correlation masking
-    corr = orientation_map.corr[:,:,orientation_ind]
+    corr = orientation_map.corr[:, :, orientation_ind]
     if corr_normalize:
         corr = corr / np.mean(corr)
     if medfilt_size is not None:
-        corr = medfilt(corr,medfilt_size)
+        corr = medfilt(corr, medfilt_size)
     mask = (corr - corr_range[0]) / (corr_range[1] - corr_range[0])
     mask = np.clip(mask, 0, 1)
 
@@ -1759,59 +1556,71 @@ def plot_fiber_orientation_maps(
         symmetry_order = 2 * symmetry_order
 
     # Generate out-of-plane orientation signal
-    ang_op = orientation_map.angles[:,:,orientation_ind,1]
-    sig_op = ang_op / np.deg2rad(self.orientation_fiber_angles[0])
+    ang_op = orientation_map.angles[:, :, orientation_ind, 1]
+    if self.orientation_fiber_angles[0] > 0:
+        sig_op = ang_op / np.deg2rad(self.orientation_fiber_angles[0])
+    else:
+        sig_op = ang_op
     if medfilt_size is not None:
-        sig_op = medfilt(sig_op,medfilt_size)
+        sig_op = medfilt(sig_op, medfilt_size)
 
     # Generate in-plane orientation signal
-    ang_ip = orientation_map.angles[:,:,orientation_ind,0] \
-        + orientation_map.angles[:,:,orientation_ind,2]
-    sig_ip = np.mod((symmetry_order/(2*np.pi))*ang_ip,1.0)
+    ang_ip = (
+        orientation_map.angles[:, :, orientation_ind, 0]
+        + orientation_map.angles[:, :, orientation_ind, 2]
+    )
+    sig_ip = np.mod((symmetry_order / (2 * np.pi)) * ang_ip, 1.0)
     if symmetry_mirror:
-        sub = np.sin((symmetry_order/2)*ang_ip) < 0
-        sig_ip[sub] = np.mod(-sig_ip[sub],1)
+        sub = np.sin((symmetry_order / 2) * ang_ip) < 0
+        sig_ip[sub] = np.mod(-sig_ip[sub], 1)
+    sig_ip = np.mod(sig_ip - (dir_in_plane_degrees / 360.0 * symmetry_order), 1.0)
     if medfilt_size is not None:
-        sig_ip = medfilt(sig_ip,medfilt_size)
+        sig_ip = medfilt(sig_ip, medfilt_size)
 
     # out-of-plane RGB images
     # im_op = plt.cm.blues(sig_op)
     cmap = plt.get_cmap(cmap_out_of_plane)
     im_op = cmap(sig_op)
     im_op = np.delete(im_op, 3, axis=2)
-    im_op = im_op * mask[:,:,None]
+    im_op = im_op * mask[:, :, None]
 
     # in-plane image
-    im_ip = np.zeros((
-        sig_ip.shape[0],
-        sig_ip.shape[1],
-        3))
+    im_ip = np.zeros((sig_ip.shape[0], sig_ip.shape[1], 3))
     for a0 in range(basis.shape[0]):
-        weight = np.maximum(1-np.abs(np.mod(
-            sig_ip - a0/basis.shape[0] + 0.5, 1.0) - 0.5) * basis.shape[0], 0)
-        im_ip += basis[a0,:][None,None,:] * weight[:,:,None]
+        weight = np.maximum(
+            1
+            - np.abs(np.mod(sig_ip - a0 / basis.shape[0] + 0.5, 1.0) - 0.5)
+            * basis.shape[0],
+            0,
+        )
+        im_ip += basis[a0, :][None, None, :] * weight[:, :, None]
     im_ip = np.clip(im_ip, 0, 1)
-    im_ip = im_ip * mask[:,:,None]
+    im_ip = im_ip * mask[:, :, None]
 
     # draw in-plane legends
-    r = np.arange(leg_size) - leg_size/2 + 0.5
-    ya,xa = np.meshgrid(r,r)
+    r = np.arange(leg_size) - leg_size / 2 + 0.5
+    ya, xa = np.meshgrid(r, r)
     ra = np.sqrt(xa**2 + ya**2)
-    ta = np.arctan2(ya,xa)
-    sig_leg = np.mod((symmetry_order/(2*np.pi))*ta,1.0)
+    ta = np.arctan2(ya, xa)
+    sig_leg = np.mod((symmetry_order / (2 * np.pi)) * ta, 1.0)
     if symmetry_mirror:
-        sub = np.sin((symmetry_order/2)*ta) < 0
-        sig_leg[sub] = np.mod(-sig_leg[sub],1)
-    # leg_ip = 
-    im_ip_leg = np.zeros((leg_size,leg_size,3))
+        sub = np.sin((symmetry_order / 2) * ta) < 0
+        sig_leg[sub] = np.mod(-sig_leg[sub], 1)
+    # leg_ip =
+    im_ip_leg = np.zeros((leg_size, leg_size, 3))
     for a0 in range(basis.shape[0]):
-        weight = np.maximum(1-np.abs(np.mod(
-            sig_leg - a0/basis.shape[0] + 0.5, 1.0) - 0.5) * basis.shape[0], 0)
-        im_ip_leg += basis[a0,:][None,None,:] * weight[:,:,None]
+        weight = np.maximum(
+            1
+            - np.abs(np.mod(sig_leg - a0 / basis.shape[0] + 0.5, 1.0) - 0.5)
+            * basis.shape[0],
+            0,
+        )
+        im_ip_leg += basis[a0, :][None, None, :] * weight[:, :, None]
     im_ip_leg = np.clip(im_ip_leg, 0, 1)
-    mask = np.clip(leg_size/2 - ra + 0.5, 0, 1) \
-        * np.clip(ra - leg_size/4 + 0.5, 0, 1)
-    im_ip_leg = im_ip_leg*mask[:,:,None] + (1-mask)[:,:,None]
+    mask = np.clip(leg_size / 2 - ra + 0.5, 0, 1) * np.clip(
+        ra - leg_size / 4 + 0.5, 0, 1
+    )
+    im_ip_leg = im_ip_leg * mask[:, :, None] + (1 - mask)[:, :, None]
 
     # t = np.linspace(0,2*np.pi,1001)
     # y = np.mod((symmetry_order/(2*np.pi))*t,1.0)
@@ -1824,57 +1633,91 @@ def plot_fiber_orientation_maps(
     fig = plt.figure(figsize=figsize)
 
     ax_ip = fig.add_axes(
-        [0.0+figbound[0], 0.25+figbound[1], 0.5-2*+figbound[0], 0.75-figbound[1]])
+        [
+            0.0 + figbound[0],
+            0.25 + figbound[1],
+            0.5 - 2 * +figbound[0],
+            0.75 - figbound[1],
+        ]
+    )
     ax_op = fig.add_axes(
-        [0.5+figbound[0], 0.25+figbound[1], 0.5-2*+figbound[0], 0.75-figbound[1]])
+        [
+            0.5 + figbound[0],
+            0.25 + figbound[1],
+            0.5 - 2 * +figbound[0],
+            0.75 - figbound[1],
+        ]
+    )
 
     ax_ip_l = fig.add_axes(
-        [0.1+figbound[0], 0.0+figbound[1], 0.3-2*+figbound[0], 0.25-figbound[1]])
+        [
+            0.1 + figbound[0],
+            0.0 + figbound[1],
+            0.3 - 2 * +figbound[0],
+            0.25 - figbound[1],
+        ]
+    )
     ax_op_l = fig.add_axes(
-        [0.6+figbound[0], 0.0+figbound[1], 0.3-2*+figbound[0], 0.25-figbound[1]])
+        [
+            0.6 + figbound[0],
+            0.0 + figbound[1],
+            0.3 - 2 * +figbound[0],
+            0.25 - figbound[1],
+        ]
+    )
 
     # in-plane
     ax_ip.imshow(im_ip)
     ax_ip.set_title("In-Plane Rotation", size=16)
 
-    #out of plane
-    ax_op.imshow(im_op)
-    ax_op.set_title("Out-of-Plane Tilt", size=16)
+    # out of plane
+    if self.orientation_fiber_angles[0] > 0:
+        ax_op.imshow(im_op)
+        ax_op.set_title("Out-of-Plane Tilt", size=16)
+    else:
+        ax_op.axis("off")
+
+    if show_axes is False:
+        ax_ip.axis("off")
+        ax_op.axis("off")
 
     # in plane legend
     ax_ip_l.imshow(im_ip_leg)
     ax_ip_l.set_axis_off()
 
     # out of plane legend
-    t = np.tile(np.linspace(0,1,leg_size,endpoint=True),(np.round(leg_size/10).astype('int'),1))
-    im_op_leg = cmap(t)
-    im_op_leg = np.delete(im_op_leg, 3, axis=2)
-    ax_op_l.imshow(im_op_leg)
-    ax_op_l.set_yticks([])
+    if self.orientation_fiber_angles[0] > 0:
+        t = np.tile(
+            np.linspace(0, 1, leg_size, endpoint=True),
+            (np.round(leg_size / 10).astype("int"), 1),
+        )
+        im_op_leg = cmap(t)
+        im_op_leg = np.delete(im_op_leg, 3, axis=2)
+        ax_op_l.imshow(im_op_leg)
+        ax_op_l.set_yticks([])
 
-    ticks = [
-        np.round(leg_size*0.0), 
-        np.round(leg_size*0.25), 
-        np.round(leg_size*0.5), 
-        np.round(leg_size*0.75), 
-        np.round(leg_size*1.0), 
+        ticks = [
+            np.round(leg_size * 0.0),
+            np.round(leg_size * 0.25),
+            np.round(leg_size * 0.5),
+            np.round(leg_size * 0.75),
+            np.round(leg_size * 1.0),
         ]
-    labels = [
-        str(np.round(self.orientation_fiber_angles[0]*0.00)) + '$\degree$', 
-        str(np.round(self.orientation_fiber_angles[0]*0.25)) + '$\degree$', 
-        str(np.round(self.orientation_fiber_angles[0]*0.50)) + '$\degree$', 
-        str(np.round(self.orientation_fiber_angles[0]*0.75)) + '$\degree$', 
-        str(np.round(self.orientation_fiber_angles[0]*1.00)) + '$\degree$', 
+        labels = [
+            str(np.round(self.orientation_fiber_angles[0] * 0.00)) + "$\\degree$",
+            str(np.round(self.orientation_fiber_angles[0] * 0.25)) + "$\\degree$",
+            str(np.round(self.orientation_fiber_angles[0] * 0.50)) + "$\\degree$",
+            str(np.round(self.orientation_fiber_angles[0] * 0.75)) + "$\\degree$",
+            str(np.round(self.orientation_fiber_angles[0] * 1.00)) + "$\\degree$",
         ]
-    ax_op_l.set_xticks(ticks)
-    ax_op_l.set_xticklabels(labels)
+        ax_op_l.set_xticks(ticks)
+        ax_op_l.set_xticklabels(labels)
+    else:
+        ax_op_l.axis("off")
 
-    images_orientation = np.zeros((
-        orientation_map.num_x,
-        orientation_map.num_y,
-        3,2))
-    images_orientation[:,:,:,0] = im_ip
-    images_orientation[:,:,:,1] = im_op
+    images_orientation = np.zeros((orientation_map.num_x, orientation_map.num_y, 3, 2))
+    images_orientation[:, :, :, 0] = im_ip
+    images_orientation[:, :, :, 1] = im_op
 
     if returnfig:
         ax = [ax_ip, ax_op, ax_ip_l, ax_op_l]
@@ -1882,6 +1725,204 @@ def plot_fiber_orientation_maps(
     else:
         return images_orientation
 
+
+def plot_clusters(
+    self,
+    area_min=2,
+    outline_grains=True,
+    outline_thickness=1,
+    fill_grains=0.25,
+    smooth_grains=1.0,
+    cmap="viridis",
+    figsize=(8, 8),
+    returnfig=False,
+):
+    """
+    Plot the clusters as an image.
+
+    Parameters
+    --------
+    area_min: int (optional)
+        Min cluster size to include, in units of probe positions.
+    outline_grains: bool (optional)
+        Set to True to draw grains with outlines
+    outline_thickness: int (optional)
+        Thickenss of the grain outline
+    fill_grains: float (optional)
+        Outlined grains are filled with this value in pixels.
+    smooth_grains: float (optional)
+        Grain boundaries are smoothed by this value in pixels.
+    figsize: tuple
+        Size of the figure panel
+    returnfig: bool
+        Setting this to true returns the figure and axis handles
+
+    Returns
+    --------
+    fig, ax (optional)
+        Figure and axes handles
+
+    """
+
+    # init
+    im_plot = np.zeros(
+        (
+            self.orientation_map.num_x,
+            self.orientation_map.num_y,
+        )
+    )
+    im_grain = np.zeros(
+        (
+            self.orientation_map.num_x,
+            self.orientation_map.num_y,
+        ),
+        dtype="bool",
+    )
+
+    # make plotting image
+
+    for a0 in range(self.cluster_sizes.shape[0]):
+        if self.cluster_sizes[a0] >= area_min:
+            if outline_grains:
+                im_grain[:] = False
+                im_grain[
+                    self.cluster_inds[a0][0, :],
+                    self.cluster_inds[a0][1, :],
+                ] = True
+
+                im_dist = distance_transform_edt(
+                    erosion(
+                        np.invert(im_grain), footprint=np.ones((3, 3), dtype="bool")
+                    )
+                ) - distance_transform_edt(im_grain)
+                im_dist = gaussian_filter(im_dist, sigma=smooth_grains, mode="nearest")
+                im_add = np.exp(im_dist**2 / (-0.5 * outline_thickness**2))
+
+                if fill_grains > 0:
+                    im_dist = distance_transform_edt(
+                        erosion(
+                            np.invert(im_grain), footprint=np.ones((3, 3), dtype="bool")
+                        )
+                    )
+                    im_dist = gaussian_filter(
+                        im_dist, sigma=smooth_grains, mode="nearest"
+                    )
+                    im_add += fill_grains * np.exp(
+                        im_dist**2 / (-0.5 * outline_thickness**2)
+                    )
+
+                # im_add = 1 - np.exp(
+                #     distance_transform_edt(im_grain)**2 \
+                #     / (-2*outline_thickness**2))
+                im_plot += im_add
+                # im_plot = np.minimum(im_plot, im_add)
+            else:
+                # xg,yg = np.unravel_index(self.cluster_inds[a0], im_plot.shape)
+                im_grain[:] = False
+                im_grain[
+                    self.cluster_inds[a0][0, :],
+                    self.cluster_inds[a0][1, :],
+                ] = True
+                im_plot += gaussian_filter(
+                    im_grain.astype("float"), sigma=smooth_grains, mode="nearest"
+                )
+
+                # im_plot[
+                #     self.cluster_inds[a0][0,:],
+                #     self.cluster_inds[a0][1,:],
+                # ] += 1
+
+    if outline_grains:
+        im_plot = np.clip(im_plot, 0, 2)
+
+    # plotting
+    fig, ax = plt.subplots(figsize=figsize)
+    ax.imshow(
+        im_plot,
+        # vmin = -3,
+        # vmax = 3,
+        cmap=cmap,
+    )
+
+
+def plot_cluster_size(
+    self,
+    area_min=None,
+    area_max=None,
+    area_step=1,
+    weight_intensity=False,
+    pixel_area=1.0,
+    pixel_area_units="px^2",
+    figsize=(8, 6),
+    returnfig=False,
+):
+    """
+    Plot the cluster sizes
+
+    Parameters
+    --------
+    area_min: int (optional)
+        Min area to include in pixels^2
+    area_max: int (optional)
+        Max area bin in pixels^2
+    area_step: int (optional)
+        Step size of the histogram bin in pixels^2
+    weight_intensity: bool
+        Weight histogram by the peak intensity.
+    pixel_area: float
+        Size of pixel area unit square
+    pixel_area_units: string
+        Units of the pixel area
+    figsize: tuple
+        Size of the figure panel
+    returnfig: bool
+        Setting this to true returns the figure and axis handles
+
+    Returns
+    --------
+    fig, ax (optional)
+        Figure and axes handles
+
+    """
+
+    if area_max is None:
+        area_max = np.max(self.cluster_sizes)
+    area = np.arange(0, area_max, area_step)
+    if area_min is None:
+        sub = self.cluster_sizes.astype("int") < area_max
+    else:
+        sub = np.logical_and(
+            self.cluster_sizes.astype("int") >= area_min,
+            self.cluster_sizes.astype("int") < area_max,
+        )
+    if weight_intensity:
+        hist = np.bincount(
+            self.cluster_sizes[sub] // area_step,
+            weights=self.cluster_sig[sub],
+            minlength=area.shape[0],
+        )
+    else:
+        hist = np.bincount(
+            self.cluster_sizes[sub] // area_step,
+            minlength=area.shape[0],
+        )
+
+    # plotting
+    fig, ax = plt.subplots(figsize=figsize)
+    ax.bar(
+        area * pixel_area,
+        hist,
+        width=0.8 * pixel_area * area_step,
+    )
+    ax.set_xlim((0, area_max * pixel_area))
+    ax.set_xlabel("Grain Area [" + pixel_area_units + "]")
+    if weight_intensity:
+        ax.set_ylabel("Total Signal [arb. units]")
+    else:
+        ax.set_ylabel("Number of Grains")
+
+    if returnfig:
+        return fig, ax
 
 
 def axisEqual3D(ax):
@@ -1893,7 +1934,6 @@ def axisEqual3D(ax):
     for ctr, dim in zip(centers, "xyz"):
         getattr(ax, "set_{}lim".format(dim))(ctr - r, ctr + r)
     ax.set_box_aspect((1, 1, 1))
-
 
 
 def atomic_colors(Z, scheme="jmol"):
@@ -2040,4 +2080,74 @@ jmol_colors = {
 
 # def isPointWithinPolygon(point, polygonVertexCoords):
 #      path = matplotlib.path.Path( polygonVertexCoords )
-#      return path.contains_point(point[0], point[1]) 
+#      return path.contains_point(point[0], point[1])
+
+
+def plot_ring_pattern(
+    radii,
+    intensity,
+    theta=[-np.pi, np.pi, 200],
+    intensity_scale=1,
+    intensity_constant=False,
+    color="k",
+    figsize=(10, 10),
+    returnfig=False,
+    input_fig_handle=None,
+    **kwargs,
+):
+    """
+    2D plot of diffraction rings
+
+    Args:
+        radii (PointList):              1D numpy array containing radii for diffraction rings
+        intensity (PointList):          1D numpy array containing intensities for diffraciton rings
+        theta (3-tuple):                first two values specify angle range, and the last specifies the number of points used for plotting
+        intensity_scale (float):        size scaling for ring thickness
+        intensity_constant (bool):      if true, all rings are plotted with same line width
+        color (matplotlib color):       color of ring, any format recognized by matplotlib
+        figsize (2 element float):      size scaling of figure axes
+        returnfig (bool):               set to True to return figure and axes handles
+        input_fig_handle (fig,ax)       tuple containing a figure / axes handle for the plot
+    """
+
+    theta = np.linspace(*theta)
+
+    if input_fig_handle is None:
+        fig, ax = plt.subplots(1, 1, figsize=figsize, facecolor=(1, 1, 1))
+    else:
+        fig = input_fig_handle[0]
+        ax_parent = input_fig_handle[1]
+        ax = ax_parent[0]
+
+    for a1 in range(radii.shape[0]):
+        if intensity_constant is True:
+            ax.plot(
+                radii[a1] * np.sin(theta),
+                radii[a1] * np.cos(theta),
+                lw=intensity_scale,
+                color=color,
+                **kwargs,
+            )
+        else:
+            ax.plot(
+                radii[a1] * np.sin(theta),
+                radii[a1] * np.cos(theta),
+                lw=intensity[a1] * intensity_scale,
+                color=color,
+                **kwargs,
+            )
+
+    ax.set_xlabel("$q_y$ [Å$^{-1}$]")
+    ax.set_ylabel("$q_x$ [Å$^{-1}$]")
+
+    max_value = np.max(radii) * 1.1
+    ax.set_xlim([-max_value, max_value])
+    ax.set_ylim([-max_value, max_value])
+
+    ax.set_aspect("equal")
+
+    if input_fig_handle is None:
+        plt.show()
+
+    if returnfig:
+        return fig, ax
