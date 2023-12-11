@@ -3,7 +3,6 @@
 from py4DSTEM.data import Data
 from emdfile import Custom, PointListArray, PointList, Metadata
 from py4DSTEM.braggvectors.braggvector_methods import BraggVectorMethods
-from py4DSTEM.process.diffraction import plot_diffraction_pattern
 from os.path import basename
 import numpy as np
 from warnings import warn
@@ -410,6 +409,8 @@ class BVects:
             If `returnfig` is True, the figure is returned.
 
         """
+        from py4DSTEM.process.diffraction import plot_diffraction_pattern
+
         if returnfig:
             return plot_diffraction_pattern(self, **kwargs)
         else:
