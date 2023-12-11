@@ -1265,15 +1265,13 @@ class ParallaxReconstruction(PhaseReconstruction):
         xy_shifts = self._xy_shifts
         BF_size = np.array(self._stack_BF_unshifted.shape[-2:])
 
-        self._DF_upsample_limit = np.max(
-            2 * self._region_of_interest_shape / self._scan_shape
+        BF_sampling = 1 / asnumpy(self._kr).max()
+        DF_sampling = 1 / (
+            self._reciprocal_sampling[0] * self._region_of_interest_shape[0] / 2
         )
-        self._BF_upsample_limit = (
-            4 * self._kr.max() / self._reciprocal_sampling[0]
-        ) / self._scan_shape.max()
 
-        if self._device == "gpu":
-            self._BF_upsample_limit = self._BF_upsample_limit.item()
+        self._BF_upsample_limit = self._scan_sampling[0] / BF_sampling
+        self._DF_upsample_limit = self._scan_sampling[0] / DF_sampling
 
         if kde_upsample_factor is None:
             if self._BF_upsample_limit * 3 / 2 > self._DF_upsample_limit:
