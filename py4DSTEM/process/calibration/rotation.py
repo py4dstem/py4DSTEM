@@ -2,76 +2,179 @@
 
 import numpy as np
 from typing import Optional
-from ...io.datastructure import Coordinates, PointListArray
-from py4DSTEM.process.utils import tqdmnd
+import matplotlib.pyplot as plt
+from py4DSTEM import show
 
 
-def calibrate_Bragg_peaks_rotation(
-    braggpeaks: PointListArray,
-    theta: Optional[float] = None,
-    flip: Optional[bool] = None,
-    coords: Optional[Coordinates] = None,
-    name: Optional[str] = None,
-) -> PointListArray:
+def compare_QR_rotation(
+    im_R,
+    im_Q,
+    QR_rotation,
+    R_rotation=0,
+    R_position=None,
+    Q_position=None,
+    R_pos_anchor="center",
+    Q_pos_anchor="center",
+    R_length=0.33,
+    Q_length=0.33,
+    R_width=0.001,
+    Q_width=0.001,
+    R_head_length_adjust=1,
+    Q_head_length_adjust=1,
+    R_head_width_adjust=1,
+    Q_head_width_adjust=1,
+    R_color="r",
+    Q_color="r",
+    figsize=(10, 5),
+    returnfig=False,
+):
     """
-    Calibrate rotation of Bragg peak positions, using either the R/Q rotation `theta`
-    or the `QR_rotation` value inside a Coordinates object.
+    Visualize a rotational offset between an image in real space, e.g. a STEM
+    virtual image, and an image in diffraction space, e.g. a defocused CBED
+    shadow image of the same region, by displaying an arrow overlaid over each
+    of these two images with the specified QR rotation applied.  The QR rotation
+    is defined as the counter-clockwise rotation from real space to diffraction
+    space, in degrees.
 
-    Accepts:
-        braggpeaks  (PointListArray) the CENTERED Bragg peaks
-        theta       (float) the rotation between real and reciprocal space in radians
-        flip        (bool) whether there is a flip between real and reciprocal space
-        coords      (Coordinates) an object containing QR_rotation
-        name        (str, optional) a name for the returned PointListArray.
-                    If unspecified, takes the old PLA name, removes '_centered'
-                    if present at the end of the string, then appends
-                    '_rotated'.
-
-    Returns:
-        braggpeaks_rotated  (PointListArray) the rotated Bragg peaks
+    Parameters
+    ----------
+    im_R : numpy array or other 2D image-like object (e.g. a VirtualImage)
+        A real space image, e.g. a STEM virtual image
+    im_Q : numpy array or other 2D image-like object
+        A diffraction space image, e.g. a defocused CBED image
+    QR_rotation : number
+        The counterclockwise rotation from real space to diffraction space,
+        in degrees
+    R_rotation : number
+        The orientation of the arrow drawn in real space, in degrees
+    R_position : None or 2-tuple
+        The position of the anchor point for the R-space arrow. If None, defaults
+        to the center of the image
+    Q_position : None or 2-tuple
+        The position of the anchor point for the Q-space arrow. If None, defaults
+        to the center of the image
+    R_pos_anchor : 'center' or 'tail' or 'head'
+        The anchor point for the R-space arrow, i.e. the point being specified by
+        the `R_position` parameter
+    Q_pos_anchor : 'center' or 'tail' or 'head'
+        The anchor point for the Q-space arrow, i.e. the point being specified by
+        the `Q_position` parameter
+    R_length : number or None
+        The length of the R-space arrow, as a fraction of the mean size of the
+        image
+    Q_length : number or None
+        The length of the Q-space arrow, as a fraction of the mean size of the
+        image
+    R_width : number
+        The width of the R-space arrow
+    Q_width : number
+        The width of the R-space arrow
+    R_head_length_adjust : number
+        Scaling factor for the R-space arrow head length
+    Q_head_length_adjust : number
+        Scaling factor for the Q-space arrow head length
+    R_head_width_adjust : number
+        Scaling factor for the R-space arrow head width
+    Q_head_width_adjust : number
+        Scaling factor for the Q-space arrow head width
+    R_color : color
+        Color of the R-space arrow
+    Q_color : color
+        Color of the Q-space arrow
+    figsize : 2-tuple
+        The figure size
+    returnfig : bool
+        Toggles returning the figure and axes
     """
-
-    assert isinstance(braggpeaks, PointListArray)
-    assert (theta is not None and flip is not None) != (
-        coords is not None
-    ), "Either (qx0,qy0) or coords must be specified"
-
-    if coords is not None:
-        assert isinstance(coords, Coordinates), "coords must be a Coordinates object."
-        theta = coords.get_QR_rotation()
-        flip = coords.get_QR_flip()
-        assert theta is not None, "coords did not contain center position"
-
-    if theta is not None:
-        assert isinstance(theta, float), "theta must be a float."
-    if flip is not None:
-        assert isinstance(flip, bool), "flip must be a boolean."
-
-    if name is None:
-        sl = braggpeaks.name.split("_")
-        _name = "_".join(
-            [s for i, s in enumerate(sl) if not (s == "centered" and i == len(sl) - 1)]
+    # parse inputs
+    if R_position is None:
+        R_position = (
+            im_R.shape[0] / 2,
+            im_R.shape[1] / 2,
         )
-        name = _name + "_rotated"
-    assert isinstance(name, str)
+    if Q_position is None:
+        Q_position = (
+            im_Q.shape[0] / 2,
+            im_Q.shape[1] / 2,
+        )
+    R_length = np.mean(im_R.shape) * R_length
+    Q_length = np.mean(im_Q.shape) * Q_length
+    assert R_pos_anchor in ("center", "tail", "head")
+    assert Q_pos_anchor in ("center", "tail", "head")
 
-    R = np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]])
+    # compute positions
+    rpos_x, rpos_y = R_position
+    qpos_x, qpos_y = Q_position
+    R_rot_rad = np.radians(R_rotation)
+    Q_rot_rad = np.radians(R_rotation + QR_rotation)
+    rvecx = np.cos(R_rot_rad)
+    rvecy = np.sin(R_rot_rad)
+    qvecx = np.cos(Q_rot_rad)
+    qvecy = np.sin(Q_rot_rad)
+    if R_pos_anchor == "center":
+        x0_r = rpos_x - rvecx * R_length / 2
+        y0_r = rpos_y - rvecy * R_length / 2
+        x1_r = rpos_x + rvecx * R_length / 2
+        y1_r = rpos_y + rvecy * R_length / 2
+    elif R_pos_anchor == "tail":
+        x0_r = rpos_x
+        y0_r = rpos_y
+        x1_r = rpos_x + rvecx * R_length
+        y1_r = rpos_y + rvecy * R_length
+    elif R_pos_anchor == "head":
+        x0_r = rpos_x - rvecx * R_length
+        y0_r = rpos_y - rvecy * R_length
+        x1_r = rpos_x
+        y1_r = rpos_y
+    else:
+        raise Exception(f"Invalid value for R_pos_anchor {R_pos_anchor}")
+    if Q_pos_anchor == "center":
+        x0_q = qpos_x - qvecx * Q_length / 2
+        y0_q = qpos_y - qvecy * Q_length / 2
+        x1_q = qpos_x + qvecx * Q_length / 2
+        y1_q = qpos_y + qvecy * Q_length / 2
+    elif Q_pos_anchor == "tail":
+        x0_q = qpos_x
+        y0_q = qpos_y
+        x1_q = qpos_x + qvecx * Q_length
+        y1_q = qpos_y + qvecy * Q_length
+    elif Q_pos_anchor == "head":
+        x0_q = qpos_x - qvecx * Q_length
+        y0_q = qpos_y - qvecy * Q_length
+        x1_q = qpos_x
+        y1_q = qpos_y
+    else:
+        raise Exception(f"Invalid value for Q_pos_anchor {Q_pos_anchor}")
 
-    braggpeaks_rotated = braggpeaks.copy(name=name)
-
-    for Rx, Ry in tqdmnd(braggpeaks_rotated.shape[0], braggpeaks_rotated.shape[1]):
-        pointlist = braggpeaks.get_pointlist(Rx, Ry)
-
-        if flip:
-            positions = R @ np.vstack((pointlist.data["qy"], pointlist.data["qx"]))
-        else:
-            positions = R @ np.vstack((pointlist.data["qx"], pointlist.data["qy"]))
-
-        rotated_pointlist = braggpeaks_rotated.get_pointlist(Rx, Ry)
-        rotated_pointlist.data["qx"] = positions[0, :]
-        rotated_pointlist.data["qy"] = positions[1, :]
-
-    return braggpeaks_rotated
+    # make the figure
+    axsize = (figsize[0] / 2, figsize[1])
+    fig, axs = show([im_R, im_Q], returnfig=True, axsize=axsize)
+    axs[0, 0].arrow(
+        x=y0_r,
+        y=x0_r,
+        dx=y1_r - y0_r,
+        dy=x1_r - x0_r,
+        color=R_color,
+        length_includes_head=True,
+        width=R_width,
+        head_width=R_length * R_head_width_adjust * 0.072,
+        head_length=R_length * R_head_length_adjust * 0.1,
+    )
+    axs[0, 1].arrow(
+        x=y0_q,
+        y=x0_q,
+        dx=y1_q - y0_q,
+        dy=x1_q - x0_q,
+        color=Q_color,
+        length_includes_head=True,
+        width=Q_width,
+        head_width=Q_length * Q_head_width_adjust * 0.072,
+        head_length=Q_length * Q_head_length_adjust * 0.1,
+    )
+    if returnfig:
+        return fig, axs
+    else:
+        plt.show()
 
 
 def get_Qvector_from_Rvector(vx, vy, QR_rotation):

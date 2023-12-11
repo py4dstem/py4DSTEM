@@ -1,160 +1,194 @@
-# General reader for 4D-STEM datasets.
+# Reader for native files
 
-import pathlib
-from os.path import exists,splitext
-from .native import read_py4DSTEM, is_py4DSTEM_file
-from .nonnative import *
+import warnings
+from os.path import exists
+from pathlib import Path
+from typing import Optional, Union
 
-def read(fp, mem="RAM", binfactor=1, ft=None, metadata=False, **kwargs):
+import emdfile as emd
+import py4DSTEM.io.legacy as legacy
+from py4DSTEM.data import Data
+from py4DSTEM.io.parsefiletype import _parse_filetype
+
+
+def read(
+    filepath: Union[str, Path],
+    datapath: Optional[str] = None,
+    tree: Optional[Union[bool, str]] = True,
+    verbose: Optional[bool] = False,
+    **kwargs,
+):
     """
-    General read function for 4D-STEM datasets. Takes a filename as input, parses
-    the filetype, and calls the appropriate reader.
+    A file reader for native py4DSTEM / EMD files.  To read non-native
+    formats, use `py4DSTEM.import_file`.
 
-    For non-native filetypes, returns a DataCube instance with the 4D-STEM data.
-    For native .h5 files, behavior is contingent on the ``data_id`` argument, as
-    follows:
-        - if ``data_id`` is not passed, prints the contents of the .h5 file
-          and returns nothing
-        - if ``data_id`` is passed, returns one or more DataObject instances
+    For files written by py4DSTEM version 0.14+, the function arguments
+    are those listed here - filepath, datapath, and tree.  See below for
+    descriptions.
+
+    Files written by py4DSTEM v0.14+ are EMD 1.0 files, an HDF5 based
+    format.  For a description and complete file specification, see
+    https://emdatasets.com/format/. For the Python implementation of
+    EMD 1.0 read-write routines which py4DSTEM is build on top of, see
+    https://github.com/py4dstem/emdfile.
+
+    To read file written by older verions of py4DSTEM, different keyword
+    arguments should be passed. See the docstring for
+    `py4DSTEM.io.native.legacy.read_py4DSTEM_legacy` for a complete list.
+    For example, `data_id` may need to be specified to select dataset.
 
     Args:
-        fp (str or pathlib.Path): path to the file
-        mem (str, optional): Specifies how the data should be stored; must be "RAM" or
-            "MEMMAP", or "DASK". "RAM" loads the entire dataset into memory. "MEMMAP" and "DASK" are useful for
-            large datasets; it does not load the data into memory, but instead creates a
-            map describing where each diffraction pattern lives in storage, and only
-            loads data into memory as needed. "MEMMAP" is numpy implementation, "DASK" is a Dask implementation.
-        binfactor (int, optional): Bin the data, in diffraction space, as it's loaded.
-            On-load binning enables datasets which, in storage, are larger than the
-            system RAM to still be loaded into RAM, provided the amount of binning is
-            sufficient. Binning by N reduces the filesize by N^2, so for instance, on a
-            system with only 16 GB of RAM, its possible to load datasets of up to 64,
-            144, or 256 GB using binfactors of 2, 3, or 4. Default is 1.
-              * Note 1: binning is only supported with mem='RAM'.
-              * Note 2: binning may cause 'wraparound' errors (e.g. if the datatype is
-                uint16 and the summed pixels in a bin exceed 65536, the count 'wraps back
-                around' to 0). This can be avoided by explicitly casting the datatype by
-                passing the keyword argument 'dtype', however, casting will also affect
-                the size of the data.
-        ft (str, optional): Force py4DSTEM to attempt to read the file as a specified
-            filetype, rather than trying to determine this automatically. Must be None or
-            a str from 'py4DSTEM', 'dm', 'empad', 'mrc_relativity', 'gatan_K2_bin',
-            'kitware_counted'. Default is None.
-        dtype (dtype, optional): Used when binning data, ignored otherwise. Default to
-            whatever the type of the raw data is, to avoid enlarging data size. May be
-            useful to avoid 'wraparound' errors.
-        data_id (int/str/list, optional): For py4DSTEM files only.  Specifies which data
-            to load. Use integers to specify the data index, or strings to specify data
-            names. A list or tuple returns a list of DataObjects. Returns the specified data.
-        topgroup (str, optional): For py4DSTEM files only.  Stricty, a py4DSTEM file is
-            considered to be everything inside a toplevel subdirectory within the HDF5
-            file, so that if desired one can place many py4DSTEM files inside a single
-            H5.  In this case, when loading data, the topgroup argument is passed to
-            indicate which py4DSTEM file to load. If an H5 containing multiple py4DSTEM
-            files is passed without a topgroup specified, the topgroup names are printed
-            to screen.
-        metadata (bool, optional): If True, returns the file metadata as a Metadata
-            instance.
-        log (bool, optional): For py4DSTEM files only.  If True, writes the processing
-            log to a plaintext file called splitext(fp)[0]+'.log'.
-
+        filepath (str or Path): the file path
+        datapath (str or None): the path within the H5 file to the data
+            group to read from. If there is a single EMD data tree in the
+            file, `datapath` may be left as None, and the path will
+            be set to the root node of that tree.  If `datapath` is None
+            and there are multiple EMD trees, this function will issue a
+            warning a return a list of paths to the root nodes of all
+            EMD trees it finds. Otherwise, should be a '/' delimited path
+            to the data node of interest, for example passing
+            'rootnode/somedata/someotherdata' will set the node called
+            'someotherdata' as the point to read from. To print the tree
+            of data nodes present in a file to the screen, use
+            `py4DSTEM.print_h5_tree(filepath)`.
+        tree (True or False or 'noroot'): indicates what data should be loaded,
+            relative to the target data group specified with `datapath`.
+            Enables reading the target data node only if `tree` is False,
+            reading the target node as well as recursively reading the tree
+            of data underneath it if `tree` is True, or recursively reading
+            the tree of data underneath the target node but excluding the
+            target node itself if `tree` is to 'noroot'.
     Returns:
-        (variable): The return value depends on usage:
-
-            * When loading non-native filetypes, the output type is a DataCube.
-            * When loading from a native .h5 file, if no ``data_id`` value is specified,
-              returns ``None``, and prints the file contents to screen
-            * When loading from a native file, if one data block is requested with the
-              ``data_id`` parameter, returns a single DataObject instance.
-            * When loading from a native .h5 file, if multiple data blocks are being
-              loaded (i.e. 'load' is passed a list) returns a list of DataObject instances
-            * when ``metadata==True``, returns a MetaData instance
+        (the data)
     """
-    assert(isinstance(fp,(str,pathlib.Path))), "Error: filepath fp must be a string or pathlib.Path"
-    assert(exists(fp)), "Error: specified filepath does not exist."
-    assert(mem in ['RAM','MEMMAP', 'DASK']), 'Error: argument mem must be either "RAM" or "MEMMAP"'
-    assert(isinstance(binfactor,int)), "Error: argument binfactor must be an integer"
-    assert(binfactor>=1), "Error: binfactor must be >= 1"
-    if binfactor > 1:
-        assert (
-            mem != "MEMMAP"
-        ), "Error: binning is not supported for memory mapping.  Either set binfactor=1 or set mem='RAM'"
-    assert ft in [
-        None,
-        "dm",
-        "empad",
-        "mrc_relativity",
-        "gatan_K2_bin",
-        "kitware_counted",
-    ], "Error: ft argument not recognized"
 
-    if ft is None:
-        ft = parse_filetype(fp)
+    # parse filetype
+    er1 = f"filepath must be a string or Path, not {type(filepath)}"
+    er2 = f"specified filepath '{filepath}' does not exist"
+    assert isinstance(filepath, (str, Path)), er1
+    assert exists(filepath), er2
 
-    if ft == "py4DSTEM":
-        data = read_py4DSTEM(
-            fp, mem=mem, binfactor=binfactor, metadata=metadata, **kwargs
-        )
-    elif ft == "dm":
-        data = read_dm(fp, mem, binfactor, metadata=metadata, **kwargs)
-    elif ft == "empad":
-        data = read_empad(fp, mem, binfactor, metadata=metadata, **kwargs)
-    elif ft == "mrc_relativity":
-        data = read_mrc_relativity(fp, mem, binfactor, metadata=metadata, **kwargs)
-    elif ft == "gatan_K2_bin":
-        data = read_gatan_K2_bin(fp, mem, binfactor, metadata=metadata, **kwargs)
-    elif ft == "kitware_counted":
-        data = read_kitware_counted(fp, mem, binfactor, metadata=metadata, **kwargs)
-    else:
-        raise Exception(
-            "Unrecognized file extension {}.  To force reading as a particular filetype, pass the 'ft' keyword argument.".format(
-                fext
+    filetype = _parse_filetype(filepath)
+    assert filetype in (
+        "emd",
+        "legacy",
+    ), f"`py4DSTEM.read` loads native HDF5 formatted files, but a file of type {filetype} was detected.  Try loading it using py4DSTEM.import_file"
+
+    # support older `root` input
+    if datapath is None:
+        if "root" in kwargs:
+            datapath = kwargs["root"]
+
+    # EMD 1.0 formatted files (py4DSTEM v0.14+)
+    if filetype == "emd":
+        # check version
+        version = emd._get_EMD_version(filepath)
+        if verbose:
+            print(
+                f"EMD version {version[0]}.{version[1]}.{version[2]} detected. Reading..."
             )
-        )
+        assert emd._version_is_geq(
+            version, (1, 0, 0)
+        ), f"EMD version {version} detected. Expected version >= 1.0.0"
 
-    return data
+        # read
+        data = emd.read(filepath, emdpath=datapath, tree=tree)
+        if verbose:
+            print("Data was read from file. Adding calibration links...")
 
-
-def parse_filetype(fp):
-    """ Accepts a path to a 4D-STEM dataset, and returns the file type.
-    """
-    assert isinstance(
-        fp, (str, pathlib.Path)
-    ), "Error: filepath fp must be a string or pathlib.Path"
-
-    _, fext = splitext(fp)
-    if fext in [
-        ".h5",
-        ".H5",
-        "hdf5",
-        "HDF5",
-        ".py4dstem",
-        ".py4DSTEM",
-        ".PY4DSTEM",
-        ".emd",
-        ".EMD",
-    ]:
-        if is_py4DSTEM_file(fp):
-            return "py4DSTEM"
+        # add calibration links
+        if isinstance(data, Data):
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                cal = data.calibration
+        elif isinstance(data, emd.Root):
+            try:
+                cal = data.metadata["calibration"]
+            except KeyError:
+                cal = None
         else:
-            raise Exception(
-                "Non-py4DSTEM formatted .h5 files are not presently supported."
-            )
-    elif fext in [".dm", ".dm3", ".dm4", ".DM", ".DM3", ".DM4"]:
-        return "dm"
-    elif fext in [".raw"]:
-        return "empad"
-    elif fext in [".mrc"]:
-        # TK TODO
-        return "mrc_relativity"
-    elif fext in [".gtg", ".bin"]:
-        return "gatan_K2_bin"
-    elif fext in [".kitware_counted"]:
-        # TK TODO
-        return "kitware_counted"
+            cal = None
+        if cal is not None:
+            try:
+                root_treepath = cal["_root_treepath"]
+                target_paths = cal["_target_paths"]
+                del cal._params["_target_paths"]
+                for p in target_paths:
+                    try:
+                        p = p.replace(root_treepath, "")
+                        d = data.root.tree(p)
+                        cal.register_target(d)
+                        if hasattr(d, "setcal"):
+                            d.setcal()
+                    except AssertionError:
+                        pass
+            except KeyError:
+                pass
+            cal.calibrate()
+
+        # return
+        if verbose:
+            print("Done.")
+        return data
+
+    # legacy py4DSTEM files (v <= 0.13)
     else:
-        raise Exception(
-            "Unrecognized file extension {}.  To force reading as a particular filetype, pass the 'ft' keyword argument.".format(
-                fext
+        assert (
+            filetype == "legacy"
+        ), "path points to an H5 file which is neither an EMD 1.0+ file, nor a recognized legacy py4DSTEM file."
+
+        # read v13
+        if legacy.is_py4DSTEM_version13(filepath):
+            # load the data
+            if verbose:
+                print("Legacy py4DSTEM version 13 file detected. Reading...")
+            kwargs["root"] = datapath
+            kwargs["tree"] = tree
+            data = legacy.read_legacy13(
+                filepath=filepath,
+                **kwargs,
             )
-        )
+            if verbose:
+                print("Done.")
+            return data
+
+        # read <= v12
+        else:
+            # parse the root/data_id from the datapath arg
+            if datapath is not None:
+                datapath = datapath.split("/")
+                try:
+                    datapath.remove("")
+                except ValueError:
+                    pass
+                rootgroup = datapath[0]
+                if len(datapath) > 1:
+                    datapath = "/".join(rootgroup[1:])
+                else:
+                    datapath = None
+            else:
+                rootgroups = legacy.get_py4DSTEM_topgroups(filepath)
+                if len(rootgroups) > 1:
+                    print(
+                        "multiple root groups in a legacy file found - returning list of root names; please pass one as `datapath`"
+                    )
+                    return rootgroups
+                elif len(rootgroups) == 0:
+                    raise Exception("No rootgroups found")
+                else:
+                    rootgroup = rootgroups[0]
+                    datapath = None
+
+            # load the data
+            if verbose:
+                print("Legacy py4DSTEM version <= 12 file detected. Reading...")
+            kwargs["topgroup"] = rootgroup
+            if datapath is not None:
+                kwargs["data_id"] = datapath
+            data = legacy.read_legacy12(
+                filepath=filepath,
+                **kwargs,
+            )
+            if verbose:
+                print("Done.")
+            return data
