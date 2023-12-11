@@ -1675,11 +1675,12 @@ def rotate_point(origin, point, angle):
     qy = oy + np.sin(angle) * (px - ox) + np.cos(angle) * (py - oy)
     return qx, qy
 
+
 def bilinearly_interpolate_array(
     image,
     xa,
     ya,
-    xp = np,
+    xp=np,
 ):
     """
     Bilinear sampling of intensities from an image array and pixel positions.
@@ -1699,7 +1700,7 @@ def bilinearly_interpolate_array(
         Bilinearly-sampled intensities of array at (xa,ya) positions
 
     """
-    
+
     xF = xp.floor(xa).astype("int")
     yF = xp.floor(ya).astype("int")
     dx = xa - xF
@@ -1738,12 +1739,13 @@ def bilinearly_interpolate_array(
 
     return intensities  # / filter_weights # unnecessary, sums up to unity
 
+
 def lanczos_interpolate_array(
     image,
     xa,
     ya,
     alpha,
-    xp = np,
+    xp=np,
 ):
     """
     Lanczos sampling of intensities from an image array and pixel positions.
@@ -1800,14 +1802,15 @@ def lanczos_interpolate_array(
 
     return intensities / filter_weights
 
+
 def pixel_rolling_kernel_density_estimate(
     stack,
     shifts,
     upsampling_factor,
     kde_sigma,
     lowpass_filter=False,
-    xp = np,
-    gaussian_filter = gaussian_filter,
+    xp=np,
+    gaussian_filter=gaussian_filter,
 ):
     """
     kernel density estimate from a set coordinates (xa,ya) and intensity weights.
@@ -1837,18 +1840,20 @@ def pixel_rolling_kernel_density_estimate(
     upsampled_shifts_int = xp.modf(upsampled_shifts)[-1].astype("int")
 
     upsampled_stack = xp.zeros(upsampled_shape, dtype=xp.float32)
-    upsampled_stack[...,::upsampling_factor,::upsampling_factor] = stack
-
-    upsampled_counts = xp.zeros(upsampled_shape, dtype=xp.float32)
-    upsampled_counts[...,::upsampling_factor,::upsampling_factor] = 1
-
-    pix_output = xp.zeros(upsampled_shape[-2:],dtype=xp.float32)
-    pix_count = xp.zeros(upsampled_shape[-2:],dtype=xp.float32)
+    upsampled_stack[..., ::upsampling_factor, ::upsampling_factor] = stack
+    pix_output = xp.zeros(upsampled_shape[-2:], dtype=xp.float32)
 
     for BF_index in range(upsampled_stack.shape[0]):
         shift = upsampled_shifts_int[BF_index]
         pix_output += xp.roll(upsampled_stack[BF_index], shift, axis=(0, 1))
-        pix_count += xp.roll(upsampled_counts[BF_index], shift, axis=(0, 1))
+
+    upsampled_stack[..., ::upsampling_factor, ::upsampling_factor] = 1
+    pix_count = xp.zeros(upsampled_shape[-2:], dtype=xp.float32)
+
+    # sequential looping for memory reasons
+    for BF_index in range(upsampled_stack.shape[0]):
+        shift = upsampled_shifts_int[BF_index]
+        pix_count += xp.roll(upsampled_stack[BF_index], shift, axis=(0, 1))
 
     # kernel density estimate
     pix_count = gaussian_filter(pix_count, kde_sigma)
@@ -1866,6 +1871,7 @@ def pixel_rolling_kernel_density_estimate(
 
     return pix_output
 
+
 def bilinear_kernel_density_estimate(
     xa,
     ya,
@@ -1873,8 +1879,8 @@ def bilinear_kernel_density_estimate(
     output_shape,
     kde_sigma,
     lowpass_filter=False,
-    xp = np,
-    gaussian_filter = gaussian_filter,
+    xp=np,
+    gaussian_filter=gaussian_filter,
 ):
     """
     kernel density estimate from a set coordinates (xa,ya) and intensity weights.
@@ -1967,6 +1973,7 @@ def bilinear_kernel_density_estimate(
 
     return pix_output
 
+
 def lanczos_kernel_density_estimate(
     xa,
     ya,
@@ -1975,8 +1982,8 @@ def lanczos_kernel_density_estimate(
     kde_sigma,
     alpha,
     lowpass_filter=False,
-    xp = np,
-    gaussian_filter = gaussian_filter,
+    xp=np,
+    gaussian_filter=gaussian_filter,
 ):
     """
     kernel density estimate from a set coordinates (xa,ya) and intensity weights.
@@ -2068,23 +2075,22 @@ def lanczos_kernel_density_estimate(
 
     return pix_output
 
+
 def vectorized_fourier_resample(
     array,
     scale=None,
     output_size=None,
-    xp = np,
+    xp=np,
 ):
-    """
-    """
+    """ """
 
     array_size = np.array(array.shape)
     input_size = array_size[-2:].copy()
-    
+
     if scale is not None:
-        
         scale = np.array(scale)
         if scale.size == 1:
-            scale = np.tile(scale,2)
+            scale = np.tile(scale, 2)
 
         output_size = (input_size * scale).astype("int")
     else:
@@ -2094,7 +2100,7 @@ def vectorized_fourier_resample(
             raise ValueError()
         output_size = np.array(output_size)
 
-    scale_output = np.prod(output_size)/np.prod(input_size)
+    scale_output = np.prod(output_size) / np.prod(input_size)
 
     # x slices
     if output_size[0] > input_size[0]:
@@ -2194,21 +2200,20 @@ def vectorized_fourier_resample(
         y_lr_out = slice(None)
         y_lr_in_ = slice(None)
 
-
     # image array
     array_size[-2:] = output_size
     array_resize = xp.zeros(array_size, dtype=xp.complex64)
     array_fft = xp.fft.fft2(array)
 
     # copy each quadrant into the resize array
-    array_resize[...,x_ul_out, y_ul_out] = array_fft[...,x_ul_in_, y_ul_in_]
-    array_resize[...,x_ll_out, y_ll_out] = array_fft[...,x_ll_in_, y_ll_in_]
-    array_resize[...,x_ur_out, y_ur_out] = array_fft[...,x_ur_in_, y_ur_in_]
-    array_resize[...,x_lr_out, y_lr_out] = array_fft[...,x_lr_in_, y_lr_in_]
+    array_resize[..., x_ul_out, y_ul_out] = array_fft[..., x_ul_in_, y_ul_in_]
+    array_resize[..., x_ll_out, y_ll_out] = array_fft[..., x_ll_in_, y_ll_in_]
+    array_resize[..., x_ur_out, y_ur_out] = array_fft[..., x_ur_in_, y_ur_in_]
+    array_resize[..., x_lr_out, y_lr_out] = array_fft[..., x_lr_in_, y_lr_in_]
 
     # Back to real space
     array_resize = xp.real(xp.fft.ifft2(array_resize)).astype(xp.float32)
-    
+
     # Normalization
     array_resize *= scale_output
 
