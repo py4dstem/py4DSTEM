@@ -3,6 +3,7 @@
 from py4DSTEM.data import Data
 from emdfile import Custom, PointListArray, PointList, Metadata
 from py4DSTEM.braggvectors.braggvector_methods import BraggVectorMethods
+from py4DSTEM.process.diffraction import plot_diffraction_pattern
 from os.path import basename
 import numpy as np
 from warnings import warn
@@ -388,6 +389,31 @@ class BVects:
         string += f"A set of {len(self.data)} bragg vectors."
         string += " Access data with .qx, .qy, .I, or .data. Optionally .h, .k, and.l, if indexed)"
         return string
+
+    def plot(
+        self,
+        returnfig: bool = False,
+        **kwargs,
+    ):
+        """
+        Plot the diffraction pattern.
+        Calls `py4DSTEM.process.diffraction.plot_diffraction_pattern` and passes kwargs to it.
+
+        Parameters
+        ----------
+        returnfig: bool
+            If True the figure is returned, else its ploted but not returned. Defaults to False
+
+        Returns
+        -------
+        figure : matplotlib object
+            If `returnfig` is True, the figure is returned.
+
+        """
+        if returnfig:
+            return plot_diffraction_pattern(self, **kwargs)
+        else:
+            plot_diffraction_pattern(self, **kwargs)
 
 
 class RawVectorGetter:
