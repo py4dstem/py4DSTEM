@@ -1378,7 +1378,7 @@ class ParallaxReconstruction(PhaseReconstruction):
                             pix_output,
                             xa,
                             ya,
-                            lanczos_alpha=lanczos_interpolation_order,
+                            lanczos_alpha=None,
                         )
                         - self._stack_BF_unshifted
                     ),
@@ -1451,7 +1451,7 @@ class ParallaxReconstruction(PhaseReconstruction):
                                 pix_output,
                                 xa,
                                 ya,
-                                lanczos_alpha=lanczos_interpolation_order,
+                                lanczos_alpha=None,
                             )
                             - self._stack_BF_unshifted
                         ),
@@ -1499,7 +1499,7 @@ class ParallaxReconstruction(PhaseReconstruction):
                                     pix_output,
                                     xa,
                                     ya,
-                                    lanczos_alpha=lanczos_interpolation_order,
+                                    lanczos_alpha=None,
                                 )
                                 - self._stack_BF_unshifted
                             ),
@@ -1615,7 +1615,7 @@ class ParallaxReconstruction(PhaseReconstruction):
                                 pix_output,
                                 xa,
                                 ya,
-                                lanczos_alpha=lanczos_interpolation_order,
+                                lanczos_alpha=None,
                             )
                             - self._stack_BF_unshifted
                         ),
