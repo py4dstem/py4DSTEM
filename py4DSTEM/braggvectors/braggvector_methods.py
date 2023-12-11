@@ -813,6 +813,51 @@ class BraggVectorMethods:
 
         return StrainMap(self, name) if name else StrainMap(self)
 
+    def plot(
+        self,
+        index: tuple[int,int] | list[int],
+        cal: str = 'cal',
+        returnfig: bool = False,
+        **kwargs
+    ):
+        """
+        Plot Bragg vector, from a specified index.
+        Calls py4DSTEM.process.diffraction.plot_diffraction_pattern(braggvectors.<cal/raw>[index], **kwargs).
+        Optionally can return the figure.
+
+        Parameters
+        ----------
+        index : tuple[int,int] | list[int]
+            index for which Bragg vectors to plot 
+        cal : str, optional
+            Choice to plot calibrated or raw Bragg vectors must be 'raw' or 'cal', by default 'cal'
+        returnfig : bool, optional
+            Boolean to return figure or not, by default False
+
+        Returns
+        -------
+        tuple (figure, axes)
+            matplotlib figure, axes returned if `returnfig` is True
+        """
+        assert cal.lower() in ('cal', 'raw'), f"'cal' must be in ('cal', 'raw') {cal = } passed"
+        from py4DSTEM.process.diffraction import plot_diffraction_pattern
+
+        if cal == 'cal':
+            pl = self.cal[index]
+        else: 
+            pl = self.raw[index]
+        
+        if returnfig:
+            return plot_diffraction_pattern(
+                pl, 
+                returnfig=returnfig,
+                **kwargs,
+                )
+        else: 
+            plot_diffraction_pattern(
+                pl, 
+                **kwargs,
+                )
 
 ######### END BraggVectorMethods CLASS ########
 
