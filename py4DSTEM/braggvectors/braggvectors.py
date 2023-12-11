@@ -412,7 +412,7 @@ class BVects:
         from py4DSTEM.process.diffraction import plot_diffraction_pattern
 
         if returnfig:
-            return plot_diffraction_pattern(self, **kwargs)
+            return plot_diffraction_pattern(self, returnfig=returnfig, **kwargs)
         else:
             plot_diffraction_pattern(self, **kwargs)
 
