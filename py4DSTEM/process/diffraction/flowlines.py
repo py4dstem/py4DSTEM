@@ -1145,6 +1145,8 @@ def plot_orientation_correlation(
     orient_corr,
     prob_range = [0.1, 10.0],
     calculate_coefs = False,
+    fraction_coefs = 0.5,
+    length_fit_slope = 10,
     plot_overlaid_coefs = True,
     inds_plot = None,
     pixel_size = None,
@@ -1166,6 +1168,10 @@ def plot_orientation_correlation(
     calculate_coefs (bool):
         If this value is True, the 0.5 and 0.1 distribution fraction of the 
         radial and annular correlations will be calculated and printed.
+    fraction_coefs (float):
+        What fraction to calculate the correlation distribution coefficients for.
+    length_fit_slope (int):
+        Number of pixels to fit the slope of angular vs radial intercept.
     plot_overlaid_coefs (bool):
         If this value is True, the 0.5 and 0.1 distribution fraction of the 
         radial and annular correlations will be overlaid onto the plots.
@@ -1310,7 +1316,6 @@ def plot_orientation_correlation(
 
         if calculate_coefs:
             # Radial fractions
-            ind = 0
             y = np.arange(orient_corr.shape[2])
             if orient_corr[ind,0,0] > orient_corr[ind,-1,0]:
                 z = orient_corr[ind,0,:]
@@ -1326,8 +1331,7 @@ def plot_orientation_correlation(
                 z,
                 p0=coefs, 
                 bounds=bounds)[0]
-            coef_radial_half = coefs[2] * (np.log(1/0.5)**(1/coefs[3]))
-            coef_radial_tenth = coefs[2] * (np.log(1/0.1)**(1/coefs[3]))
+            coef_radial = coefs[2] * (np.log(1/fraction_coefs)**(1/coefs[3]))
 
             # Annular fractions
             x = np.arange(orient_corr.shape[1])
@@ -1346,12 +1350,15 @@ def plot_orientation_correlation(
                 z,
                 p0=coefs, 
                 bounds=bounds)[0]
-            coef_annular_half = coefs[2] * (np.log(1/0.5)**(1/coefs[3]))
-            coef_annular_tenth = coefs[2] * (np.log(1/0.1)**(1/coefs[3]))
-            if orient_corr[ind,0,0] > orient_corr[ind,-1,0]:
-                coef_annular_half = orient_corr.shape[1] - 1 - coef_annular_half
-                coef_annular_tenth = orient_corr.shape[1] - 1 - coef_annular_tenth
-            pixel_size_annular = np.pi / (orient_corr.shape[1]-1)
+            coef_annular = coefs[2] * (np.log(1/fraction_coefs)**(1/coefs[3]))
+            if orient_corr[ind,0,0] <= orient_corr[ind,-1,0]:
+                coef_annular = orient_corr.shape[1] - 1 - coef_annular
+            pixel_size_annular = 90 / (orient_corr.shape[1]-1)
+
+            # Slope of annular vs radial correlations as radius --> 0
+            x_slope = np.argmin(np.abs(orient_corr[ind,:,:length_fit_slope]-1.0),axis=0)
+            y_slope = np.arange(length_fit_slope)
+            coefs_slope = np.polyfit(y_slope, x_slope, 1)
 
             # Print results
             if ind_0 != ind_1:
@@ -1360,25 +1367,20 @@ def plot_orientation_correlation(
                 )
             else:
                 print("Autocorrelation of Ring " + str(ind_0))
-            print('50% probability radial distance = ' \
-                + str(np.round(coef_radial_half * pixel_size,2)) \
+            print(str(np.round(fraction_coefs*100).astype('int')) \
+                + '% probability radial distance = ' \
+                + str(np.round(coef_radial * pixel_size,2)) \
                 + ' ' + pixel_units)
-            print('10% probability radial distance = ' \
-                + str(np.round(coef_radial_tenth * pixel_size,2)) \
-                + ' ' + pixel_units)
-            print('50% probability annular distance = ' \
-                + str(np.round(coef_annular_half * pixel_size_annular,2)) \
-                + ' ' + pixel_units)
-            print('10% probability annular distance = ' \
-                + str(np.round(coef_annular_tenth * pixel_size_annular,2)) \
-                + ' ' + pixel_units)
+            print(str(np.round(fraction_coefs*100).astype('int')) \
+                + '% probability annular distance = ' \
+                + str(np.round(coef_annular * pixel_size_annular,2)) \
+                + ' degrees')
+            print('slope = ' \
+                + str(np.round(coefs_slope[0]*pixel_size_annular/pixel_size,2)) \
+                + ' degrees/' + pixel_units)
             print()
 
         if plot_overlaid_coefs:
-            t = np.linspace(0,np.pi/2.0,91,endpoint=True)
-            ct = np.cos(t)
-            st = np.sin(t)
-
             if num_plot > 1:
                 ax_handle = ax[count]
             else:
@@ -1386,27 +1388,42 @@ def plot_orientation_correlation(
 
             if orient_corr[ind,0,0] > orient_corr[ind,-1,0]:
                 ax_handle.plot(
-                    ct * coef_radial_half,
-                    st * (orient_corr.shape[1] - 1 - coef_annular_half),
+                    np.array((coef_radial,coef_radial,0.0)),
+                    np.array((0.0,coef_annular,coef_annular)),
                     color = (1.0,1.0,1.0),
                 )
                 ax_handle.plot(
-                    ct * coef_radial_tenth,
-                    st * (orient_corr.shape[1] - 1 - coef_annular_tenth),
-                    color = (1.0,1.0,1.0),
+                    np.array((coef_radial,coef_radial,0.0)),
+                    np.array((0.0,coef_annular,coef_annular)),
+                    color = (0.0,0.0,0.0),
+                    linestyle = '--',
                 )
             else:
-                print(a0)
                 ax_handle.plot(
-                    ct * coef_radial_half,
-                    st * coef_annular_half,
+                    np.array((coef_radial,coef_radial,0.0)),
+                    np.array((
+                        orient_corr.shape[1] - 1, 
+                        coef_annular, 
+                        coef_annular,
+                    )),
                     color = (1.0,1.0,1.0),
                 )
                 ax_handle.plot(
-                    ct * coef_radial_tenth,
-                    st * coef_annular_tenth,
-                    color = (1.0,1.0,1.0),
+                    np.array((coef_radial,coef_radial,0.0)),
+                    np.array((
+                        orient_corr.shape[1] - 1, 
+                        coef_annular, 
+                        coef_annular,
+                    )),
+                    color = (0.0,0.0,0.0),
+                    linestyle = '--',
                 )
+            ax_handle.plot(
+                y_slope,
+                y_slope.astype('float') * coefs_slope[0] + coefs_slope[1],
+                color = (0.0,0.0,0.0),
+                linestyle = '--',
+            )
 
     # Fix spacing
     fig.tight_layout(pad=1.0)
