@@ -1344,9 +1344,20 @@ class ParallaxReconstruction(PhaseReconstruction):
                 lowpass_filter=kde_lowpass_filter,
             )
         else:
-            self._kde_upsample_factor = np.round(self._kde_upsample_factor).astype(
-                "int"
-            )
+            upsample_fraction, upsample_int = np.modf(self._kde_upsample_factor)
+
+            if upsample_fraction:
+                upsample_nearest = np.round(self._kde_upsample_factor).astype("int")
+
+                warnings.warn(
+                    (
+                        f"Upsampling factor of {self._kde_upsample_factor} "
+                        f"rounded to nearest integer {upsample_nearest}."
+                    ),
+                    UserWarning,
+                )
+
+                self._kde_upsample_factor = upsample_nearest
 
             pix_output = pixel_rolling_kernel_density_estimate(
                 self._stack_BF_unshifted,
@@ -1359,6 +1370,18 @@ class ParallaxReconstruction(PhaseReconstruction):
 
         # Perform probe position correction if needed
         if position_correction_num_iter is not None:
+            if integer_pixel_rolling_alignment:
+                interpolation_method = (
+                    "bilinear" if lanczos_interpolation_order is None else "Lanczos"
+                )
+                warnings.warn(
+                    (
+                        "Integer pixel rolling is not compatible with position-correction, "
+                        f"{interpolation_method} KDE interpolation will be used instead."
+                    ),
+                    UserWarning,
+                )
+
             recon_BF_subpixel_aligned_reference = pix_output.copy()
 
             # init position shift array
@@ -1625,6 +1648,7 @@ class ParallaxReconstruction(PhaseReconstruction):
                 )
 
                 position_correction_stats[a0 + 1] = scores.mean()
+
         else:
             plot_position_correction_convergence = False
 
