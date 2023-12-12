@@ -408,7 +408,7 @@ def add_ellipses(ax, d):
             (cent[1], cent[0]),
             2 * _b,
             2 * _a,
-            -np.degrees(_theta),
+            angle=-np.degrees(_theta),
             color=col,
             fill=f,
             alpha=_alpha,
@@ -832,7 +832,14 @@ def add_scalebar(ax, d):
     labelpos_y = y0
 
     # Add line
-    ax.plot((yi, yf), (xi, xf), lw=width, color=color, alpha=alpha)
+    ax.plot(
+        (yi, yf),
+        (xi, xf),
+        color=color,
+        alpha=alpha,
+        lw=width,
+        solid_capstyle="butt",
+    )
 
     # Add label
     if label:

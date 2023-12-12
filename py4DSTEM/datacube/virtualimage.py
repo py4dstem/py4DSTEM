@@ -197,13 +197,13 @@ class DataCubeVirtualImager:
         # Get mask
         mask = self.make_detector(self.Qshape, mode, g)
         # if return_mask is True, skip computation
-        if return_mask == True and shift_center == False:
+        if return_mask is True and shift_center is False:
             return mask
 
         # Calculate virtual image
 
         # no center shifting
-        if shift_center == False:
+        if shift_center is False:
             # single CPU
             if not dask:
                 # allocate space
@@ -220,7 +220,7 @@ class DataCubeVirtualImager:
                     virtual_image[rx, ry] = np.sum(self.data[rx, ry] * mask)
 
             # dask
-            if dask == True:
+            if dask is True:
                 # set up a generalized universal function for dask distribution
                 def _apply_mask_dask(self, mask):
                     virtual_image = np.sum(
@@ -444,7 +444,7 @@ class DataCubeVirtualImager:
         # shift center
         if shift_center is None:
             shift_center = False
-        elif shift_center == True:
+        elif shift_center is True:
             assert isinstance(
                 data, tuple
             ), "If shift_center is set to True, `data` should be a 2-tuple (rx,ry). \
@@ -552,7 +552,7 @@ class DataCubeVirtualImager:
         # Convert units into detector pixels
 
         # Shift center
-        if centered == True:
+        if centered is True:
             if mode == "point":
                 g = (g[0] + x0_mean, g[1] + y0_mean)
             if mode in ("circle", "circular", "annulus", "annular"):
@@ -561,7 +561,7 @@ class DataCubeVirtualImager:
                 g = (g[0] + x0_mean, g[1] + x0_mean, g[2] + y0_mean, g[3] + y0_mean)
 
         # Scale by the detector pixel size
-        if calibrated == True:
+        if calibrated is True:
             if mode == "point":
                 g = (g[0] / unit_conversion, g[1] / unit_conversion)
             if mode in ("circle", "circular"):

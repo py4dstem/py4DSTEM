@@ -17,8 +17,9 @@ from py4DSTEM.braggvectors.diskdetection_aiml import _get_latest_model
 
 try:
     import cupy as cp
-except ModuleNotFoundError:
-    raise ImportError("AIML CUDA Requires cupy")
+    from cupyx.scipy.ndimage import gaussian_filter
+except (ModuleNotFoundError, ImportError) as e:
+    raise ImportError("AIML CUDA Requires cupy") from e
 
 try:
     import tensorflow as tf
@@ -28,8 +29,6 @@ except:
         + "https://www.tensorflow.org/install"
         + "for more information"
     )
-
-from cupyx.scipy.ndimage import gaussian_filter
 
 
 def find_Bragg_disks_aiml_CUDA(
@@ -233,7 +232,7 @@ def find_Bragg_disks_aiml_CUDA(
             datacube.R_N, int(t2 / 3600), int(t2 / 60), int(t2 % 60)
         )
     )
-    if global_threshold == True:
+    if global_threshold is True:
         from py4DSTEM.braggvectors import universal_threshold
 
         peaks = universal_threshold(
@@ -265,7 +264,7 @@ def _find_Bragg_disks_aiml_single_DP_CUDA(
     blocks=None,
     threads=None,
     model_path=None,
-    **kwargs
+    **kwargs,
 ):
     """
     Finds the Bragg disks in single DP by AI/ML method. This method utilizes FCU-Net
@@ -496,7 +495,7 @@ def get_maxima_2D_cp(
         if minSpacing > 0:
             deletemask = np.zeros(len(maxima), dtype=bool)
             for i in range(len(maxima)):
-                if deletemask[i] == False:
+                if deletemask[i] == False:  # noqa: E712
                     tooClose = (
                         (maxima["x"] - maxima["x"][i]) ** 2
                         + (maxima["y"] - maxima["y"][i]) ** 2

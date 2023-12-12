@@ -7,7 +7,7 @@ from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
 from scipy.signal import medfilt
 from scipy.ndimage import gaussian_filter
-from scipy.ndimage.morphology import distance_transform_edt
+from scipy.ndimage import distance_transform_edt
 from skimage.morphology import dilation, erosion
 
 import warnings
@@ -621,7 +621,7 @@ def plot_orientation_zones(
     # x = r * np.sin(theta)
     # y = r * np.cos(theta)
 
-    warnings.filterwarnings("ignore", module="matplotlib\..*")
+    warnings.filterwarnings("ignore", module=r"matplotlib\..*")
     line_params = {"linewidth": 2, "alpha": 0.1, "c": "k"}
     for phi in np.arange(0, 180, 5):
         ax.plot3D(
@@ -1806,11 +1806,11 @@ def plot_fiber_orientation_maps(
             np.round(leg_size * 1.0),
         ]
         labels = [
-            str(np.round(self.orientation_fiber_angles[0] * 0.00)) + "$\degree$",
-            str(np.round(self.orientation_fiber_angles[0] * 0.25)) + "$\degree$",
-            str(np.round(self.orientation_fiber_angles[0] * 0.50)) + "$\degree$",
-            str(np.round(self.orientation_fiber_angles[0] * 0.75)) + "$\degree$",
-            str(np.round(self.orientation_fiber_angles[0] * 1.00)) + "$\degree$",
+            str(np.round(self.orientation_fiber_angles[0] * 0.00)) + "$\\degree$",
+            str(np.round(self.orientation_fiber_angles[0] * 0.25)) + "$\\degree$",
+            str(np.round(self.orientation_fiber_angles[0] * 0.50)) + "$\\degree$",
+            str(np.round(self.orientation_fiber_angles[0] * 0.75)) + "$\\degree$",
+            str(np.round(self.orientation_fiber_angles[0] * 1.00)) + "$\\degree$",
         ]
         ax_op_l.set_xticks(ticks)
         ax_op_l.set_xticklabels(labels)
@@ -2195,7 +2195,7 @@ def plot_ring_pattern(
     figsize=(10, 10),
     returnfig=False,
     input_fig_handle=None,
-    **kwargs
+    **kwargs,
 ):
     """
     2D plot of diffraction rings
@@ -2222,7 +2222,7 @@ def plot_ring_pattern(
         ax = ax_parent[0]
 
     for a1 in range(radii.shape[0]):
-        if intensity_constant == True:
+        if intensity_constant is True:
             ax.plot(
                 radii[a1] * np.sin(theta),
                 radii[a1] * np.cos(theta),

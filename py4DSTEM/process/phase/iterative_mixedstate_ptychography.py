@@ -14,7 +14,7 @@ from py4DSTEM.visualize.vis_special import Complex2RGB, add_colorbar_arg, show_c
 
 try:
     import cupy as cp
-except ModuleNotFoundError:
+except (ModuleNotFoundError, ImportError):
     cp = np
 
 from emdfile import Custom, tqdmnd
@@ -74,6 +74,8 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
     initial_scan_positions: np.ndarray, optional
         Probe positions in Å for each diffraction intensity
         If None, initialized to a grid scan
+    positions_mask: np.ndarray, optional
+        Boolean real space mask to select positions in datacube to skip for reconstruction
     verbose: bool, optional
         If True, class methods will inherit this and print additional information
     device: str, optional
@@ -102,6 +104,7 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
         initial_probe_guess: np.ndarray = None,
         initial_scan_positions: np.ndarray = None,
         object_type: str = "complex",
+        positions_mask: np.ndarray = None,
         verbose: bool = True,
         device: str = "cpu",
         name: str = "mixed-state_ptychographic_reconstruction",
@@ -178,6 +181,7 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
         self._rolloff = rolloff
         self._object_type = object_type
         self._object_padding_px = object_padding_px
+        self._positions_mask = positions_mask
         self._verbose = verbose
         self._device = device
         self._preprocessed = False
@@ -204,6 +208,7 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
         force_angular_sampling: float = None,
         force_reciprocal_sampling: float = None,
         object_fov_mask: np.ndarray = None,
+        crop_patterns: bool = False,
         **kwargs,
     ):
         """
@@ -261,6 +266,8 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
         object_fov_mask: np.ndarray (boolean)
             Boolean mask of FOV. Used to calculate additional shrinkage of object
             If None, probe_overlap intensity is thresholded
+        crop_patterns: bool
+            if True, crop patterns to avoid wrap around of patterns when centering
 
         Returns
         --------
@@ -283,6 +290,13 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
                     "Please run ptycho.attach_datacube(DataCube) first."
                 )
             )
+
+        if self._positions_mask is not None and self._positions_mask.dtype != "bool":
+            warnings.warn(
+                ("`positions_mask` converted to `bool` array"),
+                UserWarning,
+            )
+            self._positions_mask = np.asarray(self._positions_mask, dtype="bool")
 
         (
             self._datacube,
@@ -349,6 +363,8 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
             self._intensities,
             self._com_fitted_x,
             self._com_fitted_y,
+            crop_patterns,
+            self._positions_mask,
         )
 
         # explicitly delete namespace
@@ -357,7 +373,7 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
         del self._intensities
 
         self._positions_px = self._calculate_scan_positions_in_pixels(
-            self._scan_positions
+            self._scan_positions, self._positions_mask
         )
 
         # handle semiangle specified in pixels
@@ -429,6 +445,10 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
                         bilinear=True,
                         device=self._device,
                     )
+                    if crop_patterns:
+                        self._vacuum_probe_intensity = self._vacuum_probe_intensity[
+                            self._crop_mask
+                        ].reshape(self._region_of_interest_shape)
 
                 _probe = (
                     ComplexProbe(
@@ -505,19 +525,13 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
 
         if plot_probe_overlaps:
             figsize = kwargs.pop("figsize", (4.5 * self._num_probes + 4, 4))
-            cmap = kwargs.pop("cmap", "Greys_r")
-            vmin = kwargs.pop("vmin", None)
-            vmax = kwargs.pop("vmax", None)
-            hue_start = kwargs.pop("hue_start", 0)
-            invert = kwargs.pop("invert", False)
+            chroma_boost = kwargs.pop("chroma_boost", 1)
 
             # initial probe
             complex_probe_rgb = Complex2RGB(
                 self.probe_centered,
-                vmin=vmin,
-                vmax=vmax,
-                hue_start=hue_start,
-                invert=invert,
+                power=2,
+                chroma_boost=chroma_boost,
             )
 
             extent = [
@@ -540,23 +554,19 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
                 axs[i].imshow(
                     complex_probe_rgb[i],
                     extent=probe_extent,
-                    **kwargs,
                 )
                 axs[i].set_ylabel("x [A]")
                 axs[i].set_xlabel("y [A]")
-                axs[i].set_title(f"Initial Probe[{i}]")
+                axs[i].set_title(f"Initial probe[{i}] intensity")
 
                 divider = make_axes_locatable(axs[i])
                 cax = divider.append_axes("right", size="5%", pad="2.5%")
-                add_colorbar_arg(
-                    cax, vmin=vmin, vmax=vmax, hue_start=hue_start, invert=invert
-                )
+                add_colorbar_arg(cax, chroma_boost=chroma_boost)
 
             axs[-1].imshow(
                 asnumpy(probe_overlap),
                 extent=extent,
-                cmap=cmap,
-                **kwargs,
+                cmap="Greys_r",
             )
             axs[-1].scatter(
                 self.positions[:, 1],
@@ -568,7 +578,7 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
             axs[-1].set_xlabel("y [A]")
             axs[-1].set_xlim((extent[0], extent[1]))
             axs[-1].set_ylim((extent[2], extent[3]))
-            axs[-1].set_title("Object Field of View")
+            axs[-1].set_title("Object field of view")
 
             fig.tight_layout()
 
@@ -1125,6 +1135,9 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
         q_lowpass,
         q_highpass,
         butterworth_order,
+        tv_denoise,
+        tv_denoise_weight,
+        tv_denoise_inner_iter,
         orthogonalize_probe,
         object_positivity,
         shrinkage_rad,
@@ -1183,6 +1196,12 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
             Butterworth filter order. Smaller gives a smoother filter
         orthogonalize_probe: bool
             If True, probe will be orthogonalized
+        tv_denoise: bool
+            If True, applies TV denoising on object
+        tv_denoise_weight: float
+            Denoising weight. The greater `weight`, the more denoising.
+        tv_denoise_inner_iter: float
+            Number of iterations to run in inner loop of TV denoising
         object_positivity: bool
             If True, clips negative potential values
         shrinkage_rad: float
@@ -1211,6 +1230,11 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
                 q_lowpass,
                 q_highpass,
                 butterworth_order,
+            )
+
+        if tv_denoise:
+            current_object = self._object_denoise_tv_pylops(
+                current_object, tv_denoise_weight, tv_denoise_inner_iter
             )
 
         if shrinkage_rad > 0.0 or object_mask is not None:
@@ -1281,6 +1305,7 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
         constrain_probe_fourier_amplitude_constant_intensity: bool = False,
         fix_positions_iter: int = np.inf,
         global_affine_transformation: bool = True,
+        constrain_position_distance: float = None,
         gaussian_filter_sigma: float = None,
         gaussian_filter_iter: int = np.inf,
         fit_probe_aberrations_iter: int = 0,
@@ -1290,6 +1315,9 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
         q_lowpass: float = None,
         q_highpass: float = None,
         butterworth_order: float = 2,
+        tv_denoise_iter: int = np.inf,
+        tv_denoise_weight: float = None,
+        tv_denoise_inner_iter: float = 40,
         object_positivity: bool = True,
         shrinkage_rad: float = 0.0,
         fix_potential_baseline: bool = True,
@@ -1353,6 +1381,8 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
             If True, the probe aperture is additionally constrained to a constant intensity.
         fix_positions_iter: int, optional
             Number of iterations to run with fixed positions before updating positions estimate
+        constrain_position_distance: float
+            Distance to constrain position correction within original field of view in A
         global_affine_transformation: bool, optional
             If True, positions are assumed to be a global affine transform from initial scan
         gaussian_filter_sigma: float, optional
@@ -1373,6 +1403,12 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
             Cut-off frequency in A^-1 for high-pass butterworth filter
         butterworth_order: float
             Butterworth filter order. Smaller gives a smoother filter
+        tv_denoise_iter: int, optional
+            Number of iterations to run using tv denoise filter on object
+        tv_denoise_weight: float
+            Denoising weight. The greater `weight`, the more denoising.
+        tv_denoise_inner_iter: float
+            Number of iterations to run in inner loop of TV denoising
         object_positivity: bool, optional
             If True, forces object to be positive
         shrinkage_rad: float
@@ -1575,6 +1611,8 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
             ) = self._extract_vectorized_patch_indices()
             self._exit_waves = None
             self._object_type = self._object_type_initial
+            if hasattr(self, "_tf"):
+                del self._tf
         elif reset is None:
             if hasattr(self, "error"):
                 warnings.warn(
@@ -1667,6 +1705,7 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
                         amplitudes,
                         self._positions_px,
                         positions_step_size,
+                        constrain_position_distance,
                     )
 
                 error += batch_error
@@ -1707,6 +1746,9 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
                 q_highpass=q_highpass,
                 butterworth_order=butterworth_order,
                 orthogonalize_probe=orthogonalize_probe,
+                tv_denoise=a0 < tv_denoise_iter and tv_denoise_weight is not None,
+                tv_denoise_weight=tv_denoise_weight,
+                tv_denoise_inner_iter=tv_denoise_inner_iter,
                 object_positivity=object_positivity,
                 shrinkage_rad=shrinkage_rad,
                 object_mask=self._object_fov_mask_inverse
@@ -1800,6 +1842,7 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
         plot_convergence: bool,
         plot_probe: bool,
         plot_fourier_probe: bool,
+        remove_initial_probe_aberrations: bool,
         padding: int,
         **kwargs,
     ):
@@ -1816,13 +1859,15 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
             If true, the reconstructed complex probe is displayed
         plot_fourier_probe: bool, optional
             If true, the reconstructed complex Fourier probe is displayed
+        remove_initial_probe_aberrations: bool, optional
+            If true, when plotting fourier probe, removes initial probe
         padding : int, optional
             Pixels to pad by post rotating-cropping object
         """
         figsize = kwargs.pop("figsize", (8, 5))
         cmap = kwargs.pop("cmap", "magma")
-        invert = kwargs.pop("invert", False)
-        hue_start = kwargs.pop("hue_start", 0)
+
+        chroma_boost = kwargs.pop("chroma_boost", 1)
 
         if self._object_type == "complex":
             obj = np.angle(self.object)
@@ -1914,30 +1959,38 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
             ax = fig.add_subplot(spec[0, 1])
 
             if plot_fourier_probe:
+                if remove_initial_probe_aberrations:
+                    probe_array = self.probe_fourier_residual[0]
+                else:
+                    probe_array = self.probe_fourier[0]
+
                 probe_array = Complex2RGB(
-                    self.probe_fourier[0], hue_start=hue_start, invert=invert
+                    probe_array,
+                    chroma_boost=chroma_boost,
                 )
+
                 ax.set_title("Reconstructed Fourier probe[0]")
                 ax.set_ylabel("kx [mrad]")
                 ax.set_xlabel("ky [mrad]")
             else:
                 probe_array = Complex2RGB(
-                    self.probe[0], hue_start=hue_start, invert=invert
+                    self.probe[0],
+                    power=2,
+                    chroma_boost=chroma_boost,
                 )
-                ax.set_title("Reconstructed probe[0]")
+                ax.set_title("Reconstructed probe[0] intensity")
                 ax.set_ylabel("x [A]")
                 ax.set_xlabel("y [A]")
 
             im = ax.imshow(
                 probe_array,
                 extent=probe_extent,
-                **kwargs,
             )
 
             if cbar:
                 divider = make_axes_locatable(ax)
                 ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
-                add_colorbar_arg(ax_cb, hue_start=hue_start, invert=invert)
+                add_colorbar_arg(ax_cb, chroma_boost=chroma_boost)
 
         else:
             ax = fig.add_subplot(spec[0])
@@ -1970,10 +2023,10 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
                 ax = fig.add_subplot(spec[1])
             ax.semilogy(np.arange(errors.shape[0]), errors, **kwargs)
             ax.set_ylabel("NMSE")
-            ax.set_xlabel("Iteration Number")
+            ax.set_xlabel("Iteration number")
             ax.yaxis.tick_right()
 
-        fig.suptitle(f"Normalized Mean Squared Error: {self.error:.3e}")
+        fig.suptitle(f"Normalized mean squared error: {self.error:.3e}")
         spec.tight_layout(fig)
 
     def _visualize_all_iterations(
@@ -1983,6 +2036,7 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
         plot_convergence: bool,
         plot_probe: bool,
         plot_fourier_probe: bool,
+        remove_initial_probe_aberrations: bool,
         iterations_grid: Tuple[int, int],
         padding: int,
         **kwargs,
@@ -2004,6 +2058,9 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
             If true, the reconstructed complex probe is displayed
         plot_fourier_probe: bool, optional
             If true, the reconstructed complex Fourier probe is displayed
+        remove_initial_probe_aberrations: bool, optional
+            If true, when plotting fourier probe, removes initial probe
+            to visualize changes
         padding : int, optional
             Pixels to pad by post rotating-cropping object
         """
@@ -2045,8 +2102,8 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
         )
         figsize = kwargs.pop("figsize", auto_figsize)
         cmap = kwargs.pop("cmap", "magma")
-        invert = kwargs.pop("invert", False)
-        hue_start = kwargs.pop("hue_start", 0)
+
+        chroma_boost = kwargs.pop("chroma_boost", 1)
 
         errors = np.array(self.error_iterations)
 
@@ -2143,35 +2200,37 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
 
             for n, ax in enumerate(grid):
                 if plot_fourier_probe:
-                    probe_array = Complex2RGB(
-                        asnumpy(
-                            self._return_fourier_probe_from_centered_probe(
-                                probes[grid_range[n]][0]
-                            )
-                        ),
-                        hue_start=hue_start,
-                        invert=invert,
+                    probe_array = asnumpy(
+                        self._return_fourier_probe_from_centered_probe(
+                            probes[grid_range[n]][0],
+                            remove_initial_probe_aberrations=remove_initial_probe_aberrations,
+                        )
                     )
+
+                    probe_array = Complex2RGB(probe_array, chroma_boost=chroma_boost)
+
                     ax.set_title(f"Iter: {grid_range[n]} Fourier probe[0]")
                     ax.set_ylabel("kx [mrad]")
                     ax.set_xlabel("ky [mrad]")
                 else:
                     probe_array = Complex2RGB(
-                        probes[grid_range[n]][0], hue_start=hue_start, invert=invert
+                        probes[grid_range[n]][0],
+                        power=2,
+                        chroma_boost=chroma_boost,
                     )
-                    ax.set_title(f"Iter: {grid_range[n]} probe[0]")
+                    ax.set_title(f"Iter: {grid_range[n]} probe[0] intensity")
                     ax.set_ylabel("x [A]")
                     ax.set_xlabel("y [A]")
 
                 im = ax.imshow(
                     probe_array,
                     extent=probe_extent,
-                    **kwargs,
                 )
 
                 if cbar:
                     add_colorbar_arg(
-                        grid.cbar_axes[n], hue_start=hue_start, invert=invert
+                        grid.cbar_axes[n],
+                        chroma_boost=chroma_boost,
                     )
 
         if plot_convergence:
@@ -2183,7 +2242,7 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
                 ax2 = fig.add_subplot(spec[1])
             ax2.semilogy(np.arange(errors.shape[0]), errors, **kwargs)
             ax2.set_ylabel("NMSE")
-            ax2.set_xlabel("Iteration Number")
+            ax2.set_xlabel("Iteration number")
             ax2.yaxis.tick_right()
 
         spec.tight_layout(fig)
@@ -2195,6 +2254,7 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
         plot_convergence: bool = True,
         plot_probe: bool = True,
         plot_fourier_probe: bool = False,
+        remove_initial_probe_aberrations: bool = False,
         cbar: bool = True,
         padding: int = 0,
         **kwargs,
@@ -2216,6 +2276,9 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
             If true, the reconstructed complex probe is displayed
         plot_fourier_probe: bool, optional
             If true, the reconstructed complex Fourier probe is displayed
+        remove_initial_probe_aberrations: bool, optional
+            If true, when plotting fourier probe, removes initial probe
+            to visualize changes
         padding : int, optional
             Pixels to pad by post rotating-cropping object
 
@@ -2231,6 +2294,7 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
                 plot_convergence=plot_convergence,
                 plot_probe=plot_probe,
                 plot_fourier_probe=plot_fourier_probe,
+                remove_initial_probe_aberrations=remove_initial_probe_aberrations,
                 cbar=cbar,
                 padding=padding,
                 **kwargs,
@@ -2242,6 +2306,7 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
                 iterations_grid=iterations_grid,
                 plot_probe=plot_probe,
                 plot_fourier_probe=plot_fourier_probe,
+                remove_initial_probe_aberrations=remove_initial_probe_aberrations,
                 cbar=cbar,
                 padding=padding,
                 **kwargs,
@@ -2250,7 +2315,14 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
         return self
 
     def show_fourier_probe(
-        self, probe=None, scalebar=True, pixelsize=None, pixelunits=None, **kwargs
+        self,
+        probe=None,
+        remove_initial_probe_aberrations=False,
+        cbar=True,
+        scalebar=True,
+        pixelsize=None,
+        pixelunits=None,
+        **kwargs,
     ):
         """
         Plot probe in fourier space
@@ -2259,6 +2331,8 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
         ----------
         probe: complex array, optional
             if None is specified, uses the `probe_fourier` property
+        remove_initial_probe_aberrations: bool, optional
+            If True, removes initial probe aberrations from Fourier probe
         scalebar: bool, optional
             if True, adds scalebar to probe
         pixelunits: str, optional
@@ -2269,22 +2343,88 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
         asnumpy = self._asnumpy
 
         if probe is None:
-            probe = list(self.probe_fourier)
+            probe = list(
+                asnumpy(
+                    self._return_fourier_probe(
+                        probe,
+                        remove_initial_probe_aberrations=remove_initial_probe_aberrations,
+                    )
+                )
+            )
         else:
             if isinstance(probe, np.ndarray) and probe.ndim == 2:
                 probe = [probe]
-            probe = [asnumpy(self._return_fourier_probe(pr)) for pr in probe]
+            probe = [
+                asnumpy(
+                    self._return_fourier_probe(
+                        pr,
+                        remove_initial_probe_aberrations=remove_initial_probe_aberrations,
+                    )
+                )
+                for pr in probe
+            ]
 
         if pixelsize is None:
             pixelsize = self._reciprocal_sampling[1]
         if pixelunits is None:
             pixelunits = r"$\AA^{-1}$"
 
+        chroma_boost = kwargs.pop("chroma_boost", 1)
+
         show_complex(
             probe if len(probe) > 1 else probe[0],
+            cbar=cbar,
             scalebar=scalebar,
             pixelsize=pixelsize,
             pixelunits=pixelunits,
             ticks=False,
+            chroma_boost=chroma_boost,
             **kwargs,
         )
+
+    def _return_self_consistency_errors(
+        self,
+        max_batch_size=None,
+    ):
+        """Compute the self-consistency errors for each probe position"""
+
+        xp = self._xp
+        asnumpy = self._asnumpy
+
+        # Batch-size
+        if max_batch_size is None:
+            max_batch_size = self._num_diffraction_patterns
+
+        # Re-initialize fractional positions and vector patches
+        errors = np.array([])
+        positions_px = self._positions_px.copy()
+
+        for start, end in generate_batches(
+            self._num_diffraction_patterns, max_batch=max_batch_size
+        ):
+            # batch indices
+            self._positions_px = positions_px[start:end]
+            self._positions_px_fractional = self._positions_px - xp.round(
+                self._positions_px
+            )
+            (
+                self._vectorized_patch_indices_row,
+                self._vectorized_patch_indices_col,
+            ) = self._extract_vectorized_patch_indices()
+            amplitudes = self._amplitudes[start:end]
+
+            # Overlaps
+            _, _, overlap = self._overlap_projection(self._object, self._probe)
+            fourier_overlap = xp.fft.fft2(overlap)
+            intensity_norm = xp.sqrt(xp.sum(xp.abs(fourier_overlap) ** 2, axis=1))
+
+            # Normalized mean-squared errors
+            batch_errors = xp.sum(
+                xp.abs(amplitudes - intensity_norm) ** 2, axis=(-2, -1)
+            )
+            errors = np.hstack((errors, batch_errors))
+
+        self._positions_px = positions_px.copy()
+        errors /= self._mean_diffraction_intensity
+
+        return asnumpy(errors)

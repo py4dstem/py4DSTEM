@@ -200,7 +200,7 @@ class BraggVectors(Custom, BraggVectorMethods, Data):
         if pixel is None:
             pixel = False if c.get_Q_pixel_size() == 1 else True
         if rotate is None:
-            rotate = False if c.get_QR_rotflip() is None else True
+            rotate = False if c.get_QR_rotation() is None else True
 
         # validate requested state
         if center:
@@ -210,7 +210,7 @@ class BraggVectors(Custom, BraggVectorMethods, Data):
         if pixel:
             assert c.get_Q_pixel_size() is not None, "Requested calibration not found"
         if rotate:
-            assert c.get_QR_rotflip() is not None, "Requested calibration not found"
+            assert c.get_QR_rotation() is not None, "Requested calibration not found"
 
         # set the calibrations
         self._calstate = {
@@ -272,6 +272,7 @@ class BraggVectors(Custom, BraggVectorMethods, Data):
         braggvector_copy.set_raw_vectors(self._v_uncal.copy())
         for k in self.metadata.keys():
             braggvector_copy.metadata = self.metadata[k].copy()
+        braggvector_copy.setcal()
         return braggvector_copy
 
     # write
@@ -384,7 +385,7 @@ class RawVectorGetter:
     def __repr__(self):
         space = " " * len(self.__class__.__name__) + "  "
         string = f"{self.__class__.__name__}( "
-        string += f"Retrieves raw bragg vectors. Get vectors for scan position x,y with [x,y]. )"
+        string += "Retrieves raw bragg vectors. Get vectors for scan position x,y with [x,y]. )"
         return string
 
 
@@ -478,15 +479,15 @@ class CalibratedVectorGetter:
 
         # Q/R rotation
         if rotate:
-            flip = cal.get_QR_flip()
-            theta = cal.get_QR_rotation_degrees()
-            assert flip is not None, "Requested calibration was not found!"
+            theta = cal.get_QR_rotation()
             assert theta is not None, "Requested calibration was not found!"
+            flip = cal.get_QR_flip()
+            flip = False if flip is None else flip
             # rotation matrix
             R = np.array(
                 [[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]]
             )
-            # apply
+            # rotate and flip
             if flip:
                 positions = R @ np.vstack((ans["qy"], ans["qx"]))
             else:

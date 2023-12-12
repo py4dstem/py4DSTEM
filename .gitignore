@@ -4,6 +4,7 @@
 *.swp
 *.ipynb_checkpoints*
 .vscode/
+pyrightconfig.json
 
 # Folders #
 .idea/
