@@ -26,6 +26,8 @@ There are many ways to contribute to py4DSTEM, including:
 
 * **Testing:** Ideally all new code should be accompanied by tests using pyTest framework; but at the least we require examples of old and new behaviour caused by the PR. For bug fixes this can be a block of code which currently fails and works with the proposed changes. For new workflows or extensive feature additions,we'd prefer a Jupyter notebook demonstrating the changes for an entire workflow i.e. from loading the input data and saving any processed results. 
 
+* **Dependencies:** Adding dependencies should be done so thoughtfully. Prioritize adding dependencies that are actively maintained, have permissive installation requirements, and are accessible through both pip and conda.
+
 ### Pull Requests
 
 When submitting a pull request, please:
