@@ -6,6 +6,7 @@ from fractions import Fraction
 from typing import Union, Optional
 from scipy.optimize import curve_fit
 import sys
+import warnings
 
 from emdfile import tqdmnd, PointList, PointListArray
 from py4DSTEM.process.utils import single_atom_scatter, electron_wavelength_angstrom
@@ -277,6 +278,7 @@ class Crystal:
         else:
             return crystal_strained
 
+    @staticmethod
     def from_ase(
         atoms,
     ):
@@ -293,7 +295,12 @@ class Crystal:
             if "occupancies" in atoms.arrays.keys()
             else None
         )
-        # TODO support getting it from atoms.info['occupancy'] dictionary
+
+        if "occupancy" in atoms.info.keys():
+            warnings.warn(
+                "This Atoms object contains occupancy information but it will be ignored."
+            )
+
         xtal = Crystal(
             positions=atoms.get_scaled_positions(),  # fractional coords
             numbers=atoms.numbers,
@@ -302,6 +309,7 @@ class Crystal:
         )
         return xtal
 
+    @staticmethod
     def from_prismatic(filepath):
         """
         Create a py4DSTEM Crystal object from an prismatic style xyz co-ordinate file
@@ -330,7 +338,10 @@ class Crystal:
         )
         return xtal
 
-    def from_CIF(CIF, conventional_standard_structure=True):
+    @staticmethod
+    def from_CIF(
+        CIF, primitive: bool = True, conventional_standard_structure: bool = True
+    ):
         """
         Create a Crystal object from a CIF file, using pymatgen to import the CIF
 
@@ -346,12 +357,13 @@ class Crystal:
 
         parser = CifParser(CIF)
 
-        structure = parser.get_structures()[0]
+        structure = parser.get_structures(primitive=primitive)[0]
 
         return Crystal.from_pymatgen_structure(
             structure, conventional_standard_structure=conventional_standard_structure
         )
 
+    @staticmethod
     def from_pymatgen_structure(
         structure=None,
         formula=None,
@@ -448,8 +460,6 @@ class Crystal:
                     else selected["structure"]
                 )
 
-        positions = structure.frac_coords  #: fractional atomic coordinates
-
         cell = np.array(
             [
                 structure.lattice.a,
@@ -461,10 +471,22 @@ class Crystal:
             ]
         )
 
-        numbers = np.array([s.species.elements[0].Z for s in structure])
+        site_data = np.array(
+            [
+                (*site.frac_coords, elem.number, comp)
+                for site in structure
+                for elem, comp in site.species.items()
+            ]
+        )
+        positions = site_data[:, :3]
+        numbers = site_data[:, 3]
+        occupancies = site_data[:, 4]
 
-        return Crystal(positions, numbers, cell)
+        return Crystal(
+            positions=positions, numbers=numbers, cell=cell, occupancy=occupancies
+        )
 
+    @staticmethod
     def from_unitcell_parameters(
         latt_params,
         elements,
