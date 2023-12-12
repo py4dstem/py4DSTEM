@@ -73,7 +73,7 @@ Thank you for your interest in contributing to py4DSTEM! We look forward to seei
    git checkout -b <branch-name>
    ```
 
-4. **_(Optional)_ Create an anaconda envrionment:** Environments are useful for a number of reasons. They create an isolated environment for each project or task, making it easy to reproduce results, manage dependencies, and collaborate with others. There are a number of different ways to use environments, including anaconda, pipenv, virtualenv, we reccomend [anaconda](https://docs.anaconda.com/free/anaconda/install/index.html).:
+4. **Create an anaconda envrionment:** Environments are useful for a number of reasons. They create an isolated environment for each project or task, making it easy to reproduce results, manage dependencies, and collaborate with others. There are a number of different ways to use environments, including anaconda, pipenv, virtualenv, we reccomend [anaconda](https://docs.anaconda.com/free/anaconda/install/index.html).:
 
    ```bash
    conda create -n py4dstem-dev python=3.10
