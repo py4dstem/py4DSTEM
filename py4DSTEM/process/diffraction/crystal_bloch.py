@@ -214,7 +214,9 @@ def calculate_dynamical_structure_factors(
 
     # Calculate structure factors
     struct_factors = np.sum(
-        f_e * self.occupancy[:,None] * np.exp(2.0j * np.pi * np.squeeze(self.positions[:, None, :] @ hkl)),
+        f_e
+        * self.occupancy[:, None]
+        * np.exp(2.0j * np.pi * np.squeeze(self.positions[:, None, :] @ hkl)),
         axis=0,
     )
 
