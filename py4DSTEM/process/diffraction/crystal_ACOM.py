@@ -1,8 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import os
 from typing import Union, Optional
-import time, sys
 from tqdm import tqdm
 
 from emdfile import tqdmnd, PointList, PointListArray
@@ -16,7 +14,7 @@ from numpy.linalg import lstsq
 
 try:
     import cupy as cp
-except ModuleNotFoundError:
+except (ModuleNotFoundError, ImportError):
     cp = None
 
 
@@ -31,6 +29,7 @@ def orientation_plan(
     corr_kernel_size: float = 0.08,
     radial_power: float = 1.0,
     intensity_power: float = 0.25,  # New default intensity power scaling
+    calculate_correlation_array=True,
     tol_peak_delete=None,
     tol_distance: float = 0.01,
     fiber_axis=None,
@@ -63,6 +62,8 @@ def orientation_plan(
         corr_kernel_size (float):        Correlation kernel size length in Angstroms
         radial_power (float):          Power for scaling the correlation intensity as a function of the peak radius
         intensity_power (float):       Power for scaling the correlation intensity as a function of the peak intensity
+        calculate_correlation_array (bool):     Set to false to skip calculating the correlation array.
+                                                This is useful when we only want the angular range / rotation matrices.
         tol_peak_delete (float):      Distance to delete peaks for multiple matches.
                                       Default is kernel_size * 0.5
         tol_distance (float):         Distance tolerance for radial shell assignment [1/Angstroms]
@@ -600,21 +601,6 @@ def orientation_plan(
     # init storage arrays
     self.orientation_rotation_angles = np.zeros((self.orientation_num_zones, 3))
     self.orientation_rotation_matrices = np.zeros((self.orientation_num_zones, 3, 3))
-    self.orientation_ref = np.zeros(
-        (
-            self.orientation_num_zones,
-            np.size(self.orientation_shell_radii),
-            self.orientation_in_plane_steps,
-        ),
-        dtype="float",
-    )
-    # self.orientation_ref_1D = np.zeros(
-    #     (
-    #         self.orientation_num_zones,
-    #         np.size(self.orientation_shell_radii),
-    #     ),
-    #     dtype="float",
-    # )
 
     # If possible,  Get symmetry operations for this spacegroup, store in matrix form
     if self.pymatgen_available:
@@ -699,65 +685,76 @@ def orientation_plan(
     k0 = np.array([0.0, 0.0, -1.0 / self.wavelength])
     n = np.array([0.0, 0.0, -1.0])
 
-    for a0 in tqdmnd(
-        np.arange(self.orientation_num_zones),
-        desc="Orientation plan",
-        unit=" zone axes",
-        disable=not progress_bar,
-    ):
-        # reciprocal lattice spots and excitation errors
-        g = self.orientation_rotation_matrices[a0, :, :].T @ self.g_vec_all
-        sg = self.excitation_errors(g)
+    if calculate_correlation_array:
+        # initialize empty correlation array
+        self.orientation_ref = np.zeros(
+            (
+                self.orientation_num_zones,
+                np.size(self.orientation_shell_radii),
+                self.orientation_in_plane_steps,
+            ),
+            dtype="float",
+        )
 
-        # Keep only points that will contribute to this orientation plan slice
-        keep = np.abs(sg) < self.orientation_kernel_size
+        for a0 in tqdmnd(
+            np.arange(self.orientation_num_zones),
+            desc="Orientation plan",
+            unit=" zone axes",
+            disable=not progress_bar,
+        ):
+            # reciprocal lattice spots and excitation errors
+            g = self.orientation_rotation_matrices[a0, :, :].T @ self.g_vec_all
+            sg = self.excitation_errors(g)
 
-        # in-plane rotation angle
-        phi = np.arctan2(g[1, :], g[0, :])
+            # Keep only points that will contribute to this orientation plan slice
+            keep = np.abs(sg) < self.orientation_kernel_size
 
-        # Loop over all peaks
-        for a1 in np.arange(self.g_vec_all.shape[1]):
-            ind_radial = self.orientation_shell_index[a1]
+            # in-plane rotation angle
+            phi = np.arctan2(g[1, :], g[0, :])
 
-            if keep[a1] and ind_radial >= 0:
-                # 2D orientation plan
-                self.orientation_ref[a0, ind_radial, :] += (
-                    np.power(self.orientation_shell_radii[ind_radial], radial_power)
-                    * np.power(self.struct_factors_int[a1], intensity_power)
-                    * np.maximum(
-                        1
-                        - np.sqrt(
-                            sg[a1] ** 2
-                            + (
-                                (
-                                    np.mod(
-                                        self.orientation_gamma - phi[a1] + np.pi,
-                                        2 * np.pi,
+            # Loop over all peaks
+            for a1 in np.arange(self.g_vec_all.shape[1]):
+                ind_radial = self.orientation_shell_index[a1]
+
+                if keep[a1] and ind_radial >= 0:
+                    # 2D orientation plan
+                    self.orientation_ref[a0, ind_radial, :] += (
+                        np.power(self.orientation_shell_radii[ind_radial], radial_power)
+                        * np.power(self.struct_factors_int[a1], intensity_power)
+                        * np.maximum(
+                            1
+                            - np.sqrt(
+                                sg[a1] ** 2
+                                + (
+                                    (
+                                        np.mod(
+                                            self.orientation_gamma - phi[a1] + np.pi,
+                                            2 * np.pi,
+                                        )
+                                        - np.pi
                                     )
-                                    - np.pi
+                                    * self.orientation_shell_radii[ind_radial]
                                 )
-                                * self.orientation_shell_radii[ind_radial]
+                                ** 2
                             )
-                            ** 2
+                            / self.orientation_kernel_size,
+                            0,
                         )
-                        / self.orientation_kernel_size,
-                        0,
                     )
-                )
 
-        orientation_ref_norm = np.sqrt(np.sum(self.orientation_ref[a0, :, :] ** 2))
-        if orientation_ref_norm > 0:
-            self.orientation_ref[a0, :, :] /= orientation_ref_norm
+            orientation_ref_norm = np.sqrt(np.sum(self.orientation_ref[a0, :, :] ** 2))
+            if orientation_ref_norm > 0:
+                self.orientation_ref[a0, :, :] /= orientation_ref_norm
 
-    # Maximum value
-    self.orientation_ref_max = np.max(np.real(self.orientation_ref))
+        # Maximum value
+        self.orientation_ref_max = np.max(np.real(self.orientation_ref))
 
-    # Fourier domain along angular axis
-    if self.CUDA:
-        self.orientation_ref = cp.asarray(self.orientation_ref)
-        self.orientation_ref = cp.conj(cp.fft.fft(self.orientation_ref))
-    else:
-        self.orientation_ref = np.conj(np.fft.fft(self.orientation_ref))
+        # Fourier domain along angular axis
+        if self.CUDA:
+            self.orientation_ref = cp.asarray(self.orientation_ref)
+            self.orientation_ref = cp.conj(cp.fft.fft(self.orientation_ref))
+        else:
+            self.orientation_ref = np.conj(np.fft.fft(self.orientation_ref))
 
 
 def match_orientations(
@@ -801,12 +798,12 @@ def match_orientations(
     )
 
     # check cal state
-    if bragg_peaks_array.calstate["ellipse"] == False:
+    if bragg_peaks_array.calstate["ellipse"] is False:
         ellipse = False
         warn("Warning: bragg peaks not elliptically calibrated")
     else:
         ellipse = True
-    if bragg_peaks_array.calstate["rotate"] == False:
+    if bragg_peaks_array.calstate["rotate"] is False:
         rotate = False
         warn("bragg peaks not rotationally calibrated")
     else:
@@ -905,7 +902,13 @@ def match_single_pattern(
         Figure handles for the plotting output
     """
 
-    # init orientation output
+    # adding assert statement for checking  self.orientation_ref is present
+    # adding assert statement for checking  self.orientation_ref is present
+    if not hasattr(self, "orientation_ref"):
+        raise ValueError(
+            "orientation_plan must be run with 'calculate_correlation_array=True'"
+        )
+
     orientation = Orientation(num_matches=num_matches_return)
     if bragg_peaks.data.shape[0] < min_number_peaks:
         return orientation
@@ -1837,7 +1840,9 @@ def cluster_grains(
             xr = np.clip(x + np.arange(-1, 2, dtype="int"), 0, sig.shape[0] - 1)
             yr = np.clip(y + np.arange(-1, 2, dtype="int"), 0, sig.shape[1] - 1)
             inds_cand = inds_all[xr[:, None], yr[None], :].ravel()
-            inds_cand = np.delete(inds_cand, mark.ravel()[inds_cand] == False)
+            inds_cand = np.delete(
+                inds_cand, mark.ravel()[inds_cand] == False  # noqa: E712
+            )
 
             if inds_cand.size == 0:
                 grow = False
@@ -1890,7 +1895,7 @@ def cluster_grains(
 
                 inds_grain = np.append(inds_grain, inds_cand[keep])
                 inds_cand = np.unique(
-                    np.delete(inds_new, mark.ravel()[inds_new] == False)
+                    np.delete(inds_new, mark.ravel()[inds_new] == False)  # noqa: E712
                 )
 
                 if inds_cand.size == 0:
@@ -2080,12 +2085,12 @@ def calculate_strain(
     radius_max_2 = corr_kernel_size**2
 
     # check cal state
-    if bragg_peaks_array.calstate["ellipse"] == False:
+    if bragg_peaks_array.calstate["ellipse"] is False:
         ellipse = False
         warn("bragg peaks not elliptically calibrated")
     else:
         ellipse = True
-    if bragg_peaks_array.calstate["rotate"] == False:
+    if bragg_peaks_array.calstate["rotate"] is False:
         rotate = False
         warn("bragg peaks not rotationally calibrated")
     else:

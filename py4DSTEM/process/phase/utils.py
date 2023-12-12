@@ -8,7 +8,7 @@ from scipy.optimize import curve_fit
 try:
     import cupy as cp
     from cupyx.scipy.fft import rfft
-except ImportError:
+except (ImportError, ModuleNotFoundError):
     cp = None
     from scipy.fft import dstn, idstn
 
@@ -1543,46 +1543,84 @@ def regularize_probe_amplitude(
 def aberrations_basis_function(
     probe_size,
     probe_sampling,
+    energy,
     max_angular_order,
     max_radial_order,
     xp=np,
 ):
     """ """
+
+    # Add constant phase shift in basis
+    mn = [[-1, 0, 0]]
+
+    for m in range(1, max_radial_order):
+        n_max = np.minimum(max_angular_order, m + 1)
+        for n in range(0, n_max + 1):
+            if (m + n) % 2:
+                mn.append([m, n, 0])
+                if n > 0:
+                    mn.append([m, n, 1])
+
+    aberrations_mn = np.array(mn)
+    aberrations_mn = aberrations_mn[np.argsort(aberrations_mn[:, 1]), :]
+
+    sub = aberrations_mn[:, 1] > 0
+    aberrations_mn[sub, :] = aberrations_mn[sub, :][
+        np.argsort(aberrations_mn[sub, 0]), :
+    ]
+    aberrations_mn[~sub, :] = aberrations_mn[~sub, :][
+        np.argsort(aberrations_mn[~sub, 0]), :
+    ]
+    aberrations_num = aberrations_mn.shape[0]
+
     sx, sy = probe_size
     dx, dy = probe_sampling
+    wavelength = electron_wavelength_angstrom(energy)
+
     qx = xp.fft.fftfreq(sx, dx)
     qy = xp.fft.fftfreq(sy, dy)
+    qr2 = qx[:, None] ** 2 + qy[None, :] ** 2
+    alpha = xp.sqrt(qr2) * wavelength
+    theta = xp.arctan2(qy[None, :], qx[:, None])
 
-    qxa, qya = xp.meshgrid(qx, qy, indexing="ij")
-    q2 = qxa**2 + qya**2
-    theta = xp.arctan2(qya, qxa)
+    # Aberration basis
+    aberrations_basis = xp.ones((alpha.size, aberrations_num))
 
-    basis = []
-    index = []
+    # Skip constant to avoid dividing by zero in normalization
+    for a0 in range(1, aberrations_num):
+        m, n, a = aberrations_mn[a0]
+        if n == 0:
+            # Radially symmetric basis
+            aberrations_basis[:, a0] = (alpha ** (m + 1) / (m + 1)).ravel()
 
-    for n in range(max_angular_order + 1):
-        for m in range((max_radial_order - n) // 2 + 1):
-            basis.append((q2 ** (m + n / 2) * np.cos(n * theta)))
-            index.append((m, n, 0))
-            if n > 0:
-                basis.append((q2 ** (m + n / 2) * np.sin(n * theta)))
-                index.append((m, n, 1))
+        elif a == 0:
+            # cos coef
+            aberrations_basis[:, a0] = (
+                alpha ** (m + 1) * xp.cos(n * theta) / (m + 1)
+            ).ravel()
+        else:
+            # sin coef
+            aberrations_basis[:, a0] = (
+                alpha ** (m + 1) * xp.sin(n * theta) / (m + 1)
+            ).ravel()
 
-    basis = xp.array(basis)
+    # global scaling
+    aberrations_basis *= 2 * np.pi / wavelength
 
-    return basis, index
+    return aberrations_basis, aberrations_mn
 
 
 def fit_aberration_surface(
     complex_probe,
     probe_sampling,
+    energy,
     max_angular_order,
     max_radial_order,
     xp=np,
 ):
     """ """
     probe_amp = xp.abs(complex_probe)
-    probe_angle = xp.angle(complex_probe)
+    probe_angle = -xp.angle(complex_probe)
 
     if xp is np:
         probe_angle = probe_angle.astype(np.float64)
@@ -1592,21 +1630,47 @@ def fit_aberration_surface(
         unwrapped_angle = unwrap_phase(probe_angle, wrap_around=True)
         unwrapped_angle = xp.asarray(unwrapped_angle).astype(xp.float32)
 
-    basis, _ = aberrations_basis_function(
+    raveled_basis, _ = aberrations_basis_function(
         complex_probe.shape,
         probe_sampling,
+        energy,
         max_angular_order,
         max_radial_order,
         xp=xp,
     )
 
-    raveled_basis = basis.reshape((basis.shape[0], -1))
     raveled_weights = probe_amp.ravel()
 
-    Aw = raveled_basis.T * raveled_weights[:, None]
+    Aw = raveled_basis * raveled_weights[:, None]
     bw = unwrapped_angle.ravel() * raveled_weights
     coeff = xp.linalg.lstsq(Aw, bw, rcond=None)[0]
 
-    fitted_angle = xp.tensordot(coeff, basis, axes=1)
+    fitted_angle = xp.tensordot(raveled_basis, coeff, axes=1).reshape(probe_angle.shape)
 
     return fitted_angle, coeff
+
+
+def rotate_point(origin, point, angle):
+    """
+    Rotate a point (x1, y1) counterclockwise by a given angle around
+    a given origin (x0, y0).
+
+    Parameters
+    --------
+    origin: 2-tuple of floats
+        (x0, y0)
+    point: 2-tuple of floats
+        (x1, y1)
+    angle: float (radians)
+
+    Returns
+    --------
+    rotated points (2-tuple)
+
+    """
+    ox, oy = origin
+    px, py = point
+
+    qx = ox + np.cos(angle) * (px - ox) - np.sin(angle) * (py - oy)
+    qy = oy + np.sin(angle) * (px - ox) + np.cos(angle) * (py - oy)
+    return qx, qy

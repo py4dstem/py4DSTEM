@@ -205,6 +205,7 @@ class Calibration(Metadata):
         self["R_pixel_size"] = 1
         self["Q_pixel_units"] = "pixels"
         self["R_pixel_units"] = "pixels"
+        self["QR_flip"] = False
 
     # EMD root property
     @property
@@ -233,7 +234,7 @@ class Calibration(Metadata):
         """
         from py4DSTEM.data import Data
 
-        assert isinstance(data, Data), f"data must be a Data instance"
+        assert isinstance(data, Data), "data must be a Data instance"
         self.root.attach(data)
 
     # Register for auto-calibration
@@ -315,7 +316,7 @@ class Calibration(Metadata):
             "pixels",
             "A^-1",
             "mrad",
-        ), f"Q pixel units must be 'A^-1', 'mrad' or 'pixels'."
+        ), "Q pixel units must be 'A^-1', 'mrad' or 'pixels'."
         self._params["Q_pixel_units"] = x
 
     def get_Q_pixel_units(self):
@@ -667,7 +668,16 @@ class Calibration(Metadata):
     # Q/R-space rotation and flip
 
     @call_calibrate
+    def set_QR_rotation(self, x):
+        self._params["QR_rotation"] = x
+        self._params["QR_rotation_degrees"] = np.degrees(x)
+
+    def get_QR_rotation(self):
+        return self._get_value("QR_rotation")
+
+    @call_calibrate
     def set_QR_rotation_degrees(self, x):
+        self._params["QR_rotation"] = np.radians(x)
         self._params["QR_rotation_degrees"] = x
 
     def get_QR_rotation_degrees(self):
@@ -689,10 +699,31 @@ class Calibration(Metadata):
                 flip (bool): True indicates a Q/R axes flip
         """
         rot, flip = rot_flip
+        self._params["QR_rotation"] = rot
+        self._params["QR_rotation_degrees"] = np.degrees(rot)
+        self._params["QR_flip"] = flip
+
+    @call_calibrate
+    def set_QR_rotflip_degrees(self, rot_flip):
+        """
+        Args:
+            rot_flip (tuple), (rot, flip) where:
+                rot (number): rotation in degrees
+                flip (bool): True indicates a Q/R axes flip
+        """
+        rot, flip = rot_flip
+        self._params["QR_rotation"] = np.radians(rot)
         self._params["QR_rotation_degrees"] = rot
         self._params["QR_flip"] = flip
 
     def get_QR_rotflip(self):
+        rot = self.get_QR_rotation()
+        flip = self.get_QR_flip()
+        if rot is None or flip is None:
+            return None
+        return (rot, flip)
+
+    def get_QR_rotflip_degrees(self):
         rot = self.get_QR_rotation_degrees()
         flip = self.get_QR_flip()
         if rot is None or flip is None:

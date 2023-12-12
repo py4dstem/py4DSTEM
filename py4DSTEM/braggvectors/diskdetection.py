@@ -231,10 +231,10 @@ def find_Bragg_disks(
         mode = "dc_ml"
 
     elif mode == "datacube":
-        if distributed is None and CUDA == False:
+        if distributed is None and CUDA is False:
             mode = "dc_CPU"
-        elif distributed is None and CUDA == True:
-            if CUDA_batched == False:
+        elif distributed is None and CUDA is True:
+            if CUDA_batched is False:
                 mode = "dc_GPU"
             else:
                 mode = "dc_GPU_batched"
@@ -271,7 +271,7 @@ def find_Bragg_disks(
         kws["data_file"] = data_file
         kws["cluster_path"] = cluster_path
     # ML arguments
-    if ML == True:
+    if ML is True:
         kws["CUDA"] = CUDA
         kws["model_path"] = ml_model_path
         kws["num_attempts"] = ml_num_attempts
@@ -759,7 +759,7 @@ def _parse_distributed(distributed):
     data_file = distributed["data_file"]
 
     if not isinstance(data_file, str):
-        er = f"Expected string for distributed key 'data_file', "
+        er = "Expected string for distributed key 'data_file', "
         er += f"received {type(data_file)}"
         raise TypeError(er)
     if len(data_file.strip()) == 0:
@@ -773,7 +773,7 @@ def _parse_distributed(distributed):
         cluster_path = distributed["cluster_path"]
 
         if not isinstance(cluster_path, str):
-            er = f"distributed key 'cluster_path' must be of type str, "
+            er = "distributed key 'cluster_path' must be of type str, "
             er += f"received {type(cluster_path)}"
             raise TypeError(er)
 
@@ -784,7 +784,7 @@ def _parse_distributed(distributed):
             er = f"distributed key 'cluster_path' does not exist: {cluster_path}"
             raise FileNotFoundError(er)
         elif not os.path.isdir(cluster_path):
-            er = f"distributed key 'cluster_path' is not a directory: "
+            er = "distributed key 'cluster_path' is not a directory: "
             er += f"{cluster_path}"
             raise NotADirectoryError(er)
     else:

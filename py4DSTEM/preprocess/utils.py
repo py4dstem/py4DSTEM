@@ -5,7 +5,7 @@ from scipy.ndimage import gaussian_filter
 
 try:
     import cupy as cp
-except ModuleNotFoundError:
+except (ModuleNotFoundError, ImportError):
     cp = np
 
 
@@ -293,7 +293,7 @@ def filter_2D_maxima(
     if minSpacing > 0:
         deletemask = np.zeros(len(maxima), dtype=bool)
         for i in range(len(maxima)):
-            if deletemask[i] == False:
+            if deletemask[i] == False:  # noqa: E712
                 tooClose = (
                     (maxima["x"] - maxima["x"][i]) ** 2
                     + (maxima["y"] - maxima["y"][i]) ** 2

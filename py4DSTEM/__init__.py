@@ -52,17 +52,25 @@ from py4DSTEM.braggvectors import (
     BraggVectorMap,
 )
 
+from py4DSTEM.process import classification
+
+
+# diffraction
+from py4DSTEM.process.diffraction import Crystal, Orientation
+
+
+# ptycho
+from py4DSTEM.process import phase
+
+
+# polar
+from py4DSTEM.process.polar import PolarDatacube
+
+
 # strain
-from py4DSTEM.process import StrainMap
+from py4DSTEM.process.strain.strain import StrainMap
 
-# TODO - crystal
-# TODO - ptycho
-# TODO - others
-
-# TODO - where
-from py4DSTEM.process import (
-    PolarDatacube,
-)
+from py4DSTEM.process import wholepatternfit
 
 
 ### more submodules
