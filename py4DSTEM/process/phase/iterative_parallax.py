@@ -1688,7 +1688,7 @@ class ParallaxReconstruction(PhaseReconstruction):
             )
 
             figsize = kwargs.pop("figsize", (4 * ncols, sum(height_ratios)))
-            cmap = kwargs.pop("cmap", "RdBu_r" if self._normalized_stack else "magma")
+            cmap = kwargs.pop("cmap", "gray")
             fig = plt.figure(figsize=figsize)
 
             row_index = 0
@@ -2671,7 +2671,7 @@ class ParallaxReconstruction(PhaseReconstruction):
         # plotting
         if plot_corrected_phase:
             figsize = kwargs.pop("figsize", (6, 6))
-            cmap = kwargs.pop("cmap", "RdBu_r" if self._normalized_stack else "magma")
+            cmap = kwargs.pop("cmap", "gray")
 
             fig, ax = plt.subplots(figsize=figsize)
 
@@ -2768,7 +2768,7 @@ class ParallaxReconstruction(PhaseReconstruction):
             )
 
             figsize = kwargs.pop("figsize", (4 * ncols, 4 * nrows))
-            cmap = kwargs.pop("cmap", "RdBu_r" if self._normalized_stack else "magma")
+            cmap = kwargs.pop("cmap", "gray")
 
             fig = plt.figure(figsize=figsize)
 
@@ -2899,7 +2899,7 @@ class ParallaxReconstruction(PhaseReconstruction):
 
         """
 
-        cmap = kwargs.pop("cmap", "RdBu_r" if self._normalized_stack else "magma")
+        cmap = kwargs.pop("cmap", "gray")
 
         if upsampled:
             cropped_object = self._crop_padded_object(
