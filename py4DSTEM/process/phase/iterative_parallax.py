@@ -706,11 +706,9 @@ class ParallaxReconstruction(PhaseReconstruction):
 
         if plot_average_bf:
             figsize = kwargs.pop("figsize", (8, 4))
-            cmap = kwargs.pop("cmap", "RdBu_r" if self._normalized_stack else "magma")
-
             fig, ax = plt.subplots(1, 2, figsize=figsize)
 
-            self._visualize_figax(fig, ax[0], cmap=cmap, **kwargs)
+            self._visualize_figax(fig, ax[0], **kwargs)
 
             ax[0].set_ylabel("x [A]")
             ax[0].set_xlabel("y [A]")
@@ -823,7 +821,6 @@ class ParallaxReconstruction(PhaseReconstruction):
             figsize = kwargs.get(
                 "figsize", (4 * num_defocus_values, 4 * num_angle_values)
             )
-            cmap = kwargs.pop("cmap", "RdBu_r" if self._normalized_stack else "magma")
 
             fig = plt.figure(figsize=figsize)
 
@@ -847,7 +844,6 @@ class ParallaxReconstruction(PhaseReconstruction):
                 self._visualize_figax(
                     fig,
                     ax=object_ax,
-                    cmap=cmap,
                     **kwargs,
                 )
 
@@ -1047,7 +1043,6 @@ class ParallaxReconstruction(PhaseReconstruction):
 
                 figsize = kwargs.pop("figsize", (4 * ncols, 4 * nrows))
 
-            cmap = kwargs.pop("cmap", "RdBu_r" if self._normalized_stack else "magma")
             fig = plt.figure(figsize=figsize)
 
         xy_center = (self._xy_inds - xp.median(self._xy_inds, axis=0)).astype("float")
@@ -2904,7 +2899,7 @@ class ParallaxReconstruction(PhaseReconstruction):
 
         """
 
-        cmap = kwargs.pop("cmap", "magma")
+        cmap = kwargs.pop("cmap", "RdBu_r" if self._normalized_stack else "magma")
 
         if upsampled:
             cropped_object = self._crop_padded_object(
