@@ -884,7 +884,7 @@ def _get_latest_model(model_path=None):
             + "https://www.tensorflow.org/install"
             + "for more information"
         )
-    from py4DSTEM.io.google_drive_downloader import download_file_from_google_drive
+    from py4DSTEM.io.google_drive_downloader import gdrive_download
 
     tf.keras.backend.clear_session()
 
@@ -894,7 +894,7 @@ def _get_latest_model(model_path=None):
         except:
             pass
         # download the json file with the meta data
-        download_file_from_google_drive("FCU-Net", "./tmp/model_metadata.json")
+        gdrive_download("1-KX0saEYfhZ9IJAOwabH38PCVtfXidJi", destination="./tmp/", filename="model_metadata.json")
         with open("./tmp/model_metadata.json") as f:
             metadata = json.load(f)
             file_id = metadata["file_id"]
@@ -918,7 +918,11 @@ def _get_latest_model(model_path=None):
         else:
             print("Checking the latest model on the cloud... \n")
             filename = file_path + file_type
-            download_file_from_google_drive(file_id, filename)
+            print(f"{file_path = }")
+            print(f"{filename = }")
+            from pathlib import Path
+            filename = Path(filename)
+            gdrive_download(file_id, destination='./tmp', filename=filename.name)
             try:
                 shutil.unpack_archive(filename, "./tmp", format="zip")
             except:
