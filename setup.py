@@ -48,13 +48,13 @@ setup(
         "cuda": ["cupy >= 10.0.0"],
         "acom": ["pymatgen >= 2022", "mp-api == 0.24.1"],
         "aiml": [
-            "tensorflow == 2.8.0",
+            "tensorflow <= 2.10.0",
             "tensorflow-addons <= 0.16.1",
             "crystal4D",
             "typeguard == 2.7",
         ],
         "aiml-cuda": [
-            "tensorflow == 2.8.0",
+            "tensorflow <= 2.10.0",
             "tensorflow-addons <= 0.16.1",
             "crystal4D",
             "cupy >= 10.0.0",
