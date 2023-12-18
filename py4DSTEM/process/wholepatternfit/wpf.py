@@ -507,20 +507,7 @@ class WholePatternFit:
         lattices = [m for m in self.model if WPFModelType.LATTICE in m.model_type]
         strain_maps = []
 
-        for lat in lattices[0:2]:
-            # init empty strain map
-            strain = RealSlice(
-                name = lat.name,
-                data = np.empty(
-                    (
-                        6,
-                        self.datacube.Rshape[0],
-                        self.datacube.Rshape[1],
-                    )
-                ),
-                slicelabels = ["e_xx", "e_yy", "e_xy", "theta", "mask", "error"],
-            )
-
+        for lat in lattices:
             # Construct the stack of lattice vectors
             g1g2_map = RealSlice(
                 np.stack(
@@ -550,28 +537,9 @@ class WholePatternFit:
             )
 
             # calculate strain
-            strainmap_g1g2 = get_strain_from_reference_g1g2(self.g1g2_map, g1_ref, g2_ref)
-
-        # g_maps = []
-        # for lat in lattices:
-        #     data = np.stack(
-        #         [
-        #             self.fit_data.data[lat.params["ux"].offset],
-        #             self.fit_data.data[lat.params["uy"].offset],
-        #             self.fit_data.data[lat.params["vx"].offset],
-        #             self.fit_data.data[lat.params["vy"].offset],
-        #             self.fit_metrics["status"].data
-        #             >= 0,  # negative status indicates fit error
-        #         ],
-        #         axis=0,
-        #     )
-
-        #     g_map = RealSlice(
-        #         data,
-        #         slicelabels=["g1x", "g1y", "g2x", "g2y", "mask"],
-        #         name=lat.name,
-        #     )
-        #     g_maps.append(g_map)
+            strain_maps.append(
+                get_strain_from_reference_g1g2(g1g2_map, g1_ref, g2_ref),
+            )
 
         return strain_maps
 
