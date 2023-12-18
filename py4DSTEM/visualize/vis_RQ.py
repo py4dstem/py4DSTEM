@@ -2,27 +2,49 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
 
-from py4DSTEM.visualize.show import show,show_points
+from py4DSTEM.visualize.show import show, show_points
 
 
-
-def show_selected_dp(datacube,image,rx,ry,figsize=(12,6),returnfig=False,
-                     pointsize=50,pointcolor='r',scaling='log',**kwargs):
-    """
-    """
-    dp = datacube.data[rx,ry,:,:]
-    fig,(ax1,ax2) = plt.subplots(1,2,figsize=figsize)
-    _,_=show_points(image,rx,ry,scale=pointsize,pointcolor=pointcolor,figax=(fig,ax1),returnfig=True)
-    _,_=show(dp,figax=(fig,ax2),scaling=scaling,returnfig=True)
+def show_selected_dp(
+    datacube,
+    image,
+    rx,
+    ry,
+    figsize=(12, 6),
+    returnfig=False,
+    pointsize=50,
+    pointcolor="r",
+    scaling="log",
+    **kwargs,
+):
+    """ """
+    dp = datacube.data[rx, ry, :, :]
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=figsize)
+    _, _ = show_points(
+        image,
+        rx,
+        ry,
+        scale=pointsize,
+        pointcolor=pointcolor,
+        figax=(fig, ax1),
+        returnfig=True,
+    )
+    _, _ = show(dp, figax=(fig, ax2), scaling=scaling, returnfig=True)
     if not returnfig:
         plt.show()
         return
     else:
-        return fig,(ax1,ax2)
+        return fig, (ax1, ax2)
 
-def show_RQ(realspace_image, diffractionspace_image,
-            realspace_pdict={}, diffractionspace_pdict={'scaling':'log'},
-            figsize=(12,6),returnfig=False):
+
+def show_RQ(
+    realspace_image,
+    diffractionspace_image,
+    realspace_pdict={},
+    diffractionspace_pdict={"scaling": "log"},
+    figsize=(12, 6),
+    returnfig=False,
+):
     """
     Shows side-by-side real/reciprocal space images.
 
@@ -33,16 +55,17 @@ def show_RQ(realspace_image, diffractionspace_image,
                                     to the show() fn for the real space image
         diffractionspace_pdict      (dictionary)
     """
-    fig,(ax1,ax2) = plt.subplots(1,2,figsize=figsize)
-    show(realspace_image,figax=(fig,ax1),**realspace_pdict)
-    show(diffractionspace_image,figax=(fig,ax2),**diffractionspace_pdict)
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=figsize)
+    show(realspace_image, figax=(fig, ax1), **realspace_pdict)
+    show(diffractionspace_image, figax=(fig, ax2), **diffractionspace_pdict)
     if not returnfig:
         plt.show()
         return
     else:
-        return fig,(ax1,ax2)
+        return fig, (ax1, ax2)
 
-def ax_addvector(ax,vx,vy,vlength,x0,y0,width=1,color='r'):
+
+def ax_addvector(ax, vx, vy, vlength, x0, y0, width=1, color="r"):
     """
     Adds a vector to the subplot at ax.
 
@@ -54,11 +77,12 @@ def ax_addvector(ax,vx,vy,vlength,x0,y0,width=1,color='r'):
         vlength                     (number) the vector length
         x0,y0                       (numbers) the origin / vector tail position
     """
-    vL = np.hypot(vx,vy)
-    vx,vy = vlength*vx/vL,vlength*vy/vL
-    ax.arrow(y0,x0,vy,vx,color=color,width=width,length_includes_head=True)
+    vL = np.hypot(vx, vy)
+    vx, vy = vlength * vx / vL, vlength * vy / vL
+    ax.arrow(y0, x0, vy, vx, color=color, width=width, length_includes_head=True)
 
-def ax_addvector_RtoQ(ax,vx,vy,vlength,x0,y0,QR_rotation,width=1,color='r'):
+
+def ax_addvector_RtoQ(ax, vx, vy, vlength, x0, y0, QR_rotation, width=1, color="r"):
     """
     Adds a vector to the subplot at ax, where the vector (vx,vy) passed
     to the function is in real space and the plotted vector is transformed
@@ -79,11 +103,13 @@ def ax_addvector_RtoQ(ax,vx,vy,vlength,x0,y0,QR_rotation,width=1,color='r'):
                                     with respect to diffraction space. In degrees.
     """
     from py4DSTEM.process.calibration.rotation import get_Qvector_from_Rvector
-    _,_,vx,vy = get_Qvector_from_Rvector(vx,vy,QR_rotation)
-    vx,vy = vx*vlength,vy*vlength
-    ax.arrow(y0,x0,vy,vx,color=color,width=width,length_includes_head=True)
 
-def ax_addvector_QtoR(ax,vx,vy,vlength,x0,y0,QR_rotation,width=1,color='r'):
+    _, _, vx, vy = get_Qvector_from_Rvector(vx, vy, QR_rotation)
+    vx, vy = vx * vlength, vy * vlength
+    ax.arrow(y0, x0, vy, vx, color=color, width=width, length_includes_head=True)
+
+
+def ax_addvector_QtoR(ax, vx, vy, vlength, x0, y0, QR_rotation, width=1, color="r"):
     """
     Adds a vector to the subplot at ax, where the vector (vx,vy) passed
     to the function is in reciprocal space and the plotted vector is
@@ -103,17 +129,34 @@ def ax_addvector_QtoR(ax,vx,vy,vlength,x0,y0,QR_rotation,width=1,color='r'):
                                     with respect to diffraction space. In degrees.
     """
     from py4DSTEM.process.calibration.rotation import get_Rvector_from_Qvector
-    vx,vy,_,_ = get_Rvector_from_Qvector(vx,vy,QR_rotation)
-    vx,vy = vx*vlength,vy*vlength
-    ax.arrow(y0,x0,vy,vx,color=color,width=width,length_includes_head=True)
 
-def show_RQ_vector(realspace_image, diffractionspace_image,
-                   realspace_pdict, diffractionspace_pdict,
-                   vx,vy,vlength_R,vlength_Q,x0_R,y0_R,x0_Q,y0_Q,
-                   QR_rotation,vector_space='R',
-                   width_R=1,color_R='r',
-                   width_Q=1,color_Q='r',
-                   figsize=(12,6),returnfig=False):
+    vx, vy, _, _ = get_Rvector_from_Qvector(vx, vy, QR_rotation)
+    vx, vy = vx * vlength, vy * vlength
+    ax.arrow(y0, x0, vy, vx, color=color, width=width, length_includes_head=True)
+
+
+def show_RQ_vector(
+    realspace_image,
+    diffractionspace_image,
+    realspace_pdict,
+    diffractionspace_pdict,
+    vx,
+    vy,
+    vlength_R,
+    vlength_Q,
+    x0_R,
+    y0_R,
+    x0_Q,
+    y0_Q,
+    QR_rotation,
+    vector_space="R",
+    width_R=1,
+    color_R="r",
+    width_Q=1,
+    color_Q="r",
+    figsize=(12, 6),
+    returnfig=False,
+):
     """
     Shows side-by-side real/reciprocal space images with a vector
     overlaid in each showing corresponding directions.
@@ -142,29 +185,70 @@ def show_RQ_vector(realspace_image, diffractionspace_image,
                                     function describes a real or diffracation
                                     space vector.
     """
-    assert(vector_space in ('R','Q'))
-    fig,(ax1,ax2) = show_RQ(realspace_image, diffractionspace_image,
-                            realspace_pdict, diffractionspace_pdict,
-                            figsize=figsize,returnfig=True)
-    if vector_space=='R':
-        ax_addvector(ax1,vx,vy,vlength_R,x0_R,y0_R,width=width_R,color=color_R)
-        ax_addvector_RtoQ(ax2,vx,vy,vlength_Q,x0_Q,y0_Q,QR_rotation,width=width_Q,color=color_Q)
+    assert vector_space in ("R", "Q")
+    fig, (ax1, ax2) = show_RQ(
+        realspace_image,
+        diffractionspace_image,
+        realspace_pdict,
+        diffractionspace_pdict,
+        figsize=figsize,
+        returnfig=True,
+    )
+    if vector_space == "R":
+        ax_addvector(ax1, vx, vy, vlength_R, x0_R, y0_R, width=width_R, color=color_R)
+        ax_addvector_RtoQ(
+            ax2,
+            vx,
+            vy,
+            vlength_Q,
+            x0_Q,
+            y0_Q,
+            QR_rotation,
+            width=width_Q,
+            color=color_Q,
+        )
     else:
-        ax_addvector(ax2,vx,vy,vlength_Q,x0_Q,y0_Q,width=width_Q,color=color_Q)
-        ax_addvector_QtoR(ax1,vx,vy,vlength_R,x0_R,y0_R,QR_rotation,width=width_R,color=color_R)
+        ax_addvector(ax2, vx, vy, vlength_Q, x0_Q, y0_Q, width=width_Q, color=color_Q)
+        ax_addvector_QtoR(
+            ax1,
+            vx,
+            vy,
+            vlength_R,
+            x0_R,
+            y0_R,
+            QR_rotation,
+            width=width_R,
+            color=color_R,
+        )
     if not returnfig:
         plt.show()
         return
     else:
-        return fig,(ax1,ax2)
+        return fig, (ax1, ax2)
 
-def show_RQ_vectors(realspace_image, diffractionspace_image,
-                    realspace_pdict, diffractionspace_pdict,
-                    vx,vy,vlength_R,vlength_Q,x0_R,y0_R,x0_Q,y0_Q,
-                    QR_rotation,vector_space='R',
-                    width_R=1,color_R='r',
-                    width_Q=1,color_Q='r',
-                    figsize=(12,6),returnfig=False):
+
+def show_RQ_vectors(
+    realspace_image,
+    diffractionspace_image,
+    realspace_pdict,
+    diffractionspace_pdict,
+    vx,
+    vy,
+    vlength_R,
+    vlength_Q,
+    x0_R,
+    y0_R,
+    x0_Q,
+    y0_Q,
+    QR_rotation,
+    vector_space="R",
+    width_R=1,
+    color_R="r",
+    width_Q=1,
+    color_Q="r",
+    figsize=(12, 6),
+    returnfig=False,
+):
     """
     Shows side-by-side real/reciprocal space images with several vectors
     overlaid in each showing corresponding directions.
@@ -193,35 +277,57 @@ def show_RQ_vectors(realspace_image, diffractionspace_image,
                                     function describes a real or diffracation
                                     space vector.
     """
-    assert(vector_space in ('R','Q'))
-    assert(len(vx)==len(vy))
-    if isinstance(color_R,tuple) or isinstance(color_R,list):
-       assert(len(vx)==len(color_R))
+    assert vector_space in ("R", "Q")
+    assert len(vx) == len(vy)
+    if isinstance(color_R, tuple) or isinstance(color_R, list):
+        assert len(vx) == len(color_R)
     else:
-        color_R =[color_R for i in range(len(vx))]
-    if isinstance(color_Q,tuple) or isinstance(color_Q,list):
-       assert(len(vx)==len(color_Q))
+        color_R = [color_R for i in range(len(vx))]
+    if isinstance(color_Q, tuple) or isinstance(color_Q, list):
+        assert len(vx) == len(color_Q)
     else:
-        color_Q =[color_Q for i in range(len(vx))]
+        color_Q = [color_Q for i in range(len(vx))]
 
-    fig,(ax1,ax2) = show_RQ(realspace_image, diffractionspace_image,
-                            realspace_pdict, diffractionspace_pdict,
-                            figsize=figsize,returnfig=True)
-    for x,y,cR,cQ in zip(vx,vy,color_R,color_Q):
-        if vector_space=='R':
-            ax_addvector(ax1,x,y,vlength_R,x0_R,y0_R,width=width_R,color=cR)
-            ax_addvector_RtoQ(ax2,x,y,vlength_Q,x0_Q,y0_Q,QR_rotation,width=width_Q,color=cQ)
+    fig, (ax1, ax2) = show_RQ(
+        realspace_image,
+        diffractionspace_image,
+        realspace_pdict,
+        diffractionspace_pdict,
+        figsize=figsize,
+        returnfig=True,
+    )
+    for x, y, cR, cQ in zip(vx, vy, color_R, color_Q):
+        if vector_space == "R":
+            ax_addvector(ax1, x, y, vlength_R, x0_R, y0_R, width=width_R, color=cR)
+            ax_addvector_RtoQ(
+                ax2, x, y, vlength_Q, x0_Q, y0_Q, QR_rotation, width=width_Q, color=cQ
+            )
         else:
-            ax_addvector(ax2,x,y,vlength_Q,x0_Q,y0_Q,width=width_Q,color=cQ)
-            ax_addvector_QtoR(ax1,x,y,vlength_R,x0_R,y0_R,QR_rotation,width=width_R,color=cR)
+            ax_addvector(ax2, x, y, vlength_Q, x0_Q, y0_Q, width=width_Q, color=cQ)
+            ax_addvector_QtoR(
+                ax1, x, y, vlength_R, x0_R, y0_R, QR_rotation, width=width_R, color=cR
+            )
     if not returnfig:
         plt.show()
         return
     else:
-        return fig,(ax1,ax2)
+        return fig, (ax1, ax2)
 
-def ax_addaxes(ax,vx,vy,vlength,x0,y0,width=1,color='r',labelaxes=True,
-               labelsize=12,labelcolor='r',righthandedcoords=True):
+
+def ax_addaxes(
+    ax,
+    vx,
+    vy,
+    vlength,
+    x0,
+    y0,
+    width=1,
+    color="r",
+    labelaxes=True,
+    labelsize=12,
+    labelcolor="r",
+    righthandedcoords=True,
+):
     """
     Adds a pair of x/y axes to the matplotlib subplot ax. The user supplies
     the x-axis direction with (vx,vy), and the y-axis is then chosen
@@ -239,26 +345,39 @@ def ax_addaxes(ax,vx,vy,vlength,x0,y0,width=1,color='r',labelaxes=True,
                                     with respect to x-axis
     """
     # Get the x-axis
-    vL = np.hypot(vx,vy)
-    xaxis_x,xaxis_y = vlength*vx/vL,vlength*vy/vL
+    vL = np.hypot(vx, vy)
+    xaxis_x, xaxis_y = vlength * vx / vL, vlength * vy / vL
     # Get the y-axes
     if righthandedcoords:
-        yaxis_x,yaxis_y = -xaxis_y,xaxis_x
+        yaxis_x, yaxis_y = -xaxis_y, xaxis_x
     else:
-        yaxis_x,yaxis_y = xaxis_y,-xaxis_x
-    ax_addvector(ax,xaxis_x,xaxis_y,vlength,x0,y0,width=width,color=color)
-    ax_addvector(ax,yaxis_x,yaxis_y,vlength,x0,y0,width=width,color=color)
+        yaxis_x, yaxis_y = xaxis_y, -xaxis_x
+    ax_addvector(ax, xaxis_x, xaxis_y, vlength, x0, y0, width=width, color=color)
+    ax_addvector(ax, yaxis_x, yaxis_y, vlength, x0, y0, width=width, color=color)
     # Label axes:
     if labelaxes:
-        xaxislabel_x = x0 + 1.1*xaxis_x
+        xaxislabel_x = x0 + 1.1 * xaxis_x
         xaxislabel_y = y0 + xaxis_y
         yaxislabel_x = x0 + yaxis_x
-        yaxislabel_y = y0 + 1.1*yaxis_y
-        ax.text(xaxislabel_y,xaxislabel_x,'x',color=labelcolor,size=labelsize)
-        ax.text(yaxislabel_y,yaxislabel_x,'y',color=labelcolor,size=labelsize)
+        yaxislabel_y = y0 + 1.1 * yaxis_y
+        ax.text(xaxislabel_y, xaxislabel_x, "x", color=labelcolor, size=labelsize)
+        ax.text(yaxislabel_y, yaxislabel_x, "y", color=labelcolor, size=labelsize)
 
-def ax_addaxes_QtoR(ax,vx,vy,vlength,x0,y0,QR_rotation,width=1,color='r',
-                    labelaxes=True,labelsize=12,labelcolor='r'):
+
+def ax_addaxes_QtoR(
+    ax,
+    vx,
+    vy,
+    vlength,
+    x0,
+    y0,
+    QR_rotation,
+    width=1,
+    color="r",
+    labelaxes=True,
+    labelsize=12,
+    labelcolor="r",
+):
     """
     Adds a pair of x/y axes to the matplotlib subplot ax. The user supplies
     the x-axis direction with (vx,vy) in reciprocal space coordinates, and
@@ -280,12 +399,38 @@ def ax_addaxes_QtoR(ax,vx,vy,vlength,x0,y0,QR_rotation,width=1,color='r',
                                     with respect to diffraction space. In degrees.
     """
     from py4DSTEM.process.calibration.rotation import get_Rvector_from_Qvector
-    vx,vy,_,_ = get_Rvector_from_Qvector(vx,vy,QR_rotation)
-    ax_addaxes(ax,vx,vy,vlength,x0,y0,width=width,color=color,labelaxes=labelaxes,
-               labelsize=labelsize,labelcolor=labelcolor,righthandedcoords=True)
 
-def ax_addaxes_RtoQ(ax,vx,vy,vlength,x0,y0,QR_rotation,width=1,color='r',
-                    labelaxes=True,labelsize=12,labelcolor='r'):
+    vx, vy, _, _ = get_Rvector_from_Qvector(vx, vy, QR_rotation)
+    ax_addaxes(
+        ax,
+        vx,
+        vy,
+        vlength,
+        x0,
+        y0,
+        width=width,
+        color=color,
+        labelaxes=labelaxes,
+        labelsize=labelsize,
+        labelcolor=labelcolor,
+        righthandedcoords=True,
+    )
+
+
+def ax_addaxes_RtoQ(
+    ax,
+    vx,
+    vy,
+    vlength,
+    x0,
+    y0,
+    QR_rotation,
+    width=1,
+    color="r",
+    labelaxes=True,
+    labelsize=12,
+    labelcolor="r",
+):
     """
     Adds a pair of x/y axes to the matplotlib subplot ax. The user supplies
     the x-axis direction with (vx,vy) in real space coordinates, and the function
@@ -307,17 +452,51 @@ def ax_addaxes_RtoQ(ax,vx,vy,vlength,x0,y0,QR_rotation,width=1,color='r',
                                     with respect to diffraction space. In degrees.
     """
     from py4DSTEM.process.calibration.rotation import get_Qvector_from_Rvector
-    _,_,vx,vy = get_Qvector_from_Rvector(vx,vy,QR_rotation)
-    ax_addaxes(ax,vx,vy,vlength,x0,y0,width=width,color=color,labelaxes=labelaxes,
-               labelsize=labelsize,labelcolor=labelcolor,righthandedcoords=True)
 
-def show_RQ_axes(realspace_image,diffractionspace_image,
-                 realspace_pdict, diffractionspace_pdict,
-                 vx,vy,vlength_R,vlength_Q,x0_R,y0_R,x0_Q,y0_Q,
-                 QR_rotation,vector_space='R',
-                 width_R=1,color_R='r',width_Q=1,color_Q='r',
-                 labelaxes=True,labelcolor_R='r',labelcolor_Q='r',
-                 labelsize_R=12,labelsize_Q=12,figsize=(12,6),returnfig=False):
+    _, _, vx, vy = get_Qvector_from_Rvector(vx, vy, QR_rotation)
+    ax_addaxes(
+        ax,
+        vx,
+        vy,
+        vlength,
+        x0,
+        y0,
+        width=width,
+        color=color,
+        labelaxes=labelaxes,
+        labelsize=labelsize,
+        labelcolor=labelcolor,
+        righthandedcoords=True,
+    )
+
+
+def show_RQ_axes(
+    realspace_image,
+    diffractionspace_image,
+    realspace_pdict,
+    diffractionspace_pdict,
+    vx,
+    vy,
+    vlength_R,
+    vlength_Q,
+    x0_R,
+    y0_R,
+    x0_Q,
+    y0_Q,
+    QR_rotation,
+    vector_space="R",
+    width_R=1,
+    color_R="r",
+    width_Q=1,
+    color_Q="r",
+    labelaxes=True,
+    labelcolor_R="r",
+    labelcolor_Q="r",
+    labelsize_R=12,
+    labelsize_Q=12,
+    figsize=(12, 6),
+    returnfig=False,
+):
     """
     Shows side-by-side real/reciprocal space images with a set of corresponding
     coordinate axes overlaid in each.  (vx,vy) specifies the x-axis, and the y-axis
@@ -348,24 +527,73 @@ def show_RQ_axes(realspace_image,diffractionspace_image,
                                     function describes a real or diffracation
                                     space vector.
     """
-    assert(vector_space in ('R','Q'))
-    fig,(ax1,ax2) = show_RQ(realspace_image, diffractionspace_image,
-                            realspace_pdict, diffractionspace_pdict,
-                            figsize=figsize,returnfig=True)
-    if vector_space=='R':
-        ax_addaxes(ax1,vx,vy,vlength_R,x0_R,y0_R,width=width_R,color=color_R,
-                   labelaxes=labelaxes,labelsize=labelsize_R,labelcolor=labelcolor_R)
-        ax_addaxes_RtoQ(ax2,vx,vy,vlength_Q,x0_Q,y0_Q,QR_rotation,width=width_Q,color=color_Q,
-                        labelaxes=labelaxes,labelsize=labelsize_Q,labelcolor=labelcolor_Q)
+    assert vector_space in ("R", "Q")
+    fig, (ax1, ax2) = show_RQ(
+        realspace_image,
+        diffractionspace_image,
+        realspace_pdict,
+        diffractionspace_pdict,
+        figsize=figsize,
+        returnfig=True,
+    )
+    if vector_space == "R":
+        ax_addaxes(
+            ax1,
+            vx,
+            vy,
+            vlength_R,
+            x0_R,
+            y0_R,
+            width=width_R,
+            color=color_R,
+            labelaxes=labelaxes,
+            labelsize=labelsize_R,
+            labelcolor=labelcolor_R,
+        )
+        ax_addaxes_RtoQ(
+            ax2,
+            vx,
+            vy,
+            vlength_Q,
+            x0_Q,
+            y0_Q,
+            QR_rotation,
+            width=width_Q,
+            color=color_Q,
+            labelaxes=labelaxes,
+            labelsize=labelsize_Q,
+            labelcolor=labelcolor_Q,
+        )
     else:
-        ax_addaxes(ax2,vx,vy,vlength_Q,x0_Q,y0_Q,width=width_Q,color=color_Q,
-                   labelaxes=labelaxes,labelsize=labelsize_Q,labelcolor=labelcolor_Q)
-        ax_addaxes_QtoR(ax1,vx,vy,vlength_R,x0_R,y0_R,QR_rotation,width=width_R,color=color_R,
-                        labelaxes=labelaxes,labelsize=labelsize_R,labelcolor=labelcolor_R)
+        ax_addaxes(
+            ax2,
+            vx,
+            vy,
+            vlength_Q,
+            x0_Q,
+            y0_Q,
+            width=width_Q,
+            color=color_Q,
+            labelaxes=labelaxes,
+            labelsize=labelsize_Q,
+            labelcolor=labelcolor_Q,
+        )
+        ax_addaxes_QtoR(
+            ax1,
+            vx,
+            vy,
+            vlength_R,
+            x0_R,
+            y0_R,
+            QR_rotation,
+            width=width_R,
+            color=color_R,
+            labelaxes=labelaxes,
+            labelsize=labelsize_R,
+            labelcolor=labelcolor_R,
+        )
     if not returnfig:
         plt.show()
         return
     else:
-        return fig,(ax1,ax2)
-
-
+        return fig, (ax1, ax2)

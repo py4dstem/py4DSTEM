@@ -1,3 +1,4 @@
+from __future__ import annotations
 from py4DSTEM import DataCube, RealSlice
 from emdfile import tqdmnd
 from py4DSTEM.process.wholepatternfit.wp_models import (
@@ -466,7 +467,8 @@ class WholePatternFit:
                     self.fit_data.data[lat.params["uy"].offset],
                     self.fit_data.data[lat.params["vx"].offset],
                     self.fit_data.data[lat.params["vy"].offset],
-                    self.fit_metrics["status"].data >= 0, # negative status indicates fit error
+                    self.fit_metrics["status"].data
+                    >= 0,  # negative status indicates fit error
                 ],
                 axis=0,
             )

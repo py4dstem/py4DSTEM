@@ -1,74 +1,72 @@
-#### this file contains a function/s that will check if various 
+#### this file contains a function/s that will check if various
 # libaries/compute options are available
 import importlib
 from operator import mod
 
 # list of modules we expect/may expect to be installed
-#  as part of a standard py4DSTEM installation 
+#  as part of a standard py4DSTEM installation
 # this needs to be the import name e.g. import mp_api not mp-api
 modules = [
-        'crystal4D',
-        'cupy',
-        'dask',
-        'dill',
-        'distributed',
-        'gdown',
-        'h5py',
-        'ipyparallel',
-        'jax',
-        'matplotlib',
-        'mp_api',
-        'ncempy',
-        'numba',
-        'numpy',
-        'pymatgen',
-        'skimage',
-        'sklearn',
-        'scipy',
-        'tensorflow',
-        'tensorflow-addons',
-        'tqdm'
+    "crystal4D",
+    "cupy",
+    "dask",
+    "dill",
+    "distributed",
+    "gdown",
+    "h5py",
+    "ipyparallel",
+    "jax",
+    "matplotlib",
+    "mp_api",
+    "ncempy",
+    "numba",
+    "numpy",
+    "pymatgen",
+    "skimage",
+    "sklearn",
+    "scipy",
+    "tensorflow",
+    "tensorflow-addons",
+    "tqdm",
 ]
 
-# currently this was copy and pasted from setup.py, 
-# hopefully there's a programatic way to do this. 
+# currently this was copy and pasted from setup.py,
+# hopefully there's a programatic way to do this.
 module_depenencies = {
-    'base' : [
-        'numpy',
-        'scipy',
-        'h5py',
-        'ncempy',
-        'matplotlib',
-        'skimage',
-        'sklearn',
-        'tqdm',
-        'dill',
-        'gdown',
-        'dask',
-        'distributed'
-        ],
-    'ipyparallel': ['ipyparallel', 'dill'],
-    'cuda': ['cupy'],
-    'acom': ['pymatgen', 'mp_api'],
-    'aiml': ['tensorflow','tensorflow-addons','crystal4D'],
-    'aiml-cuda': ['tensorflow','tensorflow-addons','crystal4D','cupy'],
-    'numba': ['numba']
-    }
-
-
-
+    "base": [
+        "numpy",
+        "scipy",
+        "h5py",
+        "ncempy",
+        "matplotlib",
+        "skimage",
+        "sklearn",
+        "tqdm",
+        "dill",
+        "gdown",
+        "dask",
+        "distributed",
+    ],
+    "ipyparallel": ["ipyparallel", "dill"],
+    "cuda": ["cupy"],
+    "acom": ["pymatgen", "mp_api"],
+    "aiml": ["tensorflow", "tensorflow-addons", "crystal4D"],
+    "aiml-cuda": ["tensorflow", "tensorflow-addons", "crystal4D", "cupy"],
+    "numba": ["numba"],
+}
 
 
 #### Class and Functions to Create Coloured Strings ####
 class colours:
-    CEND = '\x1b[0m'
-    WARNING = '\x1b[7;93m'
-    SUCCESS = '\x1b[7;92m'
-    FAIL = '\x1b[7;91m'
-    BOLD = '\033[1m'
-    UNDERLINE = '\033[4m'
+    CEND = "\x1b[0m"
+    WARNING = "\x1b[7;93m"
+    SUCCESS = "\x1b[7;92m"
+    FAIL = "\x1b[7;91m"
+    BOLD = "\033[1m"
+    UNDERLINE = "\033[4m"
 
-def create_warning(s:str)->str:
+
+def create_warning(s: str) -> str:
     """
     Creates a yellow shaded with white font version of string s
 
@@ -80,7 +78,9 @@ def create_warning(s:str)->str:
     """
     s = colours.WARNING + s + colours.CEND
     return s
-def create_success(s:str)-> str:
+
+
+def create_success(s: str) -> str:
     """
     Creates a yellow shaded with white font version of string s
 
@@ -92,7 +92,9 @@ def create_success(s:str)-> str:
     """
     s = colours.SUCCESS + s + colours.CEND
     return s
-def create_failure(s:str)->str:
+
+
+def create_failure(s: str) -> str:
     """
     Creates a yellow shaded with white font version of string s
 
@@ -104,7 +106,9 @@ def create_failure(s:str)->str:
     """
     s = colours.FAIL + s + colours.CEND
     return s
-def create_bold(s:str)->str:
+
+
+def create_bold(s: str) -> str:
     """
     Creates a yellow shaded with white font version of string s
 
@@ -116,7 +120,9 @@ def create_bold(s:str)->str:
     """
     s = colours.BOLD + s + colours.CEND
     return s
-def create_underline(s:str)->str:
+
+
+def create_underline(s: str) -> str:
     """
     Creates an underlined version of string s
 
@@ -130,10 +136,11 @@ def create_underline(s:str)->str:
     return s
 
 
-#### Functions to check imports etc. 
+#### Functions to check imports etc.
 ### here I use the term state to define a boolean condition as to whether a libary/module was sucessfully imported/can be used
 
-def get_import_states(modules:list = modules)->dict:
+
+def get_import_states(modules: list = modules) -> dict:
     """
     Check the ability to import modules and store the results as a boolean value. Returns as a dict.
     e.g. import_states_dict['numpy'] == True/False
@@ -147,8 +154,8 @@ def get_import_states(modules:list = modules)->dict:
     # Create the import states dict
     import_states_dict = {}
 
-    # check if the modules import 
-    # and update the states dict to reflect this 
+    # check if the modules import
+    # and update the states dict to reflect this
     for m in modules:
         state = import_tester(m)
         import_states_dict[m] = state
@@ -156,7 +163,7 @@ def get_import_states(modules:list = modules)->dict:
     return import_states_dict
 
 
-def get_module_states(state_dict:dict)->dict:
+def get_module_states(state_dict: dict) -> dict:
     """_summary_
 
     Args:
@@ -166,15 +173,13 @@ def get_module_states(state_dict:dict)->dict:
         dict: _description_
     """
 
-
     # create an empty dict to put module states into:
     module_states = {}
 
     # key is the name of the module e.g. ACOM
-    # val is a list of its dependencies 
+    # val is a list of its dependencies
     # module_dependencies comes from the namespace
     for key, val in module_depenencies.items():
-
         # create a list to store the status of the depencies
         temp_lst = []
 
@@ -184,13 +189,13 @@ def get_module_states(state_dict:dict)->dict:
             temp_lst.append(state_dict[depend])
 
         # check that all the depencies could be imported i.e. state == True
-        # and set the state of the module to that 
-        module_states[key] = all(temp_lst) == True
+        # and set the state of the module to that
+        module_states[key] = all(temp_lst) is True
 
     return module_states
 
 
-def print_import_states(import_states:dict)->None:
+def print_import_states(import_states: dict) -> None:
     """_summary_
 
     Args:
@@ -208,7 +213,7 @@ def print_import_states(import_states:dict)->None:
             s = create_success(s)
             s = f"{s: <80}"
             print(s)
-        #if unable to import i.e. state == False
+        # if unable to import i.e. state == False
         else:
             s = f" Module {m.capitalize()} Import Failed "
             s = create_failure(s)
@@ -217,9 +222,7 @@ def print_import_states(import_states:dict)->None:
     return None
 
 
-
-
-def print_module_states(module_states:dict)->None:
+def print_module_states(module_states: dict) -> None:
     """_summary_
 
     Args:
@@ -244,7 +247,10 @@ def print_module_states(module_states:dict)->None:
             print(s)
     return None
 
-def perfrom_extra_checks(import_states:dict, verbose:bool, gratuitously_verbose:bool, **kwargs)->None:
+
+def perfrom_extra_checks(
+    import_states: dict, verbose: bool, gratuitously_verbose: bool, **kwargs
+) -> None:
     """_summary_
 
     Args:
@@ -256,7 +262,7 @@ def perfrom_extra_checks(import_states:dict, verbose:bool, gratuitously_verbose:
         _type_: _description_
     """
 
-    # print a output module 
+    # print a output module
     extra_checks_message = "Running Extra Checks"
     extra_checks_message = create_bold(extra_checks_message)
     print(f"{extra_checks_message}")
@@ -279,11 +285,10 @@ def perfrom_extra_checks(import_states:dict, verbose:bool, gratuitously_verbose:
                 else:
                     pass
 
-
     return None
 
 
-def import_tester(m:str)->bool:
+def import_tester(m: str) -> bool:
     """
     This function will try and import the module, m,
     it returns the success as boolean and prints a message.
@@ -305,9 +310,7 @@ def import_tester(m:str)->bool:
     return state
 
 
-
-
-def check_module_functionality(state_dict:dict)->None:
+def check_module_functionality(state_dict: dict) -> None:
     """
     This function checks all the py4DSTEM modules, e.g. acom, ml-ai, and whether all the required dependencies are importable
 
@@ -323,9 +326,8 @@ def check_module_functionality(state_dict:dict)->None:
     module_states = {}
 
     # key is the name of the module e.g. ACOM
-    # val is a list of its dependencies 
+    # val is a list of its dependencies
     for key, val in module_depenencies.items():
-
         # create a list to store the status of the depencies
         temp_lst = []
 
@@ -335,8 +337,8 @@ def check_module_functionality(state_dict:dict)->None:
             temp_lst.append(state_dict[depend])
 
         # check that all the depencies could be imported i.e. state == True
-        # and set the state of the module to that 
-        module_states[key] = all(temp_lst) == True
+        # and set the state of the module to that
+        module_states[key] = all(temp_lst) is True
 
     # Print out the state of all the modules in colour code
     for key, val in module_states.items():
@@ -351,14 +353,13 @@ def check_module_functionality(state_dict:dict)->None:
             s = create_failure(s)
             print(s)
 
-    return None # module_states
+    return None  # module_states
+
 
 #### ADDTIONAL CHECKS ####
 
-def check_cupy_gpu(
-    gratuitously_verbose:bool,
-    **kwargs
-    ):
+
+def check_cupy_gpu(gratuitously_verbose: bool, **kwargs):
     """
     This function performs some additional tests which may be useful in
     diagnosing Cupy GPU performance
@@ -374,22 +375,22 @@ def check_cupy_gpu(
     # check that CUDA is detected correctly
     cuda_availability = cp.cuda.is_available()
     if cuda_availability:
-        s = f" CUDA is Available "
+        s = " CUDA is Available "
         s = create_success(s)
         s = f"{s: <80}"
         print(s)
     else:
-        s = f" CUDA is Unavailable "
+        s = " CUDA is Unavailable "
         s = create_failure(s)
         s = f"{s: <80}"
         print(s)
 
     # Count how many GPUs Cupy can detect
-    # probably should change this to a while loop ... 
+    # probably should change this to a while loop ...
     for i in range(24):
         try:
             d = cp.cuda.Device(i)
-            hasattr(d, 'attributes')
+            hasattr(d, "attributes")
         except:
             num_gpus_detected = i
             break
@@ -416,7 +417,7 @@ def check_cupy_gpu(
     cupy_version = cp.__version__
     print(f"Cupy Version:\t\t{cupy_version}")
 
-    # if verbose print extra information 
+    # if verbose print extra information
     if gratuitously_verbose:
         for i in range(num_gpus_detected):
             d = cp.cuda.Device(i)
@@ -427,7 +428,7 @@ def check_cupy_gpu(
     return None
 
 
-def print_no_extra_checks(m:str):
+def print_no_extra_checks(m: str):
     """
     This function prints a warning style message that the module m
     currently has no extra checks.
@@ -445,21 +446,18 @@ def print_no_extra_checks(m:str):
 
     return None
 
+
 # dict of extra check functions
-funcs_dict = {
-    "cupy"  : check_cupy_gpu
-}
-
-
+funcs_dict = {"cupy": check_cupy_gpu}
 
 
 #### main function used to check the configuration of the installation
 def check_config(
-    #modules:list = modules, # removed to not be user editable as this will often break. Could make it append to modules... but for now just removing
-    verbose:bool = False,
-    gratuitously_verbose:bool = False,
+    # modules:list = modules, # removed to not be user editable as this will often break. Could make it append to modules... but for now just removing
+    verbose: bool = False,
+    gratuitously_verbose: bool = False,
     # egregiously_verbose:bool = False
-    )->None:
+) -> None:
     """
     This function checks the state of required imports to run py4DSTEM.
 
@@ -473,14 +471,14 @@ def check_config(
         None
     """
 
-    # get the states of all imports 
+    # get the states of all imports
     states_dict = get_import_states(modules)
 
     # get the states of all modules dependencies
     modules_dict = get_module_states(states_dict)
 
-    # print the modules compatiabiltiy 
-    # prepare a message 
+    # print the modules compatiabiltiy
+    # prepare a message
     modules_checks_message = "Checking Module Dependencies"
     modules_checks_message = create_bold(modules_checks_message)
     print(modules_checks_message)
@@ -495,8 +493,10 @@ def check_config(
 
         print_import_states(states_dict)
 
-        perfrom_extra_checks(import_states=states_dict, verbose=verbose, gratuitously_verbose=gratuitously_verbose)
-
-
+        perfrom_extra_checks(
+            import_states=states_dict,
+            verbose=verbose,
+            gratuitously_verbose=gratuitously_verbose,
+        )
 
     return None
