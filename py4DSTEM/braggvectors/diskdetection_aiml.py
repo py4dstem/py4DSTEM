@@ -897,8 +897,8 @@ def _get_latest_model(model_path=None):
             pass
         # download the json file with the meta data
         gdrive_download(
-            # "1-KX0saEYfhZ9IJAOwabH38PCVtfXidJi",
-            "FCU-Net",
+            "1-KX0saEYfhZ9IJAOwabH38PCVtfXidJi",
+            # "FCU-Net",
             destination="./tmp/",
             filename="model_metadata.json",
             overwrite=True,
