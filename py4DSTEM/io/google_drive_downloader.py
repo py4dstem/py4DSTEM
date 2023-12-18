@@ -221,7 +221,8 @@ def gdrive_download(
         kwargs = {"fuzzy": True}
         if id_ in file_ids:
             f = file_ids[id_]
-            filename = f[0]
+            # Use the name in the collection filename passed 
+            filename = filename if filename is not None else f[0]
             kwargs["id"] = f[1]
 
         # if its not in the list of files we expect
