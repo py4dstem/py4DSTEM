@@ -489,8 +489,8 @@ class WholePatternFit:
     ) -> list[RealSlice]:
         """
         Calculate a strain map from the the fitted reciprocal lattice vectors
-        refined at each scan point.  Currently we output strain maps aligned to the 
-        coordinate (qx,qy) directions, and we assume a median reference lattice. 
+        refined at each scan point.  Currently we output strain maps aligned to the
+        coordinate (qx,qy) directions, and we assume a median reference lattice.
 
         TODO -allow rotation of Q w.r.t. R coordinate space.
              -pass in reference lattice, or a mask to the reference ROI.
@@ -502,7 +502,6 @@ class WholePatternFit:
             for each lattice fit in the whole pattern fitting model.
         """
         assert hasattr(self, "fit_data"), "Please run fitting first!"
-
 
         lattices = [m for m in self.model if WPFModelType.LATTICE in m.model_type]
         strain_maps = []
@@ -517,7 +516,8 @@ class WholePatternFit:
                         self.fit_data.data[lat.params["vx"].offset],
                         self.fit_data.data[lat.params["vy"].offset],
                         np.logical_and(
-                            self.fit_metrics["status"].data >= 0, # negative status indicates fit error
+                            self.fit_metrics["status"].data
+                            >= 0,  # negative status indicates fit error
                             self.fit_metrics["nfev"].data > 0,
                         ),
                     ],
@@ -527,28 +527,28 @@ class WholePatternFit:
                 name=lat.name,
             )
 
-            fig,ax = plt.subplots(figsize=(4,4))
+            fig, ax = plt.subplots(figsize=(4, 4))
             ax.imshow(
-                g1g2_map['mask'].data.astype('float'),
-                vmin = 0,
-                vmax = 1,
-                )
+                g1g2_map["mask"].data.astype("float"),
+                vmin=0,
+                vmax=1,
+            )
 
             # Get the reference lattice vectors
             # TODO - update this to allow other refs, ROI, etc.
-            mask = (g1g2_map.get_slice("mask").data).astype('bool')
+            mask = (g1g2_map.get_slice("mask").data).astype("bool")
             g1_ref = (
                 np.median(g1g2_map.get_slice("g1x").data[mask]),
-                np.median(g1g2_map.get_slice("g1y").data[mask]),    
+                np.median(g1g2_map.get_slice("g1y").data[mask]),
             )
             g2_ref = (
                 np.median(g1g2_map.get_slice("g2x").data[mask]),
-                np.median(g1g2_map.get_slice("g2y").data[mask]),    
+                np.median(g1g2_map.get_slice("g2y").data[mask]),
             )
 
             # calculate strain
             strain_map = get_strain_from_reference_g1g2(g1g2_map, g1_ref, g2_ref)
-            strain_map.name = g1g2_map.name + ' strain map'
+            strain_map.name = g1g2_map.name + " strain map"
             strain_maps.append(strain_map)
 
         return strain_maps
