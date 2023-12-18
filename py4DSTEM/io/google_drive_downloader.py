@@ -57,7 +57,7 @@ file_ids = {
     ),
     "small_dm3_3Dstack": ("small_dm3_3Dstack.dm3", "1B-xX3F65JcWzAg0v7f1aVwnawPIfb5_o"),
     "FCU-Net": (
-        "filename.name",
+        "model_metadata.json",
         "1-KX0saEYfhZ9IJAOwabH38PCVtfXidJi",
     ),
     "small_datacube": (
