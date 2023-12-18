@@ -437,9 +437,9 @@ def find_Bragg_disks_aiml_serial(
         raise ImportError("Import Error: Please install crystal4D before proceeding")
 
     # Make the peaks PointListArray
-    # dtype = [('qx',float),('qy',float),('intensity',float)]
-    peaks = BraggVectors(datacube.Rshape, datacube.Qshape)
-
+    dtype = [('qx',float),('qy',float),('intensity',float)]
+    # peaks = BraggVectors(datacube.Rshape, datacube.Qshape)
+    peaks = PointListArray(dtype=dtype, shape=(datacube.R_Nx, datacube.R_Ny))
     # check that the filtered DP is the right size for the probe kernel:
     if filter_function:
         assert callable(filter_function), "filter_function must be callable"
