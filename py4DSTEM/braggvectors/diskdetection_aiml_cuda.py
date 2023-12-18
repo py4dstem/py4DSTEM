@@ -124,8 +124,9 @@ def find_Bragg_disks_aiml_CUDA(
     """
 
     # Make the peaks PointListArray
-    # dtype = [('qx',float),('qy',float),('intensity',float)]
-    peaks = BraggVectors(datacube.Rshape, datacube.Qshape)
+    dtype = [('qx',float),('qy',float),('intensity',float)]
+    # peaks = BraggVectors(datacube.Rshape, datacube.Qshape)
+    peaks = PointListArray(dtype=dtype, shape=(datacube.R_Nx, datacube.R_Ny))
 
     # check that the filtered DP is the right size for the probe kernel:
     if filter_function:
@@ -221,7 +222,7 @@ def find_Bragg_disks_aiml_CUDA(
             subpixel=subpixel,
             upsample_factor=upsample_factor,
             filter_function=filter_function,
-            peaks=peaks.vectors_uncal.get_pointlist(Rx, Ry),
+            peaks=peaks.get_pointlist(Rx, Ry),
             get_maximal_points=get_maximal_points,
             blocks=blocks,
             threads=threads,
