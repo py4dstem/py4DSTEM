@@ -518,7 +518,7 @@ def find_Bragg_disks_aiml_serial(
             subpixel=subpixel,
             upsample_factor=upsample_factor,
             filter_function=filter_function,
-            peaks=peaks.vectors_uncal.get_pointlist(Rx, Ry),
+            peaks=peaks.get_pointlist(Rx, Ry),
             model_path=model_path,
         )
     t2 = time() - t0
