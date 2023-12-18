@@ -989,7 +989,7 @@ def show_strain(
         Scaling for the legend g-vectors relative to the coordinate axes
     layout : int
         Determines the layout of the grid which the strain components
-        will be plotted in.  Must be in (0,1,2).  0=(2x2), 1=(1x4), 2=(4x1).
+        will be plotted in.  Options are "square", "horizontal", "vertical"/
     figsize : length 2 tuple of numbers
         Size of the figure
     returnfig : bool
