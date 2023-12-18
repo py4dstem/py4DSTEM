@@ -516,13 +516,23 @@ class WholePatternFit:
                         self.fit_data.data[lat.params["uy"].offset],
                         self.fit_data.data[lat.params["vx"].offset],
                         self.fit_data.data[lat.params["vy"].offset],
-                        self.fit_metrics["status"].data >= 0, # negative status indicates fit error
+                        np.logical_and(
+                            self.fit_metrics["status"].data >= 0, # negative status indicates fit error
+                            self.fit_metrics["nfev"].data > 0,
+                        ),
                     ],
                     axis=0,
                 ),
                 slicelabels=["g1x", "g1y", "g2x", "g2y", "mask"],
                 name=lat.name,
             )
+
+            fig,ax = plt.subplots(figsize=(4,4))
+            ax.imshow(
+                g1g2_map['mask'].data.astype('float'),
+                vmin = 0,
+                vmax = 1,
+                )
 
             # Get the reference lattice vectors
             # TODO - update this to allow other refs, ROI, etc.
@@ -532,14 +542,14 @@ class WholePatternFit:
                 np.median(g1g2_map.get_slice("g1y").data[mask]),    
             )
             g2_ref = (
-                np.median(g1g2_map.get_slice("g1x").data[mask]),
-                np.median(g1g2_map.get_slice("g1y").data[mask]),    
+                np.median(g1g2_map.get_slice("g2x").data[mask]),
+                np.median(g1g2_map.get_slice("g2y").data[mask]),    
             )
 
             # calculate strain
-            strain_maps.append(
-                get_strain_from_reference_g1g2(g1g2_map, g1_ref, g2_ref),
-            )
+            strain_map = get_strain_from_reference_g1g2(g1g2_map, g1_ref, g2_ref)
+            strain_map.name = g1g2_map.name + ' strain map'
+            strain_maps.append(strain_map)
 
         return strain_maps
 
