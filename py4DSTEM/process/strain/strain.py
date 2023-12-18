@@ -735,7 +735,7 @@ class StrainMap(RealSlice, Data):
             Scaling for the legend g-vectors relative to the coordinate axes
         layout : int
             Determines the layout of the grid which the strain components
-            will be plotted in.  Options are "square", "horizontal", "vertical".
+            will be plotted in.  Options are "square", "horizontal", "vertical."
         figsize : length 2 tuple of numbers
             Size of the figure
         returnfig : bool
