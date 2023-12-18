@@ -9,25 +9,27 @@ import dask.array as da
 from typing import Optional
 import inspect
 
-from emdfile import tqdmnd,Metadata
+from emdfile import tqdmnd, Metadata
 from py4DSTEM.data import Calibration, RealSlice, Data, DiffractionSlice
-from py4DSTEM.visualize.show import show
-
+from py4DSTEM.preprocess import get_shifted_ar
+from py4DSTEM.visualize import show
 
 
 # Virtual image container class
 
-class VirtualImage(RealSlice,Data):
+
+class VirtualImage(RealSlice, Data):
     """
     A container for storing virtual image data and metadata,
     including the real-space shaped 2D image and metadata
     indicating how this image was generated from a datacube.
     """
+
     def __init__(
         self,
         data: np.ndarray,
-        name: Optional[str] = 'virtualimage',
-        ):
+        name: Optional[str] = "virtualimage",
+    ):
         """
         Parameters
         ----------
@@ -39,49 +41,46 @@ class VirtualImage(RealSlice,Data):
         # initialize as a RealSlice
         RealSlice.__init__(
             self,
-            data = data,
-            name = name,
+            data=data,
+            name=name,
         )
 
     # read
     @classmethod
-    def _get_constructor_args(cls,group):
+    def _get_constructor_args(cls, group):
         """
         Returns a dictionary of args/values to pass to the class constructor
         """
         ar_constr_args = RealSlice._get_constructor_args(group)
         args = {
-            'data' : ar_constr_args['data'],
-            'name' : ar_constr_args['name'],
+            "data": ar_constr_args["data"],
+            "name": ar_constr_args["name"],
         }
         return args
 
 
-
-
-
 # DataCube virtual imaging methods
 
-class DataCubeVirtualImager:
 
+class DataCubeVirtualImager:
     def __init__(self):
         pass
-
 
     def get_virtual_image(
         self,
         mode,
         geometry,
-        centered = False,
-        calibrated = False,
-        shift_center = False,
-        verbose = True,
-        dask = False,
-        return_mask = False,
-        name = 'virtual_image',
-        returncalc = True,
-        test_config = False
-        ):
+        centered=False,
+        calibrated=False,
+        shift_center=False,
+        subpixel=False,
+        verbose=True,
+        dask=False,
+        return_mask=False,
+        name="virtual_image",
+        returncalc=True,
+        test_config=False,
+    ):
         """
         Calculate a virtual image.
 
@@ -141,6 +140,8 @@ class DataCubeVirtualImager:
             position and the mean origin position over all patterns, rounded to
             the nearest integer for speed. Default is False. If `shift_center` is
             True, `centered` is automatically set to True.
+        subpixel : bool
+            if True, applies subpixel shifts to virtual image
         verbose : bool
             toggles a progress bar
         dask : bool
@@ -169,63 +170,69 @@ class DataCubeVirtualImager:
         virt_im : VirtualImage (optional, if returncalc is True)
         """
         # parse inputs
-        assert mode in ('point', 'circle', 'circular', 'annulus', 'annular', 'rectangle', 'square', 'rectangular', 'mask'),\
-        'check doc strings for supported modes'
-        if shift_center == True:
-            centered = True
+        assert mode in (
+            "point",
+            "circle",
+            "circular",
+            "annulus",
+            "annular",
+            "rectangle",
+            "square",
+            "rectangular",
+            "mask",
+        ), "check doc strings for supported modes"
+
         if test_config:
-            for x,y in zip(['centered','calibrated','shift_center'],
-                           [centered,calibrated,shift_center]):
+            for x, y in zip(
+                ["centered", "calibrated", "shift_center"],
+                [centered, calibrated, shift_center],
+            ):
                 print(f"{x} = {y}")
 
         # Get geometry
         g = self.get_calibrated_detector_geometry(
-            self.calibration,
-            mode,
-            geometry,
-            centered,
-            calibrated
+            self.calibration, mode, geometry, centered, calibrated
         )
 
         # Get mask
         mask = self.make_detector(self.Qshape, mode, g)
         # if return_mask is True, skip computation
-        if return_mask == True and shift_center == False:
+        if return_mask is True and shift_center is False:
             return mask
-
 
         # Calculate virtual image
 
         # no center shifting
-        if shift_center == False:
-
+        if shift_center is False:
             # single CPU
             if not dask:
-
                 # allocate space
-                if mask.dtype == 'complex':
-                    virtual_image = np.zeros(self.Rshape, dtype = 'complex')
+                if mask.dtype == "complex":
+                    virtual_image = np.zeros(self.Rshape, dtype="complex")
                 else:
                     virtual_image = np.zeros(self.Rshape)
                 # compute
-                for rx,ry in tqdmnd(
+                for rx, ry in tqdmnd(
                     self.R_Nx,
                     self.R_Ny,
-                    disable = not verbose,
+                    disable=not verbose,
                 ):
-                    virtual_image[rx,ry] = np.sum(self.data[rx,ry]*mask)
+                    virtual_image[rx, ry] = np.sum(self.data[rx, ry] * mask)
 
-            # dask 
-            if dask == True:
-
+            # dask
+            if dask is True:
                 # set up a generalized universal function for dask distribution
-                def _apply_mask_dask(self,mask):
-                    virtual_image = np.sum(np.multiply(self.data,mask), dtype=np.float64)
+                def _apply_mask_dask(self, mask):
+                    virtual_image = np.sum(
+                        np.multiply(self.data, mask), dtype=np.float64
+                    )
+
                 apply_mask_dask = da.as_gufunc(
-                    _apply_mask_dask,signature='(i,j),(i,j)->()',
+                    _apply_mask_dask,
+                    signature="(i,j),(i,j)->()",
                     output_dtypes=np.float64,
-                    axes=[(2,3),(0,1),()],
-                    vectorize=True
+                    axes=[(2, 3), (0, 1), ()],
+                    vectorize=True,
                 )
 
                 # compute
@@ -233,85 +240,93 @@ class DataCubeVirtualImager:
 
         # with center shifting
         else:
-
             # get shifts
-            assert(self.calibration.get_origin_shift() is not None), "origin need to be calibrated"
-            qx_shift,qy_shift = self.calibration.get_origin_shift()
-            qx_shift = qx_shift.round().astype(int)
-            qy_shift = qy_shift.round().astype(int)
+            assert (
+                self.calibration.get_origin_shift() is not None
+            ), "origin need to be calibrated"
+            qx_shift, qy_shift = self.calibration.get_origin_shift()
+            if subpixel is False:
+                qx_shift = qx_shift.round().astype(int)
+                qy_shift = qy_shift.round().astype(int)
 
             # if return_mask is True, get+return the mask and skip the computation
             if return_mask is not False:
                 try:
-                    rx,ry = return_mask
+                    rx, ry = return_mask
                 except TypeError:
-                    raise Exception(f"if `shift_center=True`, return_mask must be a 2-tuple of ints or False, but revieced inpute value of {return_mask}")
-                _mask = np.roll(
-                    mask,
-                    (qx_shift[rx,ry], qy_shift[rx,ry]),
-                    axis=(0,1)
-                )
+                    raise Exception(
+                        f"if `shift_center=True`, return_mask must be a 2-tuple of \
+                        ints or False, but revieced inpute value of {return_mask}"
+                    )
+                if subpixel:
+                    _mask = get_shifted_ar(
+                        mask, qx_shift[rx, ry], qy_shift[rx, ry], bilinear=True
+                    )
+                else:
+                    _mask = np.roll(
+                        mask, (qx_shift[rx, ry], qy_shift[rx, ry]), axis=(0, 1)
+                    )
                 return _mask
 
             # allocate space
-            if mask.dtype == 'complex':
-                virtual_image = np.zeros(self.Rshape, dtype = 'complex')
+            if mask.dtype == "complex":
+                virtual_image = np.zeros(self.Rshape, dtype="complex")
             else:
                 virtual_image = np.zeros(self.Rshape)
 
             # loop
-            for rx,ry in tqdmnd(
+            for rx, ry in tqdmnd(
                 self.R_Nx,
                 self.R_Ny,
-                disable = not verbose,
+                disable=not verbose,
             ):
                 # get shifted mask
-                _mask = np.roll(
-                    mask,
-                    (qx_shift[rx,ry], qy_shift[rx,ry]),
-                    axis=(0,1)
-                )
+                if subpixel:
+                    _mask = get_shifted_ar(
+                        mask, qx_shift[rx, ry], qy_shift[rx, ry], bilinear=True
+                    )
+                else:
+                    _mask = np.roll(
+                        mask, (qx_shift[rx, ry], qy_shift[rx, ry]), axis=(0, 1)
+                    )
                 # add to output array
-                virtual_image[rx,ry] = np.sum(self.data[rx,ry]*_mask)
-
+                virtual_image[rx, ry] = np.sum(self.data[rx, ry] * _mask)
 
         # data handling
 
         # wrap with a py4dstem class
         ans = VirtualImage(
-            data = virtual_image,
-            name = name,
+            data=virtual_image,
+            name=name,
         )
 
         # add generating params as metadata
         ans.metadata = Metadata(
-            name = 'gen_params',
-            data = {
-                '_calling_method' : inspect.stack()[0][3],
-                '_calling_class' : __class__.__name__,
-                'mode' : mode,
-                'geometry' : geometry,
-                'centered' : centered,
-                'calibrated' : calibrated,
-                'shift_center' : shift_center,
-                'verbose' : verbose,
-                'dask' : dask,
-                'return_mask' : return_mask,
-                'name' : name,
-                'returncalc' : True,
-                'test_config' : test_config
-            }
+            name="gen_params",
+            data={
+                "_calling_method": inspect.stack()[0][3],
+                "_calling_class": __class__.__name__,
+                "mode": mode,
+                "geometry": geometry,
+                "centered": centered,
+                "calibrated": calibrated,
+                "shift_center": shift_center,
+                "subpixel": subpixel,
+                "verbose": verbose,
+                "dask": dask,
+                "return_mask": return_mask,
+                "name": name,
+                "returncalc": True,
+                "test_config": test_config,
+            },
         )
 
         # add to the tree
-        self.attach( ans )
+        self.attach(ans)
 
         # return
         if returncalc:
             return ans
-
-
-
 
     # Position detector
 
@@ -319,15 +334,16 @@ class DataCubeVirtualImager:
         self,
         mode,
         geometry,
-        data = None,
-        centered = None,
-        calibrated = None,
-        shift_center = False,
-        scan_position = None,
-        invert = False,
-        color = 'r',
-        alpha = 0.7,
-        **kwargs
+        data=None,
+        centered=None,
+        calibrated=None,
+        shift_center=False,
+        subpixel=True,
+        scan_position=None,
+        invert=False,
+        color="r",
+        alpha=0.7,
+        **kwargs,
     ):
         """
         Position a virtual detector by displaying a mask over a diffraction
@@ -363,6 +379,8 @@ class DataCubeVirtualImager:
             regardless of the value of `data` (enabling e.g. overlaying the
             mask for a specific scan position on a max or mean diffraction
             image.)
+        subpixel : bool
+            if True, applies subpixel shifts to virtual image
         invert : bool
             if True, invert the masked pixel (i.e. pixels *outside* the detector
             are overlaid with a mask)
@@ -376,13 +394,22 @@ class DataCubeVirtualImager:
         # parse inputs
 
         # mode
-        assert mode in ('point', 'circle', 'circular', 'annulus', 'annular', 'rectangle', 'square', 'rectangular', 'mask'),\
-        'check doc strings for supported modes'
+        assert mode in (
+            "point",
+            "circle",
+            "circular",
+            "annulus",
+            "annular",
+            "rectangle",
+            "square",
+            "rectangular",
+            "mask",
+        ), "check doc strings for supported modes"
 
         # data
         if data is None:
             image = None
-            keys = ['dp_mean','dp_max','dp_median']
+            keys = ["dp_mean", "dp_max", "dp_median"]
             for k in keys:
                 try:
                     image = self.tree(k)
@@ -390,84 +417,91 @@ class DataCubeVirtualImager:
                 except:
                     pass
             if image is None:
-                image = self[0,0]
+                image = self[0, 0]
         elif isinstance(data, np.ndarray):
-            assert(data.shape == self.Qshape), f"Can't position a detector over an image with a shape that is different from diffraction space.  Diffraction space in this dataset has shape {self.Qshape} but the image passed has shape {data.shape}"
+            assert (
+                data.shape == self.Qshape
+            ), f"Can't position a detector over an image with a shape that is different \
+                from diffraction space.  Diffraction space in this dataset has shape {self.Qshape} \
+                but the image passed has shape {data.shape}"
             image = data
         elif isinstance(data, DiffractionSlice):
-            assert(data.shape == self.Qshape), f"Can't position a detector over an image with a shape that is different from diffraction space.  Diffraction space in this dataset has shape {self.Qshape} but the image passed has shape {data.shape}"
+            assert (
+                data.shape == self.Qshape
+            ), f"Can't position a detector over an image with a shape that is different \
+                from diffraction space.  Diffraction space in this dataset has shape {self.Qshape} \
+                but the image passed has shape {data.shape}"
             image = data.data
-        elif isinstance(data,tuple):
-            rx,ry = data[:2]
-            image = self[rx,ry]
+        elif isinstance(data, tuple):
+            rx, ry = data[:2]
+            image = self[rx, ry]
         else:
-            raise Exception(f"Invalid argument passed to `data`. Expected None or np.ndarray or tuple, not type {type(data)}")
+            raise Exception(
+                f"Invalid argument passed to `data`. Expected None or np.ndarray or \
+                    tuple, not type {type(data)}"
+            )
 
         # shift center
         if shift_center is None:
             shift_center = False
-        elif shift_center == True:
-            assert(isinstance(data,tuple)), "If shift_center is set to True, `data` should be a 2-tuple (rx,ry). To shift the detector mask while using some other input for `data`, set `shift_center` to a 2-tuple (rx,ry)"
-        elif isinstance(shift_center,tuple):
-            rx,ry = shift_center[:2]
+        elif shift_center is True:
+            assert isinstance(
+                data, tuple
+            ), "If shift_center is set to True, `data` should be a 2-tuple (rx,ry). \
+                To shift the detector mask while using some other input for `data`, \
+                set `shift_center` to a 2-tuple (rx,ry)"
+        elif isinstance(shift_center, tuple):
+            rx, ry = shift_center[:2]
             shift_center = True
         else:
             shift_center = False
-
 
         # Get the mask
 
         # Get geometry
         g = self.get_calibrated_detector_geometry(
-            calibration = self.calibration,
-            mode = mode,
-            geometry = geometry,
-            centered = centered,
-            calibrated = calibrated
+            calibration=self.calibration,
+            mode=mode,
+            geometry=geometry,
+            centered=centered,
+            calibrated=calibrated,
         )
 
         # Get mask
         mask = self.make_detector(image.shape, mode, g)
-        if not(invert):
+        if not (invert):
             mask = np.logical_not(mask)
 
         # Shift center
         if shift_center:
             try:
-                rx,ry
+                rx, ry
             except NameError:
-                raise Exception("if `shift_center` is True then `data` must be the 3-tuple (DataCube,rx,ry)")
+                raise Exception(
+                    "if `shift_center` is True then `data` must be the 3-tuple (DataCube,rx,ry)"
+                )
             # get shifts
-            assert(self.calibration.get_origin_shift() is not None), "origin shifts need to be calibrated"
-            qx_shift,qy_shift = self.calibration.cal.get_origin_shift()
-            qx_shift = int(np.round(qx_shift[rx,ry]))
-            qy_shift = int(np.round(qy_shift[rx,ry]))
-            mask = np.roll(
-                mask,
-                (qx_shift, qy_shift),
-                axis=(0,1)
-            )
+            assert (
+                self.calibration.get_origin_shift() is not None
+            ), "origin shifts need to be calibrated"
+            qx_shift, qy_shift = self.calibration.get_origin_shift()
+            if subpixel:
+                mask = get_shifted_ar(
+                    mask, qx_shift[rx, ry], qy_shift[rx, ry], bilinear=True
+                )
+            else:
+                qx_shift = int(np.round(qx_shift[rx, ry]))
+                qy_shift = int(np.round(qy_shift[rx, ry]))
+                mask = np.roll(mask, (qx_shift, qy_shift), axis=(0, 1))
 
         # Show
-        show(
-            image,
-            mask = mask,
-            mask_color = color,
-            mask_alpha = alpha,
-            **kwargs
-        )
+        show(image, mask=mask, mask_color=color, mask_alpha=alpha, **kwargs)
         return
-
-
 
     @staticmethod
     def get_calibrated_detector_geometry(
-        calibration,
-        mode,
-        geometry,
-        centered,
-        calibrated
-        ):
+        calibration, mode, geometry, centered, calibrated
+    ):
         """
         Determine the detector geometry in pixels, given some mode and geometry
         in calibrated units, where the calibration state is specified by {
@@ -496,10 +530,12 @@ class DataCubeVirtualImager:
         # Parse inputs
         g = geometry
         if calibration is None:
-            assert calibrated is False and centered is False, "No calibration found - set a calibration or set `centered` and `calibrated` to False"
+            assert (
+                calibrated is False and centered is False
+            ), "No calibration found - set a calibration or set `centered` and `calibrated` to False"
             return g
         else:
-            assert(isinstance(calibration, Calibration))
+            assert isinstance(calibration, Calibration)
             cal = calibration
 
         # Get calibration metadata
@@ -508,38 +544,45 @@ class DataCubeVirtualImager:
             x0_mean, y0_mean = cal.get_origin_mean()
 
         if calibrated:
-            assert cal['Q_pixel_units'] == 'A^-1', \
-            'check calibration - must be calibrated in A^-1 to use `calibrated=True`'
+            assert (
+                cal["Q_pixel_units"] == "A^-1"
+            ), "check calibration - must be calibrated in A^-1 to use `calibrated=True`"
             unit_conversion = cal.get_Q_pixel_size()
-
 
         # Convert units into detector pixels
 
         # Shift center
-        if centered == True:
-            if mode == 'point':
+        if centered is True:
+            if mode == "point":
                 g = (g[0] + x0_mean, g[1] + y0_mean)
-            if mode in('circle', 'circular', 'annulus', 'annular'):
+            if mode in ("circle", "circular", "annulus", "annular"):
                 g = ((g[0][0] + x0_mean, g[0][1] + y0_mean), g[1])
-            if mode in('rectangle', 'square', 'rectangular') :
-                 g = (g[0] + x0_mean, g[1] + x0_mean, g[2] + y0_mean, g[3] + y0_mean)
+            if mode in ("rectangle", "square", "rectangular"):
+                g = (g[0] + x0_mean, g[1] + x0_mean, g[2] + y0_mean, g[3] + y0_mean)
 
         # Scale by the detector pixel size
-        if calibrated == True:
-            if mode == 'point':
-                g = (g[0]/unit_conversion, g[1]/unit_conversion)
-            if mode in('circle', 'circular'):
-                g = ((g[0][0]/unit_conversion, g[0][1]/unit_conversion),
-                    (g[1]/unit_conversion))
-            if mode in('annulus', 'annular'):
-                g = ((g[0][0]/unit_conversion, g[0][1]/unit_conversion),
-                    (g[1][0]/unit_conversion, g[1][1]/unit_conversion))
-            if mode in('rectangle', 'square', 'rectangular') :
-                g = (g[0]/unit_conversion, g[1]/unit_conversion,
-                     g[2]/unit_conversion, g[3]/unit_conversion)
+        if calibrated is True:
+            if mode == "point":
+                g = (g[0] / unit_conversion, g[1] / unit_conversion)
+            if mode in ("circle", "circular"):
+                g = (
+                    (g[0][0] / unit_conversion, g[0][1] / unit_conversion),
+                    (g[1] / unit_conversion),
+                )
+            if mode in ("annulus", "annular"):
+                g = (
+                    (g[0][0] / unit_conversion, g[0][1] / unit_conversion),
+                    (g[1][0] / unit_conversion, g[1][1] / unit_conversion),
+                )
+            if mode in ("rectangle", "square", "rectangular"):
+                g = (
+                    g[0] / unit_conversion,
+                    g[1] / unit_conversion,
+                    g[2] / unit_conversion,
+                    g[3] / unit_conversion,
+                )
 
         return g
-
 
     @staticmethod
     def make_detector(
@@ -547,7 +590,7 @@ class DataCubeVirtualImager:
         mode,
         geometry,
     ):
-        '''
+        """
         Generate a 2D mask representing a detector function.
 
         Parameters
@@ -564,31 +607,41 @@ class DataCubeVirtualImager:
         Returns
         -------
         detector_mask : 2d array
-        '''
+        """
         g = geometry
 
-        #point mask 
-        if mode == 'point':
-            assert(isinstance(g,tuple) and len(g)==2), 'specify qx and qy as tuple (qx, qy)'
+        # point mask
+        if mode == "point":
+            assert (
+                isinstance(g, tuple) and len(g) == 2
+            ), "specify qx and qy as tuple (qx, qy)"
             mask = np.zeros(shape, dtype=bool)
 
             qx = int(g[0])
             qy = int(g[1])
 
-            mask[qx,qy] = 1
+            mask[qx, qy] = 1
 
-        #circular mask
-        if mode in('circle', 'circular'):
-            assert(isinstance(g,tuple) and len(g)==2 and len(g[0])==2 and isinstance(g[1],(float,int))), \
-            'specify qx, qy, radius_i as ((qx, qy), radius)'
+        # circular mask
+        if mode in ("circle", "circular"):
+            assert (
+                isinstance(g, tuple)
+                and len(g) == 2
+                and len(g[0]) == 2
+                and isinstance(g[1], (float, int))
+            ), "specify qx, qy, radius_i as ((qx, qy), radius)"
 
             qxa, qya = np.indices(shape)
             mask = (qxa - g[0][0]) ** 2 + (qya - g[0][1]) ** 2 < g[1] ** 2
 
-        #annular mask 
-        if mode in('annulus', 'annular'):
-            assert(isinstance(g,tuple) and len(g)==2 and len(g[0])==2 and len(g[1])==2), \
-            'specify qx, qy, radius_i, radius_0 as ((qx, qy), (radius_i, radius_o))'
+        # annular mask
+        if mode in ("annulus", "annular"):
+            assert (
+                isinstance(g, tuple)
+                and len(g) == 2
+                and len(g[0]) == 2
+                and len(g[1]) == 2
+            ), "specify qx, qy, radius_i, radius_0 as ((qx, qy), (radius_i, radius_o))"
 
             assert g[1][1] > g[1][0], "Inner radius must be smaller than outer radius"
 
@@ -597,10 +650,11 @@ class DataCubeVirtualImager:
             mask2 = (qxa - g[0][0]) ** 2 + (qya - g[0][1]) ** 2 < g[1][1] ** 2
             mask = np.logical_and(mask1, mask2)
 
-        #rectangle mask 
-        if mode in('rectangle', 'square', 'rectangular') :
-            assert(isinstance(g,tuple) and len(g)==4), \
-           'specify x_min, x_max, y_min, y_max as (x_min, x_max, y_min, y_max)'
+        # rectangle mask
+        if mode in ("rectangle", "square", "rectangular"):
+            assert (
+                isinstance(g, tuple) and len(g) == 4
+            ), "specify x_min, x_max, y_min, y_max as (x_min, x_max, y_min, y_max)"
             mask = np.zeros(shape, dtype=bool)
 
             xmin = int(np.round(g[0]))
@@ -610,15 +664,12 @@ class DataCubeVirtualImager:
 
             mask[xmin:xmax, ymin:ymax] = 1
 
-        #flexible mask
-        if mode == 'mask':
-            assert type(g) == np.ndarray, '`geometry` type should be `np.ndarray`'
-            assert (g.shape == shape), 'mask and diffraction pattern shapes do not match'
+        # flexible mask
+        if mode == "mask":
+            assert type(g) == np.ndarray, "`geometry` type should be `np.ndarray`"
+            assert g.shape == shape, "mask and diffraction pattern shapes do not match"
             mask = g
         return mask
-
-
-
 
     # TODO where should this go?
     def make_bragg_mask(
@@ -629,10 +680,10 @@ class DataCubeVirtualImager:
         radius,
         origin,
         max_q,
-        return_sum = True,
+        return_sum=True,
         **kwargs,
-        ):
-        '''
+    ):
+        """
         Creates and returns a mask consisting of circular disks
         about the points of a 2D lattice.
 
@@ -648,43 +699,39 @@ class DataCubeVirtualImager:
 
         Returns:
             (2 or 3D array) the mask
-        '''
+        """
         nas = np.asarray
-        g1,g2,origin = nas(g1),nas(g2),nas(origin)
+        g1, g2, origin = nas(g1), nas(g2), nas(origin)
 
         # Get N,M, the maximum indices to tile out to
         L1 = np.sqrt(np.sum(g1**2))
-        H = int(max_q/L1) + 1
-        L2 = np.hypot(-g2[0]*g1[1],g2[1]*g1[0])/np.sqrt(np.sum(g1**2))
-        K = int(max_q/L2) + 1
+        H = int(max_q / L1) + 1
+        L2 = np.hypot(-g2[0] * g1[1], g2[1] * g1[0]) / np.sqrt(np.sum(g1**2))
+        K = int(max_q / L2) + 1
 
         # Compute number of points
         N = 0
-        for h in range(-H,H+1):
-            for k in range(-K,K+1):
-                v = h*g1 + k*g2
+        for h in range(-H, H + 1):
+            for k in range(-K, K + 1):
+                v = h * g1 + k * g2
                 if np.sqrt(v.dot(v)) < max_q:
                     N += 1
 
-        #create mask
+        # create mask
         mask = np.zeros((Qshape[0], Qshape[1], N), dtype=bool)
         N = 0
-        for h in range(-H,H+1):
-            for k in range(-K,K+1):
-                v = h*g1 + k*g2
+        for h in range(-H, H + 1):
+            for k in range(-K, K + 1):
+                v = h * g1 + k * g2
                 if np.sqrt(v.dot(v)) < max_q:
                     center = origin + v
-                    mask[:,:,N] = self.make_detector(
+                    mask[:, :, N] = self.make_detector(
                         Qshape,
-                        mode = 'circle',
-                        geometry = (center, radius),
+                        mode="circle",
+                        geometry=(center, radius),
                     )
                     N += 1
 
-
         if return_sum:
-            mask = np.sum(mask, axis = 2)
+            mask = np.sum(mask, axis=2)
         return mask
-
-
-

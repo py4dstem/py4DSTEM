@@ -13,38 +13,31 @@ from py4DSTEM.process.utils.cross_correlate import get_cross_correlation_FT
 from py4DSTEM.braggvectors.diskdetection_aiml import find_Bragg_disks_aiml
 
 
-
-
 def find_Bragg_disks(
     data,
     template,
-
-    radial_bksb = False,
-    filter_function = None,
-
-    corrPower = 1,
-    sigma = None,
-    sigma_dp = 0,
-    sigma_cc = 2,
-    subpixel = 'multicorr',
-    upsample_factor = 16,
-
-    minAbsoluteIntensity = 0,
-    minRelativeIntensity = 0.005,
-    relativeToPeak = 0,
-    minPeakSpacing = 60,
-    edgeBoundary = 20,
-    maxNumPeaks = 70,
-
-    CUDA = False,
-    CUDA_batched = True,
-    distributed = None,
-
-    ML = False,
-    ml_model_path = None,
-    ml_num_attempts = 1,
-    ml_batch_size = 8,
-    ):
+    radial_bksb=False,
+    filter_function=None,
+    corrPower=1,
+    sigma=None,
+    sigma_dp=0,
+    sigma_cc=2,
+    subpixel="multicorr",
+    upsample_factor=16,
+    minAbsoluteIntensity=0,
+    minRelativeIntensity=0.005,
+    relativeToPeak=0,
+    minPeakSpacing=60,
+    edgeBoundary=20,
+    maxNumPeaks=70,
+    CUDA=False,
+    CUDA_batched=True,
+    distributed=None,
+    ML=False,
+    ml_model_path=None,
+    ml_num_attempts=1,
+    ml_batch_size=8,
+):
     """
     Finds the Bragg disks in the diffraction patterns represented by `data` by
     cross/phase correlatin with `template`.
@@ -188,12 +181,12 @@ def find_Bragg_disks(
 
     # `data` type
     if isinstance(data, DataCube):
-        mode = 'datacube'
+        mode = "datacube"
     elif isinstance(data, np.ndarray):
         if data.ndim == 2:
-            mode = 'dp'
+            mode = "dp"
         elif data.ndim == 3:
-            mode = 'dp_stack'
+            mode = "dp_stack"
         else:
             er = f"if `data` is an array, must be 2- or 3-D, not {data.ndim}-D"
             raise Exception(er)
@@ -201,33 +194,33 @@ def find_Bragg_disks(
         try:
             # when a position (rx,ry) is passed, get those patterns
             # and put them in a stack
-            dc,rx,ry = data[0],data[1],data[2]
+            dc, rx, ry = data[0], data[1], data[2]
 
             # h5py datasets have different rules for slicing than
             # numpy arrays, so we have to do this manually
             if "h5py" in str(type(dc.data)):
-                data = np.zeros((len(rx),dc.Q_Nx,dc.Q_Ny))
+                data = np.zeros((len(rx), dc.Q_Nx, dc.Q_Ny))
                 # no background subtraction
                 if not radial_bksb:
-                    for i,(x,y) in enumerate(zip(rx,ry)):
-                        data[i] = dc.data[x,y]
+                    for i, (x, y) in enumerate(zip(rx, ry)):
+                        data[i] = dc.data[x, y]
                 # with bksubtr
                 else:
-                    for i,(x,y) in enumerate(zip(rx,ry)):
-                        data[i] = dc.get_radial_bksb_dp(rx,ry)
+                    for i, (x, y) in enumerate(zip(rx, ry)):
+                        data[i] = dc.get_radial_bksb_dp(rx, ry)
             else:
                 # no background subtraction
                 if not radial_bksb:
-                    data = dc.data[np.array(rx),np.array(ry),:,:]
+                    data = dc.data[np.array(rx), np.array(ry), :, :]
                 # with bksubtr
                 else:
-                    data = np.zeros((len(rx),dc.Q_Nx,dc.Q_Ny))
-                    for i,(x,y) in enumerate(zip(rx,ry)):
-                        data[i] = dc.get_radial_bksb_dp(x,y)
+                    data = np.zeros((len(rx), dc.Q_Nx, dc.Q_Ny))
+                    for i, (x, y) in enumerate(zip(rx, ry)):
+                        data[i] = dc.get_radial_bksb_dp(x, y)
             if data.ndim == 2:
-                mode = 'dp'
+                mode = "dp"
             elif data.ndim == 3:
-                mode = 'dp_stack'
+                mode = "dp_stack"
         except:
             er = f"entry {data} for `data` could not be parsed"
             raise Exception(er)
@@ -235,85 +228,78 @@ def find_Bragg_disks(
     # CPU/GPU/cluster/ML-AI
 
     if ML:
-        mode = 'dc_ml'
+        mode = "dc_ml"
 
-    elif mode == 'datacube':
-        if distributed is None and CUDA == False:
-            mode = 'dc_CPU'
-        elif distributed is None and CUDA == True:
-            if CUDA_batched == False:
-                mode = 'dc_GPU'
+    elif mode == "datacube":
+        if distributed is None and CUDA is False:
+            mode = "dc_CPU"
+        elif distributed is None and CUDA is True:
+            if CUDA_batched is False:
+                mode = "dc_GPU"
             else:
-                mode = 'dc_GPU_batched'
+                mode = "dc_GPU_batched"
         else:
             x = _parse_distributed(distributed)
             connect, data_file, cluster_path, distributed_mode = x
-            if distributed_mode == 'dask':
-                mode = 'dc_dask'
-            elif distributed_mode == 'ipyparallel':
-                mode = 'dc_ipyparallel'
+            if distributed_mode == "dask":
+                mode = "dc_dask"
+            elif distributed_mode == "ipyparallel":
+                mode = "dc_ipyparallel"
             else:
                 er = f"unrecognized distributed mode {distributed_mode}"
                 raise Exception(er)
     # overwrite if ML selected
 
-
     # select a function
     fn_dict = {
-        "dp" : _find_Bragg_disks_single,
-        "dp_stack" : _find_Bragg_disks_stack,
-        "dc_CPU" : _find_Bragg_disks_CPU,
-        "dc_GPU" : _find_Bragg_disks_CUDA_unbatched,
-        "dc_GPU_batched" : _find_Bragg_disks_CUDA_batched,
-        "dc_dask" : _find_Bragg_disks_dask,
-        "dc_ipyparallel" : _find_Bragg_disks_ipp,
-        "dc_ml" : find_Bragg_disks_aiml
+        "dp": _find_Bragg_disks_single,
+        "dp_stack": _find_Bragg_disks_stack,
+        "dc_CPU": _find_Bragg_disks_CPU,
+        "dc_GPU": _find_Bragg_disks_CUDA_unbatched,
+        "dc_GPU_batched": _find_Bragg_disks_CUDA_batched,
+        "dc_dask": _find_Bragg_disks_dask,
+        "dc_ipyparallel": _find_Bragg_disks_ipp,
+        "dc_ml": find_Bragg_disks_aiml,
     }
     fn = fn_dict[mode]
-
 
     # prepare kwargs
     kws = {}
     # distributed kwargs
     if distributed is not None:
-        kws['connect'] = connect
-        kws['data_file'] = data_file
-        kws['cluster_path'] = cluster_path
+        kws["connect"] = connect
+        kws["data_file"] = data_file
+        kws["cluster_path"] = cluster_path
     # ML arguments
-    if ML == True:
-        kws['CUDA'] = CUDA
-        kws['model_path'] = ml_model_path
-        kws['num_attempts'] = ml_num_attempts
-        kws['batch_size'] = ml_batch_size
+    if ML is True:
+        kws["CUDA"] = CUDA
+        kws["model_path"] = ml_model_path
+        kws["num_attempts"] = ml_num_attempts
+        kws["batch_size"] = ml_batch_size
 
     # if radial background subtraction is requested, add to args
-    if radial_bksb and mode=='dc_CPU':
-        kws['radial_bksb'] = radial_bksb
-
+    if radial_bksb and mode == "dc_CPU":
+        kws["radial_bksb"] = radial_bksb
 
     # run and return
     ans = fn(
         data,
         template,
-        filter_function = filter_function,
-        corrPower = corrPower,
-        sigma_dp = sigma_dp,
-        sigma_cc = sigma_cc,
-        subpixel = subpixel,
-        upsample_factor = upsample_factor,
-        minAbsoluteIntensity = minAbsoluteIntensity,
-        minRelativeIntensity = minRelativeIntensity,
-        relativeToPeak = relativeToPeak,
-        minPeakSpacing = minPeakSpacing,
-        edgeBoundary = edgeBoundary,
-        maxNumPeaks = maxNumPeaks,
-        **kws
+        filter_function=filter_function,
+        corrPower=corrPower,
+        sigma_dp=sigma_dp,
+        sigma_cc=sigma_cc,
+        subpixel=subpixel,
+        upsample_factor=upsample_factor,
+        minAbsoluteIntensity=minAbsoluteIntensity,
+        minRelativeIntensity=minRelativeIntensity,
+        relativeToPeak=relativeToPeak,
+        minPeakSpacing=minPeakSpacing,
+        edgeBoundary=edgeBoundary,
+        maxNumPeaks=maxNumPeaks,
+        **kws,
     )
     return ans
-
-
-
-
 
 
 # Single diffraction pattern
@@ -322,45 +308,41 @@ def find_Bragg_disks(
 def _find_Bragg_disks_single(
     DP,
     template,
-    filter_function = None,
-    corrPower = 1,
-    sigma_dp = 0,
-    sigma_cc = 2,
-    subpixel = 'poly',
-    upsample_factor = 16,
-    minAbsoluteIntensity = 0,
-    minRelativeIntensity = 0,
-    relativeToPeak = 0,
-    minPeakSpacing = 0,
-    edgeBoundary = 1,
-    maxNumPeaks = 100,
-    _return_cc = False,
-    _template_space = 'real'
-    ):
-
-
-   # apply filter function
+    filter_function=None,
+    corrPower=1,
+    sigma_dp=0,
+    sigma_cc=2,
+    subpixel="poly",
+    upsample_factor=16,
+    minAbsoluteIntensity=0,
+    minRelativeIntensity=0,
+    relativeToPeak=0,
+    minPeakSpacing=0,
+    edgeBoundary=1,
+    maxNumPeaks=100,
+    _return_cc=False,
+    _template_space="real",
+):
+    # apply filter function
     er = "filter_function must be callable"
-    if filter_function: assert callable(filter_function), er
+    if filter_function:
+        assert callable(filter_function), er
     DP = DP if filter_function is None else filter_function(DP)
 
     # check for a template
     if template is None:
         cc = DP
     else:
-
-
         # fourier transform the template
-        assert _template_space in ('real','fourier')
-        if _template_space == 'real':
+        assert _template_space in ("real", "fourier")
+        if _template_space == "real":
             template_FT = np.conj(np.fft.fft2(template))
         else:
             template_FT = template
 
-
         # apply any smoothing to the data
-        if sigma_dp>0:
-            DP = gaussian_filter( DP,sigma_dp )
+        if sigma_dp > 0:
+            DP = gaussian_filter(DP, sigma_dp)
 
         # Compute cross correlation
         # _returnval = 'fourier' if subpixel == 'multicorr' else 'real'
@@ -368,28 +350,26 @@ def _find_Bragg_disks_single(
             DP,
             template_FT,
             corrPower,
-            'fourier',
+            "fourier",
         )
-
 
     # Get maxima
     maxima = get_maxima_2D(
-        np.maximum(np.real(np.fft.ifft2(cc)),0),
-        subpixel = subpixel,
-        upsample_factor = upsample_factor,
-        sigma = sigma_cc,
-        minAbsoluteIntensity = minAbsoluteIntensity,
-        minRelativeIntensity = minRelativeIntensity,
-        relativeToPeak = relativeToPeak,
-        minSpacing = minPeakSpacing,
-        edgeBoundary = edgeBoundary,
-        maxNumPeaks = maxNumPeaks,
-        _ar_FT = cc
+        np.maximum(np.real(np.fft.ifft2(cc)), 0),
+        subpixel=subpixel,
+        upsample_factor=upsample_factor,
+        sigma=sigma_cc,
+        minAbsoluteIntensity=minAbsoluteIntensity,
+        minRelativeIntensity=minRelativeIntensity,
+        relativeToPeak=relativeToPeak,
+        minSpacing=minPeakSpacing,
+        edgeBoundary=edgeBoundary,
+        maxNumPeaks=maxNumPeaks,
+        _ar_FT=cc,
     )
 
     # Wrap as QPoints instance
-    maxima = QPoints( maxima )
-
+    maxima = QPoints(maxima)
 
     # Return
     if _return_cc is True:
@@ -397,10 +377,7 @@ def _find_Bragg_disks_single(
     return maxima
 
 
-
-
-
-#def _get_cross_correlation_FT(
+# def _get_cross_correlation_FT(
 #    DP,
 #    template_FT,
 #    corrPower = 1,
@@ -418,60 +395,51 @@ def _find_Bragg_disks_single(
 #    return cc
 
 
-
-
-
-
 # 3D stack of DPs
 
 
 def _find_Bragg_disks_stack(
     dp_stack,
     template,
-    filter_function = None,
-    corrPower = 1,
-    sigma_dp = 0,
-    sigma_cc = 2,
-    subpixel = 'poly',
-    upsample_factor = 16,
-    minAbsoluteIntensity = 0,
-    minRelativeIntensity = 0,
-    relativeToPeak = 0,
-    minPeakSpacing = 0,
-    edgeBoundary = 1,
-    maxNumPeaks = 100,
-    _template_space = 'real'
-    ):
-
+    filter_function=None,
+    corrPower=1,
+    sigma_dp=0,
+    sigma_cc=2,
+    subpixel="poly",
+    upsample_factor=16,
+    minAbsoluteIntensity=0,
+    minRelativeIntensity=0,
+    relativeToPeak=0,
+    minPeakSpacing=0,
+    edgeBoundary=1,
+    maxNumPeaks=100,
+    _template_space="real",
+):
     ans = []
 
     for idx in range(dp_stack.shape[0]):
-
-        dp = dp_stack[idx,:,:]
-        peaks =_find_Bragg_disks_single(
+        dp = dp_stack[idx, :, :]
+        peaks = _find_Bragg_disks_single(
             dp,
             template,
-            filter_function = filter_function,
-            corrPower = corrPower,
-            sigma_dp = sigma_dp,
-            sigma_cc = sigma_cc,
-            subpixel = subpixel,
-            upsample_factor = upsample_factor,
-            minAbsoluteIntensity = minAbsoluteIntensity,
-            minRelativeIntensity = minRelativeIntensity,
-            relativeToPeak = relativeToPeak,
-            minPeakSpacing = minPeakSpacing,
-            edgeBoundary = edgeBoundary,
-            maxNumPeaks = maxNumPeaks,
-            _template_space = _template_space,
-            _return_cc = False
+            filter_function=filter_function,
+            corrPower=corrPower,
+            sigma_dp=sigma_dp,
+            sigma_cc=sigma_cc,
+            subpixel=subpixel,
+            upsample_factor=upsample_factor,
+            minAbsoluteIntensity=minAbsoluteIntensity,
+            minRelativeIntensity=minRelativeIntensity,
+            relativeToPeak=relativeToPeak,
+            minPeakSpacing=minPeakSpacing,
+            edgeBoundary=edgeBoundary,
+            maxNumPeaks=maxNumPeaks,
+            _template_space=_template_space,
+            _return_cc=False,
         )
         ans.append(peaks)
 
     return ans
-
-
-
 
 
 # Whole datacube, CPU
@@ -480,76 +448,69 @@ def _find_Bragg_disks_stack(
 def _find_Bragg_disks_CPU(
     datacube,
     probe,
-    filter_function = None,
-    corrPower = 1,
-    sigma_dp = 0,
-    sigma_cc = 2,
-    subpixel = 'multicorr',
-    upsample_factor = 16,
-    minAbsoluteIntensity = 0,
-    minRelativeIntensity = 0.005,
-    relativeToPeak = 0,
-    minPeakSpacing = 60,
-    edgeBoundary = 20,
-    maxNumPeaks = 70,
-    radial_bksb = False
-    ):
-
+    filter_function=None,
+    corrPower=1,
+    sigma_dp=0,
+    sigma_cc=2,
+    subpixel="multicorr",
+    upsample_factor=16,
+    minAbsoluteIntensity=0,
+    minRelativeIntensity=0.005,
+    relativeToPeak=0,
+    minPeakSpacing=60,
+    edgeBoundary=20,
+    maxNumPeaks=70,
+    radial_bksb=False,
+):
     # Make the BraggVectors instance
-    braggvectors = BraggVectors( datacube.Rshape, datacube.Qshape )
-
+    braggvectors = BraggVectors(datacube.Rshape, datacube.Qshape)
 
     # Get the template's Fourier Transform
     probe_kernel_FT = np.conj(np.fft.fft2(probe)) if probe is not None else None
 
-
     # Loop over all diffraction patterns
     # Compute and populate BraggVectors data
-    for (rx,ry) in tqdmnd(
+    for rx, ry in tqdmnd(
         datacube.R_Nx,
         datacube.R_Ny,
-        desc='Finding Bragg Disks',
-        unit='DP',
-        unit_scale=True
-        ):
-
+        desc="Finding Bragg Disks",
+        unit="DP",
+        unit_scale=True,
+    ):
         # Get a diffraction pattern
 
         # without background subtraction
         if not radial_bksb:
-            dp = datacube.data[rx,ry,:,:]
+            dp = datacube.data[rx, ry, :, :]
         # and with
         else:
-            dp = datacube.get_radial_bksb_dp(rx,ry)
-
+            dp = datacube.get_radial_bksb_dp(rx, ry)
 
         # Compute
-        peaks =_find_Bragg_disks_single(
+        peaks = _find_Bragg_disks_single(
             dp,
-            template = probe_kernel_FT,
-            filter_function = filter_function,
-            corrPower = corrPower,
-            sigma_dp = sigma_dp,
-            sigma_cc = sigma_cc,
-            subpixel = subpixel,
-            upsample_factor = upsample_factor,
-            minAbsoluteIntensity = minAbsoluteIntensity,
-            minRelativeIntensity = minRelativeIntensity,
-            relativeToPeak = relativeToPeak,
-            minPeakSpacing = minPeakSpacing,
-            edgeBoundary = edgeBoundary,
-            maxNumPeaks = maxNumPeaks,
-            _return_cc = False,
-            _template_space = 'fourier'
+            template=probe_kernel_FT,
+            filter_function=filter_function,
+            corrPower=corrPower,
+            sigma_dp=sigma_dp,
+            sigma_cc=sigma_cc,
+            subpixel=subpixel,
+            upsample_factor=upsample_factor,
+            minAbsoluteIntensity=minAbsoluteIntensity,
+            minRelativeIntensity=minRelativeIntensity,
+            relativeToPeak=relativeToPeak,
+            minPeakSpacing=minPeakSpacing,
+            edgeBoundary=edgeBoundary,
+            maxNumPeaks=maxNumPeaks,
+            _return_cc=False,
+            _template_space="fourier",
         )
 
         # Populate data
-        braggvectors._v_uncal[rx,ry] = peaks
-
+        braggvectors._v_uncal[rx, ry] = peaks
 
     # Return
     return braggvectors
-
 
 
 # CUDA - unbatched
@@ -558,22 +519,22 @@ def _find_Bragg_disks_CPU(
 def _find_Bragg_disks_CUDA_unbatched(
     datacube,
     probe,
-    filter_function = None,
-    corrPower = 1,
-    sigma_dp = 0,
-    sigma_cc = 2,
-    subpixel = 'multicorr',
-    upsample_factor = 16,
-    minAbsoluteIntensity = 0,
-    minRelativeIntensity = 0.005,
-    relativeToPeak = 0,
-    minPeakSpacing = 60,
-    edgeBoundary = 20,
-    maxNumPeaks = 70,
-    ):
-
+    filter_function=None,
+    corrPower=1,
+    sigma_dp=0,
+    sigma_cc=2,
+    subpixel="multicorr",
+    upsample_factor=16,
+    minAbsoluteIntensity=0,
+    minRelativeIntensity=0.005,
+    relativeToPeak=0,
+    minPeakSpacing=60,
+    edgeBoundary=20,
+    maxNumPeaks=70,
+):
     # compute
     from py4DSTEM.braggvectors.diskdetection_cuda import find_Bragg_disks_CUDA
+
     peaks = find_Bragg_disks_CUDA(
         datacube,
         probe,
@@ -588,14 +549,15 @@ def _find_Bragg_disks_CUDA_unbatched(
         minPeakSpacing=minPeakSpacing,
         edgeBoundary=edgeBoundary,
         maxNumPeaks=maxNumPeaks,
-        batching=False)
+        batching=False,
+    )
 
     # Populate a BraggVectors instance and return
-    braggvectors = BraggVectors( datacube.Rshape, datacube.Qshape )
+    braggvectors = BraggVectors(datacube.Rshape, datacube.Qshape)
     braggvectors._v_uncal = peaks
+    braggvectors._set_raw_vector_getter()
+    braggvectors._set_cal_vector_getter()
     return braggvectors
-
-
 
 
 # CUDA - batched
@@ -604,22 +566,22 @@ def _find_Bragg_disks_CUDA_unbatched(
 def _find_Bragg_disks_CUDA_batched(
     datacube,
     probe,
-    filter_function = None,
-    corrPower = 1,
-    sigma_dp = 0,
-    sigma_cc = 2,
-    subpixel = 'multicorr',
-    upsample_factor = 16,
-    minAbsoluteIntensity = 0,
-    minRelativeIntensity = 0.005,
-    relativeToPeak = 0,
-    minPeakSpacing = 60,
-    edgeBoundary = 20,
-    maxNumPeaks = 70,
-    ):
-
+    filter_function=None,
+    corrPower=1,
+    sigma_dp=0,
+    sigma_cc=2,
+    subpixel="multicorr",
+    upsample_factor=16,
+    minAbsoluteIntensity=0,
+    minRelativeIntensity=0.005,
+    relativeToPeak=0,
+    minPeakSpacing=60,
+    edgeBoundary=20,
+    maxNumPeaks=70,
+):
     # compute
     from py4DSTEM.braggvectors.diskdetection_cuda import find_Bragg_disks_CUDA
+
     peaks = find_Bragg_disks_CUDA(
         datacube,
         probe,
@@ -634,15 +596,15 @@ def _find_Bragg_disks_CUDA_batched(
         minPeakSpacing=minPeakSpacing,
         edgeBoundary=edgeBoundary,
         maxNumPeaks=maxNumPeaks,
-        batching=True)
+        batching=True,
+    )
 
     # Populate a BraggVectors instance and return
-    braggvectors = BraggVectors( datacube.Rshape, datacube.Qshape )
+    braggvectors = BraggVectors(datacube.Rshape, datacube.Qshape)
     braggvectors._v_uncal = peaks
+    braggvectors._set_raw_vector_getter()
+    braggvectors._set_cal_vector_getter()
     return braggvectors
-
-
-
 
 
 # Distributed - ipyparallel
@@ -654,22 +616,22 @@ def _find_Bragg_disks_ipp(
     connect,
     data_file,
     cluster_path,
-    filter_function = None,
-    corrPower = 1,
-    sigma_dp = 0,
-    sigma_cc = 2,
-    subpixel = 'multicorr',
-    upsample_factor = 16,
-    minAbsoluteIntensity = 0,
-    minRelativeIntensity = 0.005,
-    relativeToPeak = 0,
-    minPeakSpacing = 60,
-    edgeBoundary = 20,
-    maxNumPeaks = 70,
-    ):
-
+    filter_function=None,
+    corrPower=1,
+    sigma_dp=0,
+    sigma_cc=2,
+    subpixel="multicorr",
+    upsample_factor=16,
+    minAbsoluteIntensity=0,
+    minRelativeIntensity=0.005,
+    relativeToPeak=0,
+    minPeakSpacing=60,
+    edgeBoundary=20,
+    maxNumPeaks=70,
+):
     # compute
     from py4DSTEM.braggvectors.diskdetection_parallel import find_Bragg_disks_ipp
+
     peaks = find_Bragg_disks_ipp(
         datacube,
         probe,
@@ -686,19 +648,19 @@ def _find_Bragg_disks_ipp(
         maxNumPeaks=maxNumPeaks,
         ipyparallel_client_file=connect,
         data_file=data_file,
-        cluster_path=cluster_path
-        )
+        cluster_path=cluster_path,
+    )
 
     # Populate a BraggVectors instance and return
-    braggvectors = BraggVectors( datacube.Rshape, datacube.Qshape )
+    braggvectors = BraggVectors(datacube.Rshape, datacube.Qshape)
     braggvectors._v_uncal = peaks
+    braggvectors._set_raw_vector_getter()
+    braggvectors._set_cal_vector_getter()
     return braggvectors
 
 
-
-
-
 # Distributed - dask
+
 
 def _find_Bragg_disks_dask(
     datacube,
@@ -706,22 +668,22 @@ def _find_Bragg_disks_dask(
     connect,
     data_file,
     cluster_path,
-    filter_function = None,
-    corrPower = 1,
-    sigma_dp = 0,
-    sigma_cc = 2,
-    subpixel = 'multicorr',
-    upsample_factor = 16,
-    minAbsoluteIntensity = 0,
-    minRelativeIntensity = 0.005,
-    relativeToPeak = 0,
-    minPeakSpacing = 60,
-    edgeBoundary = 20,
-    maxNumPeaks = 70,
-    ):
-
+    filter_function=None,
+    corrPower=1,
+    sigma_dp=0,
+    sigma_cc=2,
+    subpixel="multicorr",
+    upsample_factor=16,
+    minAbsoluteIntensity=0,
+    minRelativeIntensity=0.005,
+    relativeToPeak=0,
+    minPeakSpacing=60,
+    edgeBoundary=20,
+    maxNumPeaks=70,
+):
     # compute
     from py4DSTEM.braggvectors.diskdetection_parallel import find_Bragg_disks_dask
+
     peaks = find_Bragg_disks_dask(
         datacube,
         probe,
@@ -738,19 +700,15 @@ def _find_Bragg_disks_dask(
         maxNumPeaks=maxNumPeaks,
         dask_client_file=connect,
         data_file=data_file,
-        cluster_path=cluster_path
-        )
+        cluster_path=cluster_path,
+    )
 
     # Populate a BraggVectors instance and return
-    braggvectors = BraggVectors( datacube.Rshape, datacube.Qshape )
+    braggvectors = BraggVectors(datacube.Rshape, datacube.Qshape)
     braggvectors._v_uncal = peaks
+    braggvectors._set_raw_vector_getter()
+    braggvectors._set_cal_vector_getter()
     return braggvectors
-
-
-
-
-
-
 
 
 def _parse_distributed(distributed):
@@ -761,16 +719,17 @@ def _parse_distributed(distributed):
 
     # parse mode (ipyparallel or dask)
     if "ipyparallel" in distributed:
-        mode = 'ipyparallel'
+        mode = "ipyparallel"
         if "client_file" in distributed["ipyparallel"]:
             connect = distributed["ipyparallel"]["client_file"]
         else:
-            er = "Within distributed[\"ipyparallel\"], "
-            er += "missing key for \"client_file\""
+            er = 'Within distributed["ipyparallel"], '
+            er += 'missing key for "client_file"'
             raise KeyError(er)
 
         try:
             import ipyparallel as ipp
+
             c = ipp.Client(url_file=connect, timeout=30)
 
             if len(c.ids) == 0:
@@ -780,17 +739,16 @@ def _parse_distributed(distributed):
             raise ImportError("Unable to import module ipyparallel!")
 
     elif "dask" in distributed:
-        mode = 'dask'
+        mode = "dask"
         if "client" in distributed["dask"]:
             connect = distributed["dask"]["client"]
         else:
-            er = "Within distributed[\"dask\"], missing key for \"client\""
+            er = 'Within distributed["dask"], missing key for "client"'
             raise KeyError(er)
 
     else:
         er = "Within distributed, you must specify 'ipyparallel' or 'dask'!"
         raise KeyError(er)
-
 
     # parse data file
     if "data_file" not in distributed:
@@ -801,7 +759,7 @@ def _parse_distributed(distributed):
     data_file = distributed["data_file"]
 
     if not isinstance(data_file, str):
-        er = f"Expected string for distributed key 'data_file', "
+        er = "Expected string for distributed key 'data_file', "
         er += f"received {type(data_file)}"
         raise TypeError(er)
     if len(data_file.strip()) == 0:
@@ -810,13 +768,12 @@ def _parse_distributed(distributed):
     elif not os.path.exists(data_file):
         raise FileNotFoundError("File not found")
 
-
     # parse cluster path
     if "cluster_path" in distributed:
         cluster_path = distributed["cluster_path"]
 
         if not isinstance(cluster_path, str):
-            er = f"distributed key 'cluster_path' must be of type str, "
+            er = "distributed key 'cluster_path' must be of type str, "
             er += f"received {type(cluster_path)}"
             raise TypeError(er)
 
@@ -827,19 +784,11 @@ def _parse_distributed(distributed):
             er = f"distributed key 'cluster_path' does not exist: {cluster_path}"
             raise FileNotFoundError(er)
         elif not os.path.isdir(cluster_path):
-            er = f"distributed key 'cluster_path' is not a directory: "
+            er = "distributed key 'cluster_path' is not a directory: "
             er += f"{cluster_path}"
             raise NotADirectoryError(er)
     else:
         cluster_path = None
 
-
     # return
     return connect, data_file, cluster_path, mode
-
-
-
-
-
-
-
