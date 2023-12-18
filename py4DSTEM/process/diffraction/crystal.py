@@ -273,7 +273,7 @@ class Crystal:
 
         parser = CifParser(CIF)
 
-        structure = parser.get_structures()[0]
+        structure = parser.get_structures(False)[0]
 
         return Crystal.from_pymatgen_structure(
             structure, conventional_standard_structure=conventional_standard_structure
