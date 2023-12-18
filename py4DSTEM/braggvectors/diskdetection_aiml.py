@@ -8,6 +8,8 @@ import glob
 import json
 import shutil
 import numpy as np
+from pathlib import Path
+
 
 from scipy.ndimage import gaussian_filter
 from time import time
@@ -437,7 +439,7 @@ def find_Bragg_disks_aiml_serial(
         raise ImportError("Import Error: Please install crystal4D before proceeding")
 
     # Make the peaks PointListArray
-    dtype = [('qx',float),('qy',float),('intensity',float)]
+    dtype = [("qx", float), ("qy", float), ("intensity", float)]
     # peaks = BraggVectors(datacube.Rshape, datacube.Qshape)
     peaks = PointListArray(dtype=dtype, shape=(datacube.R_Nx, datacube.R_Ny))
     # check that the filtered DP is the right size for the probe kernel:
@@ -894,7 +896,11 @@ def _get_latest_model(model_path=None):
         except:
             pass
         # download the json file with the meta data
-        gdrive_download("1-KX0saEYfhZ9IJAOwabH38PCVtfXidJi", destination="./tmp/", filename="model_metadata.json")
+        gdrive_download(
+            "1-KX0saEYfhZ9IJAOwabH38PCVtfXidJi",
+            destination="./tmp/",
+            filename="model_metadata.json",
+        )
         with open("./tmp/model_metadata.json") as f:
             metadata = json.load(f)
             file_id = metadata["file_id"]
@@ -920,9 +926,8 @@ def _get_latest_model(model_path=None):
             filename = file_path + file_type
             print(f"{file_path = }")
             print(f"{filename = }")
-            from pathlib import Path
             filename = Path(filename)
-            gdrive_download(file_id, destination='./tmp', filename=filename.name)
+            gdrive_download(file_id, destination="./tmp", filename=filename.name)
             try:
                 shutil.unpack_archive(filename, "./tmp", format="zip")
             except:
