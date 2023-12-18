@@ -527,13 +527,6 @@ class WholePatternFit:
                 name=lat.name,
             )
 
-            fig, ax = plt.subplots(figsize=(4, 4))
-            ax.imshow(
-                g1g2_map["mask"].data.astype("float"),
-                vmin=0,
-                vmax=1,
-            )
-
             # Get the reference lattice vectors
             # TODO - update this to allow other refs, ROI, etc.
             mask = (g1g2_map.get_slice("mask").data).astype("bool")
