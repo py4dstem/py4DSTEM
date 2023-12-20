@@ -1281,13 +1281,24 @@ class ParallaxReconstruction(PhaseReconstruction):
         xy_shifts = self._xy_shifts
         BF_size = np.array(self._stack_BF_unshifted.shape[-2:])
 
-        BF_sampling = 1 / asnumpy(self._kr).max()
+        BF_sampling = 1 / asnumpy(self._kr).max() / 2
         DF_sampling = 1 / (
-            self._reciprocal_sampling[0] * self._region_of_interest_shape[0] / 2
+            self._reciprocal_sampling[0] * self._region_of_interest_shape[0]
         )
 
         self._BF_upsample_limit = self._scan_sampling[0] / BF_sampling
         self._DF_upsample_limit = self._scan_sampling[0] / DF_sampling
+
+        if self._DF_upsample_limit < 1:
+            warnings.warn(
+                (
+                    f"Dark-field upsampling limit of {self._DF_upsampling_limit:.2f} "
+                    "is less than 1, implying a scan step-size smaller than Nyquist. "
+                    "setting to 1."
+                ),
+                UserWarning,
+            )
+            self._DF_upsample_limit = 1
 
         if kde_upsample_factor is None:
             if self._BF_upsample_limit * 3 / 2 > self._DF_upsample_limit:
@@ -1296,7 +1307,7 @@ class ParallaxReconstruction(PhaseReconstruction):
                 warnings.warn(
                     (
                         f"Upsampling factor set to {kde_upsample_factor:.2f} (the "
-                        f"dark-field upsampling limit)."
+                        "dark-field upsampling limit)."
                     ),
                     UserWarning,
                 )
@@ -1312,7 +1323,7 @@ class ParallaxReconstruction(PhaseReconstruction):
                     UserWarning,
                 )
             else:
-                kde_upsample_factor = self._DF_upsample_limit * 2 / 3
+                kde_upsample_factor = np.maximum(self._DF_upsample_limit * 2 / 3, 1)
 
                 warnings.warn(
                     (
