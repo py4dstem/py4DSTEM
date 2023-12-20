@@ -948,13 +948,14 @@ class ParallaxReconstruction(PhaseReconstruction):
         asnumpy = self._asnumpy
 
         if reset:
+            self.error_iterations = []
             self._recon_BF = self._recon_BF_initial.copy()
             self._stack_BF_shifted = self._stack_BF_shifted_initial.copy()
             self._stack_mask = self._stack_mask_initial.copy()
             self._recon_mask = self._recon_mask_initial.copy()
             self._xy_shifts = self._xy_shifts_initial.copy()
         elif reset is None:
-            if hasattr(self, "_basis"):
+            if hasattr(self, "error_iterations"):
                 warnings.warn(
                     (
                         "Continuing reconstruction from previous result. "
@@ -962,6 +963,9 @@ class ParallaxReconstruction(PhaseReconstruction):
                     ),
                     UserWarning,
                 )
+            else:
+                self.error_iterations = []
+                previous_iterations = 0
 
         if not regularize_shifts:
             self._basis = self._kxy
@@ -1023,7 +1027,6 @@ class ParallaxReconstruction(PhaseReconstruction):
             ncols = int(np.ceil(num_plots / nrows))
 
             if plot_convergence:
-                errors = []
                 spec = GridSpec(
                     ncols=ncols,
                     nrows=nrows + 1,
@@ -1170,6 +1173,8 @@ class ParallaxReconstruction(PhaseReconstruction):
                 / self._mask_sum
             )
 
+            self.error_iterations.append(float(self._recon_error))
+
             if plot_aligned_bf:
                 row_index, col_index = np.unravel_index(a0, (nrows, ncols))
 
@@ -1180,14 +1185,12 @@ class ParallaxReconstruction(PhaseReconstruction):
                 ax.set_yticks([])
                 ax.set_title(f"Aligned BF at bin {int(bin_vals[a0])}")
 
-                if plot_convergence:
-                    errors.append(float(self._recon_error))
-
         if plot_aligned_bf:
             if plot_convergence:
                 ax = fig.add_subplot(spec[-1, :])
-                ax.plot(np.arange(num_plots), errors)
-                ax.set_xticks(np.arange(num_plots))
+                x_range = np.arange(len(self.error_iterations))
+                ax.plot(x_range, self.error_iterations)
+                ax.set_xticks(x_range)
                 ax.set_ylabel("Error")
             spec.tight_layout(fig)
 
