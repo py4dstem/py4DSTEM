@@ -579,6 +579,7 @@ class StrainMap(RealSlice, Data):
             amount, in degrees
         returncal : bool
             It True, returns rotated map
+        **kwargs: keywords passed to py4DSTEM show function
         """
         # confirm that the calstate hasn't changed
         assert (
@@ -740,6 +741,7 @@ class StrainMap(RealSlice, Data):
             Size of the figure
         returnfig : bool
             Toggles returning the figure
+        **kwargs: keywords passed to py4DSTEM show function
         """
 
         from py4DSTEM.visualize import show_strain

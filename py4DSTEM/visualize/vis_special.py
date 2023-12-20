@@ -994,6 +994,7 @@ def show_strain(
         Size of the figure
     returnfig : bool
         Toggles returning the figure
+    **kwargs: keywords passed to py4DSTEM show function
     """
     # Lookup table for different layouts
     assert layout in ("square", "horizontal", "vertical")
