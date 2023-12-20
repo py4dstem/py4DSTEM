@@ -1697,7 +1697,7 @@ class ParallaxReconstruction(PhaseReconstruction):
             )
 
             figsize = kwargs.pop("figsize", (4 * ncols, sum(height_ratios)))
-            cmap = kwargs.pop("cmap", "gray")
+            cmap = kwargs.pop("cmap", "magma")
             fig = plt.figure(figsize=figsize)
 
             row_index = 0
@@ -1960,6 +1960,7 @@ class ParallaxReconstruction(PhaseReconstruction):
         upsampled: bool = True,
         force_transpose: bool = False,
         force_rotation_deg: float = None,
+        **kwargs,
     ):
         """
         Fit aberrations to the measured image shifts.
@@ -2357,16 +2358,21 @@ class ParallaxReconstruction(PhaseReconstruction):
                     )
                 )
 
+                axsize = kwargs.pop("axsize", (4, 4))
+                cmap = kwargs.pop("cmap", "PiYG")
+                vmin = kwargs.pop("vmin", -max_shift)
+                vmax = kwargs.pop("vmax", max_shift)
+
                 show(
                     [
                         [asnumpy(measured_shifts_sx), asnumpy(fitted_shifts_sx)],
                         [asnumpy(measured_shifts_sy), asnumpy(fitted_shifts_sy)],
                     ],
-                    cmap="PiYG",
-                    vmin=-max_shift,
-                    vmax=max_shift,
+                    cmap=cmap,
+                    vmin=vmin,
+                    vmax=vmax,
                     intensity_range="absolute",
-                    axsize=(4, 4),
+                    axsize=axsize,
                     ticks=False,
                     title=[
                         "Measured Vertical Shifts",
@@ -2680,7 +2686,7 @@ class ParallaxReconstruction(PhaseReconstruction):
         # plotting
         if plot_corrected_phase:
             figsize = kwargs.pop("figsize", (6, 6))
-            cmap = kwargs.pop("cmap", "gray")
+            cmap = kwargs.pop("cmap", "magma")
 
             fig, ax = plt.subplots(figsize=figsize)
 
@@ -2777,7 +2783,7 @@ class ParallaxReconstruction(PhaseReconstruction):
             )
 
             figsize = kwargs.pop("figsize", (4 * ncols, 4 * nrows))
-            cmap = kwargs.pop("cmap", "gray")
+            cmap = kwargs.pop("cmap", "magma")
 
             fig = plt.figure(figsize=figsize)
 
@@ -2908,7 +2914,7 @@ class ParallaxReconstruction(PhaseReconstruction):
 
         """
 
-        cmap = kwargs.pop("cmap", "gray")
+        cmap = kwargs.pop("cmap", "magma")
 
         if upsampled:
             cropped_object = self._crop_padded_object(
