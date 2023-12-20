@@ -899,6 +899,7 @@ class ParallaxReconstruction(PhaseReconstruction):
         max_alignment_bin: int = None,
         min_alignment_bin: int = 1,
         max_iter_at_min_bin: int = 2,
+        alignment_bin_values: list = None,
         cross_correlation_upsample_factor: int = 8,
         regularizer_matrix_size: Tuple[int, int] = (1, 1),
         regularize_shifts: bool = True,
@@ -921,6 +922,8 @@ class ParallaxReconstruction(PhaseReconstruction):
             Minimum bin size for bright field alignment
         max_iter_at_min_bin: int, optional
             Number of iterations to run at the smallest bin size
+        alignment_bin_values: list, optional
+            If not None, explicitly sets the iteration bin values
         cross_correlation_upsample_factor: int, optional
             DFT upsample factor for subpixel alignment
         regularizer_matrix_size: Tuple[int,int], optional
@@ -1012,14 +1015,17 @@ class ParallaxReconstruction(PhaseReconstruction):
         else:
             max_alignment_bin = diameter_pixels
 
-        bin_min = np.ceil(np.log(min_alignment_bin) / np.log(2))
-        bin_max = np.ceil(np.log(max_alignment_bin) / np.log(2))
-        bin_vals = 2 ** np.arange(bin_min, bin_max)[::-1]
+        if alignment_bin_values is not None:
+            bin_vals = np.array(alignment_bin_values).clip(1, max_alignment_bin)
+        else:
+            bin_min = np.ceil(np.log(min_alignment_bin) / np.log(2))
+            bin_max = np.ceil(np.log(max_alignment_bin) / np.log(2))
+            bin_vals = 2 ** np.arange(bin_min, bin_max)[::-1]
 
-        if max_iter_at_min_bin > 1:
-            bin_vals = np.hstack(
-                (bin_vals, np.repeat(bin_vals[-1], max_iter_at_min_bin - 1))
-            )
+            if max_iter_at_min_bin > 1:
+                bin_vals = np.hstack(
+                    (bin_vals, np.repeat(bin_vals[-1], max_iter_at_min_bin - 1))
+                )
 
         if plot_aligned_bf:
             num_plots = bin_vals.shape[0]
