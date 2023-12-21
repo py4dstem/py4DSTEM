@@ -1964,6 +1964,7 @@ class ParallaxReconstruction(PhaseReconstruction):
         fit_aberrations_max_angular_order: int = 4,
         fit_aberrations_min_radial_order: int = 2,
         fit_aberrations_min_angular_order: int = 0,
+        fit_aberrations_mn: list = None,
         fit_max_thon_rings: int = 6,
         fit_power_alpha: float = 1.0,
         plot_CTF_comparison: bool = None,
@@ -1991,6 +1992,8 @@ class ParallaxReconstruction(PhaseReconstruction):
             Min radial order for fitting of aberrations.
         fit_aberrations_min_angular_order: int
             Min angular order for fitting of aberrations.
+        fit_aberrations_mn: list
+            If not None, sets aberrations mn explicitly.
         fit_max_thon_rings: int
             Max number of Thon rings to search for during CTF FFT fitting.
         fit_power_alpha: int
@@ -2068,17 +2071,21 @@ class ParallaxReconstruction(PhaseReconstruction):
         ### Second pass
 
         # Aberration coefs
-        mn = []
 
-        for m in range(
-            fit_aberrations_min_radial_order - 1, fit_aberrations_max_radial_order
-        ):
-            n_max = np.minimum(fit_aberrations_max_angular_order, m + 1)
-            for n in range(fit_aberrations_min_angular_order, n_max + 1):
-                if (m + n) % 2:
-                    mn.append([m, n, 0])
-                    if n > 0:
-                        mn.append([m, n, 1])
+        if fit_aberrations_mn is None:
+            mn = []
+
+            for m in range(
+                fit_aberrations_min_radial_order - 1, fit_aberrations_max_radial_order
+            ):
+                n_max = np.minimum(fit_aberrations_max_angular_order, m + 1)
+                for n in range(fit_aberrations_min_angular_order, n_max + 1):
+                    if (m + n) % 2:
+                        mn.append([m, n, 0])
+                        if n > 0:
+                            mn.append([m, n, 1])
+        else:
+            mn = fit_aberrations_mn
 
         self._aberrations_mn = np.array(mn)
         self._aberrations_mn = self._aberrations_mn[
