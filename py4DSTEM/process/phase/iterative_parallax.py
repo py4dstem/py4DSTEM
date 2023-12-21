@@ -160,12 +160,12 @@ class ParallaxReconstruction(PhaseReconstruction):
                 data=self._asnumpy(self._recon_BF_subpixel_aligned),
             )
 
-        if hasattr(self, "aberration_dict"):
+        if hasattr(self, "aberration_dict_cartesian"):
             self.metadata = Metadata(
                 name="aberrations_metadata",
                 data={
                     v["aberration name"]: v["value [Ang]"]
-                    for k, v in self.aberration_dict.items()
+                    for k, v in self.aberration_dict_cartesian.items()
                 },
             )
 
@@ -2457,7 +2457,7 @@ class ParallaxReconstruction(PhaseReconstruction):
 
             fig.tight_layout()
 
-        self.aberration_dict = {
+        self.aberration_dict_cartesian = {
             tuple(self._aberrations_mn[a0]): {
                 "aberration name": _aberration_names.get(
                     tuple(self._aberrations_mn[a0, :2]), "-"
@@ -3160,3 +3160,26 @@ class ParallaxReconstruction(PhaseReconstruction):
                 )
             else:
                 return self._crop_padded_object(self._recon_BF)
+
+    @property
+    def aberration_dict_polar(self):
+        """converts cartesian aberration dictionary to the polar convention used in ptycho"""
+        polar_dict = {}
+        unique_aberrations = np.unique(self._aberrations_mn[:, :2], axis=0)
+        aberrations_dict = self.aberration_dict_cartesian
+
+        for aberration_order in unique_aberrations:
+            m, n = aberration_order
+            modulus_name = "C" + str(m) + str(n)
+
+            if n != 0:
+                value_a = aberrations_dict[(m, n, 0)]["value [Ang]"]
+                value_b = aberrations_dict[(m, n, 1)]["value [Ang]"]
+                polar_dict[modulus_name] = np.sqrt(value_a**2 + value_b**2)
+
+                argument_name = "phi" + str(m) + str(n)
+                polar_dict[argument_name] = np.arctan2(value_b, value_a) / n
+            else:
+                polar_dict[modulus_name] = aberrations_dict[(m, n, 0)]["value [Ang]"]
+
+        return polar_dict

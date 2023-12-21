@@ -413,7 +413,8 @@ class ComplexProbe:
         """Calculate a polar grid for a given Cartesian grid."""
         xp = self._xp
         alpha = xp.sqrt(x.reshape((-1, 1)) ** 2 + y.reshape((1, -1)) ** 2)
-        phi = xp.arctan2(x.reshape((-1, 1)), y.reshape((1, -1)))
+        # phi = xp.arctan2(x.reshape((-1, 1)), y.reshape((1, -1))) # bug in abtem-legacy and py4DSTEM<=0.14.9
+        phi = xp.arctan2(y.reshape((1, -1)), x.reshape((-1, 1)))
         return alpha, phi
 
     def build(self):
