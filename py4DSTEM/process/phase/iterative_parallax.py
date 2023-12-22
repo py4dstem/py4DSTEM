@@ -33,7 +33,7 @@ from scipy.special import comb
 
 try:
     import cupy as cp
-except ModuleNotFoundError:
+except (ModuleNotFoundError, ImportError):
     cp = np
 
 warnings.simplefilter(action="always", category=UserWarning)
