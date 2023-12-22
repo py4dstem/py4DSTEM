@@ -17,8 +17,9 @@ from py4DSTEM.braggvectors.diskdetection_aiml import _get_latest_model
 
 try:
     import cupy as cp
-except ModuleNotFoundError:
-    raise ImportError("AIML CUDA Requires cupy")
+    from cupyx.scipy.ndimage import gaussian_filter
+except (ModuleNotFoundError, ImportError) as e:
+    raise ImportError("AIML CUDA Requires cupy") from e
 
 try:
     import tensorflow as tf
@@ -28,8 +29,6 @@ except:
         + "https://www.tensorflow.org/install"
         + "for more information"
     )
-
-from cupyx.scipy.ndimage import gaussian_filter
 
 
 def find_Bragg_disks_aiml_CUDA(
