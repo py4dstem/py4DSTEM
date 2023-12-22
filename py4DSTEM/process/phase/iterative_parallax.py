@@ -264,7 +264,7 @@ class ParallaxReconstruction(PhaseReconstruction):
         threshold_intensity: float = 0.8,
         normalize_images: bool = True,
         normalize_order=0,
-        descan_correct: bool = True,
+        descan_correction_fit_function: str = None,
         defocus_guess: float = None,
         rotation_guess: float = None,
         plot_average_bf: bool = True,
@@ -289,8 +289,9 @@ class ParallaxReconstruction(PhaseReconstruction):
         defocus_guess: float, optional
             Initial guess of defocus value (defocus dF) in A
             If None, first iteration is assumed to be in-focus
-        descan_correct: float, optional
-            If True, aligns bright field stack based on measured descan
+        descan_correction_fit_function: str, optional
+            If not None, descan correction will be performed using fit function.
+            One of "constant", "plane", "parabola", or "bezier_two".
         rotation_guess: float, optional
             Initial guess of defocus value in degrees
             If None, first iteration assumed to be 0
@@ -348,7 +349,7 @@ class ParallaxReconstruction(PhaseReconstruction):
             )
 
         # descan correction
-        if descan_correct:
+        if descan_correction_fit_function is not None:
             (
                 _,
                 _,
@@ -359,7 +360,7 @@ class ParallaxReconstruction(PhaseReconstruction):
             ) = self._calculate_intensities_center_of_mass(
                 self._intensities,
                 dp_mask=None,
-                fit_function="plane",
+                fit_function=descan_correction_fit_function,
                 com_shifts=None,
                 com_measured=None,
             )
@@ -968,7 +969,6 @@ class ParallaxReconstruction(PhaseReconstruction):
                 )
             else:
                 self.error_iterations = []
-                previous_iterations = 0
 
         if not regularize_shifts:
             self._basis = self._kxy
