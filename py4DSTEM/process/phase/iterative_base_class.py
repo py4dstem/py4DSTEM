@@ -544,7 +544,6 @@ class PhaseReconstruction(Custom):
         xp = self._xp
         asnumpy = self._asnumpy
 
-        # for ptycho
         if com_measured:
             com_measured_x, com_measured_y = com_measured
 
@@ -615,7 +614,7 @@ class PhaseReconstruction(Custom):
         _com_measured_y: np.ndarray,
         _com_normalized_x: np.ndarray,
         _com_normalized_y: np.ndarray,
-        rotation_angles_deg: np.ndarray = np.arange(-89.0, 90.0, 1.0),
+        rotation_angles_deg: np.ndarray = None,
         plot_rotation: bool = True,
         plot_center_of_mass: str = "default",
         maximize_divergence: bool = False,
@@ -679,6 +678,9 @@ class PhaseReconstruction(Custom):
 
         xp = self._xp
         asnumpy = self._asnumpy
+
+        if rotation_angles_deg is None:
+            rotation_angles_deg = np.arange(-89.0, 90.0, 1.0)
 
         if force_com_rotation is not None:
             # Rotation known
@@ -1132,7 +1134,7 @@ class PhaseReconstruction(Custom):
                 ax.set_xlabel(f"y [{self._scan_units[1]}]")
                 ax.set_title(title)
 
-        elif plot_center_of_mass == "default":
+        elif plot_center_of_mass == "default" or plot_center_of_mass is True:
             figsize = kwargs.pop("figsize", (8, 4))
             cmap = kwargs.pop("cmap", "RdBu_r")
 
