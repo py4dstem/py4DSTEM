@@ -7,16 +7,15 @@ from scipy.optimize import curve_fit
 
 try:
     import cupy as cp
-    from cupyx.scipy.fft import rfft
+    from cupyx.scipy.fft import dctn, idctn, rfft
 except (ImportError, ModuleNotFoundError):
     cp = None
-    from scipy.fft import dstn, idstn
+    from scipy.fft import dstn, idstn, dctn, idctn
 
 from py4DSTEM.process.utils import get_CoM
 from py4DSTEM.process.utils.cross_correlate import align_and_shift_images
 from py4DSTEM.process.utils.utils import electron_wavelength_angstrom
 from scipy.ndimage import gaussian_filter, uniform_filter1d
-from skimage.restoration import unwrap_phase
 
 # fmt: off
 
@@ -1611,6 +1610,61 @@ def aberrations_basis_function(
     return aberrations_basis, aberrations_mn
 
 
+def preconditioned_laplacian_dct(shape, xp=np):
+    """DCT eigenvalues"""
+    n, m = shape
+    i, j = xp.ogrid[0:n, 0:m]
+
+    op = 4 - 2 * xp.cos(np.pi * i / n) - 2 * xp.cos(np.pi * j / m)
+    op[0, 0] = 1  # gauge invariance
+    return -op
+
+
+def preconditioned_poisson_solver_dct(rhs, gauge=None, xp=np):
+    """DCT based poisson solver"""
+    op = preconditioned_laplacian_dct(rhs.shape, xp=xp)
+
+    if gauge is None:
+        gauge = xp.mean(rhs)
+
+    fft_rhs = dctn(rhs, type=2)
+    fft_rhs[0, 0] = gauge  # gauge invariance
+    sol = idctn(fft_rhs / op, type=2)
+    return sol
+
+
+def unwrap_phase_2d(array, weights=None, gauge=None, corner_centered=True, xp=np):
+    """Weigted phase unwrapping using DCT-based poisson solver"""
+
+    if np.iscomplexobj(array):
+        raise ValueError()
+
+    if corner_centered:
+        array = xp.fft.fftshift(array)
+        if weights is not None:
+            weights = xp.fft.fftshift(weights)
+
+    dx = xp.mod(xp.diff(array, axis=0) + np.pi, 2 * np.pi) - np.pi
+    dy = xp.mod(xp.diff(array, axis=1) + np.pi, 2 * np.pi) - np.pi
+
+    if weights is not None:
+        ww = weights**2
+        dx *= xp.minimum(ww[:-1, :], ww[1:, :])
+        dy *= xp.minimum(ww[:, :-1], ww[:, 1:])
+
+    rho = xp.diff(dx, axis=0, prepend=0, append=0) + xp.diff(
+        dy, axis=1, prepend=0, append=0
+    )
+
+    unwrapped_array = preconditioned_poisson_solver_dct(rho, gauge=gauge, xp=xp).real
+    unwrapped_array -= unwrapped_array.min()
+
+    if corner_centered:
+        unwrapped_array = xp.fft.ifftshift(unwrapped_array)
+
+    return unwrapped_array
+
+
 def fit_aberration_surface(
     complex_probe,
     probe_sampling,
@@ -1623,13 +1677,12 @@ def fit_aberration_surface(
     probe_amp = xp.abs(complex_probe)
     probe_angle = -xp.angle(complex_probe)
 
-    if xp is np:
-        probe_angle = probe_angle.astype(np.float64)
-        unwrapped_angle = unwrap_phase(probe_angle, wrap_around=True).astype(xp.float32)
-    else:
-        probe_angle = xp.asnumpy(probe_angle).astype(np.float64)
-        unwrapped_angle = unwrap_phase(probe_angle, wrap_around=True)
-        unwrapped_angle = xp.asarray(unwrapped_angle).astype(xp.float32)
+    unwrapped_angle = unwrap_phase_2d(
+        probe_angle,
+        weights=probe_amp,
+        corner_centered=True,
+        xp=xp,
+    )
 
     raveled_basis, _ = aberrations_basis_function(
         complex_probe.shape,
