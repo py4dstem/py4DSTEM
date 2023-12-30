@@ -9,7 +9,7 @@ import numpy as np
 from matplotlib.gridspec import GridSpec
 from mpl_toolkits.axes_grid1 import ImageGrid
 from py4DSTEM.visualize import return_scaled_histogram_ordering, show, show_complex
-from scipy.ndimage import rotate
+from scipy.ndimage import rotate, zoom
 
 try:
     import cupy as cp
@@ -190,6 +190,7 @@ class PhaseReconstruction(Custom):
         datacube: Datacube
             Resampled and Padded datacube
         """
+
         if com_shifts is not None:
             if np.isscalar(com_shifts[0]):
                 com_shifts = (
@@ -224,12 +225,31 @@ class PhaseReconstruction(Custom):
 
                 datacube = datacube.bin_Q(N=bin_factor)
                 if vacuum_probe_intensity is not None:
-                    vacuum_probe_intensity = vacuum_probe_intensity[
-                        ::bin_factor, ::bin_factor
-                    ]
+                    # crop edges if necessary
+                    if Qx % bin_factor == 0:
+                        vacuum_probe_intensity = vacuum_probe_intensity[
+                            : -(Qx % bin_factor), :
+                        ]
+                    if Qy % bin_factor == 0:
+                        vacuum_probe_intensity = vacuum_probe_intensity[
+                            :, : -(Qy % bin_factor)
+                        ]
+
+                    vacuum_probe_intensity = vacuum_probe_intensity.reshape(
+                        Qx // bin_factor, bin_factor, Qy // bin_factor, bin_factor
+                    ).sum(axis=(1, 3))
                 if dp_mask is not None:
-                    dp_mask = dp_mask[::bin_factor, ::bin_factor]
-            else:
+                    # crop edges if necessary
+                    if Qx % bin_factor == 0:
+                        dp_mask = dp_mask[: -(Qx % bin_factor), :]
+                    if Qy % bin_factor == 0:
+                        dp_mask = dp_mask[:, : -(Qy % bin_factor)]
+
+                    dp_mask = dp_mask.reshape(
+                        Qx // bin_factor, bin_factor, Qy // bin_factor, bin_factor
+                    ).sum(axis=(1, 3))
+
+            elif reshaping_method == "fourier":
                 datacube = datacube.resample_Q(
                     N=resampling_factor_x, method=reshaping_method
                 )
@@ -245,6 +265,29 @@ class PhaseReconstruction(Custom):
                         output_size=diffraction_intensities_shape,
                         force_nonnegative=True,
                     )
+
+            elif reshaping_method == "bilinear":
+                datacube = datacube.resample_Q(
+                    N=resampling_factor_x, method=reshaping_method
+                )
+                if vacuum_probe_intensity is not None:
+                    vacuum_probe_intensity = zoom(
+                        vacuum_probe_intensity,
+                        (resampling_factor_x, resampling_factor_x),
+                        order=1,
+                    )
+                if dp_mask is not None:
+                    dp_mask = zoom(
+                        dp_mask, (resampling_factor_x, resampling_factor_x), order=1
+                    )
+
+            else:
+                raise ValueError(
+                    (
+                        "reshaping_method needs to be one of 'bilinear', 'fourier', or 'bin', "
+                        f"not {reshaping_method}."
+                    )
+                )
 
         if probe_roi_shape is not None:
             Qx, Qy = datacube.shape[-2:]
