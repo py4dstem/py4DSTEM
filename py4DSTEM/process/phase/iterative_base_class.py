@@ -413,15 +413,16 @@ class PhaseReconstruction(Custom):
 
         # Reciprocal-space
         if force_angular_sampling is not None or force_reciprocal_sampling is not None:
-            # there is no xor keyword in Python!
-            angular = force_angular_sampling is not None
-            reciprocal = force_reciprocal_sampling is not None
-            assert (angular and not reciprocal) or (
-                not angular and reciprocal
-            ), "Only one of angular or reciprocal calibration can be forced!"
+            if (
+                force_angular_sampling is not None
+                and force_reciprocal_sampling is not None
+            ):
+                raise ValueError(
+                    "Only one of angular or reciprocal calibration can be forced."
+                )
 
             # angular calibration specified
-            if angular:
+            if force_angular_sampling is not None:
                 self._angular_sampling = (force_angular_sampling,) * 2
                 self._angular_units = ("mrad",) * 2
 
@@ -434,7 +435,7 @@ class PhaseReconstruction(Custom):
                     self._reciprocal_units = ("A^-1",) * 2
 
             # reciprocal calibration specified
-            if reciprocal:
+            if force_reciprocal_sampling is not None:
                 self._reciprocal_sampling = (force_reciprocal_sampling,) * 2
                 self._reciprocal_units = ("A^-1",) * 2
 
