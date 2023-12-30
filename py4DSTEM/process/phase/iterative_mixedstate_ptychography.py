@@ -20,6 +20,12 @@ except (ModuleNotFoundError, ImportError):
 from emdfile import Custom, tqdmnd
 from py4DSTEM import DataCube
 from py4DSTEM.process.phase.iterative_base_class import PtychographicReconstruction
+from py4DSTEM.process.phase.iterative_ptychographic_constraints import (
+    ObjectNDConstraintsMixin,
+    PositionsConstraintsMixin,
+    ProbeConstraintsMixin,
+    ProbeMixedConstraintsMixin,
+)
 from py4DSTEM.process.phase.utils import (
     ComplexProbe,
     fft_shift,
@@ -32,7 +38,13 @@ from py4DSTEM.process.utils import get_CoM, get_shifted_ar
 warnings.simplefilter(action="always", category=UserWarning)
 
 
-class MixedstatePtychographicReconstruction(PtychographicReconstruction):
+class MixedstatePtychographicReconstruction(
+    PositionsConstraintsMixin,
+    ProbeMixedConstraintsMixin,
+    ProbeConstraintsMixin,
+    ObjectNDConstraintsMixin,
+    PtychographicReconstruction,
+):
     """
     Mixed-State Ptychographic Reconstruction Class.
 
@@ -1046,68 +1058,6 @@ class MixedstatePtychographicReconstruction(PtychographicReconstruction):
             )
 
         return current_object, current_probe
-
-    def _probe_center_of_mass_constraint(self, current_probe):
-        """
-        Ptychographic center of mass constraint.
-        Used for centering corner-centered probe intensity.
-
-        Parameters
-        --------
-        current_probe: np.ndarray
-            Current probe estimate
-
-        Returns
-        --------
-        constrained_probe: np.ndarray
-            Constrained probe estimate
-        """
-        xp = self._xp
-        probe_intensity = xp.abs(current_probe[0]) ** 2
-
-        probe_x0, probe_y0 = get_CoM(
-            probe_intensity, device=self._device, corner_centered=True
-        )
-        shifted_probe = fft_shift(current_probe, -xp.array([probe_x0, probe_y0]), xp)
-
-        return shifted_probe
-
-    def _probe_orthogonalization_constraint(self, current_probe):
-        """
-        Ptychographic probe-orthogonalization constraint.
-        Used to ensure mixed states are orthogonal to each other.
-        Adapted from https://github.com/AdvancedPhotonSource/tike/blob/main/src/tike/ptycho/probe.py#L690
-
-        Parameters
-        --------
-        current_probe: np.ndarray
-            Current probe estimate
-
-        Returns
-        --------
-        constrained_probe: np.ndarray
-            Orthogonalized probe estimate
-        """
-        xp = self._xp
-        n_probes = self._num_probes
-
-        # compute upper half of P* @ P
-        pairwise_dot_product = xp.empty((n_probes, n_probes), dtype=current_probe.dtype)
-
-        for i in range(n_probes):
-            for j in range(i, n_probes):
-                pairwise_dot_product[i, j] = xp.sum(
-                    current_probe[i].conj() * current_probe[j]
-                )
-
-        # compute eigenvectors (effectively cheaper way of computing V* from SVD)
-        _, evecs = xp.linalg.eigh(pairwise_dot_product, UPLO="U")
-        current_probe = xp.tensordot(evecs.T, current_probe, axes=1)
-
-        # sort by real-space intensity
-        intensities = xp.sum(xp.abs(current_probe) ** 2, axis=(-2, -1))
-        intensities_order = xp.argsort(intensities, axis=None)[::-1]
-        return current_probe[intensities_order]
 
     def _constraints(
         self,

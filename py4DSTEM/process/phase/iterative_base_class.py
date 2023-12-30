@@ -20,9 +20,6 @@ from emdfile import Array, Custom, Metadata, _read_metadata, tqdmnd
 from py4DSTEM.data import Calibration
 from py4DSTEM.datacube import DataCube
 from py4DSTEM.process.calibration import fit_origin
-from py4DSTEM.process.phase.iterative_ptychographic_constraints import (
-    PtychographicConstraints,
-)
 from py4DSTEM.process.phase.utils import (
     AffineTransform,
     generate_batches,
@@ -1293,7 +1290,7 @@ class PhaseReconstruction(Custom):
         )
 
 
-class PtychographicReconstruction(PhaseReconstruction, PtychographicConstraints):
+class PtychographicReconstruction(PhaseReconstruction):
     """
     Base ptychographic reconstruction class.
     Inherits from PhaseReconstruction and PtychographicConstraints.
