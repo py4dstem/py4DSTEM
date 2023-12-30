@@ -16,14 +16,17 @@ try:
     import cupy as cp
 except (ModuleNotFoundError, ImportError):
     cp = None
-    import os
 
-    # make sure pylops doesn't try to use cupy
-    os.environ["CUPY_PYLOPS"] = "0"
-import pylops  # this must follow the exception
 from emdfile import Custom, tqdmnd
 from py4DSTEM import DataCube
 from py4DSTEM.process.phase.iterative_base_class import PtychographicReconstruction
+from py4DSTEM.process.phase.iterative_ptychographic_constraints import (
+    Object2p5DConstraintsMixin,
+    ObjectNDConstraintsMixin,
+    PositionsConstraintsMixin,
+    ProbeConstraintsMixin,
+    ProbeMixedConstraintsMixin,
+)
 from py4DSTEM.process.phase.utils import (
     ComplexProbe,
     fft_shift,
@@ -38,7 +41,14 @@ from scipy.ndimage import rotate
 warnings.simplefilter(action="always", category=UserWarning)
 
 
-class MixedstateMultislicePtychographicReconstruction(PtychographicReconstruction):
+class MixedstateMultislicePtychographicReconstruction(
+    PositionsConstraintsMixin,
+    ProbeMixedConstraintsMixin,
+    ProbeConstraintsMixin,
+    Object2p5DConstraintsMixin,
+    ObjectNDConstraintsMixin,
+    PtychographicReconstruction,
+):
     """
     Mixed-State Multislice Ptychographic Reconstruction Class.
 
@@ -1473,281 +1483,6 @@ class MixedstateMultislicePtychographicReconstruction(PtychographicReconstructio
 
         return current_positions
 
-    def _probe_center_of_mass_constraint(self, current_probe):
-        """
-        Ptychographic center of mass constraint.
-        Used for centering corner-centered probe intensity.
-
-        Parameters
-        --------
-        current_probe: np.ndarray
-            Current probe estimate
-
-        Returns
-        --------
-        constrained_probe: np.ndarray
-            Constrained probe estimate
-        """
-        xp = self._xp
-        probe_intensity = xp.abs(current_probe[0]) ** 2
-
-        probe_x0, probe_y0 = get_CoM(
-            probe_intensity, device=self._device, corner_centered=True
-        )
-        shifted_probe = fft_shift(current_probe, -xp.array([probe_x0, probe_y0]), xp)
-
-        return shifted_probe
-
-    def _probe_orthogonalization_constraint(self, current_probe):
-        """
-        Ptychographic probe-orthogonalization constraint.
-        Used to ensure mixed states are orthogonal to each other.
-        Adapted from https://github.com/AdvancedPhotonSource/tike/blob/main/src/tike/ptycho/probe.py#L690
-
-        Parameters
-        --------
-        current_probe: np.ndarray
-            Current probe estimate
-
-        Returns
-        --------
-        constrained_probe: np.ndarray
-            Orthogonalized probe estimate
-        """
-        xp = self._xp
-        n_probes = self._num_probes
-
-        # compute upper half of P* @ P
-        pairwise_dot_product = xp.empty((n_probes, n_probes), dtype=current_probe.dtype)
-
-        for i in range(n_probes):
-            for j in range(i, n_probes):
-                pairwise_dot_product[i, j] = xp.sum(
-                    current_probe[i].conj() * current_probe[j]
-                )
-
-        # compute eigenvectors (effectively cheaper way of computing V* from SVD)
-        _, evecs = xp.linalg.eigh(pairwise_dot_product, UPLO="U")
-        current_probe = xp.tensordot(evecs.T, current_probe, axes=1)
-
-        # sort by real-space intensity
-        intensities = xp.sum(xp.abs(current_probe) ** 2, axis=(-2, -1))
-        intensities_order = xp.argsort(intensities, axis=None)[::-1]
-        return current_probe[intensities_order]
-
-    def _object_butterworth_constraint(
-        self, current_object, q_lowpass, q_highpass, butterworth_order
-    ):
-        """
-        2D Butterworth filter
-        Used for low/high-pass filtering object.
-
-        Parameters
-        --------
-        current_object: np.ndarray
-            Current object estimate
-        q_lowpass: float
-            Cut-off frequency in A^-1 for low-pass butterworth filter
-        q_highpass: float
-            Cut-off frequency in A^-1 for high-pass butterworth filter
-        butterworth_order: float
-            Butterworth filter order. Smaller gives a smoother filter
-
-        Returns
-        --------
-        constrained_object: np.ndarray
-            Constrained object estimate
-        """
-        xp = self._xp
-        qx = xp.fft.fftfreq(current_object.shape[1], self.sampling[0])
-        qy = xp.fft.fftfreq(current_object.shape[2], self.sampling[1])
-        qya, qxa = xp.meshgrid(qy, qx)
-        qra = xp.sqrt(qxa**2 + qya**2)
-
-        env = xp.ones_like(qra)
-        if q_highpass:
-            env *= 1 - 1 / (1 + (qra / q_highpass) ** (2 * butterworth_order))
-        if q_lowpass:
-            env *= 1 / (1 + (qra / q_lowpass) ** (2 * butterworth_order))
-
-        current_object_mean = xp.mean(current_object)
-        current_object -= current_object_mean
-        current_object = xp.fft.ifft2(xp.fft.fft2(current_object) * env[None])
-        current_object += current_object_mean
-
-        if self._object_type == "potential":
-            current_object = xp.real(current_object)
-
-        return current_object
-
-    def _object_kz_regularization_constraint(
-        self, current_object, kz_regularization_gamma
-    ):
-        """
-        Arctan regularization filter
-
-        Parameters
-        --------
-        current_object: np.ndarray
-            Current object estimate
-        kz_regularization_gamma: float
-            Slice regularization strength
-
-        Returns
-        --------
-        constrained_object: np.ndarray
-            Constrained object estimate
-        """
-        xp = self._xp
-
-        current_object = xp.pad(
-            current_object, pad_width=((1, 0), (0, 0), (0, 0)), mode="constant"
-        )
-
-        qx = xp.fft.fftfreq(current_object.shape[1], self.sampling[0])
-        qy = xp.fft.fftfreq(current_object.shape[2], self.sampling[1])
-        qz = xp.fft.fftfreq(current_object.shape[0], self._slice_thicknesses[0])
-
-        kz_regularization_gamma *= self._slice_thicknesses[0] / self.sampling[0]
-
-        qza, qxa, qya = xp.meshgrid(qz, qx, qy, indexing="ij")
-        qz2 = qza**2 * kz_regularization_gamma**2
-        qr2 = qxa**2 + qya**2
-
-        w = 1 - 2 / np.pi * xp.arctan2(qz2, qr2)
-
-        current_object = xp.fft.ifftn(xp.fft.fftn(current_object) * w)
-        current_object = current_object[1:]
-
-        if self._object_type == "potential":
-            current_object = xp.real(current_object)
-
-        return current_object
-
-    def _object_identical_slices_constraint(self, current_object):
-        """
-        Strong regularization forcing all slices to be identical
-
-        Parameters
-        --------
-        current_object: np.ndarray
-            Current object estimate
-
-        Returns
-        --------
-        constrained_object: np.ndarray
-            Constrained object estimate
-        """
-        object_mean = current_object.mean(0, keepdims=True)
-        current_object[:] = object_mean
-
-        return current_object
-
-    def _object_denoise_tv_pylops(self, current_object, weights, iterations):
-        """
-        Performs second order TV denoising along x and y
-
-        Parameters
-        ----------
-        current_object: np.ndarray
-            Current object estimate
-        weights : [float, float]
-            Denoising weights[z weight, r weight]. The greater `weight`,
-            the more denoising.
-        iterations: float
-            Number of iterations to run in denoising algorithm.
-            `niter_out` in pylops
-
-        Returns
-        -------
-        constrained_object: np.ndarray
-            Constrained object estimate
-
-        """
-        xp = self._xp
-
-        if xp.iscomplexobj(current_object):
-            current_object_tv = current_object
-            warnings.warn(
-                ("TV denoising is currently only supported for potential objects."),
-                UserWarning,
-            )
-
-        else:
-            # zero pad at top and bottom slice
-            pad_width = ((1, 1), (0, 0), (0, 0))
-            current_object = xp.pad(
-                current_object, pad_width=pad_width, mode="constant"
-            )
-
-            # run tv denoising
-            nz, nx, ny = current_object.shape
-            niter_out = iterations
-            niter_in = 1
-            Iop = pylops.Identity(nx * ny * nz)
-
-            if weights[0] == 0:
-                xy_laplacian = pylops.Laplacian(
-                    (nz, nx, ny), axes=(1, 2), edge=False, kind="backward"
-                )
-                l1_regs = [xy_laplacian]
-
-                current_object_tv = pylops.optimization.sparsity.splitbregman(
-                    Op=Iop,
-                    y=current_object.ravel(),
-                    RegsL1=l1_regs,
-                    niter_outer=niter_out,
-                    niter_inner=niter_in,
-                    epsRL1s=[weights[1]],
-                    tol=1e-4,
-                    tau=1.0,
-                    show=False,
-                )[0]
-
-            elif weights[1] == 0:
-                z_gradient = pylops.FirstDerivative(
-                    (nz, nx, ny), axis=0, edge=False, kind="backward"
-                )
-                l1_regs = [z_gradient]
-
-                current_object_tv = pylops.optimization.sparsity.splitbregman(
-                    Op=Iop,
-                    y=current_object.ravel(),
-                    RegsL1=l1_regs,
-                    niter_outer=niter_out,
-                    niter_inner=niter_in,
-                    epsRL1s=[weights[0]],
-                    tol=1e-4,
-                    tau=1.0,
-                    show=False,
-                )[0]
-
-            else:
-                z_gradient = pylops.FirstDerivative(
-                    (nz, nx, ny), axis=0, edge=False, kind="backward"
-                )
-                xy_laplacian = pylops.Laplacian(
-                    (nz, nx, ny), axes=(1, 2), edge=False, kind="backward"
-                )
-                l1_regs = [z_gradient, xy_laplacian]
-
-                current_object_tv = pylops.optimization.sparsity.splitbregman(
-                    Op=Iop,
-                    y=current_object.ravel(),
-                    RegsL1=l1_regs,
-                    niter_outer=niter_out,
-                    niter_inner=niter_in,
-                    epsRL1s=weights,
-                    tol=1e-4,
-                    tau=1.0,
-                    show=False,
-                )[0]
-
-            # remove padding
-            current_object_tv = current_object_tv.reshape(current_object.shape)[1:-1]
-
-        return current_object_tv
-
     def _constraints(
         self,
         current_object,
@@ -1855,8 +1590,8 @@ class MixedstateMultislicePtychographicReconstruction(PtychographicReconstructio
             If True, performs TV denoising along z
         tv_denoise_weight_chambolle: float
             weight of tv denoising constraint
-        tv_denoise_pad_chambolle: bool
-            if True, pads object at top and bottom with zeros before applying denoising
+        tv_denoise_pad_chambolle: int
+            If not None, pads object at top and bottom with this many zeros before applying denoising
         tv_denoise: bool
             If True, applies TV denoising on object
         tv_denoise_weights: [float,float]
@@ -1894,20 +1629,23 @@ class MixedstateMultislicePtychographicReconstruction(PtychographicReconstructio
             current_object = self._object_identical_slices_constraint(current_object)
         elif kz_regularization_filter:
             current_object = self._object_kz_regularization_constraint(
-                current_object, kz_regularization_gamma
+                current_object,
+                kz_regularization_gamma,
+                z_padding=1,
             )
         elif tv_denoise:
             current_object = self._object_denoise_tv_pylops(
                 current_object,
                 tv_denoise_weights,
                 tv_denoise_inner_iter,
+                z_padding=1,
             )
         elif tv_denoise_chambolle:
             current_object = self._object_denoise_tv_chambolle(
                 current_object,
                 tv_denoise_weight_chambolle,
                 axis=0,
-                pad_object=tv_denoise_pad_chambolle,
+                padding=tv_denoise_pad_chambolle,
             )
 
         if shrinkage_rad > 0.0 or object_mask is not None:
@@ -1996,7 +1734,7 @@ class MixedstateMultislicePtychographicReconstruction(PtychographicReconstructio
         pure_phase_object_iter: int = 0,
         tv_denoise_iter_chambolle=np.inf,
         tv_denoise_weight_chambolle=None,
-        tv_denoise_pad_chambolle=True,
+        tv_denoise_pad_chambolle=1,
         tv_denoise_iter=np.inf,
         tv_denoise_weights=None,
         tv_denoise_inner_iter=40,
@@ -2096,8 +1834,8 @@ class MixedstateMultislicePtychographicReconstruction(PtychographicReconstructio
             Number of iterations with TV denoisining
         tv_denoise_weight_chambolle: float
             weight of tv denoising constraint
-        tv_denoise_pad_chambolle: bool
-            if True, pads object at top and bottom with zeros before applying denoising
+        tv_denoise_pad_chambolle: int
+            If not None, pads object at top and bottom with this many zeros before applying denoising
         tv_denoise: bool
             If True, applies TV denoising on object
         tv_denoise_weights: [float,float]

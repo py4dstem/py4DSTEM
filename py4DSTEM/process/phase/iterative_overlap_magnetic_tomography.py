@@ -18,15 +18,16 @@ try:
     import cupy as cp
 except (ModuleNotFoundError, ImportError):
     cp = np
-    import os
-
-    # make sure pylops doesn't try to use cupy
-    os.environ["CUPY_PYLOPS"] = "0"
-import pylops  # this must follow the exception
 
 from emdfile import Custom, tqdmnd
 from py4DSTEM import DataCube
 from py4DSTEM.process.phase.iterative_base_class import PtychographicReconstruction
+from py4DSTEM.process.phase.iterative_ptychographic_constraints import (
+    Object3DConstraintsMixin,
+    ObjectNDConstraintsMixin,
+    PositionsConstraintsMixin,
+    ProbeConstraintsMixin,
+)
 from py4DSTEM.process.phase.utils import (
     ComplexProbe,
     fft_shift,
@@ -41,7 +42,13 @@ from py4DSTEM.process.utils import electron_wavelength_angstrom, get_CoM, get_sh
 warnings.simplefilter(action="always", category=UserWarning)
 
 
-class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
+class OverlapMagneticTomographicReconstruction(
+    PositionsConstraintsMixin,
+    ProbeConstraintsMixin,
+    Object3DConstraintsMixin,
+    ObjectNDConstraintsMixin,
+    PtychographicReconstruction,
+):
     """
     Overlap Magnetic Tomographic Reconstruction Class.
 
@@ -1627,72 +1634,6 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
 
         return current_positions
 
-    def _object_gaussian_constraint(self, current_object, gaussian_filter_sigma):
-        """
-        Ptychographic smoothness constraint.
-        Used for blurring object.
-
-        Parameters
-        --------
-        current_object: np.ndarray
-            Current object estimate
-        gaussian_filter_sigma: float
-            Standard deviation of gaussian kernel in A
-
-        Returns
-        --------
-        constrained_object: np.ndarray
-            Constrained object estimate
-        """
-        gaussian_filter = self._gaussian_filter
-
-        gaussian_filter_sigma /= self.sampling[0]
-        current_object = gaussian_filter(current_object, gaussian_filter_sigma)
-
-        return current_object
-
-    def _object_butterworth_constraint(
-        self, current_object, q_lowpass, q_highpass, butterworth_order
-    ):
-        """
-        Butterworth filter
-
-        Parameters
-        --------
-        current_object: np.ndarray
-            Current object estimate
-        q_lowpass: float
-            Cut-off frequency in A^-1 for low-pass butterworth filter
-        q_highpass: float
-            Cut-off frequency in A^-1 for high-pass butterworth filter
-        butterworth_order: float
-            Butterworth filter order. Smaller gives a smoother filter
-
-        Returns
-        --------
-        constrained_object: np.ndarray
-            Constrained object estimate
-        """
-        xp = self._xp
-        qz = xp.fft.fftfreq(current_object.shape[0], self.sampling[1])
-        qx = xp.fft.fftfreq(current_object.shape[1], self.sampling[0])
-        qy = xp.fft.fftfreq(current_object.shape[2], self.sampling[1])
-        qza, qxa, qya = xp.meshgrid(qz, qx, qy, indexing="ij")
-        qra = xp.sqrt(qza**2 + qxa**2 + qya**2)
-
-        env = xp.ones_like(qra)
-        if q_highpass:
-            env *= 1 - 1 / (1 + (qra / q_highpass) ** (2 * butterworth_order))
-        if q_lowpass:
-            env *= 1 / (1 + (qra / q_lowpass) ** (2 * butterworth_order))
-
-        current_object_mean = xp.mean(current_object)
-        current_object -= current_object_mean
-        current_object = xp.fft.ifftn(xp.fft.fftn(current_object) * env)
-        current_object += current_object_mean
-
-        return xp.real(current_object)
-
     def _divergence_free_constraint(self, vector_field):
         """
         Leray projection operator
@@ -1715,111 +1656,6 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
         )
 
         return vector_field
-
-    def _object_denoise_tv_pylops(self, current_object, weights, iterations):
-        """
-        Performs second order TV denoising along x and y
-
-        Parameters
-        ----------
-        current_object: np.ndarray
-            Current object estimate
-        weights : [float, float]
-            Denoising weights[z weight, r weight]. The greater `weight`,
-            the more denoising.
-        iterations: float
-            Number of iterations to run in denoising algorithm.
-            `niter_out` in pylops
-
-        Returns
-        -------
-        constrained_object: np.ndarray
-            Constrained object estimate
-
-        """
-        xp = self._xp
-
-        if xp.iscomplexobj(current_object):
-            current_object_tv = current_object
-            warnings.warn(
-                ("TV denoising is currently only supported for potential objects."),
-                UserWarning,
-            )
-
-        else:
-            # zero pad at top and bottom slice
-            pad_width = ((1, 1), (0, 0), (0, 0))
-            current_object = xp.pad(
-                current_object, pad_width=pad_width, mode="constant"
-            )
-
-            # run tv denoising
-            nz, nx, ny = current_object.shape
-            niter_out = iterations
-            niter_in = 1
-            Iop = pylops.Identity(nx * ny * nz)
-
-            if weights[0] == 0:
-                xy_laplacian = pylops.Laplacian(
-                    (nz, nx, ny), axes=(1, 2), edge=False, kind="backward"
-                )
-                l1_regs = [xy_laplacian]
-
-                current_object_tv = pylops.optimization.sparsity.splitbregman(
-                    Op=Iop,
-                    y=current_object.ravel(),
-                    RegsL1=l1_regs,
-                    niter_outer=niter_out,
-                    niter_inner=niter_in,
-                    epsRL1s=[weights[1]],
-                    tol=1e-4,
-                    tau=1.0,
-                    show=False,
-                )[0]
-
-            elif weights[1] == 0:
-                z_gradient = pylops.FirstDerivative(
-                    (nz, nx, ny), axis=0, edge=False, kind="backward"
-                )
-                l1_regs = [z_gradient]
-
-                current_object_tv = pylops.optimization.sparsity.splitbregman(
-                    Op=Iop,
-                    y=current_object.ravel(),
-                    RegsL1=l1_regs,
-                    niter_outer=niter_out,
-                    niter_inner=niter_in,
-                    epsRL1s=[weights[0]],
-                    tol=1e-4,
-                    tau=1.0,
-                    show=False,
-                )[0]
-
-            else:
-                z_gradient = pylops.FirstDerivative(
-                    (nz, nx, ny), axis=0, edge=False, kind="backward"
-                )
-                xy_laplacian = pylops.Laplacian(
-                    (nz, nx, ny), axes=(1, 2), edge=False, kind="backward"
-                )
-                l1_regs = [z_gradient, xy_laplacian]
-
-                current_object_tv = pylops.optimization.sparsity.splitbregman(
-                    Op=Iop,
-                    y=current_object.ravel(),
-                    RegsL1=l1_regs,
-                    niter_outer=niter_out,
-                    niter_inner=niter_in,
-                    epsRL1s=weights,
-                    tol=1e-4,
-                    tau=1.0,
-                    show=False,
-                )[0]
-
-            # remove padding
-            current_object_tv = current_object_tv.reshape(current_object.shape)[1:-1]
-
-        return current_object_tv
 
     def _constraints(
         self,
@@ -1938,16 +1774,16 @@ class OverlapMagneticTomographicReconstruction(PtychographicReconstruction):
 
         if gaussian_filter:
             current_object[0] = self._object_gaussian_constraint(
-                current_object[0], gaussian_filter_sigma_e
+                current_object[0], gaussian_filter_sigma_e, pure_phase_object=False
             )
             current_object[1] = self._object_gaussian_constraint(
-                current_object[1], gaussian_filter_sigma_m
+                current_object[1], gaussian_filter_sigma_m, pure_phase_object=False
             )
             current_object[2] = self._object_gaussian_constraint(
-                current_object[2], gaussian_filter_sigma_m
+                current_object[2], gaussian_filter_sigma_m, pure_phase_object=False
             )
             current_object[3] = self._object_gaussian_constraint(
-                current_object[3], gaussian_filter_sigma_m
+                current_object[3], gaussian_filter_sigma_m, pure_phase_object=False
             )
 
         if butterworth_filter:
