@@ -1185,8 +1185,8 @@ class PhaseReconstruction(Custom):
         diffraction_intensities,
         com_fitted_x,
         com_fitted_y,
-        crop_patterns,
         positions_mask,
+        crop_patterns,
     ):
         """
         Fix diffraction intensities CoM, shift to origin, and take square root
@@ -1199,11 +1199,11 @@ class PhaseReconstruction(Custom):
             Best fit horizontal center of mass gradient
         com_fitted_y: (Rx,Ry) xp.ndarray
             Best fit vertical center of mass gradient
+        positions_mask: np.ndarray, optional
+            Boolean real space mask to select positions in datacube to skip for reconstruction
         crop_patterns: bool
             if True, crop patterns to avoid wrap around of patterns
             when centering
-        positions_mask: np.ndarray, optional
-            Boolean real space mask to select positions in datacube to skip for reconstruction
 
         Returns
         -------
@@ -1256,9 +1256,9 @@ class PhaseReconstruction(Custom):
             crop_mask[-crop_w:, :crop_w] = True
             crop_mask[:crop_w:, -crop_w:] = True
             crop_mask[-crop_w:, -crop_w:] = True
-            self._crop_mask = crop_mask
 
         else:
+            crop_mask = None
             region_of_interest_shape = diffraction_intensities.shape[-2:]
             amplitudes = np.zeros(
                 (number_of_patterns,) + region_of_interest_shape, dtype=np.float32
@@ -1293,7 +1293,7 @@ class PhaseReconstruction(Custom):
         amplitudes = xp.asarray(amplitudes)
         mean_intensity /= amplitudes.shape[0]
 
-        return amplitudes, mean_intensity
+        return amplitudes, mean_intensity, crop_mask
 
     def show_complex_CoM(
         self,
