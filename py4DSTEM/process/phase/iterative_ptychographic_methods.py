@@ -4,9 +4,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.gridspec import GridSpec
 from mpl_toolkits.axes_grid1 import make_axes_locatable
-from py4DSTEM.process.phase.utils import AffineTransform
+from py4DSTEM.process.phase.utils import AffineTransform, rotate_point
 from py4DSTEM.visualize import return_scaled_histogram_ordering, show, show_complex
-from scipy.ndimage import rotate
+from scipy.ndimage import gaussian_filter, rotate
 
 try:
     import cupy as cp
@@ -190,45 +190,61 @@ class Object2p5DMethodsMixin:
         obj = self._crop_rotate_object_fov(obj.sum(axis=0))
         return np.abs(np.fft.fftshift(np.fft.fft2(obj)))
 
-    def show_depth(
+    def show_depth_section(
         self,
-        x1: float,
-        x2: float,
-        y1: float,
-        y2: float,
-        specify_calibrated: bool = False,
-        gaussian_filter_sigma: float = None,
-        ms_object=None,
-        cbar: bool = False,
-        aspect: float = None,
+        ptA: Tuple[float, float],
+        ptB: Tuple[float, float],
+        aspect_ratio: float = "auto",
         plot_line_profile: bool = False,
+        ms_object=None,
+        specify_calibrated: bool = True,
+        gaussian_filter_sigma: float = None,
+        cbar: bool = True,
         **kwargs,
     ):
         """
         Displays line profile depth section
 
         Parameters
-        --------
-        x1, x2, y1, y2: floats (pixels)
-            Line profile for depth section runs from (x1,y1) to (x2,y2)
-            Specified in pixels unless specify_calibrated is True
-        specify_calibrated: bool (optional)
-            If True, specify x1, x2, y1, y2 in A values instead of pixels
-        gaussian_filter_sigma: float (optional)
-            Standard deviation of gaussian kernel in A
-        ms_object: np.array
-            Object to plot slices of. If None, uses current object
-        cbar: bool, optional
-            If True, displays a colorbar
-        aspect: float, optional
+        ----------
+        ptA: Tuple[float,float]
+            Starting point (x1,y1) for line profile depth section
+            If either is None, assumed to be array start.
+            Specified in Angstroms unless specify_calibrated is False
+        ptB: Tuple[float,float]
+            End point (x2,y2) for line profile depth section
+            If either is None, assumed to be array end.
+            Specified in Angstroms unless specify_calibrated is False
+        aspect_ratio: float, optional
             aspect ratio for depth profile plot
         plot_line_profile: bool
             If True, also plots line profile showing where depth profile is taken
+        ms_object: np.array
+            Object to plot slices of. If None, uses current object
+        specify_calibrated: bool (optional)
+            If False, ptA and ptB points specified in pixels instead of Angstroms
+        gaussian_filter_sigma: float (optional)
+            Standard deviation of gaussian kernel in A
+        cbar: bool, optional
+            If True, displays a colorbar
         """
-        if ms_object is not None:
-            ms_obj = ms_object
-        else:
-            ms_obj = self.object_cropped
+        if ms_object is None:
+            ms_object = self.object_cropped
+
+        if np.iscomplexobj(ms_object):
+            ms_object = np.angle(ms_object)
+
+        x1, y1 = ptA
+        x2, y2 = ptB
+
+        if x1 is None:
+            x1 = 0
+        if y1 is None:
+            y1 = 0
+        if x2 is None:
+            x2 = self.sampling[0] * ms_object.shape[1]
+        if y2 is None:
+            y2 = self.sampling[1] * ms_object.shape[2]
 
         if specify_calibrated:
             x1 /= self.sampling[0]
@@ -236,46 +252,70 @@ class Object2p5DMethodsMixin:
             y1 /= self.sampling[1]
             y2 /= self.sampling[1]
 
-        if x2 == x1:
-            angle = 0
-        elif y2 == y1:
-            angle = np.pi / 2
-        else:
-            angle = np.arctan((x2 - x1) / (y2 - y1))
+        x1, x2 = np.array([x1, x2]).clip(0, ms_object.shape[1])
+        y1, y2 = np.array([y1, y2]).clip(0, ms_object.shape[2])
 
-        x0 = ms_obj.shape[1] / 2
-        y0 = ms_obj.shape[2] / 2
+        angle = np.arctan2(x2 - x1, y2 - y1)
 
-        if (
-            x1 > ms_obj.shape[1]
-            or x2 > ms_obj.shape[1]
-            or y1 > ms_obj.shape[2]
-            or y2 > ms_obj.shape[2]
-        ):
-            raise ValueError("depth section must be in field of view of object")
-
-        from py4DSTEM.process.phase.utils import rotate_point
+        x0 = ms_object.shape[1] / 2
+        y0 = ms_object.shape[2] / 2
 
         x1_0, y1_0 = rotate_point((x0, y0), (x1, y1), angle)
         x2_0, y2_0 = rotate_point((x0, y0), (x2, y2), angle)
 
         rotated_object = np.roll(
-            rotate(ms_obj, np.rad2deg(angle), reshape=False, axes=(-1, -2)),
+            rotate(ms_object, np.rad2deg(angle), reshape=False, axes=(-1, -2)),
             -int(x1_0),
             axis=1,
         )
 
-        if np.iscomplexobj(rotated_object):
-            rotated_object = np.angle(rotated_object)
         if gaussian_filter_sigma is not None:
-            from scipy.ndimage import gaussian_filter
-
             gaussian_filter_sigma /= self.sampling[0]
             rotated_object = gaussian_filter(rotated_object, gaussian_filter_sigma)
 
-        plot_im = rotated_object[
-            :, 0, np.max((0, int(y1_0))) : np.min((int(y2_0), rotated_object.shape[2]))
-        ]
+        y1_0, y2_0 = (
+            np.array([y1_0, y2_0]).astype("int").clip(0, rotated_object.shape[2])
+        )
+        plot_im = rotated_object[:, 0, y1_0:y2_0]
+
+        # Plotting
+        if plot_line_profile:
+            ncols = 2
+        else:
+            ncols = 1
+        col_index = 0
+
+        spec = GridSpec(ncols=ncols, nrows=1, wspace=0.15)
+
+        figsize = kwargs.pop("figsize", (4 * ncols, 4))
+        fig = plt.figure(figsize=figsize)
+        cmap = kwargs.pop("cmap", "magma")
+
+        # Line profile
+        if plot_line_profile:
+            ax = fig.add_subplot(spec[0, col_index])
+
+            extent_line = [
+                0,
+                self.sampling[1] * ms_object.shape[2],
+                self.sampling[0] * ms_object.shape[1],
+                0,
+            ]
+
+            ax.imshow(ms_object.sum(0), cmap="gray", extent=extent_line)
+
+            ax.plot(
+                [y1 * self.sampling[0], y2 * self.sampling[1]],
+                [x1 * self.sampling[0], x2 * self.sampling[1]],
+                color="red",
+            )
+
+            ax.set_xlabel("y [A]")
+            ax.set_ylabel("x [A]")
+            ax.set_title("Multislice depth profile location")
+            col_index += 1
+
+        # Main visualization
 
         extent = [
             0,
@@ -283,51 +323,30 @@ class Object2p5DMethodsMixin:
             self._slice_thicknesses[0] * plot_im.shape[0],
             0,
         ]
-        figsize = kwargs.pop("figsize", (6, 6))
-        if not plot_line_profile:
-            fig, ax = plt.subplots(figsize=figsize)
-            im = ax.imshow(plot_im, cmap="magma", extent=extent)
-            if aspect is not None:
-                ax.set_aspect(aspect)
-            ax.set_xlabel("r [A]")
-            ax.set_ylabel("z [A]")
-            ax.set_title("Multislice depth profile")
-            if cbar:
-                divider = make_axes_locatable(ax)
-                ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
-                fig.add_axes(ax_cb)
-                fig.colorbar(im, cax=ax_cb)
-        else:
-            extent2 = [
-                0,
-                self.sampling[1] * ms_obj.shape[2],
-                self.sampling[0] * ms_obj.shape[1],
-                0,
-            ]
 
-            fig, ax = plt.subplots(2, 1, figsize=figsize)
-            ax[0].imshow(ms_obj.sum(0), cmap="gray", extent=extent2)
-            ax[0].plot(
-                [y1 * self.sampling[0], y2 * self.sampling[1]],
-                [x1 * self.sampling[0], x2 * self.sampling[1]],
-                color="red",
-            )
-            ax[0].set_xlabel("y [A]")
-            ax[0].set_ylabel("x [A]")
-            ax[0].set_title("Multislice depth profile location")
+        ax = fig.add_subplot(spec[0, col_index])
+        im = ax.imshow(plot_im, cmap=cmap, extent=extent)
 
-            im = ax[1].imshow(plot_im, cmap="magma", extent=extent)
-            if aspect is not None:
-                ax[1].set_aspect(aspect)
-            ax[1].set_xlabel("r [A]")
-            ax[1].set_ylabel("z [A]")
-            ax[1].set_title("Multislice depth profile")
-            if cbar:
-                divider = make_axes_locatable(ax[1])
-                ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
-                fig.add_axes(ax_cb)
-                fig.colorbar(im, cax=ax_cb)
-            plt.tight_layout()
+        if aspect_ratio is not None:
+            if aspect_ratio == "auto":
+                aspect_ratio = extent[1] / extent[2]
+                if plot_line_profile:
+                    aspect_ratio *= extent_line[2] / extent_line[1]
+
+            ax.set_aspect(aspect_ratio)
+            cbar = False
+
+        ax.set_xlabel("r [A]")
+        ax.set_ylabel("z [A]")
+        ax.set_title("Multislice depth profile")
+
+        if cbar:
+            divider = make_axes_locatable(ax)
+            ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
+            fig.add_axes(ax_cb)
+            fig.colorbar(im, cax=ax_cb)
+
+        spec.tight_layout(fig)
 
     def show_slices(
         self,
@@ -385,21 +404,14 @@ class Object2p5DMethodsMixin:
         cmap = kwargs.pop("cmap", "magma")
 
         if common_color_scale:
-            vals = np.sort(rotated_object.ravel())
-            ind_vmin = np.round((vals.shape[0] - 1) * 0.02).astype("int")
-            ind_vmax = np.round((vals.shape[0] - 1) * 0.98).astype("int")
-            ind_vmin = np.max([0, ind_vmin])
-            ind_vmax = np.min([len(vals) - 1, ind_vmax])
-            vmin = vals[ind_vmin]
-            vmax = vals[ind_vmax]
-            if vmax == vmin:
-                vmin = vals[0]
-                vmax = vals[-1]
+            vmin = kwargs.pop("vmin", None)
+            vmax = kwargs.pop("vmax", None)
+            rotated_object, vmin, vmax = return_scaled_histogram_ordering(
+                rotated_object, vmin=vmin, vmax=vmax
+            )
         else:
-            vmax = None
             vmin = None
-        vmin = kwargs.pop("vmin", vmin)
-        vmax = kwargs.pop("vmax", vmax)
+            vmax = None
 
         spec = GridSpec(
             ncols=num_cols,
