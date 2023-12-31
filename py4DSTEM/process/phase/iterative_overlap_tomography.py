@@ -10,7 +10,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.gridspec import GridSpec
 from mpl_toolkits.axes_grid1 import ImageGrid, make_axes_locatable
-from py4DSTEM.visualize import show
 from py4DSTEM.visualize.vis_special import Complex2RGB, add_colorbar_arg
 from scipy.ndimage import rotate as rotate_np
 
@@ -27,6 +26,11 @@ from py4DSTEM.process.phase.iterative_ptychographic_constraints import (
     ObjectNDConstraintsMixin,
     PositionsConstraintsMixin,
     ProbeConstraintsMixin,
+)
+from py4DSTEM.process.phase.iterative_ptychographic_methods import (
+    Object3DMethodsMixin,
+    ObjectNDMethodsMixin,
+    ProbeMethodsMixin,
 )
 from py4DSTEM.process.phase.utils import (
     ComplexProbe,
@@ -46,6 +50,9 @@ class OverlapTomographicReconstruction(
     ProbeConstraintsMixin,
     Object3DConstraintsMixin,
     ObjectNDConstraintsMixin,
+    ProbeMethodsMixin,
+    Object3DMethodsMixin,
+    ObjectNDMethodsMixin,
     PtychographicReconstruction,
 ):
     """
@@ -2306,46 +2313,6 @@ class OverlapTomographicReconstruction(
 
         return self
 
-    def _crop_rotate_object_manually(
-        self,
-        array,
-        angle,
-        x_lims,
-        y_lims,
-    ):
-        """
-        Crops and rotates rotates object manually.
-
-        Parameters
-        ----------
-        array: np.ndarray
-            Object array to crop and rotate. Only operates on numpy arrays for comptatibility.
-        angle: float
-            In-plane angle in degrees to rotate by
-        x_lims: tuple(float,float)
-            min/max x indices
-        y_lims: tuple(float,float)
-            min/max y indices
-
-        Returns
-        -------
-        cropped_rotated_array: np.ndarray
-            Cropped and rotated object array
-        """
-
-        asnumpy = self._asnumpy
-        min_x, max_x = x_lims
-        min_y, max_y = y_lims
-
-        if angle is not None:
-            rotated_array = rotate_np(
-                asnumpy(array), angle, reshape=False, axes=(-2, -1)
-            )
-        else:
-            rotated_array = asnumpy(array)
-
-        return rotated_array[..., min_x:max_x, min_y:max_y]
-
     def _visualize_last_iteration_figax(
         self,
         fig,
@@ -2969,113 +2936,6 @@ class OverlapTomographicReconstruction(
 
         return self
 
-    def _return_object_fft(
-        self,
-        obj=None,
-        projection_angle_deg: float = None,
-        projection_axes: Tuple[int, int] = (0, 2),
-        x_lims: Tuple[int, int] = (None, None),
-        y_lims: Tuple[int, int] = (None, None),
-    ):
-        """
-        Returns obj fft shifted to center of array
-
-        Parameters
-        ----------
-        obj: array, optional
-            if None is specified, uses self._object
-        projection_angle_deg: float
-            Angle in degrees to rotate 3D array around prior to projection
-        projection_axes: tuple(int,int)
-            Axes defining projection plane
-        x_lims: tuple(float,float)
-            min/max x indices
-        y_lims: tuple(float,float)
-            min/max y indices
-        """
-
-        xp = self._xp
-        asnumpy = self._asnumpy
-
-        if obj is None:
-            obj = self._object
-        else:
-            obj = xp.asarray(obj, dtype=xp.float32)
-
-        if projection_angle_deg is not None:
-            rotated_3d_obj = self._rotate(
-                obj,
-                projection_angle_deg,
-                axes=projection_axes,
-                reshape=False,
-                order=2,
-            )
-            rotated_3d_obj = asnumpy(rotated_3d_obj)
-        else:
-            rotated_3d_obj = asnumpy(obj)
-
-        rotated_object = self._crop_rotate_object_manually(
-            rotated_3d_obj.sum(0), angle=None, x_lims=x_lims, y_lims=y_lims
-        )
-
-        return np.abs(np.fft.fftshift(np.fft.fft2(np.fft.ifftshift(rotated_object))))
-
-    def show_object_fft(
-        self,
-        obj=None,
-        projection_angle_deg: float = None,
-        projection_axes: Tuple[int, int] = (0, 2),
-        x_lims: Tuple[int, int] = (None, None),
-        y_lims: Tuple[int, int] = (None, None),
-        **kwargs,
-    ):
-        """
-        Plot FFT of reconstructed object
-
-        Parameters
-        ----------
-        obj: array, optional
-            if None is specified, uses self._object
-        projection_angle_deg: float
-            Angle in degrees to rotate 3D array around prior to projection
-        projection_axes: tuple(int,int)
-            Axes defining projection plane
-        x_lims: tuple(float,float)
-            min/max x indices
-        y_lims: tuple(float,float)
-            min/max y indices
-        """
-        if obj is None:
-            object_fft = self._return_object_fft(
-                projection_angle_deg=projection_angle_deg,
-                projection_axes=projection_axes,
-                x_lims=x_lims,
-                y_lims=y_lims,
-            )
-        else:
-            object_fft = self._return_object_fft(
-                obj,
-                projection_angle_deg=projection_angle_deg,
-                projection_axes=projection_axes,
-                x_lims=x_lims,
-                y_lims=y_lims,
-            )
-
-        figsize = kwargs.pop("figsize", (6, 6))
-        cmap = kwargs.pop("cmap", "magma")
-
-        pixelsize = 1 / (object_fft.shape[1] * self.sampling[1])
-        show(
-            object_fft,
-            figsize=figsize,
-            cmap=cmap,
-            scalebar=True,
-            pixelsize=pixelsize,
-            ticks=False,
-            pixelunits=r"$\AA^{-1}$",
-            **kwargs,
-        )
-
     @property
     def positions(self):
         """Probe positions [A]"""
@@ -3102,12 +2962,6 @@ class OverlapTomographicReconstruction(
         max_batch_size=None,
     ):
         """Compute the self-consistency errors for each probe position"""
-        raise NotImplementedError()
-
-    def _return_projected_cropped_potential(
-        self,
-    ):
-        """Utility function to accommodate multiple classes"""
         raise NotImplementedError()
 
     def show_uncertainty_visualization(

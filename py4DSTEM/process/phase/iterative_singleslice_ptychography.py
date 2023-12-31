@@ -25,6 +25,10 @@ from py4DSTEM.process.phase.iterative_ptychographic_constraints import (
     PositionsConstraintsMixin,
     ProbeConstraintsMixin,
 )
+from py4DSTEM.process.phase.iterative_ptychographic_methods import (
+    ObjectNDMethodsMixin,
+    ProbeMethodsMixin,
+)
 from py4DSTEM.process.phase.utils import (
     ComplexProbe,
     fft_shift,
@@ -41,6 +45,8 @@ class SingleslicePtychographicReconstruction(
     PositionsConstraintsMixin,
     ProbeConstraintsMixin,
     ObjectNDConstraintsMixin,
+    ProbeMethodsMixin,
+    ObjectNDMethodsMixin,
     PtychographicReconstruction,
 ):
     """

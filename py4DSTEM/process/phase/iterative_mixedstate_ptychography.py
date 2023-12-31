@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.gridspec import GridSpec
 from mpl_toolkits.axes_grid1 import ImageGrid, make_axes_locatable
-from py4DSTEM.visualize.vis_special import Complex2RGB, add_colorbar_arg, show_complex
+from py4DSTEM.visualize.vis_special import Complex2RGB, add_colorbar_arg
 
 try:
     import cupy as cp
@@ -25,6 +25,11 @@ from py4DSTEM.process.phase.iterative_ptychographic_constraints import (
     PositionsConstraintsMixin,
     ProbeConstraintsMixin,
     ProbeMixedConstraintsMixin,
+)
+from py4DSTEM.process.phase.iterative_ptychographic_methods import (
+    ObjectNDMethodsMixin,
+    ProbeMethodsMixin,
+    ProbeMixedMethodsMixin,
 )
 from py4DSTEM.process.phase.utils import (
     ComplexProbe,
@@ -43,6 +48,9 @@ class MixedstatePtychographicReconstruction(
     ProbeMixedConstraintsMixin,
     ProbeConstraintsMixin,
     ObjectNDConstraintsMixin,
+    ProbeMixedMethodsMixin,
+    ProbeMethodsMixin,
+    ObjectNDMethodsMixin,
     PtychographicReconstruction,
 ):
     """
@@ -2263,74 +2271,6 @@ class MixedstatePtychographicReconstruction(
             )
 
         return self
-
-    def show_fourier_probe(
-        self,
-        probe=None,
-        remove_initial_probe_aberrations=False,
-        cbar=True,
-        scalebar=True,
-        pixelsize=None,
-        pixelunits=None,
-        **kwargs,
-    ):
-        """
-        Plot probe in fourier space
-
-        Parameters
-        ----------
-        probe: complex array, optional
-            if None is specified, uses the `probe_fourier` property
-        remove_initial_probe_aberrations: bool, optional
-            If True, removes initial probe aberrations from Fourier probe
-        scalebar: bool, optional
-            if True, adds scalebar to probe
-        pixelunits: str, optional
-            units for scalebar, default is A^-1
-        pixelsize: float, optional
-            default is probe reciprocal sampling
-        """
-        asnumpy = self._asnumpy
-
-        if probe is None:
-            probe = list(
-                asnumpy(
-                    self._return_fourier_probe(
-                        probe,
-                        remove_initial_probe_aberrations=remove_initial_probe_aberrations,
-                    )
-                )
-            )
-        else:
-            if isinstance(probe, np.ndarray) and probe.ndim == 2:
-                probe = [probe]
-            probe = [
-                asnumpy(
-                    self._return_fourier_probe(
-                        pr,
-                        remove_initial_probe_aberrations=remove_initial_probe_aberrations,
-                    )
-                )
-                for pr in probe
-            ]
-
-        if pixelsize is None:
-            pixelsize = self._reciprocal_sampling[1]
-        if pixelunits is None:
-            pixelunits = r"$\AA^{-1}$"
-
-        chroma_boost = kwargs.pop("chroma_boost", 1)
-
-        show_complex(
-            probe if len(probe) > 1 else probe[0],
-            cbar=cbar,
-            scalebar=scalebar,
-            pixelsize=pixelsize,
-            pixelunits=pixelunits,
-            ticks=False,
-            chroma_boost=chroma_boost,
-            **kwargs,
-        )
 
     def _return_self_consistency_errors(
         self,

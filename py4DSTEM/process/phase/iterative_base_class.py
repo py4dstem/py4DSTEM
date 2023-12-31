@@ -8,15 +8,15 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.gridspec import GridSpec
 from mpl_toolkits.axes_grid1 import ImageGrid
-from py4DSTEM.visualize import return_scaled_histogram_ordering, show, show_complex
-from scipy.ndimage import rotate, zoom
+from py4DSTEM.visualize import return_scaled_histogram_ordering, show_complex
+from scipy.ndimage import zoom
 
 try:
     import cupy as cp
 except (ModuleNotFoundError, ImportError):
     cp = np
 
-from emdfile import Array, Custom, Metadata, _read_metadata, tqdmnd
+from emdfile import Array, Custom, Metadata, _read_metadata
 from py4DSTEM.data import Calibration
 from py4DSTEM.datacube import DataCube
 from py4DSTEM.process.calibration import fit_origin
@@ -1773,52 +1773,6 @@ class PtychographicReconstruction(PhaseReconstruction):
 
         return vectorized_patch_indices_row, vectorized_patch_indices_col
 
-    def _crop_rotate_object_fov(
-        self,
-        array,
-        padding=0,
-    ):
-        """
-        Crops and rotated object to FOV bounded by current pixel positions.
-
-        Parameters
-        ----------
-        array: np.ndarray
-            Object array to crop and rotate. Only operates on numpy arrays for compatibility.
-        padding: int, optional
-            Optional padding outside pixel positions
-
-        Returns
-        cropped_rotated_array: np.ndarray
-            Cropped and rotated object array
-        """
-
-        asnumpy = self._asnumpy
-        angle = (
-            self._rotation_best_rad
-            if self._rotation_best_transpose
-            else -self._rotation_best_rad
-        )
-
-        tf = AffineTransform(angle=angle)
-        rotated_points = tf(
-            asnumpy(self._positions_px), origin=asnumpy(self._positions_px_com), xp=np
-        )
-
-        min_x, min_y = np.floor(np.amin(rotated_points, axis=0) - padding).astype("int")
-        min_x = min_x if min_x > 0 else 0
-        min_y = min_y if min_y > 0 else 0
-        max_x, max_y = np.ceil(np.amax(rotated_points, axis=0) + padding).astype("int")
-
-        rotated_array = rotate(
-            asnumpy(array), np.rad2deg(-angle), order=1, reshape=False, axes=(-2, -1)
-        )[..., min_x:max_x, min_y:max_y]
-
-        if self._rotation_best_transpose:
-            rotated_array = rotated_array.swapaxes(-2, -1)
-
-        return rotated_array
-
     def _position_correction(
         self,
         relevant_object,
@@ -2003,119 +1957,6 @@ class PtychographicReconstruction(PhaseReconstruction):
         ax.set_aspect("equal")
         ax.set_title("Probe positions correction")
 
-    def _return_fourier_probe(
-        self,
-        probe=None,
-        remove_initial_probe_aberrations=False,
-    ):
-        """
-        Returns complex fourier probe shifted to center of array from
-        corner-centered complex real space probe
-
-        Parameters
-        ----------
-        probe: complex array, optional
-            if None is specified, uses self._probe
-        remove_initial_probe_aberrations: bool, optional
-            If True, removes initial probe aberrations from Fourier probe
-
-        Returns
-        -------
-        fourier_probe: np.ndarray
-            Fourier-transformed and center-shifted probe.
-        """
-        xp = self._xp
-
-        if probe is None:
-            probe = self._probe
-        else:
-            probe = xp.asarray(probe, dtype=xp.complex64)
-
-        fourier_probe = xp.fft.fft2(probe)
-
-        if remove_initial_probe_aberrations:
-            fourier_probe *= xp.conjugate(self._known_aberrations_array)
-
-        return xp.fft.fftshift(fourier_probe, axes=(-2, -1))
-
-    def _return_fourier_probe_from_centered_probe(
-        self,
-        probe=None,
-        remove_initial_probe_aberrations=False,
-    ):
-        """
-        Returns complex fourier probe shifted to center of array from
-        centered complex real space probe
-
-        Parameters
-        ----------
-        probe: complex array, optional
-            if None is specified, uses self._probe
-        remove_initial_probe_aberrations: bool, optional
-            If True, removes initial probe aberrations from Fourier probe
-
-        Returns
-        -------
-        fourier_probe: np.ndarray
-            Fourier-transformed and center-shifted probe.
-        """
-        xp = self._xp
-        return self._return_fourier_probe(
-            xp.fft.ifftshift(probe, axes=(-2, -1)),
-            remove_initial_probe_aberrations=remove_initial_probe_aberrations,
-        )
-
-    def _return_centered_probe(
-        self,
-        probe=None,
-    ):
-        """
-        Returns complex probe centered in middle of the array.
-
-        Parameters
-        ----------
-        probe: complex array, optional
-            if None is specified, uses self._probe
-
-        Returns
-        -------
-        centered_probe: np.ndarray
-            Center-shifted probe.
-        """
-        xp = self._xp
-
-        if probe is None:
-            probe = self._probe
-        else:
-            probe = xp.asarray(probe, dtype=xp.complex64)
-
-        return xp.fft.fftshift(probe, axes=(-2, -1))
-
-    def _return_object_fft(
-        self,
-        obj=None,
-    ):
-        """
-        Returns absolute value of obj fft shifted to center of array
-
-        Parameters
-        ----------
-        obj: array, optional
-            if None is specified, uses self._object
-
-        Returns
-        -------
-        object_fft_amplitude: np.ndarray
-            Amplitude of Fourier-transformed and center-shifted obj.
-        """
-        asnumpy = self._asnumpy
-
-        if obj is None:
-            obj = self._object
-
-        obj = self._crop_rotate_object_fov(asnumpy(obj))
-        return np.abs(np.fft.fftshift(np.fft.fft2(np.fft.ifftshift(obj))))
-
     def _return_self_consistency_errors(
         self,
         max_batch_size=None,
@@ -2161,17 +2002,6 @@ class PtychographicReconstruction(PhaseReconstruction):
         errors /= self._mean_diffraction_intensity
 
         return asnumpy(errors)
-
-    def _return_projected_cropped_potential(
-        self,
-    ):
-        """Utility function to accommodate multiple classes"""
-        if self._object_type == "complex":
-            projected_cropped_potential = np.angle(self.object_cropped)
-        else:
-            projected_cropped_potential = self.object_cropped
-
-        return projected_cropped_potential
 
     def show_uncertainty_visualization(
         self,
@@ -2353,132 +2183,6 @@ class PtychographicReconstruction(PhaseReconstruction):
 
         spec.tight_layout(fig)
 
-    def show_fourier_probe(
-        self,
-        probe=None,
-        remove_initial_probe_aberrations=False,
-        cbar=True,
-        scalebar=True,
-        pixelsize=None,
-        pixelunits=None,
-        **kwargs,
-    ):
-        """
-        Plot probe in fourier space
-
-        Parameters
-        ----------
-        probe: complex array, optional
-            if None is specified, uses the `probe_fourier` property
-        remove_initial_probe_aberrations: bool, optional
-            If True, removes initial probe aberrations from Fourier probe
-        cbar: bool, optional
-            if True, adds colorbar
-        scalebar: bool, optional
-            if True, adds scalebar to probe
-        pixelunits: str, optional
-            units for scalebar, default is A^-1
-        pixelsize: float, optional
-            default is probe reciprocal sampling
-        """
-        asnumpy = self._asnumpy
-
-        probe = asnumpy(
-            self._return_fourier_probe(
-                probe, remove_initial_probe_aberrations=remove_initial_probe_aberrations
-            )
-        )
-
-        if pixelsize is None:
-            pixelsize = self._reciprocal_sampling[1]
-        if pixelunits is None:
-            pixelunits = r"$\AA^{-1}$"
-
-        figsize = kwargs.pop("figsize", (6, 6))
-        chroma_boost = kwargs.pop("chroma_boost", 1)
-
-        fig, ax = plt.subplots(figsize=figsize)
-        show_complex(
-            probe,
-            cbar=cbar,
-            figax=(fig, ax),
-            scalebar=scalebar,
-            pixelsize=pixelsize,
-            pixelunits=pixelunits,
-            ticks=False,
-            chroma_boost=chroma_boost,
-            **kwargs,
-        )
-
-    def show_object_fft(self, obj=None, **kwargs):
-        """
-        Plot FFT of reconstructed object
-
-        Parameters
-        ----------
-        obj: complex array, optional
-            if None is specified, uses the `object_fft` property
-        """
-        if obj is None:
-            object_fft = self.object_fft
-        else:
-            object_fft = self._return_object_fft(obj)
-
-        figsize = kwargs.pop("figsize", (6, 6))
-        cmap = kwargs.pop("cmap", "magma")
-
-        pixelsize = 1 / (object_fft.shape[1] * self.sampling[1])
-        show(
-            object_fft,
-            figsize=figsize,
-            cmap=cmap,
-            scalebar=True,
-            pixelsize=pixelsize,
-            ticks=False,
-            pixelunits=r"$\AA^{-1}$",
-            **kwargs,
-        )
-
-    @property
-    def probe_fourier(self):
-        """Current probe estimate in Fourier space"""
-        if not hasattr(self, "_probe"):
-            return None
-
-        asnumpy = self._asnumpy
-        return asnumpy(self._return_fourier_probe(self._probe))
-
-    @property
-    def probe_fourier_residual(self):
-        """Current probe estimate in Fourier space"""
-        if not hasattr(self, "_probe"):
-            return None
-
-        asnumpy = self._asnumpy
-        return asnumpy(
-            self._return_fourier_probe(
-                self._probe, remove_initial_probe_aberrations=True
-            )
-        )
-
-    @property
-    def probe_centered(self):
-        """Current probe estimate shifted to the center"""
-        if not hasattr(self, "_probe"):
-            return None
-
-        asnumpy = self._asnumpy
-        return asnumpy(self._return_centered_probe(self._probe))
-
-    @property
-    def object_fft(self):
-        """Fourier transform of current object estimate"""
-
-        if not hasattr(self, "_object"):
-            return None
-
-        return self._return_object_fft(self._object)
-
     @property
     def angular_sampling(self):
         """Angular sampling [mrad]"""
@@ -2510,9 +2214,3 @@ class PtychographicReconstruction(PhaseReconstruction):
         positions[:, 1] *= self.sampling[1]
 
         return asnumpy(positions)
-
-    @property
-    def object_cropped(self):
-        """Cropped and rotated object"""
-
-        return self._crop_rotate_object_fov(self._object)

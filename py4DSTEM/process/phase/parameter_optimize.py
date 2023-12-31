@@ -201,7 +201,6 @@ class PtychographyOptimizer:
         pbar.close()
 
         if plot_reconstructed_objects:
-
             if len(n_points) == 2:
                 nrows, ncols = n_points
             else:
