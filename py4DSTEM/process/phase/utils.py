@@ -3,14 +3,16 @@ from typing import Mapping, Tuple, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
+from scipy.fft import dctn, dstn, idctn, idstn
 from scipy.optimize import curve_fit
 
 try:
     import cupy as cp
-    from cupyx.scipy.fft import dctn, idctn, rfft
+    from cupyx.scipy.fft import dctn as dctn_cp
+    from cupyx.scipy.fft import idctn as idctn_cp
+    from cupyx.scipy.fft import rfft
 except (ImportError, ModuleNotFoundError):
     cp = None
-    from scipy.fft import dstn, idstn, dctn, idctn
 
 from py4DSTEM.process.utils import get_CoM
 from py4DSTEM.process.utils.cross_correlate import align_and_shift_images
@@ -1627,9 +1629,16 @@ def preconditioned_poisson_solver_dct(rhs, gauge=None, xp=np):
     if gauge is None:
         gauge = xp.mean(rhs)
 
-    fft_rhs = dctn(rhs, type=2)
+    if xp is np:
+        dctn_xp = dctn
+        idctn_xp = idctn
+    else:
+        dctn_xp = dctn_cp
+        idctn_xp = idctn_cp
+
+    fft_rhs = dctn_xp(rhs, type=2)
     fft_rhs[0, 0] = gauge  # gauge invariance
-    sol = idctn(fft_rhs / op, type=2)
+    sol = idctn_xp(fft_rhs / op, type=2)
     return sol
 
 
