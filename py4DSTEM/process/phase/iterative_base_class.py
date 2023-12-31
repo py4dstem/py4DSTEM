@@ -194,8 +194,8 @@ class PhaseReconstruction(Custom):
         if com_shifts is not None:
             if np.isscalar(com_shifts[0]):
                 com_shifts = (
-                    np.ones(self._datacube.Rshape) * com_shifts[0],
-                    np.ones(self._datacube.Rshape) * com_shifts[1],
+                    np.ones(datacube.Rshape) * com_shifts[0],
+                    np.ones(datacube.Rshape) * com_shifts[1],
                 )
 
         if diffraction_intensities_shape is not None:
@@ -368,8 +368,10 @@ class PhaseReconstruction(Custom):
             If require_calibrations is False and calibrations are not set
         """
 
-        # Copies intensities to device casting to float32
+        # explicit read-only self attributes up-front
         xp = self._xp
+        verbose = self._verbose
+        energy = self._energy
 
         intensities = xp.asarray(datacube.data, dtype=xp.float32)
         self._grid_scan_shape = intensities.shape[:2]
@@ -388,7 +390,7 @@ class PhaseReconstruction(Custom):
                 if require_calibrations:
                     raise ValueError("Real-space calibrations must be given in 'A'")
 
-                if self._verbose:
+                if verbose:
                     warnings.warn(
                         (
                             "Iterative reconstruction will not be quantitative unless you specify "
@@ -426,10 +428,10 @@ class PhaseReconstruction(Custom):
                 self._angular_sampling = (force_angular_sampling,) * 2
                 self._angular_units = ("mrad",) * 2
 
-                if self._energy is not None:
+                if energy is not None:
                     self._reciprocal_sampling = (
                         force_angular_sampling
-                        / electron_wavelength_angstrom(self._energy)
+                        / electron_wavelength_angstrom(energy)
                         / 1e3,
                     ) * 2
                     self._reciprocal_units = ("A^-1",) * 2
@@ -439,10 +441,10 @@ class PhaseReconstruction(Custom):
                 self._reciprocal_sampling = (force_reciprocal_sampling,) * 2
                 self._reciprocal_units = ("A^-1",) * 2
 
-                if self._energy is not None:
+                if energy is not None:
                     self._angular_sampling = (
                         force_reciprocal_sampling
-                        * electron_wavelength_angstrom(self._energy)
+                        * electron_wavelength_angstrom(energy)
                         * 1e3,
                     ) * 2
                     self._angular_units = ("mrad",) * 2
@@ -454,7 +456,7 @@ class PhaseReconstruction(Custom):
                         "Reciprocal-space calibrations must be given in in 'A^-1' or 'mrad'"
                     )
 
-                if self._verbose:
+                if verbose:
                     warnings.warn(
                         (
                             "Iterative reconstruction will not be quantitative unless you specify "
@@ -473,11 +475,9 @@ class PhaseReconstruction(Custom):
                 self._reciprocal_sampling = (reciprocal_size,) * 2
                 self._reciprocal_units = ("A^-1",) * 2
 
-                if self._energy is not None:
+                if energy is not None:
                     self._angular_sampling = (
-                        reciprocal_size
-                        * electron_wavelength_angstrom(self._energy)
-                        * 1e3,
+                        reciprocal_size * electron_wavelength_angstrom(energy) * 1e3,
                     ) * 2
                     self._angular_units = ("mrad",) * 2
 
@@ -486,9 +486,9 @@ class PhaseReconstruction(Custom):
                 self._angular_sampling = (angular_size,) * 2
                 self._angular_units = ("mrad",) * 2
 
-                if self._energy is not None:
+                if energy is not None:
                     self._reciprocal_sampling = (
-                        angular_size / electron_wavelength_angstrom(self._energy) / 1e3,
+                        angular_size / electron_wavelength_angstrom(energy) / 1e3,
                     ) * 2
                     self._reciprocal_units = ("A^-1",) * 2
             else:
@@ -541,8 +541,10 @@ class PhaseReconstruction(Custom):
             Normalized vertical center of mass gradient
         """
 
+        # explicit read-only self attributes up-front
         xp = self._xp
         asnumpy = self._asnumpy
+        reciprocal_sampling = self._reciprocal_sampling
 
         if com_measured:
             com_measured_x, com_measured_y = com_measured
@@ -593,10 +595,10 @@ class PhaseReconstruction(Custom):
 
         # fix CoM units
         com_normalized_x = (
-            xp.nan_to_num(com_measured_x - com_fitted_x) * self._reciprocal_sampling[0]
+            xp.nan_to_num(com_measured_x - com_fitted_x) * reciprocal_sampling[0]
         )
         com_normalized_y = (
-            xp.nan_to_num(com_measured_y - com_fitted_y) * self._reciprocal_sampling[1]
+            xp.nan_to_num(com_measured_y - com_fitted_y) * reciprocal_sampling[1]
         )
 
         return (
@@ -676,8 +678,12 @@ class PhaseReconstruction(Custom):
             Summary statistics
         """
 
+        # explicit read-only self attributes up-front
         xp = self._xp
         asnumpy = self._asnumpy
+        verbose = self._verbose
+        scan_sampling = self._scan_sampling
+        scan_units = self._scan_units
 
         if rotation_angles_deg is None:
             rotation_angles_deg = np.arange(-89.0, 90.0, 1.0)
@@ -687,7 +693,7 @@ class PhaseReconstruction(Custom):
 
             _rotation_best_rad = np.deg2rad(force_com_rotation)
 
-            if self._verbose:
+            if verbose:
                 warnings.warn(
                     (
                         "Best fit rotation forced to "
@@ -701,7 +707,7 @@ class PhaseReconstruction(Custom):
 
                 _rotation_best_transpose = force_com_transpose
 
-                if self._verbose:
+                if verbose:
                     warnings.warn(
                         f"Transpose of intensities forced to {force_com_transpose}.",
                         UserWarning,
@@ -752,7 +758,7 @@ class PhaseReconstruction(Custom):
                 else:
                     _rotation_best_transpose = rotation_curl_transpose < rotation_curl
 
-                if self._verbose:
+                if verbose:
                     if _rotation_best_transpose:
                         print("Diffraction intensities should be transposed.")
                     else:
@@ -765,7 +771,7 @@ class PhaseReconstruction(Custom):
 
                 _rotation_best_transpose = force_com_transpose
 
-                if self._verbose:
+                if verbose:
                     warnings.warn(
                         f"Transpose of intensities forced to {force_com_transpose}.",
                         UserWarning,
@@ -860,7 +866,7 @@ class PhaseReconstruction(Custom):
                         rotation_best_deg = rotation_angles_deg[ind_min]
                         _rotation_best_rad = rotation_angles_rad[ind_min]
 
-                if self._verbose:
+                if verbose:
                     print(("Best fit rotation = " f"{rotation_best_deg:.0f} degrees."))
 
                 if plot_rotation:
@@ -1014,8 +1020,9 @@ class PhaseReconstruction(Custom):
                         _rotation_best_transpose = True
 
                 self._rotation_angles_deg = rotation_angles_deg
+
                 # Print summary
-                if self._verbose:
+                if verbose:
                     print(("Best fit rotation = " f"{rotation_best_deg:.0f} degrees."))
                     if _rotation_best_transpose:
                         print("Diffraction intensities should be transposed.")
@@ -1102,8 +1109,8 @@ class PhaseReconstruction(Custom):
             cmap = kwargs.pop("cmap", "RdBu_r")
             extent = [
                 0,
-                self._scan_sampling[1] * _com_measured_x.shape[1],
-                self._scan_sampling[0] * _com_measured_x.shape[0],
+                scan_sampling[1] * _com_measured_x.shape[1],
+                scan_sampling[0] * _com_measured_x.shape[0],
                 0,
             ]
 
@@ -1130,8 +1137,8 @@ class PhaseReconstruction(Custom):
                 ],
             ):
                 ax.imshow(asnumpy(arr), extent=extent, cmap=cmap, **kwargs)
-                ax.set_ylabel(f"x [{self._scan_units[0]}]")
-                ax.set_xlabel(f"y [{self._scan_units[1]}]")
+                ax.set_ylabel(f"x [{scan_units[0]}]")
+                ax.set_xlabel(f"y [{scan_units[1]}]")
                 ax.set_title(title)
 
         elif plot_center_of_mass == "default" or plot_center_of_mass is True:
@@ -1140,8 +1147,8 @@ class PhaseReconstruction(Custom):
 
             extent = [
                 0,
-                self._scan_sampling[1] * com_x.shape[1],
-                self._scan_sampling[0] * com_x.shape[0],
+                scan_sampling[1] * com_x.shape[1],
+                scan_sampling[0] * com_x.shape[0],
                 0,
             ]
 
@@ -1160,8 +1167,8 @@ class PhaseReconstruction(Custom):
                 ],
             ):
                 ax.imshow(arr, extent=extent, cmap=cmap, **kwargs)
-                ax.set_ylabel(f"x [{self._scan_units[0]}]")
-                ax.set_xlabel(f"y [{self._scan_units[1]}]")
+                ax.set_ylabel(f"x [{scan_units[0]}]")
+                ax.set_xlabel(f"y [{scan_units[1]}]")
                 ax.set_title(title)
 
         return (
@@ -1206,10 +1213,13 @@ class PhaseReconstruction(Custom):
             Mean intensity value
         """
 
+        # explicit read-only self attributes up-front
         xp = self._xp
+        asnumpy = self._asnumpy
+
         mean_intensity = 0
 
-        diffraction_intensities = self._asnumpy(diffraction_intensities)
+        diffraction_intensities = asnumpy(diffraction_intensities)
         if positions_mask is not None:
             number_of_patterns = np.count_nonzero(positions_mask.ravel())
         else:
@@ -1254,8 +1264,8 @@ class PhaseReconstruction(Custom):
                 (number_of_patterns,) + region_of_interest_shape, dtype=np.float32
             )
 
-        com_fitted_x = self._asnumpy(com_fitted_x)
-        com_fitted_y = self._asnumpy(com_fitted_y)
+        com_fitted_x = asnumpy(com_fitted_x)
+        com_fitted_y = asnumpy(com_fitted_y)
 
         counter = 0
         for rx in range(diffraction_intensities.shape[0]):
@@ -1312,13 +1322,17 @@ class PhaseReconstruction(Custom):
             default is scan sampling
         """
 
+        # explicit read-only self attributes up-front
+        scan_sampling = self._scan_sampling
+        scan_units = self._scan_units
+
         if com is None:
             com = (self.com_x, self.com_y)
 
         if pixelsize is None:
-            pixelsize = self._scan_sampling[0]
+            pixelsize = scan_sampling[0]
         if pixelunits is None:
-            pixelunits = self._scan_units[0]
+            pixelunits = scan_units[0]
 
         figsize = kwargs.pop("figsize", (6, 6))
         fig, ax = plt.subplots(figsize=figsize)
@@ -1607,7 +1621,10 @@ class PtychographicReconstruction(PhaseReconstruction):
                 raise ValueError("{} not a recognized parameter".format(symbol))
 
     def _calculate_scan_positions_in_pixels(
-        self, positions: np.ndarray, positions_mask
+        self,
+        positions: np.ndarray,
+        positions_mask,
+        object_padding_px,
     ):
         """
         Method to compute the initial guess of scan positions in pixels.
@@ -1619,16 +1636,25 @@ class PtychographicReconstruction(PhaseReconstruction):
             If None, a raster scan using experimental parameters is constructed.
         positions_mask: np.ndarray, optional
             Boolean real space mask to select positions in datacube to skip for reconstruction
+        object_padding_px: Tuple[int,int], optional
+            Pixel dimensions to pad object with
+            If None, the padding is set to half the probe ROI dimensions
 
         Returns
         -------
         positions_in_px: (J,2) np.ndarray
             Initial guess of scan positions in pixels
+        object_padding_px: Tupe[int,int]
+            Updated object_padding_px
         """
 
+        # explicit read-only self attributes up-front
         grid_scan_shape = self._grid_scan_shape
         rotation_angle = self._rotation_best_rad
+        transpose = self._rotation_best_transpose
         step_sizes = self._scan_sampling
+        region_of_interest_shape = self._region_of_interest_shape
+        sampling = self.sampling
 
         if positions is None:
             if grid_scan_shape is not None:
@@ -1643,45 +1669,47 @@ class PtychographicReconstruction(PhaseReconstruction):
             else:
                 raise ValueError()
 
-            if self._rotation_best_transpose:
-                x = (x - np.ptp(x) / 2) / self.sampling[1]
-                y = (y - np.ptp(y) / 2) / self.sampling[0]
+            if transpose:
+                x = (x - np.ptp(x) / 2) / sampling[1]
+                y = (y - np.ptp(y) / 2) / sampling[0]
             else:
-                x = (x - np.ptp(x) / 2) / self.sampling[0]
-                y = (y - np.ptp(y) / 2) / self.sampling[1]
+                x = (x - np.ptp(x) / 2) / sampling[0]
+                y = (y - np.ptp(y) / 2) / sampling[1]
             x, y = np.meshgrid(x, y, indexing="ij")
+
             if positions_mask is not None:
                 x = x[positions_mask]
                 y = y[positions_mask]
         else:
             positions -= np.mean(positions, axis=0)
-            x = positions[:, 0] / self.sampling[1]
-            y = positions[:, 1] / self.sampling[0]
+            x = positions[:, 0] / sampling[1]
+            y = positions[:, 1] / sampling[0]
 
         if rotation_angle is not None:
             x, y = x * np.cos(rotation_angle) + y * np.sin(rotation_angle), -x * np.sin(
                 rotation_angle
             ) + y * np.cos(rotation_angle)
 
-        if self._rotation_best_transpose:
+        if transpose:
             positions = np.array([y.ravel(), x.ravel()]).T
         else:
             positions = np.array([x.ravel(), y.ravel()]).T
+
         positions -= np.min(positions, axis=0)
 
-        if self._object_padding_px is None:
-            float_padding = self._region_of_interest_shape / 2
-            self._object_padding_px = (float_padding, float_padding)
-        elif np.isscalar(self._object_padding_px[0]):
-            self._object_padding_px = (
-                (self._object_padding_px[0],) * 2,
-                (self._object_padding_px[1],) * 2,
+        if object_padding_px is None:
+            float_padding = region_of_interest_shape / 2
+            object_padding_px = (float_padding, float_padding)
+        elif np.isscalar(object_padding_px[0]):
+            object_padding_px = (
+                (object_padding_px[0],) * 2,
+                (object_padding_px[1],) * 2,
             )
 
-        positions[:, 0] += self._object_padding_px[0][0]
-        positions[:, 1] += self._object_padding_px[1][0]
+        positions[:, 0] += object_padding_px[0][0]
+        positions[:, 1] += object_padding_px[1][0]
 
-        return positions
+        return positions, object_padding_px
 
     def _sum_overlapping_patches_bincounts_base(self, patches: np.ndarray):
         """
@@ -1698,26 +1726,26 @@ class PtychographicReconstruction(PhaseReconstruction):
         out_array: (Px,Py) np.ndarray
             Summed array
         """
+        # explicit read-only self attributes up-front
         xp = self._xp
-        x0 = xp.round(self._positions_px[:, 0]).astype("int")
-        y0 = xp.round(self._positions_px[:, 1]).astype("int")
-
+        positions_px = self._positions_px
         roi_shape = self._region_of_interest_shape
+        object_shape = self._object_shape
+
+        x0 = xp.round(positions_px[:, 0]).astype("int")
+        y0 = xp.round(positions_px[:, 1]).astype("int")
+
         x_ind = xp.fft.fftfreq(roi_shape[0], d=1 / roi_shape[0]).astype("int")
         y_ind = xp.fft.fftfreq(roi_shape[1], d=1 / roi_shape[1]).astype("int")
 
         flat_weights = patches.ravel()
-        indices = (
-            (y0[:, None, None] + y_ind[None, None, :]) % self._object_shape[1]
-        ) + (
-            (x0[:, None, None] + x_ind[None, :, None]) % self._object_shape[0]
-        ) * self._object_shape[
-            1
-        ]
+        indices = ((y0[:, None, None] + y_ind[None, None, :]) % object_shape[1]) + (
+            (x0[:, None, None] + x_ind[None, :, None]) % object_shape[0]
+        ) * object_shape[1]
         counts = xp.bincount(
-            indices.ravel(), weights=flat_weights, minlength=np.prod(self._object_shape)
+            indices.ravel(), weights=flat_weights, minlength=np.prod(object_shape)
         )
-        return xp.reshape(counts, self._object_shape)
+        return xp.reshape(counts, object_shape)
 
     def _sum_overlapping_patches_bincounts(self, patches: np.ndarray):
         """
@@ -1755,15 +1783,19 @@ class PtychographicReconstruction(PhaseReconstruction):
         self._vectorized_patch_indices_col: np.ndarray
             Column indices for probe patches inside object array
         """
+        # explicit read-only self attributes up-front
         xp = self._xp
-        x0 = xp.round(self._positions_px[:, 0]).astype("int")
-        y0 = xp.round(self._positions_px[:, 1]).astype("int")
-
+        positions_px = self._positions_px
+        positions_px = self._positions_px
         roi_shape = self._region_of_interest_shape
+        obj_shape = self._object_shape
+
+        x0 = xp.round(positions_px[:, 0]).astype("int")
+        y0 = xp.round(positions_px[:, 1]).astype("int")
+
         x_ind = xp.fft.fftfreq(roi_shape[0], d=1 / roi_shape[0]).astype("int")
         y_ind = xp.fft.fftfreq(roi_shape[1], d=1 / roi_shape[1]).astype("int")
 
-        obj_shape = self._object_shape
         vectorized_patch_indices_row = (
             x0[:, None, None] + x_ind[None, :, None]
         ) % obj_shape[0]
