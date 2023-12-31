@@ -4,7 +4,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.gridspec import GridSpec
 from mpl_toolkits.axes_grid1 import make_axes_locatable
-from py4DSTEM.process.phase.utils import AffineTransform, rotate_point
+from py4DSTEM.process.phase.utils import AffineTransform, ComplexProbe, rotate_point
+from py4DSTEM.process.utils import get_CoM, get_shifted_ar
 from py4DSTEM.visualize import return_scaled_histogram_ordering, show, show_complex
 from scipy.ndimage import gaussian_filter, rotate
 
@@ -18,6 +19,36 @@ class ObjectNDMethodsMixin:
     """
     Mixin class for object methods applicable to 2D,2.5D, and 3D objects.
     """
+
+    def _initialize_object(
+        self,
+        initial_object,
+        positions_px,
+        object_type,
+    ):
+        """ """
+        # explicit read-only self attributes up-front
+        xp = self._xp
+        object_padding_px = self._object_padding_px
+        region_of_interest_shape = self._region_of_interest_shape
+
+        if initial_object is None:
+            pad_x = object_padding_px[0][1]
+            pad_y = object_padding_px[1][1]
+            p, q = np.round(np.max(positions_px, axis=0))
+            p = np.max([np.round(p + pad_x), region_of_interest_shape[0]]).astype("int")
+            q = np.max([np.round(q + pad_y), region_of_interest_shape[1]]).astype("int")
+            if object_type == "potential":
+                _object = xp.zeros((p, q), dtype=xp.float32)
+            elif object_type == "complex":
+                _object = xp.ones((p, q), dtype=xp.complex64)
+        else:
+            if object_type == "potential":
+                _object = xp.asarray(initial_object, dtype=xp.float32)
+            elif object_type == "complex":
+                _object = xp.asarray(initial_object, dtype=xp.complex64)
+
+        return _object
 
     def _crop_rotate_object_fov(
         self,
@@ -618,6 +649,85 @@ class ProbeMethodsMixin:
     """
     Mixin class for probe methods applicable to a single probe.
     """
+
+    def _initialize_probe(
+        self,
+        initial_probe,
+        vacuum_probe_intensity,
+        mean_diffraction_intensity,
+        semiangle_cutoff,
+        crop_patterns,
+    ):
+        """ """
+        # explicit read-only self attributes up-front
+        xp = self._xp
+        device = self._device
+        crop_mask = self._crop_mask
+        region_of_interest_shape = self._region_of_interest_shape
+        sampling = self.sampling
+        energy = self._energy
+        rolloff = self._rolloff
+        polar_parameters = self._polar_parameters
+
+        if initial_probe is None:
+            if vacuum_probe_intensity is not None:
+                semiangle_cutoff = np.inf
+                vacuum_probe_intensity = xp.asarray(
+                    vacuum_probe_intensity, dtype=xp.float32
+                )
+                probe_x0, probe_y0 = get_CoM(
+                    vacuum_probe_intensity,
+                    device=device,
+                )
+                vacuum_probe_intensity = get_shifted_ar(
+                    vacuum_probe_intensity,
+                    -probe_x0,
+                    -probe_y0,
+                    bilinear=True,
+                    device=device,
+                )
+
+                if crop_patterns:
+                    vacuum_probe_intensity = vacuum_probe_intensity[crop_mask].reshape(
+                        region_of_interest_shape
+                    )
+
+            _probe = (
+                ComplexProbe(
+                    gpts=region_of_interest_shape,
+                    sampling=sampling,
+                    energy=energy,
+                    semiangle_cutoff=semiangle_cutoff,
+                    rolloff=rolloff,
+                    vacuum_probe_intensity=vacuum_probe_intensity,
+                    parameters=polar_parameters,
+                    device=device,
+                )
+                .build()
+                ._array
+            )
+
+            # Normalize probe to match mean diffraction intensity
+            probe_intensity = xp.sum(xp.abs(xp.fft.fft2(_probe)) ** 2)
+            _probe *= xp.sqrt(mean_diffraction_intensity / probe_intensity)
+
+        else:
+            if isinstance(initial_probe, ComplexProbe):
+                if initial_probe._gpts != region_of_interest_shape:
+                    raise ValueError()
+                if hasattr(initial_probe, "_array"):
+                    _probe = initial_probe._array
+                else:
+                    initial_probe._xp = xp
+                    _probe = initial_probe.build()._array
+
+                # Normalize probe to match mean diffraction intensity
+                probe_intensity = xp.sum(xp.abs(xp.fft.fft2(_probe)) ** 2)
+                _probe *= xp.sqrt(mean_diffraction_intensity / probe_intensity)
+            else:
+                _probe = xp.asarray(initial_probe, dtype=xp.complex64)
+
+        return _probe, semiangle_cutoff
 
     def _return_fourier_probe(
         self,
