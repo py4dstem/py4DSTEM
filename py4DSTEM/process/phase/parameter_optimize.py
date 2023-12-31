@@ -207,7 +207,7 @@ class PtychographyOptimizer:
             else:
                 nrows = kwargs.pop("nrows", int(np.sqrt(num_evals)))
                 ncols = kwargs.pop("ncols", int(np.ceil(num_evals / nrows)))
-            if nrows * ncols != num_evals:
+            if nrows * ncols < num_evals:
                 raise ValueError()
 
             spec = GridSpec(
