@@ -775,7 +775,7 @@ class ProbeMethodsMixin:
     Mixin class for probe methods applicable to a single probe.
     """
 
-    def initialize_probe(
+    def _initialize_probe(
         self,
         initial_probe,
         vacuum_probe_intensity,
@@ -1037,7 +1037,7 @@ class ProbeMixedMethodsMixin:
     Overwrites ProbeMethodsMixin.
     """
 
-    def initialize_probe(
+    def _initialize_probe(
         self,
         initial_probe,
         vacuum_probe_intensity,
@@ -1054,7 +1054,7 @@ class ProbeMixedMethodsMixin:
 
         if initial_probe is None or isinstance(initial_probe, ComplexProbe):
             # calls ProbeMethodsMixin for first probe
-            _probe, semiangle_cutoff = super().initialize_probe(
+            _probe, semiangle_cutoff = super()._initialize_probe(
                 initial_probe,
                 vacuum_probe_intensity,
                 mean_diffraction_intensity,
