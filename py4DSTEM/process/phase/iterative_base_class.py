@@ -1215,6 +1215,7 @@ class PhaseReconstruction(Custom):
         else:
             number_of_patterns = np.prod(diffraction_intensities.shape[:2])
 
+        # Aggressive cropping for when off-centered high scattering angle data was recorded
         if crop_patterns:
             crop_x = int(
                 np.minimum(
@@ -1339,7 +1340,7 @@ class PhaseReconstruction(Custom):
 class PtychographicReconstruction(PhaseReconstruction):
     """
     Base ptychographic reconstruction class.
-    Inherits from PhaseReconstruction and PtychographicConstraints.
+    Inherits from PhaseReconstruction.
     Defines various common functions and properties for subclasses to inherit.
     """
 
@@ -1783,7 +1784,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         Parameters
         ----------
         array: np.ndarray
-            Object array to crop and rotate. Only operates on numpy arrays for comptatibility.
+            Object array to crop and rotate. Only operates on numpy arrays for compatibility.
         padding: int, optional
             Optional padding outside pixel positions
 
@@ -1810,205 +1811,13 @@ class PtychographicReconstruction(PhaseReconstruction):
         max_x, max_y = np.ceil(np.amax(rotated_points, axis=0) + padding).astype("int")
 
         rotated_array = rotate(
-            asnumpy(array), np.rad2deg(-angle), reshape=False, axes=(-2, -1)
+            asnumpy(array), np.rad2deg(-angle), order=1, reshape=False, axes=(-2, -1)
         )[..., min_x:max_x, min_y:max_y]
 
         if self._rotation_best_transpose:
             rotated_array = rotated_array.swapaxes(-2, -1)
 
         return rotated_array
-
-    def tune_angle_and_defocus(
-        self,
-        angle_guess=None,
-        defocus_guess=None,
-        transpose=None,
-        angle_step_size=1,
-        defocus_step_size=20,
-        num_angle_values=5,
-        num_defocus_values=5,
-        max_iter=5,
-        plot_reconstructions=True,
-        plot_convergence=True,
-        return_values=False,
-        **kwargs,
-    ):
-        """
-        Run reconstructions over a parameters space of angles and
-        defocus values. Should be run after preprocess step.
-
-        Parameters
-        ----------
-        angle_guess: float (degrees), optional
-            initial starting guess for rotation angle between real and reciprocal space
-            if None, uses current initialized values
-        defocus_guess: float (A), optional
-            initial starting guess for defocus
-            if None, uses current initialized values
-        angle_step_size: float (degrees), optional
-            size of change of rotation angle between real and reciprocal space for
-            each step in parameter space
-        defocus_step_size: float (A), optional
-            size of change of defocus for each step in parameter space
-        num_angle_values: int, optional
-            number of values of angle to test, must be >= 1.
-        num_defocus_values: int,optional
-            number of values of defocus to test, must be >= 1
-        max_iter: int, optional
-            number of iterations to run in ptychographic reconstruction
-        plot_reconstructions: bool, optional
-            if True, plot phase of reconstructed objects
-        plot_convergence: bool, optional
-            if True, plots error for each iteration for each reconstruction.
-        return_values: bool, optional
-            if True, returns objects, convergence
-
-        Returns
-        -------
-        objects: list
-            reconstructed objects
-        convergence: np.ndarray
-            array of convergence values from reconstructions
-        """
-        # calculate angles and defocus values to test
-        if angle_guess is None:
-            angle_guess = self._rotation_best_rad * 180 / np.pi
-        if defocus_guess is None:
-            defocus_guess = -self._polar_parameters["C10"]
-        if transpose is None:
-            transpose = self._rotation_best_transpose
-
-        if num_angle_values == 1:
-            angle_step_size = 0
-
-        if num_defocus_values == 1:
-            defocus_step_size = 0
-
-        angles = np.linspace(
-            angle_guess - angle_step_size * (num_angle_values - 1) / 2,
-            angle_guess + angle_step_size * (num_angle_values - 1) / 2,
-            num_angle_values,
-        )
-
-        defocus_values = np.linspace(
-            defocus_guess - defocus_step_size * (num_defocus_values - 1) / 2,
-            defocus_guess + defocus_step_size * (num_defocus_values - 1) / 2,
-            num_defocus_values,
-        )
-
-        if return_values:
-            convergence = []
-            objects = []
-
-        # current initialized values
-        current_verbose = self._verbose
-        current_defocus = -self._polar_parameters["C10"]
-        current_rotation_deg = self._rotation_best_rad * 180 / np.pi
-        current_transpose = self._rotation_best_transpose
-
-        # Gridspec to plot on
-        if plot_reconstructions:
-            if plot_convergence:
-                spec = GridSpec(
-                    ncols=num_defocus_values,
-                    nrows=num_angle_values * 2,
-                    height_ratios=[1, 1 / 4] * num_angle_values,
-                    hspace=0.15,
-                    wspace=0.35,
-                )
-                figsize = kwargs.get(
-                    "figsize", (4 * num_defocus_values, 5 * num_angle_values)
-                )
-            else:
-                spec = GridSpec(
-                    ncols=num_defocus_values,
-                    nrows=num_angle_values,
-                    hspace=0.15,
-                    wspace=0.35,
-                )
-                figsize = kwargs.get(
-                    "figsize", (4 * num_defocus_values, 4 * num_angle_values)
-                )
-
-            fig = plt.figure(figsize=figsize)
-
-        progress_bar = kwargs.pop("progress_bar", False)
-        # run loop and plot along the way
-        self._verbose = False
-        for flat_index, (angle, defocus) in enumerate(
-            tqdmnd(angles, defocus_values, desc="Tuning angle and defocus")
-        ):
-            self._polar_parameters["C10"] = -defocus
-            self._probe = None
-            self._object = None
-            self.preprocess(
-                force_com_rotation=angle,
-                force_com_transpose=transpose,
-                plot_center_of_mass=False,
-                plot_rotation=False,
-                plot_probe_overlaps=False,
-            )
-
-            self.reconstruct(
-                reset=True,
-                store_iterations=True,
-                max_iter=max_iter,
-                progress_bar=progress_bar,
-                **kwargs,
-            )
-
-            if plot_reconstructions:
-                row_index, col_index = np.unravel_index(
-                    flat_index, (num_angle_values, num_defocus_values)
-                )
-
-                if plot_convergence:
-                    object_ax = fig.add_subplot(spec[row_index * 2, col_index])
-                    convergence_ax = fig.add_subplot(spec[row_index * 2 + 1, col_index])
-                    self._visualize_last_iteration_figax(
-                        fig,
-                        object_ax=object_ax,
-                        convergence_ax=convergence_ax,
-                        cbar=True,
-                    )
-                    convergence_ax.yaxis.tick_right()
-                else:
-                    object_ax = fig.add_subplot(spec[row_index, col_index])
-                    self._visualize_last_iteration_figax(
-                        fig,
-                        object_ax=object_ax,
-                        convergence_ax=None,
-                        cbar=True,
-                    )
-
-                object_ax.set_title(
-                    f" angle = {angle:.1f} °, defocus = {defocus:.1f} A \n error = {self.error:.3e}"
-                )
-                object_ax.set_xticks([])
-                object_ax.set_yticks([])
-
-            if return_values:
-                objects.append(self.object)
-                convergence.append(self.error_iterations.copy())
-
-        # initialize back to pre-tuning values
-        self._polar_parameters["C10"] = -current_defocus
-        self._probe = None
-        self._object = None
-        self.preprocess(
-            force_com_rotation=current_rotation_deg,
-            force_com_transpose=current_transpose,
-            plot_center_of_mass=False,
-            plot_rotation=False,
-            plot_probe_overlaps=False,
-        )
-        self._verbose = current_verbose
-
-        if plot_reconstructions:
-            spec.tight_layout(fig)
-
-        if return_values:
-            return objects, convergence
 
     def _position_correction(
         self,
