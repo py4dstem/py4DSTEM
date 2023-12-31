@@ -775,7 +775,7 @@ class ProbeMethodsMixin:
     Mixin class for probe methods applicable to a single probe.
     """
 
-    def _initialize_probe(
+    def initialize_probe(
         self,
         initial_probe,
         vacuum_probe_intensity,
@@ -1036,6 +1036,51 @@ class ProbeMixedMethodsMixin:
     Mixin class for probe methods unique to mixed probes.
     Overwrites ProbeMethodsMixin.
     """
+
+    def initialize_probe(
+        self,
+        initial_probe,
+        vacuum_probe_intensity,
+        mean_diffraction_intensity,
+        semiangle_cutoff,
+        crop_patterns,
+    ):
+        """ """
+
+        # explicit read-only self attributes up-front
+        xp = self._xp
+        num_probes = self._num_probes
+        region_of_interest_shape = self._region_of_interest_shape
+
+        if initial_probe is None or isinstance(initial_probe, ComplexProbe):
+            # calls ProbeMethodsMixin for first probe
+            _probe, semiangle_cutoff = super().initialize_probe(
+                initial_probe,
+                vacuum_probe_intensity,
+                mean_diffraction_intensity,
+                semiangle_cutoff,
+                crop_patterns,
+            )
+
+            sx, sy = region_of_interest_shape
+            _probes = xp.zeros((num_probes, sx, sy), dtype=xp.complex64)
+            _probes[0] = _probe
+
+            # Randomly shift phase of other probes
+            for i_probe in range(1, num_probes):
+                shift_x = xp.exp(
+                    -2j * np.pi * (xp.random.rand() - 0.5) * xp.fft.fftfreq(sx)
+                )
+                shift_y = xp.exp(
+                    -2j * np.pi * (xp.random.rand() - 0.5) * xp.fft.fftfreq(sy)
+                )
+                _probes[i_probe] = (
+                    _probes[i_probe - 1] * shift_x[:, None] * shift_y[None]
+                )
+        else:
+            _probes = xp.asarray(initial_probe, dtype=xp.complex64)
+
+        return _probes, semiangle_cutoff
 
     def show_fourier_probe(
         self,
