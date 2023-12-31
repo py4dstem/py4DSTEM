@@ -26,6 +26,11 @@ from py4DSTEM.process.phase.iterative_ptychographic_constraints import (
     PositionsConstraintsMixin,
     ProbeConstraintsMixin,
 )
+from py4DSTEM.process.phase.iterative_ptychographic_methods import (
+    Object2p5DMethodsMixin,
+    ObjectNDMethodsMixin,
+    ProbeMethodsMixin,
+)
 from py4DSTEM.process.phase.utils import (
     ComplexProbe,
     fft_shift,
@@ -35,7 +40,6 @@ from py4DSTEM.process.phase.utils import (
     spatial_frequencies,
 )
 from py4DSTEM.process.utils import electron_wavelength_angstrom, get_CoM, get_shifted_ar
-from scipy.ndimage import rotate
 
 warnings.simplefilter(action="always", category=UserWarning)
 
@@ -45,6 +49,9 @@ class MultislicePtychographicReconstruction(
     ProbeConstraintsMixin,
     Object2p5DConstraintsMixin,
     ObjectNDConstraintsMixin,
+    ProbeMethodsMixin,
+    Object2p5DMethodsMixin,
+    ObjectNDMethodsMixin,
     PtychographicReconstruction,
 ):
     """
@@ -2769,291 +2776,3 @@ class MultislicePtychographicReconstruction(
             title=title,
             **kwargs,
         )
-
-    def show_slices(
-        self,
-        ms_object=None,
-        cbar: bool = True,
-        common_color_scale: bool = True,
-        padding: int = 0,
-        num_cols: int = 3,
-        show_fft: bool = False,
-        **kwargs,
-    ):
-        """
-        Displays reconstructed slices of object
-
-        Parameters
-        --------
-        ms_object: nd.array, optional
-            Object to plot slices of. If None, uses current object
-        cbar: bool, optional
-            If True, displays a colorbar
-        padding: int, optional
-            Padding to leave uncropped
-        num_cols: int, optional
-            Number of GridSpec columns
-        show_fft: bool, optional
-            if True, plots fft of object slices
-        """
-
-        if ms_object is None:
-            ms_object = self._object
-
-        rotated_object = self._crop_rotate_object_fov(ms_object, padding=padding)
-        if show_fft:
-            rotated_object = np.abs(
-                np.fft.fftshift(
-                    np.fft.fft2(rotated_object, axes=(-2, -1)), axes=(-2, -1)
-                )
-            )
-        rotated_shape = rotated_object.shape
-
-        if np.iscomplexobj(rotated_object):
-            rotated_object = np.angle(rotated_object)
-
-        extent = [
-            0,
-            self.sampling[1] * rotated_shape[2],
-            self.sampling[0] * rotated_shape[1],
-            0,
-        ]
-
-        num_rows = np.ceil(self._num_slices / num_cols).astype("int")
-        wspace = 0.35 if cbar else 0.15
-
-        axsize = kwargs.pop("axsize", (3, 3))
-        cmap = kwargs.pop("cmap", "magma")
-
-        if common_color_scale:
-            vals = np.sort(rotated_object.ravel())
-            ind_vmin = np.round((vals.shape[0] - 1) * 0.02).astype("int")
-            ind_vmax = np.round((vals.shape[0] - 1) * 0.98).astype("int")
-            ind_vmin = np.max([0, ind_vmin])
-            ind_vmax = np.min([len(vals) - 1, ind_vmax])
-            vmin = vals[ind_vmin]
-            vmax = vals[ind_vmax]
-            if vmax == vmin:
-                vmin = vals[0]
-                vmax = vals[-1]
-        else:
-            vmax = None
-            vmin = None
-        vmin = kwargs.pop("vmin", vmin)
-        vmax = kwargs.pop("vmax", vmax)
-
-        spec = GridSpec(
-            ncols=num_cols,
-            nrows=num_rows,
-            hspace=0.15,
-            wspace=wspace,
-        )
-
-        figsize = (axsize[0] * num_cols, axsize[1] * num_rows)
-        fig = plt.figure(figsize=figsize)
-
-        for flat_index, obj_slice in enumerate(rotated_object):
-            row_index, col_index = np.unravel_index(flat_index, (num_rows, num_cols))
-            ax = fig.add_subplot(spec[row_index, col_index])
-            im = ax.imshow(
-                obj_slice,
-                cmap=cmap,
-                vmin=vmin,
-                vmax=vmax,
-                extent=extent,
-                **kwargs,
-            )
-
-            ax.set_title(f"Slice index: {flat_index}")
-
-            if cbar:
-                divider = make_axes_locatable(ax)
-                ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
-                fig.add_axes(ax_cb)
-                fig.colorbar(im, cax=ax_cb)
-
-            if row_index < num_rows - 1:
-                ax.set_xticks([])
-            else:
-                ax.set_xlabel("y [A]")
-
-            if col_index > 0:
-                ax.set_yticks([])
-            else:
-                ax.set_ylabel("x [A]")
-
-        spec.tight_layout(fig)
-
-    def show_depth(
-        self,
-        x1: float,
-        x2: float,
-        y1: float,
-        y2: float,
-        specify_calibrated: bool = False,
-        gaussian_filter_sigma: float = None,
-        ms_object=None,
-        cbar: bool = False,
-        aspect: float = None,
-        plot_line_profile: bool = False,
-        **kwargs,
-    ):
-        """
-        Displays line profile depth section
-
-        Parameters
-        --------
-        x1, x2, y1, y2: floats (pixels)
-            Line profile for depth section runs from (x1,y1) to (x2,y2)
-            Specified in pixels unless specify_calibrated is True
-        specify_calibrated: bool (optional)
-            If True, specify x1, x2, y1, y2 in A values instead of pixels
-        gaussian_filter_sigma: float (optional)
-            Standard deviation of gaussian kernel in A
-        ms_object: np.array
-            Object to plot slices of. If None, uses current object
-        cbar: bool, optional
-            If True, displays a colorbar
-        aspect: float, optional
-            aspect ratio for depth profile plot
-        plot_line_profile: bool
-            If True, also plots line profile showing where depth profile is taken
-        """
-        if ms_object is not None:
-            ms_obj = ms_object
-        else:
-            ms_obj = self.object_cropped
-
-        if specify_calibrated:
-            x1 /= self.sampling[0]
-            x2 /= self.sampling[0]
-            y1 /= self.sampling[1]
-            y2 /= self.sampling[1]
-
-        if x2 == x1:
-            angle = 0
-        elif y2 == y1:
-            angle = np.pi / 2
-        else:
-            angle = np.arctan((x2 - x1) / (y2 - y1))
-
-        x0 = ms_obj.shape[1] / 2
-        y0 = ms_obj.shape[2] / 2
-
-        if (
-            x1 > ms_obj.shape[1]
-            or x2 > ms_obj.shape[1]
-            or y1 > ms_obj.shape[2]
-            or y2 > ms_obj.shape[2]
-        ):
-            raise ValueError("depth section must be in field of view of object")
-
-        from py4DSTEM.process.phase.utils import rotate_point
-
-        x1_0, y1_0 = rotate_point((x0, y0), (x1, y1), angle)
-        x2_0, y2_0 = rotate_point((x0, y0), (x2, y2), angle)
-
-        rotated_object = np.roll(
-            rotate(ms_obj, np.rad2deg(angle), reshape=False, axes=(-1, -2)),
-            -int(x1_0),
-            axis=1,
-        )
-
-        if np.iscomplexobj(rotated_object):
-            rotated_object = np.angle(rotated_object)
-        if gaussian_filter_sigma is not None:
-            from scipy.ndimage import gaussian_filter
-
-            gaussian_filter_sigma /= self.sampling[0]
-            rotated_object = gaussian_filter(rotated_object, gaussian_filter_sigma)
-
-        plot_im = rotated_object[
-            :, 0, np.max((0, int(y1_0))) : np.min((int(y2_0), rotated_object.shape[2]))
-        ]
-
-        extent = [
-            0,
-            self.sampling[1] * plot_im.shape[1],
-            self._slice_thicknesses[0] * plot_im.shape[0],
-            0,
-        ]
-        figsize = kwargs.pop("figsize", (6, 6))
-        if not plot_line_profile:
-            fig, ax = plt.subplots(figsize=figsize)
-            im = ax.imshow(plot_im, cmap="magma", extent=extent)
-            if aspect is not None:
-                ax.set_aspect(aspect)
-            ax.set_xlabel("r [A]")
-            ax.set_ylabel("z [A]")
-            ax.set_title("Multislice depth profile")
-            if cbar:
-                divider = make_axes_locatable(ax)
-                ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
-                fig.add_axes(ax_cb)
-                fig.colorbar(im, cax=ax_cb)
-        else:
-            extent2 = [
-                0,
-                self.sampling[1] * ms_obj.shape[2],
-                self.sampling[0] * ms_obj.shape[1],
-                0,
-            ]
-
-            fig, ax = plt.subplots(2, 1, figsize=figsize)
-            ax[0].imshow(ms_obj.sum(0), cmap="gray", extent=extent2)
-            ax[0].plot(
-                [y1 * self.sampling[0], y2 * self.sampling[1]],
-                [x1 * self.sampling[0], x2 * self.sampling[1]],
-                color="red",
-            )
-            ax[0].set_xlabel("y [A]")
-            ax[0].set_ylabel("x [A]")
-            ax[0].set_title("Multislice depth profile location")
-
-            im = ax[1].imshow(plot_im, cmap="magma", extent=extent)
-            if aspect is not None:
-                ax[1].set_aspect(aspect)
-            ax[1].set_xlabel("r [A]")
-            ax[1].set_ylabel("z [A]")
-            ax[1].set_title("Multislice depth profile")
-            if cbar:
-                divider = make_axes_locatable(ax[1])
-                ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
-                fig.add_axes(ax_cb)
-                fig.colorbar(im, cax=ax_cb)
-            plt.tight_layout()
-
-    def _return_object_fft(
-        self,
-        obj=None,
-    ):
-        """
-        Returns obj fft shifted to center of array
-
-        Parameters
-        ----------
-        obj: array, optional
-            if None is specified, uses self._object
-        """
-        asnumpy = self._asnumpy
-
-        if obj is None:
-            obj = self._object
-
-        obj = asnumpy(obj)
-        if np.iscomplexobj(obj):
-            obj = np.angle(obj)
-
-        obj = self._crop_rotate_object_fov(np.sum(obj, axis=0))
-        return np.abs(np.fft.fftshift(np.fft.fft2(np.fft.ifftshift(obj))))
-
-    def _return_projected_cropped_potential(
-        self,
-    ):
-        """Utility function to accommodate multiple classes"""
-        if self._object_type == "complex":
-            projected_cropped_potential = np.angle(self.object_cropped).sum(0)
-        else:
-            projected_cropped_potential = self.object_cropped.sum(0)
-
-        return projected_cropped_potential
