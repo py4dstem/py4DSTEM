@@ -1054,7 +1054,10 @@ class ProbeMixedMethodsMixin:
 
         if initial_probe is None or isinstance(initial_probe, ComplexProbe):
             # calls ProbeMethodsMixin for first probe
-            _probe, semiangle_cutoff = super()._initialize_probe(
+            # annoyingly can't use super() as Mixins are defined right->left
+            # but MRO is defined left->right..
+            _probe, semiangle_cutoff = ProbeMethodsMixin._initialize_probe(
+                self,
                 initial_probe,
                 vacuum_probe_intensity,
                 mean_diffraction_intensity,
