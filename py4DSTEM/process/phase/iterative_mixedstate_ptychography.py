@@ -441,7 +441,7 @@ class MixedstatePtychographicReconstruction(
         ) = self._extract_vectorized_patch_indices()
 
         # initialize probe
-        self._probe, self._semiangle_cutoff = self._initialize_probe(
+        self._probe, self._semiangle_cutoff = self.initialize_probe(
             self._probe,
             self._vacuum_probe_intensity,
             self._mean_diffraction_intensity,
