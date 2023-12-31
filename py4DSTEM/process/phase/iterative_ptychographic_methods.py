@@ -1,11 +1,16 @@
-from typing import Tuple
+from typing import Sequence, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.gridspec import GridSpec
 from mpl_toolkits.axes_grid1 import make_axes_locatable
-from py4DSTEM.process.phase.utils import AffineTransform, ComplexProbe, rotate_point
-from py4DSTEM.process.utils import get_CoM, get_shifted_ar
+from py4DSTEM.process.phase.utils import (
+    AffineTransform,
+    ComplexProbe,
+    rotate_point,
+    spatial_frequencies,
+)
+from py4DSTEM.process.utils import electron_wavelength_angstrom, get_CoM, get_shifted_ar
 from py4DSTEM.visualize import return_scaled_histogram_ordering, show, show_complex
 from scipy.ndimage import gaussian_filter, rotate
 
@@ -186,6 +191,126 @@ class Object2p5DMethodsMixin:
     Mixin class for object methods unique to 2.5D objects.
     Overwrites ObjectNDMethodsMixin.
     """
+
+    def _precompute_propagator_arrays(
+        self,
+        gpts: Tuple[int, int],
+        sampling: Tuple[float, float],
+        energy: float,
+        slice_thicknesses: Sequence[float],
+        theta_x: float = None,
+        theta_y: float = None,
+    ):
+        """
+        Precomputes propagator arrays complex wave-function will be convolved by,
+        for all slice thicknesses.
+
+        Parameters
+        ----------
+        gpts: Tuple[int,int]
+            Wavefunction pixel dimensions
+        sampling: Tuple[float,float]
+            Wavefunction sampling in A
+        energy: float
+            The electron energy of the wave functions in eV
+        slice_thicknesses: Sequence[float]
+            Array of slice thicknesses in A
+        theta_x: float, optional
+            x tilt of propagator (in degrees)
+        theta_y: float, optional
+            y tilt of propagator (in degrees)
+
+        Returns
+        -------
+        propagator_arrays: np.ndarray
+            (T,Sx,Sy) shape array storing propagator arrays
+        """
+        xp = self._xp
+
+        # Frequencies
+        kx, ky = spatial_frequencies(gpts, sampling)
+        kx = xp.asarray(kx, dtype=xp.float32)
+        ky = xp.asarray(ky, dtype=xp.float32)
+
+        # Propagators
+        wavelength = electron_wavelength_angstrom(energy)
+        num_slices = slice_thicknesses.shape[0]
+        propagators = xp.empty(
+            (num_slices, kx.shape[0], ky.shape[0]), dtype=xp.complex64
+        )
+
+        for i, dz in enumerate(slice_thicknesses):
+            propagators[i] = xp.exp(
+                1.0j * (-(kx**2)[:, None] * np.pi * wavelength * dz)
+            )
+            propagators[i] *= xp.exp(
+                1.0j * (-(ky**2)[None] * np.pi * wavelength * dz)
+            )
+
+            if theta_x is not None:
+                theta_x = np.deg2rad(theta_x)
+                propagators[i] *= xp.exp(
+                    1.0j * (2 * kx[:, None] * np.pi * dz * np.tan(theta_x))
+                )
+
+            if theta_y is not None:
+                theta_y = np.deg2rad(theta_y)
+                propagators[i] *= xp.exp(
+                    1.0j * (2 * ky[None] * np.pi * dz * np.tan(theta_y))
+                )
+
+        return propagators
+
+    def _propagate_array(self, array: np.ndarray, propagator_array: np.ndarray):
+        """
+        Propagates array by Fourier convolving array with propagator_array.
+
+        Parameters
+        ----------
+        array: np.ndarray
+            Wavefunction array to be convolved
+        propagator_array: np.ndarray
+            Propagator array to convolve array with
+
+        Returns
+        -------
+        propagated_array: np.ndarray
+            Fourier-convolved array
+        """
+        xp = self._xp
+
+        return xp.fft.ifft2(xp.fft.fft2(array) * propagator_array)
+
+    def _initialize_object(
+        self,
+        initial_object,
+        num_slices,
+        positions_px,
+        object_type,
+    ):
+        """ """
+        # explicit read-only self attributes up-front
+        xp = self._xp
+        object_padding_px = self._object_padding_px
+        region_of_interest_shape = self._region_of_interest_shape
+
+        if initial_object is None:
+            pad_x = object_padding_px[0][1]
+            pad_y = object_padding_px[1][1]
+            p, q = np.round(np.max(positions_px, axis=0))
+            p = np.max([np.round(p + pad_x), region_of_interest_shape[0]]).astype("int")
+            q = np.max([np.round(q + pad_y), region_of_interest_shape[1]]).astype("int")
+            if object_type == "potential":
+                _object = xp.zeros((num_slices, p, q), dtype=xp.float32)
+            elif object_type == "complex":
+                _object = xp.ones((num_slices, p, q), dtype=xp.complex64)
+        else:
+            if object_type == "potential":
+                _object = xp.asarray(initial_object, dtype=xp.float32)
+            elif object_type == "complex":
+                _object = xp.asarray(initial_object, dtype=xp.complex64)
+
+        return _object
 
     def _return_projected_cropped_potential(
         self,

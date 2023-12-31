@@ -198,7 +198,7 @@ class SingleslicePtychographicReconstruction(
         plot_center_of_mass: str = "default",
         plot_rotation: bool = True,
         maximize_divergence: bool = False,
-        rotation_angles_deg: np.ndarray = np.arange(-89.0, 90.0, 1.0),
+        rotation_angles_deg: np.ndarray = None,
         plot_probe_overlaps: bool = True,
         force_com_rotation: float = None,
         force_com_transpose: float = None,
