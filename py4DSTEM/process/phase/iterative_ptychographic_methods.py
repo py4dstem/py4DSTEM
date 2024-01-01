@@ -1755,3 +1755,263 @@ class ObjectNDProbeMethodsMixin:
             )
 
         return current_object, current_probe
+
+
+class Object2p5DProbeMethodsMixin:
+    """
+    Mixin class for methods unique to 2.5D objects using a single probe.
+    """
+
+    def _overlap_projection(self, current_object, current_probe):
+        """
+        Ptychographic overlap projection method.
+
+        Parameters
+        --------
+        current_object: np.ndarray
+            Current object estimate
+        current_probe: np.ndarray
+            Current probe estimate
+
+        Returns
+        --------
+        shifted_probes: np.ndarray
+            Shifted probes at each layer
+        object_patches: np.ndarray
+            Patched object view
+        overlap: np.ndarray
+            Transmitted probes after N-1 propagations and N transmissions
+        """
+
+        xp = self._xp
+
+        if self._object_type == "potential":
+            complex_object = xp.exp(1j * current_object)
+        else:
+            complex_object = current_object
+
+        object_patches = complex_object[
+            :,
+            self._vectorized_patch_indices_row,
+            self._vectorized_patch_indices_col,
+        ]
+
+        shifted_probes = xp.empty_like(object_patches)
+        shifted_probes[0] = fft_shift(current_probe, self._positions_px_fractional, xp)
+
+        for s in range(self._num_slices):
+            # transmit
+            overlap = object_patches[s] * shifted_probes[s]
+
+            # propagate
+            if s + 1 < self._num_slices:
+                shifted_probes[s + 1] = self._propagate_array(
+                    overlap, self._propagator_arrays[s]
+                )
+
+        return shifted_probes, object_patches, overlap
+
+    def _gradient_descent_adjoint(
+        self,
+        current_object,
+        current_probe,
+        object_patches,
+        shifted_probes,
+        exit_waves,
+        step_size,
+        normalization_min,
+        fix_probe,
+    ):
+        """
+        Ptychographic adjoint operator for GD method.
+        Computes object and probe update steps.
+
+        Parameters
+        --------
+        current_object: np.ndarray
+            Current object estimate
+        current_probe: np.ndarray
+            Current probe estimate
+        object_patches: np.ndarray
+            Patched object view
+        propagated_probes: np.ndarray
+            Shifted probes at each layer
+        exit_waves:np.ndarray
+            Updated exit_waves
+        step_size: float, optional
+            Update step size
+        normalization_min: float, optional
+            Probe normalization minimum as a fraction of the maximum overlap intensity
+        fix_probe: bool, optional
+            If True, probe will not be updated
+
+        Returns
+        --------
+        updated_object: np.ndarray
+            Updated object estimate
+        updated_probe: np.ndarray
+            Updated probe estimate
+        """
+        xp = self._xp
+
+        for s in reversed(range(self._num_slices)):
+            probe = shifted_probes[s]
+            obj = object_patches[s]
+
+            # object-update
+            probe_normalization = self._sum_overlapping_patches_bincounts(
+                xp.abs(probe) ** 2
+            )
+
+            probe_normalization = 1 / xp.sqrt(
+                1e-16
+                + ((1 - normalization_min) * probe_normalization) ** 2
+                + (normalization_min * xp.max(probe_normalization)) ** 2
+            )
+
+            if self._object_type == "potential":
+                current_object[s] += step_size * (
+                    self._sum_overlapping_patches_bincounts(
+                        xp.real(-1j * xp.conj(obj) * xp.conj(probe) * exit_waves)
+                    )
+                    * probe_normalization
+                )
+            else:
+                current_object[s] += step_size * (
+                    self._sum_overlapping_patches_bincounts(xp.conj(probe) * exit_waves)
+                    * probe_normalization
+                )
+
+            # back-transmit
+            exit_waves *= xp.conj(obj)
+
+            if s > 0:
+                # back-propagate
+                exit_waves = self._propagate_array(
+                    exit_waves, xp.conj(self._propagator_arrays[s - 1])
+                )
+            elif not fix_probe:
+                # probe-update
+                object_normalization = xp.sum(
+                    (xp.abs(obj) ** 2),
+                    axis=0,
+                )
+                object_normalization = 1 / xp.sqrt(
+                    1e-16
+                    + ((1 - normalization_min) * object_normalization) ** 2
+                    + (normalization_min * xp.max(object_normalization)) ** 2
+                )
+
+                current_probe += (
+                    step_size
+                    * xp.sum(
+                        exit_waves,
+                        axis=0,
+                    )
+                    * object_normalization
+                )
+
+        return current_object, current_probe
+
+    def _projection_sets_adjoint(
+        self,
+        current_object,
+        current_probe,
+        object_patches,
+        shifted_probes,
+        exit_waves,
+        normalization_min,
+        fix_probe,
+    ):
+        """
+        Ptychographic adjoint operator for DM_AP and RAAR methods.
+        Computes object and probe update steps.
+
+        Parameters
+        --------
+        current_object: np.ndarray
+            Current object estimate
+        current_probe: np.ndarray
+            Current probe estimate
+        object_patches: np.ndarray
+            Patched object view
+        propagated_probes: np.ndarray
+            Shifted probes at each layer
+        exit_waves:np.ndarray
+            Updated exit_waves
+        normalization_min: float, optional
+            Probe normalization minimum as a fraction of the maximum overlap intensity
+        fix_probe: bool, optional
+            If True, probe will not be updated
+
+        Returns
+        --------
+        updated_object: np.ndarray
+            Updated object estimate
+        updated_probe: np.ndarray
+            Updated probe estimate
+        """
+        xp = self._xp
+
+        # careful not to modify exit_waves in-place for projection set methods
+        exit_waves_copy = exit_waves.copy()
+
+        for s in reversed(range(self._num_slices)):
+            probe = shifted_probes[s]
+            obj = object_patches[s]
+
+            # object-update
+            probe_normalization = self._sum_overlapping_patches_bincounts(
+                xp.abs(probe) ** 2
+            )
+            probe_normalization = 1 / xp.sqrt(
+                1e-16
+                + ((1 - normalization_min) * probe_normalization) ** 2
+                + (normalization_min * xp.max(probe_normalization)) ** 2
+            )
+
+            if self._object_type == "potential":
+                current_object[s] = (
+                    self._sum_overlapping_patches_bincounts(
+                        xp.real(-1j * xp.conj(obj) * xp.conj(probe) * exit_waves_copy)
+                    )
+                    * probe_normalization
+                )
+            else:
+                current_object[s] = (
+                    self._sum_overlapping_patches_bincounts(
+                        xp.conj(probe) * exit_waves_copy
+                    )
+                    * probe_normalization
+                )
+
+            # back-transmit
+            exit_waves_copy *= xp.conj(obj)
+
+            if s > 0:
+                # back-propagate
+                exit_waves_copy = self._propagate_array(
+                    exit_waves_copy, xp.conj(self._propagator_arrays[s - 1])
+                )
+
+            elif not fix_probe:
+                # probe-update
+                object_normalization = xp.sum(
+                    (xp.abs(obj) ** 2),
+                    axis=0,
+                )
+                object_normalization = 1 / xp.sqrt(
+                    1e-16
+                    + ((1 - normalization_min) * object_normalization) ** 2
+                    + (normalization_min * xp.max(object_normalization)) ** 2
+                )
+
+                current_probe = (
+                    xp.sum(
+                        exit_waves_copy,
+                        axis=0,
+                    )
+                    * object_normalization
+                )
+
+        return current_object, current_probe
