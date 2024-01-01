@@ -22,14 +22,17 @@ from emdfile import Custom, tqdmnd
 from py4DSTEM import DataCube
 from py4DSTEM.process.phase.iterative_base_class import PtychographicReconstruction
 from py4DSTEM.process.phase.iterative_ptychographic_constraints import (
+    Object2p5DConstraintsMixin,
     Object3DConstraintsMixin,
     ObjectNDConstraintsMixin,
     PositionsConstraintsMixin,
     ProbeConstraintsMixin,
 )
 from py4DSTEM.process.phase.iterative_ptychographic_methods import (
+    Object2p5DMethodsMixin,
     Object3DMethodsMixin,
     ObjectNDMethodsMixin,
+    ProbeListMethodsMixin,
     ProbeMethodsMixin,
 )
 from py4DSTEM.process.phase.utils import (
@@ -38,9 +41,7 @@ from py4DSTEM.process.phase.utils import (
     generate_batches,
     polar_aliases,
     polar_symbols,
-    spatial_frequencies,
 )
-from py4DSTEM.process.utils import electron_wavelength_angstrom, get_CoM, get_shifted_ar
 
 warnings.simplefilter(action="always", category=UserWarning)
 
@@ -49,9 +50,12 @@ class OverlapTomographicReconstruction(
     PositionsConstraintsMixin,
     ProbeConstraintsMixin,
     Object3DConstraintsMixin,
+    Object2p5DConstraintsMixin,
     ObjectNDConstraintsMixin,
+    ProbeListMethodsMixin,
     ProbeMethodsMixin,
     Object3DMethodsMixin,
+    Object2p5DMethodsMixin,
     ObjectNDMethodsMixin,
     PtychographicReconstruction,
 ):
@@ -116,7 +120,6 @@ class OverlapTomographicReconstruction(
 
     # Class-specific Metadata
     _class_specific_metadata = ("_num_slices", "_tilt_orientation_matrices")
-    _swap_zxy_to_xyz = np.array([[0, 1, 0], [0, 0, 1], [1, 0, 0]])
 
     def __init__(
         self,
@@ -198,7 +201,7 @@ class OverlapTomographicReconstruction(
         # Data
         self._datacube = datacube
         self._object = initial_object_guess
-        self._probe = initial_probe_guess
+        self._probe_init = initial_probe_guess
 
         # Common Metadata
         self._vacuum_probe_intensity = vacuum_probe_intensity
@@ -219,164 +222,6 @@ class OverlapTomographicReconstruction(
         self._tilt_orientation_matrices = tuple(tilt_orientation_matrices)
         self._num_tilts = num_tilts
 
-    def _precompute_propagator_arrays(
-        self,
-        gpts: Tuple[int, int],
-        sampling: Tuple[float, float],
-        energy: float,
-        slice_thicknesses: Sequence[float],
-    ):
-        """
-        Precomputes propagator arrays complex wave-function will be convolved by,
-        for all slice thicknesses.
-
-        Parameters
-        ----------
-        gpts: Tuple[int,int]
-            Wavefunction pixel dimensions
-        sampling: Tuple[float,float]
-            Wavefunction sampling in A
-        energy: float
-            The electron energy of the wave functions in eV
-        slice_thicknesses: Sequence[float]
-            Array of slice thicknesses in A
-
-        Returns
-        -------
-        propagator_arrays: np.ndarray
-            (T,Sx,Sy) shape array storing propagator arrays
-        """
-        xp = self._xp
-
-        # Frequencies
-        kx, ky = spatial_frequencies(gpts, sampling)
-        kx = xp.asarray(kx, dtype=xp.float32)
-        ky = xp.asarray(ky, dtype=xp.float32)
-
-        # Propagators
-        wavelength = electron_wavelength_angstrom(energy)
-        num_slices = slice_thicknesses.shape[0]
-        propagators = xp.empty(
-            (num_slices, kx.shape[0], ky.shape[0]), dtype=xp.complex64
-        )
-        for i, dz in enumerate(slice_thicknesses):
-            propagators[i] = xp.exp(
-                1.0j * (-(kx**2)[:, None] * np.pi * wavelength * dz)
-            )
-            propagators[i] *= xp.exp(
-                1.0j * (-(ky**2)[None] * np.pi * wavelength * dz)
-            )
-
-        return propagators
-
-    def _propagate_array(self, array: np.ndarray, propagator_array: np.ndarray):
-        """
-        Propagates array by Fourier convolving array with propagator_array.
-
-        Parameters
-        ----------
-        array: np.ndarray
-            Wavefunction array to be convolved
-        propagator_array: np.ndarray
-            Propagator array to convolve array with
-
-        Returns
-        -------
-        propagated_array: np.ndarray
-            Fourier-convolved array
-        """
-        xp = self._xp
-
-        return xp.fft.ifft2(xp.fft.fft2(array) * propagator_array)
-
-    def _project_sliced_object(self, array: np.ndarray, output_z):
-        """
-        Expands supersliced object or projects voxel-sliced object.
-
-        Parameters
-        ----------
-        array: np.ndarray
-            3D array to expand/project
-        output_z: int
-            Output_dimension to expand/project array to.
-            If output_z > array.shape[0] array is expanded, else it's projected
-
-        Returns
-        -------
-        expanded_or_projected_array: np.ndarray
-            expanded or projected array
-        """
-        xp = self._xp
-        input_z = array.shape[0]
-
-        voxels_per_slice = np.ceil(input_z / output_z).astype("int")
-        pad_size = voxels_per_slice * output_z - input_z
-
-        padded_array = xp.pad(array, ((0, pad_size), (0, 0), (0, 0)))
-
-        return xp.sum(
-            padded_array.reshape(
-                (
-                    -1,
-                    voxels_per_slice,
-                )
-                + array.shape[1:]
-            ),
-            axis=1,
-        )
-
-    def _expand_sliced_object(self, array: np.ndarray, output_z):
-        """
-        Expands supersliced object or projects voxel-sliced object.
-
-        Parameters
-        ----------
-        array: np.ndarray
-            3D array to expand/project
-        output_z: int
-            Output_dimension to expand/project array to.
-            If output_z > array.shape[0] array is expanded, else it's projected
-
-        Returns
-        -------
-        expanded_or_projected_array: np.ndarray
-            expanded or projected array
-        """
-        xp = self._xp
-        input_z = array.shape[0]
-
-        voxels_per_slice = np.ceil(output_z / input_z).astype("int")
-        remainder_size = voxels_per_slice - (voxels_per_slice * input_z - output_z)
-
-        voxels_in_slice = xp.repeat(voxels_per_slice, input_z)
-        voxels_in_slice[-1] = remainder_size if remainder_size > 0 else voxels_per_slice
-
-        normalized_array = array / xp.asarray(voxels_in_slice)[:, None, None]
-        return xp.repeat(normalized_array, voxels_per_slice, axis=0)[:output_z]
-
-    def _rotate_zxy_volume(
-        self,
-        volume_array,
-        rot_matrix,
-    ):
-        """ """
-
-        xp = self._xp
-        affine_transform = self._affine_transform
-        swap_zxy_to_xyz = self._swap_zxy_to_xyz
-
-        volume = volume_array.copy()
-        volume_shape = xp.asarray(volume.shape)
-        tf = xp.asarray(swap_zxy_to_xyz.T @ rot_matrix.T @ swap_zxy_to_xyz)
-
-        in_center = (volume_shape - 1) / 2
-        out_center = tf @ in_center
-        offset = in_center - out_center
-
-        volume = affine_transform(volume, tf, offset=offset, order=3)
-
-        return volume
-
     def preprocess(
         self,
         diffraction_intensities_shape: Tuple[int, int] = None,
@@ -395,6 +240,7 @@ class OverlapTomographicReconstruction(
         progress_bar: bool = True,
         object_fov_mask: np.ndarray = None,
         crop_patterns: bool = False,
+        main_tilt_axis: str = "vertical",
         **kwargs,
     ):
         """
@@ -440,7 +286,11 @@ class OverlapTomographicReconstruction(
             Boolean mask of FOV. Used to calculate additional shrinkage of object
             If None, probe_overlap intensity is thresholded
         crop_patterns: bool
-            if True, crop patterns to avoid wrap around of patterns when centering
+            If True, crop patterns to avoid wrap around of patterns when centering
+        main_tilt_axis: str
+            The default, 'vertical' (first scan dimension), results in object size (q,p,q),
+            'horizontal' (second scan dimension) results in object size (p,p,q),
+            any other value (e.g. None) results in object size (max(p,q),p,q).
 
         Returns
         --------
@@ -465,7 +315,7 @@ class OverlapTomographicReconstruction(
             )
 
         if self._positions_mask is not None:
-            self._positions_mask = np.asarray(self._positions_mask)
+            self._positions_mask = np.asarray(self._positions_mask, dtype="bool")
 
             if self._positions_mask.ndim == 2:
                 warnings.warn(
@@ -476,47 +326,45 @@ class OverlapTomographicReconstruction(
                     self._positions_mask, (self._num_tilts, 1, 1)
                 )
 
-            if self._positions_mask.dtype != "bool":
-                warnings.warn(
-                    ("`positions_mask` converted to `bool` array."),
-                    UserWarning,
-                )
-                self._positions_mask = self._positions_mask.astype("bool")
-        else:
-            self._positions_mask = [None] * self._num_tilts
-
-        # Prepopulate various arrays
-
-        if self._positions_mask[0] is None:
-            num_probes_per_tilt = [0]
-            for dc in self._datacube:
-                rx, ry = dc.Rshape
-                num_probes_per_tilt.append(rx * ry)
-
-            num_probes_per_tilt = np.array(num_probes_per_tilt)
-        else:
             num_probes_per_tilt = np.insert(
                 self._positions_mask.sum(axis=(-2, -1)), 0, 0
             )
 
+        else:
+            self._positions_mask = [None] * self._num_tilts
+            num_probes_per_tilt = [0] + [dc.R_N for dc in self._datacube]
+            num_probes_per_tilt = np.array(num_probes_per_tilt)
+
+        # prepopulate relevant arrays
+        self._mean_diffraction_intensity = []
         self._num_diffraction_patterns = num_probes_per_tilt.sum()
         self._cum_probes_per_tilt = np.cumsum(num_probes_per_tilt)
-
-        self._mean_diffraction_intensity = []
         self._positions_px_all = np.empty((self._num_diffraction_patterns, 2))
+
+        # calculate roi_shape
+        roi_shape = self._datacube[0].Qshape
+        if diffraction_intensities_shape is not None:
+            roi_shape = diffraction_intensities_shape
+        if probe_roi_shape is not None:
+            roi_shape = tuple(max(q, s) for q, s in zip(roi_shape, probe_roi_shape))
+        self._amplitudes = xp.empty((self._num_diffraction_patterns,) + roi_shape)
+        self._region_of_interest_shape = np.array(roi_shape)
+
+        # TO-DO: generalize this
+        if force_com_shifts is None:
+            force_com_shifts = [None] * self._num_tilts
 
         self._rotation_best_rad = np.deg2rad(diffraction_patterns_rotate_degrees)
         self._rotation_best_transpose = diffraction_patterns_transpose
 
-        if force_com_shifts is None:
-            force_com_shifts = [None] * self._num_tilts
-
+        # loop over DPs for preprocessing
         for tilt_index in tqdmnd(
             self._num_tilts,
             desc="Preprocessing data",
             unit="tilt",
             disable=not progress_bar,
         ):
+            # preprocess datacube, vacuum and masks only for first tilt
             if tilt_index == 0:
                 (
                     self._datacube[tilt_index],
@@ -531,13 +379,6 @@ class OverlapTomographicReconstruction(
                     vacuum_probe_intensity=self._vacuum_probe_intensity,
                     dp_mask=self._dp_mask,
                     com_shifts=force_com_shifts[tilt_index],
-                )
-
-                self._amplitudes = xp.empty(
-                    (self._num_diffraction_patterns,) + self._datacube[0].Qshape
-                )
-                self._region_of_interest_shape = np.array(
-                    self._amplitudes[0].shape[-2:]
                 )
 
             else:
@@ -556,6 +397,7 @@ class OverlapTomographicReconstruction(
                     com_shifts=force_com_shifts[tilt_index],
                 )
 
+            # calibrations
             intensities = self._extract_intensities_and_calibrations_from_datacube(
                 self._datacube[tilt_index],
                 require_calibrations=True,
@@ -564,6 +406,7 @@ class OverlapTomographicReconstruction(
                 force_reciprocal_sampling=force_reciprocal_sampling,
             )
 
+            # calculate CoM
             (
                 com_measured_x,
                 com_measured_y,
@@ -578,19 +421,19 @@ class OverlapTomographicReconstruction(
                 com_shifts=force_com_shifts[tilt_index],
             )
 
+            # corner-center amplitudes
+            idx_start = self._cum_probes_per_tilt[tilt_index]
+            idx_end = self._cum_probes_per_tilt[tilt_index + 1]
             (
-                self._amplitudes[
-                    self._cum_probes_per_tilt[tilt_index] : self._cum_probes_per_tilt[
-                        tilt_index + 1
-                    ]
-                ],
+                self._amplitudes[idx_start:idx_end],
                 mean_diffraction_intensity_temp,
+                self._crop_mask,
             ) = self._normalize_diffraction_intensities(
                 intensities,
                 com_fitted_x,
                 com_fitted_y,
-                crop_patterns,
                 self._positions_mask[tilt_index],
+                crop_patterns,
             )
 
             self._mean_diffraction_intensity.append(mean_diffraction_intensity_temp)
@@ -605,12 +448,14 @@ class OverlapTomographicReconstruction(
                 com_normalized_y,
             )
 
-            self._positions_px_all[
-                self._cum_probes_per_tilt[tilt_index] : self._cum_probes_per_tilt[
-                    tilt_index + 1
-                ]
-            ] = self._calculate_scan_positions_in_pixels(
-                self._scan_positions[tilt_index], self._positions_mask[tilt_index]
+            # initialize probe positions
+            (
+                self._positions_px_all[idx_start:idx_end],
+                self._object_padding_px,
+            ) = self._calculate_scan_positions_in_pixels(
+                self._scan_positions[tilt_index],
+                self._positions_mask[tilt_index],
+                self._object_padding_px,
             )
 
         # handle semiangle specified in pixels
@@ -619,119 +464,60 @@ class OverlapTomographicReconstruction(
                 self._semiangle_cutoff_pixels * self._angular_sampling[0]
             )
 
-        # Object Initialization
-        if self._object is None:
-            pad_x = self._object_padding_px[0][1]
-            pad_y = self._object_padding_px[1][1]
-            p, q = np.round(np.max(self._positions_px_all, axis=0))
-            p = np.max([np.round(p + pad_x), self._region_of_interest_shape[0]]).astype(
-                "int"
-            )
-            q = np.max([np.round(q + pad_y), self._region_of_interest_shape[1]]).astype(
-                "int"
-            )
-            self._object = xp.zeros((q, p, q), dtype=xp.float32)
-        else:
-            self._object = xp.asarray(self._object, dtype=xp.float32)
+        # initialize object
+        self._object = self._initialize_object(
+            self._object,
+            self._positions_px_all,
+            self._object_type,
+            main_tilt_axis,
+        )
 
         self._object_initial = self._object.copy()
         self._object_type_initial = self._object_type
         self._object_shape = self._object.shape[-2:]
         self._num_voxels = self._object.shape[0]
 
-        # Center Probes
+        # center probe positions
         self._positions_px_all = xp.asarray(self._positions_px_all, dtype=xp.float32)
 
         for tilt_index in range(self._num_tilts):
-            self._positions_px = self._positions_px_all[
-                self._cum_probes_per_tilt[tilt_index] : self._cum_probes_per_tilt[
-                    tilt_index + 1
-                ]
-            ]
+            idx_start = self._cum_probes_per_tilt[tilt_index]
+            idx_end = self._cum_probes_per_tilt[tilt_index + 1]
+            self._positions_px = self._positions_px_all[idx_start:idx_end]
             self._positions_px_com = xp.mean(self._positions_px, axis=0)
             self._positions_px -= (
                 self._positions_px_com - xp.array(self._object_shape) / 2
             )
 
-            self._positions_px_all[
-                self._cum_probes_per_tilt[tilt_index] : self._cum_probes_per_tilt[
-                    tilt_index + 1
-                ]
-            ] = self._positions_px.copy()
+            self._positions_px_all[idx_start:idx_end] = self._positions_px.copy()
 
         self._positions_px_initial_all = self._positions_px_all.copy()
         self._positions_initial_all = self._positions_px_initial_all.copy()
         self._positions_initial_all[:, 0] *= self.sampling[0]
         self._positions_initial_all[:, 1] *= self.sampling[1]
 
-        # Probe Initialization
-        if self._probe is None:
-            if self._vacuum_probe_intensity is not None:
-                self._semiangle_cutoff = np.inf
-                self._vacuum_probe_intensity = xp.asarray(
-                    self._vacuum_probe_intensity, dtype=xp.float32
-                )
-                probe_x0, probe_y0 = get_CoM(
-                    self._vacuum_probe_intensity, device=self._device
-                )
-                self._vacuum_probe_intensity = get_shifted_ar(
-                    self._vacuum_probe_intensity,
-                    -probe_x0,
-                    -probe_y0,
-                    bilinear=True,
-                    device=self._device,
-                )
-                if crop_patterns:
-                    self._vacuum_probe_intensity = self._vacuum_probe_intensity[
-                        self._crop_mask
-                    ].reshape(self._region_of_interest_shape)
+        # initialize probe
+        self._probes_all = []
+        self._probes_all_initial = []
+        self._probes_all_initial_aperture = []
+        list_Q = isinstance(self._probe_init, (list, tuple))
 
-            self._probe = (
-                ComplexProbe(
-                    gpts=self._region_of_interest_shape,
-                    sampling=self.sampling,
-                    energy=self._energy,
-                    semiangle_cutoff=self._semiangle_cutoff,
-                    rolloff=self._rolloff,
-                    vacuum_probe_intensity=self._vacuum_probe_intensity,
-                    parameters=self._polar_parameters,
-                    device=self._device,
-                )
-                .build()
-                ._array
+        for tilt_index in range(self._num_tilts):
+            _probe, self._semiangle_cutoff = self._initialize_probe(
+                self._probe_init[tilt_index] if list_Q else self._probe_init,
+                self._vacuum_probe_intensity,
+                self._mean_diffraction_intensity[tilt_index],
+                self._semiangle_cutoff,
+                crop_patterns,
             )
 
-            # Normalize probe to match mean diffraction intensity
-            probe_intensity = xp.sum(xp.abs(xp.fft.fft2(self._probe)) ** 2)
-            self._probe *= xp.sqrt(
-                sum(self._mean_diffraction_intensity)
-                / self._num_tilts
-                / probe_intensity
-            )
+            self._probes_all.append(_probe)
+            self._probes_all_initial = _probe.copy()
+            self._probes_all_initial_aperture = xp.abs(xp.fft.fft2(_probe))
 
-        else:
-            if isinstance(self._probe, ComplexProbe):
-                if self._probe._gpts != self._region_of_interest_shape:
-                    raise ValueError()
-                if hasattr(self._probe, "_array"):
-                    self._probe = self._probe._array
-                else:
-                    self._probe._xp = xp
-                    self._probe = self._probe.build()._array
+        del self._probe_init
 
-                # Normalize probe to match mean diffraction intensity
-                probe_intensity = xp.sum(xp.abs(xp.fft.fft2(self._probe)) ** 2)
-                self._probe *= xp.sqrt(
-                    sum(self._mean_diffraction_intensity)
-                    / self._num_tilts
-                    / probe_intensity
-                )
-            else:
-                self._probe = xp.asarray(self._probe, dtype=xp.complex64)
-
-        self._probe_initial = self._probe.copy()
-        self._probe_initial_aperture = xp.abs(xp.fft.fft2(self._probe))
-
+        # initialize aberrations
         self._known_aberrations_array = ComplexProbe(
             energy=self._energy,
             gpts=self._region_of_interest_shape,
@@ -757,7 +543,9 @@ class OverlapTomographicReconstruction(
             probe_overlap_3D = xp.zeros_like(self._object)
             old_rot_matrix = np.eye(3)  # identity
 
-            for tilt_index in np.arange(self._num_tilts):
+            for tilt_index in range(self._num_tilts):
+                idx_start = self._cum_probes_per_tilt[tilt_index]
+                idx_end = self._cum_probes_per_tilt[tilt_index + 1]
                 rot_matrix = self._tilt_orientation_matrices[tilt_index]
 
                 probe_overlap_3D = self._rotate_zxy_volume(
@@ -765,16 +553,12 @@ class OverlapTomographicReconstruction(
                     rot_matrix @ old_rot_matrix.T,
                 )
 
-                self._positions_px = self._positions_px_all[
-                    self._cum_probes_per_tilt[tilt_index] : self._cum_probes_per_tilt[
-                        tilt_index + 1
-                    ]
-                ]
+                self._positions_px = self._positions_px_all[idx_start:idx_end]
                 self._positions_px_fractional = self._positions_px - xp.round(
                     self._positions_px
                 )
                 shifted_probes = fft_shift(
-                    self._probe, self._positions_px_fractional, xp
+                    self._probes_all[tilt_index], self._positions_px_fractional, xp
                 )
                 probe_intensities = xp.abs(shifted_probes) ** 2
                 probe_overlap = self._sum_overlapping_patches_bincounts(
@@ -789,31 +573,35 @@ class OverlapTomographicReconstruction(
                 old_rot_matrix.T,
             )
 
-            probe_overlap_3D = self._gaussian_filter(probe_overlap_3D, 1.0)
+            probe_overlap_3D_blurred = self._gaussian_filter(probe_overlap_3D, 1.0)
             self._object_fov_mask = asnumpy(
-                probe_overlap_3D > 0.25 * probe_overlap_3D.max()
+                probe_overlap_3D_blurred > 0.25 * probe_overlap_3D_blurred.max()
             )
+
         else:
             self._object_fov_mask = np.asarray(object_fov_mask)
+
             self._positions_px = self._positions_px_all[: self._cum_probes_per_tilt[1]]
             self._positions_px_fractional = self._positions_px - xp.round(
                 self._positions_px
             )
-            shifted_probes = fft_shift(self._probe, self._positions_px_fractional, xp)
+            shifted_probes = fft_shift(
+                self._probes_all[0], self._positions_px_fractional, xp
+            )
             probe_intensities = xp.abs(shifted_probes) ** 2
             probe_overlap = self._sum_overlapping_patches_bincounts(probe_intensities)
-            probe_overlap = self._gaussian_filter(probe_overlap, 1.0)
 
         self._object_fov_mask_inverse = np.invert(self._object_fov_mask)
 
         if plot_probe_overlaps:
             figsize = kwargs.pop("figsize", (13, 4))
             chroma_boost = kwargs.pop("chroma_boost", 1)
+            power = kwargs.pop("power", 2)
 
             # initial probe
             complex_probe_rgb = Complex2RGB(
                 self.probe_centered,
-                power=2,
+                power=power,
                 chroma_boost=chroma_boost,
             )
 
@@ -826,7 +614,7 @@ class OverlapTomographicReconstruction(
                 )
             complex_propagated_rgb = Complex2RGB(
                 asnumpy(self._return_centered_probe(propagated_probe)),
-                power=2,
+                power=power,
                 chroma_boost=chroma_boost,
             )
 

@@ -535,12 +535,14 @@ class Object2p5DMethodsMixin:
             ms_object = self._object
 
         rotated_object = self._crop_rotate_object_fov(ms_object, padding=padding)
+
         if show_fft:
             rotated_object = np.abs(
                 np.fft.fftshift(
                     np.fft.fft2(rotated_object, axes=(-2, -1)), axes=(-2, -1)
                 )
             )
+
         rotated_shape = rotated_object.shape
 
         if np.iscomplexobj(rotated_object):
@@ -617,6 +619,126 @@ class Object3DMethodsMixin:
     Mixin class for object methods unique to 3D objects.
     Overwrites ObjectNDMethodsMixin and Object2p5DMethodsMixin.
     """
+
+    _swap_zxy_to_xyz = np.array([[0, 1, 0], [0, 0, 1], [1, 0, 0]])
+
+    def _project_sliced_object(self, array: np.ndarray, output_z):
+        """
+        Projects voxel-sliced object.
+
+        Parameters
+        ----------
+        array: np.ndarray
+            3D array to project
+        output_z: int
+            Output_dimension to project array to.
+
+        Returns
+        -------
+        projected_array: np.ndarray
+            projected array
+        """
+        xp = self._xp
+        input_z = array.shape[0]
+
+        voxels_per_slice = np.ceil(input_z / output_z).astype("int")
+        pad_size = voxels_per_slice * output_z - input_z
+
+        padded_array = xp.pad(array, ((0, pad_size), (0, 0), (0, 0)))
+
+        return xp.sum(
+            padded_array.reshape(
+                (
+                    -1,
+                    voxels_per_slice,
+                )
+                + array.shape[1:]
+            ),
+            axis=1,
+        )
+
+    def _expand_sliced_object(self, array: np.ndarray, output_z):
+        """
+        Expands supersliced object.
+
+        Parameters
+        ----------
+        array: np.ndarray
+            3D array to expand
+        output_z: int
+            Output_dimension to expand array to.
+
+        Returns
+        -------
+        expanded_array: np.ndarray
+            expanded array
+        """
+        xp = self._xp
+        input_z = array.shape[0]
+
+        voxels_per_slice = np.ceil(output_z / input_z).astype("int")
+        remainder_size = voxels_per_slice - (voxels_per_slice * input_z - output_z)
+
+        voxels_in_slice = xp.repeat(voxels_per_slice, input_z)
+        voxels_in_slice[-1] = remainder_size if remainder_size > 0 else voxels_per_slice
+
+        normalized_array = array / xp.asarray(voxels_in_slice)[:, None, None]
+        return xp.repeat(normalized_array, voxels_per_slice, axis=0)[:output_z]
+
+    def _rotate_zxy_volume(
+        self,
+        volume_array,
+        rot_matrix,
+        order=3,
+    ):
+        """ """
+
+        xp = self._xp
+        affine_transform = self._affine_transform
+        swap_zxy_to_xyz = self._swap_zxy_to_xyz
+
+        volume = volume_array.copy()
+        volume_shape = xp.asarray(volume.shape)
+        tf = xp.asarray(swap_zxy_to_xyz.T @ rot_matrix.T @ swap_zxy_to_xyz)
+
+        in_center = (volume_shape - 1) / 2
+        out_center = tf @ in_center
+        offset = in_center - out_center
+
+        volume = affine_transform(volume, tf, offset=offset, order=order)
+
+        return volume
+
+    def _initialize_object(
+        self,
+        initial_object,
+        positions_px,
+        object_type,
+        main_tilt_axis="vertical",
+    ):
+        """ """
+        # explicit read-only self attributes up-front
+        xp = self._xp
+        object_padding_px = self._object_padding_px
+        region_of_interest_shape = self._region_of_interest_shape
+
+        if initial_object is None:
+            pad_x = object_padding_px[0][1]
+            pad_y = object_padding_px[1][1]
+            p, q = np.round(np.max(positions_px, axis=0))
+            p = np.max([np.round(p + pad_x), region_of_interest_shape[0]]).astype("int")
+            q = np.max([np.round(q + pad_y), region_of_interest_shape[1]]).astype("int")
+
+            if main_tilt_axis == "vertical":
+                _object = xp.zeros((q, p, q), dtype=xp.float32)
+            elif main_tilt_axis == "horizontal":
+                _object = xp.zeros((p, p, q), dtype=xp.float32)
+            else:
+                _object = xp.zeros((max(p, q), p, q), dtype=xp.float32)
+        else:
+            _object = xp.asarray(initial_object, dtype=xp.float32)
+
+        return _object
 
     def _crop_rotate_object_manually(
         self,
@@ -768,6 +890,11 @@ class Object3DMethodsMixin:
             pixelunits=r"$\AA^{-1}$",
             **kwargs,
         )
+
+    @property
+    def object_supersliced(self):
+        """Returns super-sliced object"""
+        return self._project_sliced_object(self._object, self._num_slices)
 
 
 class ProbeMethodsMixin:
@@ -1152,3 +1279,22 @@ class ProbeMixedMethodsMixin:
             chroma_boost=chroma_boost,
             **kwargs,
         )
+
+
+class ProbeListMethodsMixin:
+    """
+    Mixin class for probe methods unique to a list of single probes.
+    Overwrites ProbeMethodsMixin.
+    """
+
+    @property
+    def _probe(self):
+        """Dummy property to return average probe"""
+
+        xp = self._xp
+        probe = xp.zeros(self._region_of_interest_shape, dtype=np.complex64)
+
+        for pr in self._probes_all:
+            probe += pr
+
+        return probe / self._num_tilts
