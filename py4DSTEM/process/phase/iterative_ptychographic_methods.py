@@ -2346,3 +2346,294 @@ class ObjectNDProbeMixedMethodsMixin:
             )
 
         return current_object, current_probe
+
+
+class Object2p5DProbeMixedMethodsMixin:
+    """
+    Mixin class for methods unique to 2.5D objects using mixed probes.
+    Overwrites ObjectNDProbeMethodsMixin and ObjectNDProbeMixedMethodsMixin.
+    """
+
+    def _overlap_projection(self, current_object, current_probe):
+        """
+        Ptychographic overlap projection method.
+
+        Parameters
+        --------
+        current_object: np.ndarray
+            Current object estimate
+        current_probe: np.ndarray
+            Current probe estimate
+
+        Returns
+        --------
+        propagated_probes: np.ndarray
+            Shifted probes at each layer
+        object_patches: np.ndarray
+            Patched object view
+        transmitted_probes: np.ndarray
+            Transmitted probes after N-1 propagations and N transmissions
+        """
+
+        xp = self._xp
+
+        if self._object_type == "potential":
+            complex_object = xp.exp(1j * current_object)
+        else:
+            complex_object = current_object
+
+        object_patches = complex_object[
+            :,
+            self._vectorized_patch_indices_row,
+            self._vectorized_patch_indices_col,
+        ]
+
+        num_probe_positions = object_patches.shape[1]
+
+        shifted_shape = (
+            self._num_slices,
+            num_probe_positions,
+            self._num_probes,
+            self._region_of_interest_shape[0],
+            self._region_of_interest_shape[1],
+        )
+
+        shifted_probes = xp.empty(shifted_shape, dtype=object_patches.dtype)
+        shifted_probes[0] = fft_shift(current_probe, self._positions_px_fractional, xp)
+
+        for s in range(self._num_slices):
+            # transmit
+            overlap = xp.expand_dims(object_patches[s], axis=1) * shifted_probes[s]
+
+            # propagate
+            if s + 1 < self._num_slices:
+                shifted_probes[s + 1] = self._propagate_array(
+                    overlap, self._propagator_arrays[s]
+                )
+
+        return shifted_probes, object_patches, overlap
+
+    def _gradient_descent_adjoint(
+        self,
+        current_object,
+        current_probe,
+        object_patches,
+        shifted_probes,
+        exit_waves,
+        step_size,
+        normalization_min,
+        fix_probe,
+    ):
+        """
+        Ptychographic adjoint operator for GD method.
+        Computes object and probe update steps.
+
+        Parameters
+        --------
+        current_object: np.ndarray
+            Current object estimate
+        current_probe: np.ndarray
+            Current probe estimate
+        object_patches: np.ndarray
+            Patched object view
+        propagated_probes: np.ndarray
+            Shifted probes at each layer
+        exit_waves:np.ndarray
+            Updated exit_waves
+        step_size: float, optional
+            Update step size
+        normalization_min: float, optional
+            Probe normalization minimum as a fraction of the maximum overlap intensity
+        fix_probe: bool, optional
+            If True, probe will not be updated
+
+        Returns
+        --------
+        updated_object: np.ndarray
+            Updated object estimate
+        updated_probe: np.ndarray
+            Updated probe estimate
+        """
+        xp = self._xp
+
+        for s in reversed(range(self._num_slices)):
+            probe = shifted_probes[s]
+            obj = object_patches[s]
+
+            # object-update
+            probe_normalization = xp.zeros_like(current_object[s])
+            object_update = xp.zeros_like(current_object[s])
+
+            for i_probe in range(self._num_probes):
+                probe_normalization += self._sum_overlapping_patches_bincounts(
+                    xp.abs(probe[:, i_probe]) ** 2
+                )
+
+                if self._object_type == "potential":
+                    object_update += (
+                        step_size
+                        * self._sum_overlapping_patches_bincounts(
+                            xp.real(
+                                -1j
+                                * xp.conj(obj)
+                                * xp.conj(probe[:, i_probe])
+                                * exit_waves[:, i_probe]
+                            )
+                        )
+                    )
+                else:
+                    object_update += (
+                        step_size
+                        * self._sum_overlapping_patches_bincounts(
+                            xp.conj(probe[:, i_probe]) * exit_waves[:, i_probe]
+                        )
+                    )
+
+            probe_normalization = 1 / xp.sqrt(
+                1e-16
+                + ((1 - normalization_min) * probe_normalization) ** 2
+                + (normalization_min * xp.max(probe_normalization)) ** 2
+            )
+
+            current_object[s] += object_update * probe_normalization
+
+            # back-transmit
+            exit_waves *= xp.expand_dims(xp.conj(obj), axis=1)
+
+            if s > 0:
+                # back-propagate
+                exit_waves = self._propagate_array(
+                    exit_waves, xp.conj(self._propagator_arrays[s - 1])
+                )
+            elif not fix_probe:
+                # probe-update
+                object_normalization = xp.sum(
+                    (xp.abs(obj) ** 2),
+                    axis=0,
+                )
+                object_normalization = 1 / xp.sqrt(
+                    1e-16
+                    + ((1 - normalization_min) * object_normalization) ** 2
+                    + (normalization_min * xp.max(object_normalization)) ** 2
+                )
+
+                current_probe += (
+                    step_size
+                    * xp.sum(
+                        exit_waves,
+                        axis=0,
+                    )
+                    * object_normalization[None]
+                )
+
+        return current_object, current_probe
+
+    def _projection_sets_adjoint(
+        self,
+        current_object,
+        current_probe,
+        object_patches,
+        shifted_probes,
+        exit_waves,
+        normalization_min,
+        fix_probe,
+    ):
+        """
+        Ptychographic adjoint operator for DM_AP and RAAR methods.
+        Computes object and probe update steps.
+
+        Parameters
+        --------
+        current_object: np.ndarray
+            Current object estimate
+        current_probe: np.ndarray
+            Current probe estimate
+        object_patches: np.ndarray
+            Patched object view
+        propagated_probes: np.ndarray
+            Shifted probes at each layer
+        exit_waves:np.ndarray
+            Updated exit_waves
+        normalization_min: float, optional
+            Probe normalization minimum as a fraction of the maximum overlap intensity
+        fix_probe: bool, optional
+            If True, probe will not be updated
+
+        Returns
+        --------
+        updated_object: np.ndarray
+            Updated object estimate
+        updated_probe: np.ndarray
+            Updated probe estimate
+        """
+        xp = self._xp
+
+        # careful not to modify exit_waves in-place for projection set methods
+        exit_waves_copy = exit_waves.copy()
+        for s in reversed(range(self._num_slices)):
+            probe = shifted_probes[s]
+            obj = object_patches[s]
+
+            # object-update
+            probe_normalization = xp.zeros_like(current_object[s])
+            object_update = xp.zeros_like(current_object[s])
+
+            for i_probe in range(self._num_probes):
+                probe_normalization += self._sum_overlapping_patches_bincounts(
+                    xp.abs(probe[:, i_probe]) ** 2
+                )
+
+                if self._object_type == "potential":
+                    object_update += self._sum_overlapping_patches_bincounts(
+                        xp.real(
+                            -1j
+                            * xp.conj(obj)
+                            * xp.conj(probe[:, i_probe])
+                            * exit_waves_copy[:, i_probe]
+                        )
+                    )
+                else:
+                    object_update += self._sum_overlapping_patches_bincounts(
+                        xp.conj(probe[:, i_probe]) * exit_waves_copy[:, i_probe]
+                    )
+
+            probe_normalization = 1 / xp.sqrt(
+                1e-16
+                + ((1 - normalization_min) * probe_normalization) ** 2
+                + (normalization_min * xp.max(probe_normalization)) ** 2
+            )
+
+            current_object[s] = object_update * probe_normalization
+
+            # back-transmit
+            exit_waves_copy *= xp.expand_dims(
+                xp.conj(obj), axis=1
+            )  # / xp.abs(obj) ** 2
+
+            if s > 0:
+                # back-propagate
+                exit_waves_copy = self._propagate_array(
+                    exit_waves_copy, xp.conj(self._propagator_arrays[s - 1])
+                )
+
+            elif not fix_probe:
+                # probe-update
+                object_normalization = xp.sum(
+                    (xp.abs(obj) ** 2),
+                    axis=0,
+                )
+                object_normalization = 1 / xp.sqrt(
+                    1e-16
+                    + ((1 - normalization_min) * object_normalization) ** 2
+                    + (normalization_min * xp.max(object_normalization)) ** 2
+                )
+
+                current_probe = (
+                    xp.sum(
+                        exit_waves_copy,
+                        axis=0,
+                    )
+                    * object_normalization[None]
+                )
+
+        return current_object, current_probe
