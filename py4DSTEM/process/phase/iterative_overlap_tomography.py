@@ -1977,23 +1977,3 @@ class OverlapTomographicReconstruction(
             positions_all.append(asnumpy(positions))
 
         return np.asarray(positions_all)
-
-    def _return_self_consistency_errors(
-        self,
-        max_batch_size=None,
-    ):
-        """Compute the self-consistency errors for each probe position"""
-        raise NotImplementedError()
-
-    def show_uncertainty_visualization(
-        self,
-        errors=None,
-        max_batch_size=None,
-        projected_cropped_potential=None,
-        kde_sigma=None,
-        plot_histogram=True,
-        plot_contours=False,
-        **kwargs,
-    ):
-        """Plot uncertainty visualization using self-consistency errors"""
-        raise NotImplementedError()
