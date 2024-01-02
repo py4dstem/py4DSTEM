@@ -935,6 +935,13 @@ class Object3DMethodsMixin:
             **kwargs,
         )
 
+    def _return_self_consistency_errors(
+        self,
+        **kwargs,
+    ):
+        """Compute the self-consistency errors for each probe position"""
+        raise NotImplementedError()
+
     @property
     def object_supersliced(self):
         """Returns super-sliced object"""
