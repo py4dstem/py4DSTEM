@@ -7,7 +7,7 @@ import warnings
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.gridspec import GridSpec
-from mpl_toolkits.axes_grid1 import ImageGrid
+from mpl_toolkits.axes_grid1 import ImageGrid, make_axes_locatable
 from py4DSTEM.visualize import return_scaled_histogram_ordering, show_complex
 from scipy.ndimage import zoom
 
@@ -1981,10 +1981,12 @@ class PtychographicReconstruction(PhaseReconstruction):
                     )
                 )
 
-    def plot_position_correction(
+    def show_updated_positions(
         self,
         scale_arrows=1,
-        plot_arrow_freq=1,
+        plot_arrow_freq=None,
+        plot_cropped_rotated_fov=True,
+        cbar=True,
         verbose=True,
         **kwargs,
     ):
@@ -1995,48 +1997,92 @@ class PtychographicReconstruction(PhaseReconstruction):
         ----------
         scale_arrows: float, optional
             scaling factor to be applied on vectors prior to plt.quiver call
+        plot_arrow_freq: int, optional
+            thinning parameter to only plot a subset of probe positions
+            assumes grid position
         verbose: bool, optional
             if True, prints AffineTransformation if positions have been updated
         """
+
         if verbose:
             if hasattr(self, "_tf"):
                 print(self._tf)
 
         asnumpy = self._asnumpy
 
-        extent = [
-            0,
-            self.sampling[1] * self._object_shape[1],
-            self.sampling[0] * self._object_shape[0],
-            0,
-        ]
-
         initial_pos = asnumpy(self._positions_initial)
         pos = self.positions
 
+        if plot_cropped_rotated_fov:
+            angle = (
+                self._rotation_best_rad
+                if self._rotation_best_transpose
+                else -self._rotation_best_rad
+            )
+
+            tf = AffineTransform(angle=angle)
+            initial_pos = tf(initial_pos, origin=np.mean(pos, axis=0))
+            pos = tf(pos, origin=np.mean(pos, axis=0))
+
+            obj_shape = self.object_cropped.shape[-2:]
+            initial_pos_com = np.mean(initial_pos, axis=0)
+            center_shift = initial_pos_com - (
+                np.array(obj_shape) / 2 * np.array(self.sampling)
+            )
+            initial_pos -= center_shift
+            pos -= center_shift
+
+        else:
+            obj_shape = self._object_shape
+
+        if plot_arrow_freq is not None:
+            rshape = self._datacube.Rshape + (2,)
+            freq = plot_arrow_freq
+
+            initial_pos = initial_pos.reshape(rshape)[::freq, ::freq].reshape(-1, 2)
+            pos = pos.reshape(rshape)[::freq, ::freq].reshape(-1, 2)
+
+        deltas = pos - initial_pos
+        norms = np.linalg.norm(deltas, axis=1)
+
+        extent = [
+            0,
+            self.sampling[1] * obj_shape[1],
+            self.sampling[0] * obj_shape[0],
+            0,
+        ]
+
         figsize = kwargs.pop("figsize", (6, 6))
-        color = kwargs.pop("color", (1, 0, 0, 1))
+        cmap = kwargs.pop("cmap", "Reds")
 
         fig, ax = plt.subplots(figsize=figsize)
-        ax.quiver(
-            initial_pos[::plot_arrow_freq, 1],
-            initial_pos[::plot_arrow_freq, 0],
-            (pos[::plot_arrow_freq, 1] - initial_pos[::plot_arrow_freq, 1])
-            * scale_arrows,
-            (pos[::plot_arrow_freq, 0] - initial_pos[::plot_arrow_freq, 0])
-            * scale_arrows,
+
+        im = ax.quiver(
+            initial_pos[:, 1],
+            initial_pos[:, 0],
+            deltas[:, 1] * scale_arrows,
+            deltas[:, 0] * scale_arrows,
+            norms,
             scale_units="xy",
             scale=1,
-            color=color,
+            cmap=cmap,
             **kwargs,
         )
+
+        if cbar:
+            divider = make_axes_locatable(ax)
+            ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
+            fig.add_axes(ax_cb)
+            cb = fig.colorbar(im, cax=ax_cb)
+            cb.set_label("Δ [A]", rotation=0, ha="left", va="bottom")
+            cb.ax.yaxis.set_label_coords(0.5, 1.01)
 
         ax.set_ylabel("x [A]")
         ax.set_xlabel("y [A]")
         ax.set_xlim((extent[0], extent[1]))
         ax.set_ylim((extent[2], extent[3]))
         ax.set_aspect("equal")
-        ax.set_title("Probe positions correction")
+        ax.set_title("Updated probe positions")
 
     def show_uncertainty_visualization(
         self,
