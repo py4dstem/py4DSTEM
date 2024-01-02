@@ -721,7 +721,7 @@ class SingleslicePtychographicReconstruction(
 
     def reconstruct(
         self,
-        max_iter: int = 64,
+        max_iter: int = 8,
         reconstruction_method: str = "gradient-descent",
         reconstruction_parameter: float = 1.0,
         reconstruction_parameter_a: float = None,
