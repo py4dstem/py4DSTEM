@@ -1874,8 +1874,10 @@ class ObjectNDProbeMethodsMixin:
         overlap,
         amplitudes,
         current_positions,
+        current_positions_initial,
         positions_step_size,
         max_position_update_distance,
+        max_position_total_distance,
     ):
         """
         Position correction using estimated intensity gradient.
@@ -1896,6 +1898,8 @@ class ObjectNDProbeMethodsMixin:
             Positions step size
         max_position_update_distance: float
             Maximum allowed distance for update in A
+        max_position_total_distance: float
+            Maximum allowed distance from initial probe positions
 
         Returns
         --------
@@ -1967,6 +1971,15 @@ class ObjectNDProbeMethodsMixin:
             positions_update[outlier_ind] /= (
                 update_norms[outlier_ind, None] / max_position_update_distance
             )
+
+        if max_position_total_distance is not None:
+            max_position_total_distance /= xp.sqrt(
+                self.sampling[0] ** 2 + self.sampling[1] ** 2
+            )
+            deltas = current_positions - positions_update - current_positions_initial
+            dsts = xp.linalg.norm(deltas, axis=1)
+            outlier_ind = dsts > max_position_total_distance
+            positions_update[outlier_ind] = 0
 
         current_positions -= positions_update
         return current_positions
