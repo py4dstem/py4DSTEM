@@ -1077,67 +1077,6 @@ class SingleslicePtychographicReconstruction(
 
         return self
 
-    def _visualize_last_iteration_figax(
-        self,
-        fig,
-        object_ax,
-        convergence_ax: None,
-        cbar: bool,
-        padding: int = 0,
-        **kwargs,
-    ):
-        """
-        Displays last reconstructed object on a given fig/ax.
-
-        Parameters
-        --------
-        fig: Figure
-            Matplotlib figure object_ax lives in
-        object_ax: Axes
-            Matplotlib axes to plot reconstructed object in
-        convergence_ax: Axes, optional
-            Matplotlib axes to plot convergence plot in
-        cbar: bool, optional
-            If true, displays a colorbar
-        padding : int, optional
-            Pixels to pad by post rotating-cropping object
-        """
-        cmap = kwargs.pop("cmap", "magma")
-
-        if self._object_type == "complex":
-            obj = np.angle(self.object)
-        else:
-            obj = self.object
-
-        rotated_object = self._crop_rotate_object_fov(obj, padding=padding)
-        rotated_shape = rotated_object.shape
-
-        extent = [
-            0,
-            self.sampling[1] * rotated_shape[1],
-            self.sampling[0] * rotated_shape[0],
-            0,
-        ]
-
-        im = object_ax.imshow(
-            rotated_object,
-            extent=extent,
-            cmap=cmap,
-            **kwargs,
-        )
-
-        if cbar:
-            divider = make_axes_locatable(object_ax)
-            ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
-            fig.add_axes(ax_cb)
-            fig.colorbar(im, cax=ax_cb)
-
-        if convergence_ax is not None and hasattr(self, "error_iterations"):
-            kwargs.pop("vmin", None)
-            kwargs.pop("vmax", None)
-            errors = self.error_iterations
-            convergence_ax.semilogy(np.arange(len(errors)), errors, **kwargs)
-
     def _visualize_last_iteration(
         self,
         fig,
