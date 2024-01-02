@@ -5,8 +5,8 @@ import numpy as np
 from matplotlib.gridspec import GridSpec
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from py4DSTEM.process.phase.utils import AffineTransform
-from py4DSTEM.visualize import return_scaled_histogram_ordering, show, show_complex
-from scipy.ndimage import gaussian_filter, rotate
+from py4DSTEM.visualize import return_scaled_histogram_ordering
+from py4DSTEM.visualize.vis_special import Complex2RGB, add_colorbar_arg
 
 try:
     import cupy as cp
@@ -20,6 +20,214 @@ class VisualizationsMixin:
     """
     Mixin class for various visualization methods.
     """
+
+    def _visualize_last_iteration(
+        self,
+        fig,
+        cbar: bool,
+        plot_convergence: bool,
+        plot_probe: bool,
+        plot_fourier_probe: bool,
+        remove_initial_probe_aberrations: bool,
+        **kwargs,
+    ):
+        """
+        Displays last reconstructed object and probe iterations.
+
+        Parameters
+        --------
+        fig: Figure
+            Matplotlib figure to place Gridspec in
+        plot_convergence: bool, optional
+            If true, the normalized mean squared error (NMSE) plot is displayed
+        cbar: bool, optional
+            If true, displays a colorbar
+        plot_probe: bool, optional
+            If true, the reconstructed complex probe is displayed
+        plot_fourier_probe: bool, optional
+            If true, the reconstructed complex Fourier probe is displayed
+        remove_initial_probe_aberrations: bool, optional
+            If true, when plotting fourier probe, removes initial probe
+            to visualize changes
+        """
+
+        asnumpy = self._asnumpy
+
+        figsize = kwargs.pop("figsize", (8, 5))
+        cmap = kwargs.pop("cmap", "magma")
+        chroma_boost = kwargs.pop("chroma_boost", 1)
+        vmin = kwargs.pop("vmin", None)
+        vmax = kwargs.pop("vmax", None)
+
+        # get scaled arrays
+        obj, kwargs = self._return_projected_cropped_potential(
+            return_kwargs=True, **kwargs
+        )
+        probe = self._return_single_probe()
+
+        obj, vmin, vmax = return_scaled_histogram_ordering(obj, vmin, vmax)
+
+        extent = [
+            0,
+            self.sampling[1] * obj.shape[1],
+            self.sampling[0] * obj.shape[0],
+            0,
+        ]
+
+        if plot_fourier_probe:
+            probe_extent = [
+                -self.angular_sampling[1] * self._region_of_interest_shape[1] / 2,
+                self.angular_sampling[1] * self._region_of_interest_shape[1] / 2,
+                self.angular_sampling[0] * self._region_of_interest_shape[0] / 2,
+                -self.angular_sampling[0] * self._region_of_interest_shape[0] / 2,
+            ]
+
+        elif plot_probe:
+            probe_extent = [
+                0,
+                self.sampling[1] * self._region_of_interest_shape[1],
+                self.sampling[0] * self._region_of_interest_shape[0],
+                0,
+            ]
+
+        if plot_convergence:
+            if plot_probe or plot_fourier_probe:
+                spec = GridSpec(
+                    ncols=2,
+                    nrows=2,
+                    height_ratios=[4, 1],
+                    hspace=0.15,
+                    width_ratios=[
+                        (extent[1] / extent[2]) / (probe_extent[1] / probe_extent[2]),
+                        1,
+                    ],
+                    wspace=0.35,
+                )
+
+            else:
+                spec = GridSpec(ncols=1, nrows=2, height_ratios=[4, 1], hspace=0.15)
+
+        else:
+            if plot_probe or plot_fourier_probe:
+                spec = GridSpec(
+                    ncols=2,
+                    nrows=1,
+                    width_ratios=[
+                        (extent[1] / extent[2]) / (probe_extent[1] / probe_extent[2]),
+                        1,
+                    ],
+                    wspace=0.35,
+                )
+
+            else:
+                spec = GridSpec(ncols=1, nrows=1)
+
+        if fig is None:
+            fig = plt.figure(figsize=figsize)
+
+        if plot_probe or plot_fourier_probe:
+            # Object
+            ax = fig.add_subplot(spec[0, 0])
+            im = ax.imshow(
+                obj,
+                extent=extent,
+                cmap=cmap,
+                vmin=vmin,
+                vmax=vmax,
+                **kwargs,
+            )
+            ax.set_ylabel("x [A]")
+            ax.set_xlabel("y [A]")
+
+            if self._object_type == "potential":
+                ax.set_title("Reconstructed object potential")
+            elif self._object_type == "complex":
+                ax.set_title("Reconstructed object phase")
+
+            if cbar:
+                divider = make_axes_locatable(ax)
+                ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
+                fig.add_axes(ax_cb)
+                fig.colorbar(im, cax=ax_cb)
+
+            # Probe
+            ax = fig.add_subplot(spec[0, 1])
+            if plot_fourier_probe:
+                probe = asnumpy(
+                    self._return_fourier_probe(
+                        probe,
+                        remove_initial_probe_aberrations=remove_initial_probe_aberrations,
+                    )
+                )
+
+                probe_array = Complex2RGB(
+                    probe,
+                    chroma_boost=chroma_boost,
+                )
+
+                ax.set_title("Reconstructed Fourier probe")
+                ax.set_ylabel("kx [mrad]")
+                ax.set_xlabel("ky [mrad]")
+            else:
+                probe_array = Complex2RGB(
+                    asnumpy(self._return_centered_probe(probe)),
+                    power=2,
+                    chroma_boost=chroma_boost,
+                )
+                ax.set_title("Reconstructed probe intensity")
+                ax.set_ylabel("x [A]")
+                ax.set_xlabel("y [A]")
+
+            im = ax.imshow(
+                probe_array,
+                extent=probe_extent,
+            )
+
+            if cbar:
+                divider = make_axes_locatable(ax)
+                ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
+                add_colorbar_arg(ax_cb, chroma_boost=chroma_boost)
+
+        else:
+            # Object
+            ax = fig.add_subplot(spec[0])
+            im = ax.imshow(
+                obj,
+                extent=extent,
+                cmap=cmap,
+                vmin=vmin,
+                vmax=vmax,
+                **kwargs,
+            )
+            ax.set_ylabel("x [A]")
+            ax.set_xlabel("y [A]")
+
+            if self._object_type == "potential":
+                ax.set_title("Reconstructed object potential")
+            elif self._object_type == "complex":
+                ax.set_title("Reconstructed object phase")
+
+            if cbar:
+                divider = make_axes_locatable(ax)
+                ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
+                fig.add_axes(ax_cb)
+                fig.colorbar(im, cax=ax_cb)
+
+        if plot_convergence and hasattr(self, "error_iterations"):
+            errors = np.array(self.error_iterations)
+
+            if plot_probe:
+                ax = fig.add_subplot(spec[1, :])
+            else:
+                ax = fig.add_subplot(spec[1])
+
+            ax.semilogy(np.arange(errors.shape[0]), errors, **kwargs)
+            ax.set_ylabel("NMSE")
+            ax.set_xlabel("Iteration number")
+            ax.yaxis.tick_right()
+
+        fig.suptitle(f"Normalized mean squared error: {self.error:.3e}")
+        spec.tight_layout(fig)
 
     def show_updated_positions(
         self,
