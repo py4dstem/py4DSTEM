@@ -1343,222 +1343,6 @@ class OverlapTomographicReconstruction(
 
         return self
 
-    def _visualize_last_iteration(
-        self,
-        fig,
-        cbar: bool,
-        plot_convergence: bool,
-        plot_probe: bool,
-        plot_fourier_probe: bool,
-        remove_initial_probe_aberrations: bool,
-        projection_angle_deg: float,
-        projection_axes: Tuple[int, int],
-        x_lims: Tuple[int, int],
-        y_lims: Tuple[int, int],
-        **kwargs,
-    ):
-        """
-        Displays last reconstructed object and probe iterations.
-
-        Parameters
-        --------
-        fig: Figure
-            Matplotlib figure to place Gridspec in
-        plot_convergence: bool, optional
-            If true, the normalized mean squared error (NMSE) plot is displayed
-        cbar: bool, optional
-            If true, displays a colorbar
-        plot_probe: bool
-            If true, the reconstructed probe intensity is also displayed
-        plot_fourier_probe: bool, optional
-            If true, the reconstructed complex Fourier probe is displayed
-        remove_initial_probe_aberrations: bool, optional
-            If true, when plotting fourier probe, removes initial probe
-        projection_angle_deg: float
-            Angle in degrees to rotate 3D array around prior to projection
-        projection_axes: tuple(int,int)
-            Axes defining projection plane
-        x_lims: tuple(float,float)
-            min/max x indices
-        y_lims: tuple(float,float)
-            min/max y indices
-        """
-        asnumpy = self._asnumpy
-
-        figsize = kwargs.pop("figsize", (8, 5))
-        cmap = kwargs.pop("cmap", "magma")
-
-        chroma_boost = kwargs.pop("chroma_boost", 1)
-
-        asnumpy = self._asnumpy
-
-        if projection_angle_deg is not None:
-            rotated_3d_obj = self._rotate(
-                self._object,
-                projection_angle_deg,
-                axes=projection_axes,
-                reshape=False,
-                order=2,
-            )
-            rotated_3d_obj = asnumpy(rotated_3d_obj)
-        else:
-            rotated_3d_obj = self.object
-
-        rotated_object = self._crop_rotate_object_manually(
-            rotated_3d_obj.sum(0), angle=None, x_lims=x_lims, y_lims=y_lims
-        )
-        rotated_shape = rotated_object.shape
-
-        extent = [
-            0,
-            self.sampling[1] * rotated_shape[1],
-            self.sampling[0] * rotated_shape[0],
-            0,
-        ]
-
-        if plot_fourier_probe:
-            probe_extent = [
-                -self.angular_sampling[1] * self._region_of_interest_shape[1] / 2,
-                self.angular_sampling[1] * self._region_of_interest_shape[1] / 2,
-                self.angular_sampling[0] * self._region_of_interest_shape[0] / 2,
-                -self.angular_sampling[0] * self._region_of_interest_shape[0] / 2,
-            ]
-        elif plot_probe:
-            probe_extent = [
-                0,
-                self.sampling[1] * self._region_of_interest_shape[1],
-                self.sampling[0] * self._region_of_interest_shape[0],
-                0,
-            ]
-
-        if plot_convergence:
-            if plot_probe or plot_fourier_probe:
-                spec = GridSpec(
-                    ncols=2,
-                    nrows=2,
-                    height_ratios=[4, 1],
-                    hspace=0.15,
-                    width_ratios=[
-                        (extent[1] / extent[2]) / (probe_extent[1] / probe_extent[2]),
-                        1,
-                    ],
-                    wspace=0.35,
-                )
-            else:
-                spec = GridSpec(ncols=1, nrows=2, height_ratios=[4, 1], hspace=0.15)
-        else:
-            if plot_probe or plot_fourier_probe:
-                spec = GridSpec(
-                    ncols=2,
-                    nrows=1,
-                    width_ratios=[
-                        (extent[1] / extent[2]) / (probe_extent[1] / probe_extent[2]),
-                        1,
-                    ],
-                    wspace=0.35,
-                )
-            else:
-                spec = GridSpec(ncols=1, nrows=1)
-
-        if fig is None:
-            fig = plt.figure(figsize=figsize)
-
-        if plot_probe or plot_fourier_probe:
-            # Object
-            ax = fig.add_subplot(spec[0, 0])
-            im = ax.imshow(
-                rotated_object,
-                extent=extent,
-                cmap=cmap,
-                **kwargs,
-            )
-
-            ax.set_ylabel("x [A]")
-            ax.set_xlabel("y [A]")
-            ax.set_title("Reconstructed object projection")
-
-            if cbar:
-                divider = make_axes_locatable(ax)
-                ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
-                fig.add_axes(ax_cb)
-                fig.colorbar(im, cax=ax_cb)
-
-            # Probe
-            kwargs.pop("vmin", None)
-            kwargs.pop("vmax", None)
-
-            ax = fig.add_subplot(spec[0, 1])
-            if plot_fourier_probe:
-                if remove_initial_probe_aberrations:
-                    probe_array = self.probe_fourier_residual
-                else:
-                    probe_array = self.probe_fourier
-
-                probe_array = Complex2RGB(
-                    probe_array,
-                    chroma_boost=chroma_boost,
-                )
-
-                ax.set_title("Reconstructed Fourier probe")
-                ax.set_ylabel("kx [mrad]")
-                ax.set_xlabel("ky [mrad]")
-            else:
-                probe_array = Complex2RGB(
-                    self.probe,
-                    power=2,
-                    chroma_boost=chroma_boost,
-                )
-                ax.set_title("Reconstructed probe intensity")
-                ax.set_ylabel("x [A]")
-                ax.set_xlabel("y [A]")
-
-            im = ax.imshow(
-                probe_array,
-                extent=probe_extent,
-                **kwargs,
-            )
-
-            if cbar:
-                divider = make_axes_locatable(ax)
-                ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
-                add_colorbar_arg(
-                    ax_cb,
-                    chroma_boost=chroma_boost,
-                )
-        else:
-            ax = fig.add_subplot(spec[0])
-            im = ax.imshow(
-                rotated_object,
-                extent=extent,
-                cmap=cmap,
-                **kwargs,
-            )
-            ax.set_ylabel("x [A]")
-            ax.set_xlabel("y [A]")
-            ax.set_title("Reconstructed object projection")
-
-            if cbar:
-                divider = make_axes_locatable(ax)
-                ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
-                fig.add_axes(ax_cb)
-                fig.colorbar(im, cax=ax_cb)
-
-        if plot_convergence and hasattr(self, "error_iterations"):
-            kwargs.pop("vmin", None)
-            kwargs.pop("vmax", None)
-            errors = np.array(self.error_iterations)
-            if plot_probe:
-                ax = fig.add_subplot(spec[1, :])
-            else:
-                ax = fig.add_subplot(spec[1])
-            ax.semilogy(np.arange(errors.shape[0]), errors, **kwargs)
-            ax.set_ylabel("NMSE")
-            ax.set_xlabel("Iteration number")
-            ax.yaxis.tick_right()
-
-        fig.suptitle(f"Normalized mean squared error: {self.error:.3e}")
-        spec.tight_layout(fig)
-
     def _visualize_all_iterations(
         self,
         fig,
@@ -1810,10 +1594,6 @@ class OverlapTomographicReconstruction(
         plot_fourier_probe: bool = False,
         remove_initial_probe_aberrations: bool = False,
         cbar: bool = True,
-        projection_angle_deg: float = None,
-        projection_axes: Tuple[int, int] = (0, 2),
-        x_lims=(None, None),
-        y_lims=(None, None),
         **kwargs,
     ):
         """
@@ -1859,10 +1639,6 @@ class OverlapTomographicReconstruction(
                 plot_fourier_probe=plot_fourier_probe,
                 remove_initial_probe_aberrations=remove_initial_probe_aberrations,
                 cbar=cbar,
-                projection_angle_deg=projection_angle_deg,
-                projection_axes=projection_axes,
-                x_lims=x_lims,
-                y_lims=y_lims,
                 **kwargs,
             )
         else:
@@ -1874,10 +1650,6 @@ class OverlapTomographicReconstruction(
                 plot_fourier_probe=plot_fourier_probe,
                 remove_initial_probe_aberrations=remove_initial_probe_aberrations,
                 cbar=cbar,
-                projection_angle_deg=projection_angle_deg,
-                projection_axes=projection_axes,
-                x_lims=x_lims,
-                y_lims=y_lims,
                 **kwargs,
             )
 

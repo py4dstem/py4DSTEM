@@ -108,6 +108,8 @@ class ObjectNDMethodsMixin:
 
     def _return_projected_cropped_potential(
         self,
+        return_kwargs=False,
+        **kwargs,
     ):
         """Utility function to accommodate multiple classes"""
         if self._object_type == "complex":
@@ -115,7 +117,10 @@ class ObjectNDMethodsMixin:
         else:
             projected_cropped_potential = self.object_cropped
 
-        return projected_cropped_potential
+        if return_kwargs:
+            return projected_cropped_potential, kwargs
+        else:
+            return projected_cropped_potential
 
     def _return_object_fft(
         self,
@@ -358,6 +363,8 @@ class Object2p5DMethodsMixin:
 
     def _return_projected_cropped_potential(
         self,
+        return_kwargs=False,
+        **kwargs,
     ):
         """Utility function to accommodate multiple classes"""
         if self._object_type == "complex":
@@ -365,7 +372,10 @@ class Object2p5DMethodsMixin:
         else:
             projected_cropped_potential = self.object_cropped.sum(0)
 
-        return projected_cropped_potential
+        if return_kwargs:
+            return projected_cropped_potential, kwargs
+        else:
+            return projected_cropped_potential
 
     def _return_object_fft(
         self,
@@ -824,9 +834,35 @@ class Object3DMethodsMixin:
 
     def _return_projected_cropped_potential(
         self,
+        return_kwargs=False,
+        **kwargs,
     ):
         """Utility function to accommodate multiple classes"""
-        raise NotImplementedError()
+
+        projection_angle_deg = kwargs.pop("projection_angle_deg", None)
+        projection_axes = kwargs.pop("projection_axes", (0, 2))
+        x_lims = kwargs.pop("x_lims", (None, None))
+        y_lims = kwargs.pop("y_lims", (None, None))
+
+        if projection_angle_deg is not None:
+            obj = self._rotate(
+                self._object,
+                projection_angle_deg,
+                axes=projection_axes,
+                reshape=False,
+                order=2,
+            )
+        else:
+            obj = self._object
+
+        obj = self._crop_rotate_object_manually(
+            obj, angle=None, x_lims=x_lims, y_lims=y_lims
+        ).sum(0)
+
+        if return_kwargs:
+            return obj, kwargs
+        else:
+            return obj
 
     def _return_object_fft(
         self,
@@ -1177,6 +1213,13 @@ class ProbeMethodsMixin:
             **kwargs,
         )
 
+    def _return_single_probe(self):
+        """Current probe estimate"""
+        if not hasattr(self, "_probe"):
+            return None
+
+        return self._probe
+
     @property
     def probe_fourier(self):
         """Current probe estimate in Fourier space"""
@@ -1331,6 +1374,13 @@ class ProbeMixedMethodsMixin:
             **kwargs,
         )
 
+    def _return_single_probe(self):
+        """Current probe estimate"""
+        if not hasattr(self, "_probe"):
+            return None
+
+        return self._probe[0]
+
 
 class ProbeListMethodsMixin:
     """
@@ -1385,9 +1435,10 @@ class ProbeListMethodsMixin:
                 else:
                     self._exit_waves = None
 
-    @property
-    def _probe(self):
-        """Dummy property to return average probe"""
+    def _return_single_probe(self):
+        """Current probe estimate"""
+        if not hasattr(self, "_probes_all"):
+            return None
 
         xp = self._xp
         probe = xp.zeros(self._region_of_interest_shape, dtype=np.complex64)
@@ -1396,6 +1447,11 @@ class ProbeListMethodsMixin:
             probe += pr
 
         return probe / self._num_tilts
+
+    @property
+    def _probe(self):
+        """Dummy property to make single-probe functions work"""
+        return self._return_single_probe()
 
 
 class ObjectNDProbeMethodsMixin:
@@ -3002,9 +3058,7 @@ class Object2p5DProbeMixedMethodsMixin:
             current_object[s] = object_update * probe_normalization
 
             # back-transmit
-            exit_waves_copy *= xp.expand_dims(
-                xp.conj(obj), axis=1
-            )  # / xp.abs(obj) ** 2
+            exit_waves_copy *= xp.expand_dims(xp.conj(obj), axis=1)
 
             if s > 0:
                 # back-propagate
