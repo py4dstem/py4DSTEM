@@ -9,6 +9,7 @@ from py4DSTEM.process.phase.utils import (
     AffineTransform,
     ComplexProbe,
     fft_shift,
+    generate_batches,
     rotate_point,
     spatial_frequencies,
 )
@@ -2106,6 +2107,120 @@ class Object2p5DProbeMethodsMixin:
 
         return current_object, current_probe
 
+    def show_transmitted_probe(
+        self,
+        max_batch_size=None,
+        plot_fourier_probe: bool = False,
+        remove_initial_probe_aberrations=False,
+        **kwargs,
+    ):
+        """
+        Plots the min, max, and mean transmitted probe after propagation and transmission.
+
+        Parameters
+        ----------
+        max_batch_size: int, optional
+            Max number of probes to calculate at once
+        plot_fourier_probe: boolean, optional
+            If True, the transmitted probes are also plotted in Fourier space
+        remove_initial_probe_aberrations: bool, optional
+            If true, when plotting fourier probe, removes initial probe
+        kwargs:
+            Passed to show_complex
+        """
+
+        xp = self._xp
+        asnumpy = self._asnumpy
+
+        if max_batch_size is None:
+            max_batch_size = self._num_diffraction_patterns
+
+        positions_px = self._positions_px.copy()
+
+        mean_transmitted = xp.zeros_like(self._probe)
+        intensities_compare = [np.inf, 0]
+
+        for start, end in generate_batches(
+            self._num_diffraction_patterns, max_batch=max_batch_size
+        ):
+            # batch indices
+            self._positions_px = positions_px[start:end]
+            self._positions_px_fractional = self._positions_px - xp.round(
+                self._positions_px
+            )
+            (
+                self._vectorized_patch_indices_row,
+                self._vectorized_patch_indices_col,
+            ) = self._extract_vectorized_patch_indices()
+
+            # overlaps
+            _, _, overlap = self._overlap_projection(self._object, self._probe)
+
+            # store relevant arrays
+            mean_transmitted += overlap.sum(0)
+
+            intensities = xp.sum(xp.abs(overlap) ** 2, axis=(-2, -1))
+            min_intensity = intensities.min()
+            max_intensity = intensities.max()
+
+            if min_intensity < intensities_compare[0]:
+                min_intensity_transmitted = overlap[xp.argmin(intensities)]
+                intensities_compare[0] = min_intensity
+
+            if max_intensity > intensities_compare[1]:
+                max_intensity_transmitted = overlap[xp.argmax(intensities)]
+                intensities_compare[1] = max_intensity
+
+        mean_transmitted /= self._num_diffraction_patterns
+
+        probes = [
+            asnumpy(self._return_centered_probe(probe))
+            for probe in [
+                mean_transmitted,
+                min_intensity_transmitted,
+                max_intensity_transmitted,
+            ]
+        ]
+        title = [
+            "Mean Transmitted Probe",
+            "Min Intensity Transmitted Probe",
+            "Max Intensity Transmitted Probe",
+        ]
+
+        if plot_fourier_probe:
+            bottom_row = [
+                asnumpy(
+                    self._return_fourier_probe(
+                        probe,
+                        remove_initial_probe_aberrations=remove_initial_probe_aberrations,
+                    )
+                )
+                for probe in [
+                    mean_transmitted,
+                    min_intensity_transmitted,
+                    max_intensity_transmitted,
+                ]
+            ]
+            probes = [probes, bottom_row]
+
+            title += [
+                "Mean Transmitted Fourier Probe",
+                "Min Intensity Transmitted Fourier Probe",
+                "Max Intensity Transmitted Fourier Probe",
+            ]
+
+        title = kwargs.get("title", title)
+        ticks = kwargs.get("ticks", False)
+        axsize = kwargs.get("axsize", (4.5, 4.5))
+
+        show_complex(
+            probes,
+            title=title,
+            ticks=ticks,
+            axsize=axsize,
+            **kwargs,
+        )
+
 
 class ObjectNDProbeMixedMethodsMixin:
     """
@@ -2726,3 +2841,9 @@ class Object2p5DProbeMixedMethodsMixin:
                 )
 
         return current_object, current_probe
+
+    def show_transmitted_probe(
+        self,
+        **kwargs,
+    ):
+        raise NotImplementedError()
