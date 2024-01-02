@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.gridspec import GridSpec
 from mpl_toolkits.axes_grid1 import ImageGrid, make_axes_locatable
-from py4DSTEM.visualize.vis_special import Complex2RGB, add_colorbar_arg, show_complex
+from py4DSTEM.visualize.vis_special import Complex2RGB, add_colorbar_arg
 
 try:
     import cupy as cp
@@ -1943,79 +1943,6 @@ class MixedstateMultislicePtychographicReconstruction(
                 **kwargs,
             )
         return self
-
-    def show_transmitted_probe(
-        self,
-        plot_fourier_probe: bool = False,
-        remove_initial_probe_aberrations=False,
-        **kwargs,
-    ):
-        """
-        Plots the min, max, and mean transmitted probe after propagation and transmission.
-
-        Parameters
-        ----------
-        plot_fourier_probe: boolean, optional
-            If True, the transmitted probes are also plotted in Fourier space
-        kwargs:
-            Passed to show_complex
-        """
-
-        xp = self._xp
-        asnumpy = self._asnumpy
-
-        transmitted_probe_intensities = xp.sum(
-            xp.abs(self._transmitted_probes[:, 0]) ** 2, axis=(-2, -1)
-        )
-        min_intensity_transmitted = self._transmitted_probes[
-            xp.argmin(transmitted_probe_intensities), 0
-        ]
-        max_intensity_transmitted = self._transmitted_probes[
-            xp.argmax(transmitted_probe_intensities), 0
-        ]
-        mean_transmitted = self._transmitted_probes[:, 0].mean(0)
-        probes = [
-            asnumpy(self._return_centered_probe(probe))
-            for probe in [
-                mean_transmitted,
-                min_intensity_transmitted,
-                max_intensity_transmitted,
-            ]
-        ]
-        title = [
-            "Mean Transmitted Probe",
-            "Min Intensity Transmitted Probe",
-            "Max Intensity Transmitted Probe",
-        ]
-
-        if plot_fourier_probe:
-            bottom_row = [
-                asnumpy(
-                    self._return_fourier_probe(
-                        probe,
-                        remove_initial_probe_aberrations=remove_initial_probe_aberrations,
-                    )
-                )
-                for probe in [
-                    mean_transmitted,
-                    min_intensity_transmitted,
-                    max_intensity_transmitted,
-                ]
-            ]
-            probes = [probes, bottom_row]
-
-            title += [
-                "Mean Transmitted Fourier Probe",
-                "Min Intensity Transmitted Fourier Probe",
-                "Max Intensity Transmitted Fourier Probe",
-            ]
-
-        title = kwargs.get("title", title)
-        show_complex(
-            probes,
-            title=title,
-            **kwargs,
-        )
 
     def _return_self_consistency_errors(
         self,
