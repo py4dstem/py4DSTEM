@@ -743,7 +743,7 @@ class SingleslicePtychographicReconstruction(
         constrain_probe_fourier_amplitude_max_width_pixels: float = 3.0,
         constrain_probe_fourier_amplitude_constant_intensity: bool = False,
         fix_positions_iter: int = np.inf,
-        constrain_position_distance: float = None,
+        max_position_update_distance: float = None,
         global_affine_transformation: bool = True,
         gaussian_filter_sigma: float = None,
         gaussian_filter_iter: int = np.inf,
@@ -820,9 +820,8 @@ class SingleslicePtychographicReconstruction(
             If True, the probe aperture is additionally constrained to a constant intensity.
         fix_positions_iter: int, optional
             Number of iterations to run with fixed positions before updating positions estimate
-        constrain_position_distance: float, optional
-            Distance to constrain position correction within original
-            field of view in A
+        max_position_update_distance: float, optional
+            Maximum allowed distance for update in A
         global_affine_transformation: bool, optional
             If True, positions are assumed to be a global affine transform from initial scan
         gaussian_filter_sigma: float, optional
@@ -999,7 +998,7 @@ class SingleslicePtychographicReconstruction(
                         amplitudes,
                         self._positions_px,
                         positions_step_size,
-                        constrain_position_distance,
+                        max_position_update_distance,
                     )
 
                 error += batch_error

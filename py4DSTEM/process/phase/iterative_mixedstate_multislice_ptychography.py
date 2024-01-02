@@ -644,172 +644,6 @@ class MixedstateMultislicePtychographicReconstruction(
 
         return self
 
-    def _position_correction(
-        self,
-        current_object,
-        current_probe,
-        transmitted_probes,
-        amplitudes,
-        current_positions,
-        positions_step_size,
-        constrain_position_distance,
-    ):
-        """
-        Position correction using estimated intensity gradient.
-
-        Parameters
-        --------
-        current_object: np.ndarray
-            Current object estimate
-        current_probe:np.ndarray
-            fractionally-shifted probes
-        transmitted_probes: np.ndarray
-            Transmitted probes after N-1 propagations and N transmissions
-        amplitudes: np.ndarray
-            Measured amplitudes
-        current_positions: np.ndarray
-            Current positions estimate
-        positions_step_size: float
-            Positions step size
-        constrain_position_distance: float
-            Distance to constrain position correction within original
-            field of view in A
-
-        Returns
-        --------
-        updated_positions: np.ndarray
-            Updated positions estimate
-        """
-
-        xp = self._xp
-
-        # Intensity gradient
-        exit_waves_fft = xp.fft.fft2(transmitted_probes)
-        exit_waves_fft_conj = xp.conj(exit_waves_fft)
-        estimated_intensity = xp.abs(exit_waves_fft) ** 2
-        measured_intensity = amplitudes**2
-
-        flat_shape = (transmitted_probes.shape[0], -1)
-        difference_intensity = (measured_intensity - estimated_intensity).reshape(
-            flat_shape
-        )
-
-        # Computing perturbed exit waves one at a time to save on memory
-
-        if self._object_type == "potential":
-            complex_object = xp.exp(1j * current_object)
-        else:
-            complex_object = current_object
-
-        # dx
-        obj_rolled_patches = complex_object[
-            :,
-            (self._vectorized_patch_indices_row + 1) % self._object_shape[0],
-            self._vectorized_patch_indices_col,
-        ]
-
-        propagated_probes_perturbed = xp.empty_like(obj_rolled_patches)
-        propagated_probes_perturbed[0] = fft_shift(
-            current_probe, self._positions_px_fractional, xp
-        )
-
-        for s in range(self._num_slices):
-            # transmit
-            transmitted_probes_perturbed = (
-                obj_rolled_patches[s] * propagated_probes_perturbed[s]
-            )
-
-            # propagate
-            if s + 1 < self._num_slices:
-                propagated_probes_perturbed[s + 1] = self._propagate_array(
-                    transmitted_probes_perturbed, self._propagator_arrays[s]
-                )
-
-        exit_waves_dx_fft = exit_waves_fft - xp.fft.fft2(transmitted_probes_perturbed)
-
-        # dy
-        obj_rolled_patches = complex_object[
-            :,
-            self._vectorized_patch_indices_row,
-            (self._vectorized_patch_indices_col + 1) % self._object_shape[1],
-        ]
-
-        propagated_probes_perturbed = xp.empty_like(obj_rolled_patches)
-        propagated_probes_perturbed[0] = fft_shift(
-            current_probe, self._positions_px_fractional, xp
-        )
-
-        for s in range(self._num_slices):
-            # transmit
-            transmitted_probes_perturbed = (
-                obj_rolled_patches[s] * propagated_probes_perturbed[s]
-            )
-
-            # propagate
-            if s + 1 < self._num_slices:
-                propagated_probes_perturbed[s + 1] = self._propagate_array(
-                    transmitted_probes_perturbed, self._propagator_arrays[s]
-                )
-
-        exit_waves_dy_fft = exit_waves_fft - xp.fft.fft2(transmitted_probes_perturbed)
-
-        partial_intensity_dx = 2 * xp.real(
-            exit_waves_dx_fft * exit_waves_fft_conj
-        ).reshape(flat_shape)
-        partial_intensity_dy = 2 * xp.real(
-            exit_waves_dy_fft * exit_waves_fft_conj
-        ).reshape(flat_shape)
-
-        coefficients_matrix = xp.dstack((partial_intensity_dx, partial_intensity_dy))
-
-        # positions_update = xp.einsum(
-        #    "idk,ik->id", xp.linalg.pinv(coefficients_matrix), difference_intensity
-        # )
-
-        coefficients_matrix_T = coefficients_matrix.conj().swapaxes(-1, -2)
-        positions_update = (
-            xp.linalg.inv(coefficients_matrix_T @ coefficients_matrix)
-            @ coefficients_matrix_T
-            @ difference_intensity[..., None]
-        )
-
-        if constrain_position_distance is not None:
-            constrain_position_distance /= xp.sqrt(
-                self.sampling[0] ** 2 + self.sampling[1] ** 2
-            )
-            x1 = (current_positions - positions_step_size * positions_update[..., 0])[
-                :, 0
-            ]
-            y1 = (current_positions - positions_step_size * positions_update[..., 0])[
-                :, 1
-            ]
-            x0 = self._positions_px_initial[:, 0]
-            y0 = self._positions_px_initial[:, 1]
-            if self._rotation_best_transpose:
-                x0, y0 = xp.array([y0, x0])
-                x1, y1 = xp.array([y1, x1])
-
-            if self._rotation_best_rad is not None:
-                rotation_angle = self._rotation_best_rad
-                x0, y0 = x0 * xp.cos(-rotation_angle) + y0 * xp.sin(
-                    -rotation_angle
-                ), -x0 * xp.sin(-rotation_angle) + y0 * xp.cos(-rotation_angle)
-                x1, y1 = x1 * xp.cos(-rotation_angle) + y1 * xp.sin(
-                    -rotation_angle
-                ), -x1 * xp.sin(-rotation_angle) + y1 * xp.cos(-rotation_angle)
-
-            outlier_ind = (x1 > (xp.max(x0) + constrain_position_distance)) + (
-                x1 < (xp.min(x0) - constrain_position_distance)
-            ) + (y1 > (xp.max(y0) + constrain_position_distance)) + (
-                y1 < (xp.min(y0) - constrain_position_distance)
-            ) > 0
-
-            positions_update[..., 0][outlier_ind] = 0
-
-        current_positions -= positions_step_size * positions_update[..., 0]
-
-        return current_positions
-
     def _constraints(
         self,
         current_object,
@@ -1041,7 +875,7 @@ class MixedstateMultislicePtychographicReconstruction(
         constrain_probe_fourier_amplitude_max_width_pixels: float = 3.0,
         constrain_probe_fourier_amplitude_constant_intensity: bool = False,
         fix_positions_iter: int = np.inf,
-        constrain_position_distance: float = None,
+        max_position_update_distance: float = None,
         global_affine_transformation: bool = True,
         gaussian_filter_sigma: float = None,
         gaussian_filter_iter: int = np.inf,
@@ -1123,6 +957,8 @@ class MixedstateMultislicePtychographicReconstruction(
             If True, the probe aperture is additionally constrained to a constant intensity.
         fix_positions_iter: int, optional
             Number of iterations to run with fixed positions before updating positions estimate
+        max_position_update_distance: float, optional
+            Maximum allowed distance for update in A
         global_affine_transformation: bool, optional
             If True, positions are assumed to be a global affine transform from initial scan
         gaussian_filter_sigma: float, optional
@@ -1309,12 +1145,12 @@ class MixedstateMultislicePtychographicReconstruction(
                 if a0 >= fix_positions_iter:
                     positions_px[start:end] = self._position_correction(
                         self._object,
-                        self._probe[0],
-                        overlap[:, 0],
+                        self._probe,
+                        overlap,
                         amplitudes,
                         self._positions_px,
                         positions_step_size,
-                        constrain_position_distance,
+                        max_position_update_distance,
                     )
 
                 error += batch_error
