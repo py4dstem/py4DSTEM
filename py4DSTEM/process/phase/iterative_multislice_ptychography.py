@@ -1004,7 +1004,7 @@ class MultislicePtychographicReconstruction(
 
     def reconstruct(
         self,
-        max_iter: int = 64,
+        max_iter: int = 8,
         reconstruction_method: str = "gradient-descent",
         reconstruction_parameter: float = 1.0,
         reconstruction_parameter_a: float = None,
@@ -1037,7 +1037,7 @@ class MultislicePtychographicReconstruction(
         q_highpass: float = None,
         butterworth_order: float = 2,
         kz_regularization_filter_iter: int = np.inf,
-        kz_regularization_gamma: Union[float, np.ndarray] = None,
+        kz_regularization_gamma: float = None,
         identical_slices_iter: int = 0,
         object_positivity: bool = True,
         shrinkage_rad: float = 0.0,
@@ -1174,155 +1174,37 @@ class MultislicePtychographicReconstruction(
         asnumpy = self._asnumpy
         xp = self._xp
 
-        # Reconstruction method
-
-        if reconstruction_method == "generalized-projections":
-            if (
-                reconstruction_parameter_a is None
-                or reconstruction_parameter_b is None
-                or reconstruction_parameter_c is None
-            ):
-                raise ValueError(
-                    (
-                        "reconstruction_parameter_a/b/c must all be specified "
-                        "when using reconstruction_method='generalized-projections'."
-                    )
-                )
-
-            use_projection_scheme = True
-            projection_a = reconstruction_parameter_a
-            projection_b = reconstruction_parameter_b
-            projection_c = reconstruction_parameter_c
-            step_size = None
-        elif (
-            reconstruction_method == "DM_AP"
-            or reconstruction_method == "difference-map_alternating-projections"
-        ):
-            if reconstruction_parameter < 0.0 or reconstruction_parameter > 1.0:
-                raise ValueError("reconstruction_parameter must be between 0-1.")
-
-            use_projection_scheme = True
-            projection_a = -reconstruction_parameter
-            projection_b = 1
-            projection_c = 1 + reconstruction_parameter
-            step_size = None
-        elif (
-            reconstruction_method == "RAAR"
-            or reconstruction_method == "relaxed-averaged-alternating-reflections"
-        ):
-            if reconstruction_parameter < 0.0 or reconstruction_parameter > 1.0:
-                raise ValueError("reconstruction_parameter must be between 0-1.")
-
-            use_projection_scheme = True
-            projection_a = 1 - 2 * reconstruction_parameter
-            projection_b = reconstruction_parameter
-            projection_c = 2
-            step_size = None
-        elif (
-            reconstruction_method == "RRR"
-            or reconstruction_method == "relax-reflect-reflect"
-        ):
-            if reconstruction_parameter < 0.0 or reconstruction_parameter > 2.0:
-                raise ValueError("reconstruction_parameter must be between 0-2.")
-
-            use_projection_scheme = True
-            projection_a = -reconstruction_parameter
-            projection_b = reconstruction_parameter
-            projection_c = 2
-            step_size = None
-        elif (
-            reconstruction_method == "SUPERFLIP"
-            or reconstruction_method == "charge-flipping"
-        ):
-            use_projection_scheme = True
-            projection_a = 0
-            projection_b = 1
-            projection_c = 2
-            reconstruction_parameter = None
-            step_size = None
-        elif (
-            reconstruction_method == "GD" or reconstruction_method == "gradient-descent"
-        ):
-            use_projection_scheme = False
-            projection_a = None
-            projection_b = None
-            projection_c = None
-            reconstruction_parameter = None
-        else:
-            raise ValueError(
-                (
-                    "reconstruction_method must be one of 'generalized-projections', "
-                    "'DM_AP' (or 'difference-map_alternating-projections'), "
-                    "'RAAR' (or 'relaxed-averaged-alternating-reflections'), "
-                    "'RRR' (or 'relax-reflect-reflect'), "
-                    "'SUPERFLIP' (or 'charge-flipping'), "
-                    f"or 'GD' (or 'gradient-descent'), not  {reconstruction_method}."
-                )
-            )
+        # set and report reconstruction method
+        (
+            use_projection_scheme,
+            projection_a,
+            projection_b,
+            projection_c,
+            reconstruction_parameter,
+            step_size,
+        ) = self._set_reconstruction_method_parameters(
+            reconstruction_method,
+            reconstruction_parameter,
+            reconstruction_parameter_a,
+            reconstruction_parameter_b,
+            reconstruction_parameter_c,
+            step_size,
+        )
 
         if self._verbose:
-            if switch_object_iter > max_iter:
-                first_line = f"Performing {max_iter} iterations using a {self._object_type} object type, "
-            else:
-                switch_object_type = (
-                    "complex" if self._object_type == "potential" else "potential"
-                )
-                first_line = (
-                    f"Performing {switch_object_iter} iterations using a {self._object_type} object type and "
-                    f"{max_iter - switch_object_iter} iterations using a {switch_object_type} object type, "
-                )
-            if max_batch_size is not None:
-                if use_projection_scheme:
-                    raise ValueError(
-                        (
-                            "Stochastic object/probe updating is inconsistent with 'DM_AP', 'RAAR', 'RRR', and 'SUPERFLIP'. "
-                            "Use reconstruction_method='GD' or set max_batch_size=None."
-                        )
-                    )
-                else:
-                    print(
-                        (
-                            first_line + f"with the {reconstruction_method} algorithm, "
-                            f"with normalization_min: {normalization_min} and step _size: {step_size}, "
-                            f"in batches of max {max_batch_size} measurements."
-                        )
-                    )
-
-            else:
-                if reconstruction_parameter is not None:
-                    if np.array(reconstruction_parameter).shape == (3,):
-                        print(
-                            (
-                                first_line
-                                + f"with the {reconstruction_method} algorithm, "
-                                f"with normalization_min: {normalization_min} and (a,b,c): {reconstruction_parameter}."
-                            )
-                        )
-                    else:
-                        print(
-                            (
-                                first_line
-                                + f"with the {reconstruction_method} algorithm, "
-                                f"with normalization_min: {normalization_min} and α: {reconstruction_parameter}."
-                            )
-                        )
-                else:
-                    if step_size is not None:
-                        print(
-                            (
-                                first_line
-                                + f"with the {reconstruction_method} algorithm, "
-                                f"with normalization_min: {normalization_min}."
-                            )
-                        )
-                    else:
-                        print(
-                            (
-                                first_line
-                                + f"with the {reconstruction_method} algorithm, "
-                                f"with normalization_min: {normalization_min} and step _size: {step_size}."
-                            )
-                        )
+            self._report_reconstruction_summary(
+                max_iter,
+                switch_object_iter,
+                use_projection_scheme,
+                reconstruction_method,
+                reconstruction_parameter,
+                projection_a,
+                projection_b,
+                projection_c,
+                normalization_min,
+                step_size,
+                max_batch_size,
+            )
 
         # Batching
         shuffled_indices = np.arange(self._num_diffraction_patterns)
@@ -1334,38 +1216,7 @@ class MultislicePtychographicReconstruction(
             max_batch_size = self._num_diffraction_patterns
 
         # initialization
-        if store_iterations and (not hasattr(self, "object_iterations") or reset):
-            self.object_iterations = []
-            self.probe_iterations = []
-
-        if reset:
-            self.error_iterations = []
-            self._object = self._object_initial.copy()
-            self._probe = self._probe_initial.copy()
-            self._positions_px = self._positions_px_initial.copy()
-            self._positions_px_fractional = self._positions_px - xp.round(
-                self._positions_px
-            )
-            (
-                self._vectorized_patch_indices_row,
-                self._vectorized_patch_indices_col,
-            ) = self._extract_vectorized_patch_indices()
-            self._exit_waves = None
-            self._object_type = self._object_type_initial
-            if hasattr(self, "_tf"):
-                del self._tf
-        elif reset is None:
-            if hasattr(self, "error"):
-                warnings.warn(
-                    (
-                        "Continuing reconstruction from previous result. "
-                        "Use reset=True for a fresh start."
-                    ),
-                    UserWarning,
-                )
-            else:
-                self.error_iterations = []
-                self._exit_waves = None
+        self._reset_reconstruction(store_iterations, reset)
 
         # main loop
         for a0 in tqdmnd(
@@ -1380,16 +1231,18 @@ class MultislicePtychographicReconstruction(
                 if self._object_type == "potential":
                     self._object_type = "complex"
                     self._object = xp.exp(1j * self._object)
-                elif self._object_type == "complex":
+                else:
                     self._object_type = "potential"
                     self._object = xp.angle(self._object)
 
             # randomize
             if not use_projection_scheme:
                 np.random.shuffle(shuffled_indices)
+
             unshuffled_indices[shuffled_indices] = np.arange(
                 self._num_diffraction_patterns
             )
+
             positions_px = self._positions_px.copy()[shuffled_indices]
 
             for start, end in generate_batches(
@@ -1400,6 +1253,7 @@ class MultislicePtychographicReconstruction(
                 self._positions_px_fractional = self._positions_px - xp.round(
                     self._positions_px
                 )
+
                 (
                     self._vectorized_patch_indices_row,
                     self._vectorized_patch_indices_col,
@@ -1408,9 +1262,9 @@ class MultislicePtychographicReconstruction(
 
                 # forward operator
                 (
-                    propagated_probes,
+                    shifted_probes,
                     object_patches,
-                    self._transmitted_probes,
+                    overlap,
                     self._exit_waves,
                     batch_error,
                 ) = self._forward(
@@ -1429,7 +1283,7 @@ class MultislicePtychographicReconstruction(
                     self._object,
                     self._probe,
                     object_patches,
-                    propagated_probes,
+                    shifted_probes,
                     self._exit_waves,
                     use_projection_scheme=use_projection_scheme,
                     step_size=step_size,
@@ -1488,10 +1342,7 @@ class MultislicePtychographicReconstruction(
                 butterworth_order=butterworth_order,
                 kz_regularization_filter=a0 < kz_regularization_filter_iter
                 and kz_regularization_gamma is not None,
-                kz_regularization_gamma=kz_regularization_gamma[a0]
-                if kz_regularization_gamma is not None
-                and isinstance(kz_regularization_gamma, np.ndarray)
-                else kz_regularization_gamma,
+                kz_regularization_gamma=kz_regularization_gamma,
                 identical_slices=a0 < identical_slices_iter,
                 object_positivity=object_positivity,
                 shrinkage_rad=shrinkage_rad,
@@ -1510,6 +1361,7 @@ class MultislicePtychographicReconstruction(
             )
 
             self.error_iterations.append(error.item())
+
             if store_iterations:
                 self.object_iterations.append(asnumpy(self._object.copy()))
                 self.probe_iterations.append(self.probe_centered)
