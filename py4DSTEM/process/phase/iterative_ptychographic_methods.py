@@ -1434,6 +1434,12 @@ class ObjectNDProbeMethodsMixin:
 
         return shifted_probes, object_patches, overlap
 
+    def _return_farfield_amplitudes(self, fourier_overlap):
+        """Small utility to de-duplicate mixed-state Fourier projection."""
+
+        xp = self._xp
+        return xp.abs(fourier_overlap)
+
     def _gradient_descent_fourier_projection(self, amplitudes, overlap):
         """
         Ptychographic fourier projection method for GD method.
@@ -1455,7 +1461,8 @@ class ObjectNDProbeMethodsMixin:
 
         xp = self._xp
         fourier_overlap = xp.fft.fft2(overlap)
-        error = xp.sum(xp.abs(amplitudes - xp.abs(fourier_overlap)) ** 2)
+        farfield_amplitudes = self._return_farfield_amplitudes(fourier_overlap)
+        error = xp.sum(xp.abs(amplitudes - farfield_amplitudes) ** 2)
 
         fourier_modified_overlap = amplitudes * xp.exp(1j * xp.angle(fourier_overlap))
         modified_overlap = xp.fft.ifft2(fourier_modified_overlap)
@@ -1510,7 +1517,8 @@ class ObjectNDProbeMethodsMixin:
             exit_waves = overlap.copy()
 
         fourier_overlap = xp.fft.fft2(overlap)
-        error = xp.sum(xp.abs(amplitudes - xp.abs(fourier_overlap)) ** 2)
+        farfield_amplitudes = self._return_farfield_amplitudes(fourier_overlap)
+        error = xp.sum(xp.abs(amplitudes - farfield_amplitudes) ** 2)
 
         factor_to_be_projected = projection_c * overlap + projection_y * exit_waves
         fourier_projected_factor = xp.fft.fft2(factor_to_be_projected)
@@ -1845,6 +1853,54 @@ class ObjectNDProbeMethodsMixin:
             )
 
         return current_object, current_probe
+
+    def _return_self_consistency_errors(
+        self,
+        max_batch_size=None,
+    ):
+        """Compute the self-consistency errors for each probe position"""
+
+        xp = self._xp
+        asnumpy = self._asnumpy
+
+        # Batch-size
+        if max_batch_size is None:
+            max_batch_size = self._num_diffraction_patterns
+
+        # Re-initialize fractional positions and vector patches
+        errors = np.array([])
+        positions_px = self._positions_px.copy()
+
+        for start, end in generate_batches(
+            self._num_diffraction_patterns, max_batch=max_batch_size
+        ):
+            # batch indices
+            self._positions_px = positions_px[start:end]
+            self._positions_px_fractional = self._positions_px - xp.round(
+                self._positions_px
+            )
+
+            (
+                self._vectorized_patch_indices_row,
+                self._vectorized_patch_indices_col,
+            ) = self._extract_vectorized_patch_indices()
+            amplitudes = self._amplitudes[start:end]
+
+            # Overlaps
+            _, _, overlap = self._overlap_projection(self._object, self._probe)
+            fourier_overlap = xp.fft.fft2(overlap)
+            farfield_amplitudes = self._return_farfield_amplitudes(fourier_overlap)
+
+            # Normalized mean-squared errors
+            batch_errors = xp.sum(
+                xp.abs(amplitudes - farfield_amplitudes) ** 2, axis=(-2, -1)
+            )
+            errors = np.hstack((errors, batch_errors))
+
+        self._positions_px = positions_px.copy()
+        errors /= self._mean_diffraction_intensity
+
+        return asnumpy(errors)
 
 
 class Object2p5DProbeMethodsMixin:
@@ -2266,6 +2322,12 @@ class ObjectNDProbeMixedMethodsMixin:
 
         return shifted_probes, object_patches, overlap
 
+    def _return_farfield_amplitudes(self, fourier_overlap):
+        """Small utility to de-duplicate mixed-state Fourier projection."""
+
+        xp = self._xp
+        return xp.sqrt(xp.sum(xp.abs(fourier_overlap) ** 2, axis=1))
+
     def _gradient_descent_fourier_projection(self, amplitudes, overlap):
         """
         Ptychographic fourier projection method for GD method.
@@ -2287,11 +2349,11 @@ class ObjectNDProbeMixedMethodsMixin:
 
         xp = self._xp
         fourier_overlap = xp.fft.fft2(overlap)
-        intensity_norm = xp.sqrt(xp.sum(xp.abs(fourier_overlap) ** 2, axis=1))
-        error = xp.sum(xp.abs(amplitudes - intensity_norm) ** 2)
+        farfield_amplitudes = self._return_farfield_amplitudes(fourier_overlap)
+        error = xp.sum(xp.abs(amplitudes - farfield_amplitudes) ** 2)
 
-        intensity_norm[intensity_norm == 0.0] = np.inf
-        amplitude_modification = amplitudes / intensity_norm
+        farfield_amplitudes[farfield_amplitudes == 0.0] = np.inf
+        amplitude_modification = amplitudes / farfield_amplitudes
 
         fourier_modified_overlap = amplitude_modification[:, None] * fourier_overlap
         modified_overlap = xp.fft.ifft2(fourier_modified_overlap)

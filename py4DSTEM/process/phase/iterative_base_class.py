@@ -20,11 +20,7 @@ from emdfile import Array, Custom, Metadata, _read_metadata
 from py4DSTEM.data import Calibration
 from py4DSTEM.datacube import DataCube
 from py4DSTEM.process.calibration import fit_origin
-from py4DSTEM.process.phase.utils import (
-    AffineTransform,
-    generate_batches,
-    polar_aliases,
-)
+from py4DSTEM.process.phase.utils import AffineTransform, polar_aliases
 from py4DSTEM.process.utils import (
     electron_wavelength_angstrom,
     fourier_resample,
@@ -2169,52 +2165,6 @@ class PtychographicReconstruction(PhaseReconstruction):
         ax.set_aspect("equal")
         ax.set_title("Probe positions correction")
 
-    def _return_self_consistency_errors(
-        self,
-        max_batch_size=None,
-    ):
-        """Compute the self-consistency errors for each probe position"""
-
-        xp = self._xp
-        asnumpy = self._asnumpy
-
-        # Batch-size
-        if max_batch_size is None:
-            max_batch_size = self._num_diffraction_patterns
-
-        # Re-initialize fractional positions and vector patches
-        errors = np.array([])
-        positions_px = self._positions_px.copy()
-
-        for start, end in generate_batches(
-            self._num_diffraction_patterns, max_batch=max_batch_size
-        ):
-            # batch indices
-            self._positions_px = positions_px[start:end]
-            self._positions_px_fractional = self._positions_px - xp.round(
-                self._positions_px
-            )
-            (
-                self._vectorized_patch_indices_row,
-                self._vectorized_patch_indices_col,
-            ) = self._extract_vectorized_patch_indices()
-            amplitudes = self._amplitudes[start:end]
-
-            # Overlaps
-            _, _, overlap = self._overlap_projection(self._object, self._probe)
-            fourier_overlap = xp.fft.fft2(overlap)
-
-            # Normalized mean-squared errors
-            batch_errors = xp.sum(
-                xp.abs(amplitudes - xp.abs(fourier_overlap)) ** 2, axis=(-2, -1)
-            )
-            errors = np.hstack((errors, batch_errors))
-
-        self._positions_px = positions_px.copy()
-        errors /= self._mean_diffraction_intensity
-
-        return asnumpy(errors)
-
     def show_uncertainty_visualization(
         self,
         errors=None,
@@ -2227,18 +2177,19 @@ class PtychographicReconstruction(PhaseReconstruction):
     ):
         """Plot uncertainty visualization using self-consistency errors"""
 
+        xp = self._xp
+        asnumpy = self._asnumpy
+        gaussian_filter = self._gaussian_filter
+
         if errors is None:
             errors = self._return_self_consistency_errors(max_batch_size=max_batch_size)
+        errors_xp = xp.asarray(errors)
 
         if projected_cropped_potential is None:
             projected_cropped_potential = self._return_projected_cropped_potential()
 
         if kde_sigma is None:
             kde_sigma = 0.5 * self._scan_sampling[0] / self.sampling[0]
-
-        xp = self._xp
-        asnumpy = self._asnumpy
-        gaussian_filter = self._gaussian_filter
 
         ## Kernel Density Estimation
 
@@ -2270,46 +2221,57 @@ class PtychographicReconstruction(PhaseReconstruction):
         dy = ya - yF
 
         # resampling
-        inds_1D = xp.ravel_multi_index(
-            xp.hstack(
-                [
-                    [xF, yF],
-                    [xF + 1, yF],
-                    [xF, yF + 1],
-                    [xF + 1, yF + 1],
-                ]
-            ),
-            pixel_output,
-            mode=["wrap", "wrap"],
-        )
+        all_inds = [
+            [xF, yF],
+            [xF + 1, yF],
+            [xF, yF + 1],
+            [xF + 1, yF + 1],
+        ]
 
-        weights = xp.hstack(
-            (
-                (1 - dx) * (1 - dy),
-                (dx) * (1 - dy),
-                (1 - dx) * (dy),
-                (dx) * (dy),
+        all_weights = [
+            (1 - dx) * (1 - dy),
+            (dx) * (1 - dy),
+            (1 - dx) * (dy),
+            (dx) * (dy),
+        ]
+
+        pix_count = xp.zeros(pixel_size, dtype=xp.float32)
+        pix_output = xp.zeros(pixel_size, dtype=xp.float32)
+
+        for inds, weights in zip(all_inds, all_weights):
+            inds_1D = xp.ravel_multi_index(
+                inds,
+                pixel_output,
+                mode=["wrap", "wrap"],
             )
-        )
 
-        pix_count = xp.reshape(
-            xp.bincount(inds_1D, weights=weights, minlength=pixel_size), pixel_output
-        )
-
-        pix_output = xp.reshape(
-            xp.bincount(
+            pix_count += xp.bincount(
                 inds_1D,
-                weights=weights * xp.tile(xp.asarray(errors), 4),
+                weights=weights,
                 minlength=pixel_size,
-            ),
+            )
+            pix_output += xp.bincount(
+                inds_1D,
+                weights=weights * errors_xp,
+                minlength=pixel_size,
+            )
+
+        # reshape 1D arrays to 2D
+        pix_count = xp.reshape(
+            pix_count,
+            pixel_output,
+        )
+        pix_output = xp.reshape(
+            pix_output,
             pixel_output,
         )
 
         # kernel density estimate
-        pix_count = gaussian_filter(pix_count, kde_sigma, mode="wrap")
-        pix_count[pix_count == 0.0] = np.inf
-        pix_output = gaussian_filter(pix_output, kde_sigma, mode="wrap")
-        pix_output /= pix_count
+        pix_count = gaussian_filter(pix_count, kde_sigma)
+        pix_output = gaussian_filter(pix_output, kde_sigma)
+        sub = pix_count > 1e-3
+        pix_output[sub] /= pix_count[sub]
+        pix_output[np.logical_not(sub)] = 1
         pix_output = pix_output[padding[0] : -padding[0], padding[1] : -padding[1]]
         pix_output, _, _ = return_scaled_histogram_ordering(
             pix_output.get(), normalize=True
