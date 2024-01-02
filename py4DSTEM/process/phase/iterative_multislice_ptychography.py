@@ -1296,7 +1296,7 @@ class MultislicePtychographicReconstruction(
                     positions_px[start:end] = self._position_correction(
                         self._object,
                         self._probe,
-                        self._transmitted_probes,
+                        overlap,
                         amplitudes,
                         self._positions_px,
                         positions_step_size,
