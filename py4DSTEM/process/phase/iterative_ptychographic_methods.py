@@ -1,3 +1,4 @@
+import warnings
 from typing import Sequence, Tuple
 
 import matplotlib.pyplot as plt
@@ -19,6 +20,8 @@ try:
     import cupy as cp
 except (ModuleNotFoundError, ImportError):
     cp = np
+
+warnings.simplefilter(action="always", category=UserWarning)
 
 
 class ObjectNDMethodsMixin:
@@ -1755,6 +1758,45 @@ class ObjectNDProbeMethodsMixin:
             )
 
         return current_object, current_probe
+
+    def _reset_reconstruction(
+        self,
+        store_iterations,
+        reset,
+    ):
+        """ """
+        if store_iterations and (not hasattr(self, "object_iterations") or reset):
+            self.object_iterations = []
+            self.probe_iterations = []
+
+        # reset can be True, False, or None (default)
+        if reset is True:
+            self.error_iterations = []
+            self._object = self._object_initial.copy()
+            self._probe = self._probe_initial.copy()
+            self._positions_px = self._positions_px_initial.copy()
+            self._object_type = self._object_type_initial
+            self._exit_waves = None
+
+            # delete positions affine transform
+            if hasattr(self, "_tf"):
+                del self._tf
+
+        elif reset is None:
+            # continued run
+            if hasattr(self, "error"):
+                warnings.warn(
+                    (
+                        "Continuing reconstruction from previous result. "
+                        "Use reset=True for a fresh start."
+                    ),
+                    UserWarning,
+                )
+
+            # first start
+            else:
+                self.error_iterations = []
+                self._exit_waves = None
 
 
 class Object2p5DProbeMethodsMixin:
