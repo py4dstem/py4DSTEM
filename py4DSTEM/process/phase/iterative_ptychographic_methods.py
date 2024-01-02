@@ -108,19 +108,23 @@ class ObjectNDMethodsMixin:
 
     def _return_projected_cropped_potential(
         self,
+        obj=None,
         return_kwargs=False,
         **kwargs,
     ):
         """Utility function to accommodate multiple classes"""
-        if self._object_type == "complex":
-            projected_cropped_potential = np.angle(self.object_cropped)
+        if obj is None:
+            obj = self.object_cropped
         else:
-            projected_cropped_potential = self.object_cropped
+            obj = self._crop_rotate_object_fov(obj)
+
+        if np.iscomplexobj(obj):
+            obj = np.angle(obj)
 
         if return_kwargs:
-            return projected_cropped_potential, kwargs
+            return obj, kwargs
         else:
-            return projected_cropped_potential
+            return obj
 
     def _return_object_fft(
         self,
@@ -363,19 +367,26 @@ class Object2p5DMethodsMixin:
 
     def _return_projected_cropped_potential(
         self,
+        obj=None,
         return_kwargs=False,
         **kwargs,
     ):
         """Utility function to accommodate multiple classes"""
-        if self._object_type == "complex":
-            projected_cropped_potential = np.angle(self.object_cropped).sum(0)
+
+        if obj is None:
+            obj = self.object_cropped
         else:
-            projected_cropped_potential = self.object_cropped.sum(0)
+            obj = self._crop_rotate_object_fov(obj)
+
+        if np.iscomplexobj(obj):
+            obj = np.angle(obj).sum(0)
+        else:
+            obj = obj.sum(0)
 
         if return_kwargs:
-            return projected_cropped_potential, kwargs
+            return obj, kwargs
         else:
-            return projected_cropped_potential
+            return obj
 
     def _return_object_fft(
         self,
@@ -834,6 +845,7 @@ class Object3DMethodsMixin:
 
     def _return_projected_cropped_potential(
         self,
+        obj=None,
         return_kwargs=False,
         **kwargs,
     ):
@@ -844,16 +856,17 @@ class Object3DMethodsMixin:
         x_lims = kwargs.pop("x_lims", (None, None))
         y_lims = kwargs.pop("y_lims", (None, None))
 
+        if obj is None:
+            obj = self._object
+
         if projection_angle_deg is not None:
             obj = self._rotate(
-                self._object,
+                obj,
                 projection_angle_deg,
                 axes=projection_axes,
                 reshape=False,
                 order=2,
             )
-        else:
-            obj = self._object
 
         obj = self._crop_rotate_object_manually(
             obj, angle=None, x_lims=x_lims, y_lims=y_lims
@@ -1213,12 +1226,15 @@ class ProbeMethodsMixin:
             **kwargs,
         )
 
-    def _return_single_probe(self):
+    def _return_single_probe(self, probe=None):
         """Current probe estimate"""
-        if not hasattr(self, "_probe"):
-            return None
+        if probe is not None:
+            return probe
+        else:
+            if not hasattr(self, "_probe"):
+                return None
 
-        return self._probe
+            return self._probe
 
     @property
     def probe_fourier(self):
@@ -1374,12 +1390,15 @@ class ProbeMixedMethodsMixin:
             **kwargs,
         )
 
-    def _return_single_probe(self):
+    def _return_single_probe(self, probe=None):
         """Current probe estimate"""
-        if not hasattr(self, "_probe"):
-            return None
+        if probe is not None:
+            return probe[0]
+        else:
+            if not hasattr(self, "_probe"):
+                return None
 
-        return self._probe[0]
+            return self._probe[0]
 
 
 class ProbeListMethodsMixin:
@@ -1435,15 +1454,19 @@ class ProbeListMethodsMixin:
                 else:
                     self._exit_waves = None
 
-    def _return_single_probe(self):
+    def _return_single_probe(self, probe=None):
         """Current probe estimate"""
-        if not hasattr(self, "_probes_all"):
-            return None
+        if probe is not None:
+            _probes = probe
+        else:
+            if not hasattr(self, "_probes_all"):
+                return None
+            _probes = self._probes_all
 
         xp = self._xp
         probe = xp.zeros(self._region_of_interest_shape, dtype=np.complex64)
 
-        for pr in self._probes_all:
+        for pr in _probes:
             probe += pr
 
         return probe / self._num_tilts
