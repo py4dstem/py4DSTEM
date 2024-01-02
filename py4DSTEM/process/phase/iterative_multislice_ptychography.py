@@ -33,6 +33,9 @@ from py4DSTEM.process.phase.iterative_ptychographic_methods import (
     ObjectNDProbeMethodsMixin,
     ProbeMethodsMixin,
 )
+from py4DSTEM.process.phase.iterative_ptychographic_visualizations import (
+    VisualizationsMixin,
+)
 from py4DSTEM.process.phase.utils import (
     ComplexProbe,
     fft_shift,
@@ -45,6 +48,7 @@ warnings.simplefilter(action="always", category=UserWarning)
 
 
 class MultislicePtychographicReconstruction(
+    VisualizationsMixin,
     PositionsConstraintsMixin,
     ProbeConstraintsMixin,
     Object2p5DConstraintsMixin,
