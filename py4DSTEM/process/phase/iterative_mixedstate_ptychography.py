@@ -744,6 +744,7 @@ class MixedstatePtychographicReconstruction(
         fix_positions_iter: int = np.inf,
         global_affine_transformation: bool = True,
         max_position_update_distance: float = None,
+        max_position_total_distance: float = None,
         gaussian_filter_sigma: float = None,
         gaussian_filter_iter: int = np.inf,
         fit_probe_aberrations_iter: int = 0,
@@ -821,6 +822,8 @@ class MixedstatePtychographicReconstruction(
             Number of iterations to run with fixed positions before updating positions estimate
         max_position_update_distance: float, optional
             Maximum allowed distance for update in A
+        max_position_total_distance: float, optional
+            Maximum allowed distance from initial positions
         global_affine_transformation: bool, optional
             If True, positions are assumed to be a global affine transform from initial scan
         gaussian_filter_sigma: float, optional
@@ -941,6 +944,7 @@ class MixedstatePtychographicReconstruction(
             )
 
             positions_px = self._positions_px.copy()[shuffled_indices]
+            positions_px_initial = self._positions_px_initial.copy()[shuffled_indices]
 
             for start, end in generate_batches(
                 self._num_diffraction_patterns, max_batch=max_batch_size
@@ -996,8 +1000,10 @@ class MixedstatePtychographicReconstruction(
                         overlap,
                         amplitudes,
                         self._positions_px,
+                        positions_px_initial[start:end],
                         positions_step_size,
                         max_position_update_distance,
+                        max_position_total_distance,
                     )
 
                 error += batch_error

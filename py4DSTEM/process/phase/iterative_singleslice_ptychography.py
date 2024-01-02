@@ -744,6 +744,7 @@ class SingleslicePtychographicReconstruction(
         constrain_probe_fourier_amplitude_constant_intensity: bool = False,
         fix_positions_iter: int = np.inf,
         max_position_update_distance: float = None,
+        max_position_total_distance: float = None,
         global_affine_transformation: bool = True,
         gaussian_filter_sigma: float = None,
         gaussian_filter_iter: int = np.inf,
@@ -822,6 +823,8 @@ class SingleslicePtychographicReconstruction(
             Number of iterations to run with fixed positions before updating positions estimate
         max_position_update_distance: float, optional
             Maximum allowed distance for update in A
+        max_position_total_distance: float, optional
+            Maximum allowed distance from initial positions
         global_affine_transformation: bool, optional
             If True, positions are assumed to be a global affine transform from initial scan
         gaussian_filter_sigma: float, optional
@@ -942,6 +945,7 @@ class SingleslicePtychographicReconstruction(
             )
 
             positions_px = self._positions_px.copy()[shuffled_indices]
+            positions_px_initial = self._positions_px_initial.copy()[shuffled_indices]
 
             for start, end in generate_batches(
                 self._num_diffraction_patterns, max_batch=max_batch_size
@@ -997,8 +1001,10 @@ class SingleslicePtychographicReconstruction(
                         overlap,
                         amplitudes,
                         self._positions_px,
+                        positions_px_initial[start:end],
                         positions_step_size,
                         max_position_update_distance,
+                        max_position_total_distance,
                     )
 
                 error += batch_error
