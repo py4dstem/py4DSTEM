@@ -1,9 +1,10 @@
 import warnings
+from typing import Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.gridspec import GridSpec
-from mpl_toolkits.axes_grid1 import make_axes_locatable
+from mpl_toolkits.axes_grid1 import ImageGrid, make_axes_locatable
 from py4DSTEM.process.phase.utils import AffineTransform
 from py4DSTEM.visualize import return_scaled_histogram_ordering
 from py4DSTEM.visualize.vis_special import Complex2RGB, add_colorbar_arg
@@ -227,6 +228,240 @@ class VisualizationsMixin:
             ax.yaxis.tick_right()
 
         fig.suptitle(f"Normalized mean squared error: {self.error:.3e}")
+        spec.tight_layout(fig)
+
+    def _visualize_all_iterations(
+        self,
+        fig,
+        cbar: bool,
+        plot_convergence: bool,
+        plot_probe: bool,
+        plot_fourier_probe: bool,
+        remove_initial_probe_aberrations: bool,
+        iterations_grid: Tuple[int, int],
+        **kwargs,
+    ):
+        """
+        Displays all reconstructed object and probe iterations.
+
+        Parameters
+        --------
+        fig: Figure
+            Matplotlib figure to place Gridspec in
+        plot_convergence: bool, optional
+            If true, the normalized mean squared error (NMSE) plot is displayed
+        iterations_grid: Tuple[int,int]
+            Grid dimensions to plot reconstruction iterations
+        cbar: bool, optional
+            If true, displays a colorbar
+        plot_probe: bool
+            If true, the reconstructed complex probe is displayed
+        plot_fourier_probe: bool
+            If true, the reconstructed complex Fourier probe is displayed
+        remove_initial_probe_aberrations: bool, optional
+            If true, when plotting fourier probe, removes initial probe
+            to visualize changes
+        """
+        asnumpy = self._asnumpy
+
+        if not hasattr(self, "object_iterations"):
+            raise ValueError(
+                (
+                    "Object and probe iterations were not saved during reconstruction. "
+                    "Please re-run using store_iterations=True."
+                )
+            )
+
+        num_iter = len(self.object_iterations)
+
+        if iterations_grid == "auto":
+            if num_iter == 1:
+                return self._visualize_last_iteration(
+                    fig=fig,
+                    plot_convergence=plot_convergence,
+                    plot_probe=plot_probe,
+                    plot_fourier_probe=plot_fourier_probe,
+                    cbar=cbar,
+                    **kwargs,
+                )
+
+            elif plot_probe or plot_fourier_probe:
+                iterations_grid = (2, 4) if num_iter > 4 else (2, num_iter)
+
+            else:
+                iterations_grid = (2, 4) if num_iter > 8 else (2, num_iter // 2)
+
+        else:
+            if plot_probe or plot_fourier_probe:
+                if iterations_grid[0] != 2:
+                    raise ValueError()
+            else:
+                if iterations_grid[0] * iterations_grid[1] > num_iter:
+                    raise ValueError()
+
+        auto_figsize = (
+            (3 * iterations_grid[1], 3 * iterations_grid[0] + 1)
+            if plot_convergence
+            else (3 * iterations_grid[1], 3 * iterations_grid[0])
+        )
+
+        figsize = kwargs.pop("figsize", auto_figsize)
+        cmap = kwargs.pop("cmap", "magma")
+        chroma_boost = kwargs.pop("chroma_boost", 1)
+
+        # most recent errors
+        errors = np.array(self.error_iterations)[-num_iter:]
+
+        max_iter = num_iter - 1
+        if plot_probe or plot_fourier_probe:
+            total_grids = (np.prod(iterations_grid) / 2).astype("int")
+            grid_range = np.arange(0, max_iter + 1, max_iter // (total_grids - 1))
+            probes = [
+                self._return_single_probe(self.probe_iterations[idx])
+                for idx in grid_range
+            ]
+        else:
+            total_grids = np.prod(iterations_grid)
+            grid_range = np.arange(0, max_iter + 1, max_iter // (total_grids - 1))
+
+        objects = []
+
+        for idx in grid_range:
+            if idx < grid_range[-1]:
+                obj = self._return_projected_cropped_potential(
+                    obj=self.object_iterations[idx],
+                    return_kwargs=False,
+                    **kwargs,
+                )
+            else:
+                obj, kwargs = self._return_projected_cropped_potential(
+                    obj=self.object_iterations[idx], return_kwargs=True, **kwargs
+                )
+
+            objects.append(obj)
+
+        extent = [
+            0,
+            self.sampling[1] * objects[0].shape[1],
+            self.sampling[0] * objects[0].shape[0],
+            0,
+        ]
+
+        if plot_fourier_probe:
+            probe_extent = [
+                -self.angular_sampling[1] * self._region_of_interest_shape[1] / 2,
+                self.angular_sampling[1] * self._region_of_interest_shape[1] / 2,
+                self.angular_sampling[0] * self._region_of_interest_shape[0] / 2,
+                -self.angular_sampling[0] * self._region_of_interest_shape[0] / 2,
+            ]
+
+        elif plot_probe:
+            probe_extent = [
+                0,
+                self.sampling[1] * self._region_of_interest_shape[1],
+                self.sampling[0] * self._region_of_interest_shape[0],
+                0,
+            ]
+
+        if plot_convergence:
+            if plot_probe or plot_fourier_probe:
+                spec = GridSpec(ncols=1, nrows=3, height_ratios=[4, 4, 1], hspace=0)
+            else:
+                spec = GridSpec(ncols=1, nrows=2, height_ratios=[4, 1], hspace=0)
+
+        else:
+            if plot_probe or plot_fourier_probe:
+                spec = GridSpec(ncols=1, nrows=2)
+            else:
+                spec = GridSpec(ncols=1, nrows=1)
+
+        if fig is None:
+            fig = plt.figure(figsize=figsize)
+
+        grid = ImageGrid(
+            fig,
+            spec[0],
+            nrows_ncols=(1, iterations_grid[1])
+            if (plot_probe or plot_fourier_probe)
+            else iterations_grid,
+            axes_pad=(0.75, 0.5) if cbar else 0.5,
+            cbar_mode="each" if cbar else None,
+            cbar_pad="2.5%" if cbar else None,
+        )
+
+        for n, ax in enumerate(grid):
+            im = ax.imshow(
+                objects[n],
+                extent=extent,
+                cmap=cmap,
+                **kwargs,
+            )
+            ax.set_title(f"Iter: {grid_range[n]} potential")
+            ax.set_ylabel("x [A]")
+            ax.set_xlabel("y [A]")
+            if cbar:
+                grid.cbar_axes[n].colorbar(im)
+
+        if plot_probe or plot_fourier_probe:
+            kwargs.pop("vmin", None)
+            kwargs.pop("vmax", None)
+
+            grid = ImageGrid(
+                fig,
+                spec[1],
+                nrows_ncols=(1, iterations_grid[1]),
+                axes_pad=(0.75, 0.5) if cbar else 0.5,
+                cbar_mode="each" if cbar else None,
+                cbar_pad="2.5%" if cbar else None,
+            )
+
+            for n, ax in enumerate(grid):
+                if plot_fourier_probe:
+                    probe_array = asnumpy(
+                        self._return_fourier_probe_from_centered_probe(
+                            probes[n],
+                            remove_initial_probe_aberrations=remove_initial_probe_aberrations,
+                        )
+                    )
+
+                    probe_array = Complex2RGB(probe_array, chroma_boost=chroma_boost)
+                    ax.set_title(f"Iter: {grid_range[n]} Fourier probe")
+                    ax.set_ylabel("kx [mrad]")
+                    ax.set_xlabel("ky [mrad]")
+
+                else:
+                    probe_array = Complex2RGB(
+                        probes[n],
+                        power=2,
+                        chroma_boost=chroma_boost,
+                    )
+                    ax.set_title(f"Iter: {grid_range[n]} probe intensity")
+                    ax.set_ylabel("x [A]")
+                    ax.set_xlabel("y [A]")
+
+                im = ax.imshow(
+                    probe_array,
+                    extent=probe_extent,
+                )
+
+                if cbar:
+                    add_colorbar_arg(
+                        grid.cbar_axes[n],
+                        chroma_boost=chroma_boost,
+                    )
+
+        if plot_convergence:
+            kwargs.pop("vmin", None)
+            kwargs.pop("vmax", None)
+            if plot_probe:
+                ax2 = fig.add_subplot(spec[2])
+            else:
+                ax2 = fig.add_subplot(spec[1])
+            ax2.semilogy(np.arange(errors.shape[0]), errors, **kwargs)
+            ax2.set_ylabel("NMSE")
+            ax2.set_xlabel("Iteration number")
+            ax2.yaxis.tick_right()
+
         spec.tight_layout(fig)
 
     def show_updated_positions(
