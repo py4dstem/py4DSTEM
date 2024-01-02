@@ -1396,7 +1396,14 @@ class ObjectNDProbeMethodsMixin:
     Mixin class for methods applicable to 2D, 2.5D, and 3D objects using a single probe.
     """
 
-    def _overlap_projection(self, current_object, current_probe):
+    def _return_shifted_probes(self, current_probe):
+        """Simple utlity to de-duplicate _overlap_projection"""
+
+        xp = self._xp
+        shifted_probes = fft_shift(current_probe, self._positions_px_fractional, xp)
+        return shifted_probes
+
+    def _overlap_projection(self, current_object, shifted_probes):
         """
         Ptychographic overlap projection method.
 
@@ -1418,8 +1425,6 @@ class ObjectNDProbeMethodsMixin:
         """
 
         xp = self._xp
-
-        shifted_probes = fft_shift(current_probe, self._positions_px_fractional, xp)
 
         if self._object_type == "potential":
             complex_object = xp.exp(1j * current_object)
@@ -1581,8 +1586,9 @@ class ObjectNDProbeMethodsMixin:
             Reconstruction error
         """
 
+        shifted_probes = self._return_shifted_probes(current_probe)
         shifted_probes, object_patches, overlap = self._overlap_projection(
-            current_object, current_probe
+            current_object, shifted_probes
         )
 
         if use_projection_scheme:
@@ -1854,6 +1860,110 @@ class ObjectNDProbeMethodsMixin:
 
         return current_object, current_probe
 
+    def _position_correction(
+        self,
+        current_object,
+        shifted_probes,
+        overlap,
+        amplitudes,
+        current_positions,
+        positions_step_size,
+        max_position_update_distance,
+    ):
+        """
+        Position correction using estimated intensity gradient.
+
+        Parameters
+        --------
+        current_object: np.ndarray
+            Current object estimate
+        shifted_probes:np.ndarray
+            fractionally-shifted probes
+        overlap: np.ndarray
+            object * probe overlap
+        amplitudes: np.ndarray
+            Measured amplitudes
+        current_positions: np.ndarray
+            Current positions estimate
+        positions_step_size: float
+            Positions step size
+        max_position_update_distance: float
+            Maximum allowed distance for update in A
+
+        Returns
+        --------
+        updated_positions: np.ndarray
+            Updated positions estimate
+        """
+
+        xp = self._xp
+
+        # unperturbed
+        overlap_fft = xp.fft.fft2(overlap)
+        overlap_fft_conj = xp.conj(overlap_fft)
+        estimated_intensity = self._return_farfield_amplitudes(overlap_fft) ** 2
+        measured_intensity = amplitudes**2
+
+        # book-keeping
+        flat_shape = (measured_intensity.shape[0], -1)
+        difference_intensity = (measured_intensity - estimated_intensity).reshape(
+            flat_shape
+        )
+        vectorized_patch_indices_row = self._vectorized_patch_indices_row.copy()
+        vectorized_patch_indices_col = self._vectorized_patch_indices_col.copy()
+
+        # dx overlap projection perturbation
+        self._vectorized_patch_indices_row = (
+            vectorized_patch_indices_row + 1
+        ) % self._object_shape[0]
+        _, _, overlap_dx = self._overlap_projection(current_object, shifted_probes)
+        self._vectorized_patch_indices_row = vectorized_patch_indices_row.copy()
+
+        # dy overlap projection perturbation
+        self._vectorized_patch_indices_col = (
+            vectorized_patch_indices_col + 1
+        ) % self._object_shape[1]
+        _, _, overlap_dy = self._overlap_projection(current_object, shifted_probes)
+        self._vectorized_patch_indices_col = vectorized_patch_indices_col.copy()
+
+        # partial intensities
+        overlap_dx_fft = overlap_fft - xp.fft.fft2(overlap_dx)
+        overlap_dy_fft = overlap_fft - xp.fft.fft2(overlap_dy)
+        partial_intensity_dx = 2 * xp.real(overlap_dx_fft * overlap_fft_conj)
+        partial_intensity_dy = 2 * xp.real(overlap_dy_fft * overlap_fft_conj)
+
+        # handle mixed-state, is this correct?
+        if partial_intensity_dx.ndim == 4:
+            partial_intensity_dx = partial_intensity_dx.sum(1)
+            partial_intensity_dy = partial_intensity_dy.sum(1)
+
+        partial_intensity_dx = partial_intensity_dx.reshape(flat_shape)
+        partial_intensity_dy = partial_intensity_dy.reshape(flat_shape)
+
+        # least-squares fit
+        coefficients_matrix = xp.dstack((partial_intensity_dx, partial_intensity_dy))
+        coefficients_matrix_T = coefficients_matrix.conj().swapaxes(-1, -2)
+        positions_update = (
+            xp.linalg.inv(coefficients_matrix_T @ coefficients_matrix)
+            @ coefficients_matrix_T
+            @ difference_intensity[..., None]
+        )
+
+        positions_update = positions_update[..., 0] * positions_step_size
+
+        if max_position_update_distance is not None:
+            max_position_update_distance /= xp.sqrt(
+                self.sampling[0] ** 2 + self.sampling[1] ** 2
+            )
+            update_norms = xp.linalg.norm(positions_update, axis=1)
+            outlier_ind = update_norms > max_position_update_distance
+            positions_update[outlier_ind] /= (
+                update_norms[outlier_ind, None] / max_position_update_distance
+            )
+
+        current_positions -= positions_update
+        return current_positions
+
     def _return_self_consistency_errors(
         self,
         max_batch_size=None,
@@ -1887,7 +1997,8 @@ class ObjectNDProbeMethodsMixin:
             amplitudes = self._amplitudes[start:end]
 
             # Overlaps
-            _, _, overlap = self._overlap_projection(self._object, self._probe)
+            shifted_probes = self._return_shifted_probes(self._probe)
+            _, _, overlap = self._overlap_projection(self._object, shifted_probes)
             fourier_overlap = xp.fft.fft2(overlap)
             farfield_amplitudes = self._return_farfield_amplitudes(fourier_overlap)
 
@@ -1909,7 +2020,7 @@ class Object2p5DProbeMethodsMixin:
     Overwrites ObjectNDProbeMethodsMixin.
     """
 
-    def _overlap_projection(self, current_object, current_probe):
+    def _overlap_projection(self, current_object, shifted_probes_in):
         """
         Ptychographic overlap projection method.
 
@@ -1944,7 +2055,7 @@ class Object2p5DProbeMethodsMixin:
         ]
 
         shifted_probes = xp.empty_like(object_patches)
-        shifted_probes[0] = fft_shift(current_probe, self._positions_px_fractional, xp)
+        shifted_probes[0] = shifted_probes_in
 
         for s in range(self._num_slices):
             # transmit
@@ -2210,7 +2321,8 @@ class Object2p5DProbeMethodsMixin:
             ) = self._extract_vectorized_patch_indices()
 
             # overlaps
-            _, _, overlap = self._overlap_projection(self._object, self._probe)
+            shifted_probes = self._return_shifted_probes(self._probe)
+            _, _, overlap = self._overlap_projection(self._object, shifted_probes)
 
             # store relevant arrays
             mean_transmitted += overlap.sum(0)
@@ -2284,7 +2396,7 @@ class ObjectNDProbeMixedMethodsMixin:
     Overwrites ObjectNDProbeMethodsMixin.
     """
 
-    def _overlap_projection(self, current_object, current_probe):
+    def _overlap_projection(self, current_object, shifted_probes):
         """
         Ptychographic overlap projection method.
 
@@ -2306,8 +2418,6 @@ class ObjectNDProbeMixedMethodsMixin:
         """
 
         xp = self._xp
-
-        shifted_probes = fft_shift(current_probe, self._positions_px_fractional, xp)
 
         if self._object_type == "potential":
             complex_object = xp.exp(1j * current_object)
@@ -2620,7 +2730,7 @@ class Object2p5DProbeMixedMethodsMixin:
     Overwrites ObjectNDProbeMethodsMixin and ObjectNDProbeMixedMethodsMixin.
     """
 
-    def _overlap_projection(self, current_object, current_probe):
+    def _overlap_projection(self, current_object, shifted_probes_in):
         """
         Ptychographic overlap projection method.
 
@@ -2665,7 +2775,7 @@ class Object2p5DProbeMixedMethodsMixin:
         )
 
         shifted_probes = xp.empty(shifted_shape, dtype=object_patches.dtype)
-        shifted_probes[0] = fft_shift(current_probe, self._positions_px_fractional, xp)
+        shifted_probes[0] = shifted_probes_in
 
         for s in range(self._num_slices):
             # transmit
