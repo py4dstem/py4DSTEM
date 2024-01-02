@@ -1805,6 +1805,186 @@ class PtychographicReconstruction(PhaseReconstruction):
 
         return vectorized_patch_indices_row, vectorized_patch_indices_col
 
+    def _set_reconstruction_method_parameters(
+        self,
+        reconstruction_method,
+        reconstruction_parameter,
+        reconstruction_parameter_a,
+        reconstruction_parameter_b,
+        reconstruction_parameter_c,
+        step_size,
+    ):
+        """"""
+
+        if reconstruction_method == "generalized-projections":
+            if (
+                reconstruction_parameter_a is None
+                or reconstruction_parameter_b is None
+                or reconstruction_parameter_c is None
+            ):
+                raise ValueError(
+                    (
+                        "reconstruction_parameter_a/b/c must all be specified "
+                        "when using reconstruction_method='generalized-projections'."
+                    )
+                )
+
+            use_projection_scheme = True
+            projection_a = reconstruction_parameter_a
+            projection_b = reconstruction_parameter_b
+            projection_c = reconstruction_parameter_c
+            reconstruction_parameter = None
+            step_size = None
+        elif (
+            reconstruction_method == "DM_AP"
+            or reconstruction_method == "difference-map_alternating-projections"
+        ):
+            if reconstruction_parameter < 0.0 or reconstruction_parameter > 1.0:
+                raise ValueError("reconstruction_parameter must be between 0-1.")
+
+            use_projection_scheme = True
+            projection_a = -reconstruction_parameter
+            projection_b = 1
+            projection_c = 1 + reconstruction_parameter
+            step_size = None
+        elif (
+            reconstruction_method == "RAAR"
+            or reconstruction_method == "relaxed-averaged-alternating-reflections"
+        ):
+            if reconstruction_parameter < 0.0 or reconstruction_parameter > 1.0:
+                raise ValueError("reconstruction_parameter must be between 0-1.")
+
+            use_projection_scheme = True
+            projection_a = 1 - 2 * reconstruction_parameter
+            projection_b = reconstruction_parameter
+            projection_c = 2
+            step_size = None
+        elif (
+            reconstruction_method == "RRR"
+            or reconstruction_method == "relax-reflect-reflect"
+        ):
+            if reconstruction_parameter < 0.0 or reconstruction_parameter > 2.0:
+                raise ValueError("reconstruction_parameter must be between 0-2.")
+
+            use_projection_scheme = True
+            projection_a = -reconstruction_parameter
+            projection_b = reconstruction_parameter
+            projection_c = 2
+            step_size = None
+        elif (
+            reconstruction_method == "SUPERFLIP"
+            or reconstruction_method == "charge-flipping"
+        ):
+            use_projection_scheme = True
+            projection_a = 0
+            projection_b = 1
+            projection_c = 2
+            reconstruction_parameter = None
+            step_size = None
+        elif (
+            reconstruction_method == "GD" or reconstruction_method == "gradient-descent"
+        ):
+            use_projection_scheme = False
+            projection_a = None
+            projection_b = None
+            projection_c = None
+            reconstruction_parameter = None
+        else:
+            raise ValueError(
+                (
+                    "reconstruction_method must be one of 'generalized-projections', "
+                    "'DM_AP' (or 'difference-map_alternating-projections'), "
+                    "'RAAR' (or 'relaxed-averaged-alternating-reflections'), "
+                    "'RRR' (or 'relax-reflect-reflect'), "
+                    "'SUPERFLIP' (or 'charge-flipping'), "
+                    f"or 'GD' (or 'gradient-descent'), not  {reconstruction_method}."
+                )
+            )
+
+        return (
+            use_projection_scheme,
+            projection_a,
+            projection_b,
+            projection_c,
+            reconstruction_parameter,
+            step_size,
+        )
+
+    def _report_reconstruction_summary(
+        self,
+        max_iter,
+        switch_object_iter,
+        use_projection_scheme,
+        reconstruction_method,
+        reconstruction_parameter,
+        projection_a,
+        projection_b,
+        projection_c,
+        normalization_min,
+        max_batch_size,
+        step_size,
+    ):
+        """ """
+
+        # object type
+        if switch_object_iter > max_iter:
+            first_line = f"Performing {max_iter} iterations using a {self._object_type} object type, "
+        else:
+            switch_object_type = (
+                "complex" if self._object_type == "potential" else "potential"
+            )
+            first_line = (
+                f"Performing {switch_object_iter} iterations using a {self._object_type} object type and "
+                f"{max_iter - switch_object_iter} iterations using a {switch_object_type} object type, "
+            )
+
+        # stochastic gradient descent
+        if max_batch_size is not None:
+            if use_projection_scheme:
+                raise ValueError(
+                    (
+                        "Stochastic object/probe updating is inconsistent with 'DM_AP', 'RAAR', 'RRR', and 'SUPERFLIP'. "
+                        "Use reconstruction_method='GD' or set max_batch_size=None."
+                    )
+                )
+            else:
+                print(
+                    (
+                        first_line + f"with the {reconstruction_method} algorithm, "
+                        f"with normalization_min: {normalization_min} and step _size: {step_size}, "
+                        f"in batches of max {max_batch_size} measurements."
+                    )
+                )
+
+        else:
+            # named projection set method
+            if reconstruction_parameter is not None:
+                print(
+                    (
+                        first_line + f"with the {reconstruction_method} algorithm, "
+                        f"with normalization_min: {normalization_min} and α: {reconstruction_parameter}."
+                    )
+                )
+
+            # generalized projections (or the even more rare charge-flipping)
+            elif projection_a is not None:
+                print(
+                    (
+                        first_line + f"with the {reconstruction_method} algorithm, "
+                        f"with normalization_min: {normalization_min} and (a,b,c): "
+                        f"{projection_a, projection_b, projection_c}."
+                    )
+                )
+
+            # gradient descent
+            else:
+                print(
+                    (
+                        first_line + f"with the {reconstruction_method} algorithm, "
+                        f"with normalization_min: {normalization_min} and step _size: {step_size}."
+                    )
+                )
+
     def _position_correction(
         self,
         relevant_object,
