@@ -261,6 +261,7 @@ class ParallaxReconstruction(PhaseReconstruction):
     def preprocess(
         self,
         edge_blend: float = 16.0,
+        dp_mask: np.ndarray = None,
         threshold_intensity: float = 0.8,
         normalize_images: bool = True,
         normalize_order=0,
@@ -321,16 +322,6 @@ class ParallaxReconstruction(PhaseReconstruction):
                 )
             )
 
-        # get mean diffraction pattern
-        try:
-            self._dp_mean = xp.asarray(
-                self._datacube.tree("dp_mean").data, dtype=xp.float32
-            )
-        except AssertionError:
-            self._dp_mean = xp.asarray(
-                self._datacube.get_dp_mean().data, dtype=xp.float32
-            )
-
         # extract calibrations
         self._intensities = self._extract_intensities_and_calibrations_from_datacube(
             self._datacube,
@@ -339,14 +330,6 @@ class ParallaxReconstruction(PhaseReconstruction):
 
         self._region_of_interest_shape = np.array(self._intensities.shape[-2:])
         self._scan_shape = np.array(self._intensities.shape[:2])
-
-        # make sure mean diffraction pattern is shaped correctly
-        if (self._dp_mean.shape[0] != self._intensities.shape[2]) or (
-            self._dp_mean.shape[1] != self._intensities.shape[3]
-        ):
-            raise ValueError(
-                "dp_mean must match the datacube shape. Try setting dp_mean = None."
-            )
 
         # descan correction
         if descan_correction_fit_function is not None:
@@ -387,10 +370,14 @@ class ParallaxReconstruction(PhaseReconstruction):
                     intensities_shifted[rx, ry] = intensity_shifted
 
             self._intensities = xp.asarray(intensities_shifted, xp.float32)
-            self._dp_mean = self._intensities.mean((0, 1))
+
+        if dp_mask is not None:
+            self._dp_mask = xp.asarray(dp_mask)
+        else:
+            dp_mean = self._intensities.mean((0, 1))
+            self._dp_mask = dp_mean >= (xp.max(dp_mean) * threshold_intensity)
 
         # select virtual detector pixels
-        self._dp_mask = self._dp_mean >= (xp.max(self._dp_mean) * threshold_intensity)
         self._num_bf_images = int(xp.count_nonzero(self._dp_mask))
         self._wavelength = electron_wavelength_angstrom(self._energy)
 
