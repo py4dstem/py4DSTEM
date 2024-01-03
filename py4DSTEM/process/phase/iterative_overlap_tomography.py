@@ -1328,7 +1328,12 @@ class OverlapTomographicReconstruction(
 
             if store_iterations:
                 self.object_iterations.append(asnumpy(self._object.copy()))
-                self.probe_iterations.append(self.probe_centered)
+                self.probe_iterations.append(
+                    [
+                        asnumpy(self._return_centered_probe(pr.copy()))
+                        for pr in self._probes_all
+                    ]
+                )
 
         # store result
         self.object = asnumpy(self._object)

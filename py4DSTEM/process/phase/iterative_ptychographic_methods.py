@@ -1228,8 +1228,10 @@ class ProbeMethodsMixin:
 
     def _return_single_probe(self, probe=None):
         """Current probe estimate"""
+        xp = self._xp
+
         if probe is not None:
-            return probe
+            return xp.asarray(probe)
         else:
             if not hasattr(self, "_probe"):
                 return None
@@ -1392,8 +1394,10 @@ class ProbeMixedMethodsMixin:
 
     def _return_single_probe(self, probe=None):
         """Current probe estimate"""
+        xp = self._xp
+
         if probe is not None:
-            return probe[0]
+            return xp.asarray(probe[0])
         else:
             if not hasattr(self, "_probe"):
                 return None
@@ -1456,14 +1460,15 @@ class ProbeListMethodsMixin:
 
     def _return_single_probe(self, probe=None):
         """Current probe estimate"""
+        xp = self._xp
+
         if probe is not None:
-            _probes = probe
+            _probes = [xp.asarray(pr) for pr in probe]
         else:
             if not hasattr(self, "_probes_all"):
                 return None
             _probes = self._probes_all
 
-        xp = self._xp
         probe = xp.zeros(self._region_of_interest_shape, dtype=np.complex64)
 
         for pr in _probes:
