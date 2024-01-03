@@ -308,6 +308,8 @@ class VisualizationsMixin:
         figsize = kwargs.pop("figsize", auto_figsize)
         cmap = kwargs.pop("cmap", "magma")
         chroma_boost = kwargs.pop("chroma_boost", 1)
+        vmin = kwargs.pop("vmin", None)
+        vmax = kwargs.pop("vmax", None)
 
         # most recent errors
         errors = np.array(self.error_iterations)[-num_iter:]
@@ -390,22 +392,25 @@ class VisualizationsMixin:
         )
 
         for n, ax in enumerate(grid):
+            obj, vmin_n, vmax_n = return_scaled_histogram_ordering(
+                objects[n], vmin=vmin, vmax=vmax
+            )
             im = ax.imshow(
-                objects[n],
+                obj,
                 extent=extent,
                 cmap=cmap,
+                vmin=vmin_n,
+                vmax=vmax_n,
                 **kwargs,
             )
             ax.set_title(f"Iter: {grid_range[n]} potential")
             ax.set_ylabel("x [A]")
             ax.set_xlabel("y [A]")
+
             if cbar:
                 grid.cbar_axes[n].colorbar(im)
 
         if plot_probe or plot_fourier_probe:
-            kwargs.pop("vmin", None)
-            kwargs.pop("vmax", None)
-
             grid = ImageGrid(
                 fig,
                 spec[1],
@@ -451,8 +456,6 @@ class VisualizationsMixin:
                     )
 
         if plot_convergence:
-            kwargs.pop("vmin", None)
-            kwargs.pop("vmax", None)
             if plot_probe:
                 ax2 = fig.add_subplot(spec[2])
             else:
