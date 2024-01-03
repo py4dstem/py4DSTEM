@@ -431,7 +431,7 @@ class VisualizationsMixin:
 
                 else:
                     probe_array = Complex2RGB(
-                        probes[n],
+                        asnumpy(probes[n]),
                         power=2,
                         chroma_boost=chroma_boost,
                     )
