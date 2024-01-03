@@ -752,13 +752,13 @@ class VisualizationsMixin:
                 height_ratios=[1, 4],
                 hspace=0.15,
             )
-            auto_figsize = (4, 5.25)
+            auto_figsize = (6, 8)
         else:
             spec = GridSpec(
                 ncols=1,
                 nrows=1,
             )
-            auto_figsize = (4, 4)
+            auto_figsize = (6, 6)
 
         figsize = kwargs.pop("figsize", auto_figsize)
 
