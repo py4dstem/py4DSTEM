@@ -1,6 +1,6 @@
 """
 Module for reconstructing phase objects from 4DSTEM datasets using iterative methods,
-namely joint ptychography.
+namely magnetic ptychography.
 """
 
 import warnings
@@ -27,7 +27,12 @@ from py4DSTEM.process.phase.iterative_ptychographic_constraints import (
 )
 from py4DSTEM.process.phase.iterative_ptychographic_methods import (
     ObjectNDMethodsMixin,
+    ObjectNDProbeMethodsMixin,
+    ProbeListMethodsMixin,
     ProbeMethodsMixin,
+)
+from py4DSTEM.process.phase.iterative_ptychographic_visualizations import (
+    VisualizationsMixin,
 )
 from py4DSTEM.process.phase.utils import (
     ComplexProbe,
@@ -36,21 +41,23 @@ from py4DSTEM.process.phase.utils import (
     polar_aliases,
     polar_symbols,
 )
-from py4DSTEM.process.utils import get_CoM, get_shifted_ar
 
 warnings.simplefilter(action="always", category=UserWarning)
 
 
-class SimultaneousPtychographicReconstruction(
+class MagneticPtychographicReconstruction(
+    VisualizationsMixin,
     PositionsConstraintsMixin,
     ProbeConstraintsMixin,
     ObjectNDConstraintsMixin,
+    ObjectNDProbeMethodsMixin,
+    ProbeListMethodsMixin,
     ProbeMethodsMixin,
     ObjectNDMethodsMixin,
     PtychographicReconstruction,
 ):
     """
-    Iterative Simultaneous Ptychographic Reconstruction Class.
+    Iterative Magnetic Ptychographic Reconstruction Class.
 
     Diffraction intensities dimensions         : (Rx,Ry,Qx,Qy) (for each measurement)
     Reconstructed probe dimensions             : (Sx,Sy)
@@ -66,8 +73,8 @@ class SimultaneousPtychographicReconstruction(
         Tuple of input 4D diffraction pattern intensities
     energy: float
         The electron energy of the wave functions in eV
-    simultaneous_measurements_mode: str, optional
-        One of '-+', '-0+', '0+', where -/0/+ refer to the sign of the magnetic potential
+    magnetic_contribution_sign: str, optional
+        One of '-+', '-0+', '0+'
     semiangle_cutoff: float, optional
         Semiangle cutoff for the initial probe guess in mrad
     semiangle_cutoff_pixels: float, optional
@@ -85,8 +92,8 @@ class SimultaneousPtychographicReconstruction(
     positions_mask: np.ndarray, optional
         Boolean real space mask to select positions in datacube to skip for reconstruction
     initial_object_guess: np.ndarray, optional
-        Initial guess for complex-valued object of dimensions (Px,Py)
-        If None, initialized to 1.0j
+        Initial guess for complex-valued object of dimensions (2,Px,Py)
+        If None, initialized to 1.0j for complex objects and 0.0 for potential objects
     initial_probe_guess: np.ndarray, optional
         Initial guess for complex-valued probe of dimensions (Sx,Sy). If None,
         initialized to ComplexProbe with semiangle_cutoff, energy, and aberrations
@@ -107,13 +114,13 @@ class SimultaneousPtychographicReconstruction(
     """
 
     # Class-specific Metadata
-    _class_specific_metadata = ("_simultaneous_measurements_mode",)
+    _class_specific_metadata = ("_magnetic_contribution_sign",)
 
     def __init__(
         self,
         energy: float,
         datacube: Sequence[DataCube] = None,
-        simultaneous_measurements_mode: str = "-+",
+        magnetic_contribution_sign: str = "-+",
         semiangle_cutoff: float = None,
         semiangle_cutoff_pixels: float = None,
         rolloff: float = 2.0,
@@ -127,7 +134,7 @@ class SimultaneousPtychographicReconstruction(
         object_type: str = "complex",
         verbose: bool = True,
         device: str = "cpu",
-        name: str = "simultaneous_ptychographic_reconstruction",
+        name: str = "magnetic_ptychographic_reconstruction",
         **kwargs,
     ):
         Custom.__init__(self, name=name)
@@ -175,7 +182,7 @@ class SimultaneousPtychographicReconstruction(
         # Data
         self._datacube = datacube
         self._object = initial_object_guess
-        self._probe = initial_probe_guess
+        self._probe_init = initial_probe_guess
 
         # Common Metadata
         self._vacuum_probe_intensity = vacuum_probe_intensity
@@ -192,7 +199,7 @@ class SimultaneousPtychographicReconstruction(
         self._preprocessed = False
 
         # Class-specific Metadata
-        self._simultaneous_measurements_mode = simultaneous_measurements_mode
+        self._magnetic_contribution_sign = magnetic_contribution_sign
 
     def preprocess(
         self,
@@ -203,7 +210,7 @@ class SimultaneousPtychographicReconstruction(
         fit_function: str = "plane",
         plot_rotation: bool = True,
         maximize_divergence: bool = False,
-        rotation_angles_deg: np.ndarray = np.arange(-89.0, 90.0, 1.0),
+        rotation_angles_deg: np.ndarray = None,
         plot_probe_overlaps: bool = True,
         force_com_rotation: float = None,
         force_com_transpose: float = None,
@@ -211,6 +218,7 @@ class SimultaneousPtychographicReconstruction(
         force_scan_sampling: float = None,
         force_angular_sampling: float = None,
         force_reciprocal_sampling: float = None,
+        progress_bar: bool = True,
         object_fov_mask: np.ndarray = None,
         crop_patterns: bool = False,
         **kwargs,
@@ -292,65 +300,49 @@ class SimultaneousPtychographicReconstruction(
                 )
             )
 
-        if self._simultaneous_measurements_mode == "-+":
-            self._sim_recon_mode = 0
-            self._num_sim_measurements = 2
-            if self._verbose:
-                print(
-                    (
-                        "Magnetic vector potential sign in first meaurement assumed to be negative.\n"
-                        "Magnetic vector potential sign in second meaurement assumed to be positive."
-                    )
-                )
-            if len(self._datacube) != 2:
-                raise ValueError(
-                    f"datacube must be a set of two measurements, not length {len(self._datacube)}."
-                )
-            if self._datacube[0].shape != self._datacube[1].shape:
-                raise ValueError("datacube intensities must be the same size.")
-        elif self._simultaneous_measurements_mode == "-0+":
-            self._sim_recon_mode = 1
-            self._num_sim_measurements = 3
-            if self._verbose:
-                print(
-                    (
-                        "Magnetic vector potential sign in first meaurement assumed to be negative.\n"
-                        "Magnetic vector potential assumed to be zero in second meaurement.\n"
-                        "Magnetic vector potential sign in third meaurement assumed to be positive."
-                    )
-                )
-            if len(self._datacube) != 3:
-                raise ValueError(
-                    f"datacube must be a set of three measurements, not length {len(self._datacube)}."
-                )
-            if (
-                self._datacube[0].shape != self._datacube[1].shape
-                or self._datacube[0].shape != self._datacube[2].shape
-            ):
-                raise ValueError("datacube intensities must be the same size.")
-        elif self._simultaneous_measurements_mode == "0+":
-            self._sim_recon_mode = 2
-            self._num_sim_measurements = 2
-            if self._verbose:
-                print(
-                    (
-                        "Magnetic vector potential assumed to be zero in first meaurement.\n"
-                        "Magnetic vector potential sign in second meaurement assumed to be positive."
-                    )
-                )
-            if len(self._datacube) != 2:
-                raise ValueError(
-                    f"datacube must be a set of two measurements, not length {len(self._datacube)}."
-                )
-            if self._datacube[0].shape != self._datacube[1].shape:
-                raise ValueError("datacube intensities must be the same size.")
-        else:
-            raise ValueError(
-                f"simultaneous_measurements_mode must be either '-+', '-0+', or '0+', not {self._simultaneous_measurements_mode}"
+        if self._magnetic_contribution_sign == "-+":
+            self._recon_mode = 0
+            self._num_measurements = 2
+            magnetic_contribution_msg = (
+                "Magnetic vector potential sign in first meaurement assumed to be negative.\n"
+                "Magnetic vector potential sign in second meaurement assumed to be positive."
             )
 
+        elif self._magnetic_contribution_sign == "-0+":
+            self._recon_mode = 1
+            self._num_measurements = 3
+            magnetic_contribution_msg = (
+                "Magnetic vector potential sign in first meaurement assumed to be negative.\n"
+                "Magnetic vector potential assumed to be zero in second meaurement.\n"
+                "Magnetic vector potential sign in third meaurement assumed to be positive."
+            )
+
+        elif self._magnetic_contribution_sign == "0+":
+            self._recon_mode = 2
+            self._num_measurements = 2
+            magnetic_contribution_msg = (
+                "Magnetic vector potential assumed to be zero in first meaurement.\n"
+                "Magnetic vector potential sign in second meaurement assumed to be positive."
+            )
+        else:
+            raise ValueError(
+                f"magnetic_contribution_sign must be either '-+', '-0+', or '0+', not {self._magnetic_contribution_sign}"
+            )
+
+        if self._verbose:
+            print(magnetic_contribution_msg)
+
+        if len(self._datacube) != self._num_measurements:
+            raise ValueError(
+                f"datacube must be the same length as magnetic_contribution_sign, not length {len(self._datacube)}."
+            )
+
+        dc_shapes = [dc.shape for dc in self._datacube]
+        if dc_shapes.count(dc_shapes[0]) != self._num_measurements:
+            raise ValueError("datacube intensities must be the same size.")
+
         if self._positions_mask is not None:
-            self._positions_mask = np.asarray(self._positions_mask)
+            self._positions_mask = np.asarray(self._positions_mask, dtype="bool")
 
             if self._positions_mask.ndim == 2:
                 warnings.warn(
@@ -358,313 +350,178 @@ class SimultaneousPtychographicReconstruction(
                     UserWarning,
                 )
                 self._positions_mask = np.tile(
-                    self._positions_mask, (self._num_sim_measurements, 1, 1)
+                    self._positions_mask, (self._num_measurements, 1, 1)
                 )
 
-            if self._positions_mask.dtype != "bool":
-                warnings.warn(
-                    "`positions_mask` converted to `bool` array.",
-                    UserWarning,
-                )
-                self._positions_mask = self._positions_mask.astype("bool")
-        else:
-            self._positions_mask = [None] * self._num_sim_measurements
-
-        if force_com_shifts is None:
-            force_com_shifts = [None, None, None]
-        elif len(force_com_shifts) == self._num_sim_measurements:
-            force_com_shifts = list(force_com_shifts)
-        else:
-            raise ValueError(
-                (
-                    "force_com_shifts must be a sequence of tuples "
-                    "with the same length as the datasets."
-                )
+            num_probes_per_tilt = np.insert(
+                self._positions_mask.sum(axis=(-2, -1)), 0, 0
             )
+
+        else:
+            self._positions_mask = [None] * self._num_measurements
+            num_probes_per_tilt = [0] + [dc.R_N for dc in self._datacube]
+            num_probes_per_tilt = np.array(num_probes_per_tilt)
+
+        # prepopulate relevant arrays
+        self._mean_diffraction_intensity = []
+        self._num_diffraction_patterns = num_probes_per_tilt.sum()
+        self._cum_probes_per_tilt = np.cumsum(num_probes_per_tilt)
+        self._positions_px_all = np.empty((self._num_diffraction_patterns, 2))
+
+        # calculate roi_shape
+        roi_shape = self._datacube[0].Qshape
+        if diffraction_intensities_shape is not None:
+            roi_shape = diffraction_intensities_shape
+        if probe_roi_shape is not None:
+            roi_shape = tuple(max(q, s) for q, s in zip(roi_shape, probe_roi_shape))
+
+        self._amplitudes = xp.empty((self._num_diffraction_patterns,) + roi_shape)
+        self._region_of_interest_shape = np.array(roi_shape)
+
+        # TO-DO: generalize this
+        if force_com_shifts is None:
+            force_com_shifts = [None] * self._num_measurements
+
+        if self._scan_positions is None:
+            self._scan_positions = [None] * self._num_measurements
 
         # Ensure plot_center_of_mass is not in kwargs
         kwargs.pop("plot_center_of_mass", None)
 
-        # 1st measurement sets rotation angle and transposition
-        (
-            measurement_0,
-            self._vacuum_probe_intensity,
-            self._dp_mask,
-            force_com_shifts[0],
-        ) = self._preprocess_datacube_and_vacuum_probe(
-            self._datacube[0],
-            diffraction_intensities_shape=self._diffraction_intensities_shape,
-            reshaping_method=self._reshaping_method,
-            probe_roi_shape=self._probe_roi_shape,
-            vacuum_probe_intensity=self._vacuum_probe_intensity,
-            dp_mask=self._dp_mask,
-            com_shifts=force_com_shifts[0],
-        )
+        # prepopulate relevant arrays
+        self._mean_diffraction_intensity = []
+        self._num_diffraction_patterns = num_probes_per_tilt.sum()
+        self._cum_probes_per_tilt = np.cumsum(num_probes_per_tilt)
+        self._positions_px_all = np.empty((self._num_diffraction_patterns, 2))
 
-        intensities_0 = self._extract_intensities_and_calibrations_from_datacube(
-            measurement_0,
-            require_calibrations=True,
-            force_scan_sampling=force_scan_sampling,
-            force_angular_sampling=force_angular_sampling,
-            force_reciprocal_sampling=force_reciprocal_sampling,
-        )
+        # loop over DPs for preprocessing
+        for index in tqdmnd(
+            self._num_measurements,
+            desc="Preprocessing data",
+            unit="measurement",
+            disable=not progress_bar,
+        ):
+            # preprocess datacube, vacuum and masks only for first measurement
+            if index == 0:
+                (
+                    self._datacube[index],
+                    self._vacuum_probe_intensity,
+                    self._dp_mask,
+                    force_com_shifts[index],
+                ) = self._preprocess_datacube_and_vacuum_probe(
+                    self._datacube[index],
+                    diffraction_intensities_shape=self._diffraction_intensities_shape,
+                    reshaping_method=self._reshaping_method,
+                    probe_roi_shape=self._probe_roi_shape,
+                    vacuum_probe_intensity=self._vacuum_probe_intensity,
+                    dp_mask=self._dp_mask,
+                    com_shifts=force_com_shifts[index],
+                )
 
-        (
-            com_measured_x_0,
-            com_measured_y_0,
-            com_fitted_x_0,
-            com_fitted_y_0,
-            com_normalized_x_0,
-            com_normalized_y_0,
-        ) = self._calculate_intensities_center_of_mass(
-            intensities_0,
-            dp_mask=self._dp_mask,
-            fit_function=fit_function,
-            com_shifts=force_com_shifts[0],
-        )
+            else:
+                (
+                    self._datacube[index],
+                    _,
+                    _,
+                    force_com_shifts[index],
+                ) = self._preprocess_datacube_and_vacuum_probe(
+                    self._datacube[index],
+                    diffraction_intensities_shape=self._diffraction_intensities_shape,
+                    reshaping_method=self._reshaping_method,
+                    probe_roi_shape=self._probe_roi_shape,
+                    vacuum_probe_intensity=None,
+                    dp_mask=None,
+                    com_shifts=force_com_shifts[index],
+                )
 
-        (
-            self._rotation_best_rad,
-            self._rotation_best_transpose,
-            _com_x_0,
-            _com_y_0,
-            com_x_0,
-            com_y_0,
-        ) = self._solve_for_center_of_mass_relative_rotation(
-            com_measured_x_0,
-            com_measured_y_0,
-            com_normalized_x_0,
-            com_normalized_y_0,
-            rotation_angles_deg=rotation_angles_deg,
-            plot_rotation=plot_rotation,
-            plot_center_of_mass=False,
-            maximize_divergence=maximize_divergence,
-            force_com_rotation=force_com_rotation,
-            force_com_transpose=force_com_transpose,
-            **kwargs,
-        )
-
-        (
-            amplitudes_0,
-            mean_diffraction_intensity_0,
-        ) = self._normalize_diffraction_intensities(
-            intensities_0,
-            com_fitted_x_0,
-            com_fitted_y_0,
-            crop_patterns,
-            self._positions_mask[0],
-        )
-
-        # explicitly delete namescapes
-        del (
-            intensities_0,
-            com_measured_x_0,
-            com_measured_y_0,
-            com_fitted_x_0,
-            com_fitted_y_0,
-            com_normalized_x_0,
-            com_normalized_y_0,
-            _com_x_0,
-            _com_y_0,
-            com_x_0,
-            com_y_0,
-        )
-
-        # 2nd measurement
-        (
-            measurement_1,
-            _,
-            _,
-            force_com_shifts[1],
-        ) = self._preprocess_datacube_and_vacuum_probe(
-            self._datacube[1],
-            diffraction_intensities_shape=self._diffraction_intensities_shape,
-            reshaping_method=self._reshaping_method,
-            probe_roi_shape=self._probe_roi_shape,
-            vacuum_probe_intensity=None,
-            dp_mask=None,
-            com_shifts=force_com_shifts[1],
-        )
-
-        intensities_1 = self._extract_intensities_and_calibrations_from_datacube(
-            measurement_1,
-            require_calibrations=True,
-            force_scan_sampling=force_scan_sampling,
-            force_angular_sampling=force_angular_sampling,
-            force_reciprocal_sampling=force_reciprocal_sampling,
-        )
-
-        (
-            com_measured_x_1,
-            com_measured_y_1,
-            com_fitted_x_1,
-            com_fitted_y_1,
-            com_normalized_x_1,
-            com_normalized_y_1,
-        ) = self._calculate_intensities_center_of_mass(
-            intensities_1,
-            dp_mask=self._dp_mask,
-            fit_function=fit_function,
-            com_shifts=force_com_shifts[1],
-        )
-
-        (
-            _,
-            _,
-            _com_x_1,
-            _com_y_1,
-            com_x_1,
-            com_y_1,
-        ) = self._solve_for_center_of_mass_relative_rotation(
-            com_measured_x_1,
-            com_measured_y_1,
-            com_normalized_x_1,
-            com_normalized_y_1,
-            rotation_angles_deg=rotation_angles_deg,
-            plot_rotation=plot_rotation,
-            plot_center_of_mass=False,
-            maximize_divergence=maximize_divergence,
-            force_com_rotation=np.rad2deg(self._rotation_best_rad),
-            force_com_transpose=self._rotation_best_transpose,
-            **kwargs,
-        )
-
-        (
-            amplitudes_1,
-            mean_diffraction_intensity_1,
-        ) = self._normalize_diffraction_intensities(
-            intensities_1,
-            com_fitted_x_1,
-            com_fitted_y_1,
-            crop_patterns,
-            self._positions_mask[1],
-        )
-
-        # explicitly delete namescapes
-        del (
-            intensities_1,
-            com_measured_x_1,
-            com_measured_y_1,
-            com_fitted_x_1,
-            com_fitted_y_1,
-            com_normalized_x_1,
-            com_normalized_y_1,
-            _com_x_1,
-            _com_y_1,
-            com_x_1,
-            com_y_1,
-        )
-
-        # Optionally, 3rd measurement
-        if self._num_sim_measurements == 3:
-            (
-                measurement_2,
-                _,
-                _,
-                force_com_shifts[2],
-            ) = self._preprocess_datacube_and_vacuum_probe(
-                self._datacube[2],
-                diffraction_intensities_shape=self._diffraction_intensities_shape,
-                reshaping_method=self._reshaping_method,
-                probe_roi_shape=self._probe_roi_shape,
-                vacuum_probe_intensity=None,
-                dp_mask=None,
-                com_shifts=force_com_shifts[2],
-            )
-
-            intensities_2 = self._extract_intensities_and_calibrations_from_datacube(
-                measurement_2,
+            # calibrations
+            intensities = self._extract_intensities_and_calibrations_from_datacube(
+                self._datacube[index],
                 require_calibrations=True,
                 force_scan_sampling=force_scan_sampling,
                 force_angular_sampling=force_angular_sampling,
                 force_reciprocal_sampling=force_reciprocal_sampling,
             )
 
+            # calculate CoM
             (
-                com_measured_x_2,
-                com_measured_y_2,
-                com_fitted_x_2,
-                com_fitted_y_2,
-                com_normalized_x_2,
-                com_normalized_y_2,
+                com_measured_x,
+                com_measured_y,
+                com_fitted_x,
+                com_fitted_y,
+                com_normalized_x,
+                com_normalized_y,
             ) = self._calculate_intensities_center_of_mass(
-                intensities_2,
+                intensities,
                 dp_mask=self._dp_mask,
                 fit_function=fit_function,
-                com_shifts=force_com_shifts[2],
+                com_shifts=force_com_shifts[index],
             )
 
-            (
-                _,
-                _,
-                _com_x_2,
-                _com_y_2,
-                com_x_2,
-                com_y_2,
-            ) = self._solve_for_center_of_mass_relative_rotation(
-                com_measured_x_2,
-                com_measured_y_2,
-                com_normalized_x_2,
-                com_normalized_y_2,
-                rotation_angles_deg=rotation_angles_deg,
-                plot_rotation=plot_rotation,
-                plot_center_of_mass=False,
-                maximize_divergence=maximize_divergence,
-                force_com_rotation=np.rad2deg(self._rotation_best_rad),
-                force_com_transpose=self._rotation_best_transpose,
-                **kwargs,
-            )
+            # estimate rotation / transpose using first measurement
+            if index == 0:
+                # silence warnings to play nice with progress bar
+                verbose = self._verbose
+                self._verbose = False
 
+                (
+                    self._rotation_best_rad,
+                    self._rotation_best_transpose,
+                    _com_x,
+                    _com_y,
+                    com_x,
+                    com_y,
+                ) = self._solve_for_center_of_mass_relative_rotation(
+                    com_measured_x,
+                    com_measured_y,
+                    com_normalized_x,
+                    com_normalized_y,
+                    rotation_angles_deg=rotation_angles_deg,
+                    plot_rotation=plot_rotation,
+                    plot_center_of_mass=False,
+                    maximize_divergence=maximize_divergence,
+                    force_com_rotation=force_com_rotation,
+                    force_com_transpose=force_com_transpose,
+                    **kwargs,
+                )
+                self._verbose = verbose
+
+            # corner-center amplitudes
+            idx_start = self._cum_probes_per_tilt[index]
+            idx_end = self._cum_probes_per_tilt[index + 1]
             (
-                amplitudes_2,
-                mean_diffraction_intensity_2,
+                self._amplitudes[idx_start:idx_end],
+                mean_diffraction_intensity_temp,
+                self._crop_mask,
             ) = self._normalize_diffraction_intensities(
-                intensities_2,
-                com_fitted_x_2,
-                com_fitted_y_2,
+                intensities,
+                com_fitted_x,
+                com_fitted_y,
+                self._positions_mask[index],
                 crop_patterns,
-                self._positions_mask[2],
             )
 
-            # explicitly delete namescapes
+            self._mean_diffraction_intensity.append(mean_diffraction_intensity_temp)
+
             del (
-                intensities_2,
-                com_measured_x_2,
-                com_measured_y_2,
-                com_fitted_x_2,
-                com_fitted_y_2,
-                com_normalized_x_2,
-                com_normalized_y_2,
-                _com_x_2,
-                _com_y_2,
-                com_x_2,
-                com_y_2,
+                intensities,
+                com_measured_x,
+                com_measured_y,
+                com_fitted_x,
+                com_fitted_y,
+                com_normalized_x,
+                com_normalized_y,
             )
 
-            self._amplitudes = (amplitudes_0, amplitudes_1, amplitudes_2)
-            self._mean_diffraction_intensity = (
-                mean_diffraction_intensity_0
-                + mean_diffraction_intensity_1
-                + mean_diffraction_intensity_2
-            ) / 3
-
-            del amplitudes_0, amplitudes_1, amplitudes_2
-
-        else:
-            self._amplitudes = (amplitudes_0, amplitudes_1)
-            self._mean_diffraction_intensity = (
-                mean_diffraction_intensity_0 + mean_diffraction_intensity_1
-            ) / 2
-
-            del amplitudes_0, amplitudes_1
-
-        # explicitly delete namespace
-        self._num_diffraction_patterns = self._amplitudes[0].shape[0]
-        self._region_of_interest_shape = np.array(self._amplitudes[0].shape[-2:])
-
-        self._positions_px = self._calculate_scan_positions_in_pixels(
-            self._scan_positions, self._positions_mask[0]
-        )  # TO-DO: generaltize to per-dataset probe positions
+            # initialize probe positions
+            (
+                self._positions_px_all[idx_start:idx_end],
+                self._object_padding_px,
+            ) = self._calculate_scan_positions_in_pixels(
+                self._scan_positions[index],
+                self._positions_mask[index],
+                self._object_padding_px,
+            )
 
         # handle semiangle specified in pixels
         if self._semiangle_cutoff_pixels:
@@ -673,114 +530,61 @@ class SimultaneousPtychographicReconstruction(
             )
 
         # Object Initialization
-        if self._object is None:
-            pad_x = self._object_padding_px[0][1]
-            pad_y = self._object_padding_px[1][1]
-            p, q = np.round(np.max(self._positions_px, axis=0))
-            p = np.max([np.round(p + pad_x), self._region_of_interest_shape[0]]).astype(
-                "int"
-            )
-            q = np.max([np.round(q + pad_y), self._region_of_interest_shape[1]]).astype(
-                "int"
-            )
-            if self._object_type == "potential":
-                object_e = xp.zeros((p, q), dtype=xp.float32)
-            elif self._object_type == "complex":
-                object_e = xp.ones((p, q), dtype=xp.complex64)
-            object_m = xp.zeros((p, q), dtype=xp.float32)
-        else:
-            if self._object_type == "potential":
-                object_e = xp.asarray(self._object[0], dtype=xp.float32)
-            elif self._object_type == "complex":
-                object_e = xp.asarray(self._object[0], dtype=xp.complex64)
-            object_m = xp.asarray(self._object[1], dtype=xp.float32)
-
-        self._object = (object_e, object_m)
-        self._object_initial = (object_e.copy(), object_m.copy())
-        self._object_type_initial = self._object_type
-        self._object_shape = self._object[0].shape
-
-        self._positions_px = xp.asarray(self._positions_px, dtype=xp.float32)
-        self._positions_px_com = xp.mean(self._positions_px, axis=0)
-        self._positions_px -= self._positions_px_com - xp.array(self._object_shape) / 2
-        self._positions_px_com = xp.mean(self._positions_px, axis=0)
-        self._positions_px_fractional = self._positions_px - xp.round(
-            self._positions_px
+        obj = self._initialize_object(
+            self._object,
+            self._positions_px_all,
+            self._object_type,
         )
 
-        self._positions_px_initial = self._positions_px.copy()
-        self._positions_initial = self._positions_px_initial.copy()
-        self._positions_initial[:, 0] *= self.sampling[0]
-        self._positions_initial[:, 1] *= self.sampling[1]
+        if self._object is None:
+            self._object = xp.full((2,) + obj.shape, obj)
+        else:
+            self._object = obj
 
-        # Vectorized Patches
-        (
-            self._vectorized_patch_indices_row,
-            self._vectorized_patch_indices_col,
-        ) = self._extract_vectorized_patch_indices()
+        self._object_initial = self._object.copy()
+        self._object_type_initial = self._object_type
+        self._object_shape = self._object.shape[-2:]
 
-        # Probe Initialization
-        if self._probe is None:
-            if self._vacuum_probe_intensity is not None:
-                self._semiangle_cutoff = np.inf
-                self._vacuum_probe_intensity = xp.asarray(
-                    self._vacuum_probe_intensity, dtype=xp.float32
-                )
-                probe_x0, probe_y0 = get_CoM(
-                    self._vacuum_probe_intensity, device=self._device
-                )
-                self._vacuum_probe_intensity = get_shifted_ar(
-                    self._vacuum_probe_intensity,
-                    -probe_x0,
-                    -probe_y0,
-                    bilinear=True,
-                    device=self._device,
-                )
-                if crop_patterns:
-                    self._vacuum_probe_intensity = self._vacuum_probe_intensity[
-                        self._crop_mask
-                    ].reshape(self._region_of_interest_shape)
+        # center probe positions
+        self._positions_px_all = xp.asarray(self._positions_px_all, dtype=xp.float32)
 
-            self._probe = (
-                ComplexProbe(
-                    gpts=self._region_of_interest_shape,
-                    sampling=self.sampling,
-                    energy=self._energy,
-                    semiangle_cutoff=self._semiangle_cutoff,
-                    rolloff=self._rolloff,
-                    vacuum_probe_intensity=self._vacuum_probe_intensity,
-                    parameters=self._polar_parameters,
-                    device=self._device,
-                )
-                .build()
-                ._array
+        for index in range(self._num_measurements):
+            idx_start = self._cum_probes_per_tilt[index]
+            idx_end = self._cum_probes_per_tilt[index + 1]
+            self._positions_px = self._positions_px_all[idx_start:idx_end]
+            self._positions_px_com = xp.mean(self._positions_px, axis=0)
+            self._positions_px -= (
+                self._positions_px_com - xp.array(self._object_shape) / 2
+            )
+            self._positions_px_all[idx_start:idx_end] = self._positions_px.copy()
+
+        self._positions_px_initial_all = self._positions_px_all.copy()
+        self._positions_initial_all = self._positions_px_initial_all.copy()
+        self._positions_initial_all[:, 0] *= self.sampling[0]
+        self._positions_initial_all[:, 1] *= self.sampling[1]
+
+        # initialize probe
+        self._probes_all = []
+        self._probes_all_initial = []
+        self._probes_all_initial_aperture = []
+        list_Q = isinstance(self._probe_init, (list, tuple))
+
+        for index in range(self._num_measurements):
+            _probe, self._semiangle_cutoff = self._initialize_probe(
+                self._probe_init[index] if list_Q else self._probe_init,
+                self._vacuum_probe_intensity,
+                self._mean_diffraction_intensity[index],
+                self._semiangle_cutoff,
+                crop_patterns,
             )
 
-            # Normalize probe to match mean diffraction intensity
-            probe_intensity = xp.sum(xp.abs(xp.fft.fft2(self._probe)) ** 2)
-            self._probe *= xp.sqrt(self._mean_diffraction_intensity / probe_intensity)
+            self._probes_all.append(_probe)
+            self._probes_all_initial.append(_probe.copy())
+            self._probes_all_initial_aperture.append(xp.abs(xp.fft.fft2(_probe)))
 
-        else:
-            if isinstance(self._probe, ComplexProbe):
-                if self._probe._gpts != self._region_of_interest_shape:
-                    raise ValueError()
-                if hasattr(self._probe, "_array"):
-                    self._probe = self._probe._array
-                else:
-                    self._probe._xp = xp
-                    self._probe = self._probe.build()._array
+        del self._probe_init
 
-                # Normalize probe to match mean diffraction intensity
-                probe_intensity = xp.sum(xp.abs(xp.fft.fft2(self._probe)) ** 2)
-                self._probe *= xp.sqrt(
-                    self._mean_diffraction_intensity / probe_intensity
-                )
-            else:
-                self._probe = xp.asarray(self._probe, dtype=xp.complex64)
-
-        self._probe_initial = self._probe.copy()
-        self._probe_initial_aperture = xp.abs(xp.fft.fft2(self._probe))
-
+        # initialize aberrations
         self._known_aberrations_array = ComplexProbe(
             energy=self._energy,
             gpts=self._region_of_interest_shape,
@@ -790,25 +594,37 @@ class SimultaneousPtychographicReconstruction(
         )._evaluate_ctf()
 
         # overlaps
-        shifted_probes = fft_shift(self._probe, self._positions_px_fractional, xp)
+        idx_end = self._cum_probes_per_tilt[1]
+        self._positions_px = self._positions_px_all[0:idx_end]
+        self._positions_px_fractional = self._positions_px - xp.round(
+            self._positions_px
+        )
+        shifted_probes = fft_shift(
+            self._probes_all[0], self._positions_px_fractional, xp
+        )
         probe_intensities = xp.abs(shifted_probes) ** 2
         probe_overlap = self._sum_overlapping_patches_bincounts(probe_intensities)
-        probe_overlap = self._gaussian_filter(probe_overlap, 1.0)
 
+        # initialize object_fov_mask
         if object_fov_mask is None:
-            self._object_fov_mask = asnumpy(probe_overlap > 0.25 * probe_overlap.max())
+            probe_overlap_blurred = self._gaussian_filter(probe_overlap, 1.0)
+            self._object_fov_mask = asnumpy(
+                probe_overlap_blurred > 0.25 * probe_overlap_blurred.max()
+            )
         else:
             self._object_fov_mask = np.asarray(object_fov_mask)
         self._object_fov_mask_inverse = np.invert(self._object_fov_mask)
 
+        # plot probe overlaps
         if plot_probe_overlaps:
             figsize = kwargs.pop("figsize", (9, 4))
             chroma_boost = kwargs.pop("chroma_boost", 1)
+            power = kwargs.pop("power", 2)
 
             # initial probe
             complex_probe_rgb = Complex2RGB(
                 self.probe_centered,
-                power=2,
+                power=power,
                 chroma_boost=chroma_boost,
             )
 
@@ -835,10 +651,7 @@ class SimultaneousPtychographicReconstruction(
 
             divider = make_axes_locatable(ax1)
             cax1 = divider.append_axes("right", size="5%", pad="2.5%")
-            add_colorbar_arg(
-                cax1,
-                chroma_boost=chroma_boost,
-            )
+            add_colorbar_arg(cax1, chroma_boost=chroma_boost)
             ax1.set_ylabel("x [A]")
             ax1.set_xlabel("y [A]")
             ax1.set_title("Initial probe intensity")
@@ -846,7 +659,7 @@ class SimultaneousPtychographicReconstruction(
             ax2.imshow(
                 asnumpy(probe_overlap),
                 extent=extent,
-                cmap="Greys_r",
+                cmap="gray",
             )
             ax2.scatter(
                 self.positions[:, 1],

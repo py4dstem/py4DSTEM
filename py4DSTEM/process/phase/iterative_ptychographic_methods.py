@@ -1474,7 +1474,7 @@ class ProbeListMethodsMixin:
         for pr in _probes:
             probe += pr
 
-        return probe / self._num_tilts
+        return probe / len(_probes)
 
     @property
     def _probe(self):
