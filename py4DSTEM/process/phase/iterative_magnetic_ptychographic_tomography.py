@@ -1,6 +1,6 @@
 """
 Module for reconstructing phase objects from 4DSTEM datasets using iterative methods,
-namely overlap magnetic tomography.
+namely magnetic ptychographic tomography.
 """
 
 import warnings
@@ -45,7 +45,7 @@ from py4DSTEM.process.utils import electron_wavelength_angstrom, get_CoM, get_sh
 warnings.simplefilter(action="always", category=UserWarning)
 
 
-class OverlapMagneticTomographicReconstruction(
+class MagneticPtychographicTomographyReconstruction(
     PositionsConstraintsMixin,
     ProbeConstraintsMixin,
     Object3DConstraintsMixin,
@@ -56,7 +56,7 @@ class OverlapMagneticTomographicReconstruction(
     PtychographicReconstruction,
 ):
     """
-    Overlap Magnetic Tomographic Reconstruction Class.
+    Magnetic Ptychographic Tomography Reconstruction Class.
 
     List of diffraction intensities dimensions  : (Rx,Ry,Qx,Qy)
     Reconstructed probe dimensions              : (Sx,Sy)
@@ -140,7 +140,7 @@ class OverlapMagneticTomographicReconstruction(
         initial_scan_positions: Sequence[np.ndarray] = None,
         verbose: bool = True,
         device: str = "cpu",
-        name: str = "overlap-magnetic-tomographic_reconstruction",
+        name: str = "magnetic-ptychographic-tomography_reconstruction",
         **kwargs,
     ):
         Custom.__init__(self, name=name)

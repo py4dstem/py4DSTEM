@@ -1,6 +1,6 @@
 """
 Module for reconstructing phase objects from 4DSTEM datasets using iterative methods,
-namely overlap tomography.
+namely joint ptychographic tomography.
 """
 
 import warnings
@@ -49,7 +49,7 @@ from py4DSTEM.process.phase.utils import (
 warnings.simplefilter(action="always", category=UserWarning)
 
 
-class OverlapTomographicReconstruction(
+class PtychographicTomographyReconstruction(
     VisualizationsMixin,
     PositionsConstraintsMixin,
     ProbeConstraintsMixin,
@@ -66,7 +66,7 @@ class OverlapTomographicReconstruction(
     PtychographicReconstruction,
 ):
     """
-    Overlap Tomographic Reconstruction Class.
+    Ptychographic Tomography Reconstruction Class.
 
     List of diffraction intensities dimensions  : (Rx,Ry,Qx,Qy)
     Reconstructed probe dimensions              : (Sx,Sy)
@@ -146,7 +146,7 @@ class OverlapTomographicReconstruction(
         initial_scan_positions: Sequence[np.ndarray] = None,
         verbose: bool = True,
         device: str = "cpu",
-        name: str = "overlap-tomographic_reconstruction",
+        name: str = "ptychographic-tomography_reconstruction",
         **kwargs,
     ):
         Custom.__init__(self, name=name)
@@ -353,6 +353,7 @@ class OverlapTomographicReconstruction(
             roi_shape = diffraction_intensities_shape
         if probe_roi_shape is not None:
             roi_shape = tuple(max(q, s) for q, s in zip(roi_shape, probe_roi_shape))
+
         self._amplitudes = xp.empty((self._num_diffraction_patterns,) + roi_shape)
         self._region_of_interest_shape = np.array(roi_shape)
 
@@ -494,7 +495,6 @@ class OverlapTomographicReconstruction(
             self._positions_px -= (
                 self._positions_px_com - xp.array(self._object_shape) / 2
             )
-
             self._positions_px_all[idx_start:idx_end] = self._positions_px.copy()
 
         self._positions_px_initial_all = self._positions_px_all.copy()
