@@ -738,7 +738,7 @@ class PtychographicTomographyReconstruction(
         tv_denoise_iter=np.inf,
         tv_denoise_weights=None,
         tv_denoise_inner_iter=40,
-        collective_tilt_updates: bool = False,
+        collective_tilt_updates: bool = True,
         store_iterations: bool = False,
         progress_bar: bool = True,
         reset: bool = None,
@@ -1045,7 +1045,38 @@ class PtychographicTomographyReconstruction(
                     unshuffled_indices
                 ]
 
-                if not collective_tilt_updates:
+                if collective_tilt_updates:
+                    # probe and positions
+                    _probe = self._probe_constraints(
+                        _probe,
+                        fix_com=fix_com and a0 >= fix_probe_iter,
+                        constrain_probe_amplitude=a0 < constrain_probe_amplitude_iter
+                        and a0 >= fix_probe_iter,
+                        constrain_probe_amplitude_relative_radius=constrain_probe_amplitude_relative_radius,
+                        constrain_probe_amplitude_relative_width=constrain_probe_amplitude_relative_width,
+                        constrain_probe_fourier_amplitude=a0
+                        < constrain_probe_fourier_amplitude_iter
+                        and a0 >= fix_probe_iter,
+                        constrain_probe_fourier_amplitude_max_width_pixels=constrain_probe_fourier_amplitude_max_width_pixels,
+                        constrain_probe_fourier_amplitude_constant_intensity=constrain_probe_fourier_amplitude_constant_intensity,
+                        fit_probe_aberrations=a0 < fit_probe_aberrations_iter
+                        and a0 >= fix_probe_iter,
+                        fit_probe_aberrations_max_angular_order=fit_probe_aberrations_max_angular_order,
+                        fit_probe_aberrations_max_radial_order=fit_probe_aberrations_max_radial_order,
+                        fix_probe_aperture=a0 < fix_probe_aperture_iter,
+                        initial_probe_aperture=_probe_initial_aperture,
+                    )
+
+                    self._positions_px_all[
+                        start_tilt:end_tilt
+                    ] = self._positions_constraints(
+                        self._positions_px_all[start_tilt:end_tilt],
+                        fix_positions=a0 < fix_positions_iter,
+                        global_affine_transformation=global_affine_transformation,
+                    )
+
+                else:
+                    # object, probe, and positions
                     (
                         self._object,
                         _probe,
@@ -1100,28 +1131,9 @@ class PtychographicTomographyReconstruction(
             if collective_tilt_updates:
                 self._object += collective_object / self._num_tilts
 
-                (
+                # object only
+                self._object = self._object_constraints(
                     self._object,
-                    _,
-                    _,
-                ) = self._constraints(
-                    self._object,
-                    None,
-                    None,
-                    fix_com=False,
-                    constrain_probe_amplitude=False,
-                    constrain_probe_amplitude_relative_radius=None,
-                    constrain_probe_amplitude_relative_width=None,
-                    constrain_probe_fourier_amplitude=False,
-                    constrain_probe_fourier_amplitude_max_width_pixels=None,
-                    constrain_probe_fourier_amplitude_constant_intensity=None,
-                    fit_probe_aberrations=False,
-                    fit_probe_aberrations_max_angular_order=None,
-                    fit_probe_aberrations_max_radial_order=None,
-                    fix_probe_aperture=False,
-                    initial_probe_aperture=None,
-                    fix_positions=True,
-                    global_affine_transformation=None,
                     gaussian_filter=a0 < gaussian_filter_iter
                     and gaussian_filter_sigma is not None,
                     gaussian_filter_sigma=gaussian_filter_sigma,
