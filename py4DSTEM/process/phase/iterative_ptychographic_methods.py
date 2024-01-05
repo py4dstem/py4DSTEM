@@ -984,13 +984,6 @@ class Object3DMethodsMixin:
             **kwargs,
         )
 
-    def _return_self_consistency_errors(
-        self,
-        **kwargs,
-    ):
-        """Compute the self-consistency errors for each probe position"""
-        raise NotImplementedError()
-
     @property
     def object_supersliced(self):
         """Returns super-sliced object"""
@@ -1403,83 +1396,6 @@ class ProbeMixedMethodsMixin:
                 return None
 
             return self._probe[0]
-
-
-class ProbeListMethodsMixin:
-    """
-    Mixin class for probe methods unique to a list of single probes.
-    Overwrites ProbeMethodsMixin.
-    """
-
-    def _reset_reconstruction(
-        self,
-        store_iterations,
-        reset,
-        use_projection_scheme,
-    ):
-        """ """
-        if store_iterations and (not hasattr(self, "object_iterations") or reset):
-            self.object_iterations = []
-            self.probe_iterations = []
-
-        # reset can be True, False, or None (default)
-        if reset is True:
-            self.error_iterations = []
-            self._object = self._object_initial.copy()
-            self._probes_all = [pr.copy() for pr in self._probes_all_initial]
-            self._positions_px_all = self._positions_px_initial_all.copy()
-            self._object_type = self._object_type_initial
-
-            if use_projection_scheme:
-                self._exit_waves = [None] * len(self._probes_all)
-            else:
-                self._exit_waves = None
-
-            # delete positions affine transform
-            if hasattr(self, "_tf"):
-                del self._tf
-
-        elif reset is None:
-            # continued run
-            if hasattr(self, "error"):
-                warnings.warn(
-                    (
-                        "Continuing reconstruction from previous result. "
-                        "Use reset=True for a fresh start."
-                    ),
-                    UserWarning,
-                )
-
-            # first start
-            else:
-                self.error_iterations = []
-                if use_projection_scheme:
-                    self._exit_waves = [None] * len(self._probes_all)
-                else:
-                    self._exit_waves = None
-
-    def _return_single_probe(self, probe=None):
-        """Current probe estimate"""
-        xp = self._xp
-
-        if probe is not None:
-            _probes = [xp.asarray(pr) for pr in probe]
-        else:
-            if not hasattr(self, "_probes_all"):
-                return None
-            _probes = self._probes_all
-
-        probe = xp.zeros(self._region_of_interest_shape, dtype=np.complex64)
-
-        for pr in _probes:
-            probe += pr
-
-        return probe / len(_probes)
-
-    @property
-    def _probe(self):
-        """Dummy property to make single-probe functions work"""
-        return self._return_single_probe()
 
 
 class ObjectNDProbeMethodsMixin:
@@ -3121,3 +3037,138 @@ class Object2p5DProbeMixedMethodsMixin:
         **kwargs,
     ):
         raise NotImplementedError()
+
+
+class MultipleMeasurementsMethodsMixin:
+    """
+    Mixin class for methods unique to classes with multiple measurements.
+    Overwrites various Mixins.
+    """
+
+    def _reset_reconstruction(
+        self,
+        store_iterations,
+        reset,
+        use_projection_scheme,
+    ):
+        """ """
+        if store_iterations and (not hasattr(self, "object_iterations") or reset):
+            self.object_iterations = []
+            self.probe_iterations = []
+
+        # reset can be True, False, or None (default)
+        if reset is True:
+            self.error_iterations = []
+            self._object = self._object_initial.copy()
+            self._probes_all = [pr.copy() for pr in self._probes_all_initial]
+            self._positions_px_all = self._positions_px_initial_all.copy()
+            self._object_type = self._object_type_initial
+
+            if use_projection_scheme:
+                self._exit_waves = [None] * len(self._probes_all)
+            else:
+                self._exit_waves = None
+
+            # delete positions affine transform
+            if hasattr(self, "_tf"):
+                del self._tf
+
+        elif reset is None:
+            # continued run
+            if hasattr(self, "error"):
+                warnings.warn(
+                    (
+                        "Continuing reconstruction from previous result. "
+                        "Use reset=True for a fresh start."
+                    ),
+                    UserWarning,
+                )
+
+            # first start
+            else:
+                self.error_iterations = []
+                if use_projection_scheme:
+                    self._exit_waves = [None] * len(self._probes_all)
+                else:
+                    self._exit_waves = None
+
+    def _return_single_probe(self, probe=None):
+        """Current probe estimate"""
+        xp = self._xp
+
+        if probe is not None:
+            _probes = [xp.asarray(pr) for pr in probe]
+        else:
+            if not hasattr(self, "_probes_all"):
+                return None
+            _probes = self._probes_all
+
+        probe = xp.zeros(self._region_of_interest_shape, dtype=np.complex64)
+
+        for pr in _probes:
+            probe += pr
+
+        return probe / len(_probes)
+
+    def _return_average_positions(
+        self, positions=None, cum_probes_per_measurement=None
+    ):
+        """Average positions estimate"""
+        xp = self._xp
+
+        if positions is not None:
+            _pos = xp.asarray(positions)
+        else:
+            if not hasattr(self, "_positions_px_all"):
+                return None
+            _pos = self._positions_px_all
+
+        if cum_probes_per_measurement is None:
+            cum_probes_per_measurement = self._cum_probes_per_measurement
+
+        num_probes_per_measurement = np.diff(cum_probes_per_measurement)
+        num_measurements = len(num_probes_per_measurement)
+
+        if np.any(num_probes_per_measurement != num_probes_per_measurement[0]):
+            return None
+
+        avg_positions = xp.zeros((num_probes_per_measurement[0], 2), dtype=xp.float32)
+
+        for index in range(num_measurements):
+            start_idx = cum_probes_per_measurement[index]
+            end_idx = cum_probes_per_measurement[index + 1]
+            avg_positions += _pos[start_idx:end_idx]
+
+        return avg_positions / num_measurements
+
+    def _return_self_consistency_errors(
+        self,
+        **kwargs,
+    ):
+        """Compute the self-consistency errors for each probe position"""
+        raise NotImplementedError()
+
+    @property
+    def _probe(self):
+        """Dummy property to make single-probe functions work"""
+        return self._return_single_probe()
+
+    @property
+    def positions(self):
+        """Probe positions [A]"""
+
+        if self.angular_sampling is None:
+            return None
+
+        asnumpy = self._asnumpy
+        positions_all = []
+
+        for index in range(self._num_measurements):
+            start_idx = self._cum_probes_per_measurement[index]
+            end_idx = self._cum_probes_per_measurement[index + 1]
+            positions = self._positions_px_all[start_idx:end_idx].copy()
+            positions[:, 0] *= self.sampling[0]
+            positions[:, 1] *= self.sampling[1]
+            positions_all.append(asnumpy(positions))
+
+        return np.asarray(positions_all)

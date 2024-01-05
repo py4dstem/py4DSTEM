@@ -27,12 +27,12 @@ from py4DSTEM.process.phase.iterative_ptychographic_constraints import (
     ProbeConstraintsMixin,
 )
 from py4DSTEM.process.phase.iterative_ptychographic_methods import (
+    MultipleMeasurementsMethodsMixin,
     Object2p5DMethodsMixin,
     Object2p5DProbeMethodsMixin,
     Object3DMethodsMixin,
     ObjectNDMethodsMixin,
     ObjectNDProbeMethodsMixin,
-    ProbeListMethodsMixin,
     ProbeMethodsMixin,
 )
 from py4DSTEM.process.phase.iterative_ptychographic_visualizations import (
@@ -56,9 +56,9 @@ class PtychographicTomographyReconstruction(
     Object3DConstraintsMixin,
     Object2p5DConstraintsMixin,
     ObjectNDConstraintsMixin,
+    MultipleMeasurementsMethodsMixin,
     Object2p5DProbeMethodsMixin,
     ObjectNDProbeMethodsMixin,
-    ProbeListMethodsMixin,
     ProbeMethodsMixin,
     Object3DMethodsMixin,
     Object2p5DMethodsMixin,
@@ -226,7 +226,7 @@ class PtychographicTomographyReconstruction(
         # Class-specific Metadata
         self._num_slices = num_slices
         self._tilt_orientation_matrices = tuple(tilt_orientation_matrices)
-        self._num_tilts = num_tilts
+        self._num_measurements = num_tilts
 
     def preprocess(
         self,
@@ -329,22 +329,22 @@ class PtychographicTomographyReconstruction(
                     UserWarning,
                 )
                 self._positions_mask = np.tile(
-                    self._positions_mask, (self._num_tilts, 1, 1)
+                    self._positions_mask, (self._num_measurements, 1, 1)
                 )
 
-            num_probes_per_tilt = np.insert(
+            num_probes_per_measurement = np.insert(
                 self._positions_mask.sum(axis=(-2, -1)), 0, 0
             )
 
         else:
-            self._positions_mask = [None] * self._num_tilts
-            num_probes_per_tilt = [0] + [dc.R_N for dc in self._datacube]
-            num_probes_per_tilt = np.array(num_probes_per_tilt)
+            self._positions_mask = [None] * self._num_measurements
+            num_probes_per_measurement = [0] + [dc.R_N for dc in self._datacube]
+            num_probes_per_measurement = np.array(num_probes_per_measurement)
 
         # prepopulate relevant arrays
         self._mean_diffraction_intensity = []
-        self._num_diffraction_patterns = num_probes_per_tilt.sum()
-        self._cum_probes_per_tilt = np.cumsum(num_probes_per_tilt)
+        self._num_diffraction_patterns = num_probes_per_measurement.sum()
+        self._cum_probes_per_measurement = np.cumsum(num_probes_per_measurement)
         self._positions_px_all = np.empty((self._num_diffraction_patterns, 2))
 
         # calculate roi_shape
@@ -359,54 +359,54 @@ class PtychographicTomographyReconstruction(
 
         # TO-DO: generalize this
         if force_com_shifts is None:
-            force_com_shifts = [None] * self._num_tilts
+            force_com_shifts = [None] * self._num_measurements
 
         self._rotation_best_rad = np.deg2rad(diffraction_patterns_rotate_degrees)
         self._rotation_best_transpose = diffraction_patterns_transpose
 
         # loop over DPs for preprocessing
-        for tilt_index in tqdmnd(
-            self._num_tilts,
+        for index in tqdmnd(
+            self._num_measurements,
             desc="Preprocessing data",
             unit="tilt",
             disable=not progress_bar,
         ):
             # preprocess datacube, vacuum and masks only for first tilt
-            if tilt_index == 0:
+            if index == 0:
                 (
-                    self._datacube[tilt_index],
+                    self._datacube[index],
                     self._vacuum_probe_intensity,
                     self._dp_mask,
-                    force_com_shifts[tilt_index],
+                    force_com_shifts[index],
                 ) = self._preprocess_datacube_and_vacuum_probe(
-                    self._datacube[tilt_index],
+                    self._datacube[index],
                     diffraction_intensities_shape=self._diffraction_intensities_shape,
                     reshaping_method=self._reshaping_method,
                     probe_roi_shape=self._probe_roi_shape,
                     vacuum_probe_intensity=self._vacuum_probe_intensity,
                     dp_mask=self._dp_mask,
-                    com_shifts=force_com_shifts[tilt_index],
+                    com_shifts=force_com_shifts[index],
                 )
 
             else:
                 (
-                    self._datacube[tilt_index],
+                    self._datacube[index],
                     _,
                     _,
-                    force_com_shifts[tilt_index],
+                    force_com_shifts[index],
                 ) = self._preprocess_datacube_and_vacuum_probe(
-                    self._datacube[tilt_index],
+                    self._datacube[index],
                     diffraction_intensities_shape=self._diffraction_intensities_shape,
                     reshaping_method=self._reshaping_method,
                     probe_roi_shape=self._probe_roi_shape,
                     vacuum_probe_intensity=None,
                     dp_mask=None,
-                    com_shifts=force_com_shifts[tilt_index],
+                    com_shifts=force_com_shifts[index],
                 )
 
             # calibrations
             intensities = self._extract_intensities_and_calibrations_from_datacube(
-                self._datacube[tilt_index],
+                self._datacube[index],
                 require_calibrations=True,
                 force_scan_sampling=force_scan_sampling,
                 force_angular_sampling=force_angular_sampling,
@@ -425,12 +425,12 @@ class PtychographicTomographyReconstruction(
                 intensities,
                 dp_mask=self._dp_mask,
                 fit_function=fit_function,
-                com_shifts=force_com_shifts[tilt_index],
+                com_shifts=force_com_shifts[index],
             )
 
             # corner-center amplitudes
-            idx_start = self._cum_probes_per_tilt[tilt_index]
-            idx_end = self._cum_probes_per_tilt[tilt_index + 1]
+            idx_start = self._cum_probes_per_measurement[index]
+            idx_end = self._cum_probes_per_measurement[index + 1]
             (
                 self._amplitudes[idx_start:idx_end],
                 mean_diffraction_intensity_temp,
@@ -439,7 +439,7 @@ class PtychographicTomographyReconstruction(
                 intensities,
                 com_fitted_x,
                 com_fitted_y,
-                self._positions_mask[tilt_index],
+                self._positions_mask[index],
                 crop_patterns,
             )
 
@@ -460,8 +460,8 @@ class PtychographicTomographyReconstruction(
                 self._positions_px_all[idx_start:idx_end],
                 self._object_padding_px,
             ) = self._calculate_scan_positions_in_pixels(
-                self._scan_positions[tilt_index],
-                self._positions_mask[tilt_index],
+                self._scan_positions[index],
+                self._positions_mask[index],
                 self._object_padding_px,
             )
 
@@ -487,9 +487,9 @@ class PtychographicTomographyReconstruction(
         # center probe positions
         self._positions_px_all = xp.asarray(self._positions_px_all, dtype=xp.float32)
 
-        for tilt_index in range(self._num_tilts):
-            idx_start = self._cum_probes_per_tilt[tilt_index]
-            idx_end = self._cum_probes_per_tilt[tilt_index + 1]
+        for index in range(self._num_measurements):
+            idx_start = self._cum_probes_per_measurement[index]
+            idx_end = self._cum_probes_per_measurement[index + 1]
             self._positions_px = self._positions_px_all[idx_start:idx_end]
             self._positions_px_com = xp.mean(self._positions_px, axis=0)
             self._positions_px -= (
@@ -508,11 +508,11 @@ class PtychographicTomographyReconstruction(
         self._probes_all_initial_aperture = []
         list_Q = isinstance(self._probe_init, (list, tuple))
 
-        for tilt_index in range(self._num_tilts):
+        for index in range(self._num_measurements):
             _probe, self._semiangle_cutoff = self._initialize_probe(
-                self._probe_init[tilt_index] if list_Q else self._probe_init,
+                self._probe_init[index] if list_Q else self._probe_init,
                 self._vacuum_probe_intensity,
-                self._mean_diffraction_intensity[tilt_index],
+                self._mean_diffraction_intensity[index],
                 self._semiangle_cutoff,
                 crop_patterns,
             )
@@ -549,10 +549,10 @@ class PtychographicTomographyReconstruction(
             probe_overlap_3D = xp.zeros_like(self._object)
             old_rot_matrix = np.eye(3)  # identity
 
-            for tilt_index in range(self._num_tilts):
-                idx_start = self._cum_probes_per_tilt[tilt_index]
-                idx_end = self._cum_probes_per_tilt[tilt_index + 1]
-                rot_matrix = self._tilt_orientation_matrices[tilt_index]
+            for index in range(self._num_measurements):
+                idx_start = self._cum_probes_per_measurement[index]
+                idx_end = self._cum_probes_per_measurement[index + 1]
+                rot_matrix = self._tilt_orientation_matrices[index]
 
                 probe_overlap_3D = self._rotate_zxy_volume(
                     probe_overlap_3D,
@@ -564,7 +564,7 @@ class PtychographicTomographyReconstruction(
                     self._positions_px
                 )
                 shifted_probes = fft_shift(
-                    self._probes_all[tilt_index], self._positions_px_fractional, xp
+                    self._probes_all[index], self._positions_px_fractional, xp
                 )
                 probe_intensities = xp.abs(shifted_probes) ** 2
                 probe_overlap = self._sum_overlapping_patches_bincounts(
@@ -587,7 +587,9 @@ class PtychographicTomographyReconstruction(
         else:
             self._object_fov_mask = np.asarray(object_fov_mask)
 
-            self._positions_px = self._positions_px_all[: self._cum_probes_per_tilt[1]]
+            self._positions_px = self._positions_px_all[
+                : self._cum_probes_per_measurement[1]
+            ]
             self._positions_px_fractional = self._positions_px - xp.round(
                 self._positions_px
             )
@@ -738,7 +740,7 @@ class PtychographicTomographyReconstruction(
         tv_denoise_iter=np.inf,
         tv_denoise_weights=None,
         tv_denoise_inner_iter=40,
-        collective_tilt_updates: bool = True,
+        collective_measurement_updates: bool = True,
         store_iterations: bool = False,
         progress_bar: bool = True,
         reset: bool = None,
@@ -829,8 +831,8 @@ class PtychographicTomographyReconstruction(
             the more denoising.
         tv_denoise_inner_iter: float
             Number of iterations to run in inner loop of TV denoising
-        collective_tilt_updates: bool
-            if True perform collective tilt updates
+        collective_measurement_updates: bool
+            if True perform collective measurement updates (i.e. one per tilt)
         shrinkage_rad: float
             Phase shift in radians to be subtracted from the potential at each iteration
         store_iterations: bool, optional
@@ -897,20 +899,22 @@ class PtychographicTomographyReconstruction(
         ):
             error = 0.0
 
-            if collective_tilt_updates:
+            if collective_measurement_updates:
                 collective_object = xp.zeros_like(self._object)
 
-            tilt_indices = np.arange(self._num_tilts)
-            np.random.shuffle(tilt_indices)
+            indices = np.arange(self._num_measurements)
+            np.random.shuffle(indices)
 
             old_rot_matrix = np.eye(3)  # identity
 
-            for tilt_index in tilt_indices:
-                self._active_tilt_index = tilt_index
+            for index in indices:
+                self._active_measurement_index = index
 
-                tilt_error = 0.0
+                measurement_error = 0.0
 
-                rot_matrix = self._tilt_orientation_matrices[self._active_tilt_index]
+                rot_matrix = self._tilt_orientation_matrices[
+                    self._active_measurement_index
+                ]
                 self._object = self._rotate_zxy_volume(
                     self._object,
                     rot_matrix @ old_rot_matrix.T,
@@ -920,18 +924,22 @@ class PtychographicTomographyReconstruction(
                     self._object, self._num_slices
                 )
 
-                _probe = self._probes_all[self._active_tilt_index]
+                _probe = self._probes_all[self._active_measurement_index]
                 _probe_initial_aperture = self._probes_all_initial_aperture[
-                    self._active_tilt_index
+                    self._active_measurement_index
                 ]
 
                 if not use_projection_scheme:
                     object_sliced_old = object_sliced.copy()
 
-                start_tilt = self._cum_probes_per_tilt[self._active_tilt_index]
-                end_tilt = self._cum_probes_per_tilt[self._active_tilt_index + 1]
+                start_idx = self._cum_probes_per_measurement[
+                    self._active_measurement_index
+                ]
+                end_idx = self._cum_probes_per_measurement[
+                    self._active_measurement_index + 1
+                ]
 
-                num_diffraction_patterns = end_tilt - start_tilt
+                num_diffraction_patterns = end_idx - start_idx
                 shuffled_indices = np.arange(num_diffraction_patterns)
                 unshuffled_indices = np.zeros_like(shuffled_indices)
 
@@ -943,11 +951,11 @@ class PtychographicTomographyReconstruction(
                     num_diffraction_patterns
                 )
 
-                positions_px = self._positions_px_all[start_tilt:end_tilt].copy()[
+                positions_px = self._positions_px_all[start_idx:end_idx].copy()[
                     shuffled_indices
                 ]
                 initial_positions_px = self._positions_px_initial_all[
-                    start_tilt:end_tilt
+                    start_idx:end_idx
                 ].copy()[shuffled_indices]
 
                 for start, end in generate_batches(
@@ -966,7 +974,7 @@ class PtychographicTomographyReconstruction(
                         self._vectorized_patch_indices_col,
                     ) = self._extract_vectorized_patch_indices()
 
-                    amplitudes = self._amplitudes[start_tilt:end_tilt][
+                    amplitudes = self._amplitudes[start_idx:end_idx][
                         shuffled_indices[start:end]
                     ]
 
@@ -1015,7 +1023,7 @@ class PtychographicTomographyReconstruction(
                             max_position_total_distance,
                         )
 
-                    tilt_error += batch_error
+                    measurement_error += batch_error
 
                 if not use_projection_scheme:
                     object_sliced -= object_sliced_old
@@ -1024,7 +1032,7 @@ class PtychographicTomographyReconstruction(
                     object_sliced, self._num_voxels
                 )
 
-                if collective_tilt_updates:
+                if collective_measurement_updates:
                     collective_object += self._rotate_zxy_volume(
                         object_update, rot_matrix.T
                     )
@@ -1034,18 +1042,18 @@ class PtychographicTomographyReconstruction(
                 old_rot_matrix = rot_matrix
 
                 # Normalize Error
-                tilt_error /= (
-                    self._mean_diffraction_intensity[self._active_tilt_index]
+                measurement_error /= (
+                    self._mean_diffraction_intensity[self._active_measurement_index]
                     * num_diffraction_patterns
                 )
-                error += tilt_error
+                error += measurement_error
 
                 # constraints
-                self._positions_px_all[start_tilt:end_tilt] = positions_px.copy()[
+                self._positions_px_all[start_idx:end_idx] = positions_px.copy()[
                     unshuffled_indices
                 ]
 
-                if collective_tilt_updates:
+                if collective_measurement_updates:
                     # probe and positions
                     _probe = self._probe_constraints(
                         _probe,
@@ -1068,9 +1076,9 @@ class PtychographicTomographyReconstruction(
                     )
 
                     self._positions_px_all[
-                        start_tilt:end_tilt
+                        start_idx:end_idx
                     ] = self._positions_constraints(
-                        self._positions_px_all[start_tilt:end_tilt],
+                        self._positions_px_all[start_idx:end_idx],
                         fix_positions=a0 < fix_positions_iter,
                         global_affine_transformation=global_affine_transformation,
                     )
@@ -1080,11 +1088,11 @@ class PtychographicTomographyReconstruction(
                     (
                         self._object,
                         _probe,
-                        self._positions_px_all[start_tilt:end_tilt],
+                        self._positions_px_all[start_idx:end_idx],
                     ) = self._constraints(
                         self._object,
                         _probe,
-                        self._positions_px_all[start_tilt:end_tilt],
+                        self._positions_px_all[start_idx:end_idx],
                         fix_com=fix_com and a0 >= fix_probe_iter,
                         constrain_probe_amplitude=a0 < constrain_probe_amplitude_iter
                         and a0 >= fix_probe_iter,
@@ -1126,10 +1134,10 @@ class PtychographicTomographyReconstruction(
             self._object = self._rotate_zxy_volume(self._object, old_rot_matrix.T)
 
             # Normalize Error Over Tilts
-            error /= self._num_tilts
+            error /= self._num_measurements
 
-            if collective_tilt_updates:
-                self._object += collective_object / self._num_tilts
+            if collective_measurement_updates:
+                self._object += collective_object / self._num_measurements
 
                 # object only
                 self._object = self._object_constraints(
@@ -1174,24 +1182,3 @@ class PtychographicTomographyReconstruction(
             xp.clear_memo()
 
         return self
-
-    @property
-    def positions(self):
-        """Probe positions [A]"""
-
-        if self.angular_sampling is None:
-            return None
-
-        asnumpy = self._asnumpy
-        positions_all = []
-        for tilt_index in range(self._num_tilts):
-            positions = self._positions_px_all[
-                self._cum_probes_per_tilt[tilt_index] : self._cum_probes_per_tilt[
-                    tilt_index + 1
-                ]
-            ].copy()
-            positions[:, 0] *= self.sampling[0]
-            positions[:, 1] *= self.sampling[1]
-            positions_all.append(asnumpy(positions))
-
-        return np.asarray(positions_all)

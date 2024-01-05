@@ -10,7 +10,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.gridspec import GridSpec
 from mpl_toolkits.axes_grid1 import make_axes_locatable
-from py4DSTEM.visualize.vis_special import Complex2RGB, add_colorbar_arg
+from py4DSTEM.visualize.vis_special import (
+    Complex2RGB,
+    add_colorbar_arg,
+    return_scaled_histogram_ordering,
+)
 
 try:
     import cupy as cp
@@ -26,9 +30,9 @@ from py4DSTEM.process.phase.iterative_ptychographic_constraints import (
     ProbeConstraintsMixin,
 )
 from py4DSTEM.process.phase.iterative_ptychographic_methods import (
+    MultipleMeasurementsMethodsMixin,
     ObjectNDMethodsMixin,
     ObjectNDProbeMethodsMixin,
-    ProbeListMethodsMixin,
     ProbeMethodsMixin,
 )
 from py4DSTEM.process.phase.iterative_ptychographic_visualizations import (
@@ -50,8 +54,8 @@ class MagneticPtychographicReconstruction(
     PositionsConstraintsMixin,
     ProbeConstraintsMixin,
     ObjectNDConstraintsMixin,
+    MultipleMeasurementsMethodsMixin,
     ObjectNDProbeMethodsMixin,
-    ProbeListMethodsMixin,
     ProbeMethodsMixin,
     ObjectNDMethodsMixin,
     PtychographicReconstruction,
@@ -353,19 +357,19 @@ class MagneticPtychographicReconstruction(
                     self._positions_mask, (self._num_measurements, 1, 1)
                 )
 
-            num_probes_per_tilt = np.insert(
+            num_probes_per_measurement = np.insert(
                 self._positions_mask.sum(axis=(-2, -1)), 0, 0
             )
 
         else:
             self._positions_mask = [None] * self._num_measurements
-            num_probes_per_tilt = [0] + [dc.R_N for dc in self._datacube]
-            num_probes_per_tilt = np.array(num_probes_per_tilt)
+            num_probes_per_measurement = [0] + [dc.R_N for dc in self._datacube]
+            num_probes_per_measurement = np.array(num_probes_per_measurement)
 
         # prepopulate relevant arrays
         self._mean_diffraction_intensity = []
-        self._num_diffraction_patterns = num_probes_per_tilt.sum()
-        self._cum_probes_per_tilt = np.cumsum(num_probes_per_tilt)
+        self._num_diffraction_patterns = num_probes_per_measurement.sum()
+        self._cum_probes_per_measurement = np.cumsum(num_probes_per_measurement)
         self._positions_px_all = np.empty((self._num_diffraction_patterns, 2))
 
         # calculate roi_shape
@@ -387,12 +391,6 @@ class MagneticPtychographicReconstruction(
 
         # Ensure plot_center_of_mass is not in kwargs
         kwargs.pop("plot_center_of_mass", None)
-
-        # prepopulate relevant arrays
-        self._mean_diffraction_intensity = []
-        self._num_diffraction_patterns = num_probes_per_tilt.sum()
-        self._cum_probes_per_tilt = np.cumsum(num_probes_per_tilt)
-        self._positions_px_all = np.empty((self._num_diffraction_patterns, 2))
 
         # loop over DPs for preprocessing
         for index in tqdmnd(
@@ -487,8 +485,8 @@ class MagneticPtychographicReconstruction(
                 self._verbose = verbose
 
             # corner-center amplitudes
-            idx_start = self._cum_probes_per_tilt[index]
-            idx_end = self._cum_probes_per_tilt[index + 1]
+            idx_start = self._cum_probes_per_measurement[index]
+            idx_end = self._cum_probes_per_measurement[index + 1]
             (
                 self._amplitudes[idx_start:idx_end],
                 mean_diffraction_intensity_temp,
@@ -549,8 +547,8 @@ class MagneticPtychographicReconstruction(
         self._positions_px_all = xp.asarray(self._positions_px_all, dtype=xp.float32)
 
         for index in range(self._num_measurements):
-            idx_start = self._cum_probes_per_tilt[index]
-            idx_end = self._cum_probes_per_tilt[index + 1]
+            idx_start = self._cum_probes_per_measurement[index]
+            idx_end = self._cum_probes_per_measurement[index + 1]
             self._positions_px = self._positions_px_all[idx_start:idx_end]
             self._positions_px_com = xp.mean(self._positions_px, axis=0)
             self._positions_px -= (
@@ -562,6 +560,11 @@ class MagneticPtychographicReconstruction(
         self._positions_initial_all = self._positions_px_initial_all.copy()
         self._positions_initial_all[:, 0] *= self.sampling[0]
         self._positions_initial_all[:, 1] *= self.sampling[1]
+
+        self._positions_initial = self._return_average_positions()
+        if self._positions_initial is not None:
+            self._positions_initial[:, 0] *= self.sampling[0]
+            self._positions_initial[:, 1] *= self.sampling[1]
 
         # initialize probe
         self._probes_all = []
@@ -594,7 +597,7 @@ class MagneticPtychographicReconstruction(
         )._evaluate_ctf()
 
         # overlaps
-        idx_end = self._cum_probes_per_tilt[1]
+        idx_end = self._cum_probes_per_measurement[1]
         self._positions_px = self._positions_px_all[0:idx_end]
         self._positions_px_fractional = self._positions_px - xp.round(
             self._positions_px
@@ -662,8 +665,8 @@ class MagneticPtychographicReconstruction(
                 cmap="gray",
             )
             ax2.scatter(
-                self.positions[:, 1],
-                self.positions[:, 0],
+                self.positions[0, :, 1],
+                self.positions[0, :, 0],
                 s=2.5,
                 color=(1, 0, 0, 1),
             )
@@ -1256,6 +1259,9 @@ class MagneticPtychographicReconstruction(
         if q_lowpass_m is None:
             q_lowpass_m = q_lowpass_e
 
+        if fix_positions_iter < 1:
+            fix_positions_iter = 1  # give position correction a chance
+
         # main loop
         for a0 in tqdmnd(
             max_iter,
@@ -1289,8 +1295,12 @@ class MagneticPtychographicReconstruction(
                     self._active_measurement_index
                 ]
 
-                start_idx = self._cum_probes_per_tilt[self._active_measurement_index]
-                end_idx = self._cum_probes_per_tilt[self._active_measurement_index + 1]
+                start_idx = self._cum_probes_per_measurement[
+                    self._active_measurement_index
+                ]
+                end_idx = self._cum_probes_per_measurement[
+                    self._active_measurement_index + 1
+                ]
 
                 num_diffraction_patterns = end_idx - start_idx
                 shuffled_indices = np.arange(num_diffraction_patterns)
@@ -1535,66 +1545,8 @@ class MagneticPtychographicReconstruction(
 
         return self
 
-    def _visualize_last_iteration_figax(
-        self,
-        fig,
-        object_ax,
-        convergence_ax: None,
-        cbar: bool,
-        padding: int = 0,
-        **kwargs,
-    ):
-        """
-        Displays last reconstructed object on a given fig/ax.
-
-        Parameters
-        --------
-        fig: Figure
-            Matplotlib figure object_ax lives in
-        object_ax: Axes
-            Matplotlib axes to plot reconstructed object in
-        convergence_ax: Axes, optional
-            Matplotlib axes to plot convergence plot in
-        cbar: bool, optional
-            If true, displays a colorbar
-        padding : int, optional
-            Pixels to pad by post rotating-cropping object
-        """
-        cmap = kwargs.pop("cmap", "magma")
-
-        if self._object_type == "complex":
-            obj = np.angle(self.object[0])
-        else:
-            obj = self.object[0]
-
-        rotated_object = self._crop_rotate_object_fov(obj, padding=padding)
-        rotated_shape = rotated_object.shape
-
-        extent = [
-            0,
-            self.sampling[1] * rotated_shape[1],
-            self.sampling[0] * rotated_shape[0],
-            0,
-        ]
-
-        im = object_ax.imshow(
-            rotated_object,
-            extent=extent,
-            cmap=cmap,
-            **kwargs,
-        )
-
-        if cbar:
-            divider = make_axes_locatable(object_ax)
-            ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
-            fig.add_axes(ax_cb)
-            fig.colorbar(im, cax=ax_cb)
-
-        if convergence_ax is not None and hasattr(self, "error_iterations"):
-            kwargs.pop("vmin", None)
-            kwargs.pop("vmax", None)
-            errors = self.error_iterations
-            convergence_ax.semilogy(np.arange(len(errors)), errors, **kwargs)
+    def _visualize_all_iterations(self, **kwargs):
+        raise NotImplementedError()
 
     def _visualize_last_iteration(
         self,
@@ -1604,7 +1556,6 @@ class MagneticPtychographicReconstruction(
         plot_probe: bool,
         plot_fourier_probe: bool,
         remove_initial_probe_aberrations: bool,
-        padding: int,
         **kwargs,
     ):
         """
@@ -1625,39 +1576,35 @@ class MagneticPtychographicReconstruction(
         remove_initial_probe_aberrations: bool, optional
             If true, when plotting fourier probe, removes initial probe
             to visualize changes
-        padding : int, optional
-            Pixels to pad by post rotating-cropping object
         """
+
+        asnumpy = self._asnumpy
+
         figsize = kwargs.pop("figsize", (12, 5))
         cmap_e = kwargs.pop("cmap_e", "magma")
         cmap_m = kwargs.pop("cmap_m", "PuOr")
-
-        if self._object_type == "complex":
-            obj_e = np.angle(self.object[0])
-            obj_m = self.object[1]
-        else:
-            obj_e, obj_m = self.object
-
-        rotated_electrostatic = self._crop_rotate_object_fov(obj_e, padding=padding)
-        rotated_magnetic = self._crop_rotate_object_fov(obj_m, padding=padding)
-        rotated_shape = rotated_electrostatic.shape
-
-        min_e = rotated_electrostatic.min()
-        max_e = rotated_electrostatic.max()
-        max_m = np.abs(rotated_magnetic).max()
-        min_m = -max_m
-
-        vmin_e = kwargs.pop("vmin_e", min_e)
-        vmax_e = kwargs.pop("vmax_e", max_e)
-        vmin_m = kwargs.pop("vmin_m", min_m)
-        vmax_m = kwargs.pop("vmax_m", max_m)
-
         chroma_boost = kwargs.pop("chroma_boost", 1)
+
+        # get scaled arrays
+        probe = self._return_single_probe()
+        obj = self.object_cropped
+        if self._object_type == "complex":
+            obj = np.angle(obj)
+
+        vmin_e = kwargs.pop("vmin_e", None)
+        vmax_e = kwargs.pop("vmax_e", None)
+        obj[0], vmin_e, vmax_e = return_scaled_histogram_ordering(
+            obj[0], vmin_e, vmax_e
+        )
+
+        _, _, _vmax_m = return_scaled_histogram_ordering(np.abs(obj[1]))
+        vmin_m = kwargs.pop("vmin_m", -_vmax_m)
+        vmax_m = kwargs.pop("vmax_m", _vmax_m)
 
         extent = [
             0,
-            self.sampling[1] * rotated_shape[1],
-            self.sampling[0] * rotated_shape[0],
+            self.sampling[1] * obj.shape[2],
+            self.sampling[0] * obj.shape[1],
             0,
         ]
 
@@ -1668,6 +1615,7 @@ class MagneticPtychographicReconstruction(
                 self.angular_sampling[0] * self._region_of_interest_shape[0] / 2,
                 -self.angular_sampling[0] * self._region_of_interest_shape[0] / 2,
             ]
+
         elif plot_probe:
             probe_extent = [
                 0,
@@ -1684,26 +1632,29 @@ class MagneticPtychographicReconstruction(
                     height_ratios=[4, 1],
                     hspace=0.15,
                     width_ratios=[
+                        (extent[1] / extent[2]) / (probe_extent[1] / probe_extent[2]),
+                        (extent[1] / extent[2]) / (probe_extent[1] / probe_extent[2]),
                         1,
-                        1,
-                        (probe_extent[1] / probe_extent[2]) / (extent[1] / extent[2]),
                     ],
                     wspace=0.35,
                 )
+
             else:
                 spec = GridSpec(ncols=2, nrows=2, height_ratios=[4, 1], hspace=0.15)
+
         else:
             if plot_probe or plot_fourier_probe:
                 spec = GridSpec(
                     ncols=3,
                     nrows=1,
                     width_ratios=[
+                        (extent[1] / extent[2]) / (probe_extent[1] / probe_extent[2]),
+                        (extent[1] / extent[2]) / (probe_extent[1] / probe_extent[2]),
                         1,
-                        1,
-                        (probe_extent[1] / probe_extent[2]) / (extent[1] / extent[2]),
                     ],
                     wspace=0.35,
                 )
+
             else:
                 spec = GridSpec(ncols=2, nrows=1)
 
@@ -1711,10 +1662,10 @@ class MagneticPtychographicReconstruction(
             fig = plt.figure(figsize=figsize)
 
         if plot_probe or plot_fourier_probe:
-            # Electrostatic Object
+            # Object_e
             ax = fig.add_subplot(spec[0, 0])
             im = ax.imshow(
-                rotated_electrostatic,
+                obj[0],
                 extent=extent,
                 cmap=cmap_e,
                 vmin=vmin_e,
@@ -1723,10 +1674,11 @@ class MagneticPtychographicReconstruction(
             )
             ax.set_ylabel("x [A]")
             ax.set_xlabel("y [A]")
+
             if self._object_type == "potential":
-                ax.set_title("Reconstructed electrostatic potential")
+                ax.set_title("Electrostatic potential")
             elif self._object_type == "complex":
-                ax.set_title("Reconstructed electrostatic phase")
+                ax.set_title("Electrostatic phase")
 
             if cbar:
                 divider = make_axes_locatable(ax)
@@ -1734,10 +1686,10 @@ class MagneticPtychographicReconstruction(
                 fig.add_axes(ax_cb)
                 fig.colorbar(im, cax=ax_cb)
 
-            # Magnetic Object
+            # Object_m
             ax = fig.add_subplot(spec[0, 1])
             im = ax.imshow(
-                rotated_magnetic,
+                obj[1],
                 extent=extent,
                 cmap=cmap_m,
                 vmin=vmin_m,
@@ -1746,7 +1698,11 @@ class MagneticPtychographicReconstruction(
             )
             ax.set_ylabel("x [A]")
             ax.set_xlabel("y [A]")
-            ax.set_title("Reconstructed magnetic potential")
+
+            if self._object_type == "potential":
+                ax.set_title("Magnetic potential")
+            elif self._object_type == "complex":
+                ax.set_title("Magnetic phase")
 
             if cbar:
                 divider = make_axes_locatable(ax)
@@ -1757,21 +1713,26 @@ class MagneticPtychographicReconstruction(
             # Probe
             ax = fig.add_subplot(spec[0, 2])
             if plot_fourier_probe:
-                if remove_initial_probe_aberrations:
-                    probe_array = self.probe_fourier_residual
-                else:
-                    probe_array = self.probe_fourier
+                probe = asnumpy(
+                    self._return_fourier_probe(
+                        probe,
+                        remove_initial_probe_aberrations=remove_initial_probe_aberrations,
+                    )
+                )
 
                 probe_array = Complex2RGB(
-                    probe_array,
+                    probe,
                     chroma_boost=chroma_boost,
                 )
+
                 ax.set_title("Reconstructed Fourier probe")
                 ax.set_ylabel("kx [mrad]")
                 ax.set_xlabel("ky [mrad]")
             else:
                 probe_array = Complex2RGB(
-                    self.probe, power=2, chroma_boost=chroma_boost
+                    asnumpy(self._return_centered_probe(probe)),
+                    power=2,
+                    chroma_boost=chroma_boost,
                 )
                 ax.set_title("Reconstructed probe intensity")
                 ax.set_ylabel("x [A]")
@@ -1788,10 +1749,10 @@ class MagneticPtychographicReconstruction(
                 add_colorbar_arg(ax_cb, chroma_boost=chroma_boost)
 
         else:
-            # Electrostatic Object
+            # Object_e
             ax = fig.add_subplot(spec[0, 0])
             im = ax.imshow(
-                rotated_electrostatic,
+                obj[0],
                 extent=extent,
                 cmap=cmap_e,
                 vmin=vmin_e,
@@ -1800,10 +1761,11 @@ class MagneticPtychographicReconstruction(
             )
             ax.set_ylabel("x [A]")
             ax.set_xlabel("y [A]")
+
             if self._object_type == "potential":
-                ax.set_title("Reconstructed electrostatic potential")
+                ax.set_title("Electrostatic potential")
             elif self._object_type == "complex":
-                ax.set_title("Reconstructed electrostatic phase")
+                ax.set_title("Electrostatic phase")
 
             if cbar:
                 divider = make_axes_locatable(ax)
@@ -1811,10 +1773,10 @@ class MagneticPtychographicReconstruction(
                 fig.add_axes(ax_cb)
                 fig.colorbar(im, cax=ax_cb)
 
-            # Magnetic Object
+            # Object_e
             ax = fig.add_subplot(spec[0, 1])
             im = ax.imshow(
-                rotated_magnetic,
+                obj[1],
                 extent=extent,
                 cmap=cmap_m,
                 vmin=vmin_m,
@@ -1823,7 +1785,11 @@ class MagneticPtychographicReconstruction(
             )
             ax.set_ylabel("x [A]")
             ax.set_xlabel("y [A]")
-            ax.set_title("Reconstructed magnetic potential")
+
+            if self._object_type == "potential":
+                ax.set_title("Magnetic potential")
+            elif self._object_type == "complex":
+                ax.set_title("Magnetic phase")
 
             if cbar:
                 divider = make_axes_locatable(ax)
@@ -1833,6 +1799,7 @@ class MagneticPtychographicReconstruction(
 
         if plot_convergence and hasattr(self, "error_iterations"):
             errors = np.array(self.error_iterations)
+
             ax = fig.add_subplot(spec[1, :])
             ax.semilogy(np.arange(errors.shape[0]), errors, **kwargs)
             ax.set_ylabel("NMSE")
@@ -1842,201 +1809,11 @@ class MagneticPtychographicReconstruction(
         fig.suptitle(f"Normalized mean squared error: {self.error:.3e}")
         spec.tight_layout(fig)
 
-    def _visualize_all_iterations(
-        self,
-        fig,
-        cbar: bool,
-        plot_convergence: bool,
-        plot_probe: bool,
-        plot_fourier_probe: bool,
-        remove_initial_probe_aberrations: bool,
-        iterations_grid: Tuple[int, int],
-        padding: int,
-        **kwargs,
-    ):
-        """
-        Displays all reconstructed object and probe iterations.
-
-        Parameters
-        --------
-        fig: Figure
-            Matplotlib figure to place Gridspec in
-        plot_convergence: bool, optional
-            If true, the normalized mean squared error (NMSE) plot is displayed
-        iterations_grid: Tuple[int,int]
-            Grid dimensions to plot reconstruction iterations
-        cbar: bool, optional
-            If true, displays a colorbar
-        plot_probe: bool, optional
-            If true, the reconstructed complex probe is displayed
-        plot_fourier_probe: bool, optional
-            If true, the reconstructed complex Fourier probe is displayed
-        remove_initial_probe_aberrations: bool, optional
-            If true, when plotting fourier probe, removes initial probe
-            to visualize changes
-        padding : int, optional
-            Pixels to pad by post rotating-cropping object
-        """
-        raise NotImplementedError()
-
-    def visualize(
-        self,
-        fig=None,
-        iterations_grid: Tuple[int, int] = None,
-        plot_convergence: bool = True,
-        plot_probe: bool = True,
-        plot_fourier_probe: bool = False,
-        remove_initial_probe_aberrations: bool = False,
-        cbar: bool = True,
-        padding: int = 0,
-        **kwargs,
-    ):
-        """
-        Displays reconstructed object and probe.
-
-        Parameters
-        --------
-        fig: Figure
-            Matplotlib figure to place Gridspec in
-        plot_convergence: bool, optional
-            If true, the normalized mean squared error (NMSE) plot is displayed
-        iterations_grid: Tuple[int,int]
-            Grid dimensions to plot reconstruction iterations
-        cbar: bool, optional
-            If true, displays a colorbar
-        plot_probe: bool, optional
-            If true, the reconstructed complex probe is displayed
-        plot_fourier_probe: bool, optional
-            If true, the reconstructed complex Fourier probe is displayed
-        remove_initial_probe_aberrations: bool, optional
-            If true, when plotting fourier probe, removes initial probe
-            to visualize changes
-        padding : int, optional
-            Pixels to pad by post rotating-cropping object
-
-        Returns
-        --------
-        self: PtychographicReconstruction
-            Self to accommodate chaining
-        """
-
-        if iterations_grid is None:
-            self._visualize_last_iteration(
-                fig=fig,
-                plot_convergence=plot_convergence,
-                plot_probe=plot_probe,
-                plot_fourier_probe=plot_fourier_probe,
-                remove_initial_probe_aberrations=remove_initial_probe_aberrations,
-                cbar=cbar,
-                padding=padding,
-                **kwargs,
-            )
-        else:
-            self._visualize_all_iterations(
-                fig=fig,
-                plot_convergence=plot_convergence,
-                iterations_grid=iterations_grid,
-                plot_probe=plot_probe,
-                plot_fourier_probe=plot_fourier_probe,
-                remove_initial_probe_aberrations=remove_initial_probe_aberrations,
-                cbar=cbar,
-                padding=padding,
-                **kwargs,
-            )
-
-        return self
-
-    @property
-    def self_consistency_errors(self):
-        """Compute the self-consistency errors for each probe position"""
-
-        xp = self._xp
-        asnumpy = self._asnumpy
-
-        # Re-initialize fractional positions and vector patches, max_batch_size = None
-        self._positions_px_fractional = self._positions_px - xp.round(
-            self._positions_px
-        )
-
-        (
-            self._vectorized_patch_indices_row,
-            self._vectorized_patch_indices_col,
-        ) = self._extract_vectorized_patch_indices()
-
-        # Overlaps
-        _, _, overlap = self._warmup_overlap_projection(self._object, self._probe)
-        fourier_overlap = xp.fft.fft2(overlap[0])
-
-        # Normalized mean-squared errors
-        error = xp.sum(
-            xp.abs(self._amplitudes[0] - xp.abs(fourier_overlap)) ** 2, axis=(-2, -1)
-        )
-        error /= self._mean_diffraction_intensity
-
-        return asnumpy(error)
-
-    def _return_self_consistency_errors(
-        self,
-        max_batch_size=None,
-    ):
-        """Compute the self-consistency errors for each probe position"""
-
-        xp = self._xp
-        asnumpy = self._asnumpy
-
-        # Batch-size
-        if max_batch_size is None:
-            max_batch_size = self._num_diffraction_patterns
-
-        # Re-initialize fractional positions and vector patches
-        errors = np.array([])
-        positions_px = self._positions_px.copy()
-
-        for start, end in generate_batches(
-            self._num_diffraction_patterns, max_batch=max_batch_size
-        ):
-            # batch indices
-            self._positions_px = positions_px[start:end]
-            self._positions_px_fractional = self._positions_px - xp.round(
-                self._positions_px
-            )
-            (
-                self._vectorized_patch_indices_row,
-                self._vectorized_patch_indices_col,
-            ) = self._extract_vectorized_patch_indices()
-            amplitudes = self._amplitudes[0][start:end]
-
-            # Overlaps
-            _, _, overlap = self._warmup_overlap_projection(self._object, self._probe)
-            fourier_overlap = xp.fft.fft2(overlap[0])
-
-            # Normalized mean-squared errors
-            batch_errors = xp.sum(
-                xp.abs(amplitudes - xp.abs(fourier_overlap)) ** 2, axis=(-2, -1)
-            )
-            errors = np.hstack((errors, batch_errors))
-
-        self._positions_px = positions_px.copy()
-        errors /= self._mean_diffraction_intensity
-
-        return asnumpy(errors)
-
-    def _return_projected_cropped_potential(
-        self,
-    ):
-        """Utility function to accommodate multiple classes"""
-        if self._object_type == "complex":
-            projected_cropped_potential = np.angle(self.object_cropped[0])
-        else:
-            projected_cropped_potential = self.object_cropped[0]
-
-        return projected_cropped_potential
-
     @property
     def object_cropped(self):
         """Cropped and rotated object"""
 
-        obj_e, obj_m = self._object
-        obj_e = self._crop_rotate_object_fov(obj_e)
-        obj_m = self._crop_rotate_object_fov(obj_m)
-        return (obj_e, obj_m)
+        cropped_e = self._crop_rotate_object_fov(self._object[0])
+        cropped_m = self._crop_rotate_object_fov(self._object[1])
+
+        return np.array([cropped_e, cropped_m])
