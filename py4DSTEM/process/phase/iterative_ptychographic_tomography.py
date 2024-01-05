@@ -1055,10 +1055,6 @@ class PtychographicTomographyReconstruction(
                 max_batch_size,
             )
 
-        # batching
-        shuffled_indices = np.arange(self._num_diffraction_patterns)
-        unshuffled_indices = np.zeros_like(shuffled_indices)
-
         if max_batch_size is not None:
             xp.random.seed(seed_random)
         else:
@@ -1184,7 +1180,7 @@ class PtychographicTomographyReconstruction(
                     if a0 >= fix_positions_iter:
                         positions_px[start:end] = self._position_correction(
                             object_sliced,
-                            _probe,
+                            shifted_probes,
                             overlap,
                             amplitudes,
                             self._positions_px,
@@ -1281,30 +1277,26 @@ class PtychographicTomographyReconstruction(
 
                 (
                     self._object,
-                    _probe,
+                    _,
                     _,
                 ) = self._constraints(
                     self._object,
-                    _probe,
                     None,
-                    fix_com=fix_com and a0 >= fix_probe_iter,
-                    constrain_probe_amplitude=a0 < constrain_probe_amplitude_iter
-                    and a0 >= fix_probe_iter,
-                    constrain_probe_amplitude_relative_radius=constrain_probe_amplitude_relative_radius,
-                    constrain_probe_amplitude_relative_width=constrain_probe_amplitude_relative_width,
-                    constrain_probe_fourier_amplitude=a0
-                    < constrain_probe_fourier_amplitude_iter
-                    and a0 >= fix_probe_iter,
-                    constrain_probe_fourier_amplitude_max_width_pixels=constrain_probe_fourier_amplitude_max_width_pixels,
-                    constrain_probe_fourier_amplitude_constant_intensity=constrain_probe_fourier_amplitude_constant_intensity,
-                    fit_probe_aberrations=a0 < fit_probe_aberrations_iter
-                    and a0 >= fix_probe_iter,
-                    fit_probe_aberrations_max_angular_order=fit_probe_aberrations_max_angular_order,
-                    fit_probe_aberrations_max_radial_order=fit_probe_aberrations_max_radial_order,
-                    fix_probe_aperture=a0 < fix_probe_aperture_iter,
-                    initial_probe_aperture=_probe_initial_aperture,
+                    None,
+                    fix_com=False,
+                    constrain_probe_amplitude=False,
+                    constrain_probe_amplitude_relative_radius=None,
+                    constrain_probe_amplitude_relative_width=None,
+                    constrain_probe_fourier_amplitude=False,
+                    constrain_probe_fourier_amplitude_max_width_pixels=None,
+                    constrain_probe_fourier_amplitude_constant_intensity=None,
+                    fit_probe_aberrations=False,
+                    fit_probe_aberrations_max_angular_order=None,
+                    fit_probe_aberrations_max_radial_order=None,
+                    fix_probe_aperture=False,
+                    initial_probe_aperture=None,
                     fix_positions=True,
-                    global_affine_transformation=global_affine_transformation,
+                    global_affine_transformation=None,
                     gaussian_filter=a0 < gaussian_filter_iter
                     and gaussian_filter_sigma is not None,
                     gaussian_filter_sigma=gaussian_filter_sigma,

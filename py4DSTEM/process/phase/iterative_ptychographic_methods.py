@@ -1431,7 +1431,7 @@ class ProbeListMethodsMixin:
             self._object_type = self._object_type_initial
 
             if use_projection_scheme:
-                self._exit_waves = [None] * self._num_tilts
+                self._exit_waves = [None] * len(self._probes_all)
             else:
                 self._exit_waves = None
 
@@ -1454,7 +1454,7 @@ class ProbeListMethodsMixin:
             else:
                 self.error_iterations = []
                 if use_projection_scheme:
-                    self._exit_waves = [None] * self._num_tilts
+                    self._exit_waves = [None] * len(self._probes_all)
                 else:
                     self._exit_waves = None
 
