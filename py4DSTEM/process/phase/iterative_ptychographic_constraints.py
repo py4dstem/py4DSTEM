@@ -408,6 +408,61 @@ class ObjectNDConstraintsMixin:
 
         return updated_object
 
+    def _object_constraints(
+        self,
+        current_object,
+        gaussian_filter,
+        gaussian_filter_sigma,
+        pure_phase_object,
+        butterworth_filter,
+        butterworth_order,
+        q_lowpass,
+        q_highpass,
+        tv_denoise,
+        tv_denoise_weight,
+        tv_denoise_inner_iter,
+        object_positivity,
+        shrinkage_rad,
+        object_mask,
+        **kwargs,
+    ):
+        """ObjectNDConstraints wrapper function"""
+
+        # smoothness
+        if gaussian_filter:
+            current_object = self._object_gaussian_constraint(
+                current_object, gaussian_filter_sigma, pure_phase_object
+            )
+        if butterworth_filter:
+            current_object = self._object_butterworth_constraint(
+                current_object,
+                q_lowpass,
+                q_highpass,
+                butterworth_order,
+            )
+        if tv_denoise:
+            current_object = self._object_denoise_tv_pylops(
+                current_object, tv_denoise_weight, tv_denoise_inner_iter
+            )
+
+        # L1-norm pushing vacuum to zero
+        if shrinkage_rad > 0.0 or object_mask is not None:
+            current_object = self._object_shrinkage_constraint(
+                current_object,
+                shrinkage_rad,
+                object_mask,
+            )
+
+        # amplitude threshold (complex) or positivity (potential)
+        if self._object_type == "complex":
+            current_object = self._object_threshold_constraint(
+                current_object, pure_phase_object
+            )
+        elif object_positivity:
+            current_object = self._object_positivity_constraint(current_object)
+
+        return current_object
+
 
 class Object2p5DConstraintsMixin:
     """
@@ -591,6 +646,85 @@ class Object2p5DConstraintsMixin:
 
         return current_object
 
+    def _object_constraints(
+        self,
+        current_object,
+        gaussian_filter,
+        gaussian_filter_sigma,
+        pure_phase_object,
+        butterworth_filter,
+        butterworth_order,
+        q_lowpass,
+        q_highpass,
+        identical_slices,
+        kz_regularization_filter,
+        kz_regularization_gamma,
+        tv_denoise,
+        tv_denoise_weights,
+        tv_denoise_inner_iter,
+        tv_denoise_chambolle,
+        tv_denoise_weight_chambolle,
+        tv_denoise_pad_chambolle,
+        object_positivity,
+        shrinkage_rad,
+        object_mask,
+        **kwargs,
+    ):
+        """Object2p5DConstraints wrapper function"""
+
+        # smoothness
+        if gaussian_filter:
+            current_object = self._object_gaussian_constraint(
+                current_object, gaussian_filter_sigma, pure_phase_object
+            )
+        if butterworth_filter:
+            current_object = self._object_butterworth_constraint(
+                current_object,
+                q_lowpass,
+                q_highpass,
+                butterworth_order,
+            )
+        if identical_slices:
+            current_object = self._object_identical_slices_constraint(current_object)
+        elif kz_regularization_filter:
+            current_object = self._object_kz_regularization_constraint(
+                current_object,
+                kz_regularization_gamma,
+                z_padding=1,
+            )
+        elif tv_denoise:
+            current_object = self._object_denoise_tv_pylops(
+                current_object,
+                tv_denoise_weights,
+                tv_denoise_inner_iter,
+                z_padding=1,
+            )
+        elif tv_denoise_chambolle:
+            current_object = self._object_denoise_tv_chambolle(
+                current_object,
+                tv_denoise_weight_chambolle,
+                axis=0,
+                padding=tv_denoise_pad_chambolle,
+            )
+
+        # L1-norm pushing vacuum to zero
+        if shrinkage_rad > 0.0 or object_mask is not None:
+            current_object = self._object_shrinkage_constraint(
+                current_object,
+                shrinkage_rad,
+                object_mask,
+            )
+
+        # amplitude threshold (complex) or positivity (potential)
+        if self._object_type == "complex":
+            current_object = self._object_threshold_constraint(
+                current_object, pure_phase_object
+            )
+        elif object_positivity:
+            current_object = self._object_positivity_constraint(current_object)
+
+        return current_object
+
 
 class Object3DConstraintsMixin:
     """
@@ -696,6 +830,58 @@ class Object3DConstraintsMixin:
 
         if self._object_type == "potential":
             current_object = xp.real(current_object)
+
+        return current_object
+
+    def _object_constraints(
+        self,
+        current_object,
+        gaussian_filter,
+        gaussian_filter_sigma,
+        butterworth_filter,
+        butterworth_order,
+        q_lowpass,
+        q_highpass,
+        tv_denoise,
+        tv_denoise_weights,
+        tv_denoise_inner_iter,
+        object_positivity,
+        shrinkage_rad,
+        object_mask,
+        **kwargs,
+    ):
+        """Object3DConstraints wrapper function"""
+
+        # smoothness
+        if gaussian_filter:
+            current_object = self._object_gaussian_constraint(
+                current_object, gaussian_filter_sigma, pure_phase_object=False
+            )
+        if butterworth_filter:
+            current_object = self._object_butterworth_constraint(
+                current_object,
+                q_lowpass,
+                q_highpass,
+                butterworth_order,
+            )
+        if tv_denoise:
+            current_object = self._object_denoise_tv_pylops(
+                current_object,
+                tv_denoise_weights,
+                tv_denoise_inner_iter,
+            )
+
+        # L1-norm pushing vacuum to zero
+        if shrinkage_rad > 0.0 or object_mask is not None:
+            current_object = self._object_shrinkage_constraint(
+                current_object,
+                shrinkage_rad,
+                object_mask,
+            )
+
+        # Positivity
+        if object_positivity:
+            current_object = self._object_positivity_constraint(current_object)
 
         return current_object
 
@@ -892,6 +1078,60 @@ class ProbeConstraintsMixin:
 
         return current_probe
 
+    def _probe_constraints(
+        self,
+        current_probe,
+        fix_com,
+        fit_probe_aberrations,
+        fit_probe_aberrations_max_angular_order,
+        fit_probe_aberrations_max_radial_order,
+        fix_probe_aperture,
+        initial_probe_aperture,
+        constrain_probe_fourier_amplitude,
+        constrain_probe_fourier_amplitude_max_width_pixels,
+        constrain_probe_fourier_amplitude_constant_intensity,
+        constrain_probe_amplitude,
+        constrain_probe_amplitude_relative_radius,
+        constrain_probe_amplitude_relative_width,
+        **kwargs,
+    ):
+        """ProbeConstraints wrapper function"""
+
+        # CoM corner-centering
+        if fix_com:
+            current_probe = self._probe_center_of_mass_constraint(current_probe)
+
+        # Fourier phase (aberrations) fitting
+        if fit_probe_aberrations:
+            current_probe = self._probe_aberration_fitting_constraint(
+                current_probe,
+                fit_probe_aberrations_max_angular_order,
+                fit_probe_aberrations_max_radial_order,
+            )
+
+        # Fourier amplitude (aperture) constraints
+        if fix_probe_aperture:
+            current_probe = self._probe_aperture_constraint(
+                current_probe,
+                initial_probe_aperture,
+            )
+        elif constrain_probe_fourier_amplitude:
+            current_probe = self._probe_fourier_amplitude_constraint(
+                current_probe,
+                constrain_probe_fourier_amplitude_max_width_pixels,
+                constrain_probe_fourier_amplitude_constant_intensity,
+            )
+
+        # Real-space amplitude constraint
+        if constrain_probe_amplitude:
+            current_probe = self._probe_amplitude_constraint(
+                current_probe,
+                constrain_probe_amplitude_relative_radius,
+                constrain_probe_amplitude_relative_width,
+            )
+
+        return current_probe
+
 
 class ProbeMixedConstraintsMixin:
     """
@@ -960,6 +1200,67 @@ class ProbeMixedConstraintsMixin:
         intensities = xp.sum(xp.abs(current_probe) ** 2, axis=(-2, -1))
         intensities_order = xp.argsort(intensities, axis=None)[::-1]
         return current_probe[intensities_order]
+
+    def _probe_constraints(
+        self,
+        current_probe,
+        fix_com,
+        fit_probe_aberrations,
+        fit_probe_aberrations_max_angular_order,
+        fit_probe_aberrations_max_radial_order,
+        fix_probe_aperture,
+        initial_probe_aperture,
+        constrain_probe_fourier_amplitude,
+        constrain_probe_fourier_amplitude_max_width_pixels,
+        constrain_probe_fourier_amplitude_constant_intensity,
+        constrain_probe_amplitude,
+        constrain_probe_amplitude_relative_radius,
+        constrain_probe_amplitude_relative_width,
+        orthogonalize_probe,
+        **kwargs,
+    ):
+        """ProbeMixedConstraints wrapper function"""
+
+        # CoM corner-centering
+        if fix_com:
+            current_probe = self._probe_center_of_mass_constraint(current_probe)
+
+        # Fourier phase (aberrations) fitting
+        if fit_probe_aberrations:
+            for probe_idx in range(self._num_probes):
+                current_probe[probe_idx] = self._probe_aberration_fitting_constraint(
+                    current_probe[probe_idx],
+                    fit_probe_aberrations_max_angular_order,
+                    fit_probe_aberrations_max_radial_order,
+                )
+
+        # Fourier amplitude (aperture) constraints
+        if fix_probe_aperture:
+            current_probe[0] = self._probe_aperture_constraint(
+                current_probe[0],
+                initial_probe_aperture,
+            )
+        elif constrain_probe_fourier_amplitude:
+            current_probe[0] = self._probe_fourier_amplitude_constraint(
+                current_probe[0],
+                constrain_probe_fourier_amplitude_max_width_pixels,
+                constrain_probe_fourier_amplitude_constant_intensity,
+            )
+
+        # Real-space amplitude constraint
+        if constrain_probe_amplitude:
+            for probe_idx in range(self._num_probes):
+                current_probe[probe_idx] = self._probe_amplitude_constraint(
+                    current_probe[probe_idx],
+                    constrain_probe_amplitude_relative_radius,
+                    constrain_probe_amplitude_relative_width,
+                )
+
+        # Probe orthogonalization
+        if orthogonalize_probe:
+            current_probe = self._probe_orthogonalization_constraint(current_probe)
+
+        return current_probe
 
 
 class PositionsConstraintsMixin:
@@ -1030,5 +1331,26 @@ class PositionsConstraintsMixin:
 
         self._tf = tf
         current_positions = tf(initial_positions, origin=self._positions_px_com, xp=xp)
+
+        return current_positions
+
+    def _positions_constraints(
+        self,
+        current_positions,
+        fix_positions,
+        global_affine_transformation,
+        **kwargs,
+    ):
+        """PositionsConstraints wrapper function"""
+
+        if not fix_positions:
+            current_positions = self._positions_center_of_mass_constraint(
+                current_positions
+            )
+
+            if global_affine_transformation:
+                current_positions = self._positions_affine_transformation_constraint(
+                    self._positions_px_initial, current_positions
+                )
 
         return current_positions

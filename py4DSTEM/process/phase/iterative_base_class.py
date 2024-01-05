@@ -1980,6 +1980,15 @@ class PtychographicReconstruction(PhaseReconstruction):
                     )
                 )
 
+    def _constraints(self, current_object, current_probe, current_positions, **kwargs):
+        """Wrapper function for all classes to inherit"""
+
+        current_object = self._object_constraints(current_object, **kwargs)
+        current_probe = self._probe_constraints(current_probe, **kwargs)
+        current_positions = self._positions_constraints(current_positions, **kwargs)
+
+        return current_object, current_probe, current_positions
+
     @property
     def angular_sampling(self):
         """Angular sampling [mrad]"""
