@@ -342,7 +342,7 @@ class PhaseReconstruction(Custom):
         # Real-space
         if force_scan_sampling is not None:
             self._scan_sampling = (force_scan_sampling, force_scan_sampling)
-            self._scan_units = "A"
+            self._scan_units = ("A",) * 2
         else:
             if real_space_units == "pixels":
                 if require_calibrations:
