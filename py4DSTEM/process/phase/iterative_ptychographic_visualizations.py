@@ -6,8 +6,11 @@ import numpy as np
 from matplotlib.gridspec import GridSpec
 from mpl_toolkits.axes_grid1 import ImageGrid, make_axes_locatable
 from py4DSTEM.process.phase.utils import AffineTransform
-from py4DSTEM.visualize import return_scaled_histogram_ordering
-from py4DSTEM.visualize.vis_special import Complex2RGB, add_colorbar_arg
+from py4DSTEM.visualize.vis_special import (
+    Complex2RGB,
+    add_colorbar_arg,
+    return_scaled_histogram_ordering,
+)
 
 try:
     import cupy as cp
@@ -534,6 +537,8 @@ class VisualizationsMixin:
 
     def show_updated_positions(
         self,
+        pos=None,
+        initial_pos=None,
         scale_arrows=1,
         plot_arrow_freq=None,
         plot_cropped_rotated_fov=True,
@@ -561,8 +566,15 @@ class VisualizationsMixin:
 
         asnumpy = self._asnumpy
 
-        initial_pos = asnumpy(self._positions_initial)
-        pos = self.positions
+        if pos is None:
+            pos = self.positions
+
+            # handle multiple measurements
+            if pos.ndim == 3:
+                pos = pos.mean(0)
+
+        if initial_pos is None:
+            initial_pos = asnumpy(self._positions_initial)
 
         if plot_cropped_rotated_fov:
             angle = (
