@@ -1821,7 +1821,7 @@ def pixel_rolling_kernel_density_estimate(
     stack: np.ndarray
         Unshifted image stack
     shifts: np.ndarray
-        Cross-correlated virtual BF image shifts
+        Shifts for each image in stack, shape: (?,?)
     upsampling_factor: int
         Upsampling factor
     kde_sigma: float
