@@ -280,6 +280,8 @@ class ParallaxReconstruction(PhaseReconstruction):
         ----------
         edge_blend: float, optional
             Number of pixels to blend image at the border
+        dp_mask: np.ndarray, bool
+            Bright-field pixels mask used for cross-correlation, boolean array same shape as DPs
         threshold: float, optional
             Fraction of max of dp_mean for bright-field pixels
         normalize_images: bool, optional
