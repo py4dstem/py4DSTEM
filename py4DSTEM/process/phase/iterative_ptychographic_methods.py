@@ -1162,6 +1162,90 @@ class ProbeMethodsMixin:
 
         return xp.fft.fftshift(probe, axes=(-2, -1))
 
+    def _return_probe_intensities(self, probe):
+        """
+        Returns probe intensities summing up to 1.
+        """
+        if probe is None:
+            probe = self.probe_centered
+
+        intensity_arrays = np.abs(np.array(probe, ndmin=3)) ** 2
+        probe_ratio = list(intensity_arrays.sum((-2, -1)) / intensity_arrays.sum())
+
+        return probe_ratio
+
+    def show_probe(
+        self,
+        probe=None,
+        cbar=True,
+        scalebar=True,
+        pixelsize=None,
+        pixelunits=None,
+        **kwargs,
+    ):
+        """
+        Plot probe in real space
+
+        Parameters
+        ----------
+        probe: complex array, optional
+            if None is specified, uses the `probe_fourier` property
+        remove_initial_probe_aberrations: bool, optional
+            If True, removes initial probe aberrations from Fourier probe
+        cbar: bool, optional
+            if True, adds colorbar
+        scalebar: bool, optional
+            if True, adds scalebar to probe
+        pixelunits: str, optional
+            units for scalebar, default is A^-1
+        pixelsize: float, optional
+            default is probe reciprocal sampling
+        """
+        asnumpy = self._asnumpy
+
+        if pixelsize is None:
+            pixelsize = self.sampling[1]
+        if pixelunits is None:
+            pixelunits = r"$\AA$"
+
+        intensities = self._return_probe_intensities(probe)
+        title = [
+            f"Probe {iter} intensity: {ratio*100:.1f}%"
+            for iter, ratio in enumerate(intensities)
+        ]
+
+        axsize = kwargs.pop("axsize", (4, 4))
+        chroma_boost = kwargs.pop("chroma_boost", 1)
+        ticks = kwargs.pop("ticks", False)
+        title = kwargs.pop("title", title if len(title) > 1 else title[0])
+
+        if probe is None:
+            probe = list(np.array(self.probe_centered, ndmin=3))
+        else:
+            if isinstance(probe, np.ndarray) and probe.ndim == 2:
+                probe = [probe]
+            probe = [
+                asnumpy(
+                    self._return_centered_probe(
+                        pr,
+                    )
+                )
+                for pr in probe
+            ]
+
+        show_complex(
+            probe,
+            cbar=cbar,
+            axsize=axsize,
+            scalebar=scalebar,
+            pixelsize=pixelsize,
+            pixelunits=pixelunits,
+            ticks=ticks,
+            chroma_boost=chroma_boost,
+            title=title,
+            **kwargs,
+        )
+
     def show_fourier_probe(
         self,
         probe=None,
@@ -1192,30 +1276,51 @@ class ProbeMethodsMixin:
         """
         asnumpy = self._asnumpy
 
-        probe = asnumpy(
-            self._return_fourier_probe(
-                probe, remove_initial_probe_aberrations=remove_initial_probe_aberrations
-            )
-        )
-
         if pixelsize is None:
             pixelsize = self._reciprocal_sampling[1]
         if pixelunits is None:
             pixelunits = r"$\AA^{-1}$"
 
-        figsize = kwargs.pop("figsize", (6, 6))
-        chroma_boost = kwargs.pop("chroma_boost", 1)
+        intensities = self._return_probe_intensities(probe)
+        title = [
+            f"Probe {iter} intensity: {ratio*100:.1f}%"
+            for iter, ratio in enumerate(intensities)
+        ]
 
-        fig, ax = plt.subplots(figsize=figsize)
+        axsize = kwargs.pop("axsize", (4, 4))
+        chroma_boost = kwargs.pop("chroma_boost", 1)
+        ticks = kwargs.pop("ticks", False)
+        title = kwargs.pop("title", title if len(title) > 1 else title[0])
+
+        if probe is None:
+            if remove_initial_probe_aberrations:
+                probe = self.probe_fourier_residual
+            else:
+                probe = self.probe_fourier
+            probe = list(np.array(probe, ndmin=3))
+        else:
+            if isinstance(probe, np.ndarray) and probe.ndim == 2:
+                probe = [probe]
+            probe = [
+                asnumpy(
+                    self._return_fourier_probe(
+                        pr,
+                        remove_initial_probe_aberrations=remove_initial_probe_aberrations,
+                    )
+                )
+                for pr in probe
+            ]
+
         show_complex(
             probe,
             cbar=cbar,
-            figax=(fig, ax),
+            axsize=axsize,
             scalebar=scalebar,
             pixelsize=pixelsize,
             pixelunits=pixelunits,
-            ticks=False,
+            ticks=ticks,
             chroma_boost=chroma_boost,
+            title=title,
             **kwargs,
         )
 
@@ -1316,74 +1421,6 @@ class ProbeMixedMethodsMixin:
             _probes = xp.asarray(initial_probe, dtype=xp.complex64)
 
         return _probes, semiangle_cutoff
-
-    def show_fourier_probe(
-        self,
-        probe=None,
-        remove_initial_probe_aberrations=False,
-        cbar=True,
-        scalebar=True,
-        pixelsize=None,
-        pixelunits=None,
-        **kwargs,
-    ):
-        """
-        Plot probe in fourier space
-
-        Parameters
-        ----------
-        probe: complex array, optional
-            if None is specified, uses the `probe_fourier` property
-        remove_initial_probe_aberrations: bool, optional
-            If True, removes initial probe aberrations from Fourier probe
-        scalebar: bool, optional
-            if True, adds scalebar to probe
-        pixelunits: str, optional
-            units for scalebar, default is A^-1
-        pixelsize: float, optional
-            default is probe reciprocal sampling
-        """
-        asnumpy = self._asnumpy
-
-        if probe is None:
-            probe = list(
-                asnumpy(
-                    self._return_fourier_probe(
-                        probe,
-                        remove_initial_probe_aberrations=remove_initial_probe_aberrations,
-                    )
-                )
-            )
-        else:
-            if isinstance(probe, np.ndarray) and probe.ndim == 2:
-                probe = [probe]
-            probe = [
-                asnumpy(
-                    self._return_fourier_probe(
-                        pr,
-                        remove_initial_probe_aberrations=remove_initial_probe_aberrations,
-                    )
-                )
-                for pr in probe
-            ]
-
-        if pixelsize is None:
-            pixelsize = self._reciprocal_sampling[1]
-        if pixelunits is None:
-            pixelunits = r"$\AA^{-1}$"
-
-        chroma_boost = kwargs.pop("chroma_boost", 1)
-
-        show_complex(
-            probe if len(probe) > 1 else probe[0],
-            cbar=cbar,
-            scalebar=scalebar,
-            pixelsize=pixelsize,
-            pixelunits=pixelunits,
-            ticks=False,
-            chroma_boost=chroma_boost,
-            **kwargs,
-        )
 
     def _return_single_probe(self, probe=None):
         """Current probe estimate"""
@@ -3160,7 +3197,7 @@ class MultipleMeasurementsMethodsMixin:
     @property
     def probe_fourier_residual(self):
         """Current probe estimate in Fourier space"""
-        if not hasattr(self, "_probe"):
+        if not hasattr(self, "_probes_all"):
             return None
 
         asnumpy = self._asnumpy
