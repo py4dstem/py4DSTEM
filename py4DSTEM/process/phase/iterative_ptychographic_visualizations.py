@@ -615,7 +615,7 @@ class VisualizationsMixin:
             0,
         ]
 
-        figsize = kwargs.pop("figsize", (6, 6))
+        figsize = kwargs.pop("figsize", (4, 4))
         cmap = kwargs.pop("cmap", "Reds")
 
         fig, ax = plt.subplots(figsize=figsize)
@@ -767,13 +767,13 @@ class VisualizationsMixin:
                 height_ratios=[1, 4],
                 hspace=0.15,
             )
-            auto_figsize = (6, 8)
+            auto_figsize = (4, 5)
         else:
             spec = GridSpec(
                 ncols=1,
                 nrows=1,
             )
-            auto_figsize = (6, 6)
+            auto_figsize = (4, 4)
 
         figsize = kwargs.pop("figsize", auto_figsize)
 
@@ -785,7 +785,7 @@ class VisualizationsMixin:
             counts, bins = np.histogram(errors, bins=50)
             ax_hist.hist(bins[:-1], bins, weights=counts, color="#5ac8c8", alpha=0.5)
             ax_hist.set_ylabel("Counts")
-            ax_hist.set_xlabel("Normalized Squared Error")
+            ax_hist.set_xlabel("Normalized squared error")
 
         ax = fig.add_subplot(spec[-1])
 
