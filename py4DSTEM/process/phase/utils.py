@@ -1819,9 +1819,9 @@ def pixel_rolling_kernel_density_estimate(
     Parameters
     ----------
     stack: np.ndarray
-        Unshifted image stack
+        Unshifted image stack, shape (N,P,S)
     shifts: np.ndarray
-        Shifts for each image in stack, shape: (?,?)
+        Shifts for each image in stack, shape: (N,2)
     upsampling_factor: int
         Upsampling factor
     kde_sigma: float
