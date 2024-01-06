@@ -1037,19 +1037,21 @@ class ProbeConstraintsMixin:
         current_probe,
         max_angular_order,
         max_radial_order,
+        remove_initial_probe_aberrations,
     ):
         """
         Ptychographic probe smoothing constraint.
-        Removes/adds known (initialization) aberrations before/after smoothing.
 
         Parameters
         ----------
         current_probe: np.ndarray
             Current positions estimate
-        gaussian_filter_sigma: float
-            Standard deviation of gaussian kernel in A^-1
-        fix_amplitude: bool
-            If True, only the phase is smoothed
+        max_angular_order: bool
+            Max angular order of probe aberrations basis functions
+        max_radial_order: bool
+            Max radial order of probe aberrations basis functions
+        remove_initial_probe_aberrations: bool, optional
+            If true, initial probe aberrations are removed before fitting
 
         Returns
         --------
@@ -1060,6 +1062,9 @@ class ProbeConstraintsMixin:
         xp = self._xp
 
         fourier_probe = xp.fft.fft2(current_probe)
+        if remove_initial_probe_aberrations:
+            fourier_probe *= xp.conj(self._known_aberrations_array)
+
         fourier_probe_abs = xp.abs(fourier_probe)
         sampling = self.sampling
         energy = self._energy
@@ -1074,6 +1079,9 @@ class ProbeConstraintsMixin:
         )
 
         fourier_probe = fourier_probe_abs * xp.exp(-1.0j * fitted_angle)
+        if remove_initial_probe_aberrations:
+            fourier_probe *= self._known_aberrations_array
+
         current_probe = xp.fft.ifft2(fourier_probe)
 
         return current_probe
@@ -1085,6 +1093,7 @@ class ProbeConstraintsMixin:
         fit_probe_aberrations,
         fit_probe_aberrations_max_angular_order,
         fit_probe_aberrations_max_radial_order,
+        fit_probe_aberrations_remove_initial,
         fix_probe_aperture,
         initial_probe_aperture,
         constrain_probe_fourier_amplitude,
@@ -1107,6 +1116,7 @@ class ProbeConstraintsMixin:
                 current_probe,
                 fit_probe_aberrations_max_angular_order,
                 fit_probe_aberrations_max_radial_order,
+                fit_probe_aberrations_remove_initial,
             )
 
         # Fourier amplitude (aperture) constraints
@@ -1208,6 +1218,7 @@ class ProbeMixedConstraintsMixin:
         fit_probe_aberrations,
         fit_probe_aberrations_max_angular_order,
         fit_probe_aberrations_max_radial_order,
+        fit_probe_aberrations_remove_initial,
         fix_probe_aperture,
         initial_probe_aperture,
         constrain_probe_fourier_amplitude,
@@ -1232,6 +1243,7 @@ class ProbeMixedConstraintsMixin:
                     current_probe[probe_idx],
                     fit_probe_aberrations_max_angular_order,
                     fit_probe_aberrations_max_radial_order,
+                    fit_probe_aberrations_remove_initial,
                 )
 
         # Fourier amplitude (aperture) constraints
