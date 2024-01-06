@@ -1657,13 +1657,16 @@ def unwrap_phase_2d(array, weights=None, gauge=None, corner_centered=True, xp=np
     dy = xp.mod(xp.diff(array, axis=1) + np.pi, 2 * np.pi) - np.pi
 
     if weights is not None:
+        # normalize weights
+        weights -= weights.min()
+        weights /= weights.max()
+
         ww = weights**2
         dx *= xp.minimum(ww[:-1, :], ww[1:, :])
         dy *= xp.minimum(ww[:, :-1], ww[:, 1:])
 
-    rho = xp.diff(dx, axis=0, prepend=0, append=0) + xp.diff(
-        dy, axis=1, prepend=0, append=0
-    )
+    rho = xp.diff(dx, axis=0, prepend=0, append=0)
+    rho += xp.diff(dy, axis=1, prepend=0, append=0)
 
     unwrapped_array = preconditioned_poisson_solver_dct(rho, gauge=gauge, xp=xp).real
     unwrapped_array -= unwrapped_array.min()
@@ -1709,6 +1712,8 @@ def fit_aberration_surface(
     coeff = xp.linalg.lstsq(Aw, bw, rcond=None)[0]
 
     fitted_angle = xp.tensordot(raveled_basis, coeff, axes=1).reshape(probe_angle.shape)
+    angle_offset = fitted_angle[0, 0] - probe_angle[0, 0]
+    fitted_angle -= angle_offset
 
     return fitted_angle, coeff
 

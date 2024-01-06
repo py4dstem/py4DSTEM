@@ -583,6 +583,7 @@ class MixedstatePtychographicReconstruction(
         fit_probe_aberrations_iter: int = 0,
         fit_probe_aberrations_max_angular_order: int = 4,
         fit_probe_aberrations_max_radial_order: int = 4,
+        fit_probe_aberrations_remove_initial: bool = False,
         butterworth_filter_iter: int = np.inf,
         q_lowpass: float = None,
         q_highpass: float = None,
@@ -669,6 +670,8 @@ class MixedstatePtychographicReconstruction(
             Max angular order of probe aberrations basis functions
         fit_probe_aberrations_max_radial_order: bool
             Max radial order of probe aberrations basis functions
+        fit_probe_aberrations_remove_initial: bool
+            If true, initial probe aberrations are removed before fitting
         butterworth_filter_iter: int, optional
             Number of iterations to run using high-pass butteworth filter
         q_lowpass: float
@@ -864,6 +867,7 @@ class MixedstatePtychographicReconstruction(
                 and a0 >= fix_probe_iter,
                 fit_probe_aberrations_max_angular_order=fit_probe_aberrations_max_angular_order,
                 fit_probe_aberrations_max_radial_order=fit_probe_aberrations_max_radial_order,
+                fit_probe_aberrations_remove_initial=fit_probe_aberrations_remove_initial,
                 fix_probe_aperture=a0 < fix_probe_aperture_iter,
                 initial_probe_aperture=self._probe_initial_aperture,
                 fix_positions=a0 < fix_positions_iter,
