@@ -809,8 +809,17 @@ def show_complex(
 
             add_scalebar(ax[0, 0], scalebar)
     else:
+        figsize = kwargs.pop("axsize", None)
+        figsize = kwargs.pop("figsize", figsize)
+
         fig, ax = show(
-            rgb, vmin=0, vmax=1, intensity_range="absolute", returnfig=True, **kwargs
+            rgb,
+            vmin=0,
+            vmax=1,
+            intensity_range="absolute",
+            returnfig=True,
+            figsize=figsize,
+            **kwargs,
         )
 
         if scalebar is True:
