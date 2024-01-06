@@ -3149,9 +3149,36 @@ class MultipleMeasurementsMethodsMixin:
         raise NotImplementedError()
 
     @property
-    def _probe(self):
-        """Dummy property to make single-probe functions work"""
-        return self._return_single_probe()
+    def probe_fourier(self):
+        """Current probe estimate in Fourier space"""
+        if not hasattr(self, "_probes_all"):
+            return None
+
+        asnumpy = self._asnumpy
+        return [asnumpy(self._return_fourier_probe(pr)) for pr in self._probes_all]
+
+    @property
+    def probe_fourier_residual(self):
+        """Current probe estimate in Fourier space"""
+        if not hasattr(self, "_probe"):
+            return None
+
+        asnumpy = self._asnumpy
+        return [
+            asnumpy(
+                self._return_fourier_probe(pr, remove_initial_probe_aberrations=True)
+            )
+            for pr in self._probes_all
+        ]
+
+    @property
+    def probe_centered(self):
+        """Current probe estimate shifted to the center"""
+        if not hasattr(self, "_probes_all"):
+            return None
+
+        asnumpy = self._asnumpy
+        return [asnumpy(self._return_centered_probe(pr)) for pr in self._probes_all]
 
     @property
     def positions(self):

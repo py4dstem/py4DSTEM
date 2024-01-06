@@ -608,7 +608,7 @@ class PtychographicTomographyReconstruction(
 
             # initial probe
             complex_probe_rgb = Complex2RGB(
-                self.probe_centered,
+                self.probe_centered[0],
                 power=power,
                 chroma_boost=chroma_boost,
             )
@@ -1170,12 +1170,7 @@ class PtychographicTomographyReconstruction(
 
             if store_iterations:
                 self.object_iterations.append(asnumpy(self._object.copy()))
-                self.probe_iterations.append(
-                    [
-                        asnumpy(self._return_centered_probe(pr.copy()))
-                        for pr in self._probes_all
-                    ]
-                )
+                self.probe_iterations.append(self.probe_centered)
 
         # store result
         self.object = asnumpy(self._object)
