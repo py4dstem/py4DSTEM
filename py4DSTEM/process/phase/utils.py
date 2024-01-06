@@ -1819,7 +1819,7 @@ def pixel_rolling_kernel_density_estimate(
     Parameters
     ----------
     stack: np.ndarray
-        Unshifted virtual BF images stack
+        Unshifted image stack
     shifts: np.ndarray
         Cross-correlated virtual BF image shifts
     upsampling_factor: int
