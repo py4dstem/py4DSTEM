@@ -2407,9 +2407,9 @@ class Object2p5DProbeMethodsMixin:
             ]
         ]
         title = [
-            "Mean Transmitted Probe",
-            "Min Intensity Transmitted Probe",
-            "Max Intensity Transmitted Probe",
+            "Mean transmitted probe",
+            "Min-intensity transmitted probe",
+            "Max-intensity transmitted probe",
         ]
 
         if plot_fourier_probe:
@@ -2429,14 +2429,14 @@ class Object2p5DProbeMethodsMixin:
             probes = [probes, bottom_row]
 
             title += [
-                "Mean Transmitted Fourier Probe",
-                "Min Intensity Transmitted Fourier Probe",
-                "Max Intensity Transmitted Fourier Probe",
+                "Mean transmitted Fourier probe",
+                "Min-intensity transmitted Fourier probe",
+                "Max-intensity transmitted Fourier probe",
             ]
 
         title = kwargs.get("title", title)
         ticks = kwargs.get("ticks", False)
-        axsize = kwargs.get("axsize", (4.5, 4.5))
+        axsize = kwargs.get("axsize", (4, 4))
 
         show_complex(
             probes,
