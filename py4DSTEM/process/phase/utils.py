@@ -1756,7 +1756,7 @@ def lanczos_interpolate_array(
     image: np.ndarray
         Image array to sample from
     xa: np.ndarray
-        Vertical positions of image array in pixels
+        Vertical Interpolation sampling positions of image array in pixels
     ya: np.ndarray
         Horizontal positions of image array in pixels
     alpha: int
