@@ -27,7 +27,7 @@ def read_arina(
         dtype_bin(float): specify datatype for bin on load if need something
             other than uint16
         flatfield (np.ndarray):
-            flatfield for correction factors, coverts data to float
+            flatfield for correction factors, converts data to float
 
     Returns:
         DataCube
