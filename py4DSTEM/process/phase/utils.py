@@ -413,9 +413,9 @@ class ComplexProbe:
     def polar_coordinates(self, x, y):
         """Calculate a polar grid for a given Cartesian grid."""
         xp = self._xp
-        alpha = xp.sqrt(x.reshape((-1, 1)) ** 2 + y.reshape((1, -1)) ** 2)
+        alpha = xp.sqrt(x[:, None] ** 2 + y[None, :] ** 2)
         # phi = xp.arctan2(x.reshape((-1, 1)), y.reshape((1, -1))) # bug in abtem-legacy and py4DSTEM<=0.14.9
-        phi = xp.arctan2(y.reshape((1, -1)), x.reshape((-1, 1)))
+        phi = xp.arctan2(y[None, :], x[:, None])
         return alpha, phi
 
     def build(self):
@@ -1758,9 +1758,9 @@ def bilinearly_interpolate_array(
     image: np.ndarray
         Image array to sample from
     xa: np.ndarray
-        Vertical positions of image array in pixels
+        Vertical interpolation sampling positions of image array in pixels
     ya: np.ndarray
-        Horizontal positions of image array in pixels
+        Horizontal interpolation sampling positions of image array in pixels
 
     Returns
     -------
@@ -1823,9 +1823,9 @@ def lanczos_interpolate_array(
     image: np.ndarray
         Image array to sample from
     xa: np.ndarray
-        Vertical positions of image array in pixels
+        Vertical Interpolation sampling positions of image array in pixels
     ya: np.ndarray
-        Horizontal positions of image array in pixels
+        Horizontal interpolation sampling positions of image array in pixels
     alpha: int
         Lanczos kernel order
 
@@ -1886,9 +1886,9 @@ def pixel_rolling_kernel_density_estimate(
     Parameters
     ----------
     stack: np.ndarray
-        Unshifted virtual BF images stack
+        Unshifted image stack, shape (N,P,S)
     shifts: np.ndarray
-        Cross-correlated virtual BF image shifts
+        Shifts for each image in stack, shape: (N,2)
     upsampling_factor: int
         Upsampling factor
     kde_sigma: float
@@ -2150,7 +2150,32 @@ def vectorized_fourier_resample(
     output_size=None,
     xp=np,
 ):
-    """ """
+    """
+    Resize a 2D array along any dimension, using Fourier interpolation.
+    For 4D input arrays, only the final two axes can be resized.
+    Note, this is vectorized and thus very memory-intensive.
+
+    The scaling of the array can be specified by passing either `scale`, which sets
+    the scaling factor along both axes to be scaled; or by passing `output_size`,
+    which specifies the final dimensions of the scaled axes (and allows for different
+    scaling along the x,y or kx,ky axes.)
+
+    Parameters
+    ----------
+    array: np.ndarray
+        Input 2D/4D array to be resampled
+    scale: float
+        Scalar value giving the scaling factor for all dimensions
+    output_size: (int,int)
+        Tuple of two values giving eith the (x,y) or (kx,ky) output size for 2D and 4D respectively.
+    xp: Callable
+        Array computing module
+
+    Returns
+    -------
+    resampled_array: np.ndarray
+        Resampled 2D/4D array
+    """
 
     array_size = np.array(array.shape)
     input_size = array_size[-2:].copy()
@@ -2163,9 +2188,9 @@ def vectorized_fourier_resample(
         output_size = (input_size * scale).astype("int")
     else:
         if output_size is None:
-            raise ValueError()
+            raise ValueError("One of `scale` or `output_size` must be provided.")
         if output_size.size != 2:
-            raise ValueError()
+            raise ValueError("`output_size` must contain exactly two values.")
         output_size = np.array(output_size)
 
     scale_output = np.prod(output_size) / np.prod(input_size)

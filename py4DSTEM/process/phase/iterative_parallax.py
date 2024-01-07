@@ -261,6 +261,7 @@ class ParallaxReconstruction(PhaseReconstruction):
     def preprocess(
         self,
         edge_blend: float = 16.0,
+        dp_mask: np.ndarray = None,
         threshold_intensity: float = 0.8,
         normalize_images: bool = True,
         normalize_order=0,
@@ -279,6 +280,8 @@ class ParallaxReconstruction(PhaseReconstruction):
         ----------
         edge_blend: float, optional
             Number of pixels to blend image at the border
+        dp_mask: np.ndarray, bool
+            Bright-field pixels mask used for cross-correlation, boolean array same shape as DPs
         threshold: float, optional
             Fraction of max of dp_mean for bright-field pixels
         normalize_images: bool, optional
@@ -321,16 +324,6 @@ class ParallaxReconstruction(PhaseReconstruction):
                 )
             )
 
-        # get mean diffraction pattern
-        try:
-            self._dp_mean = xp.asarray(
-                self._datacube.tree("dp_mean").data, dtype=xp.float32
-            )
-        except AssertionError:
-            self._dp_mean = xp.asarray(
-                self._datacube.get_dp_mean().data, dtype=xp.float32
-            )
-
         # extract calibrations
         self._intensities = self._extract_intensities_and_calibrations_from_datacube(
             self._datacube,
@@ -339,14 +332,6 @@ class ParallaxReconstruction(PhaseReconstruction):
 
         self._region_of_interest_shape = np.array(self._intensities.shape[-2:])
         self._scan_shape = np.array(self._intensities.shape[:2])
-
-        # make sure mean diffraction pattern is shaped correctly
-        if (self._dp_mean.shape[0] != self._intensities.shape[2]) or (
-            self._dp_mean.shape[1] != self._intensities.shape[3]
-        ):
-            raise ValueError(
-                "dp_mean must match the datacube shape. Try setting dp_mean = None."
-            )
 
         # descan correction
         if descan_correction_fit_function is not None:
@@ -387,10 +372,14 @@ class ParallaxReconstruction(PhaseReconstruction):
                     intensities_shifted[rx, ry] = intensity_shifted
 
             self._intensities = xp.asarray(intensities_shifted, xp.float32)
-            self._dp_mean = self._intensities.mean((0, 1))
+
+        if dp_mask is not None:
+            self._dp_mask = xp.asarray(dp_mask)
+        else:
+            dp_mean = self._intensities.mean((0, 1))
+            self._dp_mask = dp_mean >= (xp.max(dp_mean) * threshold_intensity)
 
         # select virtual detector pixels
-        self._dp_mask = self._dp_mean >= (xp.max(self._dp_mean) * threshold_intensity)
         self._num_bf_images = int(xp.count_nonzero(self._dp_mask))
         self._wavelength = electron_wavelength_angstrom(self._energy)
 
@@ -1051,6 +1040,7 @@ class ParallaxReconstruction(PhaseReconstruction):
 
     def subpixel_alignment(
         self,
+        virtual_detector_mask=None,
         kde_upsample_factor=None,
         kde_sigma_px=0.125,
         kde_lowpass_filter=False,
@@ -1077,6 +1067,8 @@ class ParallaxReconstruction(PhaseReconstruction):
 
         Parameters
         ----------
+        virtual_detector_mask: np.ndarray, bool
+            Virtual detector mask, as a boolean array the same size as dp_mask
         kde_upsample_factor: int, optional
             Real-space upsampling factor
         kde_sigma_px: float, optional
@@ -1118,9 +1110,6 @@ class ParallaxReconstruction(PhaseReconstruction):
         xp = self._xp
         asnumpy = self._asnumpy
         gaussian_filter = self._gaussian_filter
-
-        xy_shifts = self._xy_shifts
-        BF_size = np.array(self._stack_BF_unshifted.shape[-2:])
 
         BF_sampling = 1 / asnumpy(self._kr).max() / 2
         DF_sampling = 1 / (
@@ -1187,6 +1176,20 @@ class ParallaxReconstruction(PhaseReconstruction):
             )
 
         self._kde_upsample_factor = kde_upsample_factor
+
+        # virtual detector
+        if virtual_detector_mask is None:
+            xy_shifts = self._xy_shifts
+            stack_BF_unshifted = self._stack_BF_unshifted
+        else:
+            virtual_detector_mask = np.asarray(virtual_detector_mask, dtype="bool")
+            xy_inds_np = asnumpy(self._xy_inds)
+            inds = virtual_detector_mask[xy_inds_np[:, 0], xy_inds_np[:, 1]]
+
+            xy_shifts = self._xy_shifts[inds]
+            stack_BF_unshifted = self._stack_BF_unshifted[inds]
+
+        BF_size = np.array(stack_BF_unshifted.shape[-2:])
         pixel_output_shape = np.round(BF_size * self._kde_upsample_factor).astype("int")
 
         if (
@@ -1205,7 +1208,7 @@ class ParallaxReconstruction(PhaseReconstruction):
             pix_output = self._kernel_density_estimate(
                 xa,
                 ya,
-                self._stack_BF_unshifted,
+                stack_BF_unshifted,
                 pixel_output_shape,
                 kde_sigma_px * self._kde_upsample_factor,
                 lanczos_alpha=lanczos_interpolation_order,
@@ -1228,7 +1231,7 @@ class ParallaxReconstruction(PhaseReconstruction):
                 self._kde_upsample_factor = upsample_nearest
 
             pix_output = pixel_rolling_kernel_density_estimate(
-                self._stack_BF_unshifted,
+                stack_BF_unshifted,
                 xy_shifts,
                 self._kde_upsample_factor,
                 kde_sigma_px * self._kde_upsample_factor,
@@ -1271,7 +1274,7 @@ class ParallaxReconstruction(PhaseReconstruction):
                             ya,
                             lanczos_alpha=None,
                         )
-                        - self._stack_BF_unshifted
+                        - stack_BF_unshifted
                     ),
                     axis=0,
                 )
@@ -1344,7 +1347,7 @@ class ParallaxReconstruction(PhaseReconstruction):
                                 ya,
                                 lanczos_alpha=None,
                             )
-                            - self._stack_BF_unshifted
+                            - stack_BF_unshifted
                         ),
                         axis=0,
                     )
@@ -1392,7 +1395,7 @@ class ParallaxReconstruction(PhaseReconstruction):
                                     ya,
                                     lanczos_alpha=None,
                                 )
-                                - self._stack_BF_unshifted
+                                - stack_BF_unshifted
                             ),
                             axis=0,
                         )
@@ -1491,7 +1494,7 @@ class ParallaxReconstruction(PhaseReconstruction):
                 pix_output = self._kernel_density_estimate(
                     xa,
                     ya,
-                    self._stack_BF_unshifted,
+                    stack_BF_unshifted,
                     pixel_output_shape,
                     kde_sigma_px * self._kde_upsample_factor,
                     lanczos_alpha=lanczos_interpolation_order,
@@ -1508,7 +1511,7 @@ class ParallaxReconstruction(PhaseReconstruction):
                                 ya,
                                 lanczos_alpha=None,
                             )
-                            - self._stack_BF_unshifted
+                            - stack_BF_unshifted
                         ),
                         axis=0,
                     )
