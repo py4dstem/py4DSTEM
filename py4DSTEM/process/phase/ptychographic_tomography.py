@@ -18,15 +18,15 @@ except (ModuleNotFoundError, ImportError):
 
 from emdfile import Custom, tqdmnd
 from py4DSTEM import DataCube
-from py4DSTEM.process.phase.iterative_base_class import PtychographicReconstruction
-from py4DSTEM.process.phase.iterative_ptychographic_constraints import (
+from py4DSTEM.process.phase.phase_base_class import PtychographicReconstruction
+from py4DSTEM.process.phase.ptychographic_constraints import (
     Object2p5DConstraintsMixin,
     Object3DConstraintsMixin,
     ObjectNDConstraintsMixin,
     PositionsConstraintsMixin,
     ProbeConstraintsMixin,
 )
-from py4DSTEM.process.phase.iterative_ptychographic_methods import (
+from py4DSTEM.process.phase.ptychographic_methods import (
     MultipleMeasurementsMethodsMixin,
     Object2p5DMethodsMixin,
     Object2p5DProbeMethodsMixin,
@@ -35,9 +35,7 @@ from py4DSTEM.process.phase.iterative_ptychographic_methods import (
     ObjectNDProbeMethodsMixin,
     ProbeMethodsMixin,
 )
-from py4DSTEM.process.phase.iterative_ptychographic_visualizations import (
-    VisualizationsMixin,
-)
+from py4DSTEM.process.phase.ptychographic_visualizations import VisualizationsMixin
 from py4DSTEM.process.phase.utils import (
     ComplexProbe,
     fft_shift,
@@ -49,7 +47,7 @@ from py4DSTEM.process.phase.utils import (
 warnings.simplefilter(action="always", category=UserWarning)
 
 
-class PtychographicTomographyReconstruction(
+class PtychographicTomography(
     VisualizationsMixin,
     PositionsConstraintsMixin,
     ProbeConstraintsMixin,

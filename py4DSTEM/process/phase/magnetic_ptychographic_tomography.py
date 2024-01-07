@@ -19,14 +19,14 @@ except (ModuleNotFoundError, ImportError):
 
 from emdfile import Custom, tqdmnd
 from py4DSTEM import DataCube
-from py4DSTEM.process.phase.iterative_base_class import PtychographicReconstruction
-from py4DSTEM.process.phase.iterative_ptychographic_constraints import (
+from py4DSTEM.process.phase.phase_base_class import PtychographicReconstruction
+from py4DSTEM.process.phase.ptychographic_constraints import (
     Object3DConstraintsMixin,
     ObjectNDConstraintsMixin,
     PositionsConstraintsMixin,
     ProbeConstraintsMixin,
 )
-from py4DSTEM.process.phase.iterative_ptychographic_methods import (
+from py4DSTEM.process.phase.ptychographic_methods import (
     Object3DMethodsMixin,
     ObjectNDMethodsMixin,
     ProbeMethodsMixin,
@@ -45,7 +45,7 @@ from py4DSTEM.process.utils import electron_wavelength_angstrom, get_CoM, get_sh
 warnings.simplefilter(action="always", category=UserWarning)
 
 
-class MagneticPtychographicTomographyReconstruction(
+class MagneticPtychographicTomography(
     PositionsConstraintsMixin,
     ProbeConstraintsMixin,
     Object3DConstraintsMixin,

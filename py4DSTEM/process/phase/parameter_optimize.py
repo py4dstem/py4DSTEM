@@ -5,7 +5,7 @@ from typing import Callable, Union
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.gridspec import GridSpec
-from py4DSTEM.process.phase.iterative_base_class import PhaseReconstruction
+from py4DSTEM.process.phase.phase_base_class import PhaseReconstruction
 from py4DSTEM.process.phase.utils import AffineTransform
 from skopt import gp_minimize
 from skopt.plots import plot_convergence as skopt_plot_convergence
