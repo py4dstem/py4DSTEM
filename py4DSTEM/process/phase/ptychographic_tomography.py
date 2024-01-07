@@ -612,7 +612,7 @@ class PtychographicTomography(
             )
 
             # propagated
-            propagated_probe = self._probe.copy()
+            propagated_probe = self._probes_all[0].copy()
 
             for s in range(self._num_slices - 1):
                 propagated_probe = self._propagate_array(

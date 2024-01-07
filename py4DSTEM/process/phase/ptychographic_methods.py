@@ -129,6 +129,8 @@ class ObjectNDMethodsMixin:
     def _return_object_fft(
         self,
         obj=None,
+        apply_hanning_window=False,
+        **kwargs,
     ):
         """
         Returns absolute value of obj fft shifted to center of array
@@ -137,6 +139,8 @@ class ObjectNDMethodsMixin:
         ----------
         obj: array, optional
             if None is specified, uses self._object
+        apply_hanning_window: bool, optional
+            If True, a 2D Hann window is applied to the object before FFT
 
         Returns
         -------
@@ -153,34 +157,82 @@ class ObjectNDMethodsMixin:
             obj = xp.angle(obj)
 
         obj = self._crop_rotate_object_fov(asnumpy(obj))
+
+        if apply_hanning_window:
+            sx, sy = obj.shape
+            wx = np.hanning(sx)
+            wy = np.hanning(sy)
+            obj *= wx[:, None] * wy[None, :]
+
         return np.abs(np.fft.fftshift(np.fft.fft2(obj)))
 
-    def show_object_fft(self, obj=None, **kwargs):
+    def show_object_fft(
+        self,
+        obj=None,
+        apply_hanning_window=True,
+        crop_to_min_frequency=True,
+        scalebar=True,
+        pixelsize=None,
+        pixelunits=None,
+        **kwargs,
+    ):
         """
         Plot FFT of reconstructed object
 
         Parameters
         ----------
         obj: complex array, optional
-            if None is specified, uses the `object_fft` property
+            If None is specified, uses the `object_fft` property
+        apply_hanning_window: bool, optional
+            If True, a 2D Hann window is applied to the object before FFT
+        crop_to_min_frequency: bool, optional
+            If True, a square FFT is plotted, cropping to the smallest axis
+        scalebar: bool, optional
+            if True, adds scalebar to probe
+        pixelunits: str, optional
+            units for scalebar, default is A^-1
+        pixelsize: float, optional
+            default is object FFT sampling
         """
-        if obj is None:
-            object_fft = self.object_fft
-        else:
-            object_fft = self._return_object_fft(obj)
 
-        figsize = kwargs.pop("figsize", (6, 6))
+        object_fft = self._return_object_fft(
+            obj, apply_hanning_window=apply_hanning_window, **kwargs
+        )
+
+        if pixelsize is None:
+            pixelsize = 1 / (object_fft.shape[1] * self.sampling[1])
+        if pixelunits is None:
+            pixelunits = r"$\AA^{-1}$"
+
+        if crop_to_min_frequency:
+            sx, sy = object_fft.shape
+            s = min(sx, sy)
+            start_x = sx // 2 - (s // 2)
+            start_y = sy // 2 - (s // 2)
+            object_fft = object_fft[start_x : start_x + s, start_y : start_y + s]
+
+        figsize = kwargs.pop("figsize", (4, 4))
         cmap = kwargs.pop("cmap", "magma")
+        ticks = kwargs.pop("ticks", False)
+        vmin = kwargs.pop("vmin", 0.001)
+        vmax = kwargs.pop("vmax", 0.999)
 
-        pixelsize = 1 / (object_fft.shape[1] * self.sampling[1])
+        # remove additional 3D FFT parameters before passing to show
+        kwargs.pop("projection_angle_deg", None)
+        kwargs.pop("projection_axes", None)
+        kwargs.pop("x_lims", None)
+        kwargs.pop("y_lims", None)
+
         show(
             object_fft,
             figsize=figsize,
             cmap=cmap,
-            scalebar=True,
+            scalebar=scalebar,
             pixelsize=pixelsize,
-            ticks=False,
-            pixelunits=r"$\AA^{-1}$",
+            ticks=ticks,
+            pixelunits=pixelunits,
+            vmin=vmin,
+            vmax=vmax,
             **kwargs,
         )
 
@@ -391,6 +443,8 @@ class Object2p5DMethodsMixin:
     def _return_object_fft(
         self,
         obj=None,
+        apply_hanning_window=False,
+        **kwargs,
     ):
         """
         Returns obj fft shifted to center of array
@@ -399,6 +453,13 @@ class Object2p5DMethodsMixin:
         ----------
         obj: array, optional
             if None is specified, uses self._object
+        apply_hanning_window: bool, optional
+            If True, a 2D Hann window is applied to the object before FFT
+
+        Returns
+        -------
+        object_fft_amplitude: np.ndarray
+            Amplitude of Fourier-transformed and center-shifted obj.
         """
         xp = self._xp
 
@@ -409,6 +470,13 @@ class Object2p5DMethodsMixin:
             obj = xp.angle(obj)
 
         obj = self._crop_rotate_object_fov(obj.sum(axis=0))
+
+        if apply_hanning_window:
+            sx, sy = obj.shape
+            wx = np.hanning(sx)
+            wy = np.hanning(sy)
+            obj *= wx[:, None] * wy[None, :]
+
         return np.abs(np.fft.fftshift(np.fft.fft2(obj)))
 
     def show_depth_section(
@@ -880,10 +948,12 @@ class Object3DMethodsMixin:
     def _return_object_fft(
         self,
         obj=None,
+        apply_hanning_window=False,
         projection_angle_deg: float = None,
         projection_axes: Tuple[int, int] = (0, 2),
         x_lims: Tuple[int, int] = (None, None),
         y_lims: Tuple[int, int] = (None, None),
+        **kwargs,
     ):
         """
         Returns obj fft shifted to center of array
@@ -892,6 +962,8 @@ class Object3DMethodsMixin:
         ----------
         obj: array, optional
             if None is specified, uses self._object
+        apply_hanning_window: bool, optional
+            If True, a 2D Hann window is applied to the object before FFT
         projection_angle_deg: float
             Angle in degrees to rotate 3D array around prior to projection
         projection_axes: tuple(int,int)
@@ -900,6 +972,11 @@ class Object3DMethodsMixin:
             min/max x indices
         y_lims: tuple(float,float)
             min/max y indices
+
+        Returns
+        -------
+        object_fft_amplitude: np.ndarray
+            Amplitude of Fourier-transformed and center-shifted obj.
         """
 
         xp = self._xp
@@ -926,63 +1003,13 @@ class Object3DMethodsMixin:
             rotated_3d_obj.sum(0), angle=None, x_lims=x_lims, y_lims=y_lims
         )
 
+        if apply_hanning_window:
+            sx, sy = rotated_object.shape
+            wx = np.hanning(sx)
+            wy = np.hanning(sy)
+            rotated_object *= wx[:, None] * wy[None, :]
+
         return np.abs(np.fft.fftshift(np.fft.fft2(rotated_object)))
-
-    def show_object_fft(
-        self,
-        obj=None,
-        projection_angle_deg: float = None,
-        projection_axes: Tuple[int, int] = (0, 2),
-        x_lims: Tuple[int, int] = (None, None),
-        y_lims: Tuple[int, int] = (None, None),
-        **kwargs,
-    ):
-        """
-        Plot FFT of reconstructed object
-
-        Parameters
-        ----------
-        obj: array, optional
-            if None is specified, uses self._object
-        projection_angle_deg: float
-            Angle in degrees to rotate 3D array around prior to projection
-        projection_axes: tuple(int,int)
-            Axes defining projection plane
-        x_lims: tuple(float,float)
-            min/max x indices
-        y_lims: tuple(float,float)
-            min/max y indices
-        """
-        if obj is None:
-            object_fft = self._return_object_fft(
-                projection_angle_deg=projection_angle_deg,
-                projection_axes=projection_axes,
-                x_lims=x_lims,
-                y_lims=y_lims,
-            )
-        else:
-            object_fft = self._return_object_fft(
-                obj,
-                projection_angle_deg=projection_angle_deg,
-                projection_axes=projection_axes,
-                x_lims=x_lims,
-                y_lims=y_lims,
-            )
-
-        figsize = kwargs.pop("figsize", (6, 6))
-        cmap = kwargs.pop("cmap", "magma")
-
-        pixelsize = 1 / (object_fft.shape[1] * self.sampling[1])
-        show(
-            object_fft,
-            figsize=figsize,
-            cmap=cmap,
-            scalebar=True,
-            pixelsize=pixelsize,
-            ticks=False,
-            pixelunits=r"$\AA^{-1}$",
-            **kwargs,
-        )
 
     @property
     def object_supersliced(self):
