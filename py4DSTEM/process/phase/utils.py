@@ -3,14 +3,13 @@ from typing import Mapping, Tuple, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.fft import dctn, dstn, idctn, idstn
+from scipy.fft import dctn, idctn
 from scipy.optimize import curve_fit
 
 try:
     import cupy as cp
     from cupyx.scipy.fft import dctn as dctn_cp
     from cupyx.scipy.fft import idctn as idctn_cp
-    from cupyx.scipy.fft import rfft
 except (ImportError, ModuleNotFoundError):
     cp = None
 
@@ -1152,114 +1151,79 @@ def fourier_rotate_real_volume(array, angle, axes=(0, 1), xp=np):
     return output_arr
 
 
-### Divergence Projection Functions
-
-
-def compute_divergence(vector_field, spacings, xp=np):
-    """Computes divergence of vector_field"""
-    num_dims = len(spacings)
-    div = xp.zeros_like(vector_field[0])
-
-    for i in range(num_dims):
-        div += xp.gradient(vector_field[i], spacings[i], axis=i)
-
-    return div
-
-
-def compute_gradient(scalar_field, spacings, xp=np):
-    """Computes gradient of scalar_field"""
-    num_dims = len(spacings)
-    grad = xp.zeros((num_dims,) + scalar_field.shape)
-
-    for i in range(num_dims):
-        grad[i] = xp.gradient(scalar_field, spacings[i], axis=i)
-
-    return grad
-
-
 def array_slice(axis, ndim, start, end, step=1):
     """Returns array slice along dynamic axis"""
     return (slice(None),) * (axis % ndim) + (slice(start, end, step),)
 
 
-def make_array_rfft_compatible(array_nd, axis=0, xp=np):
-    """Expand array to be rfft compatible"""
-    array_shape = np.array(array_nd.shape)
-    d = array_nd.ndim
-    n = array_shape[axis]
-    array_shape[axis] = (n + 1) * 2
-
-    dtype = array_nd.dtype
-    padded_array = xp.zeros(array_shape, dtype=dtype)
-
-    padded_array[array_slice(axis, d, 1, n + 1)] = -array_nd
-    padded_array[array_slice(axis, d, None, -n - 1, -1)] = array_nd
-
-    return padded_array
+### Divergence Projection Functions
 
 
-def dst_I(array_nd, xp=np):
-    """1D rfft-based DST-I"""
-    d = array_nd.ndim
-    for axis in range(d):
-        crop_slice = array_slice(axis, d, 1, -1)
-        array_nd = rfft(
-            make_array_rfft_compatible(array_nd, axis=axis, xp=xp), axis=axis
-        )[crop_slice].imag
-
-    return array_nd
-
-
-def idst_I(array_nd, xp=np):
-    """1D rfft-based iDST-I"""
-    scaling = np.prod((np.array(array_nd.shape) + 1) * 2)
-    return dst_I(array_nd, xp=xp) / scaling
-
-
-def preconditioned_laplacian(num_exterior, spacing=1, xp=np):
-    """DST-I eigenvalues"""
-    n = num_exterior - 1
-    evals_1d = 2 - 2 * xp.cos(np.pi * xp.arange(1, num_exterior) / num_exterior)
-
-    op = (
-        xp.repeat(evals_1d, n**2)
-        + xp.tile(evals_1d, n**2)
-        + xp.tile(xp.repeat(evals_1d, n), n)
+def periodic_centered_difference(array, spacing, axis, xp=np):
+    """Computes second-order centered difference with periodic BCs"""
+    return (xp.roll(array, -1, axis=axis) - xp.roll(array, 1, axis=axis)) / (
+        2 * spacing
     )
 
-    return -op / spacing**2
+
+def compute_divergence_periodic(vector_field, spacings, xp=np):
+    """Computes divergence of vector_field"""
+    num_dims = len(spacings)
+    div = xp.zeros_like(vector_field[0])
+
+    for i in range(num_dims):
+        div += periodic_centered_difference(vector_field[i], spacings[i], axis=i, xp=xp)
+
+    return div
 
 
-def preconditioned_poisson_solver(rhs_interior, spacing=1, xp=np):
-    """DST-I based poisson solver"""
-    nx, ny, nz = rhs_interior.shape
-    if nx != ny or nx != nz:
-        raise ValueError()
+def compute_gradient_periodic(scalar_field, spacings, xp=np):
+    """Computes gradient of scalar_field"""
+    num_dims = len(spacings)
+    grad = xp.zeros((num_dims,) + scalar_field.shape)
 
-    op = preconditioned_laplacian(nx + 1, spacing=spacing, xp=xp)
-    if xp is np:
-        dst_rhs = dstn(rhs_interior, type=1).ravel()
-        dst_u = (dst_rhs / op).reshape((nx, ny, nz))
-        sol = idstn(dst_u, type=1)
-    else:
-        dst_rhs = dst_I(rhs_interior, xp=xp).ravel()
-        dst_u = (dst_rhs / op).reshape((nx, ny, nz))
-        sol = idst_I(dst_u, xp=xp)
+    for i in range(num_dims):
+        grad[i] = periodic_centered_difference(scalar_field, spacings[i], axis=i, xp=xp)
 
+    return grad
+
+
+def preconditioned_laplacian_periodic_3D(shape, xp=np):
+    """FFT eigenvalues"""
+    n, m, p = shape
+    i, j, k = xp.ogrid[0:n, 0:m, 0:p]
+
+    op = 6 - 2 * xp.cos(2 * np.pi * i / n) * xp.cos(2 * np.pi * j / m) * xp.cos(
+        2 * np.pi * k / p
+    )
+    op[0, 0, 0] = 1  # gauge invariance
+    return -op
+
+
+def preconditioned_poisson_solver_periodic_3D(rhs, gauge=None, xp=np):
+    """FFT based poisson solver"""
+    op = preconditioned_laplacian_periodic_3D(rhs.shape, xp=xp)
+
+    if gauge is None:
+        gauge = xp.mean(rhs)
+
+    fft_rhs = xp.fft.fftn(rhs)
+    fft_rhs[0, 0, 0] = gauge  # gauge invariance
+    sol = xp.fft.ifftn(fft_rhs / op).real
     return sol
 
 
-def project_vector_field_divergence(vector_field, spacings=(1, 1, 1), xp=np):
+def project_vector_field_divergence_periodic_3D(vector_field, xp=np):
     """
     Returns solenoidal part of vector field using projection:
 
     f - \\grad{p}
     s.t. \\laplacian{p} = \\div{f}
     """
-
-    div_v = compute_divergence(vector_field, spacings, xp=xp)
-    p = preconditioned_poisson_solver(div_v, spacings[0], xp=xp)
-    grad_p = compute_gradient(p, spacings, xp=xp)
+    spacings = (1, 1, 1)
+    div_v = compute_divergence_periodic(vector_field, spacings, xp=xp)
+    p = preconditioned_poisson_solver_periodic_3D(div_v, xp=xp)
+    grad_p = compute_gradient_periodic(p, spacings, xp=xp)
     return vector_field - grad_p
 
 
@@ -1612,7 +1576,7 @@ def aberrations_basis_function(
     return aberrations_basis, aberrations_mn
 
 
-def preconditioned_laplacian_dct(shape, xp=np):
+def preconditioned_laplacian_neumann_2D(shape, xp=np):
     """DCT eigenvalues"""
     n, m = shape
     i, j = xp.ogrid[0:n, 0:m]
@@ -1622,9 +1586,9 @@ def preconditioned_laplacian_dct(shape, xp=np):
     return -op
 
 
-def preconditioned_poisson_solver_dct(rhs, gauge=None, xp=np):
+def preconditioned_poisson_solver_neumann_2D(rhs, gauge=None, xp=np):
     """DCT based poisson solver"""
-    op = preconditioned_laplacian_dct(rhs.shape, xp=xp)
+    op = preconditioned_laplacian_neumann_2D(rhs.shape, xp=xp)
 
     if gauge is None:
         gauge = xp.mean(rhs)
@@ -1638,7 +1602,7 @@ def preconditioned_poisson_solver_dct(rhs, gauge=None, xp=np):
 
     fft_rhs = dctn_xp(rhs, type=2)
     fft_rhs[0, 0] = gauge  # gauge invariance
-    sol = idctn_xp(fft_rhs / op, type=2)
+    sol = idctn_xp(fft_rhs / op, type=2).real
     return sol
 
 
@@ -1668,7 +1632,7 @@ def unwrap_phase_2d(array, weights=None, gauge=None, corner_centered=True, xp=np
     rho = xp.diff(dx, axis=0, prepend=0, append=0)
     rho += xp.diff(dy, axis=1, prepend=0, append=0)
 
-    unwrapped_array = preconditioned_poisson_solver_dct(rho, gauge=gauge, xp=xp).real
+    unwrapped_array = preconditioned_poisson_solver_neumann_2D(rho, gauge=gauge, xp=xp)
     unwrapped_array -= unwrapped_array.min()
 
     if corner_centered:
