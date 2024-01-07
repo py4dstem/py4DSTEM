@@ -704,7 +704,6 @@ class MagneticPtychographicTomography(
     def _object_constraints_vector(
         self,
         current_object,
-        pure_phase_object,
         gaussian_filter,
         gaussian_filter_sigma_e,
         gaussian_filter_sigma_m,
@@ -778,9 +777,22 @@ class MagneticPtychographicTomography(
 
         return current_object, current_probe, current_positions
 
+    def _rotate_zxy_volume_vector(
+        self,
+        current_object,
+        rot_matrix,
+    ):
+        """ """
+        for index in range(4):
+            current_object[index] = self._rotate_zxy_volume(
+                current_object[index], rot_matrix
+            )
+
+        return current_object
+
     def reconstruct(
         self,
-        max_iter: int = 64,
+        max_iter: int = 8,
         reconstruction_method: str = "gradient-descent",
         reconstruction_parameter: float = 1.0,
         reconstruction_parameter_a: float = None,
@@ -801,7 +813,8 @@ class MagneticPtychographicTomography(
         constrain_probe_fourier_amplitude_max_width_pixels: float = 3.0,
         constrain_probe_fourier_amplitude_constant_intensity: bool = False,
         fix_positions_iter: int = np.inf,
-        constrain_position_distance: float = None,
+        max_position_update_distance: float = None,
+        max_position_total_distance: float = None,
         global_affine_transformation: bool = True,
         gaussian_filter_sigma_e: float = None,
         gaussian_filter_sigma_m: float = None,
@@ -809,6 +822,7 @@ class MagneticPtychographicTomography(
         fit_probe_aberrations_iter: int = 0,
         fit_probe_aberrations_max_angular_order: int = 4,
         fit_probe_aberrations_max_radial_order: int = 4,
+        fit_probe_aberrations_remove_initial: bool = False,
         butterworth_filter_iter: int = np.inf,
         q_lowpass_e: float = None,
         q_lowpass_m: float = None,
@@ -821,7 +835,7 @@ class MagneticPtychographicTomography(
         tv_denoise_iter=np.inf,
         tv_denoise_weights=None,
         tv_denoise_inner_iter=40,
-        collective_tilt_updates: bool = False,
+        collective_measurement_updates: bool = True,
         store_iterations: bool = False,
         progress_bar: bool = True,
         reset: bool = None,
@@ -879,9 +893,10 @@ class MagneticPtychographicTomography(
             If True, the probe aperture is additionally constrained to a constant intensity.
         fix_positions_iter: int, optional
             Number of iterations to run with fixed positions before updating positions estimate
-        constrain_position_distance: float, optional
-            Distance to constrain position correction within original
-            field of view in A
+        max_position_update_distance: float, optional
+            Maximum allowed distance for update in A
+        max_position_total_distance: float, optional
+            Maximum allowed distance from initial positions
         global_affine_transformation: bool, optional
             If True, positions are assumed to be a global affine transform from initial scan
         gaussian_filter_sigma_e: float
@@ -896,6 +911,8 @@ class MagneticPtychographicTomography(
             Max angular order of probe aberrations basis functions
         fit_probe_aberrations_max_radial_order: bool
             Max radial order of probe aberrations basis functions
+        fit_probe_aberrations_remove_initial: bool
+            If true, initial probe aberrations are removed before fitting
         butterworth_filter_iter: int, optional
             Number of iterations to run using high-pass butteworth filter
         q_lowpass: float
@@ -913,7 +930,7 @@ class MagneticPtychographicTomography(
             the more denoising.
         tv_denoise_inner_iter: float
             Number of iterations to run in inner loop of TV denoising
-        collective_tilt_updates: bool
+        collective_measurement_updates: bool
             if True perform collective tilt updates
         shrinkage_rad: float
             Phase shift in radians to be subtracted from the potential at each iteration
@@ -932,190 +949,65 @@ class MagneticPtychographicTomography(
         asnumpy = self._asnumpy
         xp = self._xp
 
-        # Reconstruction method
+        if not collective_measurement_updates and self._verbose:
+            warnings.warn(
+                "Magnetic ptychography is much more robust with `collective_measurement_updates=True`.",
+                UserWarning,
+            )
 
-        if reconstruction_method == "generalized-projections":
-            if (
-                reconstruction_parameter_a is None
-                or reconstruction_parameter_b is None
-                or reconstruction_parameter_c is None
-            ):
-                raise ValueError(
-                    (
-                        "reconstruction_parameter_a/b/c must all be specified "
-                        "when using reconstruction_method='generalized-projections'."
-                    )
-                )
+        # set and report reconstruction method
+        (
+            use_projection_scheme,
+            projection_a,
+            projection_b,
+            projection_c,
+            reconstruction_parameter,
+            step_size,
+        ) = self._set_reconstruction_method_parameters(
+            reconstruction_method,
+            reconstruction_parameter,
+            reconstruction_parameter_a,
+            reconstruction_parameter_b,
+            reconstruction_parameter_c,
+            step_size,
+        )
 
-            use_projection_scheme = True
-            projection_a = reconstruction_parameter_a
-            projection_b = reconstruction_parameter_b
-            projection_c = reconstruction_parameter_c
-            step_size = None
-        elif (
-            reconstruction_method == "DM_AP"
-            or reconstruction_method == "difference-map_alternating-projections"
-        ):
-            if reconstruction_parameter < 0.0 or reconstruction_parameter > 1.0:
-                raise ValueError("reconstruction_parameter must be between 0-1.")
-
-            use_projection_scheme = True
-            projection_a = -reconstruction_parameter
-            projection_b = 1
-            projection_c = 1 + reconstruction_parameter
-            step_size = None
-        elif (
-            reconstruction_method == "RAAR"
-            or reconstruction_method == "relaxed-averaged-alternating-reflections"
-        ):
-            if reconstruction_parameter < 0.0 or reconstruction_parameter > 1.0:
-                raise ValueError("reconstruction_parameter must be between 0-1.")
-
-            use_projection_scheme = True
-            projection_a = 1 - 2 * reconstruction_parameter
-            projection_b = reconstruction_parameter
-            projection_c = 2
-            step_size = None
-        elif (
-            reconstruction_method == "RRR"
-            or reconstruction_method == "relax-reflect-reflect"
-        ):
-            if reconstruction_parameter < 0.0 or reconstruction_parameter > 2.0:
-                raise ValueError("reconstruction_parameter must be between 0-2.")
-
-            use_projection_scheme = True
-            projection_a = -reconstruction_parameter
-            projection_b = reconstruction_parameter
-            projection_c = 2
-            step_size = None
-        elif (
-            reconstruction_method == "SUPERFLIP"
-            or reconstruction_method == "charge-flipping"
-        ):
-            use_projection_scheme = True
-            projection_a = 0
-            projection_b = 1
-            projection_c = 2
-            reconstruction_parameter = None
-            step_size = None
-        elif (
-            reconstruction_method == "GD" or reconstruction_method == "gradient-descent"
-        ):
-            use_projection_scheme = False
-            projection_a = None
-            projection_b = None
-            projection_c = None
-            reconstruction_parameter = None
-        else:
-            raise ValueError(
-                (
-                    "reconstruction_method must be one of 'generalized-projections', "
-                    "'DM_AP' (or 'difference-map_alternating-projections'), "
-                    "'RAAR' (or 'relaxed-averaged-alternating-reflections'), "
-                    "'RRR' (or 'relax-reflect-reflect'), "
-                    "'SUPERFLIP' (or 'charge-flipping'), "
-                    f"or 'GD' (or 'gradient-descent'), not  {reconstruction_method}."
-                )
+        if use_projection_scheme:
+            raise NotImplementedError(
+                "Magnetic ptychographic tomography is currently only implemented for gradient descent."
             )
 
         if self._verbose:
-            if max_batch_size is not None:
-                if use_projection_scheme:
-                    raise ValueError(
-                        (
-                            "Stochastic object/probe updating is inconsistent with 'DM_AP', 'RAAR', 'RRR', and 'SUPERFLIP'. "
-                            "Use reconstruction_method='GD' or set max_batch_size=None."
-                        )
-                    )
-                else:
-                    print(
-                        (
-                            f"Performing {max_iter} iterations using the {reconstruction_method} algorithm, "
-                            f"with normalization_min: {normalization_min} and step _size: {step_size}, "
-                            f"in batches of max {max_batch_size} measurements."
-                        )
-                    )
-            else:
-                if reconstruction_parameter is not None:
-                    if np.array(reconstruction_parameter).shape == (3,):
-                        print(
-                            (
-                                f"Performing {max_iter} iterations using the {reconstruction_method} algorithm, "
-                                f"with normalization_min: {normalization_min} and (a,b,c): {reconstruction_parameter}."
-                            )
-                        )
-                    else:
-                        print(
-                            (
-                                f"Performing {max_iter} iterations using the {reconstruction_method} algorithm, "
-                                f"with normalization_min: {normalization_min} and α: {reconstruction_parameter}."
-                            )
-                        )
-                else:
-                    if step_size is not None:
-                        print(
-                            (
-                                f"Performing {max_iter} iterations using the {reconstruction_method} algorithm, "
-                                f"with normalization_min: {normalization_min}."
-                            )
-                        )
-                    else:
-                        print(
-                            (
-                                f"Performing {max_iter} iterations using the {reconstruction_method} algorithm, "
-                                f"with normalization_min: {normalization_min} and step _size: {step_size}."
-                            )
-                        )
-
-        # Position Correction + Collective Updates not yet implemented
-        if fix_positions_iter < max_iter:
-            raise NotImplementedError(
-                "Position correction is currently incompatible with collective updates."
+            self._report_reconstruction_summary(
+                max_iter,
+                np.inf,
+                use_projection_scheme,
+                reconstruction_method,
+                reconstruction_parameter,
+                projection_a,
+                projection_b,
+                projection_c,
+                normalization_min,
+                max_batch_size,
+                step_size,
             )
-
-        # Batching
 
         if max_batch_size is not None:
             xp.random.seed(seed_random)
+        else:
+            max_batch_size = self._num_diffraction_patterns
 
         # initialization
-        if store_iterations and (not hasattr(self, "object_iterations") or reset):
-            self.object_iterations = []
-            self.probe_iterations = []
-
-        if reset:
-            self._object = self._object_initial.copy()
-            self.error_iterations = []
-            self._probe = self._probe_initial.copy()
-            self._positions_px_all = self._positions_px_initial_all.copy()
-            if hasattr(self, "_tf"):
-                del self._tf
-
-            if use_projection_scheme:
-                self._exit_waves = [None] * self._num_tilts
-            else:
-                self._exit_waves = None
-        elif reset is None:
-            if hasattr(self, "error"):
-                warnings.warn(
-                    (
-                        "Continuing reconstruction from previous result. "
-                        "Use reset=True for a fresh start."
-                    ),
-                    UserWarning,
-                )
-            else:
-                self.error_iterations = []
-                if use_projection_scheme:
-                    self._exit_waves = [None] * self._num_tilts
-                else:
-                    self._exit_waves = None
+        self._reset_reconstruction(store_iterations, reset, use_projection_scheme)
 
         if gaussian_filter_sigma_m is None:
             gaussian_filter_sigma_m = gaussian_filter_sigma_e
 
         if q_lowpass_m is None:
             q_lowpass_m = q_lowpass_e
+
+        if fix_positions_iter < 1:
+            fix_positions_iter = 1  # give position correction a chance
 
         # main loop
         for a0 in tqdmnd(
@@ -1126,74 +1018,58 @@ class MagneticPtychographicTomography(
         ):
             error = 0.0
 
-            if collective_tilt_updates:
+            if collective_measurement_updates:
                 collective_object = xp.zeros_like(self._object)
 
-            tilt_indices = np.arange(self._num_tilts)
-            np.random.shuffle(tilt_indices)
+            indices = np.arange(self._num_measurements)
+            np.random.shuffle(indices)
 
-            for tilt_index in tilt_indices:
-                tilt_error = 0.0
-                self._active_tilt_index = tilt_index
+            old_rot_matrix = np.eye(3)  # identity
 
-                alpha_deg, beta_deg = self._tilt_angles_deg[self._active_tilt_index]
-                alpha, beta = np.deg2rad([alpha_deg, beta_deg])
+            for index in indices:
+                self._active_measurement_index = index
 
-                # V
-                self._object[0] = self._euler_angle_rotate_volume(
-                    self._object[0],
-                    alpha_deg,
-                    beta_deg,
+                measurement_error = 0.0
+
+                rot_matrix = self._tilt_orientation_matrices[
+                    self._active_measurement_index
+                ]
+                self._object = self._rotate_zxy_volume_vector(
+                    self._object,
+                    rot_matrix @ old_rot_matrix.T,
+                )
+                object_V = self._object[0]
+
+                # last transformation matrix row
+                weight_x, weight_y, weight_z = rot_matrix[-1]
+                object_A = (
+                    weight_x * self._object[2]
+                    + weight_y * self._object[3]
+                    + weight_z * self._object[1]
                 )
 
-                # Az
-                self._object[1] = self._euler_angle_rotate_volume(
-                    self._object[1],
-                    alpha_deg,
-                    beta_deg,
+                object_sliced = self._project_sliced_object(
+                    object_V + object_A, self._num_slices
                 )
 
-                # Ax
-                self._object[2] = self._euler_angle_rotate_volume(
-                    self._object[2],
-                    alpha_deg,
-                    beta_deg,
-                )
-
-                # Ay
-                self._object[3] = self._euler_angle_rotate_volume(
-                    self._object[3],
-                    alpha_deg,
-                    beta_deg,
-                )
-
-                object_A = self._object[1] * np.cos(beta) + np.sin(beta) * (
-                    self._object[3] * np.cos(alpha) - self._object[2] * np.sin(alpha)
-                )
-
-                object_sliced_V = self._project_sliced_object(
-                    self._object[0], self._num_slices
-                )
-
-                object_sliced_A = self._project_sliced_object(
-                    object_A, self._num_slices
-                )
+                _probe = self._probes_all[self._active_measurement_index]
+                _probe_initial_aperture = self._probes_all_initial_aperture[
+                    self._active_measurement_index
+                ]
 
                 if not use_projection_scheme:
-                    object_sliced_old_V = object_sliced_V.copy()
-                    object_sliced_old_A = object_sliced_A.copy()
+                    object_sliced_old = object_sliced.copy()
 
-                start_tilt = self._cum_probes_per_tilt[self._active_tilt_index]
-                end_tilt = self._cum_probes_per_tilt[self._active_tilt_index + 1]
+                start_idx = self._cum_probes_per_measurement[
+                    self._active_measurement_index
+                ]
+                end_idx = self._cum_probes_per_measurement[
+                    self._active_measurement_index + 1
+                ]
 
-                num_diffraction_patterns = end_tilt - start_tilt
+                num_diffraction_patterns = end_idx - start_idx
                 shuffled_indices = np.arange(num_diffraction_patterns)
                 unshuffled_indices = np.zeros_like(shuffled_indices)
-
-                if max_batch_size is None:
-                    current_max_batch_size = num_diffraction_patterns
-                else:
-                    current_max_batch_size = max_batch_size
 
                 # randomize
                 if not use_projection_scheme:
@@ -1203,15 +1079,15 @@ class MagneticPtychographicTomography(
                     num_diffraction_patterns
                 )
 
-                positions_px = self._positions_px_all[start_tilt:end_tilt].copy()[
+                positions_px = self._positions_px_all[start_idx:end_idx].copy()[
                     shuffled_indices
                 ]
                 initial_positions_px = self._positions_px_initial_all[
-                    start_tilt:end_tilt
+                    start_idx:end_idx
                 ].copy()[shuffled_indices]
 
                 for start, end in generate_batches(
-                    num_diffraction_patterns, max_batch=current_max_batch_size
+                    num_diffraction_patterns, max_batch=max_batch_size
                 ):
                     # batch indices
                     self._positions_px = positions_px[start:end]
@@ -1226,21 +1102,20 @@ class MagneticPtychographicTomography(
                         self._vectorized_patch_indices_col,
                     ) = self._extract_vectorized_patch_indices()
 
-                    amplitudes = self._amplitudes[start_tilt:end_tilt][
+                    amplitudes = self._amplitudes[start_idx:end_idx][
                         shuffled_indices[start:end]
                     ]
 
                     # forward operator
                     (
-                        propagated_probes,
+                        shifted_probes,
                         object_patches,
-                        transmitted_probes,
+                        overlap,
                         self._exit_waves,
                         batch_error,
                     ) = self._forward(
-                        object_sliced_V,
-                        object_sliced_A,
-                        self._probe,
+                        object_sliced,
+                        _probe,
                         amplitudes,
                         self._exit_waves,
                         use_projection_scheme,
@@ -1250,12 +1125,11 @@ class MagneticPtychographicTomography(
                     )
 
                     # adjoint operator
-                    object_sliced_V, object_sliced_A, self._probe = self._adjoint(
-                        object_sliced_V,
-                        object_sliced_A,
-                        self._probe,
+                    object_sliced, _probe = self._adjoint(
+                        object_sliced,
+                        _probe,
                         object_patches,
-                        propagated_probes,
+                        shifted_probes,
                         self._exit_waves,
                         use_projection_scheme=use_projection_scheme,
                         step_size=step_size,
@@ -1266,100 +1140,54 @@ class MagneticPtychographicTomography(
                     # position correction
                     if a0 >= fix_positions_iter:
                         positions_px[start:end] = self._position_correction(
-                            object_sliced_V,
-                            self._probe,
-                            transmitted_probes,
+                            object_sliced,
+                            shifted_probes,
+                            overlap,
                             amplitudes,
                             self._positions_px,
+                            self._positions_px_initial,
                             positions_step_size,
-                            constrain_position_distance,
+                            max_position_update_distance,
+                            max_position_total_distance,
                         )
 
-                    tilt_error += batch_error
+                    measurement_error += batch_error
 
                 if not use_projection_scheme:
-                    object_sliced_V -= object_sliced_old_V
-                    object_sliced_A -= object_sliced_old_A
+                    object_sliced -= object_sliced_old
 
-                object_update_V = self._expand_sliced_object(
-                    object_sliced_V, self._num_voxels
-                )
-                object_update_A = self._expand_sliced_object(
-                    object_sliced_A, self._num_voxels
+                object_update = self._expand_sliced_object(
+                    object_sliced, self._num_voxels
                 )
 
-                if collective_tilt_updates:
-                    collective_object[0] += self._euler_angle_rotate_volume(
-                        object_update_V,
-                        alpha_deg,
-                        -beta_deg,
-                    )
-                    collective_object[1] += self._euler_angle_rotate_volume(
-                        object_update_A * np.cos(beta),
-                        alpha_deg,
-                        -beta_deg,
-                    )
-                    collective_object[2] -= self._euler_angle_rotate_volume(
-                        object_update_A * np.sin(alpha) * np.sin(beta),
-                        alpha_deg,
-                        -beta_deg,
-                    )
-                    collective_object[3] += self._euler_angle_rotate_volume(
-                        object_update_A * np.cos(alpha) * np.sin(beta),
-                        alpha_deg,
-                        -beta_deg,
-                    )
-                else:
-                    self._object[0] += object_update_V
-                    self._object[1] += object_update_A * np.cos(beta)
-                    self._object[2] -= object_update_A * np.sin(alpha) * np.sin(beta)
-                    self._object[3] += object_update_A * np.cos(alpha) * np.sin(beta)
+                weights = (1, weight_z, weight_x, weight_y)
+                for index, weight in zip(range(4), weights):
+                    if collective_measurement_updates:
+                        collective_object[index] += self._rotate_zxy_volume(
+                            object_update * weight,
+                            rot_matrix.T,
+                        )
+                    else:
+                        self._object[index] += object_update * weight
 
-                self._object[0] = self._euler_angle_rotate_volume(
-                    self._object[0],
-                    alpha_deg,
-                    -beta_deg,
-                )
-
-                self._object[1] = self._euler_angle_rotate_volume(
-                    self._object[1],
-                    alpha_deg,
-                    -beta_deg,
-                )
-
-                self._object[2] = self._euler_angle_rotate_volume(
-                    self._object[2],
-                    alpha_deg,
-                    -beta_deg,
-                )
-
-                self._object[3] = self._euler_angle_rotate_volume(
-                    self._object[3],
-                    alpha_deg,
-                    -beta_deg,
-                )
+                old_rot_matrix = rot_matrix
 
                 # Normalize Error
-                tilt_error /= (
-                    self._mean_diffraction_intensity[self._active_tilt_index]
+                measurement_error /= (
+                    self._mean_diffraction_intensity[self._active_measurement_index]
                     * num_diffraction_patterns
                 )
-                error += tilt_error
+                error += measurement_error
 
                 # constraints
-                self._positions_px_all[start_tilt:end_tilt] = positions_px.copy()[
+                self._positions_px_all[start_idx:end_idx] = positions_px.copy()[
                     unshuffled_indices
                 ]
 
-                if not collective_tilt_updates:
-                    (
-                        self._object,
-                        self._probe,
-                        self._positions_px_all[start_tilt:end_tilt],
-                    ) = self._constraints(
-                        self._object,
-                        self._probe,
-                        self._positions_px_all[start_tilt:end_tilt],
+                if collective_measurement_updates:
+                    # probe and positions
+                    _probe = self._probe_constraints(
+                        _probe,
                         fix_com=fix_com and a0 >= fix_probe_iter,
                         constrain_probe_amplitude=a0 < constrain_probe_amplitude_iter
                         and a0 >= fix_probe_iter,
@@ -1374,8 +1202,46 @@ class MagneticPtychographicTomography(
                         and a0 >= fix_probe_iter,
                         fit_probe_aberrations_max_angular_order=fit_probe_aberrations_max_angular_order,
                         fit_probe_aberrations_max_radial_order=fit_probe_aberrations_max_radial_order,
+                        fit_probe_aberrations_remove_initial=fit_probe_aberrations_remove_initial,
                         fix_probe_aperture=a0 < fix_probe_aperture_iter,
-                        initial_probe_aperture=self._probe_initial_aperture,
+                        initial_probe_aperture=_probe_initial_aperture,
+                    )
+
+                    self._positions_px_all[
+                        start_idx:end_idx
+                    ] = self._positions_constraints(
+                        self._positions_px_all[start_idx:end_idx],
+                        fix_positions=a0 < fix_positions_iter,
+                        global_affine_transformation=global_affine_transformation,
+                    )
+
+                else:
+                    # object, probe, and positions
+                    (
+                        self._object,
+                        _probe,
+                        self._positions_px_all[start_idx:end_idx],
+                    ) = self._constraints(
+                        self._object,
+                        _probe,
+                        self._positions_px_all[start_idx:end_idx],
+                        fix_com=fix_com and a0 >= fix_probe_iter,
+                        constrain_probe_amplitude=a0 < constrain_probe_amplitude_iter
+                        and a0 >= fix_probe_iter,
+                        constrain_probe_amplitude_relative_radius=constrain_probe_amplitude_relative_radius,
+                        constrain_probe_amplitude_relative_width=constrain_probe_amplitude_relative_width,
+                        constrain_probe_fourier_amplitude=a0
+                        < constrain_probe_fourier_amplitude_iter
+                        and a0 >= fix_probe_iter,
+                        constrain_probe_fourier_amplitude_max_width_pixels=constrain_probe_fourier_amplitude_max_width_pixels,
+                        constrain_probe_fourier_amplitude_constant_intensity=constrain_probe_fourier_amplitude_constant_intensity,
+                        fit_probe_aberrations=a0 < fit_probe_aberrations_iter
+                        and a0 >= fix_probe_iter,
+                        fit_probe_aberrations_max_angular_order=fit_probe_aberrations_max_angular_order,
+                        fit_probe_aberrations_max_radial_order=fit_probe_aberrations_max_radial_order,
+                        fit_probe_aberrations_remove_initial=fit_probe_aberrations_remove_initial,
+                        fix_probe_aperture=a0 < fix_probe_aperture_iter,
+                        initial_probe_aperture=_probe_initial_aperture,
                         fix_positions=a0 < fix_positions_iter,
                         global_affine_transformation=global_affine_transformation,
                         gaussian_filter=a0 < gaussian_filter_iter
@@ -1401,40 +1267,19 @@ class MagneticPtychographicTomography(
                         tv_denoise_inner_iter=tv_denoise_inner_iter,
                     )
 
+            self._object = self._rotate_zxy_volume_vector(
+                self._object, old_rot_matrix.T
+            )
+
             # Normalize Error Over Tilts
-            error /= self._num_tilts
+            error /= self._num_measurements
 
-            self._object[1:] = self._divergence_free_constraint(self._object[1:])
+            if collective_measurement_updates:
+                self._object += collective_object / self._num_measurements
 
-            if collective_tilt_updates:
-                self._object += collective_object / self._num_tilts
-
-                (
+                # object only
+                self._object = self._object_constraints_vector(
                     self._object,
-                    self._probe,
-                    _,
-                ) = self._constraints(
-                    self._object,
-                    self._probe,
-                    None,
-                    fix_com=fix_com and a0 >= fix_probe_iter,
-                    constrain_probe_amplitude=a0 < constrain_probe_amplitude_iter
-                    and a0 >= fix_probe_iter,
-                    constrain_probe_amplitude_relative_radius=constrain_probe_amplitude_relative_radius,
-                    constrain_probe_amplitude_relative_width=constrain_probe_amplitude_relative_width,
-                    constrain_probe_fourier_amplitude=a0
-                    < constrain_probe_fourier_amplitude_iter
-                    and a0 >= fix_probe_iter,
-                    constrain_probe_fourier_amplitude_max_width_pixels=constrain_probe_fourier_amplitude_max_width_pixels,
-                    constrain_probe_fourier_amplitude_constant_intensity=constrain_probe_fourier_amplitude_constant_intensity,
-                    fit_probe_aberrations=a0 < fit_probe_aberrations_iter
-                    and a0 >= fix_probe_iter,
-                    fit_probe_aberrations_max_angular_order=fit_probe_aberrations_max_angular_order,
-                    fit_probe_aberrations_max_radial_order=fit_probe_aberrations_max_radial_order,
-                    fix_probe_aperture=a0 < fix_probe_aperture_iter,
-                    initial_probe_aperture=self._probe_initial_aperture,
-                    fix_positions=True,
-                    global_affine_transformation=global_affine_transformation,
                     gaussian_filter=a0 < gaussian_filter_iter
                     and gaussian_filter_sigma_m is not None,
                     gaussian_filter_sigma_e=gaussian_filter_sigma_e,
@@ -1458,6 +1303,7 @@ class MagneticPtychographicTomography(
                 )
 
             self.error_iterations.append(error.item())
+
             if store_iterations:
                 self.object_iterations.append(asnumpy(self._object.copy()))
                 self.probe_iterations.append(self.probe_centered)
