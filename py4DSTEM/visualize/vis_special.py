@@ -935,6 +935,7 @@ def show_strain(
     layout="square",
     figsize=None,
     returnfig=False,
+    **kwargs,
 ):
     """
     Display a strain map, showing the 4 strain components
@@ -997,11 +998,12 @@ def show_strain(
         Scaling for the legend g-vectors relative to the coordinate axes
     layout : int
         Determines the layout of the grid which the strain components
-        will be plotted in.  Must be in (0,1,2).  0=(2x2), 1=(1x4), 2=(4x1).
+        will be plotted in.  Options are "square", "horizontal", "vertical."
     figsize : length 2 tuple of numbers
         Size of the figure
     returnfig : bool
         Toggles returning the figure
+    **kwargs: keywords passed to py4DSTEM show function
     """
     # Lookup table for different layouts
     assert layout in ("square", "horizontal", "vertical")
@@ -1108,6 +1110,7 @@ def show_strain(
         cmap=cmap,
         mask_color=mask_color,
         returncax=True,
+        **kwargs,
     )
     cax12 = show(
         e_yy,
@@ -1118,6 +1121,7 @@ def show_strain(
         cmap=cmap,
         mask_color=mask_color,
         returncax=True,
+        **kwargs,
     )
     cax21 = show(
         e_xy,
@@ -1128,6 +1132,7 @@ def show_strain(
         cmap=cmap,
         mask_color=mask_color,
         returncax=True,
+        **kwargs,
     )
     cax22 = show(
         theta,
@@ -1138,6 +1143,7 @@ def show_strain(
         cmap=cmap_theta,
         mask_color=mask_color,
         returncax=True,
+        **kwargs,
     )
     ax11.set_title(r"$\epsilon_{xx}$", size=titlesize)
     ax12.set_title(r"$\epsilon_{yy}$", size=titlesize)

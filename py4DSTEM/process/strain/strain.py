@@ -6,14 +6,12 @@ from typing import Optional
 import matplotlib.pyplot as plt
 from matplotlib.patches import Circle
 from matplotlib.collections import PatchCollection
-from mpl_toolkits.axes_grid1 import make_axes_locatable
 import numpy as np
 from py4DSTEM import PointList, PointListArray, tqdmnd
 from py4DSTEM.braggvectors import BraggVectors
 from py4DSTEM.data import Data, RealSlice
 from py4DSTEM.preprocess.utils import get_maxima_2D
 from py4DSTEM.process.strain.latticevectors import (
-    add_indices_to_braggvectors,
     fit_lattice_vectors_all_DPs,
     get_reference_g1g2,
     get_rotated_strain_map,
@@ -25,8 +23,6 @@ from py4DSTEM.visualize import (
     add_bragg_index_labels,
     add_pointlabels,
     add_vector,
-    ax_addaxes,
-    ax_addaxes_QtoR,
 )
 
 
@@ -583,6 +579,7 @@ class StrainMap(RealSlice, Data):
             amount, in degrees
         returncal : bool
             It True, returns rotated map
+        **kwargs: keywords passed to py4DSTEM show function
         """
         # confirm that the calstate hasn't changed
         assert (
@@ -681,6 +678,7 @@ class StrainMap(RealSlice, Data):
         layout="square",
         figsize=None,
         returnfig=False,
+        **kwargs,
     ):
         """
         Display a strain map, showing the 4 strain components
@@ -738,11 +736,12 @@ class StrainMap(RealSlice, Data):
             Scaling for the legend g-vectors relative to the coordinate axes
         layout : int
             Determines the layout of the grid which the strain components
-            will be plotted in.  Must be in (0,1,2).  0=(2x2), 1=(1x4), 2=(4x1).
+            will be plotted in.  Options are "square", "horizontal", "vertical."
         figsize : length 2 tuple of numbers
             Size of the figure
         returnfig : bool
             Toggles returning the figure
+        **kwargs: keywords passed to py4DSTEM show function
         """
 
         from py4DSTEM.visualize import show_strain
@@ -776,6 +775,7 @@ class StrainMap(RealSlice, Data):
             layout=layout,
             figsize=figsize,
             returnfig=True,
+            **kwargs,
         )
 
         # show/return

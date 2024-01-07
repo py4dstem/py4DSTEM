@@ -59,7 +59,7 @@ def orientation_plan(
 
         angle_step_in_plane (float):  Approximate angular step size for in-plane rotation [degrees]
         accel_voltage (float):        Accelerating voltage for electrons [Volts]
-        corr_kernel_size (float):        Correlation kernel size length in Angstroms
+        corr_kernel_size (float):      Correlation kernel size length. The size of the overlap kernel between the measured Bragg peaks and diffraction library Bragg peaks. [1/Angstroms]
         radial_power (float):          Power for scaling the correlation intensity as a function of the peak radius
         intensity_power (float):       Power for scaling the correlation intensity as a function of the peak intensity
         calculate_correlation_array (bool):     Set to false to skip calculating the correlation array.
