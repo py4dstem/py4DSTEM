@@ -14,7 +14,7 @@ from matplotlib.ticker import PercentFormatter
 from mpl_toolkits.axes_grid1.axes_divider import make_axes_locatable
 from py4DSTEM import Calibration, DataCube
 from py4DSTEM.preprocess.utils import get_shifted_ar
-from py4DSTEM.process.phase.iterative_base_class import PhaseReconstruction
+from py4DSTEM.process.phase.phase_base_class import PhaseReconstruction
 from py4DSTEM.process.phase.utils import (
     AffineTransform,
     bilinear_kernel_density_estimate,
@@ -56,7 +56,7 @@ _aberration_names = {
 }
 
 
-class ParallaxReconstruction(PhaseReconstruction):
+class Parallax(PhaseReconstruction):
     """
     Iterative parallax reconstruction class.
 
