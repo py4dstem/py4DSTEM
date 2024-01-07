@@ -19,12 +19,12 @@ except (ModuleNotFoundError, ImportError):
 from emdfile import Array, Custom, Metadata, _read_metadata, tqdmnd
 from py4DSTEM.data import Calibration
 from py4DSTEM.datacube import DataCube
-from py4DSTEM.process.phase.iterative_base_class import PhaseReconstruction
+from py4DSTEM.process.phase.phase_base_class import PhaseReconstruction
 
 warnings.simplefilter(action="always", category=UserWarning)
 
 
-class DPCReconstruction(PhaseReconstruction):
+class DPC(PhaseReconstruction):
     """
     Iterative Differential Phase Constrast Reconstruction Class.
 
