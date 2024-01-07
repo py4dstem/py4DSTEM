@@ -1,10 +1,10 @@
 """
 Module for reconstructing phase objects from 4DSTEM datasets using iterative methods,
-namely multislice ptychography.
+namely mixed-state ptychography.
 """
 
 import warnings
-from typing import Mapping, Sequence, Tuple, Union
+from typing import Mapping, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -18,23 +18,21 @@ except (ModuleNotFoundError, ImportError):
 
 from emdfile import Custom, tqdmnd
 from py4DSTEM import DataCube
-from py4DSTEM.process.phase.iterative_base_class import PtychographicReconstruction
-from py4DSTEM.process.phase.iterative_ptychographic_constraints import (
-    Object2p5DConstraintsMixin,
+from py4DSTEM.process.phase.phase_base_class import PtychographicReconstruction
+from py4DSTEM.process.phase.ptychographic_constraints import (
     ObjectNDConstraintsMixin,
     PositionsConstraintsMixin,
     ProbeConstraintsMixin,
+    ProbeMixedConstraintsMixin,
 )
-from py4DSTEM.process.phase.iterative_ptychographic_methods import (
-    Object2p5DMethodsMixin,
-    Object2p5DProbeMethodsMixin,
+from py4DSTEM.process.phase.ptychographic_methods import (
     ObjectNDMethodsMixin,
     ObjectNDProbeMethodsMixin,
+    ObjectNDProbeMixedMethodsMixin,
     ProbeMethodsMixin,
+    ProbeMixedMethodsMixin,
 )
-from py4DSTEM.process.phase.iterative_ptychographic_visualizations import (
-    VisualizationsMixin,
-)
+from py4DSTEM.process.phase.ptychographic_visualizations import VisualizationsMixin
 from py4DSTEM.process.phase.utils import (
     ComplexProbe,
     fft_shift,
@@ -46,40 +44,37 @@ from py4DSTEM.process.phase.utils import (
 warnings.simplefilter(action="always", category=UserWarning)
 
 
-class MultislicePtychographicReconstruction(
+class MixedstatePtychography(
     VisualizationsMixin,
     PositionsConstraintsMixin,
+    ProbeMixedConstraintsMixin,
     ProbeConstraintsMixin,
-    Object2p5DConstraintsMixin,
     ObjectNDConstraintsMixin,
-    Object2p5DProbeMethodsMixin,
+    ObjectNDProbeMixedMethodsMixin,
     ObjectNDProbeMethodsMixin,
+    ProbeMixedMethodsMixin,
     ProbeMethodsMixin,
-    Object2p5DMethodsMixin,
     ObjectNDMethodsMixin,
     PtychographicReconstruction,
 ):
     """
-    Multislice Ptychographic Reconstruction Class.
+    Mixed-State Ptychographic Reconstruction Class.
 
     Diffraction intensities dimensions  : (Rx,Ry,Qx,Qy)
-    Reconstructed probe dimensions      : (Sx,Sy)
-    Reconstructed object dimensions     : (T,Px,Py)
+    Reconstructed probe dimensions      : (N,Sx,Sy)
+    Reconstructed object dimensions     : (Px,Py)
 
-    such that (Sx,Sy) is the region-of-interest (ROI) size of our probe
-    and (Px,Py) is the padded-object size we position our ROI around in
-    each of the T slices.
+    such that (Sx,Sy) is the region-of-interest (ROI) size of our N probes
+    and (Px,Py) is the padded-object size we position our ROI around in.
 
     Parameters
     ----------
     energy: float
         The electron energy of the wave functions in eV
-    num_slices: int
-        Number of slices to use in the forward model
-    slice_thicknesses: float or Sequence[float]
-        Slice thicknesses in angstroms. If float, all slices are assigned the same thickness
-    datacube: DataCube, optional
+    datacube: DataCube
         Input 4D diffraction pattern intensities
+    num_probes: int, optional
+        Number of mixed-state probes
     semiangle_cutoff: float, optional
         Semiangle cutoff for the initial probe guess in mrad
     semiangle_cutoff_pixels: float, optional
@@ -103,15 +98,6 @@ class MultislicePtychographicReconstruction(
     initial_scan_positions: np.ndarray, optional
         Probe positions in Å for each diffraction intensity
         If None, initialized to a grid scan
-    theta_x: float
-        x tilt of propagator (in degrees)
-    theta_y: float
-        y tilt of propagator (in degrees)
-    middle_focus: bool
-        if True, adds half the sample thickness to the defocus
-    object_type: str, optional
-        The object can be reconstructed as a real potential ('potential') or a complex
-        object ('complex')
     positions_mask: np.ndarray, optional
         Boolean real space mask to select positions in datacube to skip for reconstruction
     verbose: bool, optional
@@ -125,14 +111,13 @@ class MultislicePtychographicReconstruction(
     """
 
     # Class-specific Metadata
-    _class_specific_metadata = ("_num_slices", "_slice_thicknesses")
+    _class_specific_metadata = ("_num_probes",)
 
     def __init__(
         self,
         energy: float,
-        num_slices: int,
-        slice_thicknesses: Union[float, Sequence[float]],
         datacube: DataCube = None,
+        num_probes: int = None,
         semiangle_cutoff: float = None,
         semiangle_cutoff_pixels: float = None,
         rolloff: float = 2.0,
@@ -142,17 +127,29 @@ class MultislicePtychographicReconstruction(
         initial_object_guess: np.ndarray = None,
         initial_probe_guess: np.ndarray = None,
         initial_scan_positions: np.ndarray = None,
-        theta_x: float = None,
-        theta_y: float = None,
-        middle_focus: bool = False,
         object_type: str = "complex",
         positions_mask: np.ndarray = None,
         verbose: bool = True,
         device: str = "cpu",
-        name: str = "multi-slice_ptychographic_reconstruction",
+        name: str = "mixed-state_ptychographic_reconstruction",
         **kwargs,
     ):
         Custom.__init__(self, name=name)
+
+        if initial_probe_guess is None or isinstance(initial_probe_guess, ComplexProbe):
+            if num_probes is None:
+                raise ValueError(
+                    (
+                        "If initial_probe_guess is None, or a ComplexProbe object, "
+                        "num_probes must be specified."
+                    )
+                )
+        else:
+            if len(initial_probe_guess.shape) != 3:
+                raise ValueError(
+                    "Specified initial_probe_guess must have dimensions (N,Sx,Sy)."
+                )
+            num_probes = initial_probe_guess.shape[0]
 
         if device == "cpu":
             self._xp = np
@@ -179,25 +176,6 @@ class MultislicePtychographicReconstruction(
             if (key not in polar_symbols) and (key not in polar_aliases.keys()):
                 raise ValueError("{} not a recognized parameter".format(key))
 
-        if np.isscalar(slice_thicknesses):
-            mean_slice_thickness = slice_thicknesses
-        else:
-            mean_slice_thickness = np.mean(slice_thicknesses)
-
-        if middle_focus:
-            if "defocus" in kwargs:
-                kwargs["defocus"] += mean_slice_thickness * num_slices / 2
-            elif "C10" in kwargs:
-                kwargs["C10"] -= mean_slice_thickness * num_slices / 2
-            elif polar_parameters is not None and "defocus" in polar_parameters:
-                polar_parameters["defocus"] = (
-                    polar_parameters["defocus"] + mean_slice_thickness * num_slices / 2
-                )
-            elif polar_parameters is not None and "C10" in polar_parameters:
-                polar_parameters["C10"] = (
-                    polar_parameters["C10"] - mean_slice_thickness * num_slices / 2
-                )
-
         self._polar_parameters = dict(zip(polar_symbols, [0.0] * len(polar_symbols)))
 
         if polar_parameters is None:
@@ -205,17 +183,6 @@ class MultislicePtychographicReconstruction(
 
         polar_parameters.update(kwargs)
         self._set_polar_parameters(polar_parameters)
-
-        slice_thicknesses = np.array(slice_thicknesses)
-        if slice_thicknesses.shape == ():
-            slice_thicknesses = np.tile(slice_thicknesses, num_slices - 1)
-        elif slice_thicknesses.shape[0] != (num_slices - 1):
-            raise ValueError(
-                (
-                    f"slice_thicknesses must have length {num_slices - 1}, "
-                    f"not {slice_thicknesses.shape[0]}."
-                )
-            )
 
         if object_type != "potential" and object_type != "complex":
             raise ValueError(
@@ -237,17 +204,14 @@ class MultislicePtychographicReconstruction(
         self._semiangle_cutoff_pixels = semiangle_cutoff_pixels
         self._rolloff = rolloff
         self._object_type = object_type
-        self._positions_mask = positions_mask
         self._object_padding_px = object_padding_px
+        self._positions_mask = positions_mask
         self._verbose = verbose
         self._device = device
         self._preprocessed = False
 
         # Class-specific Metadata
-        self._num_slices = num_slices
-        self._slice_thicknesses = slice_thicknesses
-        self._theta_x = theta_x
-        self._theta_y = theta_y
+        self._num_probes = num_probes
 
     def preprocess(
         self,
@@ -281,7 +245,7 @@ class MultislicePtychographicReconstruction(
         _normalize_diffraction_intensities()
         _calculate_scan_positions_in_px()
 
-        Additionally, it initializes an (T,Px,Py) array of 1.0j
+        Additionally, it initializes an (Px,Py) array of 1.0j
         and a complex probe using the specified polar parameters.
 
         Parameters
@@ -331,7 +295,7 @@ class MultislicePtychographicReconstruction(
 
         Returns
         --------
-        self: MultislicePtychographicReconstruction
+        self: PtychographicReconstruction
             Self to accommodate chaining
         """
         xp = self._xp
@@ -453,14 +417,13 @@ class MultislicePtychographicReconstruction(
         # initialize object
         self._object = self._initialize_object(
             self._object,
-            self._num_slices,
             self._positions_px,
             self._object_type,
         )
 
         self._object_initial = self._object.copy()
         self._object_type_initial = self._object_type
-        self._object_shape = self._object.shape[-2:]
+        self._object_shape = self._object.shape
 
         # center probe positions
         self._positions_px = xp.asarray(self._positions_px, dtype=xp.float32)
@@ -503,18 +466,8 @@ class MultislicePtychographicReconstruction(
             device=self._device,
         )._evaluate_ctf()
 
-        # precompute propagator arrays
-        self._propagator_arrays = self._precompute_propagator_arrays(
-            self._region_of_interest_shape,
-            self.sampling,
-            self._energy,
-            self._slice_thicknesses,
-            self._theta_x,
-            self._theta_y,
-        )
-
         # overlaps
-        shifted_probes = fft_shift(self._probe, self._positions_px_fractional, xp)
+        shifted_probes = fft_shift(self._probe[0], self._positions_px_fractional, xp)
         probe_intensities = xp.abs(shifted_probes) ** 2
         probe_overlap = self._sum_overlapping_patches_bincounts(probe_intensities)
 
@@ -528,26 +481,13 @@ class MultislicePtychographicReconstruction(
         self._object_fov_mask_inverse = np.invert(self._object_fov_mask)
 
         if plot_probe_overlaps:
-            figsize = kwargs.pop("figsize", (13, 4))
+            figsize = kwargs.pop("figsize", (4.5 * self._num_probes + 4, 4))
             chroma_boost = kwargs.pop("chroma_boost", 1)
             power = kwargs.pop("power", 2)
 
             # initial probe
             complex_probe_rgb = Complex2RGB(
                 self.probe_centered,
-                power=power,
-                chroma_boost=chroma_boost,
-            )
-
-            # propagated
-            propagated_probe = self._probe.copy()
-
-            for s in range(self._num_slices - 1):
-                propagated_probe = self._propagate_array(
-                    propagated_probe, self._propagator_arrays[s]
-                )
-            complex_propagated_rgb = Complex2RGB(
-                asnumpy(self._return_centered_probe(propagated_probe)),
                 power=power,
                 chroma_boost=chroma_boost,
             )
@@ -566,51 +506,37 @@ class MultislicePtychographicReconstruction(
                 0,
             ]
 
-            fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=figsize)
+            fig, axs = plt.subplots(1, self._num_probes + 1, figsize=figsize)
 
-            ax1.imshow(
-                complex_probe_rgb,
-                extent=probe_extent,
-            )
+            for i in range(self._num_probes):
+                axs[i].imshow(
+                    complex_probe_rgb[i],
+                    extent=probe_extent,
+                )
+                axs[i].set_ylabel("x [A]")
+                axs[i].set_xlabel("y [A]")
+                axs[i].set_title(f"Initial probe[{i}] intensity")
 
-            divider = make_axes_locatable(ax1)
-            cax1 = divider.append_axes("right", size="5%", pad="2.5%")
-            add_colorbar_arg(cax1, chroma_boost=chroma_boost)
-            ax1.set_ylabel("x [A]")
-            ax1.set_xlabel("y [A]")
-            ax1.set_title("Initial probe intensity")
+                divider = make_axes_locatable(axs[i])
+                cax = divider.append_axes("right", size="5%", pad="2.5%")
+                add_colorbar_arg(cax, chroma_boost=chroma_boost)
 
-            ax2.imshow(
-                complex_propagated_rgb,
-                extent=probe_extent,
-            )
-
-            divider = make_axes_locatable(ax2)
-            cax2 = divider.append_axes("right", size="5%", pad="2.5%")
-            add_colorbar_arg(
-                cax2,
-                chroma_boost=chroma_boost,
-            )
-            ax2.set_ylabel("x [A]")
-            ax2.set_xlabel("y [A]")
-            ax2.set_title("Propagated probe intensity")
-
-            ax3.imshow(
+            axs[-1].imshow(
                 asnumpy(probe_overlap),
                 extent=extent,
                 cmap="Greys_r",
             )
-            ax3.scatter(
+            axs[-1].scatter(
                 self.positions[:, 1],
                 self.positions[:, 0],
                 s=2.5,
                 color=(1, 0, 0, 1),
             )
-            ax3.set_ylabel("x [A]")
-            ax3.set_xlabel("y [A]")
-            ax3.set_xlim((extent[0], extent[1]))
-            ax3.set_ylim((extent[2], extent[3]))
-            ax3.set_title("Object field of view")
+            axs[-1].set_ylabel("x [A]")
+            axs[-1].set_xlabel("y [A]")
+            axs[-1].set_xlim((extent[0], extent[1]))
+            axs[-1].set_ylim((extent[2], extent[3]))
+            axs[-1].set_title("Object field of view")
 
             fig.tight_layout()
 
@@ -635,7 +561,9 @@ class MultislicePtychographicReconstruction(
         step_size: float = 0.5,
         normalization_min: float = 1,
         positions_step_size: float = 0.9,
+        pure_phase_object_iter: int = 0,
         fix_com: bool = True,
+        orthogonalize_probe: bool = True,
         fix_probe_iter: int = 0,
         fix_probe_aperture_iter: int = 0,
         constrain_probe_amplitude_iter: int = 0,
@@ -645,9 +573,9 @@ class MultislicePtychographicReconstruction(
         constrain_probe_fourier_amplitude_max_width_pixels: float = 3.0,
         constrain_probe_fourier_amplitude_constant_intensity: bool = False,
         fix_positions_iter: int = np.inf,
+        global_affine_transformation: bool = True,
         max_position_update_distance: float = None,
         max_position_total_distance: float = None,
-        global_affine_transformation: bool = True,
         gaussian_filter_sigma: float = None,
         gaussian_filter_iter: int = np.inf,
         fit_probe_aberrations_iter: int = 0,
@@ -658,19 +586,12 @@ class MultislicePtychographicReconstruction(
         q_lowpass: float = None,
         q_highpass: float = None,
         butterworth_order: float = 2,
-        kz_regularization_filter_iter: int = np.inf,
-        kz_regularization_gamma: float = None,
-        identical_slices_iter: int = 0,
+        tv_denoise_iter: int = np.inf,
+        tv_denoise_weight: float = None,
+        tv_denoise_inner_iter: float = 40,
         object_positivity: bool = True,
         shrinkage_rad: float = 0.0,
         fix_potential_baseline: bool = True,
-        pure_phase_object_iter: int = 0,
-        tv_denoise_iter_chambolle=np.inf,
-        tv_denoise_weight_chambolle=None,
-        tv_denoise_pad_chambolle=1,
-        tv_denoise_iter=np.inf,
-        tv_denoise_weights=None,
-        tv_denoise_inner_iter=40,
         switch_object_iter: int = np.inf,
         store_iterations: bool = False,
         progress_bar: bool = True,
@@ -709,12 +630,14 @@ class MultislicePtychographicReconstruction(
             Probe normalization minimum as a fraction of the maximum overlap intensity
         positions_step_size: float, optional
             Positions update step size
+        pure_phase_object_iter: int, optional
+            Number of iterations where object amplitude is set to unity
         fix_com: bool, optional
             If True, fixes center of mass of probe
         fix_probe_iter: int, optional
             Number of iterations to run with a fixed probe before updating probe estimate
         fix_probe_aperture_iter: int, optional
-            Number of iterations to run with a fixed probe Fourier amplitude before updating probe estimate
+            Number of iterations to run with a fixed probe fourier amplitude before updating probe estimate
         constrain_probe_amplitude_iter: int, optional
             Number of iterations to run while constraining the real-space probe with a top-hat support.
         constrain_probe_amplitude_relative_radius: float
@@ -755,33 +678,18 @@ class MultislicePtychographicReconstruction(
             Cut-off frequency in A^-1 for high-pass butterworth filter
         butterworth_order: float
             Butterworth filter order. Smaller gives a smoother filter
-        kz_regularization_filter_iter: int, optional
-            Number of iterations to run using kz regularization filter
-        kz_regularization_gamma, float, optional
-            kz regularization strength
-        identical_slices_iter: int, optional
-            Number of iterations to run using identical slices
+        tv_denoise_iter: int, optional
+            Number of iterations to run using tv denoise filter on object
+        tv_denoise_weight: float
+            Denoising weight. The greater `weight`, the more denoising.
+        tv_denoise_inner_iter: float
+            Number of iterations to run in inner loop of TV denoising
         object_positivity: bool, optional
             If True, forces object to be positive
         shrinkage_rad: float
             Phase shift in radians to be subtracted from the potential at each iteration
         fix_potential_baseline: bool
             If true, the potential mean outside the FOV is forced to zero at each iteration
-        pure_phase_object_iter: int, optional
-            Number of iterations where object amplitude is set to unity
-        tv_denoise_iter_chambolle: bool
-            Number of iterations with TV denoisining
-        tv_denoise_weight_chambolle: float
-            weight of tv denoising constraint
-        tv_denoise_pad_chambolle: int
-            if not None, pads object at top and bottom with this many zeros before applying denoising
-        tv_denoise: bool
-            If True, applies TV denoising on object
-        tv_denoise_weights: [float,float]
-            Denoising weights[z weight, r weight]. The greater `weight`,
-            the more denoising.
-        tv_denoise_inner_iter: float
-            Number of iterations to run in inner loop of TV denoising
         switch_object_iter: int, optional
             Iteration to switch object type between 'complex' and 'potential' or between
             'potential' and 'complex'
@@ -794,7 +702,7 @@ class MultislicePtychographicReconstruction(
 
         Returns
         --------
-        self: MultislicePtychographicReconstruction
+        self: PtychographicReconstruction
             Self to accommodate chaining
         """
         asnumpy = self._asnumpy
@@ -922,7 +830,7 @@ class MultislicePtychographicReconstruction(
                 if a0 >= fix_positions_iter:
                     positions_px[start:end] = self._position_correction(
                         self._object,
-                        self._probe,
+                        shifted_probes,
                         overlap,
                         amplitudes,
                         self._positions_px,
@@ -970,10 +878,10 @@ class MultislicePtychographicReconstruction(
                 q_lowpass=q_lowpass,
                 q_highpass=q_highpass,
                 butterworth_order=butterworth_order,
-                kz_regularization_filter=a0 < kz_regularization_filter_iter
-                and kz_regularization_gamma is not None,
-                kz_regularization_gamma=kz_regularization_gamma,
-                identical_slices=a0 < identical_slices_iter,
+                orthogonalize_probe=orthogonalize_probe,
+                tv_denoise=a0 < tv_denoise_iter and tv_denoise_weight is not None,
+                tv_denoise_weight=tv_denoise_weight,
+                tv_denoise_inner_iter=tv_denoise_inner_iter,
                 object_positivity=object_positivity,
                 shrinkage_rad=shrinkage_rad,
                 object_mask=self._object_fov_mask_inverse
@@ -981,13 +889,6 @@ class MultislicePtychographicReconstruction(
                 else None,
                 pure_phase_object=a0 < pure_phase_object_iter
                 and self._object_type == "complex",
-                tv_denoise_chambolle=a0 < tv_denoise_iter_chambolle
-                and tv_denoise_weight_chambolle is not None,
-                tv_denoise_weight_chambolle=tv_denoise_weight_chambolle,
-                tv_denoise_pad_chambolle=tv_denoise_pad_chambolle,
-                tv_denoise=a0 < tv_denoise_iter and tv_denoise_weights is not None,
-                tv_denoise_weights=tv_denoise_weights,
-                tv_denoise_inner_iter=tv_denoise_inner_iter,
             )
 
             self.error_iterations.append(error.item())

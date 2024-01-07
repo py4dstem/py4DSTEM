@@ -1,6 +1,6 @@
 """
 Module for reconstructing phase objects from 4DSTEM datasets using iterative methods,
-namely mixed-state ptychography.
+namely (single-slice) ptychography.
 """
 
 import warnings
@@ -13,28 +13,23 @@ from py4DSTEM.visualize.vis_special import Complex2RGB, add_colorbar_arg
 
 try:
     import cupy as cp
-except (ModuleNotFoundError, ImportError):
+except (ImportError, ModuleNotFoundError):
     cp = np
 
 from emdfile import Custom, tqdmnd
-from py4DSTEM import DataCube
-from py4DSTEM.process.phase.iterative_base_class import PtychographicReconstruction
-from py4DSTEM.process.phase.iterative_ptychographic_constraints import (
+from py4DSTEM.datacube import DataCube
+from py4DSTEM.process.phase.phase_base_class import PtychographicReconstruction
+from py4DSTEM.process.phase.ptychographic_constraints import (
     ObjectNDConstraintsMixin,
     PositionsConstraintsMixin,
     ProbeConstraintsMixin,
-    ProbeMixedConstraintsMixin,
 )
-from py4DSTEM.process.phase.iterative_ptychographic_methods import (
+from py4DSTEM.process.phase.ptychographic_methods import (
     ObjectNDMethodsMixin,
     ObjectNDProbeMethodsMixin,
-    ObjectNDProbeMixedMethodsMixin,
     ProbeMethodsMixin,
-    ProbeMixedMethodsMixin,
 )
-from py4DSTEM.process.phase.iterative_ptychographic_visualizations import (
-    VisualizationsMixin,
-)
+from py4DSTEM.process.phase.ptychographic_visualizations import VisualizationsMixin
 from py4DSTEM.process.phase.utils import (
     ComplexProbe,
     fft_shift,
@@ -46,27 +41,24 @@ from py4DSTEM.process.phase.utils import (
 warnings.simplefilter(action="always", category=UserWarning)
 
 
-class MixedstatePtychographicReconstruction(
+class SingleslicePtychography(
     VisualizationsMixin,
     PositionsConstraintsMixin,
-    ProbeMixedConstraintsMixin,
     ProbeConstraintsMixin,
     ObjectNDConstraintsMixin,
-    ObjectNDProbeMixedMethodsMixin,
     ObjectNDProbeMethodsMixin,
-    ProbeMixedMethodsMixin,
     ProbeMethodsMixin,
     ObjectNDMethodsMixin,
     PtychographicReconstruction,
 ):
     """
-    Mixed-State Ptychographic Reconstruction Class.
+    Iterative Ptychographic Reconstruction Class.
 
     Diffraction intensities dimensions  : (Rx,Ry,Qx,Qy)
-    Reconstructed probe dimensions      : (N,Sx,Sy)
+    Reconstructed probe dimensions      : (Sx,Sy)
     Reconstructed object dimensions     : (Px,Py)
 
-    such that (Sx,Sy) is the region-of-interest (ROI) size of our N probes
+    such that (Sx,Sy) is the region-of-interest (ROI) size of our probe
     and (Px,Py) is the padded-object size we position our ROI around in.
 
     Parameters
@@ -75,8 +67,6 @@ class MixedstatePtychographicReconstruction(
         The electron energy of the wave functions in eV
     datacube: DataCube
         Input 4D diffraction pattern intensities
-    num_probes: int, optional
-        Number of mixed-state probes
     semiangle_cutoff: float, optional
         Semiangle cutoff for the initial probe guess in mrad
     semiangle_cutoff_pixels: float, optional
@@ -100,12 +90,15 @@ class MixedstatePtychographicReconstruction(
     initial_scan_positions: np.ndarray, optional
         Probe positions in Å for each diffraction intensity
         If None, initialized to a grid scan
-    positions_mask: np.ndarray, optional
-        Boolean real space mask to select positions in datacube to skip for reconstruction
     verbose: bool, optional
         If True, class methods will inherit this and print additional information
     device: str, optional
         Calculation device will be perfomed on. Must be 'cpu' or 'gpu'
+    object_type: str, optional
+        The object can be reconstructed as a real potential ('potential') or a complex
+        object ('complex')
+    positions_mask: np.ndarray, optional
+        Boolean real space mask to select positions in datacube to skip for reconstruction
     name: str, optional
         Class name
     kwargs:
@@ -113,45 +106,29 @@ class MixedstatePtychographicReconstruction(
     """
 
     # Class-specific Metadata
-    _class_specific_metadata = ("_num_probes",)
+    _class_specific_metadata = ()
 
     def __init__(
         self,
         energy: float,
         datacube: DataCube = None,
-        num_probes: int = None,
         semiangle_cutoff: float = None,
         semiangle_cutoff_pixels: float = None,
         rolloff: float = 2.0,
         vacuum_probe_intensity: np.ndarray = None,
         polar_parameters: Mapping[str, float] = None,
-        object_padding_px: Tuple[int, int] = None,
         initial_object_guess: np.ndarray = None,
         initial_probe_guess: np.ndarray = None,
         initial_scan_positions: np.ndarray = None,
+        object_padding_px: Tuple[int, int] = None,
         object_type: str = "complex",
         positions_mask: np.ndarray = None,
         verbose: bool = True,
         device: str = "cpu",
-        name: str = "mixed-state_ptychographic_reconstruction",
+        name: str = "ptychographic_reconstruction",
         **kwargs,
     ):
         Custom.__init__(self, name=name)
-
-        if initial_probe_guess is None or isinstance(initial_probe_guess, ComplexProbe):
-            if num_probes is None:
-                raise ValueError(
-                    (
-                        "If initial_probe_guess is None, or a ComplexProbe object, "
-                        "num_probes must be specified."
-                    )
-                )
-        else:
-            if len(initial_probe_guess.shape) != 3:
-                raise ValueError(
-                    "Specified initial_probe_guess must have dimensions (N,Sx,Sy)."
-                )
-            num_probes = initial_probe_guess.shape[0]
 
         if device == "cpu":
             self._xp = np
@@ -213,7 +190,6 @@ class MixedstatePtychographicReconstruction(
         self._preprocessed = False
 
         # Class-specific Metadata
-        self._num_probes = num_probes
 
     def preprocess(
         self,
@@ -401,7 +377,7 @@ class MixedstatePtychographicReconstruction(
             crop_patterns,
         )
 
-        # explicitly delete namespace
+        # explicitly delete intensities namespace
         self._num_diffraction_patterns = self._amplitudes.shape[0]
         self._region_of_interest_shape = np.array(self._amplitudes.shape[-2:])
         del self._intensities
@@ -469,10 +445,11 @@ class MixedstatePtychographicReconstruction(
         )._evaluate_ctf()
 
         # overlaps
-        shifted_probes = fft_shift(self._probe[0], self._positions_px_fractional, xp)
+        shifted_probes = fft_shift(self._probe, self._positions_px_fractional, xp)
         probe_intensities = xp.abs(shifted_probes) ** 2
         probe_overlap = self._sum_overlapping_patches_bincounts(probe_intensities)
 
+        # initialize object_fov_mask
         if object_fov_mask is None:
             probe_overlap_blurred = self._gaussian_filter(probe_overlap, 1.0)
             self._object_fov_mask = asnumpy(
@@ -482,8 +459,9 @@ class MixedstatePtychographicReconstruction(
             self._object_fov_mask = np.asarray(object_fov_mask)
         self._object_fov_mask_inverse = np.invert(self._object_fov_mask)
 
+        # plot probe overlaps
         if plot_probe_overlaps:
-            figsize = kwargs.pop("figsize", (4.5 * self._num_probes + 4, 4))
+            figsize = kwargs.pop("figsize", (9, 4))
             chroma_boost = kwargs.pop("chroma_boost", 1)
             power = kwargs.pop("power", 2)
 
@@ -508,37 +486,36 @@ class MixedstatePtychographicReconstruction(
                 0,
             ]
 
-            fig, axs = plt.subplots(1, self._num_probes + 1, figsize=figsize)
+            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=figsize)
 
-            for i in range(self._num_probes):
-                axs[i].imshow(
-                    complex_probe_rgb[i],
-                    extent=probe_extent,
-                )
-                axs[i].set_ylabel("x [A]")
-                axs[i].set_xlabel("y [A]")
-                axs[i].set_title(f"Initial probe[{i}] intensity")
+            ax1.imshow(
+                complex_probe_rgb,
+                extent=probe_extent,
+            )
 
-                divider = make_axes_locatable(axs[i])
-                cax = divider.append_axes("right", size="5%", pad="2.5%")
-                add_colorbar_arg(cax, chroma_boost=chroma_boost)
+            divider = make_axes_locatable(ax1)
+            cax1 = divider.append_axes("right", size="5%", pad="2.5%")
+            add_colorbar_arg(cax1, chroma_boost=chroma_boost)
+            ax1.set_ylabel("x [A]")
+            ax1.set_xlabel("y [A]")
+            ax1.set_title("Initial probe intensity")
 
-            axs[-1].imshow(
+            ax2.imshow(
                 asnumpy(probe_overlap),
                 extent=extent,
-                cmap="Greys_r",
+                cmap="gray",
             )
-            axs[-1].scatter(
+            ax2.scatter(
                 self.positions[:, 1],
                 self.positions[:, 0],
                 s=2.5,
                 color=(1, 0, 0, 1),
             )
-            axs[-1].set_ylabel("x [A]")
-            axs[-1].set_xlabel("y [A]")
-            axs[-1].set_xlim((extent[0], extent[1]))
-            axs[-1].set_ylim((extent[2], extent[3]))
-            axs[-1].set_title("Object field of view")
+            ax2.set_ylabel("x [A]")
+            ax2.set_xlabel("y [A]")
+            ax2.set_xlim((extent[0], extent[1]))
+            ax2.set_ylim((extent[2], extent[3]))
+            ax2.set_title("Object field of view")
 
             fig.tight_layout()
 
@@ -565,7 +542,6 @@ class MixedstatePtychographicReconstruction(
         positions_step_size: float = 0.9,
         pure_phase_object_iter: int = 0,
         fix_com: bool = True,
-        orthogonalize_probe: bool = True,
         fix_probe_iter: int = 0,
         fix_probe_aperture_iter: int = 0,
         constrain_probe_amplitude_iter: int = 0,
@@ -575,9 +551,9 @@ class MixedstatePtychographicReconstruction(
         constrain_probe_fourier_amplitude_max_width_pixels: float = 3.0,
         constrain_probe_fourier_amplitude_constant_intensity: bool = False,
         fix_positions_iter: int = np.inf,
-        global_affine_transformation: bool = True,
         max_position_update_distance: float = None,
         max_position_total_distance: float = None,
+        global_affine_transformation: bool = True,
         gaussian_filter_sigma: float = None,
         gaussian_filter_iter: int = np.inf,
         fit_probe_aberrations_iter: int = 0,
@@ -639,7 +615,7 @@ class MixedstatePtychographicReconstruction(
         fix_probe_iter: int, optional
             Number of iterations to run with a fixed probe before updating probe estimate
         fix_probe_aperture_iter: int, optional
-            Number of iterations to run with a fixed probe fourier amplitude before updating probe estimate
+            Number of iterations to run with a fixed probe Fourier amplitude before updating probe estimate
         constrain_probe_amplitude_iter: int, optional
             Number of iterations to run while constraining the real-space probe with a top-hat support.
         constrain_probe_amplitude_relative_radius: float
@@ -666,9 +642,9 @@ class MixedstatePtychographicReconstruction(
             Number of iterations to run using object smoothness constraint
         fit_probe_aberrations_iter: int, optional
             Number of iterations to run while fitting the probe aberrations to a low-order expansion
-        fit_probe_aberrations_max_angular_order: bool
+        fit_probe_aberrations_max_angular_order: int
             Max angular order of probe aberrations basis functions
-        fit_probe_aberrations_max_radial_order: bool
+        fit_probe_aberrations_max_radial_order: int
             Max radial order of probe aberrations basis functions
         fit_probe_aberrations_remove_initial: bool
             If true, initial probe aberrations are removed before fitting
@@ -742,7 +718,7 @@ class MixedstatePtychographicReconstruction(
                 step_size,
             )
 
-        # Batching
+        # batching
         shuffled_indices = np.arange(self._num_diffraction_patterns)
         unshuffled_indices = np.zeros_like(shuffled_indices)
 
@@ -880,7 +856,6 @@ class MixedstatePtychographicReconstruction(
                 q_lowpass=q_lowpass,
                 q_highpass=q_highpass,
                 butterworth_order=butterworth_order,
-                orthogonalize_probe=orthogonalize_probe,
                 tv_denoise=a0 < tv_denoise_iter and tv_denoise_weight is not None,
                 tv_denoise_weight=tv_denoise_weight,
                 tv_denoise_inner_iter=tv_denoise_inner_iter,
