@@ -701,254 +701,80 @@ class MagneticPtychographicTomography(
 
         return self
 
-    def _divergence_free_constraint(self, vector_field):
-        """
-        Leray projection operator
-
-        Parameters
-        --------
-        vector_field: np.ndarray
-            Current object vector as Ax, Ay, Az
-
-        Returns
-        --------
-        projected_vector_field: np.ndarray
-            Divergence-less object vector as Ax, Ay, Az
-        """
-        xp = self._xp
-
-        vector_field = project_vector_field_divergence_periodic_3D(vector_field, xp=xp)
-
-        return vector_field
-
-    def _constraints(
+    def _object_constraints_vector(
         self,
         current_object,
-        current_probe,
-        current_positions,
-        fix_com,
-        fit_probe_aberrations,
-        fit_probe_aberrations_max_angular_order,
-        fit_probe_aberrations_max_radial_order,
-        constrain_probe_amplitude,
-        constrain_probe_amplitude_relative_radius,
-        constrain_probe_amplitude_relative_width,
-        constrain_probe_fourier_amplitude,
-        constrain_probe_fourier_amplitude_max_width_pixels,
-        constrain_probe_fourier_amplitude_constant_intensity,
-        fix_probe_aperture,
-        initial_probe_aperture,
-        fix_positions,
-        global_affine_transformation,
+        pure_phase_object,
         gaussian_filter,
         gaussian_filter_sigma_e,
         gaussian_filter_sigma_m,
         butterworth_filter,
+        butterworth_order,
         q_lowpass_e,
         q_lowpass_m,
         q_highpass_e,
         q_highpass_m,
-        butterworth_order,
-        object_positivity,
-        shrinkage_rad,
-        object_mask,
         tv_denoise,
         tv_denoise_weights,
         tv_denoise_inner_iter,
+        object_positivity,
+        shrinkage_rad,
+        object_mask,
+        **kwargs,
     ):
-        """
-        Ptychographic constraints operator.
-        Calls _threshold_object_constraint() and _probe_center_of_mass_constraint()
+        """Calls Object3DConstraints _object_constraints for each object."""
+        xp = self._xp
 
-        Parameters
-        --------
-        current_object: np.ndarray
-            Current object estimate
-        current_probe: np.ndarray
-            Current probe estimate
-        current_positions: np.ndarray
-            Current positions estimate
-        fix_com: bool
-            If True, probe CoM is fixed to the center
-        fit_probe_aberrations: bool
-            If True, fits the probe aberrations to a low-order expansion
-        fit_probe_aberrations_max_angular_order: bool
-            Max angular order of probe aberrations basis functions
-        fit_probe_aberrations_max_radial_order: bool
-            Max radial order of probe aberrations basis functions
-        constrain_probe_amplitude: bool
-            If True, probe amplitude is constrained by top hat function
-        constrain_probe_amplitude_relative_radius: float
-            Relative location of top-hat inflection point, between 0 and 0.5
-        constrain_probe_amplitude_relative_width: float
-            Relative width of top-hat sigmoid, between 0 and 0.5
-        constrain_probe_fourier_amplitude: bool
-            If True, probe aperture is constrained by fitting a sigmoid for each angular frequency.
-        constrain_probe_fourier_amplitude_max_width_pixels: float
-            Maximum pixel width of fitted sigmoid functions.
-        constrain_probe_fourier_amplitude_constant_intensity: bool
-            If True, the probe aperture is additionally constrained to a constant intensity.
-        fix_probe_aperture: bool,
-            If True, probe Fourier amplitude is replaced by initial probe aperture.
-        initial_probe_aperture: np.ndarray,
-            Initial probe aperture to use in replacing probe Fourier amplitude.
-        fix_positions: bool
-            If True, positions are not updated
-        gaussian_filter: bool
-            If True, applies real-space gaussian filter
-        gaussian_filter_sigma_e: float
-            Standard deviation of gaussian kernel for electrostatic object in A
-        gaussian_filter_sigma_m: float
-            Standard deviation of gaussian kernel for magnetic object in A
-        butterworth_filter: bool
-            If True, applies high-pass butteworth filter
-        q_lowpass_e: float
-            Cut-off frequency in A^-1 for low-pass filtering electrostatic object
-        q_lowpass_m: float
-            Cut-off frequency in A^-1 for low-pass filtering magnetic object
-        q_highpass_e: float
-            Cut-off frequency in A^-1 for high-pass filtering electrostatic object
-        q_highpass_m: float
-            Cut-off frequency in A^-1 for high-pass filtering magnetic object
-        butterworth_order: float
-            Butterworth filter order. Smaller gives a smoother filter
-        object_positivity: bool
-            If True, forces object to be positive
-        shrinkage_rad: float
-            Phase shift in radians to be subtracted from the potential at each iteration
-        object_mask: np.ndarray (boolean)
-            If not None, used to calculate additional shrinkage using masked-mean of object
-        tv_denoise: bool
-            If True, applies TV denoising on object
-        tv_denoise_weights: [float,float]
-            Denoising weights[z weight, r weight]. The greater `weight`,
-            the more denoising.
-        tv_denoise_inner_iter: float
-            Number of iterations to run in inner loop of TV denoising
+        # electrostatic
+        current_object[0] = self._object_constraints(
+            current_object[0],
+            gaussian_filter,
+            gaussian_filter_sigma_e,
+            butterworth_filter,
+            butterworth_order,
+            q_lowpass_e,
+            q_highpass_e,
+            tv_denoise,
+            tv_denoise_weights,
+            tv_denoise_inner_iter,
+            object_positivity,
+            shrinkage_rad,
+            object_mask,
+            **kwargs,
+        )
 
-        Returns
-        --------
-        constrained_object: np.ndarray
-            Constrained object estimate
-        constrained_probe: np.ndarray
-            Constrained probe estimate
-        constrained_positions: np.ndarray
-            Constrained positions estimate
-        """
-
-        if gaussian_filter:
-            current_object[0] = self._object_gaussian_constraint(
-                current_object[0], gaussian_filter_sigma_e, pure_phase_object=False
-            )
-            current_object[1] = self._object_gaussian_constraint(
-                current_object[1], gaussian_filter_sigma_m, pure_phase_object=False
-            )
-            current_object[2] = self._object_gaussian_constraint(
-                current_object[2], gaussian_filter_sigma_m, pure_phase_object=False
-            )
-            current_object[3] = self._object_gaussian_constraint(
-                current_object[3], gaussian_filter_sigma_m, pure_phase_object=False
-            )
-
-        if butterworth_filter:
-            current_object[0] = self._object_butterworth_constraint(
-                current_object[0],
-                q_lowpass_e,
-                q_highpass_e,
+        # magnetic
+        for index in range(1, 4):
+            current_object[index] = self._object_constraints(
+                current_object[index],
+                gaussian_filter,
+                gaussian_filter_sigma_m,
+                butterworth_filter,
                 butterworth_order,
-            )
-            current_object[1] = self._object_butterworth_constraint(
-                current_object[1],
                 q_lowpass_m,
                 q_highpass_m,
-                butterworth_order,
-            )
-            current_object[2] = self._object_butterworth_constraint(
-                current_object[2],
-                q_lowpass_m,
-                q_highpass_m,
-                butterworth_order,
-            )
-            current_object[3] = self._object_butterworth_constraint(
-                current_object[3],
-                q_lowpass_m,
-                q_highpass_m,
-                butterworth_order,
-            )
-
-        elif tv_denoise:
-            current_object[0] = self._object_denoise_tv_pylops(
-                current_object[0],
+                tv_denoise,
                 tv_denoise_weights,
                 tv_denoise_inner_iter,
+                False,
+                0.0,
+                None,
+                **kwargs,
             )
 
-            current_object[1] = self._object_denoise_tv_pylops(
-                current_object[1],
-                tv_denoise_weights,
-                tv_denoise_inner_iter,
-            )
+        # divergence-free
+        current_object[1:] = project_vector_field_divergence_periodic_3D(
+            current_object[1:], xp=xp
+        )
 
-            current_object[2] = self._object_denoise_tv_pylops(
-                current_object[2],
-                tv_denoise_weights,
-                tv_denoise_inner_iter,
-            )
+        return current_object
 
-            current_object[3] = self._object_denoise_tv_pylops(
-                current_object[3],
-                tv_denoise_weights,
-                tv_denoise_inner_iter,
-            )
+    def _constraints(self, current_object, current_probe, current_positions, **kwargs):
+        """Wrapper function to bypass _object_constraints"""
 
-        if shrinkage_rad > 0.0 or object_mask is not None:
-            current_object[0] = self._object_shrinkage_constraint(
-                current_object[0],
-                shrinkage_rad,
-                object_mask,
-            )
-
-        if object_positivity:
-            current_object[0] = self._object_positivity_constraint(current_object[0])
-
-        if fix_com:
-            current_probe = self._probe_center_of_mass_constraint(current_probe)
-
-        if fix_probe_aperture:
-            current_probe = self._probe_aperture_constraint(
-                current_probe,
-                initial_probe_aperture,
-            )
-        elif constrain_probe_fourier_amplitude:
-            current_probe = self._probe_fourier_amplitude_constraint(
-                current_probe,
-                constrain_probe_fourier_amplitude_max_width_pixels,
-                constrain_probe_fourier_amplitude_constant_intensity,
-            )
-
-        if fit_probe_aberrations:
-            current_probe = self._probe_aberration_fitting_constraint(
-                current_probe,
-                fit_probe_aberrations_max_angular_order,
-                fit_probe_aberrations_max_radial_order,
-            )
-
-        if constrain_probe_amplitude:
-            current_probe = self._probe_amplitude_constraint(
-                current_probe,
-                constrain_probe_amplitude_relative_radius,
-                constrain_probe_amplitude_relative_width,
-            )
-
-        if not fix_positions:
-            current_positions = self._positions_center_of_mass_constraint(
-                current_positions
-            )
-
-            if global_affine_transformation:
-                current_positions = self._positions_affine_transformation_constraint(
-                    self._positions_px_initial, current_positions
-                )
+        current_object = self._object_constraints_vector(current_object, **kwargs)
+        current_probe = self._probe_constraints(current_probe, **kwargs)
+        current_positions = self._positions_constraints(current_positions, **kwargs)
 
         return current_object, current_probe, current_positions
 
