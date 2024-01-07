@@ -14,25 +14,30 @@ from py4DSTEM.visualize.vis_special import Complex2RGB, add_colorbar_arg
 try:
     import cupy as cp
 except (ModuleNotFoundError, ImportError):
-    cp = np
+    cp = None
 
 from emdfile import Custom, tqdmnd
 from py4DSTEM import DataCube
-from py4DSTEM.process.phase.phase_base_class import PtychographicReconstruction
-from py4DSTEM.process.phase.ptychographic_constraints import (
+from py4DSTEM.process.phase.iterative_base_class import PtychographicReconstruction
+from py4DSTEM.process.phase.iterative_ptychographic_constraints import (
     Object2p5DConstraintsMixin,
     ObjectNDConstraintsMixin,
     PositionsConstraintsMixin,
     ProbeConstraintsMixin,
+    ProbeMixedConstraintsMixin,
 )
-from py4DSTEM.process.phase.ptychographic_methods import (
+from py4DSTEM.process.phase.iterative_ptychographic_methods import (
     Object2p5DMethodsMixin,
-    Object2p5DProbeMethodsMixin,
+    Object2p5DProbeMixedMethodsMixin,
     ObjectNDMethodsMixin,
     ObjectNDProbeMethodsMixin,
+    ObjectNDProbeMixedMethodsMixin,
     ProbeMethodsMixin,
+    ProbeMixedMethodsMixin,
 )
-from py4DSTEM.process.phase.ptychographic_visualizations import VisualizationsMixin
+from py4DSTEM.process.phase.iterative_ptychographic_visualizations import (
+    VisualizationsMixin,
+)
 from py4DSTEM.process.phase.utils import (
     ComplexProbe,
     fft_shift,
@@ -44,27 +49,30 @@ from py4DSTEM.process.phase.utils import (
 warnings.simplefilter(action="always", category=UserWarning)
 
 
-class MultislicePtychography(
+class MixedstateMultislicePtychographicReconstruction(
     VisualizationsMixin,
     PositionsConstraintsMixin,
+    ProbeMixedConstraintsMixin,
     ProbeConstraintsMixin,
     Object2p5DConstraintsMixin,
     ObjectNDConstraintsMixin,
-    Object2p5DProbeMethodsMixin,
+    Object2p5DProbeMixedMethodsMixin,
+    ObjectNDProbeMixedMethodsMixin,
     ObjectNDProbeMethodsMixin,
+    ProbeMixedMethodsMixin,
     ProbeMethodsMixin,
     Object2p5DMethodsMixin,
     ObjectNDMethodsMixin,
     PtychographicReconstruction,
 ):
     """
-    Multislice Ptychographic Reconstruction Class.
+    Mixed-State Multislice Ptychographic Reconstruction Class.
 
     Diffraction intensities dimensions  : (Rx,Ry,Qx,Qy)
-    Reconstructed probe dimensions      : (Sx,Sy)
+    Reconstructed probe dimensions      : (N,Sx,Sy)
     Reconstructed object dimensions     : (T,Px,Py)
 
-    such that (Sx,Sy) is the region-of-interest (ROI) size of our probe
+    such that (Sx,Sy) is the region-of-interest (ROI) size of our N probes
     and (Px,Py) is the padded-object size we position our ROI around in
     each of the T slices.
 
@@ -72,6 +80,8 @@ class MultislicePtychography(
     ----------
     energy: float
         The electron energy of the wave functions in eV
+    num_probes: int, optional
+        Number of mixed-state probes
     num_slices: int
         Number of slices to use in the forward model
     slice_thicknesses: float or Sequence[float]
@@ -123,13 +133,14 @@ class MultislicePtychography(
     """
 
     # Class-specific Metadata
-    _class_specific_metadata = ("_num_slices", "_slice_thicknesses")
+    _class_specific_metadata = ("_num_probes", "_num_slices", "_slice_thicknesses")
 
     def __init__(
         self,
         energy: float,
         num_slices: int,
         slice_thicknesses: Union[float, Sequence[float]],
+        num_probes: int = None,
         datacube: DataCube = None,
         semiangle_cutoff: float = None,
         semiangle_cutoff_pixels: float = None,
@@ -140,8 +151,8 @@ class MultislicePtychography(
         initial_object_guess: np.ndarray = None,
         initial_probe_guess: np.ndarray = None,
         initial_scan_positions: np.ndarray = None,
-        theta_x: float = None,
-        theta_y: float = None,
+        theta_x: float = 0,
+        theta_y: float = 0,
         middle_focus: bool = False,
         object_type: str = "complex",
         positions_mask: np.ndarray = None,
@@ -151,6 +162,21 @@ class MultislicePtychography(
         **kwargs,
     ):
         Custom.__init__(self, name=name)
+
+        if initial_probe_guess is None or isinstance(initial_probe_guess, ComplexProbe):
+            if num_probes is None:
+                raise ValueError(
+                    (
+                        "If initial_probe_guess is None, or a ComplexProbe object, "
+                        "num_probes must be specified."
+                    )
+                )
+        else:
+            if len(initial_probe_guess.shape) != 3:
+                raise ValueError(
+                    "Specified initial_probe_guess must have dimensions (N,Sx,Sy)."
+                )
+            num_probes = initial_probe_guess.shape[0]
 
         if device == "cpu":
             self._xp = np
@@ -242,6 +268,7 @@ class MultislicePtychography(
         self._preprocessed = False
 
         # Class-specific Metadata
+        self._num_probes = num_probes
         self._num_slices = num_slices
         self._slice_thicknesses = slice_thicknesses
         self._theta_x = theta_x
@@ -329,7 +356,7 @@ class MultislicePtychography(
 
         Returns
         --------
-        self: MultislicePtychographicReconstruction
+        self: MixedstateMultislicePtychographicReconstruction
             Self to accommodate chaining
         """
         xp = self._xp
@@ -512,7 +539,7 @@ class MultislicePtychography(
         )
 
         # overlaps
-        shifted_probes = fft_shift(self._probe, self._positions_px_fractional, xp)
+        shifted_probes = fft_shift(self._probe[0], self._positions_px_fractional, xp)
         probe_intensities = xp.abs(shifted_probes) ** 2
         probe_overlap = self._sum_overlapping_patches_bincounts(probe_intensities)
 
@@ -532,13 +559,13 @@ class MultislicePtychography(
 
             # initial probe
             complex_probe_rgb = Complex2RGB(
-                self.probe_centered,
+                self.probe_centered[0],
                 power=power,
                 chroma_boost=chroma_boost,
             )
 
             # propagated
-            propagated_probe = self._probe.copy()
+            propagated_probe = self._probe[0].copy()
 
             for s in range(self._num_slices - 1):
                 propagated_probe = self._propagate_array(
@@ -573,10 +600,13 @@ class MultislicePtychography(
 
             divider = make_axes_locatable(ax1)
             cax1 = divider.append_axes("right", size="5%", pad="2.5%")
-            add_colorbar_arg(cax1, chroma_boost=chroma_boost)
+            add_colorbar_arg(
+                cax1,
+                chroma_boost=chroma_boost,
+            )
             ax1.set_ylabel("x [A]")
             ax1.set_xlabel("y [A]")
-            ax1.set_title("Initial probe intensity")
+            ax1.set_title("Initial probe[0] intensity")
 
             ax2.imshow(
                 complex_propagated_rgb,
@@ -585,13 +615,10 @@ class MultislicePtychography(
 
             divider = make_axes_locatable(ax2)
             cax2 = divider.append_axes("right", size="5%", pad="2.5%")
-            add_colorbar_arg(
-                cax2,
-                chroma_boost=chroma_boost,
-            )
+            add_colorbar_arg(cax2, chroma_boost=chroma_boost)
             ax2.set_ylabel("x [A]")
             ax2.set_xlabel("y [A]")
-            ax2.set_title("Propagated probe intensity")
+            ax2.set_title("Propagated probe[0] intensity")
 
             ax3.imshow(
                 asnumpy(probe_overlap),
@@ -634,6 +661,7 @@ class MultislicePtychography(
         normalization_min: float = 1,
         positions_step_size: float = 0.9,
         fix_com: bool = True,
+        orthogonalize_probe: bool = True,
         fix_probe_iter: int = 0,
         fix_probe_aperture_iter: int = 0,
         constrain_probe_amplitude_iter: int = 0,
@@ -657,7 +685,7 @@ class MultislicePtychography(
         q_highpass: float = None,
         butterworth_order: float = 2,
         kz_regularization_filter_iter: int = np.inf,
-        kz_regularization_gamma: float = None,
+        kz_regularization_gamma: Union[float, np.ndarray] = None,
         identical_slices_iter: int = 0,
         object_positivity: bool = True,
         shrinkage_rad: float = 0.0,
@@ -772,7 +800,7 @@ class MultislicePtychography(
         tv_denoise_weight_chambolle: float
             weight of tv denoising constraint
         tv_denoise_pad_chambolle: int
-            if not None, pads object at top and bottom with this many zeros before applying denoising
+            If not None, pads object at top and bottom with this many zeros before applying denoising
         tv_denoise: bool
             If True, applies TV denoising on object
         tv_denoise_weights: [float,float]
@@ -830,7 +858,7 @@ class MultislicePtychography(
                 step_size,
             )
 
-        # Batching
+        # batching
         shuffled_indices = np.arange(self._num_diffraction_patterns)
         unshuffled_indices = np.zeros_like(shuffled_indices)
 
@@ -970,7 +998,10 @@ class MultislicePtychography(
                 butterworth_order=butterworth_order,
                 kz_regularization_filter=a0 < kz_regularization_filter_iter
                 and kz_regularization_gamma is not None,
-                kz_regularization_gamma=kz_regularization_gamma,
+                kz_regularization_gamma=kz_regularization_gamma[a0]
+                if kz_regularization_gamma is not None
+                and isinstance(kz_regularization_gamma, np.ndarray)
+                else kz_regularization_gamma,
                 identical_slices=a0 < identical_slices_iter,
                 object_positivity=object_positivity,
                 shrinkage_rad=shrinkage_rad,
@@ -986,6 +1017,7 @@ class MultislicePtychography(
                 tv_denoise=a0 < tv_denoise_iter and tv_denoise_weights is not None,
                 tv_denoise_weights=tv_denoise_weights,
                 tv_denoise_inner_iter=tv_denoise_inner_iter,
+                orthogonalize_probe=orthogonalize_probe,
             )
 
             self.error_iterations.append(error.item())
