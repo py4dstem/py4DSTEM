@@ -81,7 +81,7 @@ class PtychographicTomography(
     energy: float
         The electron energy of the wave functions in eV
     num_slices: int
-        Number of slices to use in the forward model
+        Number of super-slices to use in the forward model
     tilt_orientation_matrices: Sequence[np.ndarray]
         List of orientation matrices for each tilt
     semiangle_cutoff: float, optional
@@ -531,9 +531,17 @@ class PtychographicTomography(
         )._evaluate_ctf()
 
         # Precomputed propagator arrays
+        if main_tilt_axis == "vertical":
+            thickness = self._object_shape[1] * self.sampling[1]
+        elif main_tilt_axis == "horizontal":
+            thickness = self._object_shape[0] * self.sampling[0]
+        else:
+            thickness_h = self._object_shape[1] * self.sampling[1]
+            thickness_v = self._object_shape[0] * self.sampling[0]
+            thickness = max(thickness_h, thickness_v)
+
         self._slice_thicknesses = np.tile(
-            self._object_shape[1] * self.sampling[1] / self._num_slices,
-            self._num_slices - 1,
+            thickness / self._num_slices, self._num_slices - 1
         )
         self._propagator_arrays = self._precompute_propagator_arrays(
             self._region_of_interest_shape,

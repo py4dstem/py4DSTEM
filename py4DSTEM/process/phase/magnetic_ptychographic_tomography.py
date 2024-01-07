@@ -8,7 +8,6 @@ from typing import Mapping, Sequence, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.gridspec import GridSpec
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from py4DSTEM.visualize.vis_special import Complex2RGB, add_colorbar_arg
 
@@ -21,37 +20,47 @@ from emdfile import Custom, tqdmnd
 from py4DSTEM import DataCube
 from py4DSTEM.process.phase.phase_base_class import PtychographicReconstruction
 from py4DSTEM.process.phase.ptychographic_constraints import (
+    Object2p5DConstraintsMixin,
     Object3DConstraintsMixin,
     ObjectNDConstraintsMixin,
     PositionsConstraintsMixin,
     ProbeConstraintsMixin,
 )
 from py4DSTEM.process.phase.ptychographic_methods import (
+    MultipleMeasurementsMethodsMixin,
+    Object2p5DMethodsMixin,
+    Object2p5DProbeMethodsMixin,
     Object3DMethodsMixin,
     ObjectNDMethodsMixin,
+    ObjectNDProbeMethodsMixin,
     ProbeMethodsMixin,
 )
+from py4DSTEM.process.phase.ptychographic_visualizations import VisualizationsMixin
 from py4DSTEM.process.phase.utils import (
     ComplexProbe,
     fft_shift,
     generate_batches,
     polar_aliases,
     polar_symbols,
-    project_vector_field_divergence,
-    spatial_frequencies,
+    project_vector_field_divergence_periodic_3D,
 )
-from py4DSTEM.process.utils import electron_wavelength_angstrom, get_CoM, get_shifted_ar
 
 warnings.simplefilter(action="always", category=UserWarning)
 
 
 class MagneticPtychographicTomography(
+    VisualizationsMixin,
     PositionsConstraintsMixin,
     ProbeConstraintsMixin,
     Object3DConstraintsMixin,
+    Object2p5DConstraintsMixin,
     ObjectNDConstraintsMixin,
+    MultipleMeasurementsMethodsMixin,
+    Object2p5DProbeMethodsMixin,
+    ObjectNDProbeMethodsMixin,
     ProbeMethodsMixin,
     Object3DMethodsMixin,
+    Object2p5DMethodsMixin,
     ObjectNDMethodsMixin,
     PtychographicReconstruction,
 ):
@@ -73,13 +82,9 @@ class MagneticPtychographicTomography(
     energy: float
         The electron energy of the wave functions in eV
     num_slices: int
-        Number of slices to use in the forward model
-    tilt_angles_deg: Sequence[float]
-        List of (\alpha, \beta) tilt angle tuple in degrees,
-        with the following Euler-angle convention:
-          - \alpha tilt around z-axis
-          - \beta tilt around x-axis
-          - -\alpha tilt around z-axis
+        Number of super-slices to use in the forward model
+    tilt_orientation_matrices: Sequence[np.ndarray]
+        List of orientation matrices for each tilt
     semiangle_cutoff: float, optional
         Semiangle cutoff for the initial probe guess in mrad
     semiangle_cutoff_pixels: float, optional
@@ -119,13 +124,13 @@ class MagneticPtychographicTomography(
     """
 
     # Class-specific Metadata
-    _class_specific_metadata = ("_num_slices", "_tilt_angles_deg")
+    _class_specific_metadata = ("_num_slices", "_tilt_orientation_matrices")
 
     def __init__(
         self,
         energy: float,
         num_slices: int,
-        tilt_angles_deg: Sequence[Tuple[float, float]],
+        tilt_orientation_matrices: Sequence[np.ndarray],
         datacube: Sequence[DataCube] = None,
         semiangle_cutoff: float = None,
         semiangle_cutoff_pixels: float = None,
@@ -148,19 +153,32 @@ class MagneticPtychographicTomography(
         if device == "cpu":
             self._xp = np
             self._asnumpy = np.asarray
-            from scipy.ndimage import gaussian_filter, rotate, zoom
+            from scipy.ndimage import affine_transform, gaussian_filter, rotate, zoom
 
             self._gaussian_filter = gaussian_filter
             self._zoom = zoom
             self._rotate = rotate
+            self._affine_transform = affine_transform
+            from scipy.special import erf
+
+            self._erf = erf
         elif device == "gpu":
             self._xp = cp
             self._asnumpy = cp.asnumpy
-            from cupyx.scipy.ndimage import gaussian_filter, rotate, zoom
+            from cupyx.scipy.ndimage import (
+                affine_transform,
+                gaussian_filter,
+                rotate,
+                zoom,
+            )
 
             self._gaussian_filter = gaussian_filter
             self._zoom = zoom
             self._rotate = rotate
+            self._affine_transform = affine_transform
+            from cupyx.scipy.special import erf
+
+            self._erf = erf
         else:
             raise ValueError(f"device must be either 'cpu' or 'gpu', not {device}")
 
@@ -176,7 +194,7 @@ class MagneticPtychographicTomography(
         polar_parameters.update(kwargs)
         self._set_polar_parameters(polar_parameters)
 
-        num_tilts = len(tilt_angles_deg)
+        num_tilts = len(tilt_orientation_matrices)
         if initial_scan_positions is None:
             initial_scan_positions = [None] * num_tilts
 
@@ -188,7 +206,7 @@ class MagneticPtychographicTomography(
         # Data
         self._datacube = datacube
         self._object = initial_object_guess
-        self._probe = initial_probe_guess
+        self._probe_init = initial_probe_guess
 
         # Common Metadata
         self._vacuum_probe_intensity = vacuum_probe_intensity
@@ -206,234 +224,8 @@ class MagneticPtychographicTomography(
 
         # Class-specific Metadata
         self._num_slices = num_slices
-        self._tilt_angles_deg = tuple(tilt_angles_deg)
-        self._num_tilts = num_tilts
-
-    def _precompute_propagator_arrays(
-        self,
-        gpts: Tuple[int, int],
-        sampling: Tuple[float, float],
-        energy: float,
-        slice_thicknesses: Sequence[float],
-    ):
-        """
-        Precomputes propagator arrays complex wave-function will be convolved by,
-        for all slice thicknesses.
-
-        Parameters
-        ----------
-        gpts: Tuple[int,int]
-            Wavefunction pixel dimensions
-        sampling: Tuple[float,float]
-            Wavefunction sampling in A
-        energy: float
-            The electron energy of the wave functions in eV
-        slice_thicknesses: Sequence[float]
-            Array of slice thicknesses in A
-
-        Returns
-        -------
-        propagator_arrays: np.ndarray
-            (T,Sx,Sy) shape array storing propagator arrays
-        """
-        xp = self._xp
-
-        # Frequencies
-        kx, ky = spatial_frequencies(gpts, sampling)
-        kx = xp.asarray(kx, dtype=xp.float32)
-        ky = xp.asarray(ky, dtype=xp.float32)
-
-        # Propagators
-        wavelength = electron_wavelength_angstrom(energy)
-        num_slices = slice_thicknesses.shape[0]
-        propagators = xp.empty(
-            (num_slices, kx.shape[0], ky.shape[0]), dtype=xp.complex64
-        )
-        for i, dz in enumerate(slice_thicknesses):
-            propagators[i] = xp.exp(
-                1.0j * (-(kx**2)[:, None] * np.pi * wavelength * dz)
-            )
-            propagators[i] *= xp.exp(
-                1.0j * (-(ky**2)[None] * np.pi * wavelength * dz)
-            )
-
-        return propagators
-
-    def _propagate_array(self, array: np.ndarray, propagator_array: np.ndarray):
-        """
-        Propagates array by Fourier convolving array with propagator_array.
-
-        Parameters
-        ----------
-        array: np.ndarray
-            Wavefunction array to be convolved
-        propagator_array: np.ndarray
-            Propagator array to convolve array with
-
-        Returns
-        -------
-        propagated_array: np.ndarray
-            Fourier-convolved array
-        """
-        xp = self._xp
-
-        return xp.fft.ifft2(xp.fft.fft2(array) * propagator_array)
-
-    def _project_sliced_object(self, array: np.ndarray, output_z):
-        """
-        Expands supersliced object or projects voxel-sliced object.
-
-        Parameters
-        ----------
-        array: np.ndarray
-            3D array to expand/project
-        output_z: int
-            Output_dimension to expand/project array to.
-            If output_z > array.shape[0] array is expanded, else it's projected
-
-        Returns
-        -------
-        expanded_or_projected_array: np.ndarray
-            expanded or projected array
-        """
-        xp = self._xp
-        input_z = array.shape[0]
-
-        voxels_per_slice = np.ceil(input_z / output_z).astype("int")
-        pad_size = voxels_per_slice * output_z - input_z
-
-        padded_array = xp.pad(array, ((0, pad_size), (0, 0), (0, 0)))
-
-        return xp.sum(
-            padded_array.reshape(
-                (
-                    -1,
-                    voxels_per_slice,
-                )
-                + array.shape[1:]
-            ),
-            axis=1,
-        )
-
-    def _expand_sliced_object(self, array: np.ndarray, output_z):
-        """
-        Expands supersliced object or projects voxel-sliced object.
-
-        Parameters
-        ----------
-        array: np.ndarray
-            3D array to expand/project
-        output_z: int
-            Output_dimension to expand/project array to.
-            If output_z > array.shape[0] array is expanded, else it's projected
-
-        Returns
-        -------
-        expanded_or_projected_array: np.ndarray
-            expanded or projected array
-        """
-        xp = self._xp
-        input_z = array.shape[0]
-
-        voxels_per_slice = np.ceil(output_z / input_z).astype("int")
-        remainder_size = voxels_per_slice - (voxels_per_slice * input_z - output_z)
-
-        voxels_in_slice = xp.repeat(voxels_per_slice, input_z)
-        voxels_in_slice[-1] = remainder_size if remainder_size > 0 else voxels_per_slice
-
-        normalized_array = array / xp.asarray(voxels_in_slice)[:, None, None]
-        return xp.repeat(normalized_array, voxels_per_slice, axis=0)[:output_z]
-
-    def _euler_angle_rotate_volume(
-        self,
-        volume_array,
-        alpha_deg,
-        beta_deg,
-    ):
-        """
-        Rotate 3D volume using alpha, beta, gamma Euler angles according to convention:
-
-        - \\-alpha tilt around first axis (z)
-        - \\beta tilt around second axis (x)
-        - \\alpha tilt around first axis (z)
-
-        Note: since we store array as zxy, the x- and y-axis rotations flip sign below.
-
-        """
-
-        rotate = self._rotate
-        volume = volume_array.copy()
-
-        alpha_deg, beta_deg = np.mod(np.array([alpha_deg, beta_deg]) + 180, 360) - 180
-
-        if alpha_deg == -180:
-            # print(f"rotation of {-beta_deg} around x")
-            volume = rotate(
-                volume,
-                beta_deg,
-                axes=(0, 2),
-                reshape=False,
-                order=3,
-            )
-        elif alpha_deg == -90:
-            # print(f"rotation of {beta_deg} around y")
-            volume = rotate(
-                volume,
-                -beta_deg,
-                axes=(0, 1),
-                reshape=False,
-                order=3,
-            )
-        elif alpha_deg == 0:
-            # print(f"rotation of {beta_deg} around x")
-            volume = rotate(
-                volume,
-                -beta_deg,
-                axes=(0, 2),
-                reshape=False,
-                order=3,
-            )
-        elif alpha_deg == 90:
-            # print(f"rotation of {-beta_deg} around y")
-            volume = rotate(
-                volume,
-                beta_deg,
-                axes=(0, 1),
-                reshape=False,
-                order=3,
-            )
-        else:
-            # print((
-            #     f"rotation of {-alpha_deg} around z, "
-            #     f"rotation of {beta_deg} around x, "
-            #     f"rotation of {alpha_deg} around z."
-            # ))
-
-            volume = rotate(
-                volume,
-                -alpha_deg,
-                axes=(1, 2),
-                reshape=False,
-                order=3,
-            )
-
-            volume = rotate(
-                volume,
-                -beta_deg,
-                axes=(0, 2),
-                reshape=False,
-                order=3,
-            )
-
-            volume = rotate(
-                volume,
-                alpha_deg,
-                axes=(1, 2),
-                reshape=False,
-                order=3,
-            )
-
-        return volume
+        self._tilt_orientation_matrices = tuple(tilt_orientation_matrices)
+        self._num_measurements = num_tilts
 
     def preprocess(
         self,
@@ -523,7 +315,7 @@ class MagneticPtychographicTomography(
             )
 
         if self._positions_mask is not None:
-            self._positions_mask = np.asarray(self._positions_mask)
+            self._positions_mask = np.asarray(self._positions_mask, dtype="bool")
 
             if self._positions_mask.ndim == 2:
                 warnings.warn(
@@ -531,97 +323,91 @@ class MagneticPtychographicTomography(
                     UserWarning,
                 )
                 self._positions_mask = np.tile(
-                    self._positions_mask, (self._num_tilts, 1, 1)
+                    self._positions_mask, (self._num_measurements, 1, 1)
                 )
 
-            if self._positions_mask.dtype != "bool":
-                warnings.warn(
-                    ("`positions_mask` converted to `bool` array."),
-                    UserWarning,
-                )
-                self._positions_mask = self._positions_mask.astype("bool")
-        else:
-            self._positions_mask = [None] * self._num_tilts
-
-        # Prepopulate various arrays
-
-        if self._positions_mask[0] is None:
-            num_probes_per_tilt = [0]
-            for dc in self._datacube:
-                rx, ry = dc.Rshape
-                num_probes_per_tilt.append(rx * ry)
-
-            num_probes_per_tilt = np.array(num_probes_per_tilt)
-        else:
-            num_probes_per_tilt = np.insert(
+            num_probes_per_measurement = np.insert(
                 self._positions_mask.sum(axis=(-2, -1)), 0, 0
             )
 
-        self._num_diffraction_patterns = num_probes_per_tilt.sum()
-        self._cum_probes_per_tilt = np.cumsum(num_probes_per_tilt)
+        else:
+            self._positions_mask = [None] * self._num_measurements
+            num_probes_per_measurement = [0] + [dc.R_N for dc in self._datacube]
+            num_probes_per_measurement = np.array(num_probes_per_measurement)
 
+        # prepopulate relevant arrays
         self._mean_diffraction_intensity = []
+        self._num_diffraction_patterns = num_probes_per_measurement.sum()
+        self._cum_probes_per_measurement = np.cumsum(num_probes_per_measurement)
         self._positions_px_all = np.empty((self._num_diffraction_patterns, 2))
+
+        # calculate roi_shape
+        roi_shape = self._datacube[0].Qshape
+        if diffraction_intensities_shape is not None:
+            roi_shape = diffraction_intensities_shape
+        if probe_roi_shape is not None:
+            roi_shape = tuple(max(q, s) for q, s in zip(roi_shape, probe_roi_shape))
+
+        self._amplitudes = xp.empty((self._num_diffraction_patterns,) + roi_shape)
+        self._region_of_interest_shape = np.array(roi_shape)
+
+        # TO-DO: generalize this
+        if force_com_shifts is None:
+            force_com_shifts = [None] * self._num_measurements
 
         self._rotation_best_rad = np.deg2rad(diffraction_patterns_rotate_degrees)
         self._rotation_best_transpose = diffraction_patterns_transpose
 
-        if force_com_shifts is None:
-            force_com_shifts = [None] * self._num_tilts
-
-        for tilt_index in tqdmnd(
-            self._num_tilts,
+        # loop over DPs for preprocessing
+        for index in tqdmnd(
+            self._num_measurements,
             desc="Preprocessing data",
             unit="tilt",
             disable=not progress_bar,
         ):
-            if tilt_index == 0:
+            # preprocess datacube, vacuum and masks only for first tilt
+            if index == 0:
                 (
-                    self._datacube[tilt_index],
+                    self._datacube[index],
                     self._vacuum_probe_intensity,
                     self._dp_mask,
-                    force_com_shifts[tilt_index],
+                    force_com_shifts[index],
                 ) = self._preprocess_datacube_and_vacuum_probe(
-                    self._datacube[tilt_index],
+                    self._datacube[index],
                     diffraction_intensities_shape=self._diffraction_intensities_shape,
                     reshaping_method=self._reshaping_method,
                     probe_roi_shape=self._probe_roi_shape,
                     vacuum_probe_intensity=self._vacuum_probe_intensity,
                     dp_mask=self._dp_mask,
-                    com_shifts=force_com_shifts[tilt_index],
-                )
-
-                self._amplitudes = xp.empty(
-                    (self._num_diffraction_patterns,) + self._datacube[0].Qshape
-                )
-                self._region_of_interest_shape = np.array(
-                    self._amplitudes[0].shape[-2:]
+                    com_shifts=force_com_shifts[index],
                 )
 
             else:
                 (
-                    self._datacube[tilt_index],
+                    self._datacube[index],
                     _,
                     _,
-                    force_com_shifts[tilt_index],
+                    force_com_shifts[index],
                 ) = self._preprocess_datacube_and_vacuum_probe(
-                    self._datacube[tilt_index],
+                    self._datacube[index],
                     diffraction_intensities_shape=self._diffraction_intensities_shape,
                     reshaping_method=self._reshaping_method,
                     probe_roi_shape=self._probe_roi_shape,
                     vacuum_probe_intensity=None,
                     dp_mask=None,
-                    com_shifts=force_com_shifts[tilt_index],
+                    com_shifts=force_com_shifts[index],
                 )
 
+            # calibrations
             intensities = self._extract_intensities_and_calibrations_from_datacube(
-                self._datacube[tilt_index],
+                self._datacube[index],
                 require_calibrations=True,
                 force_scan_sampling=force_scan_sampling,
                 force_angular_sampling=force_angular_sampling,
                 force_reciprocal_sampling=force_reciprocal_sampling,
             )
 
+            # calculate CoM
             (
                 com_measured_x,
                 com_measured_y,
@@ -633,22 +419,22 @@ class MagneticPtychographicTomography(
                 intensities,
                 dp_mask=self._dp_mask,
                 fit_function=fit_function,
-                com_shifts=force_com_shifts[tilt_index],
+                com_shifts=force_com_shifts[index],
             )
 
+            # corner-center amplitudes
+            idx_start = self._cum_probes_per_measurement[index]
+            idx_end = self._cum_probes_per_measurement[index + 1]
             (
-                self._amplitudes[
-                    self._cum_probes_per_tilt[tilt_index] : self._cum_probes_per_tilt[
-                        tilt_index + 1
-                    ]
-                ],
+                self._amplitudes[idx_start:idx_end],
                 mean_diffraction_intensity_temp,
+                self._crop_mask,
             ) = self._normalize_diffraction_intensities(
                 intensities,
                 com_fitted_x,
                 com_fitted_y,
+                self._positions_mask[index],
                 crop_patterns,
-                self._positions_mask[tilt_index],
             )
 
             self._mean_diffraction_intensity.append(mean_diffraction_intensity_temp)
@@ -663,12 +449,14 @@ class MagneticPtychographicTomography(
                 com_normalized_y,
             )
 
-            self._positions_px_all[
-                self._cum_probes_per_tilt[tilt_index] : self._cum_probes_per_tilt[
-                    tilt_index + 1
-                ]
-            ] = self._calculate_scan_positions_in_pixels(
-                self._scan_positions[tilt_index], self._positions_mask[tilt_index]
+            # initialize probe positions
+            (
+                self._positions_px_all[idx_start:idx_end],
+                self._object_padding_px,
+            ) = self._calculate_scan_positions_in_pixels(
+                self._scan_positions[index],
+                self._positions_mask[index],
+                self._object_padding_px,
             )
 
         # handle semiangle specified in pixels
@@ -677,119 +465,64 @@ class MagneticPtychographicTomography(
                 self._semiangle_cutoff_pixels * self._angular_sampling[0]
             )
 
-        # Object Initialization
+        # initialize object
+        obj = self._initialize_object(
+            self._object,
+            self._positions_px_all,
+            self._object_type,
+            main_tilt_axis=None,
+        )
+
         if self._object is None:
-            pad_x = self._object_padding_px[0][1]
-            pad_y = self._object_padding_px[1][1]
-            p, q = np.round(np.max(self._positions_px_all, axis=0))
-            p = np.max([np.round(p + pad_x), self._region_of_interest_shape[0]]).astype(
-                "int"
-            )
-            q = np.max([np.round(q + pad_y), self._region_of_interest_shape[1]]).astype(
-                "int"
-            )
-            self._object = xp.zeros((4, q, p, q), dtype=xp.float32)
+            self._object = xp.full((4,) + obj.shape, obj)
         else:
-            self._object = xp.asarray(self._object, dtype=xp.float32)
+            self._object = obj
 
         self._object_initial = self._object.copy()
         self._object_type_initial = self._object_type
         self._object_shape = self._object.shape[-2:]
         self._num_voxels = self._object.shape[1]
 
-        # Center Probes
+        # center probe positions
         self._positions_px_all = xp.asarray(self._positions_px_all, dtype=xp.float32)
 
-        for tilt_index in range(self._num_tilts):
-            self._positions_px = self._positions_px_all[
-                self._cum_probes_per_tilt[tilt_index] : self._cum_probes_per_tilt[
-                    tilt_index + 1
-                ]
-            ]
+        for index in range(self._num_measurements):
+            idx_start = self._cum_probes_per_measurement[index]
+            idx_end = self._cum_probes_per_measurement[index + 1]
+            self._positions_px = self._positions_px_all[idx_start:idx_end]
             self._positions_px_com = xp.mean(self._positions_px, axis=0)
             self._positions_px -= (
                 self._positions_px_com - xp.array(self._object_shape) / 2
             )
-
-            self._positions_px_all[
-                self._cum_probes_per_tilt[tilt_index] : self._cum_probes_per_tilt[
-                    tilt_index + 1
-                ]
-            ] = self._positions_px.copy()
+            self._positions_px_all[idx_start:idx_end] = self._positions_px.copy()
 
         self._positions_px_initial_all = self._positions_px_all.copy()
         self._positions_initial_all = self._positions_px_initial_all.copy()
         self._positions_initial_all[:, 0] *= self.sampling[0]
         self._positions_initial_all[:, 1] *= self.sampling[1]
 
-        # Probe Initialization
-        if self._probe is None:
-            if self._vacuum_probe_intensity is not None:
-                self._semiangle_cutoff = np.inf
-                self._vacuum_probe_intensity = xp.asarray(
-                    self._vacuum_probe_intensity, dtype=xp.float32
-                )
-                probe_x0, probe_y0 = get_CoM(
-                    self._vacuum_probe_intensity, device=self._device
-                )
-                self._vacuum_probe_intensity = get_shifted_ar(
-                    self._vacuum_probe_intensity,
-                    -probe_x0,
-                    -probe_y0,
-                    bilinear=True,
-                    device=self._device,
-                )
-                if crop_patterns:
-                    self._vacuum_probe_intensity = self._vacuum_probe_intensity[
-                        self._crop_mask
-                    ].reshape(self._region_of_interest_shape)
+        # initialize probe
+        self._probes_all = []
+        self._probes_all_initial = []
+        self._probes_all_initial_aperture = []
+        list_Q = isinstance(self._probe_init, (list, tuple))
 
-            self._probe = (
-                ComplexProbe(
-                    gpts=self._region_of_interest_shape,
-                    sampling=self.sampling,
-                    energy=self._energy,
-                    semiangle_cutoff=self._semiangle_cutoff,
-                    rolloff=self._rolloff,
-                    vacuum_probe_intensity=self._vacuum_probe_intensity,
-                    parameters=self._polar_parameters,
-                    device=self._device,
-                )
-                .build()
-                ._array
+        for index in range(self._num_measurements):
+            _probe, self._semiangle_cutoff = self._initialize_probe(
+                self._probe_init[index] if list_Q else self._probe_init,
+                self._vacuum_probe_intensity,
+                self._mean_diffraction_intensity[index],
+                self._semiangle_cutoff,
+                crop_patterns,
             )
 
-            # Normalize probe to match mean diffraction intensity
-            probe_intensity = xp.sum(xp.abs(xp.fft.fft2(self._probe)) ** 2)
-            self._probe *= xp.sqrt(
-                sum(self._mean_diffraction_intensity)
-                / self._num_tilts
-                / probe_intensity
-            )
+            self._probes_all.append(_probe)
+            self._probes_all_initial.append(_probe.copy())
+            self._probes_all_initial_aperture.append(xp.abs(xp.fft.fft2(_probe)))
 
-        else:
-            if isinstance(self._probe, ComplexProbe):
-                if self._probe._gpts != self._region_of_interest_shape:
-                    raise ValueError()
-                if hasattr(self._probe, "_array"):
-                    self._probe = self._probe._array
-                else:
-                    self._probe._xp = xp
-                    self._probe = self._probe.build()._array
+        del self._probe_init
 
-                # Normalize probe to match mean diffraction intensity
-                probe_intensity = xp.sum(xp.abs(xp.fft.fft2(self._probe)) ** 2)
-                self._probe *= xp.sqrt(
-                    sum(self._mean_diffraction_intensity)
-                    / self._num_tilts
-                    / probe_intensity
-                )
-            else:
-                self._probe = xp.asarray(self._probe, dtype=xp.complex64)
-
-        self._probe_initial = self._probe.copy()
-        self._probe_initial_aperture = xp.abs(xp.fft.fft2(self._probe))
-
+        # initialize aberrations
         self._known_aberrations_array = ComplexProbe(
             energy=self._energy,
             gpts=self._region_of_interest_shape,
@@ -799,9 +532,12 @@ class MagneticPtychographicTomography(
         )._evaluate_ctf()
 
         # Precomputed propagator arrays
+        thickness_h = self._object_shape[1] * self.sampling[1]
+        thickness_v = self._object_shape[0] * self.sampling[0]
+        thickness = max(thickness_h, thickness_v)
+
         self._slice_thicknesses = np.tile(
-            self._object_shape[1] * self.sampling[1] / self._num_slices,
-            self._num_slices - 1,
+            thickness / self._num_slices, self._num_slices - 1
         )
         self._propagator_arrays = self._precompute_propagator_arrays(
             self._region_of_interest_shape,
@@ -813,26 +549,24 @@ class MagneticPtychographicTomography(
         # overlaps
         if object_fov_mask is None:
             probe_overlap_3D = xp.zeros_like(self._object[0])
+            old_rot_matrix = np.eye(3)  # identity
 
-            for tilt_index in np.arange(self._num_tilts):
-                alpha_deg, beta_deg = self._tilt_angles_deg[tilt_index]
+            for index in range(self._num_measurements):
+                idx_start = self._cum_probes_per_measurement[index]
+                idx_end = self._cum_probes_per_measurement[index + 1]
+                rot_matrix = self._tilt_orientation_matrices[index]
 
-                probe_overlap_3D = self._euler_angle_rotate_volume(
+                probe_overlap_3D = self._rotate_zxy_volume(
                     probe_overlap_3D,
-                    alpha_deg,
-                    beta_deg,
+                    rot_matrix @ old_rot_matrix.T,
                 )
 
-                self._positions_px = self._positions_px_all[
-                    self._cum_probes_per_tilt[tilt_index] : self._cum_probes_per_tilt[
-                        tilt_index + 1
-                    ]
-                ]
+                self._positions_px = self._positions_px_all[idx_start:idx_end]
                 self._positions_px_fractional = self._positions_px - xp.round(
                     self._positions_px
                 )
                 shifted_probes = fft_shift(
-                    self._probe, self._positions_px_fractional, xp
+                    self._probes_all[index], self._positions_px_fractional, xp
                 )
                 probe_intensities = xp.abs(shifted_probes) ** 2
                 probe_overlap = self._sum_overlapping_patches_bincounts(
@@ -840,43 +574,49 @@ class MagneticPtychographicTomography(
                 )
 
                 probe_overlap_3D += probe_overlap[None]
+                old_rot_matrix = rot_matrix
 
-                probe_overlap_3D = self._euler_angle_rotate_volume(
-                    probe_overlap_3D,
-                    alpha_deg,
-                    -beta_deg,
-                )
-
-            probe_overlap_3D = self._gaussian_filter(probe_overlap_3D, 1.0)
-            self._object_fov_mask = asnumpy(
-                probe_overlap_3D > 0.25 * probe_overlap_3D.max()
+            probe_overlap_3D = self._rotate_zxy_volume(
+                probe_overlap_3D,
+                old_rot_matrix.T,
             )
+
+            probe_overlap_3D_blurred = self._gaussian_filter(probe_overlap_3D, 1.0)
+            self._object_fov_mask = asnumpy(
+                probe_overlap_3D_blurred > 0.25 * probe_overlap_3D_blurred.max()
+            )
+
         else:
             self._object_fov_mask = np.asarray(object_fov_mask)
-            self._positions_px = self._positions_px_all[: self._cum_probes_per_tilt[1]]
+
+            self._positions_px = self._positions_px_all[
+                : self._cum_probes_per_measurement[1]
+            ]
             self._positions_px_fractional = self._positions_px - xp.round(
                 self._positions_px
             )
-            shifted_probes = fft_shift(self._probe, self._positions_px_fractional, xp)
+            shifted_probes = fft_shift(
+                self._probes_all[0], self._positions_px_fractional, xp
+            )
             probe_intensities = xp.abs(shifted_probes) ** 2
             probe_overlap = self._sum_overlapping_patches_bincounts(probe_intensities)
-            probe_overlap = self._gaussian_filter(probe_overlap, 1.0)
 
         self._object_fov_mask_inverse = np.invert(self._object_fov_mask)
 
         if plot_probe_overlaps:
             figsize = kwargs.pop("figsize", (13, 4))
             chroma_boost = kwargs.pop("chroma_boost", 1)
+            power = kwargs.pop("power", 2)
 
             # initial probe
             complex_probe_rgb = Complex2RGB(
-                self.probe_centered,
-                power=2,
+                self.probe_centered[0],
+                power=power,
                 chroma_boost=chroma_boost,
             )
 
             # propagated
-            propagated_probe = self._probe.copy()
+            propagated_probe = self._probes_all[0].copy()
 
             for s in range(self._num_slices - 1):
                 propagated_probe = self._propagate_array(
@@ -884,7 +624,7 @@ class MagneticPtychographicTomography(
                 )
             complex_propagated_rgb = Complex2RGB(
                 asnumpy(self._return_centered_probe(propagated_probe)),
-                power=2,
+                power=power,
                 chroma_boost=chroma_boost,
             )
 
@@ -961,685 +701,6 @@ class MagneticPtychographicTomography(
 
         return self
 
-    def _overlap_projection(
-        self, current_object_V, current_object_A_projected, current_probe
-    ):
-        """
-        Ptychographic overlap projection method.
-
-        Parameters
-        --------
-        current_object_V: np.ndarray
-            Current electrostatic object estimate
-        current_object_A_projected: np.ndarray
-            Current projected magnetic object estimate
-        current_probe: np.ndarray
-            Current probe estimate
-
-        Returns
-        --------
-        propagated_probes: np.ndarray
-            Shifted probes at each layer
-        object_patches: np.ndarray
-            Patched object view
-        transmitted_probes: np.ndarray
-            Transmitted probes after N-1 propagations and N transmissions
-        """
-
-        xp = self._xp
-
-        complex_object = xp.exp(1j * (current_object_V + current_object_A_projected))
-        object_patches = complex_object[
-            :, self._vectorized_patch_indices_row, self._vectorized_patch_indices_col
-        ]
-
-        propagated_probes = xp.empty_like(object_patches)
-        propagated_probes[0] = fft_shift(
-            current_probe, self._positions_px_fractional, xp
-        )
-
-        for s in range(self._num_slices):
-            # transmit
-            transmitted_probes = object_patches[s] * propagated_probes[s]
-
-            # propagate
-            if s + 1 < self._num_slices:
-                propagated_probes[s + 1] = self._propagate_array(
-                    transmitted_probes, self._propagator_arrays[s]
-                )
-
-        return propagated_probes, object_patches, transmitted_probes
-
-    def _gradient_descent_fourier_projection(self, amplitudes, transmitted_probes):
-        """
-        Ptychographic fourier projection method for GD method.
-
-        Parameters
-        --------
-        amplitudes: np.ndarray
-            Normalized measured amplitudes
-        transmitted_probes: np.ndarray
-            Transmitted probes after N-1 propagations and N transmissions
-
-        Returns
-        --------
-        exit_waves:np.ndarray
-            Updated exit wave difference
-        error: float
-            Reconstruction error
-        """
-
-        xp = self._xp
-        fourier_exit_waves = xp.fft.fft2(transmitted_probes)
-
-        error = xp.sum(xp.abs(amplitudes - xp.abs(fourier_exit_waves)) ** 2)
-
-        modified_exit_wave = xp.fft.ifft2(
-            amplitudes * xp.exp(1j * xp.angle(fourier_exit_waves))
-        )
-
-        exit_waves = modified_exit_wave - transmitted_probes
-
-        return exit_waves, error
-
-    def _projection_sets_fourier_projection(
-        self,
-        amplitudes,
-        transmitted_probes,
-        exit_waves,
-        projection_a,
-        projection_b,
-        projection_c,
-    ):
-        """
-        Ptychographic fourier projection method for DM_AP and RAAR methods.
-        Generalized projection using three parameters: a,b,c
-
-            DM_AP(\\alpha)   :   a =  -\\alpha, b = 1, c = 1 + \\alpha
-              DM: DM_AP(1.0), AP: DM_AP(0.0)
-
-            RAAR(\\beta)     :   a = 1-2\\beta, b = \\beta, c = 2
-              DM : RAAR(1.0)
-
-            RRR(\\gamma)     :   a = -\\gamma, b = \\gamma, c = 2
-              DM: RRR(1.0)
-
-            SUPERFLIP       :   a = 0, b = 1, c = 2
-
-        Parameters
-        --------
-        amplitudes: np.ndarray
-            Normalized measured amplitudes
-        transmitted_probes: np.ndarray
-            Transmitted probes after N-1 propagations and N transmissions
-        exit_waves: np.ndarray
-            previously estimated exit waves
-        projection_a: float
-        projection_b: float
-        projection_c: float
-
-        Returns
-        --------
-        exit_waves:np.ndarray
-            Updated exit wave difference
-        error: float
-            Reconstruction error
-        """
-
-        xp = self._xp
-        projection_x = 1 - projection_a - projection_b
-        projection_y = 1 - projection_c
-
-        if exit_waves is None:
-            exit_waves = transmitted_probes.copy()
-
-        fourier_exit_waves = xp.fft.fft2(transmitted_probes)
-        error = xp.sum(xp.abs(amplitudes - xp.abs(fourier_exit_waves)) ** 2)
-
-        factor_to_be_projected = (
-            projection_c * transmitted_probes + projection_y * exit_waves
-        )
-        fourier_projected_factor = xp.fft.fft2(factor_to_be_projected)
-
-        fourier_projected_factor = amplitudes * xp.exp(
-            1j * xp.angle(fourier_projected_factor)
-        )
-        projected_factor = xp.fft.ifft2(fourier_projected_factor)
-
-        exit_waves = (
-            projection_x * exit_waves
-            + projection_a * transmitted_probes
-            + projection_b * projected_factor
-        )
-
-        return exit_waves, error
-
-    def _forward(
-        self,
-        current_object_V,
-        current_object_A_projected,
-        current_probe,
-        amplitudes,
-        exit_waves,
-        use_projection_scheme,
-        projection_a,
-        projection_b,
-        projection_c,
-    ):
-        """
-        Ptychographic forward operator.
-        Calls _overlap_projection() and the appropriate _fourier_projection().
-
-        Parameters
-        --------
-        current_object_V: np.ndarray
-            Current electrostatic object estimate
-        current_object_A_projected: np.ndarray
-            Current projected magnetic object estimate
-        current_probe: np.ndarray
-            Current probe estimate
-        amplitudes: np.ndarray
-            Normalized measured amplitudes
-        exit_waves: np.ndarray
-            previously estimated exit waves
-        use_projection_scheme: bool,
-            If True, use generalized projection update
-        projection_a: float
-        projection_b: float
-        projection_c: float
-
-        Returns
-        --------
-        propagated_probes:np.ndarray
-            Prop[object^n*probe^n]
-        object_patches: np.ndarray
-            Patched object view
-        transmitted_probes: np.ndarray
-            Transmitted probes at each layer
-        exit_waves:np.ndarray
-            Updated exit_waves
-        error: float
-            Reconstruction error
-        """
-
-        (
-            propagated_probes,
-            object_patches,
-            transmitted_probes,
-        ) = self._overlap_projection(
-            current_object_V,
-            current_object_A_projected,
-            current_probe,
-        )
-
-        if use_projection_scheme:
-            (
-                exit_waves[self._active_tilt_index],
-                error,
-            ) = self._projection_sets_fourier_projection(
-                amplitudes,
-                transmitted_probes,
-                exit_waves[self._active_tilt_index],
-                projection_a,
-                projection_b,
-                projection_c,
-            )
-
-        else:
-            exit_waves, error = self._gradient_descent_fourier_projection(
-                amplitudes, transmitted_probes
-            )
-
-        return propagated_probes, object_patches, transmitted_probes, exit_waves, error
-
-    def _gradient_descent_adjoint(
-        self,
-        current_object_V,
-        current_object_A_projected,
-        current_probe,
-        object_patches,
-        propagated_probes,
-        exit_waves,
-        step_size,
-        normalization_min,
-        fix_probe,
-    ):
-        """
-        Ptychographic adjoint operator for GD method.
-        Computes object and probe update steps.
-
-        Parameters
-        --------
-        current_object_V: np.ndarray
-            Current electrostatic object estimate
-        current_object_A_projected: np.ndarray
-            Current projected magnetic object estimate
-        current_probe: np.ndarray
-            Current probe estimate
-        object_patches: np.ndarray
-            Patched object view
-        propagated_probes: np.ndarray
-            Shifted probes at each layer
-        exit_waves:np.ndarray
-            Updated exit_waves
-        step_size: float, optional
-            Update step size
-        normalization_min: float, optional
-            Probe normalization minimum as a fraction of the maximum overlap intensity
-        fix_probe: bool, optional
-            If True, probe will not be updated
-
-        Returns
-        --------
-        updated_object_V: np.ndarray
-            Updated electrostatic object estimate
-        updated_object_A_projected: np.ndarray
-            Updated projected magnetic object estimate
-        updated_probe: np.ndarray
-            Updated probe estimate
-        """
-        xp = self._xp
-
-        for s in reversed(range(self._num_slices)):
-            probe = propagated_probes[s]
-            obj = object_patches[s]
-
-            # object-update
-            probe_normalization = self._sum_overlapping_patches_bincounts(
-                xp.abs(probe) ** 2
-            )
-            probe_normalization = 1 / xp.sqrt(
-                1e-16
-                + ((1 - normalization_min) * probe_normalization) ** 2
-                + (normalization_min * xp.max(probe_normalization)) ** 2
-            )
-
-            object_update = step_size * (
-                self._sum_overlapping_patches_bincounts(
-                    xp.real(-1j * xp.conj(obj) * xp.conj(probe) * exit_waves)
-                )
-                * probe_normalization
-            )
-
-            current_object_V[s] += object_update
-            current_object_A_projected[s] += object_update
-
-            # back-transmit
-            exit_waves *= xp.conj(obj)
-
-            if s > 0:
-                # back-propagate
-                exit_waves = self._propagate_array(
-                    exit_waves, xp.conj(self._propagator_arrays[s - 1])
-                )
-            elif not fix_probe:
-                # probe-update
-                object_normalization = xp.sum(
-                    (xp.abs(obj) ** 2),
-                    axis=0,
-                )
-                object_normalization = 1 / xp.sqrt(
-                    1e-16
-                    + ((1 - normalization_min) * object_normalization) ** 2
-                    + (normalization_min * xp.max(object_normalization)) ** 2
-                )
-
-                current_probe += (
-                    step_size
-                    * xp.sum(
-                        exit_waves,
-                        axis=0,
-                    )
-                    * object_normalization
-                )
-
-        return current_object_V, current_object_A_projected, current_probe
-
-    def _projection_sets_adjoint(
-        self,
-        current_object_V,
-        current_object_A_projected,
-        current_probe,
-        object_patches,
-        propagated_probes,
-        exit_waves,
-        normalization_min,
-        fix_probe,
-    ):
-        """
-        Ptychographic adjoint operator for DM_AP and RAAR methods.
-        Computes object and probe update steps.
-
-        Parameters
-        --------
-        current_object_V: np.ndarray
-            Current electrostatic object estimate
-        current_object_A_projected: np.ndarray
-            Current projected magnetic object estimate
-        current_probe: np.ndarray
-            Current probe estimate
-        object_patches: np.ndarray
-            Patched object view
-        propagated_probes: np.ndarray
-            Shifted probes at each layer
-        exit_waves:np.ndarray
-            Updated exit_waves
-        normalization_min: float, optional
-            Probe normalization minimum as a fraction of the maximum overlap intensity
-        fix_probe: bool, optional
-            If True, probe will not be updated
-
-        Returns
-        --------
-        updated_object_V: np.ndarray
-            Updated electrostatic object estimate
-        updated_object_A_projected: np.ndarray
-            Updated projected magnetic object estimate
-        updated_probe: np.ndarray
-            Updated probe estimate
-        """
-        xp = self._xp
-
-        # careful not to modify exit_waves in-place for projection set methods
-        exit_waves_copy = exit_waves.copy()
-        for s in reversed(range(self._num_slices)):
-            probe = propagated_probes[s]
-            obj = object_patches[s]
-
-            # object-update
-            probe_normalization = self._sum_overlapping_patches_bincounts(
-                xp.abs(probe) ** 2
-            )
-            probe_normalization = 1 / xp.sqrt(
-                1e-16
-                + ((1 - normalization_min) * probe_normalization) ** 2
-                + (normalization_min * xp.max(probe_normalization)) ** 2
-            )
-
-            object_update = (
-                self._sum_overlapping_patches_bincounts(
-                    xp.real(-1j * xp.conj(obj) * xp.conj(probe) * exit_waves)
-                )
-                * probe_normalization
-            )
-
-            current_object_V[s] = object_update
-            current_object_A_projected[s] = object_update
-
-            # back-transmit
-            exit_waves_copy *= xp.conj(obj)
-
-            if s > 0:
-                # back-propagate
-                exit_waves_copy = self._propagate_array(
-                    exit_waves_copy, xp.conj(self._propagator_arrays[s - 1])
-                )
-
-            elif not fix_probe:
-                # probe-update
-                object_normalization = xp.sum(
-                    (xp.abs(obj) ** 2),
-                    axis=0,
-                )
-                object_normalization = 1 / xp.sqrt(
-                    1e-16
-                    + ((1 - normalization_min) * object_normalization) ** 2
-                    + (normalization_min * xp.max(object_normalization)) ** 2
-                )
-
-                current_probe = (
-                    xp.sum(
-                        exit_waves_copy,
-                        axis=0,
-                    )
-                    * object_normalization
-                )
-
-        return current_object_V, current_object_A_projected, current_probe
-
-    def _adjoint(
-        self,
-        current_object_V,
-        current_object_A_projected,
-        current_probe,
-        object_patches,
-        propagated_probes,
-        exit_waves,
-        use_projection_scheme: bool,
-        step_size: float,
-        normalization_min: float,
-        fix_probe: bool,
-    ):
-        """
-        Ptychographic adjoint operator for GD method.
-        Computes object and probe update steps.
-
-        Parameters
-        --------
-        current_object_V: np.ndarray
-            Current electrostatic object estimate
-        current_object_A_projected: np.ndarray
-            Current projected magnetic object estimate
-        current_probe: np.ndarray
-            Current probe estimate
-        object_patches: np.ndarray
-            Patched object view
-        transmitted_probes: np.ndarray
-            Transmitted probes at each layer
-        exit_waves:np.ndarray
-            Updated exit_waves
-        use_projection_scheme: bool,
-            If True, use generalized projection update
-        step_size: float, optional
-            Update step size
-        normalization_min: float, optional
-            Probe normalization minimum as a fraction of the maximum overlap intensity
-        fix_probe: bool, optional
-            If True, probe will not be updated
-
-        Returns
-        --------
-        updated_object_V: np.ndarray
-            Updated electrostatic object estimate
-        updated_object_A_projected: np.ndarray
-            Updated projected magnetic object estimate
-        updated_probe: np.ndarray
-            Updated probe estimate
-        """
-
-        if use_projection_scheme:
-            (
-                current_object_V,
-                current_object_A_projected,
-                current_probe,
-            ) = self._projection_sets_adjoint(
-                current_object_V,
-                current_object_A_projected,
-                current_probe,
-                object_patches,
-                propagated_probes,
-                exit_waves[self._active_tilt_index],
-                normalization_min,
-                fix_probe,
-            )
-        else:
-            (
-                current_object_V,
-                current_object_A_projected,
-                current_probe,
-            ) = self._gradient_descent_adjoint(
-                current_object_V,
-                current_object_A_projected,
-                current_probe,
-                object_patches,
-                propagated_probes,
-                exit_waves,
-                step_size,
-                normalization_min,
-                fix_probe,
-            )
-
-        return current_object_V, current_object_A_projected, current_probe
-
-    def _position_correction(
-        self,
-        current_object,
-        current_probe,
-        transmitted_probes,
-        amplitudes,
-        current_positions,
-        positions_step_size,
-        constrain_position_distance,
-    ):
-        """
-        Position correction using estimated intensity gradient.
-
-        Parameters
-        --------
-        current_object: np.ndarray
-            Current object estimate
-        current_probe:np.ndarray
-            fractionally-shifted probes
-        transmitted_probes: np.ndarray
-            Transmitted probes at each layer
-        amplitudes: np.ndarray
-            Measured amplitudes
-        current_positions: np.ndarray
-            Current positions estimate
-        positions_step_size: float
-            Positions step size
-        constrain_position_distance: float
-            Distance to constrain position correction within original
-            field of view in A
-
-        Returns
-        --------
-        updated_positions: np.ndarray
-            Updated positions estimate
-        """
-
-        xp = self._xp
-
-        # Intensity gradient
-        exit_waves_fft = xp.fft.fft2(transmitted_probes[-1])
-        exit_waves_fft_conj = xp.conj(exit_waves_fft)
-        estimated_intensity = xp.abs(exit_waves_fft) ** 2
-        measured_intensity = amplitudes**2
-
-        flat_shape = (transmitted_probes[-1].shape[0], -1)
-        difference_intensity = (measured_intensity - estimated_intensity).reshape(
-            flat_shape
-        )
-
-        # Computing perturbed exit waves one at a time to save on memory
-
-        complex_object = xp.exp(1j * current_object)
-
-        # dx
-        propagated_probes = fft_shift(current_probe, self._positions_px_fractional, xp)
-        obj_rolled_patches = complex_object[
-            :,
-            (self._vectorized_patch_indices_row + 1) % self._object_shape[0],
-            self._vectorized_patch_indices_col,
-        ]
-
-        transmitted_probes_perturbed = xp.empty_like(obj_rolled_patches)
-
-        for s in range(self._num_slices):
-            # transmit
-            transmitted_probes_perturbed[s] = obj_rolled_patches[s] * propagated_probes
-
-            # propagate
-            if s + 1 < self._num_slices:
-                propagated_probes = self._propagate_array(
-                    transmitted_probes_perturbed[s], self._propagator_arrays[s]
-                )
-
-        exit_waves_dx_fft = exit_waves_fft - xp.fft.fft2(
-            transmitted_probes_perturbed[-1]
-        )
-
-        # dy
-        propagated_probes = fft_shift(current_probe, self._positions_px_fractional, xp)
-        obj_rolled_patches = complex_object[
-            :,
-            self._vectorized_patch_indices_row,
-            (self._vectorized_patch_indices_col + 1) % self._object_shape[1],
-        ]
-
-        transmitted_probes_perturbed = xp.empty_like(obj_rolled_patches)
-
-        for s in range(self._num_slices):
-            # transmit
-            transmitted_probes_perturbed[s] = obj_rolled_patches[s] * propagated_probes
-
-            # propagate
-            if s + 1 < self._num_slices:
-                propagated_probes = self._propagate_array(
-                    transmitted_probes_perturbed[s], self._propagator_arrays[s]
-                )
-
-        exit_waves_dy_fft = exit_waves_fft - xp.fft.fft2(
-            transmitted_probes_perturbed[-1]
-        )
-
-        partial_intensity_dx = 2 * xp.real(
-            exit_waves_dx_fft * exit_waves_fft_conj
-        ).reshape(flat_shape)
-        partial_intensity_dy = 2 * xp.real(
-            exit_waves_dy_fft * exit_waves_fft_conj
-        ).reshape(flat_shape)
-
-        coefficients_matrix = xp.dstack((partial_intensity_dx, partial_intensity_dy))
-
-        # positions_update = xp.einsum(
-        #    "idk,ik->id", xp.linalg.pinv(coefficients_matrix), difference_intensity
-        # )
-
-        coefficients_matrix_T = coefficients_matrix.conj().swapaxes(-1, -2)
-        positions_update = (
-            xp.linalg.inv(coefficients_matrix_T @ coefficients_matrix)
-            @ coefficients_matrix_T
-            @ difference_intensity[..., None]
-        )
-
-        if constrain_position_distance is not None:
-            constrain_position_distance /= xp.sqrt(
-                self.sampling[0] ** 2 + self.sampling[1] ** 2
-            )
-            x1 = (current_positions - positions_step_size * positions_update[..., 0])[
-                :, 0
-            ]
-            y1 = (current_positions - positions_step_size * positions_update[..., 0])[
-                :, 1
-            ]
-            x0 = self._positions_px_initial[:, 0]
-            y0 = self._positions_px_initial[:, 1]
-            if self._rotation_best_transpose:
-                x0, y0 = xp.array([y0, x0])
-                x1, y1 = xp.array([y1, x1])
-
-            if self._rotation_best_rad is not None:
-                rotation_angle = self._rotation_best_rad
-                x0, y0 = x0 * xp.cos(-rotation_angle) + y0 * xp.sin(
-                    -rotation_angle
-                ), -x0 * xp.sin(-rotation_angle) + y0 * xp.cos(-rotation_angle)
-                x1, y1 = x1 * xp.cos(-rotation_angle) + y1 * xp.sin(
-                    -rotation_angle
-                ), -x1 * xp.sin(-rotation_angle) + y1 * xp.cos(-rotation_angle)
-
-            outlier_ind = (x1 > (xp.max(x0) + constrain_position_distance)) + (
-                x1 < (xp.min(x0) - constrain_position_distance)
-            ) + (y1 > (xp.max(y0) + constrain_position_distance)) + (
-                y1 < (xp.min(y0) - constrain_position_distance)
-            ) > 0
-
-            positions_update[..., 0][outlier_ind] = 0
-
-        current_positions -= positions_step_size * positions_update[..., 0]
-
-        return current_positions
-
     def _divergence_free_constraint(self, vector_field):
         """
         Leray projection operator
@@ -1647,19 +708,16 @@ class MagneticPtychographicTomography(
         Parameters
         --------
         vector_field: np.ndarray
-            Current object vector as Az, Ax, Ay
+            Current object vector as Ax, Ay, Az
 
         Returns
         --------
         projected_vector_field: np.ndarray
-            Divergence-less object vector as Az, Ax, Ay
+            Divergence-less object vector as Ax, Ay, Az
         """
         xp = self._xp
 
-        spacings = (self.sampling[1],) + self.sampling
-        vector_field = project_vector_field_divergence(
-            vector_field, spacings=spacings, xp=xp
-        )
+        vector_field = project_vector_field_divergence_periodic_3D(vector_field, xp=xp)
 
         return vector_field
 
@@ -2588,491 +1646,3 @@ class MagneticPtychographicTomography(
             xp.clear_memo()
 
         return self
-
-    def _visualize_last_iteration_figax(
-        self,
-        fig,
-        object_ax,
-        convergence_ax,
-        cbar: bool,
-        projection_angle_deg: float,
-        projection_axes: Tuple[int, int],
-        x_lims: Tuple[int, int],
-        y_lims: Tuple[int, int],
-        **kwargs,
-    ):
-        """
-        Displays last reconstructed object on a given fig/ax.
-
-        Parameters
-        --------
-        fig: Figure
-            Matplotlib figure object_ax lives in
-        object_ax: Axes
-            Matplotlib axes to plot reconstructed object in
-        convergence_ax: Axes, optional
-            Matplotlib axes to plot convergence plot in
-        cbar: bool, optional
-            If true, displays a colorbar
-        projection_angle_deg: float
-            Angle in degrees to rotate 3D array around prior to projection
-        projection_axes: tuple(int,int)
-            Axes defining projection plane
-        x_lims: tuple(float,float)
-            min/max x indices
-        y_lims: tuple(float,float)
-            min/max y indices
-        """
-
-        cmap = kwargs.pop("cmap", "magma")
-
-        asnumpy = self._asnumpy
-
-        if projection_angle_deg is not None:
-            rotated_3d_obj = self._rotate(
-                self._object[0],
-                projection_angle_deg,
-                axes=projection_axes,
-                reshape=False,
-                order=2,
-            )
-            rotated_3d_obj = asnumpy(rotated_3d_obj)
-        else:
-            rotated_3d_obj = self.object[0]
-
-        rotated_object = self._crop_rotate_object_manually(
-            rotated_3d_obj.sum(0), angle=None, x_lims=x_lims, y_lims=y_lims
-        )
-        rotated_shape = rotated_object.shape
-
-        extent = [
-            0,
-            self.sampling[1] * rotated_shape[1],
-            self.sampling[0] * rotated_shape[0],
-            0,
-        ]
-
-        im = object_ax.imshow(
-            rotated_object,
-            extent=extent,
-            cmap=cmap,
-            **kwargs,
-        )
-
-        if cbar:
-            divider = make_axes_locatable(object_ax)
-            ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
-            fig.add_axes(ax_cb)
-            fig.colorbar(im, cax=ax_cb)
-
-        if convergence_ax is not None and hasattr(self, "error_iterations"):
-            errors = np.array(self.error_iterations)
-            kwargs.pop("vmin", None)
-            kwargs.pop("vmax", None)
-            errors = self.error_iterations
-            convergence_ax.semilogy(np.arange(errors.shape[0]), errors, **kwargs)
-
-    def _visualize_last_iteration(
-        self,
-        fig,
-        cbar: bool,
-        plot_convergence: bool,
-        projection_angle_deg: float,
-        projection_axes: Tuple[int, int],
-        x_lims: Tuple[int, int],
-        y_lims: Tuple[int, int],
-        **kwargs,
-    ):
-        """
-        Displays last reconstructed object and probe iterations.
-
-        Parameters
-        --------
-        fig: Figure
-            Matplotlib figure to place Gridspec in
-        plot_convergence: bool, optional
-            If true, the normalized mean squared error (NMSE) plot is displayed
-        cbar: bool, optional
-            If true, displays a colorbar
-        projection_angle_deg: float
-            Angle in degrees to rotate 3D array around prior to projection
-        projection_axes: tuple(int,int)
-            Axes defining projection plane
-        x_lims: tuple(float,float)
-            min/max x indices
-        y_lims: tuple(float,float)
-            min/max y indices
-        """
-        figsize = kwargs.pop("figsize", (14, 10) if cbar else (12, 10))
-        cmap_e = kwargs.pop("cmap_e", "magma")
-        cmap_m = kwargs.pop("cmap_m", "PuOr")
-
-        asnumpy = self._asnumpy
-
-        if projection_angle_deg is not None:
-            rotated_3d_obj_V = self._rotate(
-                self._object[0],
-                projection_angle_deg,
-                axes=projection_axes,
-                reshape=False,
-                order=2,
-            )
-
-            rotated_3d_obj_Az = self._rotate(
-                self._object[1],
-                projection_angle_deg,
-                axes=projection_axes,
-                reshape=False,
-                order=2,
-            )
-
-            rotated_3d_obj_Ax = self._rotate(
-                self._object[2],
-                projection_angle_deg,
-                axes=projection_axes,
-                reshape=False,
-                order=2,
-            )
-
-            rotated_3d_obj_Ay = self._rotate(
-                self._object[3],
-                projection_angle_deg,
-                axes=projection_axes,
-                reshape=False,
-                order=2,
-            )
-
-            rotated_3d_obj_V = asnumpy(rotated_3d_obj_V)
-            rotated_3d_obj_Az = asnumpy(rotated_3d_obj_Az)
-            rotated_3d_obj_Ax = asnumpy(rotated_3d_obj_Ax)
-            rotated_3d_obj_Ay = asnumpy(rotated_3d_obj_Ay)
-        else:
-            (
-                rotated_3d_obj_V,
-                rotated_3d_obj_Az,
-                rotated_3d_obj_Ax,
-                rotated_3d_obj_Ay,
-            ) = self.object
-
-        rotated_object_Vx = self._crop_rotate_object_manually(
-            rotated_3d_obj_V.sum(1).T, angle=None, x_lims=x_lims, y_lims=y_lims
-        )
-        rotated_object_Vy = self._crop_rotate_object_manually(
-            rotated_3d_obj_V.sum(2).T, angle=None, x_lims=x_lims, y_lims=y_lims
-        )
-        rotated_object_Vz = self._crop_rotate_object_manually(
-            rotated_3d_obj_V.sum(0), angle=None, x_lims=x_lims, y_lims=y_lims
-        )
-
-        rotated_object_Azx = self._crop_rotate_object_manually(
-            rotated_3d_obj_Az.sum(1).T, angle=None, x_lims=x_lims, y_lims=y_lims
-        )
-        rotated_object_Azy = self._crop_rotate_object_manually(
-            rotated_3d_obj_Az.sum(2).T, angle=None, x_lims=x_lims, y_lims=y_lims
-        )
-        rotated_object_Azz = self._crop_rotate_object_manually(
-            rotated_3d_obj_Az.sum(0), angle=None, x_lims=x_lims, y_lims=y_lims
-        )
-
-        rotated_object_Axx = self._crop_rotate_object_manually(
-            rotated_3d_obj_Ax.sum(1).T, angle=None, x_lims=x_lims, y_lims=y_lims
-        )
-        rotated_object_Axy = self._crop_rotate_object_manually(
-            rotated_3d_obj_Ax.sum(2).T, angle=None, x_lims=x_lims, y_lims=y_lims
-        )
-        rotated_object_Axz = self._crop_rotate_object_manually(
-            rotated_3d_obj_Ax.sum(0), angle=None, x_lims=x_lims, y_lims=y_lims
-        )
-
-        rotated_object_Ayx = self._crop_rotate_object_manually(
-            rotated_3d_obj_Ay.sum(1).T, angle=None, x_lims=x_lims, y_lims=y_lims
-        )
-        rotated_object_Ayy = self._crop_rotate_object_manually(
-            rotated_3d_obj_Ay.sum(2).T, angle=None, x_lims=x_lims, y_lims=y_lims
-        )
-        rotated_object_Ayz = self._crop_rotate_object_manually(
-            rotated_3d_obj_Ay.sum(0), angle=None, x_lims=x_lims, y_lims=y_lims
-        )
-
-        rotated_shape = rotated_object_Vx.shape
-
-        extent = [
-            0,
-            self.sampling[1] * rotated_shape[1],
-            self.sampling[0] * rotated_shape[0],
-            0,
-        ]
-
-        arrays = [
-            [
-                rotated_object_Vx,
-                rotated_object_Axx,
-                rotated_object_Ayx,
-                rotated_object_Azx,
-            ],
-            [
-                rotated_object_Vy,
-                rotated_object_Axy,
-                rotated_object_Ayy,
-                rotated_object_Azy,
-            ],
-            [
-                rotated_object_Vz,
-                rotated_object_Axz,
-                rotated_object_Ayz,
-                rotated_object_Azz,
-            ],
-        ]
-
-        titles = [
-            [
-                "V projected along x",
-                "Ax projected along x",
-                "Ay projected along x",
-                "Az projected along x",
-            ],
-            [
-                "V projected along y",
-                "Ax projected along y",
-                "Ay projected along y",
-                "Az projected along y",
-            ],
-            [
-                "V projected along z",
-                "Ax projected along z",
-                "Ay projected along z",
-                "Az projected along z",
-            ],
-        ]
-
-        max_e = np.array(
-            [rotated_object_Vx.max(), rotated_object_Vy.max(), rotated_object_Vz.max()]
-        ).max()
-        max_m = np.array(
-            [
-                [
-                    np.abs(rotated_object_Axx).max(),
-                    np.abs(rotated_object_Ayx).max(),
-                    np.abs(rotated_object_Azx).max(),
-                ],
-                [
-                    np.abs(rotated_object_Axy).max(),
-                    np.abs(rotated_object_Ayy).max(),
-                    np.abs(rotated_object_Azy).max(),
-                ],
-                [
-                    np.abs(rotated_object_Axz).max(),
-                    np.abs(rotated_object_Ayz).max(),
-                    np.abs(rotated_object_Azz).max(),
-                ],
-            ]
-        ).max()
-
-        vmin_e = kwargs.pop("vmin_e", 0.0)
-        vmax_e = kwargs.pop("vmax_e", max_e)
-        vmin_m = kwargs.pop("vmin_m", -max_m)
-        vmax_m = kwargs.pop("vmax_m", max_m)
-
-        if plot_convergence:
-            spec = GridSpec(
-                ncols=4, nrows=4, height_ratios=[4, 4, 4, 1], hspace=0.15, wspace=0.35
-            )
-        else:
-            spec = GridSpec(ncols=4, nrows=3, hspace=0.15, wspace=0.35)
-
-        if fig is None:
-            fig = plt.figure(figsize=figsize)
-
-        for sp in spec:
-            row, col = np.unravel_index(sp.num1, (4, 4))
-
-            if row < 3:
-                ax = fig.add_subplot(sp)
-                if sp.is_first_col():
-                    cmap = cmap_e
-                    vmin = vmin_e
-                    vmax = vmax_e
-                else:
-                    cmap = cmap_m
-                    vmin = vmin_m
-                    vmax = vmax_m
-
-                im = ax.imshow(
-                    arrays[row][col],
-                    cmap=cmap,
-                    vmin=vmin,
-                    vmax=vmax,
-                    extent=extent,
-                    **kwargs,
-                )
-
-                if cbar:
-                    divider = make_axes_locatable(ax)
-                    ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
-                    fig.add_axes(ax_cb)
-                    fig.colorbar(im, cax=ax_cb)
-
-                ax.set_title(titles[row][col])
-
-                if row < 2:
-                    ax.set_xticks([])
-                else:
-                    ax.set_xlabel("y [A]")
-
-                if col > 0:
-                    ax.set_yticks([])
-                else:
-                    ax.set_ylabel("x [A]")
-
-        if plot_convergence and hasattr(self, "error_iterations"):
-            errors = np.array(self.error_iterations)
-
-            ax = fig.add_subplot(spec[-1, :])
-            ax.semilogy(np.arange(errors.shape[0]), errors, **kwargs)
-            ax.set_ylabel("NMSE")
-            ax.set_xlabel("Iteration number")
-            ax.yaxis.tick_right()
-
-        spec.tight_layout(fig)
-
-    def _visualize_all_iterations(
-        self,
-        fig,
-        plot_convergence: bool,
-        iterations_grid: Tuple[int, int],
-        projection_angle_deg: float,
-        projection_axes: Tuple[int, int],
-        x_lims: Tuple[int, int],
-        y_lims: Tuple[int, int],
-        **kwargs,
-    ):
-        """
-        Displays all reconstructed object and probe iterations.
-
-        Parameters
-        --------
-        fig: Figure
-            Matplotlib figure to place Gridspec in
-        plot_convergence: bool, optional
-            If true, the normalized mean squared error (NMSE) plot is displayed
-        cbar: bool, optional
-            If true, displays a colorbar
-        projection_angle_deg: float
-            Angle in degrees to rotate 3D array around prior to projection
-        projection_axes: tuple(int,int)
-            Axes defining projection plane
-        x_lims: tuple(float,float)
-            min/max x indices
-        y_lims: tuple(float,float)
-            min/max y indices
-        iterations_grid: Tuple[int,int]
-            Grid dimensions to plot reconstruction iterations
-        """
-        raise NotImplementedError()
-
-    def visualize(
-        self,
-        fig=None,
-        cbar: bool = True,
-        iterations_grid: Tuple[int, int] = None,
-        plot_convergence: bool = True,
-        projection_angle_deg: float = None,
-        projection_axes: Tuple[int, int] = (0, 2),
-        x_lims=(None, None),
-        y_lims=(None, None),
-        **kwargs,
-    ):
-        """
-        Displays reconstructed object and probe.
-
-        Parameters
-        --------
-        fig: Figure
-            Matplotlib figure to place Gridspec in
-        plot_convergence: bool, optional
-            If true, the normalized mean squared error (NMSE) plot is displayed
-        cbar: bool, optional
-            If true, displays a colorbar
-        projection_angle_deg: float
-            Angle in degrees to rotate 3D array around prior to projection
-        projection_axes: tuple(int,int)
-            Axes defining projection plane
-        x_lims: tuple(float,float)
-            min/max x indices
-        y_lims: tuple(float,float)
-            min/max y indices
-        iterations_grid: Tuple[int,int]
-            Grid dimensions to plot reconstruction iterations
-
-        Returns
-        --------
-        self: OverlapMagneticTomographicReconstruction
-            Self to accommodate chaining
-        """
-
-        if iterations_grid is None:
-            self._visualize_last_iteration(
-                fig=fig,
-                plot_convergence=plot_convergence,
-                projection_angle_deg=projection_angle_deg,
-                projection_axes=projection_axes,
-                cbar=cbar,
-                x_lims=x_lims,
-                y_lims=y_lims,
-                **kwargs,
-            )
-        else:
-            self._visualize_all_iterations(
-                fig=fig,
-                plot_convergence=plot_convergence,
-                iterations_grid=iterations_grid,
-                projection_angle_deg=projection_angle_deg,
-                projection_axes=projection_axes,
-                cbar=cbar,
-                x_lims=x_lims,
-                y_lims=y_lims,
-                **kwargs,
-            )
-
-        return self
-
-    @property
-    def positions(self):
-        """Probe positions [A]"""
-
-        if self.angular_sampling is None:
-            return None
-
-        asnumpy = self._asnumpy
-        positions_all = []
-        for tilt_index in range(self._num_tilts):
-            positions = self._positions_px_all[
-                self._cum_probes_per_tilt[tilt_index] : self._cum_probes_per_tilt[
-                    tilt_index + 1
-                ]
-            ].copy()
-            positions[:, 0] *= self.sampling[0]
-            positions[:, 1] *= self.sampling[1]
-            positions_all.append(asnumpy(positions))
-
-        return np.asarray(positions_all)
-
-    def _return_self_consistency_errors(
-        self,
-        max_batch_size=None,
-    ):
-        """Compute the self-consistency errors for each probe position"""
-        raise NotImplementedError()
-
-    def show_uncertainty_visualization(
-        self,
-        errors=None,
-        max_batch_size=None,
-        projected_cropped_potential=None,
-        kde_sigma=None,
-        plot_histogram=True,
-        plot_contours=False,
-        **kwargs,
-    ):
-        """Plot uncertainty visualization using self-consistency errors"""
-        raise NotImplementedError()
