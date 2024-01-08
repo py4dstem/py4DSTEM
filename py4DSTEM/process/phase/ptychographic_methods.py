@@ -10,6 +10,7 @@ from py4DSTEM.process.phase.utils import (
     ComplexProbe,
     fft_shift,
     generate_batches,
+    partition_list,
     rotate_point,
     spatial_frequencies,
 )
@@ -1158,6 +1159,7 @@ class ProbeMethodsMixin:
         scalebar=True,
         pixelsize=None,
         pixelunits=None,
+        W=6,
         **kwargs,
     ):
         """
@@ -1173,10 +1175,12 @@ class ProbeMethodsMixin:
             if True, adds colorbar
         scalebar: bool, optional
             if True, adds scalebar to probe
-        pixelunits: str, optional
-            units for scalebar, default is A^-1
         pixelsize: float, optional
             default is probe reciprocal sampling
+        pixelunits: str, optional
+            units for scalebar, default is A^-1
+        W: int, optional
+            if not None, sets the width of the image grid
         """
         asnumpy = self._asnumpy
 
@@ -1210,6 +1214,8 @@ class ProbeMethodsMixin:
                 for pr in probe
             ]
 
+        probe = list(partition_list(probe, W))
+
         show_complex(
             probe,
             cbar=cbar,
@@ -1231,6 +1237,7 @@ class ProbeMethodsMixin:
         scalebar=True,
         pixelsize=None,
         pixelunits=None,
+        W=6,
         **kwargs,
     ):
         """
@@ -1246,10 +1253,12 @@ class ProbeMethodsMixin:
             if True, adds colorbar
         scalebar: bool, optional
             if True, adds scalebar to probe
-        pixelunits: str, optional
-            units for scalebar, default is A^-1
         pixelsize: float, optional
             default is probe reciprocal sampling
+        pixelunits: str, optional
+            units for scalebar, default is A^-1
+        W: int, optional
+            if not None, sets the width of the image grid
         """
         asnumpy = self._asnumpy
 
@@ -1287,6 +1296,8 @@ class ProbeMethodsMixin:
                 )
                 for pr in probe
             ]
+
+        probe = list(partition_list(probe, W))
 
         show_complex(
             probe,
