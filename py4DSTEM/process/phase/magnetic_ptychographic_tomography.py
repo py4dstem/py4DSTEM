@@ -8,8 +8,13 @@ from typing import Mapping, Sequence, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.gridspec import GridSpec
 from mpl_toolkits.axes_grid1 import make_axes_locatable
-from py4DSTEM.visualize.vis_special import Complex2RGB, add_colorbar_arg
+from py4DSTEM.visualize.vis_special import (
+    Complex2RGB,
+    add_colorbar_arg,
+    return_scaled_histogram_ordering,
+)
 
 try:
     import cupy as cp
@@ -777,19 +782,6 @@ class MagneticPtychographicTomography(
 
         return current_object, current_probe, current_positions
 
-    def _rotate_zxy_volume_vector(
-        self,
-        current_object,
-        rot_matrix,
-    ):
-        """ """
-        for index in range(4):
-            current_object[index] = self._rotate_zxy_volume(
-                current_object[index], rot_matrix
-            )
-
-        return current_object
-
     def reconstruct(
         self,
         max_iter: int = 8,
@@ -1034,7 +1026,7 @@ class MagneticPtychographicTomography(
                 rot_matrix = self._tilt_orientation_matrices[
                     self._active_measurement_index
                 ]
-                self._object = self._rotate_zxy_volume_vector(
+                self._object = self._rotate_zxy_volume_util(
                     self._object,
                     rot_matrix @ old_rot_matrix.T,
                 )
@@ -1267,9 +1259,7 @@ class MagneticPtychographicTomography(
                         tv_denoise_inner_iter=tv_denoise_inner_iter,
                     )
 
-            self._object = self._rotate_zxy_volume_vector(
-                self._object, old_rot_matrix.T
-            )
+            self._object = self._rotate_zxy_volume_util(self._object, old_rot_matrix.T)
 
             # Normalize Error Over Tilts
             error /= self._num_measurements
@@ -1318,3 +1308,244 @@ class MagneticPtychographicTomography(
             xp.clear_memo()
 
         return self
+
+    def _visualize_all_iterations(self, **kwargs):
+        raise NotImplementedError()
+
+    def _visualize_last_iteration(
+        self,
+        fig,
+        cbar: bool,
+        plot_convergence: bool,
+        orientation_matrix=None,
+        **kwargs,
+    ):
+        """
+        Displays last reconstructed object and probe iterations.
+
+        Parameters
+        --------
+        fig: Figure
+            Matplotlib figure to place Gridspec in
+        plot_convergence: bool, optional
+            If true, the normalized mean squared error (NMSE) plot is displayed
+        cbar: bool, optional
+            If true, displays a colorbar
+        plot_probe: bool, optional
+            If true, the reconstructed complex probe is displayed
+        plot_fourier_probe: bool, optional
+            If true, the reconstructed complex Fourier probe is displayed
+        remove_initial_probe_aberrations: bool, optional
+            If true, when plotting fourier probe, removes initial probe
+            to visualize changes
+        """
+
+        asnumpy = self._asnumpy
+
+        # get scaled arrays
+
+        if orientation_matrix is not None:
+            ordered_obj = self._rotate_zxy_volume_vector(
+                self._object,
+                orientation_matrix,
+            )
+
+            # V(z,x,y), Ax(z,x,y), Ay(z,x,y), Az(z,x,y)
+            ordered_obj = asnumpy(ordered_obj)
+            ordered_obj[1:] = np.roll(ordered_obj[1:], -1, axis=0)
+
+        else:
+            # V(z,x,y), Ax(z,x,y), Ay(z,x,y), Az(z,x,y)
+            ordered_obj = self.object.copy()
+            ordered_obj[1:] = np.roll(ordered_obj[1:], -1, axis=0)
+
+        _, nz, nx, ny = ordered_obj.shape
+        img_array = np.zeros((nx + nx + nz, ny * 4), dtype=ordered_obj.dtype)
+
+        axes = [1, 2, 0]
+        transposes = [False, True, False]
+        labels = [("z [A]", "y [A]"), ("x [A]", "z [A]"), ("x [A]", "y [A]")]
+        limits_v = [(0, nz), (nz, nz + nx), (nz + nx, nz + nx + nx)]
+        limits_h = [(0, ny), (0, nz), (0, ny)]
+
+        titles = [
+            [
+                r"$V$ projected along $\hat{x}$",
+                r"$A_x$ projected along $\hat{x}$",
+                r"$A_y$ projected along $\hat{x}$",
+                r"$A_z$ projected along $\hat{x}$",
+            ],
+            [
+                r"$V$ projected along $\hat{y}$",
+                r"$A_x$ projected along $\hat{y}$",
+                r"$A_y$ projected along $\hat{y}$",
+                r"$A_z$ projected along $\hat{y}$",
+            ],
+            [
+                r"$V$ projected along $\hat{z}$",
+                r"$A_x$ projected along $\hat{z}$",
+                r"$A_y$ projected along $\hat{z}$",
+                r"$A_z$ projected along $\hat{z}$",
+            ],
+        ]
+
+        for index in range(4):
+            for axis, transpose, limit_v, limit_h in zip(
+                axes, transposes, limits_v, limits_h
+            ):
+                start_v, end_v = limit_v
+                start_h, end_h = np.array(limit_h) + index * ny
+
+                subarray = ordered_obj[index].sum(axis)
+                if transpose:
+                    subarray = subarray.T
+
+                img_array[start_v:end_v, start_h:end_h] = subarray
+
+        if plot_convergence:
+            auto_figsize = (ny * 4 * 4 / nx, (nx + nx + nz) * 3.5 / nx + 1)
+        else:
+            auto_figsize = (ny * 4 * 4 / nx, (nx + nx + nz) * 3.5 / nx)
+
+        figsize = kwargs.pop("figsize", auto_figsize)
+        cmap_e = kwargs.pop("cmap_e", "magma")
+        cmap_m = kwargs.pop("cmap_m", "PuOr")
+        vmin_e = kwargs.pop("vmin_e", None)
+        vmax_e = kwargs.pop("vmax_e", None)
+
+        # remove common unused kwargs
+        kwargs.pop("plot_probe", None)
+        kwargs.pop("plot_fourier_probe", None)
+        kwargs.pop("remove_initial_probe_aberrations", None)
+        kwargs.pop("vertical_lims", None)
+        kwargs.pop("horizontal_lims", None)
+
+        _, vmin_e, vmax_e = return_scaled_histogram_ordering(
+            img_array[:, :ny], vmin_e, vmax_e
+        )
+
+        _, _, _vmax_m = return_scaled_histogram_ordering(np.abs(img_array[:, ny:]))
+        vmin_m = kwargs.pop("vmin_m", -_vmax_m)
+        vmax_m = kwargs.pop("vmax_m", _vmax_m)
+
+        if plot_convergence:
+            spec = GridSpec(
+                ncols=4,
+                nrows=4,
+                height_ratios=[nx, nz, nx, nx / 4],
+                hspace=0.15,
+                wspace=0.35,
+            )
+        else:
+            spec = GridSpec(
+                ncols=4, nrows=3, height_ratios=[nx, nz, nx], hspace=0.15, wspace=0.35
+            )
+
+        if fig is None:
+            fig = plt.figure(figsize=figsize)
+
+        for sp in spec:
+            row, col = np.unravel_index(sp.num1, (4, 4))
+
+            if row < 3:
+                ax = fig.add_subplot(sp)
+
+                start_v, end_v = limits_v[row]
+                start_h, end_h = np.array(limits_h[row]) + col * ny
+                subarray = img_array[start_v:end_v, start_h:end_h]
+
+                extent = [
+                    0,
+                    self.sampling[1] * subarray.shape[1],
+                    self.sampling[0] * subarray.shape[0],
+                    0,
+                ]
+
+                im = ax.imshow(
+                    subarray,
+                    cmap=cmap_e if sp.is_first_col() else cmap_m,
+                    vmin=vmin_e if sp.is_first_col() else vmin_m,
+                    vmax=vmax_e if sp.is_first_col() else vmax_m,
+                    extent=extent,
+                    **kwargs,
+                )
+
+                if cbar:
+                    divider = make_axes_locatable(ax)
+                    ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
+                    fig.add_axes(ax_cb)
+                    fig.colorbar(im, cax=ax_cb)
+
+                ax.set_title(titles[row][col])
+
+                y_label, x_label = labels[row]
+                ax.set_xlabel(x_label)
+                ax.set_ylabel(y_label)
+
+        if plot_convergence and hasattr(self, "error_iterations"):
+            errors = np.array(self.error_iterations)
+
+            ax = fig.add_subplot(spec[-1, :])
+            ax.semilogy(np.arange(errors.shape[0]), errors, **kwargs)
+            ax.set_ylabel("NMSE")
+            ax.set_xlabel("Iteration number")
+            ax.yaxis.tick_right()
+
+        fig.suptitle(f"Normalized mean squared error: {self.error:.3e}")
+        spec.tight_layout(fig)
+
+    def _rotate_zxy_volume_util(
+        self,
+        current_object,
+        rot_matrix,
+    ):
+        """ """
+        for index in range(4):
+            current_object[index] = self._rotate_zxy_volume(
+                current_object[index], rot_matrix
+            )
+
+        return current_object
+
+    def _rotate_zxy_volume_vector(self, current_object, rot_matrix):
+        """Rotates vector field consistently. Note this is very expensive"""
+
+        xp = self._xp
+        swap_zxy_to_xyz = self._swap_zxy_to_xyz
+
+        if xp is np or int(xp.__version__.split(".")[0]) < 12:
+            from scipy.interpolate import RegularGridInterpolator
+
+            xp = np  # ensure np is enforced for cupy < 12
+            current_object = self._asnumpy(current_object)
+        else:
+            from cupyx.scipy.interpolate import RegularGridInterpolator
+
+        _, nz, nx, ny = current_object.shape
+
+        z, x, y = [xp.linspace(-1, 1, s, endpoint=False) for s in (nx, ny, nz)]
+        Z, X, Y = xp.meshgrid(z, x, y, indexing="ij")
+        coords = xp.array([Z.ravel(), X.ravel(), Y.ravel()])
+
+        tf = xp.asarray(swap_zxy_to_xyz.T @ rot_matrix @ swap_zxy_to_xyz)
+        rotated_vecs = tf.T.dot(coords).T
+
+        Az = RegularGridInterpolator(
+            (z, x, y), current_object[1], bounds_error=False, fill_value=0
+        )
+        Ax = RegularGridInterpolator(
+            (z, x, y), current_object[2], bounds_error=False, fill_value=0
+        )
+        Ay = RegularGridInterpolator(
+            (z, x, y), current_object[3], bounds_error=False, fill_value=0
+        )
+
+        xp = self._xp  # switch back to device
+        obj = xp.zeros_like(current_object)
+        obj[0] = self._rotate_zxy_volume(xp.asarray(current_object[0]), rot_matrix)
+
+        obj[1] = xp.asarray(Az(rotated_vecs).reshape(nz, nx, ny))
+        obj[2] = xp.asarray(Ax(rotated_vecs).reshape(nz, nx, ny))
+        obj[3] = xp.asarray(Ay(rotated_vecs).reshape(nz, nx, ny))
+
+        return obj
