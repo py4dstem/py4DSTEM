@@ -4,12 +4,14 @@ from typing import Mapping, Tuple, Union
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.fft import dctn, idctn
+from scipy.ndimage import zoom
 from scipy.optimize import curve_fit
 
 try:
     import cupy as cp
     from cupyx.scipy.fft import dctn as dctn_cp
     from cupyx.scipy.fft import idctn as idctn_cp
+    from cupyx.scipy.ndimage import zoom as zoom_cp
 except (ImportError, ModuleNotFoundError):
     cp = None
 
@@ -2108,6 +2110,67 @@ def lanczos_kernel_density_estimate(
     return pix_output
 
 
+def vectorized_bilinear_resample(
+    array,
+    scale=None,
+    output_size=None,
+    mode="grid-wrap",
+    grid_mode=True,
+    xp=np,
+):
+    """
+    Resize an array along its final two axes.
+    Note, this is vectorized and thus very memory-intensive.
+
+    The scaling of the array can be specified by passing either `scale`, which sets
+    the scaling factor along both axes to be scaled; or by passing `output_size`,
+    which specifies the final dimensions of the scaled axes.
+
+    Parameters
+    ----------
+    array: np.ndarray
+        Input array to be resampled
+    scale: float
+        Scalar value giving the scaling factor for all dimensions
+    output_size: (int,int)
+        Tuple of two values giving the output size for the final two axes
+    xp: Callable
+        Array computing module
+
+    Returns
+    -------
+    resampled_array: np.ndarray
+        Resampled array
+    """
+
+    array_size = np.array(array.shape)
+    input_size = array_size[-2:].copy()
+
+    if scale is not None:
+        scale = np.array(scale)
+        if scale.size == 1:
+            scale = np.tile(scale, 2)
+
+        output_size = (input_size * scale).astype("int")
+    else:
+        if output_size is None:
+            raise ValueError("One of `scale` or `output_size` must be provided.")
+        output_size = np.array(output_size)
+        if output_size.size != 2:
+            raise ValueError("`output_size` must contain exactly two values.")
+        output_size = np.array(output_size)
+
+    scale_output = tuple(output_size / input_size)
+    scale_output = (1,) * (array_size.size - input_size.size) + scale_output
+
+    if xp is np:
+        array = zoom(array, scale_output, order=1, mode=mode, grid_mode=grid_mode)
+    else:
+        array = zoom_cp(array, scale_output, order=1, mode=mode, grid_mode=grid_mode)
+
+    return array
+
+
 def vectorized_fourier_resample(
     array,
     scale=None,
@@ -2153,6 +2216,7 @@ def vectorized_fourier_resample(
     else:
         if output_size is None:
             raise ValueError("One of `scale` or `output_size` must be provided.")
+        output_size = np.array(output_size)
         if output_size.size != 2:
             raise ValueError("`output_size` must contain exactly two values.")
         output_size = np.array(output_size)

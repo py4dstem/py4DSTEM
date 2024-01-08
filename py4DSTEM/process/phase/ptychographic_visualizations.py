@@ -284,6 +284,7 @@ class VisualizationsMixin:
                     plot_convergence=plot_convergence,
                     plot_probe=plot_probe,
                     plot_fourier_probe=plot_fourier_probe,
+                    remove_initial_probe_aberrations=remove_initial_probe_aberrations,
                     cbar=cbar,
                     **kwargs,
                 )

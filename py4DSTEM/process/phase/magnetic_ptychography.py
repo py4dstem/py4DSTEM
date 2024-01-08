@@ -207,7 +207,8 @@ class MagneticPtychography(
         self,
         diffraction_intensities_shape: Tuple[int, int] = None,
         reshaping_method: str = "fourier",
-        probe_roi_shape: Tuple[int, int] = None,
+        padded_diffraction_intensities_shape: Tuple[int, int] = None,
+        region_of_interest_shape: Tuple[int, int] = None,
         dp_mask: np.ndarray = None,
         fit_function: str = "plane",
         plot_rotation: bool = True,
@@ -244,10 +245,13 @@ class MagneticPtychography(
             Pixel dimensions (Qx',Qy') of the resampled diffraction intensities
             If None, no resampling of diffraction intenstities is performed
         reshaping_method: str, optional
-            Method to use for reshaping, either 'bin', 'bilinear', or 'fourier' (default)
-        probe_roi_shape, (int,int), optional
+            Method to use for reshaping, either 'bin, 'bilinear', or 'fourier' (default)
+        padded_diffraction_intensities_shape: (int,int), optional
             Padded diffraction intensities shape.
             If None, no padding is performed
+        region_of_interest_shape: (int,int), optional
+            If not None, explicitly sets region_of_interest_shape and resamples exit_waves
+            at the diffraction plane to allow comparison with experimental data
         dp_mask: ndarray, optional
             Mask for datacube intensities (Qx,Qy)
         fit_function: str, optional
@@ -291,7 +295,9 @@ class MagneticPtychography(
         # set additional metadata
         self._diffraction_intensities_shape = diffraction_intensities_shape
         self._reshaping_method = reshaping_method
-        self._probe_roi_shape = probe_roi_shape
+        self._padded_diffraction_intensities_shape = (
+            padded_diffraction_intensities_shape
+        )
         self._dp_mask = dp_mask
 
         if self._datacube is None:
@@ -374,11 +380,20 @@ class MagneticPtychography(
         roi_shape = self._datacube[0].Qshape
         if diffraction_intensities_shape is not None:
             roi_shape = diffraction_intensities_shape
-        if probe_roi_shape is not None:
-            roi_shape = tuple(max(q, s) for q, s in zip(roi_shape, probe_roi_shape))
+        if padded_diffraction_intensities_shape is not None:
+            roi_shape = tuple(
+                max(q, s)
+                for q, s in zip(roi_shape, padded_diffraction_intensities_shape)
+            )
 
         self._amplitudes = xp.empty((self._num_diffraction_patterns,) + roi_shape)
-        self._region_of_interest_shape = np.array(roi_shape)
+
+        if region_of_interest_shape is not None:
+            self._resample_exit_waves = True
+            self._region_of_interest_shape = np.array(region_of_interest_shape)
+        else:
+            self._resample_exit_waves = False
+            self._region_of_interest_shape = np.array(self._amplitudes.shape[-2:])
 
         # TO-DO: generalize this
         if force_com_shifts is None:
@@ -408,7 +423,7 @@ class MagneticPtychography(
                     self._datacube[index],
                     diffraction_intensities_shape=self._diffraction_intensities_shape,
                     reshaping_method=self._reshaping_method,
-                    probe_roi_shape=self._probe_roi_shape,
+                    padded_diffraction_intensities_shape=self._padded_diffraction_intensities_shape,
                     vacuum_probe_intensity=self._vacuum_probe_intensity,
                     dp_mask=self._dp_mask,
                     com_shifts=force_com_shifts[index],
@@ -424,7 +439,7 @@ class MagneticPtychography(
                     self._datacube[index],
                     diffraction_intensities_shape=self._diffraction_intensities_shape,
                     reshaping_method=self._reshaping_method,
-                    probe_roi_shape=self._probe_roi_shape,
+                    padded_diffraction_intensities_shape=self._padded_diffraction_intensities_shape,
                     vacuum_probe_intensity=None,
                     dp_mask=None,
                     com_shifts=force_com_shifts[index],
