@@ -218,10 +218,9 @@ class ObjectNDMethodsMixin:
         vmax = kwargs.pop("vmax", 0.999)
 
         # remove additional 3D FFT parameters before passing to show
-        kwargs.pop("projection_angle_deg", None)
-        kwargs.pop("projection_axes", None)
-        kwargs.pop("x_lims", None)
-        kwargs.pop("y_lims", None)
+        kwargs.pop("orientation_matrix", None)
+        kwargs.pop("vertical_lims", None)
+        kwargs.pop("horizontal_lims", None)
 
         show(
             object_fft,
@@ -873,44 +872,6 @@ class Object3DMethodsMixin:
 
         return _object
 
-    def _crop_rotate_object_manually(
-        self,
-        array,
-        angle,
-        x_lims,
-        y_lims,
-    ):
-        """
-        Crops and rotates rotates object manually.
-
-        Parameters
-        ----------
-        array: np.ndarray
-            Object array to crop and rotate. Only operates on numpy arrays for compatibility.
-        angle: float
-            In-plane angle in degrees to rotate by
-        x_lims: tuple(float,float)
-            min/max x indices
-        y_lims: tuple(float,float)
-            min/max y indices
-
-        Returns
-        -------
-        cropped_rotated_array: np.ndarray
-            Cropped and rotated object array
-        """
-
-        asnumpy = self._asnumpy
-        min_x, max_x = x_lims
-        min_y, max_y = y_lims
-
-        if angle is not None:
-            rotated_array = rotate(asnumpy(array), angle, reshape=False, axes=(-2, -1))
-        else:
-            rotated_array = asnumpy(array)
-
-        return rotated_array[..., min_x:max_x, min_y:max_y]
-
     def _return_projected_cropped_potential(
         self,
         obj=None,
@@ -919,26 +880,24 @@ class Object3DMethodsMixin:
     ):
         """Utility function to accommodate multiple classes"""
 
-        projection_angle_deg = kwargs.pop("projection_angle_deg", None)
-        projection_axes = kwargs.pop("projection_axes", (0, 2))
-        x_lims = kwargs.pop("x_lims", (None, None))
-        y_lims = kwargs.pop("y_lims", (None, None))
+        asnumpy = self._asnumpy
+
+        rot_matrix = kwargs.pop("orientation_matrix", None)
+        v_lims = kwargs.pop("vertical_lims", (None, None))
+        h_lims = kwargs.pop("horizontal_lims", (None, None))
 
         if obj is None:
             obj = self._object
 
-        if projection_angle_deg is not None:
-            obj = self._rotate(
+        if rot_matrix is not None:
+            obj = self._rotate_zxy_volume(
                 obj,
-                projection_angle_deg,
-                axes=projection_axes,
-                reshape=False,
-                order=2,
+                rot_matrix=rot_matrix,
             )
 
-        obj = self._crop_rotate_object_manually(
-            obj, angle=None, x_lims=x_lims, y_lims=y_lims
-        ).sum(0)
+        start_v, end_v = v_lims
+        start_h, end_h = h_lims
+        obj = asnumpy(obj.sum(0)[start_v:end_v, start_h:end_h])
 
         if return_kwargs:
             return obj, kwargs
@@ -949,10 +908,9 @@ class Object3DMethodsMixin:
         self,
         obj=None,
         apply_hanning_window=False,
-        projection_angle_deg: float = None,
-        projection_axes: Tuple[int, int] = (0, 2),
-        x_lims: Tuple[int, int] = (None, None),
-        y_lims: Tuple[int, int] = (None, None),
+        orientation_matrix=None,
+        vertical_lims: Tuple[int, int] = (None, None),
+        horizontal_lims: Tuple[int, int] = (None, None),
         **kwargs,
     ):
         """
@@ -964,14 +922,12 @@ class Object3DMethodsMixin:
             if None is specified, uses self._object
         apply_hanning_window: bool, optional
             If True, a 2D Hann window is applied to the object before FFT
-        projection_angle_deg: float
-            Angle in degrees to rotate 3D array around prior to projection
-        projection_axes: tuple(int,int)
-            Axes defining projection plane
-        x_lims: tuple(float,float)
-            min/max x indices
-        y_lims: tuple(float,float)
-            min/max y indices
+        orientation_matrix: np.ndarray, optional
+            orientation matrix to rotate zone-axis
+        vertical_lims: tuple(int,int), optional
+            min/max vertical indices
+        horizontal_lims: tuple(int,int), optional
+            min/max horizontal indices
 
         Returns
         -------
@@ -987,29 +943,23 @@ class Object3DMethodsMixin:
         else:
             obj = xp.asarray(obj, dtype=xp.float32)
 
-        if projection_angle_deg is not None:
-            rotated_3d_obj = self._rotate(
+        if orientation_matrix is not None:
+            obj = self._rotate_zxy_volume(
                 obj,
-                projection_angle_deg,
-                axes=projection_axes,
-                reshape=False,
-                order=2,
+                rot_matrix=orientation_matrix,
             )
-            rotated_3d_obj = asnumpy(rotated_3d_obj)
-        else:
-            rotated_3d_obj = asnumpy(obj)
 
-        rotated_object = self._crop_rotate_object_manually(
-            rotated_3d_obj.sum(0), angle=None, x_lims=x_lims, y_lims=y_lims
-        )
+        start_v, end_v = vertical_lims
+        start_h, end_h = horizontal_lims
+        obj = asnumpy(obj.sum(0)[start_v:end_v, start_h:end_h])
 
         if apply_hanning_window:
-            sx, sy = rotated_object.shape
+            sx, sy = obj.shape
             wx = np.hanning(sx)
             wy = np.hanning(sy)
-            rotated_object *= wx[:, None] * wy[None, :]
+            obj *= wx[:, None] * wy[None, :]
 
-        return np.abs(np.fft.fftshift(np.fft.fft2(rotated_object)))
+        return np.abs(np.fft.fftshift(np.fft.fft2(obj)))
 
     @property
     def object_supersliced(self):
