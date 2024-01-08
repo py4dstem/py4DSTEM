@@ -2275,3 +2275,9 @@ def vectorized_fourier_resample(
     array_resize *= scale_output
 
     return array_resize
+
+
+def partition_list(lst, size):
+    """Partitions lst into chunks of size. Returns a generator."""
+    for i in range(0, len(lst), size):
+        yield lst[i : i + size]

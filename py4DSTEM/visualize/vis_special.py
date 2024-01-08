@@ -801,8 +801,8 @@ def show_complex(
         )
         if scalebar is True:
             scalebar = {
-                "Nx": ar_complex[0].shape[0],
-                "Ny": ar_complex[0].shape[1],
+                "Nx": rgb[0].shape[0],
+                "Ny": rgb[0].shape[1],
                 "pixelsize": pixelsize,
                 "pixelunits": pixelunits,
             }
@@ -824,8 +824,8 @@ def show_complex(
 
         if scalebar is True:
             scalebar = {
-                "Nx": ar_complex.shape[0],
-                "Ny": ar_complex.shape[1],
+                "Nx": rgb.shape[0],
+                "Ny": rgb.shape[1],
                 "pixelsize": pixelsize,
                 "pixelunits": pixelunits,
             }
@@ -835,7 +835,7 @@ def show_complex(
     # add color bar
     if cbar:
         if is_grid:
-            for ax_flat in ax.flatten():
+            for ax_flat in ax.flatten()[: len(rgb)]:
                 divider = make_axes_locatable(ax_flat)
                 ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
                 add_colorbar_arg(ax_cb, chroma_boost=chroma_boost)
