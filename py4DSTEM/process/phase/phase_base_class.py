@@ -136,7 +136,7 @@ class PhaseReconstruction(Custom):
         datacube,
         diffraction_intensities_shape=None,
         reshaping_method="fourier",
-        probe_roi_shape=None,
+        padded_diffraction_intensities_shape=None,
         vacuum_probe_intensity=None,
         dp_mask=None,
         com_shifts=None,
@@ -153,13 +153,10 @@ class PhaseReconstruction(Custom):
         Note this does not affect the maximum scattering wavevector (Qx*dkx,Qy*dky) = (Sx*dkx',Sy*dky'),
         and thus the real-space sampling stays fixed.
 
-        The real space sampling, (dx, dy), combined with the resampled diffraction_intensities_shape,
-        sets the real-space probe region of interest (ROI) extent (dx*Sx, dy*Sy).
-        Occasionally, one may also want to specify a larger probe ROI extent, e.g when the probe
-        does not comfortably fit without self-ovelap artifacts, or when the scan step sizes are much
-        smaller than the real-space sampling (dx,dy). This can be achieved by specifying a
-        probe_roi_shape, which is larger than diffraction_intensities_shape, which will result in
-        zero-padding of the diffraction intensities.
+        Additionally, one may wish to zero-pad the diffraction intensity data. Note this does not increase
+        the information or resolution, but might be beneficial in a limited number of cases, e.g. when the
+        scan step sizes are much smaller than the real-space sampling (dx,dy). This can be achieved by specifying
+        a padded_diffraction_intensities_shape which is larger than diffraction_intensities_shape.
 
         Parameters
         ----------
@@ -170,7 +167,7 @@ class PhaseReconstruction(Custom):
             If None, no resamping is performed
         reshaping method: str, optional
             Reshaping method to use, one of 'bin', 'bilinear' or 'fourier' (default)
-        probe_roi_shape, (int,int), optional
+        padded_diffraction_intensities_shape, (int,int), optional
             Padded diffraction intensities shape.
             If None, no padding is performed
         vacuum_probe_intensity, np.ndarray, optional
@@ -284,10 +281,10 @@ class PhaseReconstruction(Custom):
                     )
                 )
 
-        if probe_roi_shape is not None:
+        if padded_diffraction_intensities_shape is not None:
             Qx, Qy = datacube.shape[-2:]
-            Sx, Sy = probe_roi_shape
-            datacube = datacube.pad_Q(output_size=probe_roi_shape)
+            Sx, Sy = padded_diffraction_intensities_shape
+            datacube = datacube.pad_Q(output_size=padded_diffraction_intensities_shape)
 
             if vacuum_probe_intensity is not None or dp_mask is not None:
                 pad_kx = Sx - Qx
