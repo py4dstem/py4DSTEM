@@ -59,17 +59,19 @@ class DPC(PhaseReconstruction):
         Custom.__init__(self, name=name)
 
         if device == "cpu":
+            import scipy
+
             self._xp = np
             self._asnumpy = np.asarray
-            from scipy.ndimage import gaussian_filter
+            self._scipy = scipy
 
-            self._gaussian_filter = gaussian_filter
         elif device == "gpu":
+            from cupyx import scipy
+
             self._xp = cp
             self._asnumpy = cp.asnumpy
-            from cupyx.scipy.ndimage import gaussian_filter
+            self._scipy = scipy
 
-            self._gaussian_filter = gaussian_filter
         else:
             raise ValueError(f"device must be either 'cpu' or 'gpu', not {device}")
 
@@ -516,7 +518,7 @@ class DPC(PhaseReconstruction):
         constrained_object: np.ndarray
             Constrained object estimate
         """
-        gaussian_filter = self._gaussian_filter
+        gaussian_filter = self._scipy.ndimage.gaussian_filter
 
         gaussian_filter_sigma /= self.sampling[0]
         current_object = gaussian_filter(current_object, gaussian_filter_sigma)

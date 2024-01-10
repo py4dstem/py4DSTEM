@@ -153,23 +153,19 @@ class MultislicePtychography(
         Custom.__init__(self, name=name)
 
         if device == "cpu":
+            import scipy
+
             self._xp = np
             self._asnumpy = np.asarray
-            from scipy.ndimage import gaussian_filter
+            self._scipy = scipy
 
-            self._gaussian_filter = gaussian_filter
-            from scipy.special import erf
-
-            self._erf = erf
         elif device == "gpu":
+            from cupyx import scipy
+
             self._xp = cp
             self._asnumpy = cp.asnumpy
-            from cupyx.scipy.ndimage import gaussian_filter
+            self._scipy = scipy
 
-            self._gaussian_filter = gaussian_filter
-            from cupyx.scipy.special import erf
-
-            self._erf = erf
         else:
             raise ValueError(f"device must be either 'cpu' or 'gpu', not {device}")
 
@@ -529,7 +525,8 @@ class MultislicePtychography(
         probe_overlap = self._sum_overlapping_patches_bincounts(probe_intensities)
 
         if object_fov_mask is None:
-            probe_overlap_blurred = self._gaussian_filter(probe_overlap, 1.0)
+            gaussian_filter = self._scipy.ndimage.gaussian_filter
+            probe_overlap_blurred = gaussian_filter(probe_overlap, 1.0)
             self._object_fov_mask = asnumpy(
                 probe_overlap_blurred > 0.25 * probe_overlap_blurred.max()
             )

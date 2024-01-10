@@ -828,7 +828,7 @@ class Object3DMethodsMixin:
         """ """
 
         xp = self._xp
-        affine_transform = self._affine_transform
+        affine_transform = self._scipy.ndimage.affine_transform
         swap_zxy_to_xyz = self._swap_zxy_to_xyz
 
         volume = volume_array.copy()

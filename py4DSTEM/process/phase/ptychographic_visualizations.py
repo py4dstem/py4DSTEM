@@ -662,7 +662,7 @@ class VisualizationsMixin:
 
         xp = self._xp
         asnumpy = self._asnumpy
-        gaussian_filter = self._gaussian_filter
+        gaussian_filter = self._scipy.ndimage.gaussian_filter
 
         if errors is None:
             errors = self._return_self_consistency_errors(max_batch_size=max_batch_size)

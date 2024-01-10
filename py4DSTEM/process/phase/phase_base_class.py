@@ -73,23 +73,19 @@ class PhaseReconstruction(Custom):
 
         if device is not None:
             if device == "cpu":
+                import scipy
+
                 self._xp = np
                 self._asnumpy = np.asarray
-                from scipy.ndimage import gaussian_filter
+                self._scipy = scipy
 
-                self._gaussian_filter = gaussian_filter
-                from scipy.special import erf
-
-                self._erf = erf
             elif device == "gpu":
+                from cupyx import scipy
+
                 self._xp = cp
                 self._asnumpy = cp.asnumpy
-                from cupyx.scipy.ndimage import gaussian_filter
+                self._scipy = scipy
 
-                self._gaussian_filter = gaussian_filter
-                from cupyx.scipy.special import erf
-
-                self._erf = erf
             else:
                 raise ValueError(f"device must be either 'cpu' or 'gpu', not {device}")
             self._device = device
