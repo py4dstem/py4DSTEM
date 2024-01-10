@@ -138,7 +138,7 @@ class ObjectNDConstraintsMixin:
             Constrained object estimate
         """
         xp = self._xp
-        gaussian_filter = self._gaussian_filter
+        gaussian_filter = self._scipy.ndimage.gaussian_filter
         gaussian_filter_sigma /= self.sampling[0]
 
         if not pure_phase_object or self._object_type == "potential":
@@ -938,7 +938,7 @@ class ProbeConstraintsMixin:
             Constrained probe estimate
         """
         xp = self._xp
-        erf = self._erf
+        erf = self._scipy.special.erf
 
         probe_intensity = xp.abs(current_probe) ** 2
         current_probe_sum = xp.sum(probe_intensity)

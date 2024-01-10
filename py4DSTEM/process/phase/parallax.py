@@ -87,17 +87,19 @@ class Parallax(PhaseReconstruction):
         Custom.__init__(self, name=name)
 
         if device == "cpu":
+            import scipy
+
             self._xp = np
             self._asnumpy = np.asarray
-            from scipy.ndimage import gaussian_filter
+            self._scipy = scipy
 
-            self._gaussian_filter = gaussian_filter
         elif device == "gpu":
+            from cupyx import scipy
+
             self._xp = cp
             self._asnumpy = cp.asnumpy
-            from cupyx.scipy.ndimage import gaussian_filter
+            self._scipy = scipy
 
-            self._gaussian_filter = gaussian_filter
         else:
             raise ValueError(f"device must be either 'cpu' or 'gpu', not {device}")
 
@@ -1109,7 +1111,7 @@ class Parallax(PhaseReconstruction):
         """
         xp = self._xp
         asnumpy = self._asnumpy
-        gaussian_filter = self._gaussian_filter
+        gaussian_filter = self._scipy.ndimage.gaussian_filter
 
         BF_sampling = 1 / asnumpy(self._kr).max() / 2
         DF_sampling = 1 / (
@@ -1774,7 +1776,7 @@ class Parallax(PhaseReconstruction):
         """ """
 
         xp = self._xp
-        gaussian_filter = self._gaussian_filter
+        gaussian_filter = self._scipy.ndimage.gaussian_filter
 
         if lanczos_alpha is not None:
             return lanczos_kernel_density_estimate(

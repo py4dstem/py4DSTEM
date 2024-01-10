@@ -150,34 +150,19 @@ class PtychographicTomography(
         Custom.__init__(self, name=name)
 
         if device == "cpu":
+            import scipy
+
             self._xp = np
             self._asnumpy = np.asarray
-            from scipy.ndimage import affine_transform, gaussian_filter, rotate, zoom
+            self._scipy = scipy
 
-            self._gaussian_filter = gaussian_filter
-            self._zoom = zoom
-            self._rotate = rotate
-            self._affine_transform = affine_transform
-            from scipy.special import erf
-
-            self._erf = erf
         elif device == "gpu":
+            from cupyx import scipy
+
             self._xp = cp
             self._asnumpy = cp.asnumpy
-            from cupyx.scipy.ndimage import (
-                affine_transform,
-                gaussian_filter,
-                rotate,
-                zoom,
-            )
+            self._scipy = scipy
 
-            self._gaussian_filter = gaussian_filter
-            self._zoom = zoom
-            self._rotate = rotate
-            self._affine_transform = affine_transform
-            from cupyx.scipy.special import erf
-
-            self._erf = erf
         else:
             raise ValueError(f"device must be either 'cpu' or 'gpu', not {device}")
 
@@ -600,7 +585,8 @@ class PtychographicTomography(
                 old_rot_matrix.T,
             )
 
-            probe_overlap_3D_blurred = self._gaussian_filter(probe_overlap_3D, 1.0)
+            gaussian_filter = self._scipy.ndimage.gaussian_filter
+            probe_overlap_3D_blurred = gaussian_filter(probe_overlap_3D, 1.0)
             self._object_fov_mask = asnumpy(
                 probe_overlap_3D_blurred > 0.25 * probe_overlap_3D_blurred.max()
             )
