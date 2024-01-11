@@ -4,7 +4,7 @@ from typing import Mapping, Tuple, Union
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.fft import dctn, idctn
-from scipy.ndimage import zoom
+from scipy.ndimage import gaussian_filter, uniform_filter1d, zoom
 from scipy.optimize import curve_fit
 
 try:
@@ -12,13 +12,18 @@ try:
     from cupyx.scipy.fft import dctn as dctn_cp
     from cupyx.scipy.fft import idctn as idctn_cp
     from cupyx.scipy.ndimage import zoom as zoom_cp
+
+    get_array_module = cp.get_array_module
 except (ImportError, ModuleNotFoundError):
     cp = None
+
+    def get_array_module(*args):
+        return np
+
 
 from py4DSTEM.process.utils import get_CoM
 from py4DSTEM.process.utils.cross_correlate import align_and_shift_images
 from py4DSTEM.process.utils.utils import electron_wavelength_angstrom
-from scipy.ndimage import gaussian_filter, uniform_filter1d
 
 # fmt: off
 
@@ -406,16 +411,13 @@ class ComplexProbe:
 
     def get_spatial_frequencies(self):
         xp = self._xp
-        kx, ky = spatial_frequencies(self._gpts, self._sampling)
-        kx = xp.asarray(kx, dtype=xp.float32)
-        ky = xp.asarray(ky, dtype=xp.float32)
+        kx, ky = spatial_frequencies(self._gpts, self._sampling, xp)
         return kx, ky
 
     def polar_coordinates(self, x, y):
         """Calculate a polar grid for a given Cartesian grid."""
         xp = self._xp
         alpha = xp.sqrt(x[:, None] ** 2 + y[None, :] ** 2)
-        # phi = xp.arctan2(x.reshape((-1, 1)), y.reshape((1, -1))) # bug in abtem-legacy and py4DSTEM<=0.14.9
         phi = xp.arctan2(y[None, :], x[:, None])
         return alpha, phi
 
@@ -443,7 +445,7 @@ class ComplexProbe:
         return self
 
 
-def spatial_frequencies(gpts: Tuple[int, int], sampling: Tuple[float, float]):
+def spatial_frequencies(gpts: Tuple[int, int], sampling: Tuple[float, float], xp=np):
     """
     Calculate spatial frequencies of a grid.
 
@@ -460,7 +462,7 @@ def spatial_frequencies(gpts: Tuple[int, int], sampling: Tuple[float, float]):
     """
 
     return tuple(
-        np.fft.fftfreq(n, d).astype(np.float32) for n, d in zip(gpts, sampling)
+        xp.fft.fftfreq(n, d).astype(xp.float32) for n, d in zip(gpts, sampling)
     )
 
 
@@ -492,16 +494,14 @@ def fourier_translation_operator(
     if len(positions_shape) == 1:
         positions = positions[None]
 
-    kx, ky = spatial_frequencies(shape, (1.0, 1.0))
-    kx = kx.reshape((1, -1, 1))
-    ky = ky.reshape((1, 1, -1))
-    kx = xp.asarray(kx, dtype=xp.float32)
-    ky = xp.asarray(ky, dtype=xp.float32)
+    kx, ky = spatial_frequencies(shape, (1.0, 1.0), xp=xp)
     positions = xp.asarray(positions, dtype=xp.float32)
-    x = positions[:, 0].reshape((-1,) + (1, 1))
-    y = positions[:, 1].reshape((-1,) + (1, 1))
+    x = positions[:, 0].ravel()[:, None, None]
+    y = positions[:, 1].ravel()[:, None, None]
 
-    result = xp.exp(-2.0j * np.pi * kx * x) * xp.exp(-2.0j * np.pi * ky * y)
+    result = xp.exp(-2.0j * np.pi * kx[None, :, None] * x) * xp.exp(
+        -2.0j * np.pi * ky[None, None, :] * y
+    )
 
     if len(positions_shape) == 1:
         return result[0]
@@ -2345,3 +2345,23 @@ def partition_list(lst, size):
     """Partitions lst into chunks of size. Returns a generator."""
     for i in range(0, len(lst), size):
         yield lst[i : i + size]
+
+
+def copy_to_device(array, device="cpu"):
+    """Copies array to device. Default allows one to use this as asnumpy()"""
+    xp = get_array_module(array)
+
+    if xp is np:
+        if device == "cpu":
+            return np.asarray(array)
+        elif device == "gpu":
+            return cp.asarray(array)
+        else:
+            raise ValueError(f"device must be either 'cpu' or 'gpu', not {device}")
+    else:
+        if device == "cpu":
+            return cp.asnumpy(array)
+        elif device == "gpu":
+            return cp.asarray(array)
+        else:
+            raise ValueError(f"device must be either 'cpu' or 'gpu', not {device}")

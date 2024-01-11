@@ -1089,7 +1089,7 @@ class ProbeConstraintsMixin:
     def _probe_constraints(
         self,
         current_probe,
-        fix_com,
+        fix_probe_com,
         fit_probe_aberrations,
         fit_probe_aberrations_max_angular_order,
         fit_probe_aberrations_max_radial_order,
@@ -1107,7 +1107,7 @@ class ProbeConstraintsMixin:
         """ProbeConstraints wrapper function"""
 
         # CoM corner-centering
-        if fix_com:
+        if fix_probe_com:
             current_probe = self._probe_center_of_mass_constraint(current_probe)
 
         # Fourier phase (aberrations) fitting
@@ -1280,7 +1280,9 @@ class PositionsConstraintsMixin:
     Mixin class for probe positions constraints.
     """
 
-    def _positions_center_of_mass_constraint(self, current_positions):
+    def _positions_center_of_mass_constraint(
+        self, current_positions, initial_positions_com
+    ):
         """
         Ptychographic position center of mass constraint.
         Additionally updates vectorized indices used in _overlap_projection.
@@ -1295,15 +1297,7 @@ class PositionsConstraintsMixin:
         constrained_positions: np.ndarray
             CoM constrained positions estimate
         """
-        xp = self._xp
-
-        current_positions -= xp.mean(current_positions, axis=0) - self._positions_px_com
-        self._positions_px_fractional = current_positions - xp.round(current_positions)
-
-        (
-            self._vectorized_patch_indices_row,
-            self._vectorized_patch_indices_col,
-        ) = self._extract_vectorized_patch_indices()
+        current_positions -= current_positions.mean(0) - initial_positions_com
 
         return current_positions
 
@@ -1330,39 +1324,45 @@ class PositionsConstraintsMixin:
             Affine-transform constrained positions estimate
         """
 
-        xp = self._xp
+        xp_storage = self._xp_storage
+        initial_positions_com = initial_positions.mean(0)
 
         tf, _ = estimate_global_transformation_ransac(
             positions0=initial_positions,
             positions1=current_positions,
-            origin=self._positions_px_com,
+            origin=initial_positions_com,
             translation_allowed=True,
-            min_sample=self._num_diffraction_patterns // 10,
-            xp=xp,
+            min_sample=initial_positions.shape[0] // 10,
+            xp=xp_storage,
         )
 
+        current_positions = tf(
+            initial_positions, origin=initial_positions_com, xp=xp_storage
+        )
         self._tf = tf
-        current_positions = tf(initial_positions, origin=self._positions_px_com, xp=xp)
 
         return current_positions
 
     def _positions_constraints(
         self,
         current_positions,
+        initial_positions,
         fix_positions,
+        fix_positions_com,
         global_affine_transformation,
         **kwargs,
     ):
         """PositionsConstraints wrapper function"""
 
         if not fix_positions:
-            current_positions = self._positions_center_of_mass_constraint(
-                current_positions
-            )
+            if not fix_positions_com:
+                current_positions = self._positions_center_of_mass_constraint(
+                    current_positions, initial_positions.mean(0)
+                )
 
             if global_affine_transformation:
                 current_positions = self._positions_affine_transformation_constraint(
-                    self._positions_px_initial, current_positions
+                    initial_positions, current_positions
                 )
 
         return current_positions

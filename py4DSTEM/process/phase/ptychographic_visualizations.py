@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.gridspec import GridSpec
 from mpl_toolkits.axes_grid1 import ImageGrid, make_axes_locatable
-from py4DSTEM.process.phase.utils import AffineTransform
+from py4DSTEM.process.phase.utils import AffineTransform, copy_to_device
 from py4DSTEM.visualize.vis_special import (
     Complex2RGB,
     add_colorbar_arg,
@@ -534,6 +534,8 @@ class VisualizationsMixin:
                 **kwargs,
             )
 
+        self.clear_device_mem(self._device, self._clear_fft_cache)
+
         return self
 
     def show_updated_positions(
@@ -661,6 +663,7 @@ class VisualizationsMixin:
         """Plot uncertainty visualization using self-consistency errors"""
 
         xp = self._xp
+        device = self._device
         asnumpy = self._asnumpy
         gaussian_filter = self._scipy.ndimage.gaussian_filter
 
@@ -684,7 +687,8 @@ class VisualizationsMixin:
         )
 
         tf = AffineTransform(angle=angle)
-        rotated_points = tf(self._positions_px, origin=self._positions_px_com, xp=xp)
+        positions_px = copy_to_device(self._positions_px, device)
+        rotated_points = tf(positions_px, origin=positions_px.mean(0), xp=xp)
 
         padding = xp.min(rotated_points, axis=0).astype("int")
 
@@ -839,3 +843,5 @@ class VisualizationsMixin:
         ax.xaxis.set_ticks_position("bottom")
 
         spec.tight_layout(fig)
+
+        self.clear_device_mem(device, self._clear_fft_cache)
