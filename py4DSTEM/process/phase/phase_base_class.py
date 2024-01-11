@@ -122,6 +122,12 @@ class PhaseReconstruction(Custom):
             xp._default_memory_pool.free_all_blocks()
             xp._default_pinned_memory_pool.free_all_blocks()
 
+    def copy_attributes_to_device(self, attrs, device):
+        """Utility function to copy a set of attrs to device"""
+        for attr in attrs:
+            array = copy_to_device(getattr(self, attr), device)
+            setattr(self, attr, array)
+
     def attach_datacube(self, datacube: DataCube):
         """
         Attaches a datacube to a class initialized without one.
@@ -1818,7 +1824,8 @@ class PtychographicReconstruction(PhaseReconstruction):
         counts = xp.bincount(
             indices.ravel(), weights=flat_weights, minlength=np.prod(object_shape)
         )
-        return xp.reshape(counts, object_shape)
+        counts = xp.reshape(counts, object_shape).astype(xp.float32)
+        return counts
 
     def _sum_overlapping_patches_bincounts(self, patches: np.ndarray, positions_px):
         """
