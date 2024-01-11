@@ -374,7 +374,7 @@ class SingleslicePtychography(
 
         # corner-center amplitudes
         (
-            _amplitudes,
+            self._amplitudes,
             self._mean_diffraction_intensity,
             self._crop_mask,
         ) = self._normalize_diffraction_intensities(
@@ -386,7 +386,7 @@ class SingleslicePtychography(
         )
 
         # explicitly transfer arrays to storage
-        self._amplitudes = copy_to_device(_amplitudes, storage)
+        self._amplitudes = copy_to_device(self._amplitudes, storage)
         del _intensities
 
         self._num_diffraction_patterns = self._amplitudes.shape[0]

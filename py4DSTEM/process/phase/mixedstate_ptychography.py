@@ -35,6 +35,7 @@ from py4DSTEM.process.phase.ptychographic_methods import (
 from py4DSTEM.process.phase.ptychographic_visualizations import VisualizationsMixin
 from py4DSTEM.process.phase.utils import (
     ComplexProbe,
+    copy_to_device,
     fft_shift,
     generate_batches,
     polar_aliases,
@@ -131,27 +132,18 @@ class MixedstatePtychography(
         positions_mask: np.ndarray = None,
         verbose: bool = True,
         device: str = "cpu",
+        storage: str = None,
+        clear_fft_cache: bool = True,
         name: str = "mixed-state_ptychographic_reconstruction",
         **kwargs,
     ):
         Custom.__init__(self, name=name)
 
-        if device == "cpu":
-            import scipy
+        if storage is None:
+            storage = device
 
-            self._xp = np
-            self._asnumpy = np.asarray
-            self._scipy = scipy
-
-        elif device == "gpu":
-            from cupyx import scipy
-
-            self._xp = cp
-            self._asnumpy = cp.asnumpy
-            self._scipy = scipy
-
-        else:
-            raise ValueError(f"device must be either 'cpu' or 'gpu', not {device}")
+        self.set_device(device, clear_fft_cache)
+        self.set_storage(storage)
 
         if initial_probe_guess is None or isinstance(initial_probe_guess, ComplexProbe):
             if num_probes is None:
@@ -203,7 +195,6 @@ class MixedstatePtychography(
         self._object_padding_px = object_padding_px
         self._positions_mask = positions_mask
         self._verbose = verbose
-        self._device = device
         self._preprocessed = False
 
         # Class-specific Metadata
@@ -230,6 +221,8 @@ class MixedstatePtychography(
         force_reciprocal_sampling: float = None,
         object_fov_mask: np.ndarray = None,
         crop_patterns: bool = False,
+        device: str = None,
+        clear_fft_cache: bool = True,
         **kwargs,
     ):
         """
@@ -289,13 +282,23 @@ class MixedstatePtychography(
             If None, probe_overlap intensity is thresholded
         crop_patterns: bool
             if True, crop patterns to avoid wrap around of patterns when centering
+        device: str, optional
+            if not none, overwrites self._device to set device preprocess will be perfomed on.
+        clear_fft_cache: bool, optional
+            if true, and device = 'gpu', clears the cached fft plan at the end of function calls
 
         Returns
         --------
         self: PtychographicReconstruction
             Self to accommodate chaining
         """
+        # handle device/storage
+        self.set_device(device, clear_fft_cache)
+
         xp = self._xp
+        device = self._device
+        xp_storage = self._xp_storage
+        storage = self._storage
         asnumpy = self._asnumpy
 
         # set additional metadata
@@ -334,7 +337,7 @@ class MixedstatePtychography(
         )
 
         # calibrations
-        self._intensities = self._extract_intensities_and_calibrations_from_datacube(
+        _intensities = self._extract_intensities_and_calibrations_from_datacube(
             self._datacube,
             require_calibrations=True,
             force_scan_sampling=force_scan_sampling,
@@ -357,7 +360,7 @@ class MixedstatePtychography(
             self._com_normalized_x,
             self._com_normalized_y,
         ) = self._calculate_intensities_center_of_mass(
-            self._intensities,
+            _intensities,
             dp_mask=self._dp_mask,
             fit_function=fit_function,
             com_shifts=force_com_shifts,
@@ -369,8 +372,6 @@ class MixedstatePtychography(
             self._rotation_best_transpose,
             self._com_x,
             self._com_y,
-            self.com_x,
-            self.com_y,
         ) = self._solve_for_center_of_mass_relative_rotation(
             self._com_measured_x,
             self._com_measured_y,
@@ -385,20 +386,33 @@ class MixedstatePtychography(
             **kwargs,
         )
 
+        # explicitly transfer arrays to storage
+        self._com_measured_x = copy_to_device(self._com_measured_x, storage)
+        self._com_measured_y = copy_to_device(self._com_measured_y, storage)
+        self._com_fitted_x = copy_to_device(self._com_fitted_x, storage)
+        self._com_fitted_y = copy_to_device(self._com_fitted_y, storage)
+        self._com_normalized_x = copy_to_device(self._com_normalized_x, storage)
+        self._com_normalized_y = copy_to_device(self._com_normalized_y, storage)
+        self._com_x = copy_to_device(self._com_x, storage)
+        self._com_y = copy_to_device(self._com_y, storage)
+
         # corner-center amplitudes
         (
             self._amplitudes,
             self._mean_diffraction_intensity,
             self._crop_mask,
         ) = self._normalize_diffraction_intensities(
-            self._intensities,
+            _intensities,
             self._com_fitted_x,
             self._com_fitted_y,
             self._positions_mask,
             crop_patterns,
         )
 
-        # explicitly delete namespace
+        # explicitly transfer arrays to storage
+        self._amplitudes = copy_to_device(self._amplitudes, storage)
+        del _intensities
+
         self._num_diffraction_patterns = self._amplitudes.shape[0]
 
         if region_of_interest_shape is not None:
@@ -407,7 +421,6 @@ class MixedstatePtychography(
         else:
             self._resample_exit_waves = False
             self._region_of_interest_shape = np.array(self._amplitudes.shape[-2:])
-        del self._intensities
 
         # initialize probe positions
         (
@@ -431,24 +444,17 @@ class MixedstatePtychography(
         self._object_shape = self._object.shape
 
         # center probe positions
-        self._positions_px = xp.asarray(self._positions_px, dtype=xp.float32)
-        self._positions_px_com = xp.mean(self._positions_px, axis=0)
-        self._positions_px -= self._positions_px_com - xp.array(self._object_shape) / 2
-        self._positions_px_com = xp.mean(self._positions_px, axis=0)
-        self._positions_px_fractional = self._positions_px - xp.round(
-            self._positions_px
+        self._positions_px = xp_storage.asarray(self._positions_px, dtype=xp.float32)
+        self._positions_px_initial_com = self._positions_px.mean(0)
+        self._positions_px -= (
+            self._positions_px_initial_com - xp_storage.array(self._object_shape) / 2
         )
+        self._positions_px_initial_com = self._positions_px.mean(0)
 
         self._positions_px_initial = self._positions_px.copy()
         self._positions_initial = self._positions_px_initial.copy()
         self._positions_initial[:, 0] *= self.sampling[0]
         self._positions_initial[:, 1] *= self.sampling[1]
-
-        # set vectorized patches
-        (
-            self._vectorized_patch_indices_row,
-            self._vectorized_patch_indices_col,
-        ) = self._extract_vectorized_patch_indices()
 
         # initialize probe
         self._probe, self._semiangle_cutoff = self._initialize_probe(
@@ -459,9 +465,6 @@ class MixedstatePtychography(
             crop_patterns,
         )
 
-        self._probe_initial = self._probe.copy()
-        self._probe_initial_aperture = xp.abs(xp.fft.fft2(self._probe))
-
         # initialize aberrations
         self._known_aberrations_array = ComplexProbe(
             energy=self._energy,
@@ -471,10 +474,18 @@ class MixedstatePtychography(
             device=self._device,
         )._evaluate_ctf()
 
+        self._probe_initial = self._probe.copy()
+        self._probe_initial_aperture = xp.abs(xp.fft.fft2(self._probe))
+
         # overlaps
-        shifted_probes = fft_shift(self._probe[0], self._positions_px_fractional, xp)
-        probe_intensities = xp.abs(shifted_probes) ** 2
-        probe_overlap = self._sum_overlapping_patches_bincounts(probe_intensities)
+        positions_px_fractional = self._positions_px - xp_storage.round(
+            self._positions_px
+        )
+        shifted_probes = fft_shift(self._probe[0], positions_px_fractional, xp)
+        probe_overlap = self._sum_overlapping_patches_bincounts(
+            xp.abs(shifted_probes) ** 2, self._positions_px
+        )
+        del shifted_probes
 
         if object_fov_mask is None:
             gaussian_filter = self._scipy.ndimage.gaussian_filter
@@ -482,10 +493,14 @@ class MixedstatePtychography(
             self._object_fov_mask = asnumpy(
                 probe_overlap_blurred > 0.25 * probe_overlap_blurred.max()
             )
+            del probe_overlap_blurred
         else:
             self._object_fov_mask = np.asarray(object_fov_mask)
         self._object_fov_mask_inverse = np.invert(self._object_fov_mask)
 
+        probe_overlap = asnumpy(probe_overlap)
+
+        # plot probe overlaps
         if plot_probe_overlaps:
             figsize = kwargs.pop("figsize", (4.5 * self._num_probes + 4, 4))
             chroma_boost = kwargs.pop("chroma_boost", 1)
@@ -528,7 +543,7 @@ class MixedstatePtychography(
                 add_colorbar_arg(cax, chroma_boost=chroma_boost)
 
             axs[-1].imshow(
-                asnumpy(probe_overlap),
+                probe_overlap,
                 extent=extent,
                 cmap="Greys_r",
             )
@@ -547,10 +562,7 @@ class MixedstatePtychography(
             fig.tight_layout()
 
         self._preprocessed = True
-
-        if self._device == "gpu":
-            xp._default_memory_pool.free_all_blocks()
-            xp.clear_memo()
+        self.clear_device_mem(device, self._clear_fft_cache)
 
         return self
 
@@ -568,7 +580,7 @@ class MixedstatePtychography(
         normalization_min: float = 1,
         positions_step_size: float = 0.9,
         pure_phase_object_iter: int = 0,
-        fix_com: bool = True,
+        fix_probe_com: bool = True,
         orthogonalize_probe: bool = True,
         fix_probe_iter: int = 0,
         fix_probe_aperture_iter: int = 0,
@@ -579,6 +591,7 @@ class MixedstatePtychography(
         constrain_probe_fourier_amplitude_max_width_pixels: float = 3.0,
         constrain_probe_fourier_amplitude_constant_intensity: bool = False,
         fix_positions_iter: int = np.inf,
+        fix_positions_com: bool = True,
         global_affine_transformation: bool = True,
         max_position_update_distance: float = None,
         max_position_total_distance: float = None,
@@ -602,6 +615,8 @@ class MixedstatePtychography(
         store_iterations: bool = False,
         progress_bar: bool = True,
         reset: bool = None,
+        device: str = None,
+        clear_fft_cache: bool = True,
     ):
         """
         Ptychographic reconstruction main method.
@@ -638,7 +653,7 @@ class MixedstatePtychography(
             Positions update step size
         pure_phase_object_iter: int, optional
             Number of iterations where object amplitude is set to unity
-        fix_com: bool, optional
+        fix_probe_com: bool, optional
             If True, fixes center of mass of probe
         fix_probe_iter: int, optional
             Number of iterations to run with a fixed probe before updating probe estimate
@@ -658,6 +673,8 @@ class MixedstatePtychography(
             If True, the probe aperture is additionally constrained to a constant intensity.
         fix_positions_iter: int, optional
             Number of iterations to run with fixed positions before updating positions estimate
+        fix_positions_com: bool, optional
+            If True, fixes the positions CoM to the middle of the fov
         max_position_update_distance: float, optional
             Maximum allowed distance for update in A
         max_position_total_distance: float, optional
@@ -705,14 +722,34 @@ class MixedstatePtychography(
             If True, reconstruction progress is displayed
         reset: bool, optional
             If True, previous reconstructions are ignored
+        device: str, optional
+            if not none, overwrites self._device to set device preprocess will be perfomed on.
+        clear_fft_cache: bool, optional
+            if true, and device = 'gpu', clears the cached fft plan at the end of function calls
 
         Returns
         --------
         self: PtychographicReconstruction
             Self to accommodate chaining
         """
-        asnumpy = self._asnumpy
+        # handle device/storage
+        self.set_device(device, clear_fft_cache)
+
+        if device is not None:
+            attrs = [
+                "_known_aberrations_array",
+                "_object",
+                "_object_initial",
+                "_probe",
+                "_probe_initial",
+                "_probe_initial_aperture",
+            ]
+            self.copy_attributes_to_device(attrs, device)
+
         xp = self._xp
+        xp_storage = self._xp_storage
+        device = self._device
+        asnumpy = self._asnumpy
 
         # set and report reconstruction method
         (
@@ -748,10 +785,9 @@ class MixedstatePtychography(
 
         # Batching
         shuffled_indices = np.arange(self._num_diffraction_patterns)
-        unshuffled_indices = np.zeros_like(shuffled_indices)
 
         if max_batch_size is not None:
-            xp.random.seed(seed_random)
+            np.random.seed(seed_random)
         else:
             max_batch_size = self._num_diffraction_patterns
 
@@ -779,27 +815,23 @@ class MixedstatePtychography(
             if not use_projection_scheme:
                 np.random.shuffle(shuffled_indices)
 
-            unshuffled_indices[shuffled_indices] = np.arange(
-                self._num_diffraction_patterns
-            )
-
-            positions_px = self._positions_px.copy()[shuffled_indices]
-            positions_px_initial = self._positions_px_initial.copy()[shuffled_indices]
-
             for start, end in generate_batches(
                 self._num_diffraction_patterns, max_batch=max_batch_size
             ):
                 # batch indices
-                self._positions_px = positions_px[start:end]
-                self._positions_px_fractional = self._positions_px - xp.round(
-                    self._positions_px
-                )
+                batch_indices = shuffled_indices[start:end]
+                positions_px = self._positions_px[batch_indices]
+                positions_px_initial = self._positions_px_initial[batch_indices]
+                positions_px_fractional = positions_px - xp_storage.round(positions_px)
 
                 (
-                    self._vectorized_patch_indices_row,
-                    self._vectorized_patch_indices_col,
-                ) = self._extract_vectorized_patch_indices()
-                amplitudes = self._amplitudes[shuffled_indices[start:end]]
+                    vectorized_patch_indices_row,
+                    vectorized_patch_indices_col,
+                ) = self._extract_vectorized_patch_indices(positions_px)
+
+                amplitudes_device = copy_to_device(
+                    self._amplitudes[batch_indices], device
+                )
 
                 # forward operator
                 (
@@ -810,8 +842,11 @@ class MixedstatePtychography(
                     batch_error,
                 ) = self._forward(
                     self._object,
+                    vectorized_patch_indices_row,
+                    vectorized_patch_indices_col,
                     self._probe,
-                    amplitudes,
+                    positions_px_fractional,
+                    amplitudes_device,
                     self._exit_waves,
                     use_projection_scheme,
                     projection_a,
@@ -825,6 +860,7 @@ class MixedstatePtychography(
                     self._probe,
                     object_patches,
                     shifted_probes,
+                    positions_px,
                     self._exit_waves,
                     use_projection_scheme=use_projection_scheme,
                     step_size=step_size,
@@ -834,13 +870,15 @@ class MixedstatePtychography(
 
                 # position correction
                 if a0 >= fix_positions_iter:
-                    positions_px[start:end] = self._position_correction(
+                    self._positions_px[batch_indices] = self._position_correction(
                         self._object,
+                        vectorized_patch_indices_row,
+                        vectorized_patch_indices_col,
                         shifted_probes,
                         overlap,
-                        amplitudes,
-                        self._positions_px,
-                        positions_px_initial[start:end],
+                        amplitudes_device,
+                        positions_px,
+                        positions_px_initial,
                         positions_step_size,
                         max_position_update_distance,
                         max_position_total_distance,
@@ -852,12 +890,12 @@ class MixedstatePtychography(
             error /= self._mean_diffraction_intensity * self._num_diffraction_patterns
 
             # constraints
-            self._positions_px = positions_px.copy()[unshuffled_indices]
             self._object, self._probe, self._positions_px = self._constraints(
                 self._object,
                 self._probe,
                 self._positions_px,
-                fix_com=fix_com and a0 >= fix_probe_iter,
+                self._positions_px_initial,
+                fix_probe_com=fix_probe_com and a0 >= fix_probe_iter,
                 constrain_probe_amplitude=a0 < constrain_probe_amplitude_iter
                 and a0 >= fix_probe_iter,
                 constrain_probe_amplitude_relative_radius=constrain_probe_amplitude_relative_radius,
@@ -875,6 +913,7 @@ class MixedstatePtychography(
                 fix_probe_aperture=a0 < fix_probe_aperture_iter,
                 initial_probe_aperture=self._probe_initial_aperture,
                 fix_positions=a0 < fix_positions_iter,
+                fix_positions_com=fix_positions_com and a0 >= fix_positions_iter,
                 global_affine_transformation=global_affine_transformation,
                 gaussian_filter=a0 < gaussian_filter_iter
                 and gaussian_filter_sigma is not None,
@@ -908,8 +947,10 @@ class MixedstatePtychography(
         self.probe = self.probe_centered
         self.error = error.item()
 
-        if self._device == "gpu":
-            xp._default_memory_pool.free_all_blocks()
-            xp.clear_memo()
+        # remove _exit_waves attr from self for GD
+        if not use_projection_scheme:
+            self._exit_waves = None
+
+        self.clear_device_mem(device, self._clear_fft_cache)
 
         return self

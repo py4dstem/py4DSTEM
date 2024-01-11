@@ -1214,7 +1214,7 @@ class ProbeMixedConstraintsMixin:
     def _probe_constraints(
         self,
         current_probe,
-        fix_com,
+        fix_probe_com,
         fit_probe_aberrations,
         fit_probe_aberrations_max_angular_order,
         fit_probe_aberrations_max_radial_order,
@@ -1233,7 +1233,7 @@ class ProbeMixedConstraintsMixin:
         """ProbeMixedConstraints wrapper function"""
 
         # CoM corner-centering
-        if fix_com:
+        if fix_probe_com:
             current_probe = self._probe_center_of_mass_constraint(current_probe)
 
         # Fourier phase (aberrations) fitting
