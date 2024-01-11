@@ -444,14 +444,17 @@ class MixedstateMultislicePtychography(
         )
 
         # explicitly transfer arrays to storage
-        self._com_measured_x = copy_to_device(self._com_measured_x, storage)
-        self._com_measured_y = copy_to_device(self._com_measured_y, storage)
-        self._com_fitted_x = copy_to_device(self._com_fitted_x, storage)
-        self._com_fitted_y = copy_to_device(self._com_fitted_y, storage)
-        self._com_normalized_x = copy_to_device(self._com_normalized_x, storage)
-        self._com_normalized_y = copy_to_device(self._com_normalized_y, storage)
-        self._com_x = copy_to_device(self._com_x, storage)
-        self._com_y = copy_to_device(self._com_y, storage)
+        attrs = [
+            "_com_measured_x",
+            "_com_measured_y",
+            "_com_fitted_x",
+            "_com_fitted_y",
+            "_com_normalized_x",
+            "_com_normalized_y",
+            "_com_x",
+            "_com_y",
+        ]
+        self.copy_attributes_to_device(attrs, storage)
 
         # corner-center amplitudes
         (
