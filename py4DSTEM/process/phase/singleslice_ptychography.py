@@ -93,13 +93,17 @@ class SingleslicePtychography(
         If None, initialized to a grid scan
     verbose: bool, optional
         If True, class methods will inherit this and print additional information
-    device: str, optional
-        Calculation device will be perfomed on. Must be 'cpu' or 'gpu'
     object_type: str, optional
         The object can be reconstructed as a real potential ('potential') or a complex
         object ('complex')
     positions_mask: np.ndarray, optional
         Boolean real space mask to select positions in datacube to skip for reconstruction
+    device: str, optional
+        Device calculation will be perfomed on. Must be 'cpu' or 'gpu'
+    storage: str, optional
+        Device non-frequent arrays will be stored on. Must be 'cpu' or 'gpu'
+    clear_fft_cache: bool, optional
+        If True, and device = 'gpu', clears the cached fft plan at the end of function calls
     name: str, optional
         Class name
     kwargs:
@@ -205,16 +209,6 @@ class SingleslicePtychography(
     ):
         """
         Ptychographic preprocessing step.
-        Calls the base class methods:
-
-        _extract_intensities_and_calibrations_from_datacube,
-        _compute_center_of_mass(),
-        _solve_CoM_rotation(),
-        _normalize_diffraction_intensities()
-        _calculate_scan_positions_in_px()
-
-        Additionally, it initializes an (Px,Py) array of 1.0j
-        and a complex probe using the specified polar parameters.
 
         Parameters
         ----------
@@ -263,6 +257,10 @@ class SingleslicePtychography(
             If None, probe_overlap intensity is thresholded
         crop_patterns: bool
             if True, crop patterns to avoid wrap around of patterns when centering
+        device: str, optional
+            If not None, overwrites self._device to set device preprocess will be perfomed on.
+        clear_fft_cache: bool, optional
+            If True, and device = 'gpu', clears the cached fft plan at the end of function calls
 
         Returns
         --------
@@ -299,7 +297,6 @@ class SingleslicePtychography(
             self._positions_mask = np.asarray(self._positions_mask, dtype="bool")
 
         # preprocess datacube
-        # all arrays computed/returned on 'cpu'
         (
             self._datacube,
             self._vacuum_probe_intensity,
@@ -316,7 +313,6 @@ class SingleslicePtychography(
         )
 
         # calibrations
-        # all arrays computed/returned on 'cpu'
         _intensities = self._extract_intensities_and_calibrations_from_datacube(
             self._datacube,
             require_calibrations=True,
@@ -332,7 +328,6 @@ class SingleslicePtychography(
             )
 
         # calculate CoM
-        # arrays computed/returned on device
         (
             self._com_measured_x,
             self._com_measured_y,
@@ -348,7 +343,6 @@ class SingleslicePtychography(
         )
 
         # estimate rotation / transpose
-        # arrays computed/returned on device
         (
             self._rotation_best_rad,
             self._rotation_best_transpose,
@@ -379,7 +373,6 @@ class SingleslicePtychography(
         self._com_y = copy_to_device(self._com_y, storage)
 
         # corner-center amplitudes
-        # arrays computed/returned on 'cpu'
         (
             _amplitudes,
             self._mean_diffraction_intensity,
@@ -406,7 +399,6 @@ class SingleslicePtychography(
             self._region_of_interest_shape = np.array(self._amplitudes.shape[-2:])
 
         # initialize probe positions
-        # arrays computed/returned on 'cpu'
         (
             self._positions_px,
             self._object_padding_px,
@@ -417,7 +409,6 @@ class SingleslicePtychography(
         )
 
         # initialize object
-        # arrays computed/returned on device directly
         self._object = self._initialize_object(
             self._object,
             self._positions_px,
@@ -429,7 +420,6 @@ class SingleslicePtychography(
         self._object_shape = self._object.shape
 
         # center probe positions
-        # arrays computed/returned on storage directly
         self._positions_px = xp_storage.asarray(self._positions_px, dtype=xp.float32)
         self._positions_px_initial_com = self._positions_px.mean(0)
         self._positions_px -= (
@@ -442,7 +432,6 @@ class SingleslicePtychography(
         self._positions_initial[:, 1] *= self.sampling[1]
 
         # initialize probe
-        # arrays computed/returned on device directly
         self._probe, self._semiangle_cutoff = self._initialize_probe(
             self._probe,
             self._vacuum_probe_intensity,
@@ -452,7 +441,6 @@ class SingleslicePtychography(
         )
 
         # initialize aberrations
-        # arrays computed/returned on device directly
         self._known_aberrations_array = ComplexProbe(
             energy=self._energy,
             gpts=self._region_of_interest_shape,
@@ -717,17 +705,16 @@ class SingleslicePtychography(
         # handle device/storage
         self.set_device(device, clear_fft_cache)
 
-        if device is not None:  # TO-DO: abstract away
-            self._known_aberrations_array = copy_to_device(
-                self._known_aberrations_array, device
-            )
-            self._object = copy_to_device(self._object, device)
-            self._object_initial = copy_to_device(self._object_initial, device)
-            self._probe = copy_to_device(self._probe, device)
-            self._probe_initial = copy_to_device(self._probe_initial, device)
-            self._probe_initial_aperture = copy_to_device(
-                self._probe_initial_aperture, device
-            )
+        if device is not None:
+            attrs = [
+                "_known_aberrations_array",
+                "_object",
+                "_object_initial",
+                "_probe",
+                "_probe_initial",
+                "_probe_initial_aperture",
+            ]
+            self.copy_attributes_to_device(attrs, device)
 
         xp = self._xp
         xp_storage = self._xp_storage
@@ -821,7 +808,7 @@ class SingleslicePtychography(
                     shifted_probes,
                     object_patches,
                     overlap,
-                    exit_waves,
+                    self._exit_waves,
                     batch_error,
                 ) = self._forward(
                     self._object,
@@ -830,7 +817,7 @@ class SingleslicePtychography(
                     self._probe,
                     positions_px_fractional,
                     amplitudes_device,
-                    None,
+                    self._exit_waves,
                     use_projection_scheme,
                     projection_a,
                     projection_b,
@@ -844,7 +831,7 @@ class SingleslicePtychography(
                     object_patches,
                     shifted_probes,
                     positions_px,
-                    exit_waves,
+                    self._exit_waves,
                     use_projection_scheme=use_projection_scheme,
                     step_size=step_size,
                     normalization_min=normalization_min,
@@ -928,6 +915,10 @@ class SingleslicePtychography(
         self.object = asnumpy(self._object)
         self.probe = self.probe_centered
         self.error = error.item()
+
+        # remove _exit_waves attr from self for GD
+        if not use_projection_scheme:
+            self._exit_waves = None
 
         self.clear_device_mem(device, self._clear_fft_cache)
 

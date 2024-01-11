@@ -1786,6 +1786,7 @@ class ObjectNDProbeMethodsMixin:
         current_probe,
         object_patches,
         shifted_probes,
+        positions_px,
         exit_waves,
         normalization_min,
         fix_probe,
@@ -1817,7 +1818,8 @@ class ObjectNDProbeMethodsMixin:
         xp = self._xp
 
         probe_normalization = self._sum_overlapping_patches_bincounts(
-            xp.abs(shifted_probes) ** 2
+            xp.abs(shifted_probes) ** 2,
+            positions_px,
         )
         probe_normalization = 1 / xp.sqrt(
             1e-16
@@ -1833,14 +1835,16 @@ class ObjectNDProbeMethodsMixin:
                         * xp.conj(object_patches)
                         * xp.conj(shifted_probes)
                         * exit_waves
-                    )
+                    ),
+                    positions_px,
                 )
                 * probe_normalization
             )
         else:
             current_object = (
                 self._sum_overlapping_patches_bincounts(
-                    xp.conj(shifted_probes) * exit_waves
+                    xp.conj(shifted_probes) * exit_waves,
+                    positions_px,
                 )
                 * probe_normalization
             )
@@ -1917,6 +1921,7 @@ class ObjectNDProbeMethodsMixin:
                 current_probe,
                 object_patches,
                 shifted_probes,
+                positions_px,
                 exit_waves,
                 normalization_min,
                 fix_probe,
