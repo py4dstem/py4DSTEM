@@ -329,9 +329,9 @@ class Object2p5DMethodsMixin:
         slice_thicknesses: Sequence[float]
             Array of slice thicknesses in A
         theta_x: float, optional
-            x tilt of propagator (in degrees)
+            x tilt of propagator in mrad
         theta_y: float, optional
-            y tilt of propagator (in degrees)
+            y tilt of propagator in mrad
 
         Returns
         -------
@@ -361,15 +361,13 @@ class Object2p5DMethodsMixin:
             )
 
             if theta_x is not None:
-                theta_x = np.deg2rad(theta_x)
                 propagators[i] *= xp.exp(
-                    1.0j * (2 * kx[:, None] * np.pi * dz * np.tan(theta_x))
+                    1.0j * (-2 * kx[:, None] * np.pi * dz * np.tan(theta_x / 1e3))
                 )
 
             if theta_y is not None:
-                theta_y = np.deg2rad(theta_y)
                 propagators[i] *= xp.exp(
-                    1.0j * (2 * ky[None] * np.pi * dz * np.tan(theta_y))
+                    1.0j * (-2 * ky[None] * np.pi * dz * np.tan(theta_y / 1e3))
                 )
 
         return propagators
