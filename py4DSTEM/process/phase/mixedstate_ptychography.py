@@ -245,9 +245,12 @@ class MixedstatePtychography(
             If None, no resampling of diffraction intenstities is performed
         reshaping_method: str, optional
             Method to use for reshaping, either 'bin, 'bilinear', or 'fourier' (default)
-        probe_roi_shape, (int,int), optional
+        padded_diffraction_intensities_shape: (int,int), optional
             Padded diffraction intensities shape.
             If None, no padding is performed
+        region_of_interest_shape: (int,int), optional
+            If not None, explicitly sets region_of_interest_shape and resamples exit_waves
+            at the diffraction plane to allow comparison with experimental data
         dp_mask: ndarray, optional
             Mask for datacube intensities (Qx,Qy)
         fit_function: str, optional
@@ -387,14 +390,17 @@ class MixedstatePtychography(
         )
 
         # explicitly transfer arrays to storage
-        self._com_measured_x = copy_to_device(self._com_measured_x, storage)
-        self._com_measured_y = copy_to_device(self._com_measured_y, storage)
-        self._com_fitted_x = copy_to_device(self._com_fitted_x, storage)
-        self._com_fitted_y = copy_to_device(self._com_fitted_y, storage)
-        self._com_normalized_x = copy_to_device(self._com_normalized_x, storage)
-        self._com_normalized_y = copy_to_device(self._com_normalized_y, storage)
-        self._com_x = copy_to_device(self._com_x, storage)
-        self._com_y = copy_to_device(self._com_y, storage)
+        attrs = [
+            "_com_measured_x",
+            "_com_measured_y",
+            "_com_fitted_x",
+            "_com_fitted_y",
+            "_com_normalized_x",
+            "_com_normalized_y",
+            "_com_x",
+            "_com_y",
+        ]
+        self.copy_attributes_to_device(attrs, storage)
 
         # corner-center amplitudes
         (
