@@ -35,6 +35,7 @@ from py4DSTEM.process.phase.ptychographic_methods import (
 from py4DSTEM.process.phase.ptychographic_visualizations import VisualizationsMixin
 from py4DSTEM.process.phase.utils import (
     ComplexProbe,
+    copy_to_device,
     fft_shift,
     generate_batches,
     polar_aliases,
@@ -102,9 +103,9 @@ class MultislicePtychography(
         Probe positions in Å for each diffraction intensity
         If None, initialized to a grid scan
     theta_x: float
-        x tilt of propagator (in degrees)
+        x tilt of propagator in mrad
     theta_y: float
-        y tilt of propagator (in degrees)
+        y tilt of propagator in mrad
     middle_focus: bool
         if True, adds half the sample thickness to the defocus
     object_type: str, optional
@@ -115,7 +116,11 @@ class MultislicePtychography(
     verbose: bool, optional
         If True, class methods will inherit this and print additional information
     device: str, optional
-        Calculation device will be perfomed on. Must be 'cpu' or 'gpu'
+        Device calculation will be perfomed on. Must be 'cpu' or 'gpu'
+    storage: str, optional
+        Device non-frequent arrays will be stored on. Must be 'cpu' or 'gpu'
+    clear_fft_cache: bool, optional
+        If True, and device = 'gpu', clears the cached fft plan at the end of function calls
     name: str, optional
         Class name
     kwargs:
@@ -123,7 +128,12 @@ class MultislicePtychography(
     """
 
     # Class-specific Metadata
-    _class_specific_metadata = ("_num_slices", "_slice_thicknesses")
+    _class_specific_metadata = (
+        "_num_slices",
+        "_slice_thicknesses",
+        "_theta_x",
+        "_theta_y",
+    )
 
     def __init__(
         self,
@@ -147,58 +157,22 @@ class MultislicePtychography(
         positions_mask: np.ndarray = None,
         verbose: bool = True,
         device: str = "cpu",
+        storage: str = None,
+        clear_fft_cache: bool = True,
         name: str = "multi-slice_ptychographic_reconstruction",
         **kwargs,
     ):
         Custom.__init__(self, name=name)
 
-        if device == "cpu":
-            import scipy
+        if storage is None:
+            storage = device
 
-            self._xp = np
-            self._asnumpy = np.asarray
-            self._scipy = scipy
-
-        elif device == "gpu":
-            from cupyx import scipy
-
-            self._xp = cp
-            self._asnumpy = cp.asnumpy
-            self._scipy = scipy
-
-        else:
-            raise ValueError(f"device must be either 'cpu' or 'gpu', not {device}")
+        self.set_device(device, clear_fft_cache)
+        self.set_storage(storage)
 
         for key in kwargs.keys():
             if (key not in polar_symbols) and (key not in polar_aliases.keys()):
                 raise ValueError("{} not a recognized parameter".format(key))
-
-        if np.isscalar(slice_thicknesses):
-            mean_slice_thickness = slice_thicknesses
-        else:
-            mean_slice_thickness = np.mean(slice_thicknesses)
-
-        if middle_focus:
-            if "defocus" in kwargs:
-                kwargs["defocus"] += mean_slice_thickness * num_slices / 2
-            elif "C10" in kwargs:
-                kwargs["C10"] -= mean_slice_thickness * num_slices / 2
-            elif polar_parameters is not None and "defocus" in polar_parameters:
-                polar_parameters["defocus"] = (
-                    polar_parameters["defocus"] + mean_slice_thickness * num_slices / 2
-                )
-            elif polar_parameters is not None and "C10" in polar_parameters:
-                polar_parameters["C10"] = (
-                    polar_parameters["C10"] - mean_slice_thickness * num_slices / 2
-                )
-
-        self._polar_parameters = dict(zip(polar_symbols, [0.0] * len(polar_symbols)))
-
-        if polar_parameters is None:
-            polar_parameters = {}
-
-        polar_parameters.update(kwargs)
-        self._set_polar_parameters(polar_parameters)
 
         slice_thicknesses = np.array(slice_thicknesses)
         if slice_thicknesses.shape == ():
@@ -210,6 +184,18 @@ class MultislicePtychography(
                     f"not {slice_thicknesses.shape[0]}."
                 )
             )
+
+        self._polar_parameters = dict(zip(polar_symbols, [0.0] * len(polar_symbols)))
+
+        if polar_parameters is None:
+            polar_parameters = {}
+
+        polar_parameters.update(kwargs)
+        self._set_polar_parameters(polar_parameters)
+
+        if middle_focus:
+            half_thickness = slice_thicknesses.mean() * num_slices / 2
+            self._polar_parameters["C10"] -= half_thickness
 
         if object_type != "potential" and object_type != "complex":
             raise ValueError(
@@ -234,7 +220,6 @@ class MultislicePtychography(
         self._positions_mask = positions_mask
         self._object_padding_px = object_padding_px
         self._verbose = verbose
-        self._device = device
         self._preprocessed = False
 
         # Class-specific Metadata
