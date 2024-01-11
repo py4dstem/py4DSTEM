@@ -174,8 +174,6 @@ class SingleslicePtychography(
         self._object_padding_px = object_padding_px
         self._positions_mask = positions_mask
         self._verbose = verbose
-        self._device = device
-        self._storage = storage
         self._preprocessed = False
 
         # Class-specific Metadata
@@ -718,6 +716,18 @@ class SingleslicePtychography(
         """
         # handle device/storage
         self.set_device(device, clear_fft_cache)
+
+        if device is not None:  # TO-DO: abstract away
+            self._known_aberrations_array = copy_to_device(
+                self._known_aberrations_array, device
+            )
+            self._object = copy_to_device(self._object, device)
+            self._object_initial = copy_to_device(self._object_initial, device)
+            self._probe = copy_to_device(self._probe, device)
+            self._probe_initial = copy_to_device(self._probe_initial, device)
+            self._probe_initial_aperture = copy_to_device(
+                self._probe_initial_aperture, device
+            )
 
         xp = self._xp
         xp_storage = self._xp_storage
