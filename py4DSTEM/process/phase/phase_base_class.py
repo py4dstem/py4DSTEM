@@ -1093,8 +1093,6 @@ class PhaseReconstruction(Custom):
                     # Minimize Curl
                     ind_min = xp.argmin(rotation_curl).item()
                     ind_trans_min = xp.argmin(rotation_curl_transpose).item()
-                    self._rotation_curl = rotation_curl
-                    self._rotation_curl_transpose = rotation_curl_transpose
                     if rotation_curl[ind_min] <= rotation_curl_transpose[ind_trans_min]:
                         rotation_best_deg = rotation_angles_deg[ind_min]
                         _rotation_best_rad = rotation_angles_rad[ind_min]
