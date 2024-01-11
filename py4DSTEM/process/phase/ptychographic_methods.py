@@ -402,6 +402,7 @@ class Object2p5DMethodsMixin:
         """ """
         # explicit read-only self attributes up-front
         xp = self._xp
+
         object_padding_px = self._object_padding_px
         region_of_interest_shape = self._region_of_interest_shape
 
@@ -2078,7 +2079,6 @@ class ObjectNDProbeMethodsMixin:
         if max_batch_size is None:
             max_batch_size = self._num_diffraction_patterns
 
-        # Re-initialize fractional positions and vector patches
         errors = np.array([])
 
         for start, end in generate_batches(
@@ -2125,7 +2125,13 @@ class Object2p5DProbeMethodsMixin:
     Overwrites ObjectNDProbeMethodsMixin.
     """
 
-    def _overlap_projection(self, current_object, shifted_probes_in):
+    def _overlap_projection(
+        self,
+        current_object,
+        vectorized_patch_indices_row,
+        vectorized_patch_indices_col,
+        shifted_probes_in,
+    ):
         """
         Ptychographic overlap projection method.
 
@@ -2148,16 +2154,14 @@ class Object2p5DProbeMethodsMixin:
 
         xp = self._xp
 
-        if self._object_type == "potential":
-            complex_object = xp.exp(1j * current_object)
-        else:
-            complex_object = current_object
-
-        object_patches = complex_object[
+        object_patches = current_object[
             :,
-            self._vectorized_patch_indices_row,
-            self._vectorized_patch_indices_col,
+            vectorized_patch_indices_row,
+            vectorized_patch_indices_col,
         ]
+
+        if self._object_type == "potential":
+            object_patches = xp.exp(1j * object_patches)
 
         shifted_probes = xp.empty_like(object_patches)
         shifted_probes[0] = shifted_probes_in
@@ -2180,6 +2184,7 @@ class Object2p5DProbeMethodsMixin:
         current_probe,
         object_patches,
         shifted_probes,
+        positions_px,
         exit_waves,
         step_size,
         normalization_min,
@@ -2223,7 +2228,8 @@ class Object2p5DProbeMethodsMixin:
 
             # object-update
             probe_normalization = self._sum_overlapping_patches_bincounts(
-                xp.abs(probe) ** 2
+                xp.abs(probe) ** 2,
+                positions_px,
             )
 
             probe_normalization = 1 / xp.sqrt(
@@ -2235,13 +2241,16 @@ class Object2p5DProbeMethodsMixin:
             if self._object_type == "potential":
                 current_object[s] += step_size * (
                     self._sum_overlapping_patches_bincounts(
-                        xp.real(-1j * xp.conj(obj) * xp.conj(probe) * exit_waves)
+                        xp.real(-1j * xp.conj(obj) * xp.conj(probe) * exit_waves),
+                        positions_px,
                     )
                     * probe_normalization
                 )
             else:
                 current_object[s] += step_size * (
-                    self._sum_overlapping_patches_bincounts(xp.conj(probe) * exit_waves)
+                    self._sum_overlapping_patches_bincounts(
+                        xp.conj(probe) * exit_waves, positions_px
+                    )
                     * probe_normalization
                 )
 
@@ -2282,6 +2291,7 @@ class Object2p5DProbeMethodsMixin:
         current_probe,
         object_patches,
         shifted_probes,
+        positions_px,
         exit_waves,
         normalization_min,
         fix_probe,
@@ -2325,7 +2335,8 @@ class Object2p5DProbeMethodsMixin:
 
             # object-update
             probe_normalization = self._sum_overlapping_patches_bincounts(
-                xp.abs(probe) ** 2
+                xp.abs(probe) ** 2,
+                positions_px,
             )
             probe_normalization = 1 / xp.sqrt(
                 1e-16
@@ -2336,14 +2347,16 @@ class Object2p5DProbeMethodsMixin:
             if self._object_type == "potential":
                 current_object[s] = (
                     self._sum_overlapping_patches_bincounts(
-                        xp.real(-1j * xp.conj(obj) * xp.conj(probe) * exit_waves_copy)
+                        xp.real(-1j * xp.conj(obj) * xp.conj(probe) * exit_waves_copy),
+                        positions_px,
                     )
                     * probe_normalization
                 )
             else:
                 current_object[s] = (
                     self._sum_overlapping_patches_bincounts(
-                        xp.conj(probe) * exit_waves_copy
+                        xp.conj(probe) * exit_waves_copy,
+                        positions_px,
                     )
                     * probe_normalization
                 )
@@ -2402,12 +2415,12 @@ class Object2p5DProbeMethodsMixin:
         """
 
         xp = self._xp
+        xp_storage = self._xp_storage
+        device = self._device
         asnumpy = self._asnumpy
 
         if max_batch_size is None:
             max_batch_size = self._num_diffraction_patterns
-
-        positions_px = self._positions_px.copy()
 
         mean_transmitted = xp.zeros_like(self._probe)
         intensities_compare = [np.inf, 0]
@@ -2416,18 +2429,24 @@ class Object2p5DProbeMethodsMixin:
             self._num_diffraction_patterns, max_batch=max_batch_size
         ):
             # batch indices
-            self._positions_px = positions_px[start:end]
-            self._positions_px_fractional = self._positions_px - xp.round(
-                self._positions_px
-            )
+            positions_px = self._positions_px[start:end]
+            positions_px_fractional = positions_px - xp_storage.round(positions_px)
+
             (
-                self._vectorized_patch_indices_row,
-                self._vectorized_patch_indices_col,
-            ) = self._extract_vectorized_patch_indices()
+                vectorized_patch_indices_row,
+                vectorized_patch_indices_col,
+            ) = self._extract_vectorized_patch_indices(positions_px)
 
             # overlaps
-            shifted_probes = self._return_shifted_probes(self._probe)
-            _, _, overlap = self._overlap_projection(self._object, shifted_probes)
+            shifted_probes = self._return_shifted_probes(
+                self._probe, positions_px_fractional
+            )
+            _, _, overlap = self._overlap_projection(
+                self._object,
+                vectorized_patch_indices_row,
+                vectorized_patch_indices_col,
+                shifted_probes,
+            )
 
             # store relevant arrays
             mean_transmitted += overlap.sum(0)
@@ -2493,6 +2512,8 @@ class Object2p5DProbeMethodsMixin:
             axsize=axsize,
             **kwargs,
         )
+
+        self.clear_device_mem(device, self._clear_fft_cache)
 
 
 class ObjectNDProbeMixedMethodsMixin:
