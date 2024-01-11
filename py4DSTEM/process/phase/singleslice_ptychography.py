@@ -258,9 +258,9 @@ class SingleslicePtychography(
         crop_patterns: bool
             if True, crop patterns to avoid wrap around of patterns when centering
         device: str, optional
-            If not None, overwrites self._device to set device preprocess will be perfomed on.
+            if not none, overwrites self._device to set device preprocess will be perfomed on.
         clear_fft_cache: bool, optional
-            If True, and device = 'gpu', clears the cached fft plan at the end of function calls
+            if true, and device = 'gpu', clears the cached fft plan at the end of function calls
 
         Returns
         --------
@@ -425,6 +425,7 @@ class SingleslicePtychography(
         self._positions_px -= (
             self._positions_px_initial_com - xp_storage.array(self._object_shape) / 2
         )
+        self._positions_px_initial_com = self._positions_px.mean(0)
 
         self._positions_px_initial = self._positions_px.copy()
         self._positions_initial = self._positions_px_initial.copy()
@@ -696,6 +697,10 @@ class SingleslicePtychography(
             If True, reconstruction progress is displayed
         reset: bool, optional
             If True, previous reconstructions are ignored
+        device: str, optional
+            if not none, overwrites self._device to set device preprocess will be perfomed on.
+        clear_fft_cache: bool, optional
+            if true, and device = 'gpu', clears the cached fft plan at the end of function calls
 
         Returns
         --------
