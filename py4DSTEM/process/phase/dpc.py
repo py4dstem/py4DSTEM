@@ -20,6 +20,8 @@ from emdfile import Array, Custom, Metadata, _read_metadata, tqdmnd
 from py4DSTEM.data import Calibration
 from py4DSTEM.datacube import DataCube
 from py4DSTEM.process.phase.phase_base_class import PhaseReconstruction
+from py4DSTEM.process.phase.utils import copy_to_device
+from py4DSTEM.visualize.vis_special import return_scaled_histogram_ordering
 
 warnings.simplefilter(action="always", category=UserWarning)
 
@@ -42,7 +44,11 @@ class DPC(PhaseReconstruction):
     verbose: bool, optional
         If True, class methods will inherit this and print additional information
     device: str, optional
-        Calculation device will be perfomed on. Must be 'cpu' or 'gpu'
+        Device calculation will be perfomed on. Must be 'cpu' or 'gpu'
+    storage: str, optional
+        Device non-frequent arrays will be stored on. Must be 'cpu' or 'gpu'
+    clear_fft_cache: bool, optional
+        If True, and device = 'gpu', clears the cached fft plan at the end of function calls
     name: str, optional
         Class name
     """
@@ -54,26 +60,17 @@ class DPC(PhaseReconstruction):
         energy: float = None,
         verbose: bool = True,
         device: str = "cpu",
+        storage: str = None,
+        clear_fft_cache: bool = True,
         name: str = "dpc_reconstruction",
     ):
         Custom.__init__(self, name=name)
 
-        if device == "cpu":
-            import scipy
+        if storage is None:
+            storage = device
 
-            self._xp = np
-            self._asnumpy = np.asarray
-            self._scipy = scipy
-
-        elif device == "gpu":
-            from cupyx import scipy
-
-            self._xp = cp
-            self._asnumpy = cp.asnumpy
-            self._scipy = scipy
-
-        else:
-            raise ValueError(f"device must be either 'cpu' or 'gpu', not {device}")
+        self.set_device(device, clear_fft_cache)
+        self.set_storage(storage)
 
         self.set_save_defaults()
 
@@ -84,7 +81,6 @@ class DPC(PhaseReconstruction):
         # Metadata
         self._energy = energy
         self._verbose = verbose
-        self._device = device
         self._preprocessed = False
 
     def to_h5(self, group):
@@ -236,7 +232,7 @@ class DPC(PhaseReconstruction):
         self,
         dp_mask: np.ndarray = None,
         padding_factor: float = 2,
-        rotation_angles_deg: np.ndarray = np.arange(-89.0, 90.0, 1.0),
+        rotation_angles_deg: np.ndarray = None,
         maximize_divergence: bool = False,
         fit_function: str = "plane",
         force_com_rotation: float = None,
@@ -245,6 +241,8 @@ class DPC(PhaseReconstruction):
         force_com_measured: Sequence[np.ndarray] = None,
         plot_center_of_mass: str = "default",
         plot_rotation: bool = True,
+        device: str = None,
+        clear_fft_cache: bool = True,
         **kwargs,
     ):
         """
@@ -286,7 +284,14 @@ class DPC(PhaseReconstruction):
         self: DPCReconstruction
             Self to accommodate chaining
         """
+        # handle device/storage
+        self.set_device(device, clear_fft_cache)
+
         xp = self._xp
+        device = self._device
+        xp_storage = self._xp_storage
+        storage = self._storage
+        asnumpy = self._asnumpy
 
         # set additional metadata
         self._dp_mask = dp_mask
@@ -305,7 +310,7 @@ class DPC(PhaseReconstruction):
                     data=np.empty(force_com_measured[0].shape + (1, 1))
                 )
 
-        self._intensities = self._extract_intensities_and_calibrations_from_datacube(
+        _intensities = self._extract_intensities_and_calibrations_from_datacube(
             self._datacube,
             require_calibrations=False,
         )
@@ -318,7 +323,7 @@ class DPC(PhaseReconstruction):
             self._com_normalized_x,
             self._com_normalized_y,
         ) = self._calculate_intensities_center_of_mass(
-            self._intensities,
+            _intensities,
             dp_mask=self._dp_mask,
             fit_function=fit_function,
             com_shifts=force_com_shifts,
@@ -330,8 +335,6 @@ class DPC(PhaseReconstruction):
             self._rotation_best_transpose,
             self._com_x,
             self._com_y,
-            self.com_x,
-            self.com_y,
         ) = self._solve_for_center_of_mass_relative_rotation(
             self._com_measured_x,
             self._com_measured_y,
@@ -346,11 +349,23 @@ class DPC(PhaseReconstruction):
             **kwargs,
         )
 
+        # explicitly transfer arrays to storage
+        attrs = [
+            "_com_measured_x",
+            "_com_measured_y",
+            "_com_fitted_x",
+            "_com_fitted_y",
+            "_com_normalized_x",
+            "_com_normalized_y",
+        ]
+        self.copy_attributes_to_device(attrs, storage)
+
         # Object Initialization
         padded_object_shape = np.round(
             np.array(self._grid_scan_shape) * padding_factor
         ).astype("int")
         self._padded_object_phase = xp.zeros(padded_object_shape, dtype=xp.float32)
+
         if self._object_phase is not None:
             self._padded_object_phase[
                 : self._grid_scan_shape[0], : self._grid_scan_shape[1]
@@ -359,20 +374,23 @@ class DPC(PhaseReconstruction):
         self._padded_object_phase_initial = self._padded_object_phase.copy()
 
         # Fourier coordinates and operators
-        kx = xp.fft.fftfreq(padded_object_shape[0], d=self._scan_sampling[0])
-        ky = xp.fft.fftfreq(padded_object_shape[1], d=self._scan_sampling[1])
+        kx = xp.fft.fftfreq(padded_object_shape[0], d=self._scan_sampling[0]).astype(
+            xp.float32
+        )
+        ky = xp.fft.fftfreq(padded_object_shape[1], d=self._scan_sampling[1]).astype(
+            xp.float32
+        )
         kya, kxa = xp.meshgrid(ky, kx)
+
         k_den = kxa**2 + kya**2
         k_den[0, 0] = np.inf
         k_den = 1 / k_den
+
         self._kx_op = -1j * 0.25 * kxa * k_den
         self._ky_op = -1j * 0.25 * kya * k_den
 
         self._preprocessed = True
-
-        if self._device == "gpu":
-            xp._default_memory_pool.free_all_blocks()
-            xp.clear_memo()
+        self.clear_device_mem(device, self._clear_fft_cache)
 
         return self
 
@@ -415,6 +433,7 @@ class DPC(PhaseReconstruction):
         """
 
         xp = self._xp
+        asnumpy = self._asnumpy
         dx, dy = self._scan_sampling
 
         # centered finite-differences
@@ -433,8 +452,9 @@ class DPC(PhaseReconstruction):
         obj_dx[mask_inv] = 0
         obj_dy[mask_inv] = 0
 
-        new_error = xp.mean(obj_dx[mask] ** 2 + obj_dy[mask] ** 2) / (
-            xp.mean(self._com_x.ravel() ** 2 + self._com_y.ravel() ** 2)
+        new_error = asnumpy(
+            xp.mean(obj_dx[mask] ** 2 + obj_dy[mask] ** 2)
+            / (xp.mean(self._com_x.ravel() ** 2 + self._com_y.ravel() ** 2))
         )
 
         return obj_dx, obj_dy, new_error, step_size
@@ -519,8 +539,8 @@ class DPC(PhaseReconstruction):
             Constrained object estimate
         """
         gaussian_filter = self._scipy.ndimage.gaussian_filter
-
         gaussian_filter_sigma /= self.sampling[0]
+
         current_object = gaussian_filter(current_object, gaussian_filter_sigma)
 
         return current_object
@@ -560,43 +580,12 @@ class DPC(PhaseReconstruction):
         if q_lowpass:
             env *= 1 / (1 + (qra / q_lowpass) ** (2 * butterworth_order))
 
-        current_object_mean = xp.mean(current_object)
+        current_object_mean = xp.mean(current_object, axis=(-2, -1), keepdims=True)
         current_object -= current_object_mean
         current_object = xp.fft.ifft2(xp.fft.fft2(current_object) * env)
         current_object += current_object_mean
 
         return xp.real(current_object)
-
-    def _object_anti_gridding_contraint(self, current_object):
-        """
-        Zero outer pixels of object fft to remove gridding artifacts
-
-        Parameters
-        --------
-        current_object: np.ndarray
-            Current object estimate
-
-        Returns
-        --------
-        constrained_object: np.ndarray
-            Constrained object estimate
-        """
-        xp = self._xp
-
-        # find indices to zero
-        width_x = current_object.shape[0]
-        width_y = current_object.shape[1]
-        ind_min_x = int(xp.floor(width_x / 2) - 2)
-        ind_max_x = int(xp.ceil(width_x / 2) + 2)
-        ind_min_y = int(xp.floor(width_y / 2) - 2)
-        ind_max_y = int(xp.ceil(width_y / 2) + 2)
-
-        # zero pixels
-        object_fft = xp.fft.fft2(current_object)
-        object_fft[ind_min_x:ind_max_x] = 0
-        object_fft[:, ind_min_y:ind_max_y] = 0
-
-        return xp.real(xp.fft.ifft2(object_fft))
 
     def _constraints(
         self,
@@ -607,7 +596,6 @@ class DPC(PhaseReconstruction):
         q_lowpass,
         q_highpass,
         butterworth_order,
-        anti_gridding,
     ):
         """
         DPC constraints operator.
@@ -628,9 +616,6 @@ class DPC(PhaseReconstruction):
             Cut-off frequency in A^-1 for high-pass butterworth filter
         butterworth_order: float
             Butterworth filter order. Smaller gives a smoother filter
-        anti_gridding: bool
-            If true, zero outer pixels of object fft to remove
-            gridding artifacts
 
         Returns
         --------
@@ -650,11 +635,6 @@ class DPC(PhaseReconstruction):
                 butterworth_order,
             )
 
-        if anti_gridding:
-            current_object = self._object_anti_gridding_contraint(
-                current_object,
-            )
-
         return current_object
 
     def reconstruct(
@@ -671,8 +651,9 @@ class DPC(PhaseReconstruction):
         q_lowpass: float = None,
         q_highpass: float = None,
         butterworth_order: float = 2,
-        anti_gridding: float = True,
         store_iterations: bool = False,
+        device: str = None,
+        clear_fft_cache: bool = True,
     ):
         """
         Performs Iterative DPC Reconstruction:
@@ -705,11 +686,12 @@ class DPC(PhaseReconstruction):
             Cut-off frequency in A^-1 for high-pass butterworth filter
         butterworth_order: float
             Butterworth filter order. Smaller gives a smoother filter
-        anti_gridding: bool
-            If true, zero outer pixels of object fft to remove
-            gridding artifacts
         store_iterations: bool, optional
             If True, all reconstruction iterations will be stored
+        device: str, optional
+            if not none, overwrites self._device to set device preprocess will be perfomed on.
+        clear_fft_cache: bool, optional
+            if true, and device = 'gpu', clears the cached fft plan at the end of function calls
 
         Returns
         --------
@@ -717,18 +699,35 @@ class DPC(PhaseReconstruction):
             Self to accommodate chaining
         """
 
+        # handle device/storage
+        self.set_device(device, clear_fft_cache)
+
+        if device is not None:
+            attrs = [
+                "_known_aberrations_array",
+                "_object",
+                "_object_initial",
+                "_probe",
+                "_probe_initial",
+                "_probe_initial_aperture",
+            ]
+            self.copy_attributes_to_device(attrs, device)
+
         xp = self._xp
+        xp_storage = self._xp_storage
+        device = self._device
         asnumpy = self._asnumpy
 
         # Restart
         if store_iterations and (not hasattr(self, "object_phase_iterations") or reset):
             self.object_phase_iterations = []
 
-        if reset:
+        if reset is True:
             self.error = np.inf
             self.error_iterations = []
             self._step_size = step_size if step_size is not None else 0.5
             self._padded_object_phase = self._padded_object_phase_initial.copy()
+
         elif reset is None:
             if hasattr(self, "error"):
                 warnings.warn(
@@ -798,10 +797,10 @@ class DPC(PhaseReconstruction):
                 q_lowpass=q_lowpass,
                 q_highpass=q_highpass,
                 butterworth_order=butterworth_order,
-                anti_gridding=anti_gridding,
             )
 
             self.error_iterations.append(self.error.item())
+
             if store_iterations:
                 self.object_phase_iterations.append(
                     asnumpy(
@@ -824,9 +823,7 @@ class DPC(PhaseReconstruction):
         ]
         self.object_phase = asnumpy(self._object_phase)
 
-        if self._device == "gpu":
-            xp._default_memory_pool.free_all_blocks()
-            xp.clear_memo()
+        self.clear_device_mem(device, self._clear_fft_cache)
 
         return self
 
@@ -848,6 +845,8 @@ class DPC(PhaseReconstruction):
 
         figsize = kwargs.pop("figsize", (5, 6))
         cmap = kwargs.pop("cmap", "magma")
+        vmin = kwargs.pop("vmin", None)
+        vmax = kwargs.pop("vmax", None)
 
         if plot_convergence:
             spec = GridSpec(ncols=1, nrows=2, height_ratios=[4, 1], hspace=0.15)
@@ -865,7 +864,12 @@ class DPC(PhaseReconstruction):
         ]
 
         ax1 = fig.add_subplot(spec[0])
-        im = ax1.imshow(self.object_phase, extent=extent, cmap=cmap, **kwargs)
+
+        obj, vmin, vmax = return_scaled_histogram_ordering(
+            self.object_phase, vmin, vmax
+        )
+        im = ax1.imshow(obj, extent=extent, cmap=cmap, vmin=vmin, vmax=vmax, **kwargs)
+
         ax1.set_ylabel(f"x [{self._scan_units[0]}]")
         ax1.set_xlabel(f"y [{self._scan_units[1]}]")
         ax1.set_title(f"DPC phase reconstruction - NMSE error: {self.error:.3e}")
@@ -880,6 +884,7 @@ class DPC(PhaseReconstruction):
             errors = self.error_iterations
             ax2 = fig.add_subplot(spec[1])
             ax2.semilogy(np.arange(len(errors)), errors, **kwargs)
+
             ax2.set_xlabel("Iteration number")
             ax2.set_ylabel("Log NMSE error")
             ax2.yaxis.tick_right()
