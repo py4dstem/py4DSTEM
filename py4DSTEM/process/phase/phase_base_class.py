@@ -12,6 +12,7 @@ from scipy.ndimage import zoom
 
 try:
     import cupy as cp
+    from cupy.fft.config import get_plan_cache
 except (ModuleNotFoundError, ImportError):
     cp = np
 
@@ -19,7 +20,12 @@ from emdfile import Array, Custom, Metadata, _read_metadata
 from py4DSTEM.data import Calibration
 from py4DSTEM.datacube import DataCube
 from py4DSTEM.process.calibration import fit_origin
-from py4DSTEM.process.phase.utils import AffineTransform, polar_aliases
+from py4DSTEM.process.phase.utils import (
+    AffineTransform,
+    copy_to_device,
+    get_array_module,
+    polar_aliases,
+)
 from py4DSTEM.process.utils import (
     electron_wavelength_angstrom,
     fourier_resample,
@@ -34,6 +40,81 @@ class PhaseReconstruction(Custom):
     Base phase reconstruction class.
     Defines various common functions and properties for subclasses to inherit.
     """
+
+    def set_device(self, device, clear_fft_cache):
+        """
+        Sets calculation device.
+
+        Parameters
+        ----------
+        device: str
+            Calculation device will be perfomed on. Must be 'cpu' or 'gpu'
+
+        Returns
+        --------
+        self: PhaseReconstruction
+            Self to enable chaining
+        """
+
+        if device == "cpu":
+            import scipy
+
+            self._xp = np
+            self._scipy = scipy
+
+        elif device == "gpu":
+            from cupyx import scipy
+
+            self._xp = cp
+            self._scipy = scipy
+
+        elif device is not None:
+            raise ValueError(f"device must be either 'cpu' or 'gpu', not {device}")
+
+        self._clear_fft_cache = clear_fft_cache
+
+        return self
+
+    def set_storage(self, storage):
+        """
+        Sets storage device.
+
+        Parameters
+        ----------
+        storage: str
+            Device arrays will be stored on. Must be 'cpu' or 'gpu'
+
+        Returns
+        --------
+        self: PhaseReconstruction
+            Self to enable chaining
+        """
+
+        if storage == "cpu":
+            self._xp_storage = np
+
+        elif storage == "gpu":
+            if self._xp is np:
+                raise ValueError("storage='gpu' and device='cpu' is not supported")
+            self._xp_storage = cp
+
+        else:
+            raise ValueError(f"storage must be either 'cpu' or 'gpu', not {storage}")
+
+        self._asnumpy = copy_to_device
+
+        return self
+
+    def clear_device_mem(self, device, clear_fft_cache):
+        """ """
+        if device == "gpu":
+            if clear_fft_cache is True:
+                cache = get_plan_cache()
+                cache.clear()
+
+            xp = self._xp
+            xp._default_memory_pool.free_all_blocks()
+            xp._default_pinned_memory_pool.free_all_blocks()
 
     def attach_datacube(self, datacube: DataCube):
         """
@@ -357,11 +438,10 @@ class PhaseReconstruction(Custom):
         """
 
         # explicit read-only self attributes up-front
-        xp = self._xp
         verbose = self._verbose
         energy = self._energy
 
-        intensities = xp.asarray(datacube.data, dtype=xp.float32)
+        intensities = np.asarray(datacube.data, dtype=np.float32)
         self._grid_scan_shape = intensities.shape[:2]
 
         # Extracts calibrations
@@ -531,13 +611,18 @@ class PhaseReconstruction(Custom):
 
         # explicit read-only self attributes up-front
         xp = self._xp
+        device = self._device
         asnumpy = self._asnumpy
+
         reciprocal_sampling = self._reciprocal_sampling
 
         if com_measured:
             com_measured_x, com_measured_y = com_measured
 
         else:
+            # copy to device
+            intensities = copy_to_device(intensities, device)
+
             # Coordinates
             kx = xp.arange(intensities.shape[-2], dtype=xp.float32)
             ky = xp.arange(intensities.shape[-1], dtype=xp.float32)
@@ -1087,10 +1172,6 @@ class PhaseReconstruction(Custom):
                 + xp.cos(_rotation_best_rad) * _com_normalized_y
             )
 
-        # 'Public'-facing attributes as numpy arrays
-        com_x = asnumpy(_com_x)
-        com_y = asnumpy(_com_y)
-
         # Optionally, plot CoM
         if plot_center_of_mass == "all":
             figsize = kwargs.pop("figsize", (8, 12))
@@ -1112,8 +1193,8 @@ class PhaseReconstruction(Custom):
                     _com_measured_y,
                     _com_normalized_x,
                     _com_normalized_y,
-                    com_x,
-                    com_y,
+                    _com_x,
+                    _com_y,
                 ],
                 [
                     "CoM_x",
@@ -1135,8 +1216,8 @@ class PhaseReconstruction(Custom):
 
             extent = [
                 0,
-                scan_sampling[1] * com_x.shape[1],
-                scan_sampling[0] * com_x.shape[0],
+                scan_sampling[1] * _com_x.shape[1],
+                scan_sampling[0] * _com_x.shape[0],
                 0,
             ]
 
@@ -1146,15 +1227,15 @@ class PhaseReconstruction(Custom):
             for ax, arr, title in zip(
                 grid,
                 [
-                    com_x,
-                    com_y,
+                    _com_x,
+                    _com_y,
                 ],
                 [
                     "Corrected CoM_x",
                     "Corrected CoM_y",
                 ],
             ):
-                ax.imshow(arr, extent=extent, cmap=cmap, **kwargs)
+                ax.imshow(asnumpy(arr), extent=extent, cmap=cmap, **kwargs)
                 ax.set_ylabel(f"x [{scan_units[0]}]")
                 ax.set_xlabel(f"y [{scan_units[1]}]")
                 ax.set_title(title)
@@ -1164,8 +1245,6 @@ class PhaseReconstruction(Custom):
             _rotation_best_transpose,
             _com_x,
             _com_y,
-            com_x,
-            com_y,
         )
 
     def _normalize_diffraction_intensities(
@@ -1202,12 +1281,14 @@ class PhaseReconstruction(Custom):
         """
 
         # explicit read-only self attributes up-front
-        xp = self._xp
         asnumpy = self._asnumpy
 
         mean_intensity = 0
 
         diffraction_intensities = asnumpy(diffraction_intensities)
+        com_fitted_x = asnumpy(com_fitted_x)
+        com_fitted_y = asnumpy(com_fitted_y)
+
         if positions_mask is not None:
             number_of_patterns = np.count_nonzero(positions_mask.ravel())
         else:
@@ -1252,9 +1333,6 @@ class PhaseReconstruction(Custom):
                 (number_of_patterns,) + region_of_interest_shape, dtype=np.float32
             )
 
-        com_fitted_x = asnumpy(com_fitted_x)
-        com_fitted_y = asnumpy(com_fitted_y)
-
         counter = 0
         for rx in range(diffraction_intensities.shape[0]):
             for ry in range(diffraction_intensities.shape[1]):
@@ -1278,7 +1356,6 @@ class PhaseReconstruction(Custom):
                 amplitudes[counter] = np.sqrt(np.maximum(intensities, 0))
                 counter += 1
 
-        amplitudes = xp.asarray(amplitudes)
         mean_intensity /= amplitudes.shape[0]
 
         return amplitudes, mean_intensity, crop_mask
@@ -1311,11 +1388,12 @@ class PhaseReconstruction(Custom):
         """
 
         # explicit read-only self attributes up-front
+        asnumpy = self._asnumpy
         scan_sampling = self._scan_sampling
         scan_units = self._scan_units
 
         if com is None:
-            com = (self.com_x, self.com_y)
+            com = (self._com_x, self._com_y)
 
         if pixelsize is None:
             pixelsize = scan_sampling[0]
@@ -1328,7 +1406,7 @@ class PhaseReconstruction(Custom):
         complex_com = com[0] + 1j * com[1]
 
         show_complex(
-            complex_com,
+            asnumpy(complex_com),
             cbar=cbar,
             figax=(fig, ax),
             scalebar=scalebar,
@@ -1699,7 +1777,9 @@ class PtychographicReconstruction(PhaseReconstruction):
 
         return positions, object_padding_px
 
-    def _sum_overlapping_patches_bincounts_base(self, patches: np.ndarray):
+    def _sum_overlapping_patches_bincounts_base(
+        self, patches: np.ndarray, positions_px
+    ):
         """
         Base bincouts overlapping patches sum function, operating on real-valued arrays.
         Note this assumes the probe is corner-centered.
@@ -1715,8 +1795,7 @@ class PtychographicReconstruction(PhaseReconstruction):
             Summed array
         """
         # explicit read-only self attributes up-front
-        xp = self._xp
-        positions_px = self._positions_px
+        xp = get_array_module(patches)
         roi_shape = self._region_of_interest_shape
         object_shape = self._object_shape
 
@@ -1735,7 +1814,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         )
         return xp.reshape(counts, object_shape)
 
-    def _sum_overlapping_patches_bincounts(self, patches: np.ndarray):
+    def _sum_overlapping_patches_bincounts(self, patches: np.ndarray, positions_px):
         """
         Sum overlapping patches defined into object shaped array using bincounts.
         Calls _sum_overlapping_patches_bincounts_base on Real and Imaginary parts.
@@ -1751,15 +1830,21 @@ class PtychographicReconstruction(PhaseReconstruction):
             Summed array
         """
 
-        xp = self._xp
-        if xp.iscomplexobj(patches):
-            real = self._sum_overlapping_patches_bincounts_base(xp.real(patches))
-            imag = self._sum_overlapping_patches_bincounts_base(xp.imag(patches))
+        if np.iscomplexobj(patches):
+            real = self._sum_overlapping_patches_bincounts_base(
+                patches.real, positions_px
+            )
+            imag = self._sum_overlapping_patches_bincounts_base(
+                patches.imag, positions_px
+            )
             return real + 1.0j * imag
         else:
-            return self._sum_overlapping_patches_bincounts_base(patches)
+            return self._sum_overlapping_patches_bincounts_base(patches, positions_px)
 
-    def _extract_vectorized_patch_indices(self):
+    def _extract_vectorized_patch_indices(
+        self,
+        positions_px,
+    ):
         """
         Sets the vectorized row/col indices used for the overlap projection
         Note this assumes the probe is corner-centered.
@@ -1772,17 +1857,15 @@ class PtychographicReconstruction(PhaseReconstruction):
             Column indices for probe patches inside object array
         """
         # explicit read-only self attributes up-front
-        xp = self._xp
-        positions_px = self._positions_px
-        positions_px = self._positions_px
+        xp_storage = self._xp_storage
         roi_shape = self._region_of_interest_shape
         obj_shape = self._object_shape
 
-        x0 = xp.round(positions_px[:, 0]).astype("int")
-        y0 = xp.round(positions_px[:, 1]).astype("int")
+        x0 = xp_storage.round(positions_px[:, 0]).astype("int")
+        y0 = xp_storage.round(positions_px[:, 1]).astype("int")
 
-        x_ind = xp.fft.fftfreq(roi_shape[0], d=1 / roi_shape[0]).astype("int")
-        y_ind = xp.fft.fftfreq(roi_shape[1], d=1 / roi_shape[1]).astype("int")
+        x_ind = xp_storage.fft.fftfreq(roi_shape[0], d=1 / roi_shape[0]).astype("int")
+        y_ind = xp_storage.fft.fftfreq(roi_shape[1], d=1 / roi_shape[1]).astype("int")
 
         vectorized_patch_indices_row = (
             x0[:, None, None] + x_ind[None, :, None]
@@ -1973,12 +2056,21 @@ class PtychographicReconstruction(PhaseReconstruction):
                     )
                 )
 
-    def _constraints(self, current_object, current_probe, current_positions, **kwargs):
+    def _constraints(
+        self,
+        current_object,
+        current_probe,
+        current_positions,
+        initial_positions,
+        **kwargs,
+    ):
         """Wrapper function for all classes to inherit"""
 
         current_object = self._object_constraints(current_object, **kwargs)
         current_probe = self._probe_constraints(current_probe, **kwargs)
-        current_positions = self._positions_constraints(current_positions, **kwargs)
+        current_positions = self._positions_constraints(
+            current_positions, initial_positions, **kwargs
+        )
 
         return current_object, current_probe, current_positions
 

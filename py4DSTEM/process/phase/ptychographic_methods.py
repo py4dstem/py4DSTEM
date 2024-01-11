@@ -8,6 +8,7 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from py4DSTEM.process.phase.utils import (
     AffineTransform,
     ComplexProbe,
+    copy_to_device,
     fft_shift,
     generate_batches,
     partition_list,
@@ -41,6 +42,7 @@ class ObjectNDMethodsMixin:
         """ """
         # explicit read-only self attributes up-front
         xp = self._xp
+
         object_padding_px = self._object_padding_px
         region_of_interest_shape = self._region_of_interest_shape
 
@@ -65,6 +67,7 @@ class ObjectNDMethodsMixin:
     def _crop_rotate_object_fov(
         self,
         array,
+        positions_px=None,
         padding=0,
     ):
         """
@@ -83,16 +86,20 @@ class ObjectNDMethodsMixin:
         """
 
         asnumpy = self._asnumpy
+
         angle = (
             self._rotation_best_rad
             if self._rotation_best_transpose
             else -self._rotation_best_rad
         )
 
+        if positions_px is None:
+            positions_px = asnumpy(self._positions_px)
+        else:
+            positions_px = asnumpy(positions_px)
+
         tf = AffineTransform(angle=angle)
-        rotated_points = tf(
-            asnumpy(self._positions_px), origin=asnumpy(self._positions_px_com), xp=np
-        )
+        rotated_points = tf(positions_px, origin=positions_px.mean(0), xp=np)
 
         min_x, min_y = np.floor(np.amin(rotated_points, axis=0) - padding).astype("int")
         min_x = min_x if min_x > 0 else 0
@@ -986,6 +993,7 @@ class ProbeMethodsMixin:
         # explicit read-only self attributes up-front
         xp = self._xp
         device = self._device
+
         crop_mask = self._crop_mask
         region_of_interest_shape = self._region_of_interest_shape
         sampling = self.sampling
@@ -1431,14 +1439,20 @@ class ObjectNDProbeMethodsMixin:
     Mixin class for methods applicable to 2D, 2.5D, and 3D objects using a single probe.
     """
 
-    def _return_shifted_probes(self, current_probe):
-        """Simple utlity to de-duplicate _overlap_projection"""
+    def _return_shifted_probes(self, current_probe, positions_px_fractional):
+        """Simple utility to de-duplicate _overlap_projection"""
 
         xp = self._xp
-        shifted_probes = fft_shift(current_probe, self._positions_px_fractional, xp)
+        shifted_probes = fft_shift(current_probe, positions_px_fractional, xp)
         return shifted_probes
 
-    def _overlap_projection(self, current_object, shifted_probes):
+    def _overlap_projection(
+        self,
+        current_object,
+        vectorized_patch_indices_row,
+        vectorized_patch_indices_col,
+        shifted_probes,
+    ):
         """
         Ptychographic overlap projection method.
 
@@ -1461,14 +1475,12 @@ class ObjectNDProbeMethodsMixin:
 
         xp = self._xp
 
-        if self._object_type == "potential":
-            complex_object = xp.exp(1j * current_object)
-        else:
-            complex_object = current_object
-
-        object_patches = complex_object[
-            self._vectorized_patch_indices_row, self._vectorized_patch_indices_col
+        object_patches = current_object[
+            vectorized_patch_indices_row, vectorized_patch_indices_col
         ]
+
+        if self._object_type == "potential":
+            object_patches = xp.exp(1j * object_patches)
 
         overlap = shifted_probes * object_patches
 
@@ -1604,7 +1616,10 @@ class ObjectNDProbeMethodsMixin:
     def _forward(
         self,
         current_object,
+        vectorized_patch_indices_row,
+        vectorized_patch_indices_col,
         current_probe,
+        positions_px_fractional,
         amplitudes,
         exit_waves,
         use_projection_scheme,
@@ -1645,10 +1660,15 @@ class ObjectNDProbeMethodsMixin:
         error: float
             Reconstruction error
         """
+        shifted_probes = self._return_shifted_probes(
+            current_probe, positions_px_fractional
+        )
 
-        shifted_probes = self._return_shifted_probes(current_probe)
         shifted_probes, object_patches, overlap = self._overlap_projection(
-            current_object, shifted_probes
+            current_object,
+            vectorized_patch_indices_row,
+            vectorized_patch_indices_col,
+            shifted_probes,
         )
 
         if use_projection_scheme:
@@ -1674,6 +1694,7 @@ class ObjectNDProbeMethodsMixin:
         current_probe,
         object_patches,
         shifted_probes,
+        positions_px,
         exit_waves,
         step_size,
         normalization_min,
@@ -1685,10 +1706,6 @@ class ObjectNDProbeMethodsMixin:
 
         Parameters
         --------
-        current_object: np.ndarray
-            Current object estimate
-        current_probe: np.ndarray
-            Current probe estimate
         object_patches: np.ndarray
             Patched object view
         shifted_probes:np.ndarray
@@ -1704,15 +1721,16 @@ class ObjectNDProbeMethodsMixin:
 
         Returns
         --------
-        updated_object: np.ndarray
+        object_update: np.ndarray
             Updated object estimate
-        updated_probe: np.ndarray
+        probe_update: np.ndarray
             Updated probe estimate
         """
         xp = self._xp
 
         probe_normalization = self._sum_overlapping_patches_bincounts(
-            xp.abs(shifted_probes) ** 2
+            xp.abs(shifted_probes) ** 2,
+            positions_px,
         )
         probe_normalization = 1 / xp.sqrt(
             1e-16
@@ -1728,14 +1746,15 @@ class ObjectNDProbeMethodsMixin:
                         * xp.conj(object_patches)
                         * xp.conj(shifted_probes)
                         * exit_waves
-                    )
+                    ),
+                    positions_px,
                 )
                 * probe_normalization
             )
         else:
             current_object += step_size * (
                 self._sum_overlapping_patches_bincounts(
-                    xp.conj(shifted_probes) * exit_waves
+                    xp.conj(shifted_probes) * exit_waves, positions_px
                 )
                 * probe_normalization
             )
@@ -1777,10 +1796,6 @@ class ObjectNDProbeMethodsMixin:
 
         Parameters
         --------
-        current_object: np.ndarray
-            Current object estimate
-        current_probe: np.ndarray
-            Current probe estimate
         object_patches: np.ndarray
             Patched object view
         shifted_probes:np.ndarray
@@ -1857,6 +1872,7 @@ class ObjectNDProbeMethodsMixin:
         current_probe,
         object_patches,
         shifted_probes,
+        positions_px,
         exit_waves,
         use_projection_scheme: bool,
         step_size: float,
@@ -1895,7 +1911,6 @@ class ObjectNDProbeMethodsMixin:
         updated_probe: np.ndarray
             Updated probe estimate
         """
-
         if use_projection_scheme:
             current_object, current_probe = self._projection_sets_adjoint(
                 current_object,
@@ -1912,6 +1927,7 @@ class ObjectNDProbeMethodsMixin:
                 current_probe,
                 object_patches,
                 shifted_probes,
+                positions_px,
                 exit_waves,
                 step_size,
                 normalization_min,
@@ -1923,6 +1939,8 @@ class ObjectNDProbeMethodsMixin:
     def _position_correction(
         self,
         current_object,
+        vectorized_patch_indices_row,
+        vectorized_patch_indices_col,
         shifted_probes,
         overlap,
         amplitudes,
@@ -1961,6 +1979,7 @@ class ObjectNDProbeMethodsMixin:
         """
 
         xp = self._xp
+        asnumpy = self._asnumpy
 
         # unperturbed
         overlap_fft = xp.fft.fft2(overlap)
@@ -1973,22 +1992,22 @@ class ObjectNDProbeMethodsMixin:
         difference_intensity = (measured_intensity - estimated_intensity).reshape(
             flat_shape
         )
-        vectorized_patch_indices_row = self._vectorized_patch_indices_row.copy()
-        vectorized_patch_indices_col = self._vectorized_patch_indices_col.copy()
 
         # dx overlap projection perturbation
-        self._vectorized_patch_indices_row = (
-            vectorized_patch_indices_row + 1
-        ) % self._object_shape[0]
-        _, _, overlap_dx = self._overlap_projection(current_object, shifted_probes)
-        self._vectorized_patch_indices_row = vectorized_patch_indices_row.copy()
+        _, _, overlap_dx = self._overlap_projection(
+            current_object,
+            (vectorized_patch_indices_row + 1) % self._object_shape[0],
+            vectorized_patch_indices_col,
+            shifted_probes,
+        )
 
         # dy overlap projection perturbation
-        self._vectorized_patch_indices_col = (
-            vectorized_patch_indices_col + 1
-        ) % self._object_shape[1]
-        _, _, overlap_dy = self._overlap_projection(current_object, shifted_probes)
-        self._vectorized_patch_indices_col = vectorized_patch_indices_col.copy()
+        _, _, overlap_dy = self._overlap_projection(
+            current_object,
+            vectorized_patch_indices_row,
+            (vectorized_patch_indices_col + 1) % self._object_shape[1],
+            shifted_probes,
+        )
 
         # partial intensities
         overlap_dx_fft = overlap_fft - xp.fft.fft2(overlap_dx)
@@ -2029,12 +2048,16 @@ class ObjectNDProbeMethodsMixin:
             max_position_total_distance /= xp.sqrt(
                 self.sampling[0] ** 2 + self.sampling[1] ** 2
             )
-            deltas = current_positions - positions_update - current_positions_initial
+            deltas = (
+                xp.asarray(current_positions - current_positions_initial)
+                - positions_update
+            )
             dsts = xp.linalg.norm(deltas, axis=1)
             outlier_ind = dsts > max_position_total_distance
             positions_update[outlier_ind] = 0
 
-        current_positions -= positions_update
+        current_positions -= asnumpy(positions_update)
+
         return current_positions
 
     def _return_self_consistency_errors(
@@ -2044,6 +2067,8 @@ class ObjectNDProbeMethodsMixin:
         """Compute the self-consistency errors for each probe position"""
 
         xp = self._xp
+        xp_storage = self._xp_storage
+        device = self._device
         asnumpy = self._asnumpy
 
         # Batch-size
@@ -2052,36 +2077,40 @@ class ObjectNDProbeMethodsMixin:
 
         # Re-initialize fractional positions and vector patches
         errors = np.array([])
-        positions_px = self._positions_px.copy()
 
         for start, end in generate_batches(
             self._num_diffraction_patterns, max_batch=max_batch_size
         ):
             # batch indices
-            self._positions_px = positions_px[start:end]
-            self._positions_px_fractional = self._positions_px - xp.round(
-                self._positions_px
-            )
+            positions_px = self._positions_px[start:end]
+            positions_px_fractional = positions_px - xp_storage.round(positions_px)
 
             (
-                self._vectorized_patch_indices_row,
-                self._vectorized_patch_indices_col,
-            ) = self._extract_vectorized_patch_indices()
-            amplitudes = self._amplitudes[start:end]
+                vectorized_patch_indices_row,
+                vectorized_patch_indices_col,
+            ) = self._extract_vectorized_patch_indices(positions_px)
+
+            amplitudes_device = copy_to_device(self._amplitudes[start:end], device)
 
             # Overlaps
-            shifted_probes = self._return_shifted_probes(self._probe)
-            _, _, overlap = self._overlap_projection(self._object, shifted_probes)
+            shifted_probes = self._return_shifted_probes(
+                self._probe, positions_px_fractional
+            )
+            _, _, overlap = self._overlap_projection(
+                self._object,
+                vectorized_patch_indices_row,
+                vectorized_patch_indices_col,
+                shifted_probes,
+            )
             fourier_overlap = xp.fft.fft2(overlap)
             farfield_amplitudes = self._return_farfield_amplitudes(fourier_overlap)
 
             # Normalized mean-squared errors
             batch_errors = xp.sum(
-                xp.abs(amplitudes - farfield_amplitudes) ** 2, axis=(-2, -1)
+                xp.abs(amplitudes_device - farfield_amplitudes) ** 2, axis=(-2, -1)
             )
             errors = np.hstack((errors, batch_errors))
 
-        self._positions_px = positions_px.copy()
         errors /= self._mean_diffraction_intensity
 
         return asnumpy(errors)
