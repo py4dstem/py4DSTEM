@@ -2522,7 +2522,13 @@ class ObjectNDProbeMixedMethodsMixin:
     Overwrites ObjectNDProbeMethodsMixin.
     """
 
-    def _overlap_projection(self, current_object, shifted_probes):
+    def _overlap_projection(
+        self,
+        current_object,
+        vectorized_patch_indices_row,
+        vectorized_patch_indices_col,
+        shifted_probes,
+    ):
         """
         Ptychographic overlap projection method.
 
@@ -2545,14 +2551,12 @@ class ObjectNDProbeMixedMethodsMixin:
 
         xp = self._xp
 
-        if self._object_type == "potential":
-            complex_object = xp.exp(1j * current_object)
-        else:
-            complex_object = current_object
-
-        object_patches = complex_object[
-            self._vectorized_patch_indices_row, self._vectorized_patch_indices_col
+        object_patches = current_object[
+            vectorized_patch_indices_row, vectorized_patch_indices_col
         ]
+
+        if self._object_type == "potential":
+            object_patches = xp.exp(1j * object_patches)
 
         overlap = shifted_probes * xp.expand_dims(object_patches, axis=1)
 
@@ -2694,6 +2698,7 @@ class ObjectNDProbeMixedMethodsMixin:
         current_probe,
         object_patches,
         shifted_probes,
+        positions_px,
         exit_waves,
         step_size,
         normalization_min,
@@ -2736,7 +2741,8 @@ class ObjectNDProbeMixedMethodsMixin:
 
         for i_probe in range(self._num_probes):
             probe_normalization += self._sum_overlapping_patches_bincounts(
-                xp.abs(shifted_probes[:, i_probe]) ** 2
+                xp.abs(shifted_probes[:, i_probe]) ** 2,
+                positions_px,
             )
             if self._object_type == "potential":
                 object_update += step_size * self._sum_overlapping_patches_bincounts(
@@ -2745,11 +2751,13 @@ class ObjectNDProbeMixedMethodsMixin:
                         * xp.conj(object_patches)
                         * xp.conj(shifted_probes[:, i_probe])
                         * exit_waves[:, i_probe]
-                    )
+                    ),
+                    positions_px,
                 )
             else:
                 object_update += step_size * self._sum_overlapping_patches_bincounts(
-                    xp.conj(shifted_probes[:, i_probe]) * exit_waves[:, i_probe]
+                    xp.conj(shifted_probes[:, i_probe]) * exit_waves[:, i_probe],
+                    positions_px,
                 )
         probe_normalization = 1 / xp.sqrt(
             1e-16
@@ -2786,6 +2794,7 @@ class ObjectNDProbeMixedMethodsMixin:
         current_probe,
         object_patches,
         shifted_probes,
+        positions_px,
         exit_waves,
         normalization_min,
         fix_probe,
@@ -2825,7 +2834,8 @@ class ObjectNDProbeMixedMethodsMixin:
 
         for i_probe in range(self._num_probes):
             probe_normalization += self._sum_overlapping_patches_bincounts(
-                xp.abs(shifted_probes[:, i_probe]) ** 2
+                xp.abs(shifted_probes[:, i_probe]) ** 2,
+                positions_px,
             )
             if self._object_type == "potential":
                 current_object += self._sum_overlapping_patches_bincounts(
@@ -2834,11 +2844,13 @@ class ObjectNDProbeMixedMethodsMixin:
                         * xp.conj(object_patches)
                         * xp.conj(shifted_probes[:, i_probe])
                         * exit_waves[:, i_probe]
-                    )
+                    ),
+                    positions_px,
                 )
             else:
                 current_object += self._sum_overlapping_patches_bincounts(
-                    xp.conj(shifted_probes[:, i_probe]) * exit_waves[:, i_probe]
+                    xp.conj(shifted_probes[:, i_probe]) * exit_waves[:, i_probe],
+                    positions_px,
                 )
         probe_normalization = 1 / xp.sqrt(
             1e-16
