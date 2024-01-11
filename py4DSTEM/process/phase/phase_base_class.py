@@ -56,6 +56,10 @@ class PhaseReconstruction(Custom):
             Self to enable chaining
         """
 
+        if device is None:
+            self._clear_fft_cache = clear_fft_cache
+            return self
+
         if device == "cpu":
             import scipy
 
@@ -68,9 +72,10 @@ class PhaseReconstruction(Custom):
             self._xp = cp
             self._scipy = scipy
 
-        elif device is not None:
+        else:
             raise ValueError(f"device must be either 'cpu' or 'gpu', not {device}")
 
+        self._device = device
         self._clear_fft_cache = clear_fft_cache
 
         return self
@@ -102,6 +107,7 @@ class PhaseReconstruction(Custom):
             raise ValueError(f"storage must be either 'cpu' or 'gpu', not {storage}")
 
         self._asnumpy = copy_to_device
+        self._storage = storage
 
         return self
 
