@@ -684,8 +684,9 @@ class PhaseReconstruction(Custom):
                     unit="probe position",
                     disable=not self._verbose,
                 ):
-                    intensities_device = copy_to_device(intensities[rx, ry], device)
-                    masked_intensity = intensities_device * dp_mask
+                    masked_intensity = copy_to_device(intensities[rx, ry], device)
+                    if dp_mask is not None:
+                        masked_intensity *= dp_mask
                     summed_intensity = masked_intensity.sum()
                     com_measured_x[rx, ry] = (
                         xp.sum(masked_intensity * kxa) / summed_intensity
