@@ -20,7 +20,6 @@ from emdfile import Array, Custom, Metadata, _read_metadata, tqdmnd
 from py4DSTEM.data import Calibration
 from py4DSTEM.datacube import DataCube
 from py4DSTEM.process.phase.phase_base_class import PhaseReconstruction
-from py4DSTEM.process.phase.utils import copy_to_device
 from py4DSTEM.visualize.vis_special import return_scaled_histogram_ordering
 
 warnings.simplefilter(action="always", category=UserWarning)
@@ -289,9 +288,7 @@ class DPC(PhaseReconstruction):
 
         xp = self._xp
         device = self._device
-        xp_storage = self._xp_storage
         storage = self._storage
-        asnumpy = self._asnumpy
 
         # set additional metadata
         self._dp_mask = dp_mask
@@ -714,7 +711,6 @@ class DPC(PhaseReconstruction):
             self.copy_attributes_to_device(attrs, device)
 
         xp = self._xp
-        xp_storage = self._xp_storage
         device = self._device
         asnumpy = self._asnumpy
 
@@ -872,7 +868,7 @@ class DPC(PhaseReconstruction):
 
         ax1.set_ylabel(f"x [{self._scan_units[0]}]")
         ax1.set_xlabel(f"y [{self._scan_units[1]}]")
-        ax1.set_title(f"DPC phase reconstruction - NMSE error: {self.error:.3e}")
+        ax1.set_title("Reconstructed object phase")
 
         if cbar:
             divider = make_axes_locatable(ax1)
@@ -889,6 +885,7 @@ class DPC(PhaseReconstruction):
             ax2.set_ylabel("Log NMSE error")
             ax2.yaxis.tick_right()
 
+        fig.suptitle(f"Normalized mean squared error: {self.error:.3e}")
         spec.tight_layout(fig)
 
     def _visualize_all_iterations(
@@ -913,7 +910,6 @@ class DPC(PhaseReconstruction):
         iterations_grid: Tuple[int,int]
             Grid dimensions to plot reconstruction iterations
         """
-
         if not hasattr(self, "object_phase_iterations"):
             raise ValueError(
                 (
@@ -922,31 +918,41 @@ class DPC(PhaseReconstruction):
                 )
             )
 
-        if iterations_grid == "auto":
-            num_iter = len(self.error_iterations)
+        num_iter = len(self.object_phase_iterations)
 
+        if iterations_grid == "auto":
             if num_iter == 1:
                 return self._visualize_last_iteration(
+                    fig=fig,
                     plot_convergence=plot_convergence,
                     cbar=cbar,
                     **kwargs,
                 )
+
             else:
                 iterations_grid = (2, 4) if num_iter > 8 else (2, num_iter // 2)
+
+        else:
+            if iterations_grid[0] * iterations_grid[1] > num_iter:
+                raise ValueError()
 
         auto_figsize = (
             (3 * iterations_grid[1], 3 * iterations_grid[0] + 1)
             if plot_convergence
             else (3 * iterations_grid[1], 3 * iterations_grid[0])
         )
+
         figsize = kwargs.pop("figsize", auto_figsize)
         cmap = kwargs.pop("cmap", "magma")
+        vmin = kwargs.pop("vmin", None)
+        vmax = kwargs.pop("vmax", None)
 
+        max_iter = num_iter - 1
         total_grids = np.prod(iterations_grid)
-        errors = self.error_iterations
-        phases = self.object_phase_iterations
-        max_iter = len(phases) - 1
-        grid_range = range(0, max_iter + 1, max_iter // (total_grids - 1))
+        grid_range = np.arange(0, max_iter + 1, max_iter // (total_grids - 1))
+
+        errors = np.array(self.error_iterations)[-num_iter:]
+        objects = [self.object_phase_iterations[n] for n in grid_range]
 
         extent = [
             0,
@@ -973,25 +979,30 @@ class DPC(PhaseReconstruction):
         )
 
         for n, ax in enumerate(grid):
+            obj, vmin_n, vmax_n = return_scaled_histogram_ordering(
+                objects[n], vmin=vmin, vmax=vmax
+            )
             im = ax.imshow(
-                phases[grid_range[n]],
+                obj,
                 extent=extent,
                 cmap=cmap,
+                vmin=vmin_n,
+                vmax=vmax_n,
                 **kwargs,
             )
+
             ax.set_ylabel(f"x [{self._scan_units[0]}]")
             ax.set_xlabel(f"y [{self._scan_units[1]}]")
+            ax.set_title(f"Iter: {grid_range[n]} phase")
+
             if cbar:
                 grid.cbar_axes[n].colorbar(im)
-            ax.set_title(
-                f"Iteration: {grid_range[n]}\nNMSE error: {errors[grid_range[n]]:.3e}"
-            )
 
         if plot_convergence:
             ax2 = fig.add_subplot(spec[1])
-            ax2.semilogy(np.arange(len(errors)), errors, **kwargs)
+            ax2.semilogy(np.arange(errors.shape[0]), errors, **kwargs)
             ax2.set_xlabel("Iteration number")
-            ax2.set_ylabel("Log NMSE error")
+            ax2.set_ylabel("NMSE error")
             ax2.yaxis.tick_right()
 
         spec.tight_layout(fig)
@@ -1036,6 +1047,8 @@ class DPC(PhaseReconstruction):
                 cbar=cbar,
                 **kwargs,
             )
+
+        self.clear_device_mem(self._device, self._clear_fft_cache)
 
         return self
 
