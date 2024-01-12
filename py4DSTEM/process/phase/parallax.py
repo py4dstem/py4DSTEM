@@ -1138,7 +1138,7 @@ class Parallax(PhaseReconstruction):
         if self._DF_upsample_limit < 1:
             warnings.warn(
                 (
-                    f"Dark-field upsampling limit of {self._DF_upsampling_limit:.2f} "
+                    f"Dark-field upsampling limit of {self._DF_upsample_limit:.2f} "
                     "is less than 1, implying a scan step-size smaller than Nyquist. "
                     "setting to 1."
                 ),
