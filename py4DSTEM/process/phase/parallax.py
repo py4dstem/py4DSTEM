@@ -82,26 +82,20 @@ class Parallax(PhaseReconstruction):
         verbose: bool = False,
         object_padding_px: Tuple[int, int] = (32, 32),
         device: str = "cpu",
+        storage: str = None,
+        clear_fft_cache: bool = True,
         name: str = "parallax_reconstruction",
     ):
         Custom.__init__(self, name=name)
 
-        if device == "cpu":
-            import scipy
+        if storage is None:
+            storage = device
 
-            self._xp = np
-            self._asnumpy = np.asarray
-            self._scipy = scipy
+        if storage != device:
+            raise NotImplementedError()
 
-        elif device == "gpu":
-            from cupyx import scipy
-
-            self._xp = cp
-            self._asnumpy = cp.asnumpy
-            self._scipy = scipy
-
-        else:
-            raise ValueError(f"device must be either 'cpu' or 'gpu', not {device}")
+        self.set_device(device, clear_fft_cache)
+        self.set_storage(storage)
 
         self.set_save_defaults()
 
@@ -111,7 +105,6 @@ class Parallax(PhaseReconstruction):
         # Metadata
         self._energy = energy
         self._verbose = verbose
-        self._device = device
         self._object_padding_px = object_padding_px
         self._preprocessed = False
 
@@ -273,6 +266,9 @@ class Parallax(PhaseReconstruction):
         plot_average_bf: bool = True,
         realspace_mask: np.ndarray = None,
         apply_realspace_mask_to_stack: bool = True,
+        vectorized_com_calculation: bool = True,
+        device: str = None,
+        clear_fft_cache: bool = True,
         **kwargs,
     ):
         """
@@ -308,6 +304,12 @@ class Parallax(PhaseReconstruction):
         apply_realspace_mask_to_stack: bool, optional
             If this value is set to true, output BF images will be masked by
             the edge filter and realspace_mask if it is passed in.
+        vectorized_com_calculation: bool, optional
+            If True (default), the memory-intensive CoM calculation is vectorized
+        device: str, optional
+            if not none, overwrites self._device to set device preprocess will be perfomed on.
+        clear_fft_cache: bool, optional
+            if true, and device = 'gpu', clears the cached fft plan at the end of function calls
 
         Returns
         --------
@@ -315,7 +317,11 @@ class Parallax(PhaseReconstruction):
             Self to accommodate chaining
         """
 
+        # handle device/storage
+        self.set_device(device, clear_fft_cache)
+
         xp = self._xp
+        device = self._device
         asnumpy = self._asnumpy
 
         if self._datacube is None:
@@ -331,6 +337,8 @@ class Parallax(PhaseReconstruction):
             self._datacube,
             require_calibrations=True,
         )
+
+        self._intensities = xp.asarray(self._intensities)
 
         self._region_of_interest_shape = np.array(self._intensities.shape[-2:])
         self._scan_shape = np.array(self._intensities.shape[:2])
@@ -350,6 +358,7 @@ class Parallax(PhaseReconstruction):
                 fit_function=descan_correction_fit_function,
                 com_shifts=None,
                 com_measured=None,
+                vectorized_calculation=vectorized_com_calculation,
             )
 
             com_fitted_x = asnumpy(com_fitted_x)
@@ -357,7 +366,6 @@ class Parallax(PhaseReconstruction):
             intensities = asnumpy(self._intensities)
             intensities_shifted = np.zeros_like(intensities)
 
-            # center_x, center_y = self._region_of_interest_shape / 2
             center_x = com_fitted_x.mean()
             center_y = com_fitted_y.mean()
 
@@ -719,11 +727,9 @@ class Parallax(PhaseReconstruction):
             ax[1].set_ylabel(r"$k_x$ [$A^{-1}$]")
             ax[1].set_xlabel(r"$k_y$ [$A^{-1}$]")
             plt.tight_layout()
-        self._preprocessed = True
 
-        if self._device == "gpu":
-            xp._default_memory_pool.free_all_blocks()
-            xp.clear_memo()
+        self._preprocessed = True
+        self.clear_device_mem(device, self._clear_fft_cache)
 
         return self
 
@@ -741,6 +747,8 @@ class Parallax(PhaseReconstruction):
         plot_aligned_bf: bool = True,
         plot_convergence: bool = True,
         reset: bool = None,
+        device: str = None,
+        clear_fft_cache: bool = True,
         **kwargs,
     ):
         """
@@ -773,12 +781,19 @@ class Parallax(PhaseReconstruction):
             If True, the convergence error is also plotted
         reset: bool, optional
             If True, the reconstruction is reset
+        device: str, optional
+            if not none, overwrites self._device to set device preprocess will be perfomed on.
+        clear_fft_cache: bool, optional
+            if true, and device = 'gpu', clears the cached fft plan at the end of function calls
 
         Returns
         --------
         self: BFReconstruction
             Self to accommodate chaining
         """
+
+        # handle device/storage
+        self.set_device(device, clear_fft_cache)
 
         xp = self._xp
         asnumpy = self._asnumpy
@@ -790,6 +805,7 @@ class Parallax(PhaseReconstruction):
             self._stack_mask = self._stack_mask_initial.copy()
             self._recon_mask = self._recon_mask_initial.copy()
             self._xy_shifts = self._xy_shifts_initial.copy()
+
         elif reset is None:
             if hasattr(self, "error_iterations"):
                 warnings.warn(
@@ -1034,9 +1050,7 @@ class Parallax(PhaseReconstruction):
 
         self.recon_BF = asnumpy(self._recon_BF)
 
-        if self._device == "gpu":
-            xp._default_memory_pool.free_all_blocks()
-            xp.clear_memo()
+        self.clear_device_mem(device, self._clear_fft_cache)
 
         return self
 
@@ -1742,6 +1756,8 @@ class Parallax(PhaseReconstruction):
 
             spec.tight_layout(fig)
 
+        self.clear_device_mem(self._device, self._clear_fft_cache)
+
     def _interpolate_array(
         self,
         image,
@@ -2375,9 +2391,7 @@ class Parallax(PhaseReconstruction):
                             + str(np.round(self._aberrations_coefs[a0]).astype("int"))
                         )
 
-        if self._device == "gpu":
-            xp._default_memory_pool.free_all_blocks()
-            xp.clear_memo()
+        self.clear_device_mem(self._device, self._clear_fft_cache)
 
     def _calculate_CTF(self, alpha_shape, sampling, *coefs):
         xp = self._xp
@@ -2575,6 +2589,8 @@ class Parallax(PhaseReconstruction):
             ax.set_ylabel("x [A]")
             ax.set_xlabel("y [A]")
             ax.set_title("Parallax-Corrected Phase Image")
+
+        self.clear_device_mem(self._device, self._clear_fft_cache)
 
     def depth_section(
         self,
@@ -2853,7 +2869,8 @@ class Parallax(PhaseReconstruction):
 
         dp_mask_ind = xp.nonzero(self._dp_mask)
         yy, xx = xp.meshgrid(
-            xp.arange(self._dp_mean.shape[1]), xp.arange(self._dp_mean.shape[0])
+            xp.arange(self._region_of_interest_shape[1]),
+            xp.arange(self._region_of_interest_shape[0]),
         )
         freq_mask = xp.logical_and(xx % plot_arrow_freq == 0, yy % plot_arrow_freq == 0)
         masked_ind = xp.logical_and(freq_mask, self._dp_mask)
