@@ -268,7 +268,7 @@ class Parallax(PhaseReconstruction):
         apply_realspace_mask_to_stack: bool = True,
         vectorized_com_calculation: bool = True,
         device: str = None,
-        clear_fft_cache: bool = True,
+        clear_fft_cache: bool = None,
         **kwargs,
     ):
         """
@@ -729,7 +729,7 @@ class Parallax(PhaseReconstruction):
             plt.tight_layout()
 
         self._preprocessed = True
-        self.clear_device_mem(device, self._clear_fft_cache)
+        self.clear_device_mem(self._device, self._clear_fft_cache)
 
         return self
 
@@ -748,7 +748,7 @@ class Parallax(PhaseReconstruction):
         plot_convergence: bool = True,
         reset: bool = None,
         device: str = None,
-        clear_fft_cache: bool = True,
+        clear_fft_cache: bool = None,
         **kwargs,
     ):
         """
@@ -1050,7 +1050,7 @@ class Parallax(PhaseReconstruction):
 
         self.recon_BF = asnumpy(self._recon_BF)
 
-        self.clear_device_mem(device, self._clear_fft_cache)
+        self.clear_device_mem(self._device, self._clear_fft_cache)
 
         return self
 
@@ -2556,10 +2556,6 @@ class Parallax(PhaseReconstruction):
         # Output phase image
         self._recon_phase_corrected = xp.real(xp.fft.ifft2(im_fft_corr))
         self.recon_phase_corrected = asnumpy(self._recon_phase_corrected)
-
-        if self._device == "gpu":
-            xp._default_memory_pool.free_all_blocks()
-            xp.clear_memo()
 
         # plotting
         if plot_corrected_phase:

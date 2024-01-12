@@ -56,8 +56,10 @@ class PhaseReconstruction(Custom):
             Self to enable chaining
         """
 
-        if device is None:
+        if clear_fft_cache is not None:
             self._clear_fft_cache = clear_fft_cache
+
+        if device is None:
             return self
 
         if device == "cpu":
@@ -76,7 +78,6 @@ class PhaseReconstruction(Custom):
             raise ValueError(f"device must be either 'cpu' or 'gpu', not {device}")
 
         self._device = device
-        self._clear_fft_cache = clear_fft_cache
 
         return self
 
@@ -114,7 +115,7 @@ class PhaseReconstruction(Custom):
     def clear_device_mem(self, device, clear_fft_cache):
         """ """
         if device == "gpu":
-            if clear_fft_cache is True:
+            if clear_fft_cache:
                 cache = get_plan_cache()
                 cache.clear()
 
