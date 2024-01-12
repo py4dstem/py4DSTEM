@@ -62,50 +62,58 @@ Thank you for your interest in contributing to py4DSTEM! We look forward to seei
 
 1. **Fork the Git repository:** Go to the py4DSTEM GitHub repository and click the "Fork" button. This will create your own copy of the repository on your GitHub account.
 
-2. **Clone the forked repository:** Open your terminal and clone your forked repository to your local machine. This will create a local copy of your fork of the repository on your computer's filesystem. Use the following command, replacing `<your-github-username>` with your GitHub username:
+2. **Clone the forked repository:** Open your terminal and clone your forked repository to your local machine. This will create a local copy of your fork of the repository on your computer's filesystem. Use the following command, replacing `<your-github-username>` with your GitHub username and <path> with the the directory where you'd like to copy the py4DSTEM repository onto your filesystem:
 
     ```bash
-   git clone https://github.com/<your-github-username>/py4DSTEM.git
+    cd <path>
+    git clone https://github.com/<your-github-username>/py4DSTEM.git
     ```
 **_extra tips_:** Github has an excellent [tutorial](https://docs.github.com/en/get-started/quickstart/fork-a-repo) you can follow to learn more about for steps one and two.
 
-3. **Create a new branch:** Create a new branch for your development work. This will prevent your changes from affecting the main branch of the repository. Use the following command, replacing `<branch-name>` with a name for your branch, using an informative name can be helpful e.g. `<fixing-virtual-image-bug>`:
+3. **Create a new branch:** Create a new branch for your development work. This will silo any edits you make to the new branch, allowing you to work and make edits to your working branch without affecting the main branch of the repository. Use the following command, replacing `<branch-name>` with a name for your branch.  Please use an informative name describing the purpose of the branch, e.g. `<fixing-virtual-image-bug>`:
 
    ```bash
    git checkout -b <branch-name>
    ```
 
-4. **Create an anaconda envrionment:** Environments are useful for a number of reasons. They create an isolated environment for each project or task, making it easy to reproduce results, manage dependencies, and collaborate with others. There are a number of different ways to use environments, including anaconda, pipenv, virtualenv, we reccomend [anaconda](https://docs.anaconda.com/free/anaconda/install/index.html).:
+4. **Create an anaconda environment:** Environments are useful for a number of reasons. They create an isolated computing environment for each project or task, making it easy to reproduce results, manage dependencies, and collaborate with others. There are a number of different ways to use environments, including anaconda, pipenv, virtualenv - we recommend using [anaconda](https://docs.anaconda.com/free/anaconda/install/index.html) for environment management, where you can create a new environment with:
 
    ```bash
    conda create -n py4dstem-dev python=3.10
    ```
-   
+
+You can then enter that environment using:
+
+   ```bash
+   conda activate py4dstem-dev
+   ```
+
 
 5. **Install py4DSTEM in editable mode:** Navigate to the cloned repository directory and install py4DSTEM in editable mode. This will allow you to make changes to the code and test them without having to reinstall the library. Use the following command:
 
    ```bash
-   conda activate py4DSTEM-dev #optional if using anaconda
+   conda activate py4dstem-dev
    pip install -e .
-   pip install flake8 black # necessary extra dependencies
+   pip install flake8 black   # install linter and autoformatter
    ```
 
-making changes to the code and testing them using your favorite Python IDE or editor.
+You can now make changes to the code and test them using your favorite Python IDE or editor.
 
-6.  **_(Optional)_ - Using `pre-commit`**: `pre-commit` streamlines code formatting and linting. Essientally it runs black and flake8 on commit for all staged files, and only allows commits if they both pass. To use pre-commit:
+6.  **_(Optional)_ - Using `pre-commit`**: `pre-commit` streamlines code formatting and linting. Essentially it runs black (an autoformatter) and flake8 (a linter) whenever a new commit is attempted on all staged files, and only allows the commit to proceed if they both pass. To use pre-commit, run:
 
     ```bash
-    conda activate py4DSTEM-dev
-    pip install pre-commit # install pre-commit
-    cd <path-to-your-fork-of-the-py4DSTEM-git-repo> # go to your py4DSTEM repo
-    pre-commit install # setup pre-commit to work on this repo (it won't affect any other repos), it changes/creates a file in .git/hooks/pre-commit
+    conda activate py4dstem-dev
+    pip install pre-commit
+    cd <path-to-your-fork-of-the-py4DSTEM-git-repo>   # go to your py4DSTEM repo
+    pre-commit install
     ```
-`pre-commit` is now set up and will automatically run flake8 and black when you try and commit code, and will only commit if they pass and will reject the commit if there are errors. 
+    
+This will setup pre-commit to work on this repo by creating/changing a file in .git/hooks/pre-commit, which tells `pre-commit` to automatically run flake8 and black when you try to commit code.  It won't affect any other repos.
 
 **_extra tips_:** 
 
 ```bash
-# You can call pre commit manually at any time 
+# You can call pre commit manually at any time without committing
 pre-commit run # will check any staged files 
 pre-commit run -a # will run on all files in repo
 
