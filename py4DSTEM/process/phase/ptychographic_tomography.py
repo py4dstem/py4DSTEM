@@ -128,7 +128,11 @@ class PtychographicTomography(
     """
 
     # Class-specific Metadata
-    _class_specific_metadata = ("_num_slices", "_tilt_orientation_matrices")
+    _class_specific_metadata = (
+        "_num_slices",
+        "_tilt_orientation_matrices",
+        "_num_measurements",
+    )
 
     def __init__(
         self,
@@ -504,7 +508,7 @@ class PtychographicTomography(
 
         # center probe positions
         self._positions_px_all = xp_storage.asarray(
-            self._positions_px_all, dtype=xp.float32
+            self._positions_px_all, dtype=xp_storage.float32
         )
 
         for index in range(self._num_measurements):
@@ -1090,7 +1094,7 @@ class PtychographicTomography(
                         self._positions_px_all[
                             batch_indices
                         ] = self._position_correction(
-                            self._object,
+                            object_sliced,
                             vectorized_patch_indices_row,
                             vectorized_patch_indices_col,
                             shifted_probes,

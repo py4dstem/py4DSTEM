@@ -573,7 +573,7 @@ class MagneticPtychography(
 
         # center probe positions
         self._positions_px_all = xp_storage.asarray(
-            self._positions_px_all, dtype=xp.float32
+            self._positions_px_all, dtype=xp_storage.float32
         )
 
         for index in range(self._num_measurements):

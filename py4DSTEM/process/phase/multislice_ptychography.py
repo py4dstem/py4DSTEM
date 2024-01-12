@@ -486,7 +486,9 @@ class MultislicePtychography(
         self._object_shape = self._object.shape[-2:]
 
         # center probe positions
-        self._positions_px = xp_storage.asarray(self._positions_px, dtype=xp.float32)
+        self._positions_px = xp_storage.asarray(
+            self._positions_px, dtype=xp_storage.float32
+        )
         self._positions_px_initial_com = self._positions_px.mean(0)
         self._positions_px -= (
             self._positions_px_initial_com - xp_storage.array(self._object_shape) / 2
