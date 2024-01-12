@@ -3264,10 +3264,10 @@ class MultipleMeasurementsMethodsMixin:
         self, positions=None, cum_probes_per_measurement=None
     ):
         """Average positions estimate"""
-        xp = self._xp
+        xp_storage = self._xp_storage
 
         if positions is not None:
-            _pos = xp.asarray(positions)
+            _pos = xp_storage.asarray(positions)
         else:
             if not hasattr(self, "_positions_px_all"):
                 return None
@@ -3282,7 +3282,9 @@ class MultipleMeasurementsMethodsMixin:
         if np.any(num_probes_per_measurement != num_probes_per_measurement[0]):
             return None
 
-        avg_positions = xp.zeros((num_probes_per_measurement[0], 2), dtype=xp.float32)
+        avg_positions = xp_storage.zeros(
+            (num_probes_per_measurement[0], 2), dtype=xp_storage.float32
+        )
 
         for index in range(num_measurements):
             start_idx = cum_probes_per_measurement[index]
