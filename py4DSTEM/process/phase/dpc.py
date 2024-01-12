@@ -237,6 +237,7 @@ class DPC(PhaseReconstruction):
         force_com_rotation: float = None,
         force_com_transpose: bool = None,
         force_com_shifts: Union[Sequence[np.ndarray], Sequence[float]] = None,
+        vectorized_com_calculation: bool = True,
         force_com_measured: Sequence[np.ndarray] = None,
         plot_center_of_mass: str = "default",
         plot_rotation: bool = True,
@@ -270,6 +271,8 @@ class DPC(PhaseReconstruction):
             Force whether diffraction intensities need to be transposed.
         force_com_shifts: tuple of ndarrays (CoMx, CoMy)
             Force CoM fitted shifts
+        vectorized_com_calculation: bool, optional
+            If True (default), the memory-intensive CoM calculation is vectorized
         force_com_measured: tuple of ndarrays (CoMx measured, CoMy measured)
             Force CoM measured shifts
         plot_center_of_mass: str, optional
@@ -324,6 +327,7 @@ class DPC(PhaseReconstruction):
             dp_mask=self._dp_mask,
             fit_function=fit_function,
             com_shifts=force_com_shifts,
+            vectorized_calculation=vectorized_com_calculation,
             com_measured=force_com_measured,
         )
 

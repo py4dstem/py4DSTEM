@@ -244,6 +244,7 @@ class MultislicePtychography(
         force_com_rotation: float = None,
         force_com_transpose: float = None,
         force_com_shifts: float = None,
+        vectorized_com_calculation: bool = True,
         force_scan_sampling: float = None,
         force_angular_sampling: float = None,
         force_reciprocal_sampling: float = None,
@@ -251,6 +252,7 @@ class MultislicePtychography(
         crop_patterns: bool = False,
         device: str = None,
         clear_fft_cache: bool = True,
+        max_batch_size: int = None,
         **kwargs,
     ):
         """
@@ -302,6 +304,8 @@ class MultislicePtychography(
             Amplitudes come from diffraction patterns shifted with
             the CoM in the upper left corner for each probe unless
             shift is overwritten.
+        vectorized_com_calculation: bool, optional
+            If True (default), the memory-intensive CoM calculation is vectorized
         force_scan_sampling: float, optional
             Override DataCube real space scan pixel size calibrations, in Angstrom
         force_angular_sampling: float, optional
@@ -317,6 +321,8 @@ class MultislicePtychography(
             If not None, overwrites self._device to set device preprocess will be perfomed on.
         clear_fft_cache: bool, optional
             If True, and device = 'gpu', clears the cached fft plan at the end of function calls
+        max_batch_size: int, optional
+            Max number of probes to use at once in computing probe overlaps
 
         Returns
         --------
@@ -395,6 +401,7 @@ class MultislicePtychography(
             dp_mask=self._dp_mask,
             fit_function=fit_function,
             com_shifts=force_com_shifts,
+            vectorized_calculation=vectorized_com_calculation,
         )
 
         # estimate rotation / transpose
@@ -523,13 +530,23 @@ class MultislicePtychography(
         )
 
         # overlaps
-        positions_px_fractional = self._positions_px - xp_storage.round(
-            self._positions_px
-        )
-        shifted_probes = fft_shift(self._probe, positions_px_fractional, xp)
-        probe_overlap = self._sum_overlapping_patches_bincounts(
-            xp.abs(shifted_probes) ** 2, self._positions_px
-        )
+        if max_batch_size is None:
+            max_batch_size = self._num_diffraction_patterns
+
+        probe_overlap = xp.zeros(self._object_shape, dtype=xp.float32)
+
+        for start, end in generate_batches(
+            self._num_diffraction_patterns, max_batch=max_batch_size
+        ):
+            # batch indices
+            positions_px = self._positions_px[start:end]
+            positions_px_fractional = positions_px - xp_storage.round(positions_px)
+
+            shifted_probes = fft_shift(self._probe, positions_px_fractional, xp)
+            probe_overlap += self._sum_overlapping_patches_bincounts(
+                xp.abs(shifted_probes) ** 2, positions_px
+            )
+
         del shifted_probes
 
         if object_fov_mask is None:
