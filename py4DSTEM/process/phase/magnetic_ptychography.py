@@ -724,7 +724,13 @@ class MagneticPtychography(
 
         return self
 
-    def _overlap_projection(self, current_object, shifted_probes):
+    def _overlap_projection(
+        self,
+        current_object,
+        vectorized_patch_indices_row,
+        vectorized_patch_indices_col,
+        shifted_probes,
+    ):
         """
         Ptychographic overlap projection method.
 
@@ -747,20 +753,18 @@ class MagneticPtychography(
 
         xp = self._xp
 
-        if self._object_type == "potential":
-            complex_object = xp.exp(1j * current_object)
-        else:
-            complex_object = current_object
-
         object_patches = xp.empty(
-            (self._num_measurements,) + shifted_probes.shape, dtype=xp.complex64
+            (self._num_measurements,) + shifted_probes.shape, dtype=current_object.dtype
         )
-        object_patches[0] = complex_object[
-            0, self._vectorized_patch_indices_row, self._vectorized_patch_indices_col
+        object_patches[0] = current_object[
+            0, vectorized_patch_indices_row, vectorized_patch_indices_col
         ]
-        object_patches[1] = complex_object[
-            1, self._vectorized_patch_indices_row, self._vectorized_patch_indices_col
+        object_patches[1] = current_object[
+            1, vectorized_patch_indices_row, vectorized_patch_indices_col
         ]
+
+        if self._object_type == "potential":
+            object_patches = xp.exp(1j * object_patches)
 
         overlap_base = shifted_probes * object_patches[0]
 
@@ -782,6 +786,7 @@ class MagneticPtychography(
         current_probe,
         object_patches,
         shifted_probes,
+        positions_px,
         exit_waves,
         step_size,
         normalization_min,
@@ -824,7 +829,8 @@ class MagneticPtychography(
 
         probe_electrostatic_abs = xp.abs(shifted_probes * object_patches[0])
         probe_electrostatic_normalization = self._sum_overlapping_patches_bincounts(
-            probe_electrostatic_abs**2
+            probe_electrostatic_abs**2,
+            positions_px,
         )
         probe_electrostatic_normalization = 1 / xp.sqrt(
             1e-16
@@ -834,7 +840,8 @@ class MagneticPtychography(
 
         probe_magnetic_abs = xp.abs(shifted_probes * object_patches[1])
         probe_magnetic_normalization = self._sum_overlapping_patches_bincounts(
-            probe_magnetic_abs**2
+            probe_magnetic_abs**2,
+            positions_px,
         )
         probe_magnetic_normalization = 1 / xp.sqrt(
             1e-16
@@ -878,7 +885,8 @@ class MagneticPtychography(
                             * electrostatic_conj
                             * probe_conj
                             * exit_waves
-                        )
+                        ),
+                        positions_px,
                     )
 
                     # i exp(-i v) exp(i m) P*
@@ -887,13 +895,15 @@ class MagneticPtychography(
                 else:
                     # M P*
                     electrostatic_update = self._sum_overlapping_patches_bincounts(
-                        probe_conj * object_patches[1] * exit_waves
+                        probe_conj * object_patches[1] * exit_waves,
+                        positions_px,
                     )
 
                     # V* P*
                     magnetic_update = xp.conj(
                         self._sum_overlapping_patches_bincounts(
-                            probe_conj * electrostatic_conj * exit_waves
+                            probe_conj * electrostatic_conj * exit_waves,
+                            positions_px,
                         )
                     )
 
@@ -926,7 +936,8 @@ class MagneticPtychography(
                             * electrostatic_conj
                             * probe_conj
                             * exit_waves
-                        )
+                        ),
+                        positions_px,
                     )
 
                     # -i exp(-i v) exp(-i m) P*
@@ -935,12 +946,14 @@ class MagneticPtychography(
                 else:
                     # M* P*
                     electrostatic_update = self._sum_overlapping_patches_bincounts(
-                        probe_conj * magnetic_conj * exit_waves
+                        probe_conj * magnetic_conj * exit_waves,
+                        positions_px,
                     )
 
                     # V* P*
                     magnetic_update = self._sum_overlapping_patches_bincounts(
-                        probe_conj * electrostatic_conj * exit_waves
+                        probe_conj * electrostatic_conj * exit_waves,
+                        positions_px,
                     )
 
                 current_object[0] += (
@@ -963,7 +976,8 @@ class MagneticPtychography(
             case (1, 1) | (2, 0):  # neutral
                 probe_abs = xp.abs(shifted_probes)
                 probe_normalization = self._sum_overlapping_patches_bincounts(
-                    probe_abs**2
+                    probe_abs**2,
+                    positions_px,
                 )
                 probe_normalization = 1 / xp.sqrt(
                     1e-16
@@ -974,13 +988,15 @@ class MagneticPtychography(
                 if self._object_type == "potential":
                     # -i exp(-i v) P*
                     electrostatic_update = self._sum_overlapping_patches_bincounts(
-                        xp.real(-1j * electrostatic_conj * probe_conj * exit_waves)
+                        xp.real(-1j * electrostatic_conj * probe_conj * exit_waves),
+                        positions_px,
                     )
 
                 else:
                     # P*
                     electrostatic_update = self._sum_overlapping_patches_bincounts(
-                        probe_conj * exit_waves
+                        probe_conj * exit_waves,
+                        positions_px,
                     )
 
                 current_object[0] += (
@@ -1086,7 +1102,7 @@ class MagneticPtychography(
         normalization_min: float = 1,
         positions_step_size: float = 0.9,
         pure_phase_object_iter: int = 0,
-        fix_com: bool = True,
+        fix_probe_com: bool = True,
         fix_probe_iter: int = 0,
         fix_probe_aperture_iter: int = 0,
         constrain_probe_amplitude_iter: int = 0,
@@ -1096,6 +1112,7 @@ class MagneticPtychography(
         constrain_probe_fourier_amplitude_max_width_pixels: float = 3.0,
         constrain_probe_fourier_amplitude_constant_intensity: bool = False,
         fix_positions_iter: int = np.inf,
+        fix_positions_com: bool = True,
         max_position_update_distance: float = None,
         max_position_total_distance: float = None,
         global_affine_transformation: bool = True,
@@ -1123,6 +1140,8 @@ class MagneticPtychography(
         collective_measurement_updates: bool = True,
         progress_bar: bool = True,
         reset: bool = None,
+        device: str = None,
+        clear_fft_cache: bool = True,
     ):
         """
         Ptychographic reconstruction main method.
@@ -1159,7 +1178,7 @@ class MagneticPtychography(
             Positions update step size
         pure_phase_object_iter: float, optional
             Number of iterations where object amplitude is set to unity
-        fix_com: bool, optional
+        fix_probe_com: bool, optional
             If True, fixes center of mass of probe
         fix_probe_iter: int, optional
             Number of iterations to run with a fixed probe before updating probe estimate
@@ -1179,6 +1198,8 @@ class MagneticPtychography(
             If True, the probe aperture is additionally constrained to a constant intensity.
         fix_positions_iter: int, optional
             Number of iterations to run with fixed positions before updating positions estimate
+        fix_positions_com: bool, optional
+            If True, fixes the positions CoM to the middle of the fov
         max_position_update_distance: float, optional
             Maximum allowed distance for update in A
         max_position_total_distance: float, optional
@@ -1234,14 +1255,34 @@ class MagneticPtychography(
             If True, reconstruction progress is displayed
         reset: bool, optional
             If True, previous reconstructions are ignored
+        device: str, optional
+            if not none, overwrites self._device to set device preprocess will be perfomed on.
+        clear_fft_cache: bool, optional
+            if true, and device = 'gpu', clears the cached fft plan at the end of function calls
 
         Returns
         --------
         self: PtychographicReconstruction
             Self to accommodate chaining
         """
-        asnumpy = self._asnumpy
+        # handle device/storage
+        self.set_device(device, clear_fft_cache)
+
+        if device is not None:
+            attrs = [
+                "_known_aberrations_array",
+                "_object",
+                "_object_initial",
+                "_probes_all",
+                "_probes_all_initial",
+                "_probes_all_initial_aperture",
+            ]
+            self.copy_attributes_to_device(attrs, device)
+
         xp = self._xp
+        xp_storage = self._xp_storage
+        device = self._device
+        asnumpy = self._asnumpy
 
         if not collective_measurement_updates and self._verbose:
             warnings.warn(
@@ -1287,7 +1328,7 @@ class MagneticPtychography(
             )
 
         if max_batch_size is not None:
-            xp.random.seed(seed_random)
+            np.random.seed(seed_random)
         else:
             max_batch_size = self._num_diffraction_patterns
 
@@ -1323,6 +1364,7 @@ class MagneticPtychography(
             if collective_measurement_updates:
                 collective_object = xp.zeros_like(self._object)
 
+            # randomize
             measurement_indices = np.arange(self._num_measurements)
             np.random.shuffle(measurement_indices)
 
@@ -1344,43 +1386,31 @@ class MagneticPtychography(
                 ]
 
                 num_diffraction_patterns = end_idx - start_idx
-                shuffled_indices = np.arange(num_diffraction_patterns)
-                unshuffled_indices = np.zeros_like(shuffled_indices)
+                shuffled_indices = np.arange(start_idx, end_idx)
 
                 # randomize
                 if not use_projection_scheme:
                     np.random.shuffle(shuffled_indices)
 
-                unshuffled_indices[shuffled_indices] = np.arange(
-                    num_diffraction_patterns
-                )
-
-                positions_px = self._positions_px_all[start_idx:end_idx].copy()[
-                    shuffled_indices
-                ]
-                initial_positions_px = self._positions_px_initial_all[
-                    start_idx:end_idx
-                ].copy()[shuffled_indices]
-
                 for start, end in generate_batches(
                     num_diffraction_patterns, max_batch=max_batch_size
                 ):
                     # batch indices
-                    self._positions_px = positions_px[start:end]
-                    self._positions_px_initial = initial_positions_px[start:end]
-                    self._positions_px_com = xp.mean(self._positions_px, axis=0)
-                    self._positions_px_fractional = self._positions_px - xp.round(
-                        self._positions_px
+                    batch_indices = shuffled_indices[start:end]
+                    positions_px = self._positions_px_all[batch_indices]
+                    positions_px_initial = self._positions_px_initial_all[batch_indices]
+                    positions_px_fractional = positions_px - xp_storage.round(
+                        positions_px
                     )
 
                     (
-                        self._vectorized_patch_indices_row,
-                        self._vectorized_patch_indices_col,
-                    ) = self._extract_vectorized_patch_indices()
+                        vectorized_patch_indices_row,
+                        vectorized_patch_indices_col,
+                    ) = self._extract_vectorized_patch_indices(positions_px)
 
-                    amplitudes = self._amplitudes[start_idx:end_idx][
-                        shuffled_indices[start:end]
-                    ]
+                    amplitudes_device = copy_to_device(
+                        self._amplitudes[batch_indices], device
+                    )
 
                     # forward operator
                     (
@@ -1391,8 +1421,11 @@ class MagneticPtychography(
                         batch_error,
                     ) = self._forward(
                         self._object,
+                        vectorized_patch_indices_row,
+                        vectorized_patch_indices_col,
                         _probe,
-                        amplitudes,
+                        positions_px_fractional,
+                        amplitudes_device,
                         self._exit_waves,
                         use_projection_scheme=use_projection_scheme,
                         projection_a=projection_a,
@@ -1406,6 +1439,7 @@ class MagneticPtychography(
                         _probe,
                         object_patches,
                         shifted_probes,
+                        positions_px,
                         self._exit_waves,
                         use_projection_scheme=use_projection_scheme,
                         step_size=step_size,
@@ -1417,13 +1451,17 @@ class MagneticPtychography(
 
                     # position correction
                     if a0 >= fix_positions_iter:
-                        positions_px[start:end] = self._position_correction(
+                        self._positions_px_all[
+                            batch_indices
+                        ] = self._position_correction(
                             self._object,
+                            vectorized_patch_indices_row,
+                            vectorized_patch_indices_col,
                             shifted_probes,
                             overlap,
-                            amplitudes,
-                            self._positions_px,
-                            self._positions_px_initial,
+                            amplitudes_device,
+                            positions_px,
+                            positions_px_initial,
                             positions_step_size,
                             max_position_update_distance,
                             max_position_total_distance,
@@ -1444,15 +1482,12 @@ class MagneticPtychography(
                 error += measurement_error
 
                 # constraints
-                self._positions_px_all[start_idx:end_idx] = positions_px.copy()[
-                    unshuffled_indices
-                ]
 
                 if collective_measurement_updates:
                     # probe and positions
                     _probe = self._probe_constraints(
                         _probe,
-                        fix_com=fix_com and a0 >= fix_probe_iter,
+                        fix_probe_com=fix_probe_com and a0 >= fix_probe_iter,
                         constrain_probe_amplitude=a0 < constrain_probe_amplitude_iter
                         and a0 >= fix_probe_iter,
                         constrain_probe_amplitude_relative_radius=constrain_probe_amplitude_relative_radius,
@@ -1471,11 +1506,12 @@ class MagneticPtychography(
                         initial_probe_aperture=_probe_initial_aperture,
                     )
 
-                    self._positions_px_all[
-                        start_idx:end_idx
-                    ] = self._positions_constraints(
-                        self._positions_px_all[start_idx:end_idx],
+                    self._positions_px_all[batch_indices] = self._positions_constraints(
+                        self._positions_px_all[batch_indices],
+                        self._positions_px_initial_all[batch_indices],
                         fix_positions=a0 < fix_positions_iter,
+                        fix_positions_com=fix_positions_com
+                        and a0 >= fix_positions_iter,
                         global_affine_transformation=global_affine_transformation,
                     )
 
@@ -1484,12 +1520,13 @@ class MagneticPtychography(
                     (
                         self._object,
                         _probe,
-                        self._positions_px_all[start_idx:end_idx],
+                        self._positions_px_all[batch_indices],
                     ) = self._constraints(
                         self._object,
                         _probe,
-                        self._positions_px_all[start_idx:end_idx],
-                        fix_com=fix_com and a0 >= fix_probe_iter,
+                        self._positions_px_all[batch_indices],
+                        self._positions_px_initial_all[batch_indices],
+                        fix_probe_com=fix_probe_com and a0 >= fix_probe_iter,
                         constrain_probe_amplitude=a0 < constrain_probe_amplitude_iter
                         and a0 >= fix_probe_iter,
                         constrain_probe_amplitude_relative_radius=constrain_probe_amplitude_relative_radius,
@@ -1507,6 +1544,8 @@ class MagneticPtychography(
                         fix_probe_aperture=a0 < fix_probe_aperture_iter,
                         initial_probe_aperture=_probe_initial_aperture,
                         fix_positions=a0 < fix_positions_iter,
+                        fix_positions_com=fix_positions_com
+                        and a0 >= fix_positions_iter,
                         global_affine_transformation=global_affine_transformation,
                         gaussian_filter=a0 < gaussian_filter_iter
                         and gaussian_filter_sigma_m is not None,
@@ -1577,9 +1616,11 @@ class MagneticPtychography(
         self.probe = self.probe_centered
         self.error = error.item()
 
-        if self._device == "gpu":
-            xp._default_memory_pool.free_all_blocks()
-            xp.clear_memo()
+        # remove _exit_waves attr from self for GD
+        if not use_projection_scheme:
+            self._exit_waves = None
+
+        self.clear_device_mem(device, self._clear_fft_cache)
 
         return self
 
@@ -1850,8 +1891,8 @@ class MagneticPtychography(
     @property
     def object_cropped(self):
         """Cropped and rotated object"""
-
-        cropped_e = self._crop_rotate_object_fov(self._object[0])
-        cropped_m = self._crop_rotate_object_fov(self._object[1])
+        avg_pos = self._return_average_positions()
+        cropped_e = self._crop_rotate_object_fov(self._object[0], positions_px=avg_pos)
+        cropped_m = self._crop_rotate_object_fov(self._object[1], positions_px=avg_pos)
 
         return np.array([cropped_e, cropped_m])
