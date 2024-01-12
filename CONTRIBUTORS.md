@@ -62,7 +62,7 @@ Thank you for your interest in contributing to py4DSTEM! We look forward to seei
 
 1. **Fork the Git repository:** Go to the py4DSTEM GitHub repository and click the "Fork" button. This will create your own copy of the repository on your GitHub account.
 
-2. **Clone the forked repository:** Open your terminal and clone your forked repository to your local machine. Use the following command, replacing `<your-github-username>` with your GitHub username:
+2. **Clone the forked repository:** Open your terminal and clone your forked repository to your local machine. This will create a local copy of your fork of the repository on your computer's filesystem. Use the following command, replacing `<your-github-username>` with your GitHub username:
 
     ```bash
    git clone https://github.com/<your-github-username>/py4DSTEM.git
