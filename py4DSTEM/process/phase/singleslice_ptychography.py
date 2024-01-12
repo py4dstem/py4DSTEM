@@ -206,6 +206,7 @@ class SingleslicePtychography(
         crop_patterns: bool = False,
         device: str = None,
         clear_fft_cache: bool = True,
+        max_batch_size: int = None,
         **kwargs,
     ):
         """
@@ -264,6 +265,8 @@ class SingleslicePtychography(
             if not none, overwrites self._device to set device preprocess will be perfomed on.
         clear_fft_cache: bool, optional
             if true, and device = 'gpu', clears the cached fft plan at the end of function calls
+        max_batch_size: int, optional
+            Max number of probes to use at once in computing probe overlaps
 
         Returns
         --------
@@ -461,13 +464,23 @@ class SingleslicePtychography(
         self._probe_initial_aperture = xp.abs(xp.fft.fft2(self._probe))
 
         # overlaps
-        positions_px_fractional = self._positions_px - xp_storage.round(
-            self._positions_px
-        )
-        shifted_probes = fft_shift(self._probe, positions_px_fractional, xp)
-        probe_overlap = self._sum_overlapping_patches_bincounts(
-            xp.abs(shifted_probes) ** 2, self._positions_px
-        )
+        if max_batch_size is None:
+            max_batch_size = self._num_diffraction_patterns
+
+        probe_overlap = xp.zeros(self._object_shape, dtype=xp.float32)
+
+        for start, end in generate_batches(
+            self._num_diffraction_patterns, max_batch=max_batch_size
+        ):
+            # batch indices
+            positions_px = self._positions_px[start:end]
+            positions_px_fractional = positions_px - xp_storage.round(positions_px)
+
+            shifted_probes = fft_shift(self._probe, positions_px_fractional, xp)
+            probe_overlap += self._sum_overlapping_patches_bincounts(
+                xp.abs(shifted_probes) ** 2, positions_px
+            )
+
         del shifted_probes
 
         # initialize object_fov_mask
