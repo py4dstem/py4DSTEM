@@ -16,7 +16,7 @@ try:
 except (ModuleNotFoundError, ImportError):
     cp = np
 
-from emdfile import Array, Custom, Metadata, _read_metadata
+from emdfile import Array, Custom, Metadata, _read_metadata, tqdmnd
 from py4DSTEM.data import Calibration
 from py4DSTEM.datacube import DataCube
 from py4DSTEM.process.calibration import fit_origin
@@ -588,6 +588,7 @@ class PhaseReconstruction(Custom):
         fit_function: str = "plane",
         com_shifts: np.ndarray = None,
         com_measured: np.ndarray = None,
+        vectorized_calculation=True,
     ):
         """
         Common preprocessing function to compute and fit diffraction intensities CoM
@@ -604,6 +605,8 @@ class PhaseReconstruction(Custom):
             If not None, com_shifts are fitted on the measured CoM values.
         com_measured: tuple of ndarrays (CoMx measured, CoMy measured)
             If not None, com_measured are passed as com_measured_x, com_measured_y
+        vectorized_calculation: bool, optional
+            If True (default), the calculation is vectorized
         Returns
         -------
 
@@ -632,15 +635,6 @@ class PhaseReconstruction(Custom):
             com_measured_x, com_measured_y = com_measured
 
         else:
-            # copy to device
-            intensities = copy_to_device(intensities, device)
-
-            # Coordinates
-            kx = xp.arange(intensities.shape[-2], dtype=xp.float32)
-            ky = xp.arange(intensities.shape[-1], dtype=xp.float32)
-            kya, kxa = xp.meshgrid(ky, kx)
-
-            # calculate CoM
             if dp_mask is not None:
                 if dp_mask.shape != intensities.shape[-2:]:
                     raise ValueError(
@@ -649,19 +643,56 @@ class PhaseReconstruction(Custom):
                             f"not {dp_mask.shape}"
                         )
                     )
-                intensities_mask = intensities * xp.asarray(dp_mask, dtype=xp.float32)
-            else:
-                intensities_mask = intensities
+                    dp_mask = xp.asarray(dp_mask, dtype=xp.float32)
 
-            intensities_sum = xp.sum(intensities_mask, axis=(-2, -1))
-            com_measured_x = (
-                xp.sum(intensities_mask * kxa[None, None], axis=(-2, -1))
-                / intensities_sum
-            )
-            com_measured_y = (
-                xp.sum(intensities_mask * kya[None, None], axis=(-2, -1))
-                / intensities_sum
-            )
+            # Coordinates
+            kx = xp.arange(intensities.shape[-2], dtype=xp.float32)
+            ky = xp.arange(intensities.shape[-1], dtype=xp.float32)
+            kya, kxa = xp.meshgrid(ky, kx)
+
+            if vectorized_calculation:
+                # copy to device
+                intensities = copy_to_device(intensities, device)
+
+                # calculate CoM
+                if dp_mask is not None:
+                    intensities_mask = intensities * dp_mask
+                else:
+                    intensities_mask = intensities
+
+                intensities_sum = xp.sum(intensities_mask, axis=(-2, -1))
+
+                com_measured_x = (
+                    xp.sum(intensities_mask * kxa[None, None], axis=(-2, -1))
+                    / intensities_sum
+                )
+                com_measured_y = (
+                    xp.sum(intensities_mask * kya[None, None], axis=(-2, -1))
+                    / intensities_sum
+                )
+
+            else:
+                sx, sy = intensities.shape[:2]
+                com_measured_x = xp.zeros((sx, sy), dtype=xp.float32)
+                com_measured_y = xp.zeros((sx, sy), dtype=xp.float32)
+
+                # loop of dps
+                for rx, ry in tqdmnd(
+                    sx,
+                    sy,
+                    desc="Fitting center of mass",
+                    unit="probe position",
+                    disable=not self._verbose,
+                ):
+                    intensities_device = copy_to_device(intensities[rx, ry], device)
+                    masked_intensity = intensities_device * dp_mask
+                    summed_intensity = masked_intensity.sum()
+                    com_measured_x[rx, ry] = (
+                        xp.sum(masked_intensity * kxa) / summed_intensity
+                    )
+                    com_measured_y[rx, ry] = (
+                        xp.sum(masked_intensity * kya) / summed_intensity
+                    )
 
         if com_shifts is None:
             com_measured_x_np = asnumpy(com_measured_x)
