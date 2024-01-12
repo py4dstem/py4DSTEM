@@ -22,7 +22,7 @@ There are many ways to contribute to py4DSTEM, including:
 
 * **Code style:** py4DSTEM uses the black code formatter and flake8 linter. All code must pass these checks without error before it can be merged. We suggest using `pre-commit` to help ensure any code commited follows these practices, checkout the [setting up developer environment section below](#install). We also try to abide by PEP8 coding style guide where possible.
 
-* **Documentation:** All code should be well-documented, and use Numpy style docstrings. Use docstrings to document functions and classes, add comments to explain complex code both blocks and individual lines; and use informative variable names.
+* **Documentation:** All code should be well-documented, and use Numpy style docstrings. Use docstrings to document functions and classes, add comments to explain complex code both blocks and individual lines, and use informative variable names.
 
 * **Testing:** Ideally all new code should be accompanied by tests using pyTest framework; but at the least we require examples of old and new behaviour caused by the PR. For bug fixes this can be a block of code which currently fails and works with the proposed changes. For new workflows or extensive feature additions,we'd prefer a Jupyter notebook demonstrating the changes for an entire workflow i.e. from loading the input data and saving any processed results. 
 
