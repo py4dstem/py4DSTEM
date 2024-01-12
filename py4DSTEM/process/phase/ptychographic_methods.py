@@ -2416,7 +2416,6 @@ class Object2p5DProbeMethodsMixin:
 
         xp = self._xp
         xp_storage = self._xp_storage
-        device = self._device
         asnumpy = self._asnumpy
 
         if max_batch_size is None:
@@ -2513,7 +2512,7 @@ class Object2p5DProbeMethodsMixin:
             **kwargs,
         )
 
-        self.clear_device_mem(device, self._clear_fft_cache)
+        self.clear_device_mem(self._device, self._clear_fft_cache)
 
 
 class ObjectNDProbeMixedMethodsMixin:

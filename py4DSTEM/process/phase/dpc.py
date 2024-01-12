@@ -242,7 +242,7 @@ class DPC(PhaseReconstruction):
         plot_center_of_mass: str = "default",
         plot_rotation: bool = True,
         device: str = None,
-        clear_fft_cache: bool = True,
+        clear_fft_cache: bool = None,
         **kwargs,
     ):
         """
@@ -391,7 +391,7 @@ class DPC(PhaseReconstruction):
         self._ky_op = -1j * 0.25 * kya * k_den
 
         self._preprocessed = True
-        self.clear_device_mem(device, self._clear_fft_cache)
+        self.clear_device_mem(self._device, self._clear_fft_cache)
 
         return self
 
@@ -654,7 +654,7 @@ class DPC(PhaseReconstruction):
         butterworth_order: float = 2,
         store_iterations: bool = False,
         device: str = None,
-        clear_fft_cache: bool = True,
+        clear_fft_cache: bool = None,
     ):
         """
         Performs Iterative DPC Reconstruction:
@@ -823,7 +823,7 @@ class DPC(PhaseReconstruction):
         ]
         self.object_phase = asnumpy(self._object_phase)
 
-        self.clear_device_mem(device, self._clear_fft_cache)
+        self.clear_device_mem(self._device, self._clear_fft_cache)
 
         return self
 

@@ -232,7 +232,7 @@ class PtychographicTomography(
         crop_patterns: bool = False,
         main_tilt_axis: str = "vertical",
         device: str = None,
-        clear_fft_cache: bool = True,
+        clear_fft_cache: bool = None,
         max_batch_size: int = None,
         **kwargs,
     ):
@@ -754,7 +754,7 @@ class PtychographicTomography(
             fig.tight_layout()
 
         self._preprocessed = True
-        self.clear_device_mem(device, self._clear_fft_cache)
+        self.clear_device_mem(self._device, self._clear_fft_cache)
 
         return self
 
@@ -806,7 +806,7 @@ class PtychographicTomography(
         progress_bar: bool = True,
         reset: bool = None,
         device: str = None,
-        clear_fft_cache: bool = True,
+        clear_fft_cache: bool = None,
     ):
         """
         Ptychographic reconstruction main method.
@@ -1263,6 +1263,6 @@ class PtychographicTomography(
         if not use_projection_scheme:
             self._exit_waves = None
 
-        self.clear_device_mem(device, self._clear_fft_cache)
+        self.clear_device_mem(self._device, self._clear_fft_cache)
 
         return self

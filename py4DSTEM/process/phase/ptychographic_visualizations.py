@@ -844,4 +844,4 @@ class VisualizationsMixin:
 
         spec.tight_layout(fig)
 
-        self.clear_device_mem(device, self._clear_fft_cache)
+        self.clear_device_mem(self._device, self._clear_fft_cache)
