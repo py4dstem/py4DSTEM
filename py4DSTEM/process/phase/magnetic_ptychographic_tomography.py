@@ -1591,13 +1591,18 @@ class MagneticPtychographicTomography(
         xp = self._xp
         swap_zxy_to_xyz = self._swap_zxy_to_xyz
 
-        if xp is np or int(xp.__version__.split(".")[0]) < 12:
+        if xp is np:
             from scipy.interpolate import RegularGridInterpolator
 
-            xp = np  # ensure np is enforced for cupy < 12
             current_object = self._asnumpy(current_object)
         else:
-            from cupyx.scipy.interpolate import RegularGridInterpolator
+            try:
+                from cupyx.scipy.interpolate import RegularGridInterpolator
+            except ModuleNotFoundError:
+                from scipy.interpolate import RegularGridInterpolator
+
+                xp = np  # force xp to np for cupy <12.0
+                current_object = self._asnumpy(current_object)
 
         _, nz, nx, ny = current_object.shape
 
