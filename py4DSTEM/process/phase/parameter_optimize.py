@@ -227,7 +227,10 @@ class PtychographyOptimizer:
                 row_index, col_index = np.unravel_index(index, (nrows, ncols))
 
                 ax = fig.add_subplot(spec[row_index, col_index])
-                ax.imshow(res[0], cmap=cmap)
+                if np.iscomplexobj(res[0]):
+                    ax.imshow(np.angle(res[0]), cmap=cmap)
+                else:
+                    ax.imshow(res[0], cmap=cmap)
 
                 title_substrings = [
                     f"{param.name}: {val}"
