@@ -22,6 +22,7 @@ except (ImportError, ModuleNotFoundError):
 from py4DSTEM.process.utils import get_CoM
 from py4DSTEM.process.utils.cross_correlate import align_and_shift_images
 from py4DSTEM.process.utils.utils import electron_wavelength_angstrom
+from skimage.restoration import unwrap_phase
 
 # fmt: off
 
@@ -1755,24 +1756,47 @@ def unwrap_phase_2d(array, weights=None, gauge=None, corner_centered=True, xp=np
     return unwrapped_array
 
 
+def unwrap_phase_2d_skimage(array, corner_centered=True, xp=np):
+    if xp is np:
+        array = array.astype(np.float64)
+        unwrapped_array = unwrap_phase(array, wrap_around=corner_centered).astype(
+            xp.float32
+        )
+    else:
+        array = xp.asnumpy(array).astype(np.float64)
+        unwrapped_array = unwrap_phase(array, wrap_around=corner_centered)
+        unwrapped_array = xp.asarray(unwrapped_array).astype(xp.float32)
+
+    return unwrapped_array
+
+
 def fit_aberration_surface(
     complex_probe,
     probe_sampling,
     energy,
     max_angular_order,
     max_radial_order,
+    use_scikit_image,
     xp=np,
 ):
     """ """
     probe_amp = xp.abs(complex_probe)
     probe_angle = -xp.angle(complex_probe)
 
-    unwrapped_angle = unwrap_phase_2d(
-        probe_angle,
-        weights=probe_amp,
-        corner_centered=True,
-        xp=xp,
-    )
+    if use_scikit_image:
+        unwrapped_angle = unwrap_phase_2d(
+            probe_angle,
+            corner_centered=True,
+            xp=xp,
+        )
+
+    else:
+        unwrapped_angle = unwrap_phase_2d(
+            probe_angle,
+            weights=probe_amp,
+            corner_centered=True,
+            xp=xp,
+        )
 
     raveled_basis, _ = aberrations_basis_function(
         complex_probe.shape,
