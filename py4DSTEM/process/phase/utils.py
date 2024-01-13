@@ -1599,10 +1599,10 @@ def interleave_ndarray_symmetrically(array_nd, axis, xp=np):
     return array
 
 
-def return_exp_factors(size, ndim, axis):
+def return_exp_factors(size, ndim, axis, xp=np):
     none_axes = [None] * ndim
     none_axes[axis] = slice(None)
-    exp_factors = 2 * np.exp(-1j * np.pi * np.arange(size) / (2 * size))
+    exp_factors = 2 * xp.exp(-1j * np.pi * xp.arange(size) / (2 * size))
     return exp_factors[tuple(none_axes)]
 
 
@@ -1613,7 +1613,7 @@ def dct_II_using_FFT_base(array_nd, xp=np):
     for axis in range(d):
         n = array_nd.shape[axis]
         interleaved_array = interleave_ndarray_symmetrically(array_nd, axis=axis, xp=xp)
-        exp_factors = return_exp_factors(n, d, axis)
+        exp_factors = return_exp_factors(n, d, axis, xp)
         interleaved_array = xp.fft.fft(interleaved_array, axis=axis)
         interleaved_array *= exp_factors
         array_nd = interleaved_array.real
@@ -1653,10 +1653,10 @@ def interleave_ndarray_symmetrically_inverse(array_nd, axis, xp=np):
     return array
 
 
-def return_exp_factors_inverse(size, ndim, axis):
+def return_exp_factors_inverse(size, ndim, axis, xp=np):
     none_axes = [None] * ndim
     none_axes[axis] = slice(None)
-    exp_factors = np.exp(1j * np.pi * np.arange(size) / (2 * size)) / 2
+    exp_factors = xp.exp(1j * np.pi * xp.arange(size) / (2 * size)) / 2
     return exp_factors[tuple(none_axes)]
 
 
@@ -1672,7 +1672,7 @@ def idct_II_using_FFT_base(array_nd, xp=np):
         reversed_array[array_slice(axis, d, 0, 1)] = 0  # set C(N) = 0
 
         interleaved_array = array_nd - 1j * reversed_array
-        exp_factors = return_exp_factors_inverse(n, d, axis)
+        exp_factors = return_exp_factors_inverse(n, d, axis, xp)
         interleaved_array *= exp_factors
 
         array_nd = xp.fft.ifft(interleaved_array, axis=axis).real
