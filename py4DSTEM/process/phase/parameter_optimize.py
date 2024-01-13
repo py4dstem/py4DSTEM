@@ -178,7 +178,10 @@ class PtychographyOptimizer:
         def evaluation_callback(ptycho):
             if plot_reconstructed_objects or return_reconstructed_objects:
                 pbar.update(1)
-                return (ptycho.object_cropped, error_metric(ptycho))
+                return (
+                    ptycho._return_projected_cropped_potential(),
+                    error_metric(ptycho),
+                )
             else:
                 pbar.update(1)
                 error_metric(ptycho)
@@ -227,10 +230,7 @@ class PtychographyOptimizer:
                 row_index, col_index = np.unravel_index(index, (nrows, ncols))
 
                 ax = fig.add_subplot(spec[row_index, col_index])
-                if np.iscomplexobj(res[0]):
-                    ax.imshow(np.angle(res[0]), cmap=cmap)
-                else:
-                    ax.imshow(res[0], cmap=cmap)
+                ax.imshow(res[0], cmap=cmap)
 
                 title_substrings = [
                     f"{param.name}: {val}"
