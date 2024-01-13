@@ -1123,6 +1123,7 @@ class MagneticPtychography(
         fit_probe_aberrations_max_angular_order: int = 4,
         fit_probe_aberrations_max_radial_order: int = 4,
         fit_probe_aberrations_remove_initial: bool = False,
+        fit_probe_aberrations_using_scikit_image: bool = True,
         butterworth_filter_iter: int = np.inf,
         q_lowpass_e: float = None,
         q_lowpass_m: float = None,
@@ -1220,6 +1221,10 @@ class MagneticPtychography(
             Max radial order of probe aberrations basis functions
         fit_probe_aberrations_remove_initial: bool
             If true, initial probe aberrations are removed before fitting
+        fit_probe_aberrations_using_scikit_image: bool
+            If true, the necessary phase unwrapping is performed using scikit-image. This is more stable, but occasionally leads
+            to a documented bug where the kernel hangs..
+            If false, a poisson-based solver is used for phase unwrapping. This won't hang, but tends to underestimate aberrations.
         butterworth_filter_iter: int, optional
             Number of iterations to run using high-pass butteworth filter
         q_lowpass_e: float
@@ -1502,6 +1507,7 @@ class MagneticPtychography(
                         fit_probe_aberrations_max_angular_order=fit_probe_aberrations_max_angular_order,
                         fit_probe_aberrations_max_radial_order=fit_probe_aberrations_max_radial_order,
                         fit_probe_aberrations_remove_initial=fit_probe_aberrations_remove_initial,
+                        fit_probe_aberrations_using_scikit_image=fit_probe_aberrations_using_scikit_image,
                         fix_probe_aperture=a0 < fix_probe_aperture_iter,
                         initial_probe_aperture=_probe_initial_aperture,
                     )
@@ -1541,6 +1547,7 @@ class MagneticPtychography(
                         fit_probe_aberrations_max_angular_order=fit_probe_aberrations_max_angular_order,
                         fit_probe_aberrations_max_radial_order=fit_probe_aberrations_max_radial_order,
                         fit_probe_aberrations_remove_initial=fit_probe_aberrations_remove_initial,
+                        fit_probe_aberrations_using_scikit_image=fit_probe_aberrations_using_scikit_image,
                         fix_probe_aperture=a0 < fix_probe_aperture_iter,
                         initial_probe_aperture=_probe_initial_aperture,
                         fix_positions=a0 < fix_positions_iter,

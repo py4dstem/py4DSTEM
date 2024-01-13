@@ -1038,6 +1038,7 @@ class ProbeConstraintsMixin:
         max_angular_order,
         max_radial_order,
         remove_initial_probe_aberrations,
+        use_scikit_image,
     ):
         """
         Ptychographic probe smoothing constraint.
@@ -1075,6 +1076,7 @@ class ProbeConstraintsMixin:
             energy,
             max_angular_order,
             max_radial_order,
+            use_scikit_image,
             xp=xp,
         )
 
@@ -1094,6 +1096,7 @@ class ProbeConstraintsMixin:
         fit_probe_aberrations_max_angular_order,
         fit_probe_aberrations_max_radial_order,
         fit_probe_aberrations_remove_initial,
+        fit_probe_aberrations_using_scikit_image,
         fix_probe_aperture,
         initial_probe_aperture,
         constrain_probe_fourier_amplitude,
@@ -1117,6 +1120,7 @@ class ProbeConstraintsMixin:
                 fit_probe_aberrations_max_angular_order,
                 fit_probe_aberrations_max_radial_order,
                 fit_probe_aberrations_remove_initial,
+                fit_probe_aberrations_using_scikit_image,
             )
 
         # Fourier amplitude (aperture) constraints
@@ -1219,6 +1223,7 @@ class ProbeMixedConstraintsMixin:
         fit_probe_aberrations_max_angular_order,
         fit_probe_aberrations_max_radial_order,
         fit_probe_aberrations_remove_initial,
+        fit_probe_aberrations_using_scikit_image,
         fix_probe_aperture,
         initial_probe_aperture,
         constrain_probe_fourier_amplitude,
@@ -1244,6 +1249,7 @@ class ProbeMixedConstraintsMixin:
                     fit_probe_aberrations_max_angular_order,
                     fit_probe_aberrations_max_radial_order,
                     fit_probe_aberrations_remove_initial,
+                    fit_probe_aberrations_using_scikit_image,
                 )
 
         # Fourier amplitude (aperture) constraints

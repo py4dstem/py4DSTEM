@@ -1784,7 +1784,7 @@ def fit_aberration_surface(
     probe_angle = -xp.angle(complex_probe)
 
     if use_scikit_image:
-        unwrapped_angle = unwrap_phase_2d(
+        unwrapped_angle = unwrap_phase_2d_skimage(
             probe_angle,
             corner_centered=True,
             xp=xp,
