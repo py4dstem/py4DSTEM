@@ -1984,6 +1984,7 @@ class ObjectNDProbeMethodsMixin:
 
         xp = self._xp
         asnumpy = self._asnumpy
+        xp_storage = self._xp_storage
 
         # resample to match data, note: this needs to happen in real-space
         if self._resample_exit_waves:
@@ -2076,7 +2077,10 @@ class ObjectNDProbeMethodsMixin:
             outlier_ind = dsts > max_position_total_distance
             positions_update[outlier_ind] = 0
 
-        current_positions -= asnumpy(positions_update)
+        if xp_storage == np:
+            current_positions -= asnumpy(positions_update)
+        else:
+            current_positions -= positions_update
 
         return current_positions
 
