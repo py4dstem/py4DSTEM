@@ -1985,9 +1985,16 @@ class ObjectNDProbeMethodsMixin:
         xp = self._xp
         asnumpy = self._asnumpy
 
+        # resample to match data, note: this needs to happen in real-space
+        if self._resample_exit_waves:
+            overlap = vectorized_bilinear_resample(
+                overlap, output_size=amplitudes.shape[-2:], xp=xp
+            )
+
         # unperturbed
         overlap_fft = xp.fft.fft2(overlap)
         overlap_fft_conj = xp.conj(overlap_fft)
+
         estimated_intensity = self._return_farfield_amplitudes(overlap_fft) ** 2
         measured_intensity = amplitudes**2
 
@@ -2012,6 +2019,15 @@ class ObjectNDProbeMethodsMixin:
             (vectorized_patch_indices_col + 1) % self._object_shape[1],
             shifted_probes,
         )
+
+        # resample to match data, note: this needs to happen in real-space
+        if self._resample_exit_waves:
+            overlap_dx = vectorized_bilinear_resample(
+                overlap_dx, output_size=amplitudes.shape[-2:], xp=xp
+            )
+            overlap_dy = vectorized_bilinear_resample(
+                overlap_dy, output_size=amplitudes.shape[-2:], xp=xp
+            )
 
         # partial intensities
         overlap_dx_fft = overlap_fft - xp.fft.fft2(overlap_dx)
@@ -2105,6 +2121,13 @@ class ObjectNDProbeMethodsMixin:
                 vectorized_patch_indices_col,
                 shifted_probes,
             )
+
+            # resample to match data, note: this needs to happen in real-space
+            if self._resample_exit_waves:
+                overlap = vectorized_bilinear_resample(
+                    overlap, output_size=amplitudes_device.shape[-2:], xp=xp
+                )
+
             fourier_overlap = xp.fft.fft2(overlap)
             farfield_amplitudes = self._return_farfield_amplitudes(fourier_overlap)
 
