@@ -397,7 +397,6 @@ class MixedstateMultislicePtychography(
             vacuum_probe_intensity=self._vacuum_probe_intensity,
             dp_mask=self._dp_mask,
             com_shifts=force_com_shifts,
-            vectorized_calculation=vectorized_com_calculation,
         )
 
         # calibrations
@@ -428,6 +427,7 @@ class MixedstateMultislicePtychography(
             dp_mask=self._dp_mask,
             fit_function=fit_function,
             com_shifts=force_com_shifts,
+            vectorized_calculation=vectorized_com_calculation,
         )
 
         # estimate rotation / transpose
