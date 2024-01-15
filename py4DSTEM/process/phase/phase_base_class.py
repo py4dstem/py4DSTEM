@@ -1540,15 +1540,7 @@ class PtychographicReconstruction(PhaseReconstruction):
 
         # reconstruction metadata
         is_stack = self._save_iterations and hasattr(self, "object_iterations")
-        if is_stack:
-            num_iterations = len(self.object_iterations)
-            iterations = list(range(0, num_iterations, self._save_iterations_frequency))
-            if num_iterations - 1 not in iterations:
-                iterations.append(num_iterations - 1)
-
-            error = [self.error_iterations[i] for i in iterations]
-        else:
-            error = getattr(self, "error", 0.0)
+        error = self.error_iterations
 
         self.metadata = Metadata(
             name="reconstruction_metadata",
@@ -1573,6 +1565,8 @@ class PtychographicReconstruction(PhaseReconstruction):
         self._probe_emd = Array(name="reconstruction_probe", data=asnumpy(self._probe))
 
         if is_stack:
+            num_iterations = len(self.object_iterations)
+            iterations = list(range(0, num_iterations, self._save_iterations_frequency))
             iterations_labels = [f"iteration_{i:03}" for i in iterations]
 
             # object
