@@ -76,6 +76,7 @@ def show(
     theta=None,
     title=None,
     show_fft=False,
+    apply_hanning_window=True,
     show_cbar=False,
     **kwargs,
 ):
@@ -305,6 +306,8 @@ def show(
             which will attempt to use it to overlay a scalebar. If True, uses calibraiton or pixelsize/pixelunits
             for scalebar. If False, no scalebar is added.
         show_fft (bool): if True, plots 2D-fft of array
+        apply_hanning_window (bool)
+            If True, a 2D Hann window is applied to the before FFT
         show_cbar (bool) : if True, adds cbar
         **kwargs: any keywords accepted by matplotlib's ax.matshow()
 
@@ -369,9 +372,12 @@ def show(
             from py4DSTEM.visualize import show
 
             if show_fft:
-                n0 = ar.shape
-                w0 = np.hanning(n0[1]) * np.hanning(n0[0])[:, None]
-                ar = np.abs(np.fft.fftshift(np.fft.fft2(w0 * ar.copy())))
+                if apply_hanning_window:
+                    n0 = ar.shape
+                    w0 = np.hanning(n0[1]) * np.hanning(n0[0])[:, None]
+                    ar = np.abs(np.fft.fftshift(np.fft.fft2(w0 * ar.copy())))
+                else:
+                    ar = np.abs(np.fft.fftshift(np.fft.fft2(ar.copy())))
             for a0 in range(num_images):
                 im = show(
                     ar[a0],
@@ -451,7 +457,12 @@ def show(
     # Otherwise, plot one image
     if show_fft:
         if combine_images is False:
-            ar = np.abs(np.fft.fftshift(np.fft.fft2(ar.copy())))
+            if apply_hanning_window:
+                n0 = ar.shape
+                w0 = np.hanning(n0[1]) * np.hanning(n0[0])[:, None]
+                ar = np.abs(np.fft.fftshift(np.fft.fft2(w0 * ar.copy())))
+            else:
+                ar = np.abs(np.fft.fftshift(np.fft.fft2(ar.copy())))
 
     # get image from a masked array
     if mask is not None:
