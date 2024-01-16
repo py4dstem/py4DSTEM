@@ -307,7 +307,7 @@ def show(
             for scalebar. If False, no scalebar is added.
         show_fft (bool): if True, plots 2D-fft of array
         apply_hanning_window (bool)
-            If True, a 2D Hann window is applied to the before FFT
+            If True, a 2D Hann window is applied to the array before applying the FFT
         show_cbar (bool) : if True, adds cbar
         **kwargs: any keywords accepted by matplotlib's ax.matshow()
 
