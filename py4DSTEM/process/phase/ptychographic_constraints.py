@@ -1254,8 +1254,8 @@ class ProbeMixedConstraintsMixin:
 
         # Fourier amplitude (aperture) constraints
         if fix_probe_aperture:
-            current_probe[0] = self._probe_aperture_constraint(
-                current_probe[0],
+            current_probe = self._probe_aperture_constraint(
+                current_probe,
                 initial_probe_aperture,
             )
         elif constrain_probe_fourier_amplitude:
