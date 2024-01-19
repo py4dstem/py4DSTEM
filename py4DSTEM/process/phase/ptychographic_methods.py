@@ -1,4 +1,3 @@
-import sys
 import warnings
 from typing import Sequence, Tuple
 
@@ -25,8 +24,6 @@ try:
     import cupy as cp
 except (ModuleNotFoundError, ImportError):
     cp = np
-
-warnings.showwarning = lambda msg, *args, **kwargs: print(msg, file=sys.stderr)
 
 
 class ObjectNDMethodsMixin:

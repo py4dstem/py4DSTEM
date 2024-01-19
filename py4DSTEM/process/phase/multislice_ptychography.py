@@ -3,8 +3,6 @@ Module for reconstructing phase objects from 4DSTEM datasets using iterative met
 namely multislice ptychography.
 """
 
-import sys
-import warnings
 from typing import Mapping, Sequence, Tuple, Union
 
 import matplotlib.pyplot as plt
@@ -42,8 +40,6 @@ from py4DSTEM.process.phase.utils import (
     polar_aliases,
     polar_symbols,
 )
-
-warnings.showwarning = lambda msg, *args, **kwargs: print(msg, file=sys.stderr)
 
 
 class MultislicePtychography(

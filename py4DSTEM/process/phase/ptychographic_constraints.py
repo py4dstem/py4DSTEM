@@ -1,4 +1,3 @@
-import sys
 import warnings
 
 import numpy as np
@@ -20,8 +19,6 @@ except (ModuleNotFoundError, ImportError):
     # make sure pylops doesn't try to use cupy
     os.environ["CUPY_PYLOPS"] = "0"
 import pylops  # this must follow the exception
-
-warnings.showwarning = lambda msg, *args, **kwargs: print(msg, file=sys.stderr)
 
 
 class ObjectNDConstraintsMixin:
