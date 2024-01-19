@@ -178,8 +178,8 @@ class ObjectNDConstraintsMixin:
             Constrained object estimate
         """
         xp = self._xp
-        qx = xp.fft.fftfreq(current_object.shape[-1], self.sampling[0])
-        qy = xp.fft.fftfreq(current_object.shape[-2], self.sampling[1])
+        qx = xp.fft.fftfreq(current_object.shape[-2], self.sampling[0])
+        qy = xp.fft.fftfreq(current_object.shape[-1], self.sampling[1])
 
         qya, qxa = xp.meshgrid(qy, qx)
         qra = xp.sqrt(qxa**2 + qya**2)
