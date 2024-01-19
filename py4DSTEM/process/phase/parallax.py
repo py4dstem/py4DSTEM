@@ -79,7 +79,7 @@ class Parallax(PhaseReconstruction):
         self,
         energy: float,
         datacube: DataCube = None,
-        verbose: bool = False,
+        verbose: bool = True,
         object_padding_px: Tuple[int, int] = (32, 32),
         device: str = "cpu",
         storage: str = None,
