@@ -3,7 +3,6 @@ Module for reconstructing phase objects from 4DSTEM datasets using iterative met
 namely joint ptychographic tomography.
 """
 
-import sys
 import warnings
 from typing import Mapping, Sequence, Tuple
 
@@ -45,8 +44,6 @@ from py4DSTEM.process.phase.utils import (
     polar_aliases,
     polar_symbols,
 )
-
-warnings.showwarning = lambda msg, *args, **kwargs: print(msg, file=sys.stderr)
 
 
 class PtychographicTomography(

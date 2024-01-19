@@ -34,6 +34,7 @@ from py4DSTEM.process.utils import (
 )
 
 warnings.showwarning = lambda msg, *args, **kwargs: print(msg, file=sys.stderr)
+warnings.simplefilter("always", UserWarning)
 
 
 class PhaseReconstruction(Custom):

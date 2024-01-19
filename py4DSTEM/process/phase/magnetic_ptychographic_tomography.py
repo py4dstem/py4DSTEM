@@ -3,7 +3,6 @@ Module for reconstructing phase objects from 4DSTEM datasets using iterative met
 namely magnetic ptychographic tomography.
 """
 
-import sys
 import warnings
 from typing import Mapping, Sequence, Tuple
 
@@ -51,8 +50,6 @@ from py4DSTEM.process.phase.utils import (
     polar_symbols,
     project_vector_field_divergence_periodic_3D,
 )
-
-warnings.showwarning = lambda msg, *args, **kwargs: print(msg, file=sys.stderr)
 
 
 class MagneticPtychographicTomography(
