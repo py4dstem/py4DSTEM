@@ -3,6 +3,7 @@ Module for reconstructing phase objects from 4DSTEM datasets using iterative met
 namely DPC.
 """
 
+import sys
 import warnings
 from typing import Sequence, Tuple, Union
 
@@ -22,7 +23,7 @@ from py4DSTEM.datacube import DataCube
 from py4DSTEM.process.phase.phase_base_class import PhaseReconstruction
 from py4DSTEM.visualize.vis_special import return_scaled_histogram_ordering
 
-warnings.simplefilter(action="always", category=UserWarning)
+warnings.showwarning = lambda msg, *args, **kwargs: print(msg, file=sys.stderr)
 
 
 class DPC(PhaseReconstruction):
@@ -773,8 +774,6 @@ class DPC(PhaseReconstruction):
             if (new_error > self.error) and backtrack:
                 self._padded_object_phase = previous_iteration
                 self._step_size /= 2
-                if self._verbose:
-                    print(f"Iteration {a0}, step reduced to {self._step_size}")
                 continue
             self.error = new_error
 

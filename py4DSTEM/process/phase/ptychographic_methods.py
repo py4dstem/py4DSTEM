@@ -1,3 +1,4 @@
+import sys
 import warnings
 from typing import Sequence, Tuple
 
@@ -25,7 +26,7 @@ try:
 except (ModuleNotFoundError, ImportError):
     cp = np
 
-warnings.simplefilter(action="always", category=UserWarning)
+warnings.showwarning = lambda msg, *args, **kwargs: print(msg, file=sys.stderr)
 
 
 class ObjectNDMethodsMixin:
@@ -1983,7 +1984,6 @@ class ObjectNDProbeMethodsMixin:
         """
 
         xp = self._xp
-        asnumpy = self._asnumpy
         storage = self._storage
 
         # resample to match data, note: this needs to happen in real-space

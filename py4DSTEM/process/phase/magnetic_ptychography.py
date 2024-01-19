@@ -3,6 +3,7 @@ Module for reconstructing phase objects from 4DSTEM datasets using iterative met
 namely magnetic ptychography.
 """
 
+import sys
 import warnings
 from typing import Mapping, Sequence, Tuple
 
@@ -45,7 +46,7 @@ from py4DSTEM.process.phase.utils import (
     polar_symbols,
 )
 
-warnings.simplefilter(action="always", category=UserWarning)
+warnings.showwarning = lambda msg, *args, **kwargs: print(msg, file=sys.stderr)
 
 
 class MagneticPtychography(
@@ -347,7 +348,10 @@ class MagneticPtychography(
             )
 
         if self._verbose:
-            print(magnetic_contribution_msg)
+            warnings.warn(
+                magnetic_contribution_msg,
+                UserWarning,
+            )
 
         if len(self._datacube) != self._num_measurements:
             raise ValueError(

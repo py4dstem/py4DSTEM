@@ -3,6 +3,7 @@ Module for reconstructing phase objects from 4DSTEM datasets using iterative met
 namely (single-slice) ptychography.
 """
 
+import sys
 import warnings
 from typing import Mapping, Tuple
 
@@ -39,7 +40,7 @@ from py4DSTEM.process.phase.utils import (
     polar_symbols,
 )
 
-warnings.simplefilter(action="always", category=UserWarning)
+warnings.showwarning = lambda msg, *args, **kwargs: print(msg, file=sys.stderr)
 
 
 class SingleslicePtychography(

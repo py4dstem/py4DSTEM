@@ -3,6 +3,7 @@ Module for reconstructing virtual parallax (also known as tilted-shifted bright 
 images by aligning each virtual BF image.
 """
 
+import sys
 import warnings
 from typing import Tuple
 
@@ -36,7 +37,7 @@ try:
 except (ModuleNotFoundError, ImportError):
     cp = np
 
-warnings.simplefilter(action="always", category=UserWarning)
+warnings.showwarning = lambda msg, *args, **kwargs: print(msg, file=sys.stderr)
 
 _aberration_names = {
     (1, 0): "C1        ",

@@ -2,6 +2,7 @@
 Module for reconstructing phase objects from 4DSTEM datasets using iterative methods.
 """
 
+import sys
 import warnings
 
 import matplotlib.pyplot as plt
@@ -32,7 +33,7 @@ from py4DSTEM.process.utils import (
     get_shifted_ar,
 )
 
-warnings.simplefilter(action="always", category=UserWarning)
+warnings.showwarning = lambda msg, *args, **kwargs: print(msg, file=sys.stderr)
 
 
 class PhaseReconstruction(Custom):
@@ -878,9 +879,10 @@ class PhaseReconstruction(Custom):
 
                 if verbose:
                     if _rotation_best_transpose:
-                        print("Diffraction intensities should be transposed.")
-                    else:
-                        print("No need to transpose diffraction intensities.")
+                        warnings.warn(
+                            "Diffraction intensities should be transposed.",
+                            UserWarning,
+                        )
 
         else:
             # Rotation unknown
@@ -985,7 +987,10 @@ class PhaseReconstruction(Custom):
                         _rotation_best_rad = rotation_angles_rad[ind_min]
 
                 if verbose:
-                    print(("Best fit rotation = " f"{rotation_best_deg:.0f} degrees."))
+                    warnings.warn(
+                        f"Best fit rotation = {rotation_best_deg:.0f} degrees.",
+                        UserWarning,
+                    )
 
                 if plot_rotation:
                     figsize = kwargs.get("figsize", (8, 2))
@@ -1139,11 +1144,15 @@ class PhaseReconstruction(Custom):
 
                 # Print summary
                 if verbose:
-                    print(("Best fit rotation = " f"{rotation_best_deg:.0f} degrees."))
+                    warnings.warn(
+                        f"Best fit rotation = {rotation_best_deg:.0f} degrees.",
+                        UserWarning,
+                    )
                     if _rotation_best_transpose:
-                        print("Diffraction intensities should be transposed.")
-                    else:
-                        print("No need to transpose diffraction intensities.")
+                        warnings.warn(
+                            "Diffraction intensities should be transposed.",
+                            UserWarning,
+                        )
 
                 # Plot Curl/Div rotation
                 if plot_rotation:
@@ -2057,41 +2066,45 @@ class PtychographicReconstruction(PhaseReconstruction):
                     )
                 )
             else:
-                print(
+                warnings.warn(
                     (
                         first_line + f"with the {reconstruction_method} algorithm, "
                         f"with normalization_min: {normalization_min} and step _size: {step_size}, "
                         f"in batches of max {max_batch_size} measurements."
-                    )
+                    ),
+                    UserWarning,
                 )
 
         else:
             # named projection set method
             if reconstruction_parameter is not None:
-                print(
+                warnings.warn(
                     (
                         first_line + f"with the {reconstruction_method} algorithm, "
                         f"with normalization_min: {normalization_min} and α: {reconstruction_parameter}."
-                    )
+                    ),
+                    UserWarning,
                 )
 
             # generalized projections (or the even more rare charge-flipping)
             elif projection_a is not None:
-                print(
+                warnings.warn(
                     (
                         first_line + f"with the {reconstruction_method} algorithm, "
                         f"with normalization_min: {normalization_min} and (a,b,c): "
                         f"{projection_a, projection_b, projection_c}."
-                    )
+                    ),
+                    UserWarning,
                 )
 
             # gradient descent
             else:
-                print(
+                warnings.warn(
                     (
                         first_line + f"with the {reconstruction_method} algorithm, "
                         f"with normalization_min: {normalization_min} and step _size: {step_size}."
-                    )
+                    ),
+                    UserWarning,
                 )
 
     def _constraints(
