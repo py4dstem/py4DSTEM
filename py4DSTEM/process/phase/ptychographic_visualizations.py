@@ -1,4 +1,3 @@
-import warnings
 from typing import Tuple
 
 import matplotlib.pyplot as plt
@@ -16,8 +15,6 @@ try:
     import cupy as cp
 except (ModuleNotFoundError, ImportError):
     cp = np
-
-warnings.simplefilter(action="always", category=UserWarning)
 
 
 class VisualizationsMixin:
