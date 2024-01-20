@@ -679,7 +679,7 @@ class SingleslicePtychography(
         gaussian_filter_sigma: float, optional
             Standard deviation of gaussian kernel in A
         gaussian_filter: bool, optional
-            If True, object is smoothed using gaussian filtering
+            If True and gaussian_filter_sigma is not None, object is smoothed using gaussian filtering
         fit_probe_aberrations: bool, optional
             If True, probe aberrations are fitted to a low-order expansion
         fit_probe_aberrations_max_angular_order: int
@@ -693,7 +693,7 @@ class SingleslicePtychography(
             to a documented bug where the kernel hangs..
             If false, a poisson-based solver is used for phase unwrapping. This won't hang, but tends to underestimate aberrations.
         butterworth_filter: bool, optional
-            If True, object is smoothed using butterworth filtering
+            If True and q_lowpass or q_highpass is not None, object is smoothed using butterworth filtering
         q_lowpass: float
             Cut-off frequency in A^-1 for low-pass butterworth filter
         q_highpass: float
@@ -701,7 +701,7 @@ class SingleslicePtychography(
         butterworth_order: float
             Butterworth filter order. Smaller gives a smoother filter
         tv_denoise: bool, optional
-            If True, object is smoothed using TV denoising
+            If True and tv_denoise_weight is not None, object is smoothed using TV denoising
         tv_denoise_weight: float
             Denoising weight. The greater `weight`, the more denoising.
         tv_denoise_inner_iter: float

@@ -682,7 +682,7 @@ class MixedstateMultislicePtychography(
 
     def reconstruct(
         self,
-        max_iter: int = 8,
+        num_iter: int = 8,
         reconstruction_method: str = "gradient-descent",
         reconstruction_parameter: float = 1.0,
         reconstruction_parameter_a: float = None,
@@ -695,41 +695,41 @@ class MixedstateMultislicePtychography(
         positions_step_size: float = 0.9,
         fix_probe_com: bool = True,
         orthogonalize_probe: bool = True,
-        fix_probe_iter: int = 0,
-        fix_probe_aperture_iter: int = 0,
-        constrain_probe_amplitude_iter: int = 0,
+        fix_probe: bool = False,
+        fix_probe_aperture: bool = False,
+        constrain_probe_amplitude: bool = False,
         constrain_probe_amplitude_relative_radius: float = 0.5,
         constrain_probe_amplitude_relative_width: float = 0.05,
-        constrain_probe_fourier_amplitude_iter: int = 0,
+        constrain_probe_fourier_amplitude: bool = False,
         constrain_probe_fourier_amplitude_max_width_pixels: float = 3.0,
         constrain_probe_fourier_amplitude_constant_intensity: bool = False,
-        fix_positions_iter: int = np.inf,
+        fix_positions: bool = True,
         fix_positions_com: bool = True,
         max_position_update_distance: float = None,
         max_position_total_distance: float = None,
-        global_affine_transformation: bool = True,
+        global_affine_transformation: bool = False,
         gaussian_filter_sigma: float = None,
-        gaussian_filter_iter: int = np.inf,
-        fit_probe_aberrations_iter: int = 0,
+        gaussian_filter: bool = True,
+        fit_probe_aberrations: bool = False,
         fit_probe_aberrations_max_angular_order: int = 4,
         fit_probe_aberrations_max_radial_order: int = 4,
         fit_probe_aberrations_remove_initial: bool = False,
         fit_probe_aberrations_using_scikit_image: bool = True,
-        butterworth_filter_iter: int = np.inf,
+        butterworth_filter: bool = True,
         q_lowpass: float = None,
         q_highpass: float = None,
         butterworth_order: float = 2,
-        kz_regularization_filter_iter: int = np.inf,
+        kz_regularization_filter: bool = True,
         kz_regularization_gamma: Union[float, np.ndarray] = None,
-        identical_slices_iter: int = 0,
+        identical_slices: bool = False,
         object_positivity: bool = True,
         shrinkage_rad: float = 0.0,
         fix_potential_baseline: bool = True,
-        pure_phase_object_iter: int = 0,
-        tv_denoise_iter_chambolle=np.inf,
+        pure_phase_object: bool = False,
+        tv_denoise_chambolle: bool = True,
         tv_denoise_weight_chambolle=None,
         tv_denoise_pad_chambolle=1,
-        tv_denoise_iter=np.inf,
+        tv_denoise: bool = True,
         tv_denoise_weights=None,
         tv_denoise_inner_iter=40,
         switch_object_iter: int = np.inf,
@@ -744,7 +744,7 @@ class MixedstateMultislicePtychography(
 
         Parameters
         --------
-        max_iter: int, optional
+        num_iter: int, optional
             Maximum number of iterations to run
         reconstruction_method: str, optional
             Specifies which reconstruction algorithm to use, one of:
@@ -774,24 +774,24 @@ class MixedstateMultislicePtychography(
             Positions update step size
         fix_com: bool, optional
             If True, fixes center of mass of probe
-        fix_probe_iter: int, optional
-            Number of iterations to run with a fixed probe before updating probe estimate
-        fix_probe_aperture_iter: int, optional
-            Number of iterations to run with a fixed probe Fourier amplitude before updating probe estimate
-        constrain_probe_amplitude_iter: int, optional
-            Number of iterations to run while constraining the real-space probe with a top-hat support.
+        fix_probe: bool, optional
+            If True, probe is fixed
+        fix_probe_aperture: bool, optional
+            If True, vaccum probe is used to fix Fourier amplitude
+        constrain_probe_amplitude: bool, optional
+            If True, real-space probe is constrained with a top-hat support.
         constrain_probe_amplitude_relative_radius: float
             Relative location of top-hat inflection point, between 0 and 0.5
         constrain_probe_amplitude_relative_width: float
             Relative width of top-hat sigmoid, between 0 and 0.5
-        constrain_probe_fourier_amplitude_iter: int, optional
-            Number of iterations to run while constraining the Fourier-space probe by fitting a sigmoid for each angular frequency.
+        constrain_probe_fourier_amplitude: bool, optional
+            If True, Fourier-probe is constrained by fitting a sigmoid for each angular frequency
         constrain_probe_fourier_amplitude_max_width_pixels: float
             Maximum pixel width of fitted sigmoid functions.
         constrain_probe_fourier_amplitude_constant_intensity: bool
             If True, the probe aperture is additionally constrained to a constant intensity.
-        fix_positions_iter: int, optional
-            Number of iterations to run with fixed positions before updating positions estimate
+        fix_positions: bool, optional
+            If True, probe-positions are fixed
         max_position_update_distance: float, optional
             Maximum allowed distance for update in A
         max_position_total_distance: float, optional
@@ -800,10 +800,10 @@ class MixedstateMultislicePtychography(
             If True, positions are assumed to be a global affine transform from initial scan
         gaussian_filter_sigma: float, optional
             Standard deviation of gaussian kernel in A
-        gaussian_filter_iter: int, optional
-            Number of iterations to run using object smoothness constraint
-        fit_probe_aberrations_iter: int, optional
-            Number of iterations to run while fitting the probe aberrations to a low-order expansion
+        gaussian_filter: bool, optional
+            If True and gaussian_filter_sigma is not None, object is smoothed using gaussian filtering
+        fit_probe_aberrations: bool, optional
+            If True, probe aberrations are fitted to a low-order expansion
         fit_probe_aberrations_max_angular_order: bool
             Max angular order of probe aberrations basis functions
         fit_probe_aberrations_max_radial_order: bool
@@ -814,36 +814,36 @@ class MixedstateMultislicePtychography(
             If true, the necessary phase unwrapping is performed using scikit-image. This is more stable, but occasionally leads
             to a documented bug where the kernel hangs..
             If false, a poisson-based solver is used for phase unwrapping. This won't hang, but tends to underestimate aberrations.
-        butterworth_filter_iter: int, optional
-            Number of iterations to run using high-pass butteworth filter
+        butterworth_filter: bool, optional
+            If True and q_lowpass or q_highpass is not None, object is smoothed using butterworth filtering
         q_lowpass: float
             Cut-off frequency in A^-1 for low-pass butterworth filter
         q_highpass: float
             Cut-off frequency in A^-1 for high-pass butterworth filter
         butterworth_order: float
             Butterworth filter order. Smaller gives a smoother filter
-        kz_regularization_filter_iter: int, optional
-            Number of iterations to run using kz regularization filter
+        kz_regularization_filter: bool, optional
+            If True and kz_regularization_gamma is not None, applies kz regularization filter
         kz_regularization_gamma, float, optional
             kz regularization strength
-        identical_slices_iter: int, optional
-            Number of iterations to run using identical slices
+        identical_slices: bool, optional
+            If True, object forced to identical slices
         object_positivity: bool, optional
             If True, forces object to be positive
         shrinkage_rad: float
             Phase shift in radians to be subtracted from the potential at each iteration
         fix_potential_baseline: bool
             If true, the potential mean outside the FOV is forced to zero at each iteration
-        pure_phase_object_iter: int, optional
-            Number of iterations where object amplitude is set to unity
-        tv_denoise_iter_chambolle: bool
-            Number of iterations with TV denoisining
+        pure_phase_object: bool, optional
+            If True, object amplitude is set to unity
+        tv_denoise_chambolle: bool
+            If True and tv_denoise_weight_chambolle is not None, object is smoothed using TV denoisining
         tv_denoise_weight_chambolle: float
             weight of tv denoising constraint
         tv_denoise_pad_chambolle: int
             If not None, pads object at top and bottom with this many zeros before applying denoising
         tv_denoise: bool
-            If True, applies TV denoising on object
+            If True and tv_denoise_weights is not None, object is smoothed using TV denoising
         tv_denoise_weights: [float,float]
             Denoising weights[z weight, r weight]. The greater `weight`,
             the more denoising.
@@ -903,7 +903,7 @@ class MixedstateMultislicePtychography(
 
         if self._verbose:
             self._report_reconstruction_summary(
-                max_iter,
+                num_iter,
                 switch_object_iter,
                 use_projection_scheme,
                 reconstruction_method,
@@ -929,7 +929,7 @@ class MixedstateMultislicePtychography(
 
         # main loop
         for a0 in tqdmnd(
-            max_iter,
+            num_iter,
             desc="Reconstructing object and probe",
             unit=" iter",
             disable=not progress_bar,
@@ -998,11 +998,11 @@ class MixedstateMultislicePtychography(
                     use_projection_scheme=use_projection_scheme,
                     step_size=step_size,
                     normalization_min=normalization_min,
-                    fix_probe=a0 < fix_probe_iter,
+                    fix_probe=fix_probe,
                 )
 
                 # position correction
-                if a0 >= fix_positions_iter:
+                if not fix_positions:
                     self._positions_px[batch_indices] = self._position_correction(
                         self._object,
                         vectorized_patch_indices_row,
@@ -1028,54 +1028,49 @@ class MixedstateMultislicePtychography(
                 self._probe,
                 self._positions_px,
                 self._positions_px_initial,
-                fix_probe_com=fix_probe_com and a0 >= fix_probe_iter,
-                constrain_probe_amplitude=a0 < constrain_probe_amplitude_iter
-                and a0 >= fix_probe_iter,
+                fix_probe_com=fix_probe_com and not fix_probe,
+                constrain_probe_amplitude=constrain_probe_amplitude and not fix_probe,
                 constrain_probe_amplitude_relative_radius=constrain_probe_amplitude_relative_radius,
                 constrain_probe_amplitude_relative_width=constrain_probe_amplitude_relative_width,
-                constrain_probe_fourier_amplitude=a0
-                < constrain_probe_fourier_amplitude_iter
-                and a0 >= fix_probe_iter,
+                constrain_probe_fourier_amplitude=constrain_probe_fourier_amplitude
+                and not fix_probe,
                 constrain_probe_fourier_amplitude_max_width_pixels=constrain_probe_fourier_amplitude_max_width_pixels,
                 constrain_probe_fourier_amplitude_constant_intensity=constrain_probe_fourier_amplitude_constant_intensity,
-                fit_probe_aberrations=a0 < fit_probe_aberrations_iter
-                and a0 >= fix_probe_iter,
+                fit_probe_aberrations=fit_probe_aberrations and not fix_probe,
                 fit_probe_aberrations_max_angular_order=fit_probe_aberrations_max_angular_order,
                 fit_probe_aberrations_max_radial_order=fit_probe_aberrations_max_radial_order,
                 fit_probe_aberrations_remove_initial=fit_probe_aberrations_remove_initial,
                 fit_probe_aberrations_using_scikit_image=fit_probe_aberrations_using_scikit_image,
-                fix_probe_aperture=a0 < fix_probe_aperture_iter,
+                fix_probe_aperture=fix_probe_aperture,
                 initial_probe_aperture=self._probe_initial_aperture,
-                fix_positions=a0 < fix_positions_iter,
-                fix_positions_com=fix_positions_com and a0 >= fix_positions_iter,
+                fix_positions=fix_positions,
+                fix_positions_com=fix_positions_com and not fix_positions,
                 global_affine_transformation=global_affine_transformation,
-                gaussian_filter=a0 < gaussian_filter_iter
-                and gaussian_filter_sigma is not None,
+                gaussian_filter=gaussian_filter and gaussian_filter_sigma is not None,
                 gaussian_filter_sigma=gaussian_filter_sigma,
-                butterworth_filter=a0 < butterworth_filter_iter
+                butterworth_filter=butterworth_filter
                 and (q_lowpass is not None or q_highpass is not None),
                 q_lowpass=q_lowpass,
                 q_highpass=q_highpass,
                 butterworth_order=butterworth_order,
-                kz_regularization_filter=a0 < kz_regularization_filter_iter
+                kz_regularization_filter=kz_regularization_filter
                 and kz_regularization_gamma is not None,
                 kz_regularization_gamma=kz_regularization_gamma[a0]
                 if kz_regularization_gamma is not None
                 and isinstance(kz_regularization_gamma, np.ndarray)
                 else kz_regularization_gamma,
-                identical_slices=a0 < identical_slices_iter,
+                identical_slices=identical_slices,
                 object_positivity=object_positivity,
                 shrinkage_rad=shrinkage_rad,
                 object_mask=self._object_fov_mask_inverse
                 if fix_potential_baseline and self._object_fov_mask_inverse.sum() > 0
                 else None,
-                pure_phase_object=a0 < pure_phase_object_iter
-                and self._object_type == "complex",
-                tv_denoise_chambolle=a0 < tv_denoise_iter_chambolle
+                pure_phase_object=pure_phase_object and self._object_type == "complex",
+                tv_denoise_chambolle=tv_denoise_chambolle
                 and tv_denoise_weight_chambolle is not None,
                 tv_denoise_weight_chambolle=tv_denoise_weight_chambolle,
                 tv_denoise_pad_chambolle=tv_denoise_pad_chambolle,
-                tv_denoise=a0 < tv_denoise_iter and tv_denoise_weights is not None,
+                tv_denoise=tv_denoise and tv_denoise_weights is not None,
                 tv_denoise_weights=tv_denoise_weights,
                 tv_denoise_inner_iter=tv_denoise_inner_iter,
                 orthogonalize_probe=orthogonalize_probe,
