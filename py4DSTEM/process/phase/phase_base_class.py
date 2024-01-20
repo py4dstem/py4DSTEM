@@ -1696,13 +1696,12 @@ class PtychographicReconstruction(PhaseReconstruction):
             self._exit_waves = None
 
         # Check if stack
-        if hasattr(error, "__len__"):
+        if "_object_iterations_emd" in dict_data.keys():
             self.object_iterations = list(dict_data["_object_iterations_emd"].data)
             self.probe_iterations = list(dict_data["_probe_iterations_emd"].data)
-            self.error_iterations = error
-            self.error = error[-1]
-        else:
-            self.error = error
+
+        self.error_iterations = error
+        self.error = error[-1]
 
         # Slim preprocessing to enable visualize
         self._positions_px_com = xp.mean(self._positions_px, axis=0)
