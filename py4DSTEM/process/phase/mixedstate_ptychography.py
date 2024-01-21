@@ -931,7 +931,7 @@ class MixedstatePtychography(
                 fit_probe_aberrations_max_radial_order=fit_probe_aberrations_max_radial_order,
                 fit_probe_aberrations_remove_initial=fit_probe_aberrations_remove_initial,
                 fit_probe_aberrations_using_scikit_image=fit_probe_aberrations_using_scikit_image,
-                fix_probe_aperture=fix_probe_aperture,
+                fix_probe_aperture=fix_probe_aperture and not fix probe,
                 initial_probe_aperture=self._probe_initial_aperture,
                 fix_positions=fix_positions,
                 fix_positions_com=fix_positions_com and not fix_positions,
