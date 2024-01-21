@@ -1054,7 +1054,6 @@ class MagneticPtychographicTomography(
         if self._verbose:
             self._report_reconstruction_summary(
                 num_iter,
-                np.inf,
                 use_projection_scheme,
                 reconstruction_method,
                 reconstruction_parameter,
