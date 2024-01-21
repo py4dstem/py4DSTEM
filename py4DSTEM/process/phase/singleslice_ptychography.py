@@ -606,12 +606,12 @@ class SingleslicePtychography(
         object_positivity: bool = True,
         shrinkage_rad: float = 0.0,
         fix_potential_baseline: bool = True,
-        switch_object_iter: int = np.inf,
         store_iterations: bool = False,
         progress_bar: bool = True,
         reset: bool = None,
         device: str = None,
         clear_fft_cache: bool = None,
+        object_type: str = None,
     ):
         """
         Ptychographic reconstruction main method.
@@ -712,9 +712,6 @@ class SingleslicePtychography(
             Phase shift in radians to be subtracted from the potential at each iteration
         fix_potential_baseline: bool
             If true, the potential mean outside the FOV is forced to zero at each iteration
-        switch_object_iter: int, optional
-            Iteration to switch object type between 'complex' and 'potential' or between
-            'potential' and 'complex'
         store_iterations: bool, optional
             If True, reconstructed objects and probes are stored at each iteration
         progress_bar: bool, optional
@@ -722,9 +719,11 @@ class SingleslicePtychography(
         reset: bool, optional
             If True, previous reconstructions are ignored
         device: str, optional
-            if not none, overwrites self._device to set device preprocess will be perfomed on.
+            If not none, overwrites self._device to set device preprocess will be perfomed on.
         clear_fft_cache: bool, optional
-            if true, and device = 'gpu', clears the cached fft plan at the end of function calls
+            If true, and device = 'gpu', clears the cached fft plan at the end of function calls
+        object_type: str, optional
+            Overwrites self._object_type
 
         Returns
         --------
@@ -745,7 +744,9 @@ class SingleslicePtychography(
             ]
             self.copy_attributes_to_device(attrs, device)
 
-        xp = self._xp
+        if object_type is not None:
+            self._switch_object_type(object_type)
+
         xp_storage = self._xp_storage
         device = self._device
         asnumpy = self._asnumpy
@@ -770,7 +771,6 @@ class SingleslicePtychography(
         if self._verbose:
             self._report_reconstruction_summary(
                 num_iter,
-                switch_object_iter,
                 use_projection_scheme,
                 reconstruction_method,
                 reconstruction_parameter,
@@ -801,14 +801,6 @@ class SingleslicePtychography(
             disable=not progress_bar,
         ):
             error = 0.0
-
-            if a0 == switch_object_iter:
-                if self._object_type == "potential":
-                    self._object_type = "complex"
-                    self._object = xp.exp(1j * self._object, dtype=xp.complex64)
-                else:
-                    self._object_type = "potential"
-                    self._object = xp.angle(self._object)
 
             # randomize
             if not use_projection_scheme:
