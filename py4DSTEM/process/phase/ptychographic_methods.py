@@ -177,7 +177,6 @@ class ObjectNDMethodsMixin:
         self,
         obj=None,
         apply_hanning_window=True,
-        crop_to_min_frequency=True,
         scalebar=True,
         pixelsize=None,
         pixelunits=None,
@@ -192,8 +191,6 @@ class ObjectNDMethodsMixin:
             If None is specified, uses the `object_fft` property
         apply_hanning_window: bool, optional
             If True, a 2D Hann window is applied to the object before FFT
-        crop_to_min_frequency: bool, optional
-            If True, a square FFT is plotted, cropping to the smallest axis
         scalebar: bool, optional
             if True, adds scalebar to probe
         pixelunits: str, optional
@@ -210,13 +207,6 @@ class ObjectNDMethodsMixin:
             pixelsize = 1 / (object_fft.shape[1] * self.sampling[1])
         if pixelunits is None:
             pixelunits = r"$\AA^{-1}$"
-
-        if crop_to_min_frequency:
-            sx, sy = object_fft.shape
-            s = min(sx, sy)
-            start_x = sx // 2 - (s // 2)
-            start_y = sy // 2 - (s // 2)
-            object_fft = object_fft[start_x : start_x + s, start_y : start_y + s]
 
         figsize = kwargs.pop("figsize", (4, 4))
         cmap = kwargs.pop("cmap", "magma")
@@ -239,6 +229,7 @@ class ObjectNDMethodsMixin:
             pixelunits=pixelunits,
             vmin=vmin,
             vmax=vmax,
+            aspect=object_fft.shape[1] / object_fft.shape[0],
             **kwargs,
         )
 
