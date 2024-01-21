@@ -148,7 +148,13 @@ class PhaseReconstruction(Custom):
         self._datacube = datacube
         return self
 
-    def reinitialize_parameters(self, device: str = None, verbose: bool = None):
+    def reinitialize_parameters(
+        self,
+        device: str = None,
+        storage: str = None,
+        clear_fft_cache: bool = None,
+        verbose: bool = None,
+    ):
         """
         Reinitializes common parameters. This is useful when loading a previously-saved
         reconstruction (which set device='cpu' and verbose=True for compatibility) ,
@@ -157,7 +163,11 @@ class PhaseReconstruction(Custom):
         Parameters
         ----------
         device: str, optional
-            If not None, imports and assigns appropriate device modules
+            If not None, assigns appropriate device modules
+        storage: str, optional
+            If not None, assigns appropriate storage modules
+        clear_fft_cache: bool, optional
+            If not None, sets the FFT caching parameter
         verbose: bool, optional
             If not None, sets the verbosity to verbose
 
@@ -168,23 +178,10 @@ class PhaseReconstruction(Custom):
         """
 
         if device is not None:
-            if device == "cpu":
-                import scipy
+            self.set_device(device, clear_fft_cache)
 
-                self._xp = np
-                self._asnumpy = np.asarray
-                self._scipy = scipy
-
-            elif device == "gpu":
-                from cupyx import scipy
-
-                self._xp = cp
-                self._asnumpy = cp.asnumpy
-                self._scipy = scipy
-
-            else:
-                raise ValueError(f"device must be either 'cpu' or 'gpu', not {device}")
-            self._device = device
+        if storage is not None:
+            self.set_storage(storage)
 
         if verbose is not None:
             self._verbose = verbose
@@ -1508,6 +1505,8 @@ class PtychographicReconstruction(PhaseReconstruction):
             "object_type": self._object_type,
             "verbose": self._verbose,
             "device": self._device,
+            "storage": self._storage,
+            "clear_fft_cache": self._clear_fft_cache,
             "name": self.name,
             "vacuum_probe_intensity": vacuum_probe_intensity,
             "positions": scan_positions,
@@ -1656,6 +1655,8 @@ class PtychographicReconstruction(PhaseReconstruction):
             "polar_parameters": polar_params,
             "verbose": True,  # for compatibility
             "device": "cpu",  # for compatibility
+            "storage": "cpu",  # for compatibility
+            "clear_fft_cache": True,  # for compatibility
         }
 
         class_specific_kwargs = {}
