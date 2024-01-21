@@ -1710,6 +1710,29 @@ class PtychographicReconstruction(PhaseReconstruction):
         self.probe = self.probe_centered
         self._preprocessed = True
 
+    def _switch_object_type(self, object_type):
+        """
+        Switches object type to/from "potential"/"complex"
+
+        Returns
+        --------
+        self: PhaseReconstruction
+            Self to enable chaining
+        """
+        xp = self._xp
+
+        match (self._object_type, object_type):
+            case ("potential", "complex"):
+                self._object_type = "complex"
+                self._object = xp.exp(1j * self._object, dtype=xp.complex64)
+            case ("complex", "potential"):
+                self._object_type = "potential"
+                self._object = xp.angle(self._object)
+            case _:
+                self._object_type = self._object_type
+
+        return self
+
     def _set_polar_parameters(self, parameters: dict):
         """
         Set the probe aberrations dictionary.
@@ -2032,7 +2055,6 @@ class PtychographicReconstruction(PhaseReconstruction):
     def _report_reconstruction_summary(
         self,
         max_iter,
-        switch_object_iter,
         use_projection_scheme,
         reconstruction_method,
         reconstruction_parameter,
@@ -2046,16 +2068,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         """ """
 
         # object type
-        if switch_object_iter > max_iter:
-            first_line = f"Performing {max_iter} iterations using a {self._object_type} object type, "
-        else:
-            switch_object_type = (
-                "complex" if self._object_type == "potential" else "potential"
-            )
-            first_line = (
-                f"Performing {switch_object_iter} iterations using a {self._object_type} object type and "
-                f"{max_iter - switch_object_iter} iterations using a {switch_object_type} object type, "
-            )
+        first_line = f"Performing {max_iter} iterations using a {self._object_type} object type, "
 
         # stochastic gradient descent
         if max_batch_size is not None:
