@@ -835,7 +835,7 @@ class MagneticPtychographicTomography(
 
     def reconstruct(
         self,
-        max_iter: int = 8,
+        num_iter: int = 8,
         reconstruction_method: str = "gradient-descent",
         reconstruction_parameter: float = 1.0,
         reconstruction_parameter_a: float = None,
@@ -847,28 +847,28 @@ class MagneticPtychographicTomography(
         normalization_min: float = 1,
         positions_step_size: float = 0.9,
         fix_probe_com: bool = True,
-        fix_probe_iter: int = 0,
-        fix_probe_aperture_iter: int = 0,
-        constrain_probe_amplitude_iter: int = 0,
+        fix_probe: bool = False,
+        fix_probe_aperture: bool = False,
+        constrain_probe_amplitude: bool = False,
         constrain_probe_amplitude_relative_radius: float = 0.5,
         constrain_probe_amplitude_relative_width: float = 0.05,
-        constrain_probe_fourier_amplitude_iter: int = 0,
+        constrain_probe_fourier_amplitude: bool = False,
         constrain_probe_fourier_amplitude_max_width_pixels: float = 3.0,
         constrain_probe_fourier_amplitude_constant_intensity: bool = False,
-        fix_positions_iter: int = np.inf,
+        fix_positions: bool = True,
         fix_positions_com: bool = True,
         max_position_update_distance: float = None,
         max_position_total_distance: float = None,
-        global_affine_transformation: bool = True,
+        global_affine_transformation: bool = False,
         gaussian_filter_sigma_e: float = None,
         gaussian_filter_sigma_m: float = None,
-        gaussian_filter_iter: int = np.inf,
-        fit_probe_aberrations_iter: int = 0,
+        gaussian_filter: bool = True,
+        fit_probe_aberrations: bool = False,
         fit_probe_aberrations_max_angular_order: int = 4,
         fit_probe_aberrations_max_radial_order: int = 4,
         fit_probe_aberrations_remove_initial: bool = False,
         fit_probe_aberrations_using_scikit_image: bool = True,
-        butterworth_filter_iter: int = np.inf,
+        butterworth_filter: bool = True,
         q_lowpass_e: float = None,
         q_lowpass_m: float = None,
         q_highpass_e: float = None,
@@ -877,7 +877,7 @@ class MagneticPtychographicTomography(
         object_positivity: bool = True,
         shrinkage_rad: float = 0.0,
         fix_potential_baseline: bool = True,
-        tv_denoise_iter=np.inf,
+        tv_denoise: bool = True,
         tv_denoise_weights=None,
         tv_denoise_inner_iter=40,
         collective_measurement_updates: bool = True,
@@ -892,8 +892,8 @@ class MagneticPtychographicTomography(
 
         Parameters
         --------
-        max_iter: int, optional
-            Maximum number of iterations to run
+        num_iter: int, optional
+            Number of iterations to run
         reconstruction_method: str, optional
             Specifies which reconstruction algorithm to use, one of:
             "generalized-projections",
@@ -922,24 +922,24 @@ class MagneticPtychographicTomography(
             Positions update step size
         fix_probe_com: bool, optional
             If True, fixes center of mass of probe
-        fix_probe_iter: int, optional
-            Number of iterations to run with a fixed probe before updating probe estimate
-        fix_probe_aperture_iter: int, optional
-            Number of iterations to run with a fixed probe Fourier amplitude before updating probe estimate
-        constrain_probe_amplitude_iter: int, optional
-            Number of iterations to run while constraining the real-space probe with a top-hat support.
+        fix_probe: bool, optional
+            If True, probe is fixed
+        fix_probe_aperture: bool, optional
+            If True, vaccum probe is used to fix Fourier amplitude
+        constrain_probe_amplitude: bool, optional
+            If True, real-space probe is constrained with a top-hat support.
         constrain_probe_amplitude_relative_radius: float
             Relative location of top-hat inflection point, between 0 and 0.5
         constrain_probe_amplitude_relative_width: float
             Relative width of top-hat sigmoid, between 0 and 0.5
-        constrain_probe_fourier_amplitude_iter: int, optional
-            Number of iterations to run while constraining the Fourier-space probe by fitting a sigmoid for each angular frequency.
+        constrain_probe_fourier_amplitude: bool, optional
+            If True, Fourier-probe is constrained by fitting a sigmoid for each angular frequency
         constrain_probe_fourier_amplitude_max_width_pixels: float
             Maximum pixel width of fitted sigmoid functions.
         constrain_probe_fourier_amplitude_constant_intensity: bool
             If True, the probe aperture is additionally constrained to a constant intensity.
-        fix_positions_iter: int, optional
-            Number of iterations to run with fixed positions before updating positions estimate
+        fix_positions: bool, optional
+            If True, probe-positions are fixed
         fix_positions_com: bool, optional
             If True, fixes the positions CoM to the middle of the fov
         max_position_update_distance: float, optional
@@ -952,10 +952,10 @@ class MagneticPtychographicTomography(
             Standard deviation of gaussian kernel for electrostatic object in A
         gaussian_filter_sigma_m: float
             Standard deviation of gaussian kernel for magnetic object in A
-        gaussian_filter_iter: int, optional
-            Number of iterations to run using object smoothness constraint
-        fit_probe_aberrations_iter: int, optional
-            Number of iterations to run while fitting the probe aberrations to a low-order expansion
+        gaussian_filter: bool, optional
+            If True and gaussian_filter_sigma is not None, object is smoothed using gaussian filtering
+        fit_probe_aberrations: bool, optional
+            If True, probe aberrations are fitted to a low-order expansion
         fit_probe_aberrations_max_angular_order: bool
             Max angular order of probe aberrations basis functions
         fit_probe_aberrations_max_radial_order: bool
@@ -966,8 +966,8 @@ class MagneticPtychographicTomography(
             If true, the necessary phase unwrapping is performed using scikit-image. This is more stable, but occasionally leads
             to a documented bug where the kernel hangs..
             If false, a poisson-based solver is used for phase unwrapping. This won't hang, but tends to underestimate aberrations.
-        butterworth_filter_iter: int, optional
-            Number of iterations to run using high-pass butteworth filter
+        butterworth_filter: bool, optional
+            If True and q_lowpass or q_highpass is not None, object is smoothed using butterworth filtering
         q_lowpass: float
             Cut-off frequency in A^-1 for low-pass butterworth filter
         q_highpass: float
@@ -976,8 +976,8 @@ class MagneticPtychographicTomography(
             Butterworth filter order. Smaller gives a smoother filter
         object_positivity: bool, optional
             If True, forces object to be positive
-        tv_denoise: bool
-            If True, applies TV denoising on object
+        tv_denoise: bool, optional
+            If True and tv_denoise_weight is not None, object is smoothed using TV denoising
         tv_denoise_weights: [float,float]
             Denoising weights[z weight, r weight]. The greater `weight`,
             the more denoising.
@@ -1053,7 +1053,7 @@ class MagneticPtychographicTomography(
 
         if self._verbose:
             self._report_reconstruction_summary(
-                max_iter,
+                num_iter,
                 np.inf,
                 use_projection_scheme,
                 reconstruction_method,
@@ -1080,12 +1080,9 @@ class MagneticPtychographicTomography(
         if q_lowpass_m is None:
             q_lowpass_m = q_lowpass_e
 
-        if fix_positions_iter < 1:
-            fix_positions_iter = 1  # give position correction a chance
-
         # main loop
         for a0 in tqdmnd(
-            max_iter,
+            num_iter,
             desc="Reconstructing object and probe",
             unit=" iter",
             disable=not progress_bar,
@@ -1200,11 +1197,11 @@ class MagneticPtychographicTomography(
                         use_projection_scheme=use_projection_scheme,
                         step_size=step_size,
                         normalization_min=normalization_min,
-                        fix_probe=a0 < fix_probe_iter,
+                        fix_probe=fix_probe,
                     )
 
                     # position correction
-                    if a0 >= fix_positions_iter:
+                    if not fix_positions and a0 > 0:
                         self._positions_px_all[
                             batch_indices
                         ] = self._position_correction(
@@ -1255,32 +1252,29 @@ class MagneticPtychographicTomography(
                     # probe and positions
                     _probe = self._probe_constraints(
                         _probe,
-                        fix_probe_com=fix_probe_com and a0 >= fix_probe_iter,
-                        constrain_probe_amplitude=a0 < constrain_probe_amplitude_iter
-                        and a0 >= fix_probe_iter,
+                        fix_probe_com=fix_probe_com and not fix_probe,
+                        constrain_probe_amplitude=constrain_probe_amplitude
+                        and not fix_probe,
                         constrain_probe_amplitude_relative_radius=constrain_probe_amplitude_relative_radius,
                         constrain_probe_amplitude_relative_width=constrain_probe_amplitude_relative_width,
-                        constrain_probe_fourier_amplitude=a0
-                        < constrain_probe_fourier_amplitude_iter
-                        and a0 >= fix_probe_iter,
+                        constrain_probe_fourier_amplitude=constrain_probe_fourier_amplitude
+                        and not fix_probe,
                         constrain_probe_fourier_amplitude_max_width_pixels=constrain_probe_fourier_amplitude_max_width_pixels,
                         constrain_probe_fourier_amplitude_constant_intensity=constrain_probe_fourier_amplitude_constant_intensity,
-                        fit_probe_aberrations=a0 < fit_probe_aberrations_iter
-                        and a0 >= fix_probe_iter,
+                        fit_probe_aberrations=fit_probe_aberrations and not fix_probe,
                         fit_probe_aberrations_max_angular_order=fit_probe_aberrations_max_angular_order,
                         fit_probe_aberrations_max_radial_order=fit_probe_aberrations_max_radial_order,
                         fit_probe_aberrations_remove_initial=fit_probe_aberrations_remove_initial,
                         fit_probe_aberrations_using_scikit_image=fit_probe_aberrations_using_scikit_image,
-                        fix_probe_aperture=a0 < fix_probe_aperture_iter,
+                        fix_probe_aperture=fix_probe_aperture,
                         initial_probe_aperture=_probe_initial_aperture,
                     )
 
                     self._positions_px_all[batch_indices] = self._positions_constraints(
                         self._positions_px_all[batch_indices],
                         self._positions_px_initial_all[batch_indices],
-                        fix_positions=a0 < fix_positions_iter,
-                        fix_positions_com=fix_positions_com
-                        and a0 >= fix_positions_iter,
+                        fix_positions=fix_positions,
+                        fix_positions_com=fix_positions_com and not fix_positions,
                         global_affine_transformation=global_affine_transformation,
                     )
 
@@ -1295,33 +1289,30 @@ class MagneticPtychographicTomography(
                         _probe,
                         self._positions_px_all[batch_indices],
                         self._positions_px_initial_all[batch_indices],
-                        fix_probe_com=fix_probe_com and a0 >= fix_probe_iter,
-                        constrain_probe_amplitude=a0 < constrain_probe_amplitude_iter
-                        and a0 >= fix_probe_iter,
+                        fix_probe_com=fix_probe_com and not fix_probe,
+                        constrain_probe_amplitude=constrain_probe_amplitude
+                        and not fix_probe,
                         constrain_probe_amplitude_relative_radius=constrain_probe_amplitude_relative_radius,
                         constrain_probe_amplitude_relative_width=constrain_probe_amplitude_relative_width,
-                        constrain_probe_fourier_amplitude=a0
-                        < constrain_probe_fourier_amplitude_iter
-                        and a0 >= fix_probe_iter,
+                        constrain_probe_fourier_amplitude=constrain_probe_fourier_amplitude
+                        and not fix_probe,
                         constrain_probe_fourier_amplitude_max_width_pixels=constrain_probe_fourier_amplitude_max_width_pixels,
                         constrain_probe_fourier_amplitude_constant_intensity=constrain_probe_fourier_amplitude_constant_intensity,
-                        fit_probe_aberrations=a0 < fit_probe_aberrations_iter
-                        and a0 >= fix_probe_iter,
+                        fit_probe_aberrations=fit_probe_aberrations and not fix_probe,
                         fit_probe_aberrations_max_angular_order=fit_probe_aberrations_max_angular_order,
                         fit_probe_aberrations_max_radial_order=fit_probe_aberrations_max_radial_order,
                         fit_probe_aberrations_remove_initial=fit_probe_aberrations_remove_initial,
                         fit_probe_aberrations_using_scikit_image=fit_probe_aberrations_using_scikit_image,
-                        fix_probe_aperture=a0 < fix_probe_aperture_iter,
+                        fix_probe_aperture=fix_probe_aperture,
                         initial_probe_aperture=_probe_initial_aperture,
-                        fix_positions=a0 < fix_positions_iter,
-                        fix_positions_com=fix_positions_com
-                        and a0 >= fix_positions_iter,
+                        fix_positions=fix_positions,
+                        fix_positions_com=fix_positions_com and not fix_positions,
                         global_affine_transformation=global_affine_transformation,
-                        gaussian_filter=a0 < gaussian_filter_iter
+                        gaussian_filter=gaussian_filter
                         and gaussian_filter_sigma_m is not None,
                         gaussian_filter_sigma_e=gaussian_filter_sigma_e,
                         gaussian_filter_sigma_m=gaussian_filter_sigma_m,
-                        butterworth_filter=a0 < butterworth_filter_iter
+                        butterworth_filter=butterworth_filter
                         and (q_lowpass_m is not None or q_highpass_m is not None),
                         q_lowpass_e=q_lowpass_e,
                         q_lowpass_m=q_lowpass_m,
@@ -1334,8 +1325,7 @@ class MagneticPtychographicTomography(
                         if fix_potential_baseline
                         and self._object_fov_mask_inverse.sum() > 0
                         else None,
-                        tv_denoise=a0 < tv_denoise_iter
-                        and tv_denoise_weights is not None,
+                        tv_denoise=tv_denoise and tv_denoise_weights is not None,
                         tv_denoise_weights=tv_denoise_weights,
                         tv_denoise_inner_iter=tv_denoise_inner_iter,
                     )
@@ -1351,11 +1341,11 @@ class MagneticPtychographicTomography(
                 # object only
                 self._object = self._object_constraints_vector(
                     self._object,
-                    gaussian_filter=a0 < gaussian_filter_iter
+                    gaussian_filter=gaussian_filter
                     and gaussian_filter_sigma_m is not None,
                     gaussian_filter_sigma_e=gaussian_filter_sigma_e,
                     gaussian_filter_sigma_m=gaussian_filter_sigma_m,
-                    butterworth_filter=a0 < butterworth_filter_iter
+                    butterworth_filter=butterworth_filter
                     and (q_lowpass_m is not None or q_highpass_m is not None),
                     q_lowpass_e=q_lowpass_e,
                     q_lowpass_m=q_lowpass_m,
@@ -1368,7 +1358,7 @@ class MagneticPtychographicTomography(
                     if fix_potential_baseline
                     and self._object_fov_mask_inverse.sum() > 0
                     else None,
-                    tv_denoise=a0 < tv_denoise_iter and tv_denoise_weights is not None,
+                    tv_denoise=tv_denoise and tv_denoise_weights is not None,
                     tv_denoise_weights=tv_denoise_weights,
                     tv_denoise_inner_iter=tv_denoise_inner_iter,
                 )
