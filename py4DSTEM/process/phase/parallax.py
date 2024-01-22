@@ -14,7 +14,7 @@ from matplotlib.ticker import PercentFormatter
 from mpl_toolkits.axes_grid1.axes_divider import make_axes_locatable
 from py4DSTEM import Calibration, DataCube
 from py4DSTEM.preprocess.utils import get_shifted_ar
-from py4DSTEM.process.phase.iterative_base_class import PhaseReconstruction
+from py4DSTEM.process.phase.phase_base_class import PhaseReconstruction
 from py4DSTEM.process.phase.utils import (
     AffineTransform,
     bilinear_kernel_density_estimate,
@@ -36,8 +36,6 @@ try:
 except (ModuleNotFoundError, ImportError):
     cp = np
 
-warnings.simplefilter(action="always", category=UserWarning)
-
 _aberration_names = {
     (1, 0): "C1        ",
     (1, 2): "stig      ",
@@ -56,7 +54,7 @@ _aberration_names = {
 }
 
 
-class ParallaxReconstruction(PhaseReconstruction):
+class Parallax(PhaseReconstruction):
     """
     Iterative parallax reconstruction class.
 
@@ -79,27 +77,23 @@ class ParallaxReconstruction(PhaseReconstruction):
         self,
         energy: float,
         datacube: DataCube = None,
-        verbose: bool = False,
+        verbose: bool = True,
         object_padding_px: Tuple[int, int] = (32, 32),
         device: str = "cpu",
+        storage: str = None,
+        clear_fft_cache: bool = True,
         name: str = "parallax_reconstruction",
     ):
         Custom.__init__(self, name=name)
 
-        if device == "cpu":
-            self._xp = np
-            self._asnumpy = np.asarray
-            from scipy.ndimage import gaussian_filter
+        if storage is None:
+            storage = device
 
-            self._gaussian_filter = gaussian_filter
-        elif device == "gpu":
-            self._xp = cp
-            self._asnumpy = cp.asnumpy
-            from cupyx.scipy.ndimage import gaussian_filter
+        if storage != device:
+            raise NotImplementedError()
 
-            self._gaussian_filter = gaussian_filter
-        else:
-            raise ValueError(f"device must be either 'cpu' or 'gpu', not {device}")
+        self.set_device(device, clear_fft_cache)
+        self.set_storage(storage)
 
         self.set_save_defaults()
 
@@ -109,7 +103,6 @@ class ParallaxReconstruction(PhaseReconstruction):
         # Metadata
         self._energy = energy
         self._verbose = verbose
-        self._device = device
         self._object_padding_px = object_padding_px
         self._preprocessed = False
 
@@ -271,6 +264,9 @@ class ParallaxReconstruction(PhaseReconstruction):
         plot_average_bf: bool = True,
         realspace_mask: np.ndarray = None,
         apply_realspace_mask_to_stack: bool = True,
+        vectorized_com_calculation: bool = True,
+        device: str = None,
+        clear_fft_cache: bool = None,
         **kwargs,
     ):
         """
@@ -306,6 +302,12 @@ class ParallaxReconstruction(PhaseReconstruction):
         apply_realspace_mask_to_stack: bool, optional
             If this value is set to true, output BF images will be masked by
             the edge filter and realspace_mask if it is passed in.
+        vectorized_com_calculation: bool, optional
+            If True (default), the memory-intensive CoM calculation is vectorized
+        device: str, optional
+            if not none, overwrites self._device to set device preprocess will be perfomed on.
+        clear_fft_cache: bool, optional
+            if true, and device = 'gpu', clears the cached fft plan at the end of function calls
 
         Returns
         --------
@@ -313,7 +315,11 @@ class ParallaxReconstruction(PhaseReconstruction):
             Self to accommodate chaining
         """
 
+        # handle device/storage
+        self.set_device(device, clear_fft_cache)
+
         xp = self._xp
+        device = self._device
         asnumpy = self._asnumpy
 
         if self._datacube is None:
@@ -329,6 +335,8 @@ class ParallaxReconstruction(PhaseReconstruction):
             self._datacube,
             require_calibrations=True,
         )
+
+        self._intensities = xp.asarray(self._intensities)
 
         self._region_of_interest_shape = np.array(self._intensities.shape[-2:])
         self._scan_shape = np.array(self._intensities.shape[:2])
@@ -348,6 +356,7 @@ class ParallaxReconstruction(PhaseReconstruction):
                 fit_function=descan_correction_fit_function,
                 com_shifts=None,
                 com_measured=None,
+                vectorized_calculation=vectorized_com_calculation,
             )
 
             com_fitted_x = asnumpy(com_fitted_x)
@@ -355,7 +364,6 @@ class ParallaxReconstruction(PhaseReconstruction):
             intensities = asnumpy(self._intensities)
             intensities_shifted = np.zeros_like(intensities)
 
-            # center_x, center_y = self._region_of_interest_shape / 2
             center_x = com_fitted_x.mean()
             center_y = com_fitted_y.mean()
 
@@ -717,178 +725,17 @@ class ParallaxReconstruction(PhaseReconstruction):
             ax[1].set_ylabel(r"$k_x$ [$A^{-1}$]")
             ax[1].set_xlabel(r"$k_y$ [$A^{-1}$]")
             plt.tight_layout()
-        self._preprocessed = True
 
-        if self._device == "gpu":
-            xp._default_memory_pool.free_all_blocks()
-            xp.clear_memo()
+        self._preprocessed = True
+        self.clear_device_mem(self._device, self._clear_fft_cache)
 
         return self
-
-    def tune_angle_and_defocus(
-        self,
-        angle_guess=None,
-        defocus_guess=None,
-        angle_step_size=5,
-        defocus_step_size=100,
-        num_angle_values=5,
-        num_defocus_values=5,
-        return_values=False,
-        plot_reconstructions=True,
-        plot_convergence=True,
-        **kwargs,
-    ):
-        """
-        Run parallax reconstruction over a parameters space of pre-determined angles
-        and defocus
-
-        Parameters
-        ----------
-        angle_guess: float (degrees), optional
-            initial starting guess for rotation angle between real and reciprocal space
-            if None, uses 0
-        defocus_guess: float (A), optional
-            initial starting guess for defocus (defocus dF)
-            if None, uses 0
-        angle_step_size: float (degrees), optional
-            size of change of rotation angle between real and reciprocal space for
-            each step in parameter space
-        defocus_step_size: float (A), optional
-            size of change of defocus for each step in parameter space
-        num_angle_values: int, optional
-            number of values of angle to test, must be >= 1.
-        num_defocus_values: int,optional
-            number of values of defocus to test, must be >= 1
-        plot_reconstructions: bool, optional
-            if True, plot phase of reconstructed objects
-        plot_convergence: bool, optional
-            if True, makes 2D plot of error metrix
-        return_values: bool, optional
-            if True, returns objects, convergence
-
-        Returns
-        -------
-        objects: list
-            reconstructed objects
-        convergence: np.ndarray
-            array of convergence values from reconstructions
-        """
-        asnumpy = self._asnumpy
-
-        if angle_guess is None:
-            angle_guess = 0
-        if defocus_guess is None:
-            defocus_guess = 0
-
-        if num_angle_values == 1:
-            angle_step_size = 0
-
-        if num_defocus_values == 1:
-            defocus_step_size = 0
-
-        angles = np.linspace(
-            angle_guess - angle_step_size * (num_angle_values - 1) / 2,
-            angle_guess + angle_step_size * (num_angle_values - 1) / 2,
-            num_angle_values,
-        )
-
-        defocus_values = np.linspace(
-            defocus_guess - defocus_step_size * (num_defocus_values - 1) / 2,
-            defocus_guess + defocus_step_size * (num_defocus_values - 1) / 2,
-            num_defocus_values,
-        )
-        if return_values or plot_convergence:
-            recon_BF = []
-            convergence = []
-
-        if plot_reconstructions:
-            spec = GridSpec(
-                ncols=num_defocus_values,
-                nrows=num_angle_values,
-                hspace=0.15,
-                wspace=0.35,
-            )
-            figsize = kwargs.get(
-                "figsize", (4 * num_defocus_values, 4 * num_angle_values)
-            )
-
-            fig = plt.figure(figsize=figsize)
-
-        # run loop and plot along the way
-        self._verbose = False
-        for flat_index, (angle, defocus) in enumerate(
-            tqdmnd(angles, defocus_values, desc="Tuning angle and defocus")
-        ):
-            self.preprocess(
-                defocus_guess=defocus,
-                rotation_guess=angle,
-                plot_average_bf=False,
-                **kwargs,
-            )
-
-            if plot_reconstructions:
-                row_index, col_index = np.unravel_index(
-                    flat_index, (num_angle_values, num_defocus_values)
-                )
-                object_ax = fig.add_subplot(spec[row_index, col_index])
-                self._visualize_figax(
-                    fig,
-                    ax=object_ax,
-                    **kwargs,
-                )
-
-                object_ax.set_title(
-                    f" angle = {angle:.1f} °, defocus = {defocus:.1f} A \n error = {self._recon_error[0]:.3e}"
-                )
-                object_ax.set_xticks([])
-                object_ax.set_yticks([])
-
-            if return_values:
-                recon_BF.append(self.recon_BF)
-            if return_values or plot_convergence:
-                convergence.append(asnumpy(self._recon_error[0]))
-
-        if plot_convergence:
-            fig, ax = plt.subplots()
-            ax.set_title("convergence")
-            im = ax.imshow(
-                np.array(convergence).reshape(angles.shape[0], defocus_values.shape[0]),
-                cmap="magma",
-            )
-
-            if angles.shape[0] > 1:
-                ax.set_ylabel("angles")
-                ax.set_yticks(np.arange(angles.shape[0]))
-                ax.set_yticklabels([f"{angle:.1f} °" for angle in angles])
-            else:
-                ax.set_yticks([])
-                ax.set_ylabel(f"angle {angles[0]:.1f}")
-
-            if defocus_values.shape[0] > 1:
-                ax.set_xlabel("defocus values")
-                ax.set_xticks(np.arange(defocus_values.shape[0]))
-                ax.set_xticklabels([f"{df:.1f}" for df in defocus_values])
-            else:
-                ax.set_xticks([])
-                ax.set_xlabel(f"defocus value: {defocus_values[0]:.1f}")
-
-            divider = make_axes_locatable(ax)
-            cax = divider.append_axes("right", size="5%", pad=0.05)
-            fig.colorbar(im, cax=cax)
-
-            fig.tight_layout()
-
-        if return_values:
-            convergence = np.array(convergence).reshape(
-                angles.shape[0], defocus_values.shape[0]
-            )
-            return recon_BF, convergence
 
     def reconstruct(
         self,
         max_alignment_bin: int = None,
         min_alignment_bin: int = 1,
-        max_iter_at_min_bin: int = 2,
+        num_iter_at_min_bin: int = 2,
         alignment_bin_values: list = None,
         cross_correlation_upsample_factor: int = 8,
         regularizer_matrix_size: Tuple[int, int] = (1, 1),
@@ -898,6 +745,8 @@ class ParallaxReconstruction(PhaseReconstruction):
         plot_aligned_bf: bool = True,
         plot_convergence: bool = True,
         reset: bool = None,
+        device: str = None,
+        clear_fft_cache: bool = None,
         **kwargs,
     ):
         """
@@ -910,7 +759,7 @@ class ParallaxReconstruction(PhaseReconstruction):
             If None, the bright field disk radius is used
         min_alignment_bin: int, optional
             Minimum bin size for bright field alignment
-        max_iter_at_min_bin: int, optional
+        num_iter_at_min_bin: int, optional
             Number of iterations to run at the smallest bin size
         alignment_bin_values: list, optional
             If not None, explicitly sets the iteration bin values
@@ -930,12 +779,19 @@ class ParallaxReconstruction(PhaseReconstruction):
             If True, the convergence error is also plotted
         reset: bool, optional
             If True, the reconstruction is reset
+        device: str, optional
+            if not none, overwrites self._device to set device preprocess will be perfomed on.
+        clear_fft_cache: bool, optional
+            if true, and device = 'gpu', clears the cached fft plan at the end of function calls
 
         Returns
         --------
         self: BFReconstruction
             Self to accommodate chaining
         """
+
+        # handle device/storage
+        self.set_device(device, clear_fft_cache)
 
         xp = self._xp
         asnumpy = self._asnumpy
@@ -947,6 +803,7 @@ class ParallaxReconstruction(PhaseReconstruction):
             self._stack_mask = self._stack_mask_initial.copy()
             self._recon_mask = self._recon_mask_initial.copy()
             self._xy_shifts = self._xy_shifts_initial.copy()
+
         elif reset is None:
             if hasattr(self, "error_iterations"):
                 warnings.warn(
@@ -1011,9 +868,9 @@ class ParallaxReconstruction(PhaseReconstruction):
             bin_max = np.ceil(np.log(max_alignment_bin) / np.log(2))
             bin_vals = 2 ** np.arange(bin_min, bin_max)[::-1]
 
-            if max_iter_at_min_bin > 1:
+            if num_iter_at_min_bin > 1:
                 bin_vals = np.hstack(
-                    (bin_vals, np.repeat(bin_vals[-1], max_iter_at_min_bin - 1))
+                    (bin_vals, np.repeat(bin_vals[-1], num_iter_at_min_bin - 1))
                 )
 
         if plot_aligned_bf:
@@ -1191,9 +1048,7 @@ class ParallaxReconstruction(PhaseReconstruction):
 
         self.recon_BF = asnumpy(self._recon_BF)
 
-        if self._device == "gpu":
-            xp._default_memory_pool.free_all_blocks()
-            xp.clear_memo()
+        self.clear_device_mem(self._device, self._clear_fft_cache)
 
         return self
 
@@ -1268,7 +1123,7 @@ class ParallaxReconstruction(PhaseReconstruction):
         """
         xp = self._xp
         asnumpy = self._asnumpy
-        gaussian_filter = self._gaussian_filter
+        gaussian_filter = self._scipy.ndimage.gaussian_filter
 
         BF_sampling = 1 / asnumpy(self._kr).max() / 2
         DF_sampling = 1 / (
@@ -1281,7 +1136,7 @@ class ParallaxReconstruction(PhaseReconstruction):
         if self._DF_upsample_limit < 1:
             warnings.warn(
                 (
-                    f"Dark-field upsampling limit of {self._DF_upsampling_limit:.2f} "
+                    f"Dark-field upsampling limit of {self._DF_upsample_limit:.2f} "
                     "is less than 1, implying a scan step-size smaller than Nyquist. "
                     "setting to 1."
                 ),
@@ -1899,6 +1754,8 @@ class ParallaxReconstruction(PhaseReconstruction):
 
             spec.tight_layout(fig)
 
+        self.clear_device_mem(self._device, self._clear_fft_cache)
+
     def _interpolate_array(
         self,
         image,
@@ -1933,7 +1790,7 @@ class ParallaxReconstruction(PhaseReconstruction):
         """ """
 
         xp = self._xp
-        gaussian_filter = self._gaussian_filter
+        gaussian_filter = self._scipy.ndimage.gaussian_filter
 
         if lanczos_alpha is not None:
             return lanczos_kernel_density_estimate(
@@ -2532,9 +2389,7 @@ class ParallaxReconstruction(PhaseReconstruction):
                             + str(np.round(self._aberrations_coefs[a0]).astype("int"))
                         )
 
-        if self._device == "gpu":
-            xp._default_memory_pool.free_all_blocks()
-            xp.clear_memo()
+        self.clear_device_mem(self._device, self._clear_fft_cache)
 
     def _calculate_CTF(self, alpha_shape, sampling, *coefs):
         xp = self._xp
@@ -2700,10 +2555,6 @@ class ParallaxReconstruction(PhaseReconstruction):
         self._recon_phase_corrected = xp.real(xp.fft.ifft2(im_fft_corr))
         self.recon_phase_corrected = asnumpy(self._recon_phase_corrected)
 
-        if self._device == "gpu":
-            xp._default_memory_pool.free_all_blocks()
-            xp.clear_memo()
-
         # plotting
         if plot_corrected_phase:
             figsize = kwargs.pop("figsize", (6, 6))
@@ -2732,6 +2583,8 @@ class ParallaxReconstruction(PhaseReconstruction):
             ax.set_ylabel("x [A]")
             ax.set_xlabel("y [A]")
             ax.set_title("Parallax-Corrected Phase Image")
+
+        self.clear_device_mem(self._device, self._clear_fft_cache)
 
     def depth_section(
         self,
@@ -3010,7 +2863,8 @@ class ParallaxReconstruction(PhaseReconstruction):
 
         dp_mask_ind = xp.nonzero(self._dp_mask)
         yy, xx = xp.meshgrid(
-            xp.arange(self._dp_mean.shape[1]), xp.arange(self._dp_mean.shape[0])
+            xp.arange(self._region_of_interest_shape[1]),
+            xp.arange(self._region_of_interest_shape[0]),
         )
         freq_mask = xp.logical_and(xx % plot_arrow_freq == 0, yy % plot_arrow_freq == 0)
         masked_ind = xp.logical_and(freq_mask, self._dp_mask)

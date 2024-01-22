@@ -16,7 +16,7 @@ jobs:
                 allow_failure: [false]
                 runs-on: [ubuntu-latest]
                 architecture: [x86_64]
-                python-version: ["3.9", "3.10", "3.11", "3.12"]
+                python-version: ["3.10", "3.11", "3.12"]
                 # include:
                 #     - python-version: "3.12.0-beta.4"
                 #       runs-on: ubuntu-latest

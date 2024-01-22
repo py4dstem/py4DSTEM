@@ -576,7 +576,9 @@ def resample_data_diffraction(
             resampling_factor = np.array(output_size) / np.array(datacube.shape[-2:])
 
         resampling_factor = np.concatenate(((1, 1), resampling_factor))
-        datacube.data = zoom(datacube.data, resampling_factor, order=1)
+        datacube.data = zoom(
+            datacube.data, resampling_factor, order=1, mode="grid-wrap", grid_mode=True
+        )
         datacube.calibration.set_Q_pixel_size(
             datacube.calibration.get_Q_pixel_size() / resampling_factor[2]
         )
