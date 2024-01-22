@@ -327,7 +327,7 @@ class PtychographyOptimizer:
             for p, x in zip(self._parameter_list, self._skopt_result.x):
                 print(f"{p.name}: {x}")
         finally:
-            # close the pbar and clear memory gracefully on interrupt
+            # close the pbar gracefully on interrupt
             pbar.close()
 
         return self
