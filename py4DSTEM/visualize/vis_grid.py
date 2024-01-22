@@ -205,7 +205,7 @@ def show_image_grid(
             ax = axs[i, j]
             N = i * W + j
             # make titles
-            if type(title) == list:
+            if type(title) == list and N < len(title):
                 print_title = title[N]
             else:
                 print_title = None

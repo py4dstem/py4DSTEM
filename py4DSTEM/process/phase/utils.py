@@ -3,19 +3,25 @@ from typing import Mapping, Tuple, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
+from scipy.fft import dctn, idctn
+from scipy.ndimage import gaussian_filter, uniform_filter1d, zoom
 from scipy.optimize import curve_fit
 
 try:
     import cupy as cp
-    from cupyx.scipy.fft import rfft
+    from cupyx.scipy.ndimage import zoom as zoom_cp
+
+    get_array_module = cp.get_array_module
 except (ImportError, ModuleNotFoundError):
     cp = None
-    from scipy.fft import dstn, idstn
+
+    def get_array_module(*args):
+        return np
+
 
 from py4DSTEM.process.utils import get_CoM
 from py4DSTEM.process.utils.cross_correlate import align_and_shift_images
 from py4DSTEM.process.utils.utils import electron_wavelength_angstrom
-from scipy.ndimage import gaussian_filter, uniform_filter1d
 from skimage.restoration import unwrap_phase
 
 # fmt: off
@@ -404,16 +410,13 @@ class ComplexProbe:
 
     def get_spatial_frequencies(self):
         xp = self._xp
-        kx, ky = spatial_frequencies(self._gpts, self._sampling)
-        kx = xp.asarray(kx, dtype=xp.float32)
-        ky = xp.asarray(ky, dtype=xp.float32)
+        kx, ky = spatial_frequencies(self._gpts, self._sampling, xp)
         return kx, ky
 
     def polar_coordinates(self, x, y):
         """Calculate a polar grid for a given Cartesian grid."""
         xp = self._xp
         alpha = xp.sqrt(x[:, None] ** 2 + y[None, :] ** 2)
-        # phi = xp.arctan2(x.reshape((-1, 1)), y.reshape((1, -1))) # bug in abtem-legacy and py4DSTEM<=0.14.9
         phi = xp.arctan2(y[None, :], x[:, None])
         return alpha, phi
 
@@ -441,7 +444,7 @@ class ComplexProbe:
         return self
 
 
-def spatial_frequencies(gpts: Tuple[int, int], sampling: Tuple[float, float]):
+def spatial_frequencies(gpts: Tuple[int, int], sampling: Tuple[float, float], xp=np):
     """
     Calculate spatial frequencies of a grid.
 
@@ -458,7 +461,7 @@ def spatial_frequencies(gpts: Tuple[int, int], sampling: Tuple[float, float]):
     """
 
     return tuple(
-        np.fft.fftfreq(n, d).astype(np.float32) for n, d in zip(gpts, sampling)
+        xp.fft.fftfreq(n, d).astype(xp.float32) for n, d in zip(gpts, sampling)
     )
 
 
@@ -490,16 +493,14 @@ def fourier_translation_operator(
     if len(positions_shape) == 1:
         positions = positions[None]
 
-    kx, ky = spatial_frequencies(shape, (1.0, 1.0))
-    kx = kx.reshape((1, -1, 1))
-    ky = ky.reshape((1, 1, -1))
-    kx = xp.asarray(kx, dtype=xp.float32)
-    ky = xp.asarray(ky, dtype=xp.float32)
+    kx, ky = spatial_frequencies(shape, (1.0, 1.0), xp=xp)
     positions = xp.asarray(positions, dtype=xp.float32)
-    x = positions[:, 0].reshape((-1,) + (1, 1))
-    y = positions[:, 1].reshape((-1,) + (1, 1))
+    x = positions[:, 0].ravel()[:, None, None]
+    y = positions[:, 1].ravel()[:, None, None]
 
-    result = xp.exp(-2.0j * np.pi * kx * x) * xp.exp(-2.0j * np.pi * ky * y)
+    result = xp.exp(-2.0j * np.pi * kx[None, :, None] * x) * xp.exp(
+        -2.0j * np.pi * ky[None, None, :] * y
+    )
 
     if len(positions_shape) == 1:
         return result[0]
@@ -1151,114 +1152,79 @@ def fourier_rotate_real_volume(array, angle, axes=(0, 1), xp=np):
     return output_arr
 
 
-### Divergence Projection Functions
-
-
-def compute_divergence(vector_field, spacings, xp=np):
-    """Computes divergence of vector_field"""
-    num_dims = len(spacings)
-    div = xp.zeros_like(vector_field[0])
-
-    for i in range(num_dims):
-        div += xp.gradient(vector_field[i], spacings[i], axis=i)
-
-    return div
-
-
-def compute_gradient(scalar_field, spacings, xp=np):
-    """Computes gradient of scalar_field"""
-    num_dims = len(spacings)
-    grad = xp.zeros((num_dims,) + scalar_field.shape)
-
-    for i in range(num_dims):
-        grad[i] = xp.gradient(scalar_field, spacings[i], axis=i)
-
-    return grad
-
-
 def array_slice(axis, ndim, start, end, step=1):
     """Returns array slice along dynamic axis"""
     return (slice(None),) * (axis % ndim) + (slice(start, end, step),)
 
 
-def make_array_rfft_compatible(array_nd, axis=0, xp=np):
-    """Expand array to be rfft compatible"""
-    array_shape = np.array(array_nd.shape)
-    d = array_nd.ndim
-    n = array_shape[axis]
-    array_shape[axis] = (n + 1) * 2
-
-    dtype = array_nd.dtype
-    padded_array = xp.zeros(array_shape, dtype=dtype)
-
-    padded_array[array_slice(axis, d, 1, n + 1)] = -array_nd
-    padded_array[array_slice(axis, d, None, -n - 1, -1)] = array_nd
-
-    return padded_array
+### Divergence Projection Functions
 
 
-def dst_I(array_nd, xp=np):
-    """1D rfft-based DST-I"""
-    d = array_nd.ndim
-    for axis in range(d):
-        crop_slice = array_slice(axis, d, 1, -1)
-        array_nd = rfft(
-            make_array_rfft_compatible(array_nd, axis=axis, xp=xp), axis=axis
-        )[crop_slice].imag
-
-    return array_nd
-
-
-def idst_I(array_nd, xp=np):
-    """1D rfft-based iDST-I"""
-    scaling = np.prod((np.array(array_nd.shape) + 1) * 2)
-    return dst_I(array_nd, xp=xp) / scaling
-
-
-def preconditioned_laplacian(num_exterior, spacing=1, xp=np):
-    """DST-I eigenvalues"""
-    n = num_exterior - 1
-    evals_1d = 2 - 2 * xp.cos(np.pi * xp.arange(1, num_exterior) / num_exterior)
-
-    op = (
-        xp.repeat(evals_1d, n**2)
-        + xp.tile(evals_1d, n**2)
-        + xp.tile(xp.repeat(evals_1d, n), n)
+def periodic_centered_difference(array, spacing, axis, xp=np):
+    """Computes second-order centered difference with periodic BCs"""
+    return (xp.roll(array, -1, axis=axis) - xp.roll(array, 1, axis=axis)) / (
+        2 * spacing
     )
 
-    return -op / spacing**2
+
+def compute_divergence_periodic(vector_field, spacings, xp=np):
+    """Computes divergence of vector_field"""
+    num_dims = len(spacings)
+    div = xp.zeros_like(vector_field[0])
+
+    for i in range(num_dims):
+        div += periodic_centered_difference(vector_field[i], spacings[i], axis=i, xp=xp)
+
+    return div
 
 
-def preconditioned_poisson_solver(rhs_interior, spacing=1, xp=np):
-    """DST-I based poisson solver"""
-    nx, ny, nz = rhs_interior.shape
-    if nx != ny or nx != nz:
-        raise ValueError()
+def compute_gradient_periodic(scalar_field, spacings, xp=np):
+    """Computes gradient of scalar_field"""
+    num_dims = len(spacings)
+    grad = xp.zeros((num_dims,) + scalar_field.shape)
 
-    op = preconditioned_laplacian(nx + 1, spacing=spacing, xp=xp)
-    if xp is np:
-        dst_rhs = dstn(rhs_interior, type=1).ravel()
-        dst_u = (dst_rhs / op).reshape((nx, ny, nz))
-        sol = idstn(dst_u, type=1)
-    else:
-        dst_rhs = dst_I(rhs_interior, xp=xp).ravel()
-        dst_u = (dst_rhs / op).reshape((nx, ny, nz))
-        sol = idst_I(dst_u, xp=xp)
+    for i in range(num_dims):
+        grad[i] = periodic_centered_difference(scalar_field, spacings[i], axis=i, xp=xp)
 
+    return grad
+
+
+def preconditioned_laplacian_periodic_3D(shape, xp=np):
+    """FFT eigenvalues"""
+    n, m, p = shape
+    i, j, k = xp.ogrid[0:n, 0:m, 0:p]
+
+    op = 6 - 2 * xp.cos(2 * np.pi * i / n) * xp.cos(2 * np.pi * j / m) * xp.cos(
+        2 * np.pi * k / p
+    )
+    op[0, 0, 0] = 1  # gauge invariance
+    return -op
+
+
+def preconditioned_poisson_solver_periodic_3D(rhs, gauge=None, xp=np):
+    """FFT based poisson solver"""
+    op = preconditioned_laplacian_periodic_3D(rhs.shape, xp=xp)
+
+    if gauge is None:
+        gauge = xp.mean(rhs)
+
+    fft_rhs = xp.fft.fftn(rhs)
+    fft_rhs[0, 0, 0] = gauge  # gauge invariance
+    sol = xp.fft.ifftn(fft_rhs / op).real
     return sol
 
 
-def project_vector_field_divergence(vector_field, spacings=(1, 1, 1), xp=np):
+def project_vector_field_divergence_periodic_3D(vector_field, xp=np):
     """
     Returns solenoidal part of vector field using projection:
 
     f - \\grad{p}
     s.t. \\laplacian{p} = \\div{f}
     """
-
-    div_v = compute_divergence(vector_field, spacings, xp=xp)
-    p = preconditioned_poisson_solver(div_v, spacings[0], xp=xp)
-    grad_p = compute_gradient(p, spacings, xp=xp)
+    spacings = (1, 1, 1)
+    div_v = compute_divergence_periodic(vector_field, spacings, xp=xp)
+    p = preconditioned_poisson_solver_periodic_3D(div_v, xp=xp)
+    grad_p = compute_gradient_periodic(p, spacings, xp=xp)
     return vector_field - grad_p
 
 
@@ -1611,25 +1577,226 @@ def aberrations_basis_function(
     return aberrations_basis, aberrations_mn
 
 
+def interleave_ndarray_symmetrically(array_nd, axis, xp=np):
+    """[a,b,c,d,e,f] -> [a,c,e,f,d,b]"""
+    array_shape = np.array(array_nd.shape)
+    d = array_nd.ndim
+    n = array_shape[axis]
+
+    array = xp.empty_like(array_nd)
+    array[array_slice(axis, d, None, (n - 1) // 2 + 1)] = array_nd[
+        array_slice(axis, d, None, None, 2)
+    ]
+
+    if n % 2:  # odd
+        array[array_slice(axis, d, (n - 1) // 2 + 1, None)] = array_nd[
+            array_slice(axis, d, -2, None, -2)
+        ]
+    else:  # even
+        array[array_slice(axis, d, (n - 1) // 2 + 1, None)] = array_nd[
+            array_slice(axis, d, None, None, -2)
+        ]
+
+    return array
+
+
+def return_exp_factors(size, ndim, axis, xp=np):
+    none_axes = [None] * ndim
+    none_axes[axis] = slice(None)
+    exp_factors = 2 * xp.exp(-1j * np.pi * xp.arange(size) / (2 * size))
+    return exp_factors[tuple(none_axes)]
+
+
+def dct_II_using_FFT_base(array_nd, xp=np):
+    """FFT-based DCT-II"""
+    d = array_nd.ndim
+
+    for axis in range(d):
+        n = array_nd.shape[axis]
+        interleaved_array = interleave_ndarray_symmetrically(array_nd, axis=axis, xp=xp)
+        exp_factors = return_exp_factors(n, d, axis, xp)
+        interleaved_array = xp.fft.fft(interleaved_array, axis=axis)
+        interleaved_array *= exp_factors
+        array_nd = interleaved_array.real
+
+    return array_nd
+
+
+def dct_II_using_FFT(array_nd, xp=np):
+    if xp.iscomplexobj(array_nd):
+        real = dct_II_using_FFT_base(array_nd.real, xp=xp)
+        imag = dct_II_using_FFT_base(array_nd.imag, xp=xp)
+        return real + 1j * imag
+    else:
+        return dct_II_using_FFT_base(array_nd, xp=xp)
+
+
+def interleave_ndarray_symmetrically_inverse(array_nd, axis, xp=np):
+    """[a,c,e,f,d,b] -> [a,b,c,d,e,f]"""
+    array_shape = np.array(array_nd.shape)
+    d = array_nd.ndim
+    n = array_shape[axis]
+
+    array = xp.empty_like(array_nd)
+    array[array_slice(axis, d, None, None, 2)] = array_nd[
+        array_slice(axis, d, None, (n - 1) // 2 + 1)
+    ]
+
+    if n % 2:  # odd
+        array[array_slice(axis, d, -2, None, -2)] = array_nd[
+            array_slice(axis, d, (n - 1) // 2 + 1, None)
+        ]
+    else:  # even
+        array[array_slice(axis, d, None, None, -2)] = array_nd[
+            array_slice(axis, d, (n - 1) // 2 + 1, None)
+        ]
+
+    return array
+
+
+def return_exp_factors_inverse(size, ndim, axis, xp=np):
+    none_axes = [None] * ndim
+    none_axes[axis] = slice(None)
+    exp_factors = xp.exp(1j * np.pi * xp.arange(size) / (2 * size)) / 2
+    return exp_factors[tuple(none_axes)]
+
+
+def idct_II_using_FFT_base(array_nd, xp=np):
+    """FFT-based IDCT-II"""
+    d = array_nd.ndim
+
+    for axis in range(d):
+        n = array_nd.shape[axis]
+        reversed_array = xp.roll(
+            array_nd[array_slice(axis, d, None, None, -1)], 1, axis=axis
+        )  # C(N-k)
+        reversed_array[array_slice(axis, d, 0, 1)] = 0  # set C(N) = 0
+
+        interleaved_array = array_nd - 1j * reversed_array
+        exp_factors = return_exp_factors_inverse(n, d, axis, xp)
+        interleaved_array *= exp_factors
+
+        array_nd = xp.fft.ifft(interleaved_array, axis=axis).real
+        array_nd = interleave_ndarray_symmetrically_inverse(array_nd, axis=axis, xp=xp)
+
+    return array_nd
+
+
+def idct_II_using_FFT(array_nd, xp=np):
+    """FFT-based IDCT-II"""
+    if xp.iscomplexobj(array_nd):
+        real = idct_II_using_FFT_base(array_nd.real, xp=xp)
+        imag = idct_II_using_FFT_base(array_nd.imag, xp=xp)
+        return real + 1j * imag
+    else:
+        return idct_II_using_FFT_base(array_nd, xp=xp)
+
+
+def preconditioned_laplacian_neumann_2D(shape, xp=np):
+    """DCT eigenvalues"""
+    n, m = shape
+    i, j = xp.ogrid[0:n, 0:m]
+
+    op = 4 - 2 * xp.cos(np.pi * i / n) - 2 * xp.cos(np.pi * j / m)
+    op[0, 0] = 1  # gauge invariance
+    return -op
+
+
+def preconditioned_poisson_solver_neumann_2D(rhs, gauge=None, xp=np):
+    """DCT based poisson solver"""
+    op = preconditioned_laplacian_neumann_2D(rhs.shape, xp=xp)
+
+    if gauge is None:
+        gauge = xp.mean(rhs)
+
+    if xp is np:
+        fft_rhs = dctn(rhs, type=2)
+        fft_rhs[0, 0] = gauge  # gauge invariance
+        sol = idctn(fft_rhs / op, type=2).real
+    else:
+        fft_rhs = dct_II_using_FFT(rhs, xp)
+        fft_rhs[0, 0] = gauge  # gauge invariance
+        sol = idct_II_using_FFT(fft_rhs / op, xp)
+
+    return sol
+
+
+def unwrap_phase_2d(array, weights=None, gauge=None, corner_centered=True, xp=np):
+    """Weigted phase unwrapping using DCT-based poisson solver"""
+
+    if np.iscomplexobj(array):
+        raise ValueError()
+
+    if corner_centered:
+        array = xp.fft.fftshift(array)
+        if weights is not None:
+            weights = xp.fft.fftshift(weights)
+
+    dx = xp.mod(xp.diff(array, axis=0) + np.pi, 2 * np.pi) - np.pi
+    dy = xp.mod(xp.diff(array, axis=1) + np.pi, 2 * np.pi) - np.pi
+
+    if weights is not None:
+        # normalize weights
+        weights -= weights.min()
+        weights /= weights.max()
+
+        ww = weights**2
+        dx *= xp.minimum(ww[:-1, :], ww[1:, :])
+        dy *= xp.minimum(ww[:, :-1], ww[:, 1:])
+
+    rho = xp.diff(dx, axis=0, prepend=0, append=0)
+    rho += xp.diff(dy, axis=1, prepend=0, append=0)
+
+    unwrapped_array = preconditioned_poisson_solver_neumann_2D(rho, gauge=gauge, xp=xp)
+    unwrapped_array -= unwrapped_array.min()
+
+    if corner_centered:
+        unwrapped_array = xp.fft.ifftshift(unwrapped_array)
+
+    return unwrapped_array
+
+
+def unwrap_phase_2d_skimage(array, corner_centered=True, xp=np):
+    if xp is np:
+        array = array.astype(np.float64)
+        unwrapped_array = unwrap_phase(array, wrap_around=corner_centered).astype(
+            xp.float32
+        )
+    else:
+        array = xp.asnumpy(array).astype(np.float64)
+        unwrapped_array = unwrap_phase(array, wrap_around=corner_centered)
+        unwrapped_array = xp.asarray(unwrapped_array).astype(xp.float32)
+
+    return unwrapped_array
+
+
 def fit_aberration_surface(
     complex_probe,
     probe_sampling,
     energy,
     max_angular_order,
     max_radial_order,
+    use_scikit_image,
     xp=np,
 ):
     """ """
     probe_amp = xp.abs(complex_probe)
     probe_angle = -xp.angle(complex_probe)
 
-    if xp is np:
-        probe_angle = probe_angle.astype(np.float64)
-        unwrapped_angle = unwrap_phase(probe_angle, wrap_around=True).astype(xp.float32)
+    if use_scikit_image:
+        unwrapped_angle = unwrap_phase_2d_skimage(
+            probe_angle,
+            corner_centered=True,
+            xp=xp,
+        )
+
     else:
-        probe_angle = xp.asnumpy(probe_angle).astype(np.float64)
-        unwrapped_angle = unwrap_phase(probe_angle, wrap_around=True)
-        unwrapped_angle = xp.asarray(unwrapped_angle).astype(xp.float32)
+        unwrapped_angle = unwrap_phase_2d(
+            probe_angle,
+            weights=probe_amp,
+            corner_centered=True,
+            xp=xp,
+        )
 
     raveled_basis, _ = aberrations_basis_function(
         complex_probe.shape,
@@ -1647,6 +1814,8 @@ def fit_aberration_surface(
     coeff = xp.linalg.lstsq(Aw, bw, rcond=None)[0]
 
     fitted_angle = xp.tensordot(raveled_basis, coeff, axes=1).reshape(probe_angle.shape)
+    angle_offset = fitted_angle[0, 0] - probe_angle[0, 0]
+    fitted_angle -= angle_offset
 
     return fitted_angle, coeff
 
@@ -2077,6 +2246,67 @@ def lanczos_kernel_density_estimate(
     return pix_output
 
 
+def vectorized_bilinear_resample(
+    array,
+    scale=None,
+    output_size=None,
+    mode="grid-wrap",
+    grid_mode=True,
+    xp=np,
+):
+    """
+    Resize an array along its final two axes.
+    Note, this is vectorized and thus very memory-intensive.
+
+    The scaling of the array can be specified by passing either `scale`, which sets
+    the scaling factor along both axes to be scaled; or by passing `output_size`,
+    which specifies the final dimensions of the scaled axes.
+
+    Parameters
+    ----------
+    array: np.ndarray
+        Input array to be resampled
+    scale: float
+        Scalar value giving the scaling factor for all dimensions
+    output_size: (int,int)
+        Tuple of two values giving the output size for the final two axes
+    xp: Callable
+        Array computing module
+
+    Returns
+    -------
+    resampled_array: np.ndarray
+        Resampled array
+    """
+
+    array_size = np.array(array.shape)
+    input_size = array_size[-2:].copy()
+
+    if scale is not None:
+        scale = np.array(scale)
+        if scale.size == 1:
+            scale = np.tile(scale, 2)
+
+        output_size = (input_size * scale).astype("int")
+    else:
+        if output_size is None:
+            raise ValueError("One of `scale` or `output_size` must be provided.")
+        output_size = np.array(output_size)
+        if output_size.size != 2:
+            raise ValueError("`output_size` must contain exactly two values.")
+        output_size = np.array(output_size)
+
+    scale_output = tuple(output_size / input_size)
+    scale_output = (1,) * (array_size.size - input_size.size) + scale_output
+
+    if xp is np:
+        array = zoom(array, scale_output, order=1, mode=mode, grid_mode=grid_mode)
+    else:
+        array = zoom_cp(array, scale_output, order=1, mode=mode, grid_mode=grid_mode)
+
+    return array
+
+
 def vectorized_fourier_resample(
     array,
     scale=None,
@@ -2122,6 +2352,7 @@ def vectorized_fourier_resample(
     else:
         if output_size is None:
             raise ValueError("One of `scale` or `output_size` must be provided.")
+        output_size = np.array(output_size)
         if output_size.size != 2:
             raise ValueError("`output_size` must contain exactly two values.")
         output_size = np.array(output_size)
@@ -2244,3 +2475,29 @@ def vectorized_fourier_resample(
     array_resize *= scale_output
 
     return array_resize
+
+
+def partition_list(lst, size):
+    """Partitions lst into chunks of size. Returns a generator."""
+    for i in range(0, len(lst), size):
+        yield lst[i : i + size]
+
+
+def copy_to_device(array, device="cpu"):
+    """Copies array to device. Default allows one to use this as asnumpy()"""
+    xp = get_array_module(array)
+
+    if xp is np:
+        if device == "cpu":
+            return np.asarray(array)
+        elif device == "gpu":
+            return cp.asarray(array)
+        else:
+            raise ValueError(f"device must be either 'cpu' or 'gpu', not {device}")
+    else:
+        if device == "cpu":
+            return cp.asnumpy(array)
+        elif device == "gpu":
+            return cp.asarray(array)
+        else:
+            raise ValueError(f"device must be either 'cpu' or 'gpu', not {device}")
