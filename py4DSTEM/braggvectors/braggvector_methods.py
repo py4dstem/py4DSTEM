@@ -828,7 +828,7 @@ class BraggVectorMethods:
         Parameters
         ----------
         index : tuple[int,int] | list[int]
-            index for which Bragg vectors to plot
+            scan position for which Bragg vectors to plot
         cal : str, optional
             Choice to plot calibrated or raw Bragg vectors must be 'raw' or 'cal', by default 'cal'
         returnfig : bool, optional
@@ -839,7 +839,8 @@ class BraggVectorMethods:
         tuple (figure, axes)
             matplotlib figure, axes returned if `returnfig` is True
         """
-        assert cal.lower() in (
+        cal = cal.lower()
+        assert cal in (
             "cal",
             "raw",
         ), f"'cal' must be in ('cal', 'raw') {cal = } passed"
