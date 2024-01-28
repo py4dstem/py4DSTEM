@@ -715,6 +715,7 @@ class MixedstateMultislicePtychography(
         fit_probe_aberrations_max_radial_order: int = 4,
         fit_probe_aberrations_remove_initial: bool = False,
         fit_probe_aberrations_using_scikit_image: bool = True,
+        num_probes_fit_aberrations: int = np.inf,
         butterworth_filter: bool = True,
         q_lowpass: float = None,
         q_highpass: float = None,
@@ -814,6 +815,8 @@ class MixedstateMultislicePtychography(
             If true, the necessary phase unwrapping is performed using scikit-image. This is more stable, but occasionally leads
             to a documented bug where the kernel hangs..
             If false, a poisson-based solver is used for phase unwrapping. This won't hang, but tends to underestimate aberrations.
+        num_probes_fit_aberrations: int
+            The number of probes on which to apply the probe fitting
         butterworth_filter: bool, optional
             If True and q_lowpass or q_highpass is not None, object is smoothed using butterworth filtering
         q_lowpass: float
@@ -1033,6 +1036,7 @@ class MixedstateMultislicePtychography(
                 fit_probe_aberrations_max_radial_order=fit_probe_aberrations_max_radial_order,
                 fit_probe_aberrations_remove_initial=fit_probe_aberrations_remove_initial,
                 fit_probe_aberrations_using_scikit_image=fit_probe_aberrations_using_scikit_image,
+                num_probes_fit_aberrations=num_probes_fit_aberrations,
                 fix_probe_aperture=fix_probe_aperture and not fix_probe,
                 initial_probe_aperture=self._probe_initial_aperture,
                 fix_positions=fix_positions,
