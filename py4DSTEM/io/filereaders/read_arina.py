@@ -12,6 +12,7 @@ def read_arina(
     binfactor: int = 1,
     dtype_bin: float = None,
     flatfield: np.ndarray = None,
+    flip_180: bool = False,
 ):
     """
     File reader for arina 4D-STEM datasets
@@ -28,6 +29,8 @@ def read_arina(
             other than uint16
         flatfield (np.ndarray):
             flatfield for correction factors, converts data to float
+        flip_180 (bool):
+            if True, rotates on loading data by 180 degrees
 
     Returns:
         DataCube
@@ -94,6 +97,9 @@ def read_arina(
             0,
         )
     )
+
+    if flip_180:
+        datacube.data = np.rot90(datacube.data, k=2, axes=(-1, -2))
 
     return datacube
 
