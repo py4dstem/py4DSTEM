@@ -101,6 +101,8 @@ class MagneticPtychography(
     initial_scan_positions: np.ndarray, optional
         Probe positions in Å for each diffraction intensity
         If None, initialized to a grid scan
+    positions_offset_ang: np.ndarray, optional
+        Offset of positions in A
     verbose: bool, optional
         If True, class methods will inherit this and print additional information
     device: str, optional
@@ -136,6 +138,7 @@ class MagneticPtychography(
         initial_object_guess: np.ndarray = None,
         initial_probe_guess: np.ndarray = None,
         initial_scan_positions: np.ndarray = None,
+        positions_offset_ang: np.ndarray = None,
         object_type: str = "complex",
         verbose: bool = True,
         device: str = "cpu",
@@ -179,6 +182,7 @@ class MagneticPtychography(
         # Common Metadata
         self._vacuum_probe_intensity = vacuum_probe_intensity
         self._scan_positions = initial_scan_positions
+        self._positions_offset_ang = positions_offset_ang
         self._energy = energy
         self._semiangle_cutoff = semiangle_cutoff
         self._semiangle_cutoff_pixels = semiangle_cutoff_pixels
@@ -548,6 +552,7 @@ class MagneticPtychography(
                 self._scan_positions[index],
                 self._positions_mask[index],
                 self._object_padding_px,
+                self._positions_offset_ang,
             )
 
         # handle semiangle specified in pixels

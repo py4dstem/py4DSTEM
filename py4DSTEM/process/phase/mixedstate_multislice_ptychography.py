@@ -107,6 +107,8 @@ class MixedstateMultislicePtychography(
     initial_scan_positions: np.ndarray, optional
         Probe positions in Å for each diffraction intensity
         If None, initialized to a grid scan
+    positions_offset_ang: np.ndarray, optional
+        Offset of positions in A
     theta_x: float
         x tilt of propagator in mrad
     theta_y: float
@@ -157,6 +159,7 @@ class MixedstateMultislicePtychography(
         initial_object_guess: np.ndarray = None,
         initial_probe_guess: np.ndarray = None,
         initial_scan_positions: np.ndarray = None,
+        positions_offset_ang: np.ndarray = None,
         theta_x: float = 0,
         theta_y: float = 0,
         middle_focus: bool = False,
@@ -234,6 +237,7 @@ class MixedstateMultislicePtychography(
         # Common Metadata
         self._vacuum_probe_intensity = vacuum_probe_intensity
         self._scan_positions = initial_scan_positions
+        self._positions_offset_ang = positions_offset_ang
         self._energy = energy
         self._semiangle_cutoff = semiangle_cutoff
         self._semiangle_cutoff_pixels = semiangle_cutoff_pixels
@@ -494,6 +498,7 @@ class MixedstateMultislicePtychography(
             self._scan_positions,
             self._positions_mask,
             self._object_padding_px,
+            self._positions_offset_ang,
         )
 
         # initialize object

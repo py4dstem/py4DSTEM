@@ -106,6 +106,8 @@ class PtychographicTomography(
     initial_scan_positions: list of np.ndarray, optional
         Probe positions in Å for each diffraction intensity per tilt
         If None, initialized to a grid scan centered along tilt axis
+    positions_offset_ang: list of np.ndarray, optional
+        Offset of positions in A
     verbose: bool, optional
         If True, class methods will inherit this and print additional information
     object_type: str, optional
@@ -149,6 +151,7 @@ class PtychographicTomography(
         initial_object_guess: np.ndarray = None,
         initial_probe_guess: np.ndarray = None,
         initial_scan_positions: Sequence[np.ndarray] = None,
+        positions_offset_ang: Sequence[np.ndarray] = None,
         verbose: bool = True,
         device: str = "cpu",
         storage: str = None,
@@ -193,6 +196,7 @@ class PtychographicTomography(
         # Common Metadata
         self._vacuum_probe_intensity = vacuum_probe_intensity
         self._scan_positions = initial_scan_positions
+        self._positions_offset_ang = positions_offset_ang
         self._energy = energy
         self._semiangle_cutoff = semiangle_cutoff
         self._semiangle_cutoff_pixels = semiangle_cutoff_pixels
@@ -483,6 +487,7 @@ class PtychographicTomography(
                 self._scan_positions[index],
                 self._positions_mask[index],
                 self._object_padding_px,
+                self._positions_offset_ang[index],
             )
 
         # handle semiangle specified in pixels

@@ -1761,6 +1761,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         positions: np.ndarray,
         positions_mask,
         object_padding_px,
+        positions_offset_ang,
     ):
         """
         Method to compute the initial guess of scan positions in pixels.
@@ -1775,6 +1776,8 @@ class PtychographicReconstruction(PhaseReconstruction):
         object_padding_px: Tuple[int,int], optional
             Pixel dimensions to pad object with
             If None, the padding is set to half the probe ROI dimensions
+        positions_offset_ang, np.ndarray, optional
+            Offset of positions in A
 
         Returns
         -------
@@ -1812,6 +1815,14 @@ class PtychographicReconstruction(PhaseReconstruction):
                 x = (x - np.ptp(x) / 2) / sampling[0]
                 y = (y - np.ptp(y) / 2) / sampling[1]
             x, y = np.meshgrid(x, y, indexing="ij")
+
+            if positions_offset_ang is not None:
+                if transpose:
+                    x += positions_offset_ang[0] / sampling[1]
+                    y += positions_offset_ang[1] / sampling[0]
+                else:
+                    x += positions_offset_ang[0] / sampling[0]
+                    y += positions_offset_ang[1] / sampling[1]
 
             if positions_mask is not None:
                 x = x[positions_mask]
