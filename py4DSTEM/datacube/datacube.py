@@ -479,13 +479,29 @@ class DataCube(
         """
         from py4DSTEM.preprocess import filter_hot_pixels
 
-        d = filter_hot_pixels(
+        datacube = filter_hot_pixels(
             self,
             thresh,
             ind_compare,
             return_mask,
         )
-        return d
+        return datacube
+
+    def median_filter_masked_pixels(self, mask, kernel_width: int = 3):
+        """
+        This function fixes a datacube where the same pixels are consistently
+        bad. It requires a mask that identifies all the bad pixels in the dataset.
+        Then for each diffraction pattern, a median kernel is applied around each
+        bad pixel with the specified width.
+        """
+        from py4DSTEM.preprocess import median_filter_masked_pixels
+
+        datacube = median_filter_masked_pixels(
+            self,
+            mask,
+            kernel_width,
+        )
+        return datacube
 
     # Probe
 

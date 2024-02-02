@@ -470,6 +470,61 @@ def filter_hot_pixels(datacube, thresh, ind_compare=1, return_mask=False):
         return datacube
 
 
+def median_filter_masked_pixels(datacube, mask, kernel_width: int = 3):
+    """
+    This function fixes a datacube where the same pixels are consistently
+    bad. It requires a mask that identifies all the bad pixels in the dataset.
+    Then for each diffraction pattern, a median kernel is applied around each
+    bad pixel with the specified width.
+
+    Parameters
+    ----------
+    datacube:
+        Datacube to be filtered
+    mask:
+        a boolean mask that specifies the bad pixels in the datacube
+    kernel_width (optional):
+        specifies the width of the median kernel
+
+    Returns
+    ----------
+    filtered datacube
+    """
+    if kernel_width % 2 == 0:
+        width_max = kernel_width // 2
+        width_min = kernel_width // 2
+
+    else:
+        width_max = int(kernel_width / 2 + 0.5)
+        width_min = int(kernel_width / 2 - 0.5)
+
+    num_bad_pixels_indicies = np.array(np.where(mask))
+    for a0 in range(num_bad_pixels_indicies.shape[1]):
+        index_x = num_bad_pixels_indicies[0, a0]
+        index_y = num_bad_pixels_indicies[1, a0]
+
+        x_min = index_x - width_min
+        y_min = index_y - width_min
+
+        x_max = index_x + width_max
+        y_max = index_y + width_max
+
+        if x_min < 0:
+            x_min = 0
+        if y_min < 0:
+            y_min = 0
+
+        if x_max > datacube.Rshape[0]:
+            x_max = datacube.Rshape[0]
+        if y_max > datacube.Rshape[1]:
+            y_max = datacube.Rshape[1]
+
+        datacube.data[:, :, index_x, index_y] = np.median(
+            datacube.data[:, :, x_min:x_max, y_min:y_max], axis=(2, 3)
+        )
+    return datacube
+
+
 def datacube_diffraction_shift(
     datacube,
     xshifts,
