@@ -887,6 +887,7 @@ class Crystal:
         potential_radius_Ang =  3.0,
         sigma_image_blur_Ang = 0.1,
         plot_result = False,
+        figsize = (6,6),
         orientation: Optional[Orientation] = None,
         ind_orientation: Optional[int] = 0,
         orientation_matrix: Optional[np.ndarray] = None,
@@ -1023,7 +1024,7 @@ class Crystal:
 
         if plot_result:
             # test plotting
-            fig,ax = plt.subplots(figsize = (6,6))
+            fig,ax = plt.subplots(figsize = figsize)
             ax.imshow(
                 im_potential,
                 cmap = 'turbo',
