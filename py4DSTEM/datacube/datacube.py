@@ -718,20 +718,14 @@ class DataCube(
         """
         Finds Bragg scattering vectors.
 
-        Template matching is performed by (1) optionally preprocessing the data,
-        (2) cross-correlating it with the template and finding the local maxima,
-        and (3) thresholding and returning.  These three steps are controlled
-        using the `preprocess`, `corr`, and `thresh` arguments, respectively.
-        The `data` argument controls which data is analyzed, as well as the
-        return value.
+        The method is template matching unless the ML argument is specified.
+        In normal operation, the sequence is (1) optional preprocessing,
+        (2) cross-correlating with the template, and (3) finding local maxima,
+        thresholding and returning. See `preprocess`, `corr`, `thresh`, and
+        `ML` below. Accelration is handle with `device`.
 
-        Template matching may be performed on the CPU, one or more GPUs, or
-        distributed to a cluster of CPUs.  Device configuration is controlled
-        with the `device` argument.
-
-        Vectors may be localized using a neural network, FCU-net (Fourier space,
-        complex valued U-net) instead of traditional template matching. FCU-net
-        is enabled using the `ML` argument. If you use FCU-net in your work,
+        Invoking `ML` makes use of a custom neural network called FCU-net to
+        localize the Bragg scattering. If you use FCU-net in your work,
         please reference "Munshi, Joydeep, et al. npj Computational Materials
         8.1 (2022): 254".
 
@@ -862,10 +856,12 @@ class DataCube(
 
         Parameters
         ----------
-        template : qshaped 2d np.ndarray or Probe or None
+        template : qshape'd 2d np.ndarray or Probe or None
             The matching template. If an ndarray is passed, must be centered
             about the origin. If a Probe is passed, probe.kernel must be
-            populated. If None is passed, cross correlation is skipped.
+            populated. If None is passed, cross correlation is skipped and
+            the maxima are taken directly from the (possibly preprocessed)
+            diffraction data
         data : None or 2-tuple or 2D numpy ndarray
             Specifies the data in which to find the Bragg scattering. Valid
             entries and their behavoirs are:
@@ -991,10 +987,6 @@ class DataCube(
                   model is available locally, then download and update the model
                   if one is not available or the local model is not up-to-date.
                   Otherwise, must be a filepath to a Tensorflow model of weights
-                  to use with FCU-net. Leaving this as None is recommended.
-                  # TODO: @alex-rakowski - is this correct? This is what I think
-                  # it should do, but looking quickly at the current method it
-                  # looks like None always downloads the latest? Is that right?
             Note that to use GPU / batched GPU computation, the "CUDA" and
             "CUDA_batched" flags should be set to True in the `device` arguement.
         return_cc : bool
