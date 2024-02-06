@@ -229,6 +229,7 @@ class PhaseReconstruction(Custom):
         vacuum_probe_intensity=None,
         dp_mask=None,
         com_shifts=None,
+        com_measured=None,
     ):
         """
         Datacube preprocessing step, to set the reciprocal- and real-space sampling.
@@ -279,6 +280,13 @@ class PhaseReconstruction(Custom):
                     np.ones(datacube.Rshape) * com_shifts[1],
                 )
 
+        if com_measured is not None:
+            if np.isscalar(com_measured[0]):
+                com_measured = (
+                    np.ones(datacube.Rshape) * com_measured[0],
+                    np.ones(datacube.Rshape) * com_measured[1],
+                )
+
         if diffraction_intensities_shape is not None:
             Qx, Qy = datacube.shape[-2:]
             Sx, Sy = diffraction_intensities_shape
@@ -295,6 +303,12 @@ class PhaseReconstruction(Custom):
                 com_shifts = (
                     com_shifts[0] * resampling_factor_x,
                     com_shifts[1] * resampling_factor_x,
+                )
+
+            if com_measured is not None:
+                com_measured = (
+                    com_measured[0] * resampling_factor_x,
+                    com_measured[1] * resampling_factor_x,
                 )
 
             if reshaping_method == "bin":
@@ -390,7 +404,7 @@ class PhaseReconstruction(Custom):
             if dp_mask is not None:
                 dp_mask = np.pad(dp_mask, pad_width=(pad_kx, pad_ky), mode="constant")
 
-        return datacube, vacuum_probe_intensity, dp_mask, com_shifts
+        return datacube, vacuum_probe_intensity, dp_mask, com_shifts, com_measured
 
     def _extract_intensities_and_calibrations_from_datacube(
         self,

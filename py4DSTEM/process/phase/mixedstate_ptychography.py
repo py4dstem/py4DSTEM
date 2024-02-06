@@ -3,7 +3,7 @@ Module for reconstructing phase objects from 4DSTEM datasets using iterative met
 namely mixed-state ptychography.
 """
 
-from typing import Mapping, Tuple
+from typing import Mapping, Sequence, Tuple, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -216,7 +216,9 @@ class MixedstatePtychography(
         plot_probe_overlaps: bool = True,
         force_com_rotation: float = None,
         force_com_transpose: float = None,
-        force_com_shifts: float = None,
+        force_com_shifts: Union[Sequence[np.ndarray], Sequence[float]] = None,
+        force_com_measured: Sequence[np.ndarray] = None,
+        vectorized_com_calculation: bool = True,
         force_scan_sampling: float = None,
         force_angular_sampling: float = None,
         force_reciprocal_sampling: float = None,
@@ -276,6 +278,10 @@ class MixedstatePtychography(
             Amplitudes come from diffraction patterns shifted with
             the CoM in the upper left corner for each probe unless
             shift is overwritten.
+        force_com_measured: tuple of ndarrays (CoMx measured, CoMy measured)
+            Force CoM measured shifts
+        vectorized_com_calculation: bool, optional
+            If True (default), the memory-intensive CoM calculation is vectorized
         force_scan_sampling: float, optional
             Override DataCube real space scan pixel size calibrations, in Angstrom
         force_angular_sampling: float, optional
@@ -333,6 +339,7 @@ class MixedstatePtychography(
             self._vacuum_probe_intensity,
             self._dp_mask,
             force_com_shifts,
+            force_com_measured,
         ) = self._preprocess_datacube_and_vacuum_probe(
             self._datacube,
             diffraction_intensities_shape=self._diffraction_intensities_shape,
@@ -341,6 +348,7 @@ class MixedstatePtychography(
             vacuum_probe_intensity=self._vacuum_probe_intensity,
             dp_mask=self._dp_mask,
             com_shifts=force_com_shifts,
+            com_measured=force_com_measured,
         )
 
         # calibrations
@@ -371,6 +379,8 @@ class MixedstatePtychography(
             dp_mask=self._dp_mask,
             fit_function=fit_function,
             com_shifts=force_com_shifts,
+            vectorized_calculation=vectorized_com_calculation,
+            com_measured=force_com_measured,
         )
 
         # estimate rotation / transpose

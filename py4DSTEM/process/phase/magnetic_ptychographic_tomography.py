@@ -231,6 +231,7 @@ class MagneticPtychographicTomography(
         diffraction_patterns_rotate_degrees: float = None,
         diffraction_patterns_transpose: bool = None,
         force_com_shifts: Sequence[float] = None,
+        force_com_measured: Sequence[np.ndarray] = None,
         vectorized_com_calculation: bool = True,
         progress_bar: bool = True,
         force_scan_sampling: float = None,
@@ -279,6 +280,8 @@ class MagneticPtychographicTomography(
             Amplitudes come from diffraction patterns shifted with
             the CoM in the upper left corner for each probe unless
             shift is overwritten. One tuple per tilt.
+        force_com_measured: tuple of ndarrays (CoMx measured, CoMy measured)
+            Force CoM measured shifts
         vectorized_com_calculation: bool, optional
             If True (default), the memory-intensive CoM calculation is vectorized
         force_scan_sampling: float, optional
@@ -381,6 +384,9 @@ class MagneticPtychographicTomography(
         if force_com_shifts is None:
             force_com_shifts = [None] * self._num_measurements
 
+        if force_com_measured is None:
+            force_com_measured = [None] * self._num_measurements
+
         self._rotation_best_rad = np.deg2rad(diffraction_patterns_rotate_degrees)
         self._rotation_best_transpose = diffraction_patterns_transpose
 
@@ -398,6 +404,7 @@ class MagneticPtychographicTomography(
                     self._vacuum_probe_intensity,
                     self._dp_mask,
                     force_com_shifts[index],
+                    force_com_measured[index],
                 ) = self._preprocess_datacube_and_vacuum_probe(
                     self._datacube[index],
                     diffraction_intensities_shape=self._diffraction_intensities_shape,
@@ -406,6 +413,7 @@ class MagneticPtychographicTomography(
                     vacuum_probe_intensity=self._vacuum_probe_intensity,
                     dp_mask=self._dp_mask,
                     com_shifts=force_com_shifts[index],
+                    com_measured=force_com_measured[index],
                 )
 
             else:
@@ -414,6 +422,7 @@ class MagneticPtychographicTomography(
                     _,
                     _,
                     force_com_shifts[index],
+                    force_com_measured[index],
                 ) = self._preprocess_datacube_and_vacuum_probe(
                     self._datacube[index],
                     diffraction_intensities_shape=self._diffraction_intensities_shape,
@@ -422,6 +431,7 @@ class MagneticPtychographicTomography(
                     vacuum_probe_intensity=None,
                     dp_mask=None,
                     com_shifts=force_com_shifts[index],
+                    com_measured=force_com_measured[index],
                 )
 
             # calibrations
@@ -447,6 +457,7 @@ class MagneticPtychographicTomography(
                 fit_function=fit_function,
                 com_shifts=force_com_shifts[index],
                 vectorized_calculation=vectorized_com_calculation,
+                com_measured=force_com_measured[index],
             )
 
             # corner-center amplitudes
