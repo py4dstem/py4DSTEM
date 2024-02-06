@@ -155,11 +155,8 @@ class Parallax(PhaseReconstruction):
 
         if hasattr(self, "aberration_dict_cartesian"):
             self.metadata = Metadata(
-                name="aberrations_metadata",
-                data={
-                    v["aberration name"]: v["value [Ang]"]
-                    for k, v in self.aberration_dict_cartesian.items()
-                },
+                name="aberrations_polar_metadata",
+                data=self.aberration_dict_polar,
             )
 
         self.metadata = Metadata(
