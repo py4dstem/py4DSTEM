@@ -646,7 +646,8 @@ class PhaseReconstruction(Custom):
         reciprocal_sampling = self._reciprocal_sampling
 
         if com_measured:
-            com_measured_x, com_measured_y = com_measured
+            com_measured_x = xp.asarray(com_measured[0], dtype=xp.float32)
+            com_measured_y = xp.asarray(com_measured[1], dtype=xp.float32)
 
         else:
             if dp_mask is not None:
@@ -694,7 +695,7 @@ class PhaseReconstruction(Custom):
                 for rx, ry in tqdmnd(
                     sx,
                     sy,
-                    desc="Fitting center of mass",
+                    desc="Calculating center of mass",
                     unit="probe position",
                     disable=not self._verbose,
                 ):
@@ -710,19 +711,27 @@ class PhaseReconstruction(Custom):
                     )
 
         if com_shifts is None:
-            com_measured_x_np = asnumpy(com_measured_x)
-            com_measured_y_np = asnumpy(com_measured_y)
-            finite_mask = np.isfinite(com_measured_x_np)
+            if fit_function is not None:
+                com_measured_x_np = asnumpy(com_measured_x)
+                com_measured_y_np = asnumpy(com_measured_y)
+                finite_mask = np.isfinite(com_measured_x_np)
 
-            com_shifts = fit_origin(
-                (com_measured_x_np, com_measured_y_np),
-                fitfunction=fit_function,
-                mask=finite_mask,
-            )
+                com_shifts = fit_origin(
+                    (com_measured_x_np, com_measured_y_np),
+                    fitfunction=fit_function,
+                    mask=finite_mask,
+                )
+
+                com_fitted_x = xp.asarray(com_shifts[0], dtype=xp.float32)
+                com_fitted_y = xp.asarray(com_shifts[1], dtype=xp.float32)
+            else:
+                com_fitted_x = xp.asarray(com_measured_x, dtype=xp.float32)
+                com_fitted_y = xp.asarray(com_measured_y, dtype=xp.float32)
+        else:
+            com_fitted_x = xp.asarray(com_shifts[0], dtype=xp.float32)
+            com_fitted_y = xp.asarray(com_shifts[1], dtype=xp.float32)
 
         # Fit function to center of mass
-        com_fitted_x = xp.asarray(com_shifts[0], dtype=xp.float32)
-        com_fitted_y = xp.asarray(com_shifts[1], dtype=xp.float32)
 
         # fix CoM units
         com_normalized_x = (
