@@ -18,9 +18,11 @@ from py4DSTEM.utils.elliptical_coords import (
     radial_elliptical_integral,
     radial_integral)
 from py4DSTEM.utils.ewpc import get_ewpc_filter_function
-from py4DSTEM.utils.filter_maxima_2d import filter_2D_maxima
 from py4DSTEM.utils.get_CoM import get_CoM
-from py4DSTEM.utils.get_maxima import get_maxima_1D, get_maxima_2D
+from py4DSTEM.utils.get_maxima import (
+    get_maxima_1D,
+    get_maxima_2D,
+    filter_2D_maxima)
 from py4DSTEM.utils.get_shifted_ar import get_shifted_ar
 from py4DSTEM.utils.linear_interpolation import (
     linear_interpolation_1D,
