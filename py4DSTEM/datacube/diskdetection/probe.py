@@ -3,10 +3,226 @@
 import numpy as np
 from typing import Optional
 from warnings import warn
-
-from py4DSTEM.data import DiffractionSlice, Data
 from scipy.ndimage import binary_opening, binary_dilation, distance_transform_edt
 
+from py4DSTEM.utils import get_shifted_ar, get_shift, get_CoM
+from py4DSTEM.data import DiffractionSlice, Data
+
+
+
+
+
+# DataCube methods
+
+
+class ProbeMaker:
+    def __init__(self):
+        pass
+
+
+    def get_vacuum_probe(
+        self,
+        ROI=None,
+        align=True,
+        mask=None,
+        threshold=0.2,
+        expansion=12,
+        opening=3,
+        verbose=False,
+        returncalc=True,
+    ):
+        """
+        Computes a vacuum probe.
+
+        Which diffraction patterns are included in the calculation is specified
+        by the `ROI` parameter.  Diffraction patterns are aligned before averaging
+        if `align` is True (default). A global mask is applied to each diffraction
+        pattern before aligning/averaging if `mask` is specified. After averaging,
+        a final masking step is applied according to the parameters `threshold`,
+        `expansion`, and `opening`.
+
+        Parameters
+        ----------
+        ROI : optional, boolean array or len 4 list/tuple
+            If unspecified, uses the whole datacube. If a boolean array is
+            passed must be real-space shaped, and True pixels are used. If a
+            4-tuple is passed, uses the region inside the limits
+            (rx_min,rx_max,ry_min,ry_max)
+        align : optional, bool
+            if True, aligns the probes before averaging
+        mask : optional, array
+            mask applied to each diffraction pattern before alignment and
+            averaging
+        threshold : float
+            in the final masking step, values less than max(probe)*threshold
+            are considered outside the probe
+        expansion : int
+            number of pixels by which the final mask is expanded after
+            thresholding
+        opening : int
+            size of binary opening applied to the final mask to eliminate stray
+            bright pixels
+        verbose : bool
+            toggles verbose output
+        returncalc : bool
+            if True, returns the answer
+
+        Returns
+        -------
+        probe : Probe, optional
+            the vacuum probe
+        """
+        from py4DSTEM.braggvectors import Probe
+
+        # parse region to use
+        if ROI is None:
+            ROI = np.ones(self.Rshape, dtype=bool)
+        elif isinstance(ROI, tuple):
+            assert len(ROI) == 4, "if ROI is a tuple must be length 4"
+            _ROI = np.ones(self.Rshape, dtype=bool)
+            ROI = _ROI[ROI[0] : ROI[1], ROI[2] : ROI[3]]
+        else:
+            assert isinstance(ROI, np.ndarray)
+            assert ROI.shape == self.Rshape
+        xy = np.vstack(np.nonzero(ROI))
+        length = xy.shape[1]
+
+        # setup global mask
+        if mask is None:
+            mask = 1
+        else:
+            assert mask.shape == self.Qshape
+
+        # compute average probe
+        probe = self.data[xy[0, 0], xy[1, 0], :, :]
+        for n in tqdmnd(range(1, length)):
+            curr_DP = self.data[xy[0, n], xy[1, n], :, :] * mask
+            if align:
+                xshift, yshift = get_shift(probe, curr_DP)
+                curr_DP = get_shifted_ar(curr_DP, xshift, yshift)
+            probe = probe * (n - 1) / n + curr_DP / n
+
+        # mask
+        mask = probe > np.max(probe) * threshold
+        mask = binary_opening(mask, iterations=opening)
+        mask = binary_dilation(mask, iterations=1)
+        mask = (
+            np.cos(
+                (np.pi / 2)
+                * np.minimum(
+                    distance_transform_edt(np.logical_not(mask)) / expansion, 1
+                )
+            )
+            ** 2
+        )
+        probe *= mask
+
+        # make a probe, add to tree, and return
+        probe = Probe(probe)
+        self.attach(probe)
+        if returncalc:
+            return probe
+
+    def get_probe_size(
+        self,
+        dp=None,
+        thresh_lower=0.01,
+        thresh_upper=0.99,
+        N=100,
+        plot=False,
+        returncal=True,
+        write_to_cal=True,
+        **kwargs,
+    ):
+        """
+        Gets the center and radius of the probe in the diffraction plane.
+
+        The algorithm is as follows:
+        First, create a series of N binary masks, by thresholding the diffraction
+        pattern DP with a linspace of N thresholds from thresh_lower to
+        thresh_upper, measured relative to the maximum intensity in DP.
+        Using the area of each binary mask, calculate the radius r of a circular
+        probe. Because the central disk is typically very intense relative to
+        the rest of the DP, r should change very little over a wide range of
+        intermediate values of the threshold. The range in which r is trustworthy
+        is found by taking the derivative of r(thresh) and finding identifying
+        where it is small.  The radius is taken to be the mean of these r values.
+        Using the threshold corresponding to this r, a mask is created and the
+        CoM of the DP times this mask it taken.  This is taken to be the origin
+        x0,y0.
+
+        Args:
+            dp (str or array): specifies the diffraction pattern in which to
+                find the central disk. A position averaged, or shift-corrected
+                and averaged, DP works best. If mode is None, the diffraction
+                pattern stored in the tree from 'get_dp_mean' is used. If mode
+                is a string it specifies the name of another virtual diffraction
+                pattern in the tree. If mode is an array, the array is used to
+                calculate probe size.
+            thresh_lower (float, 0 to 1): the lower limit of threshold values
+            thresh_upper (float, 0 to 1): the upper limit of threshold values
+            N (int): the number of thresholds / masks to use
+            plot (bool): if True plots results
+            plot_params(dict): dictionary to modify defaults in plot
+            return_calc (bool): if True returns 3-tuple described below
+            write_to_cal (bool): if True, looks for a Calibration instance
+                and writes the measured probe radius there
+
+        Returns:
+            (3-tuple): A 3-tuple containing:
+
+                * **r**: *(float)* the central disk radius, in pixels
+                * **x0**: *(float)* the x position of the central disk center
+                * **y0**: *(float)* the y position of the central disk center
+        """
+        # perform computation
+        from py4DSTEM.process.calibration import get_probe_size
+
+        if dp is None:
+            assert (
+                "dp_mean" in self.treekeys
+            ), "calculate .get_dp_mean() or pass a `dp` arg"
+            DP = self.tree("dp_mean").data
+        elif type(dp) == str:
+            assert dp in self.treekeys, f"mode {dp} not found in the tree"
+            DP = self.tree(dp)
+        elif type(dp) == np.ndarray:
+            assert dp.shape == self.Qshape, "must be a diffraction space shape 2D array"
+            DP = dp
+
+        x = get_probe_size(
+            DP,
+            thresh_lower=thresh_lower,
+            thresh_upper=thresh_upper,
+            N=N,
+        )
+
+        # try to add to calibration
+        if write_to_cal:
+            try:
+                self.calibration.set_probe_param(x)
+            except AttributeError:
+                raise Exception(
+                    "writing to calibrations were requested, but could not be completed"
+                )
+
+        # plot results
+        if plot:
+            from py4DSTEM.visualize import show_circles
+
+            show_circles(DP, (x[1], x[2]), x[0], vmin=0, vmax=1, **kwargs)
+
+        # return
+        if returncal:
+            return x
+
+
+
+
+
+
+
+# Container class
 
 class Probe(DiffractionSlice, Data):
     """
@@ -219,8 +435,6 @@ class Probe(DiffractionSlice, Data):
         r, x0, y0 : (3-tuple)
             the radius and origin
         """
-        from py4DSTEM.process.utils import get_CoM
-
         # set the image
         im = self.probe if data is None else data
 
@@ -368,8 +582,6 @@ class Probe(DiffractionSlice, Data):
             the cross-correlation kernel corresponding to the probe, in real
             space
         """
-        from py4DSTEM.process.utils import get_shifted_ar
-
         Q_Nx, Q_Ny = probe.shape
 
         # Get CoM
@@ -420,8 +632,6 @@ class Probe(DiffractionSlice, Data):
         kernel : ndarray
             the cross-correlation kernel
         """
-        from py4DSTEM.process.utils import get_shifted_ar
-
         Q_Nx, Q_Ny = probe.shape
 
         # Get CoM
@@ -486,8 +696,6 @@ class Probe(DiffractionSlice, Data):
         kernel : 2d array
             the cross-correlation kernel
         """
-        from py4DSTEM.process.utils import get_shifted_ar
-
         # parse inputs
         if isinstance(probe, Probe):
             probe = probe.probe

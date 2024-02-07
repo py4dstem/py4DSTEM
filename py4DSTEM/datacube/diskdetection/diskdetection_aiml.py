@@ -18,7 +18,7 @@ from numbers import Number
 from emdfile import tqdmnd, PointList, PointListArray
 from py4DSTEM.braggvectors.braggvectors import BraggVectors
 from py4DSTEM.data import QPoints
-from py4DSTEM.process.utils import get_maxima_2D
+from py4DSTEM.utils import get_maxima_2D
 
 # from py4DSTEM.braggvectors import universal_threshold
 

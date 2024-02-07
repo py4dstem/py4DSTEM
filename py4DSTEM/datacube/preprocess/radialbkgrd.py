@@ -6,6 +6,8 @@ import numpy as np
 from scipy.interpolate import interp1d
 from scipy.signal import savgol_filter
 
+from py4DSTEM.utils import cartesian_to_polarelliptical_transform
+
 
 ## Create look up table for background subtraction
 def get_1D_polar_background(
@@ -61,8 +63,6 @@ def get_1D_polar_background(
         * **polarData** (optional): the masked polar transform from which the
           background is computed, returned iff `return_polar_arr==True`
     """
-    from py4DSTEM.process.utils import cartesian_to_polarelliptical_transform
-
     # assert data is proper form
     assert isinstance(smoothing, bool), "Smoothing must be bool"
     assert smoothingWindowSize % 2 == 1, "Smoothing window must be odd"

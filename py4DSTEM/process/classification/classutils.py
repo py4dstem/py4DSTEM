@@ -4,7 +4,7 @@ import numpy as np
 
 from emdfile import tqdmnd, PointListArray
 from py4DSTEM.datacube import DataCube
-from py4DSTEM.process.utils import get_shifted_ar
+from py4DSTEM.utils import get_shifted_ar
 
 
 def get_class_DP(

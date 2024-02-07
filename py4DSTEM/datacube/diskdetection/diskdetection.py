@@ -8,8 +8,7 @@ from emdfile import tqdmnd
 from py4DSTEM.braggvectors.braggvectors import BraggVectors
 from py4DSTEM.data import QPoints
 from py4DSTEM.datacube import DataCube
-from py4DSTEM.preprocess.utils import get_maxima_2D
-from py4DSTEM.process.utils.cross_correlate import get_cross_correlation_FT
+from py4DSTEM.utils import get_maxima_2D, get_cross_correlation_FT
 from py4DSTEM.braggvectors.diskdetection_aiml import find_Bragg_disks_aiml
 
 
@@ -23,7 +22,7 @@ def find_bragg_vectors(
     preprocess_args=None,
     device=None,
     ML=None,
-    return_cc = False
+    return_cc = False,
     name = 'braggvectors',
     returncalc = True
 ):
@@ -156,7 +155,7 @@ def find_bragg_vectors(
     Using
 
     >>> def preprocess_fn(data):
-    >>>     return py4DSTEM.preprocess.bin2D(data,2)
+    >>>     return py4DSTEM.utils.bin2D(data,2)
     >>> datacube.find_bragg_vectors(
     >>>     template,
     >>>     preprocess = {
@@ -371,7 +370,7 @@ def find_bragg_vectors(
             dc, rx, ry = data[0], data[1], data[2]
 
             # extra logic for HDF5 data
-            if "h5py" in not str(type(dc.data)):
+            if "h5py" not in str(type(dc.data)):
                 data = dc.data[np.array(rx), np.array(ry), :, :]
             else:
                 # h5py datasets have different rules for slicing than
@@ -387,6 +386,8 @@ def find_bragg_vectors(
 
     # Use the ML method
     if ML:
+
+        raise Exception("ML methods are currently accessible in the find_Bragg_disks method. Thanks for you patience!")
 
         kws["CUDA"] = CUDA
         kws["model_path"] = ml_model_path

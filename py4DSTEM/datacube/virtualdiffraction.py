@@ -1,6 +1,7 @@
-# Virtual diffraction from a self. Includes:
-#  * VirtualDiffraction - a container for virtual diffraction data + metadata
-#  * DataCubeVirtualDiffraction - methods inherited by DataCube for virt diffraction
+# Contains-
+# 1) Datacube methods and
+# 2) a container class
+
 
 import numpy as np
 from typing import Optional
@@ -8,55 +9,14 @@ import inspect
 
 from emdfile import tqdmnd, Metadata
 from py4DSTEM.data import DiffractionSlice, Data
-from py4DSTEM.preprocess import get_shifted_ar
-
-# Virtual diffraction container class
+from py4DSTEM.utils import get_shifted_ar
 
 
-class VirtualDiffraction(DiffractionSlice, Data):
-    """
-    Stores a diffraction-space shaped 2D image with metadata
-    indicating how this image was generated from a self.
-    """
 
-    def __init__(
-        self,
-        data: np.ndarray,
-        name: Optional[str] = "virtualdiffraction",
-    ):
-        """
-        Args:
-            data (np.ndarray) : the 2D data
-            name (str) : the name
-
-        Returns:
-            A new VirtualDiffraction instance
-        """
-        # initialize as a DiffractionSlice
-        DiffractionSlice.__init__(
-            self,
-            data=data,
-            name=name,
-        )
-
-    # read
-    @classmethod
-    def _get_constructor_args(cls, group):
-        """
-        Returns a dictionary of args/values to pass to the class constructor
-        """
-        ar_constr_args = DiffractionSlice._get_constructor_args(group)
-        args = {
-            "data": ar_constr_args["data"],
-            "name": ar_constr_args["name"],
-        }
-        return args
+# DataCube methods
 
 
-# DataCube virtual diffraction methods
-
-
-class DataCubeVirtualDiffraction:
+class VirtualDiffractioner:
     def __init__(self):
         pass
 
@@ -391,3 +351,50 @@ class DataCubeVirtualDiffraction:
             name="dp_median",
             returncalc=True,
         )
+
+
+
+# Container class
+
+
+class VirtualDiffraction(DiffractionSlice, Data):
+    """
+    Stores a diffraction-space shaped 2D image with metadata
+    indicating how this image was generated from a self.
+    """
+
+    def __init__(
+        self,
+        data: np.ndarray,
+        name: Optional[str] = "virtualdiffraction",
+    ):
+        """
+        Args:
+            data (np.ndarray) : the 2D data
+            name (str) : the name
+
+        Returns:
+            A new VirtualDiffraction instance
+        """
+        # initialize as a DiffractionSlice
+        DiffractionSlice.__init__(
+            self,
+            data=data,
+            name=name,
+        )
+
+    # read
+    @classmethod
+    def _get_constructor_args(cls, group):
+        """
+        Returns a dictionary of args/values to pass to the class constructor
+        """
+        ar_constr_args = DiffractionSlice._get_constructor_args(group)
+        args = {
+            "data": ar_constr_args["data"],
+            "name": ar_constr_args["name"],
+        }
+        return args
+
+
+

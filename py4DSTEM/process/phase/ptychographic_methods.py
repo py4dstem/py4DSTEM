@@ -16,7 +16,7 @@ from py4DSTEM.process.phase.utils import (
     spatial_frequencies,
     vectorized_bilinear_resample,
 )
-from py4DSTEM.process.utils import electron_wavelength_angstrom, get_CoM, get_shifted_ar
+from py4DSTEM.utils import electron_wavelength_angstrom, get_CoM, get_shifted_ar
 from py4DSTEM.visualize import return_scaled_histogram_ordering, show, show_complex
 from scipy.ndimage import gaussian_filter, rotate
 

@@ -1,8 +1,8 @@
 # Cross correlation function
 
 import numpy as np
-from py4DSTEM.preprocess.utils import get_shifted_ar
-from py4DSTEM.process.utils.multicorr import upsampled_correlation
+from py4DSTEM.utils.get_shifted_ar import get_shifted_ar
+from py4DSTEM.utils.multicorr import upsampled_correlation
 
 try:
     import cupy as cp

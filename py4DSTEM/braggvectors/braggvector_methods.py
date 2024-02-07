@@ -2,13 +2,15 @@
 from __future__ import annotations
 import inspect
 from warnings import warn
-
+from scipy.ndimage import gaussian_filter
 import matplotlib.pyplot as plt
 import numpy as np
+
 from emdfile import Array, Metadata, _read_metadata, tqdmnd
 from py4DSTEM import show
+from py4DSTEM.utils import get_CoM
 from py4DSTEM.datacube import VirtualImage
-from scipy.ndimage import gaussian_filter
+
 
 
 class BraggVectorMethods:
@@ -384,8 +386,6 @@ class BraggVectorMethods:
                     np.argmax(gaussian_filter(bvm, 10)), (Q_Nx, Q_Ny)
                 )
             else:
-                from py4DSTEM.process.utils import get_CoM
-
                 x0, y0 = get_CoM(bvm)
         else:
             x0, y0 = center_guess

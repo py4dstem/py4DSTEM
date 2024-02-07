@@ -9,7 +9,7 @@ import sys
 import warnings
 
 from emdfile import PointList
-from py4DSTEM.process.utils import single_atom_scatter, electron_wavelength_angstrom
+from py4DSTEM.utils import single_atom_scatter, electron_wavelength_angstrom
 
 from py4DSTEM.process.diffraction.utils import Orientation
 

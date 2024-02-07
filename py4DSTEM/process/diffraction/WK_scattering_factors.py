@@ -3,7 +3,7 @@ from scipy.special import expi
 
 # from functools import lru_cache
 
-from py4DSTEM.process.utils import electron_wavelength_angstrom
+from py4DSTEM.utils import electron_wavelength_angstrom
 
 """
 Weickenmeier-Kohl absorptive scattering factors, adapted by SE Zeltmann from EMsoftLib/others.f90

@@ -1,6 +1,6 @@
 import numpy as np
 
-from py4DSTEM.process.utils import get_CoM
+from py4DSTEM.utils import get_CoM
 
 
 def get_probe_size(DP, thresh_lower=0.01, thresh_upper=0.99, N=100):

@@ -105,17 +105,17 @@ def _find_Bragg_disks_single_DP_FK(
 
     import numpy
     import scipy.ndimage.filters
-    import py4DSTEM.process.utils.multicorr
+    import py4DSTEM.utils.multicorr
 
     # apply filter function:
     DP = DP if filter_function is None else filter_function(DP)
 
     if subpixel == "none":
-        cc = py4DSTEM.process.utils.get_cross_correlation_fk(
+        cc = py4DSTEM.utils.get_cross_correlation_fk(
             DP, probe_kernel_FT, corrPower
         )
         cc = numpy.maximum(cc, 0)
-        maxima_x, maxima_y, maxima_int = py4DSTEM.process.utils.get_maxima_2D(
+        maxima_x, maxima_y, maxima_int = py4DSTEM.utils.get_maxima_2D(
             cc,
             sigma=sigma,
             edgeBoundary=edgeBoundary,
@@ -127,11 +127,11 @@ def _find_Bragg_disks_single_DP_FK(
             subpixel=False,
         )
     elif subpixel == "poly":
-        cc = py4DSTEM.process.utils.get_cross_correlation_fk(
+        cc = py4DSTEM.utils.get_cross_correlation_fk(
             DP, probe_kernel_FT, corrPower
         )
         cc = numpy.maximum(cc, 0)
-        maxima_x, maxima_y, maxima_int = py4DSTEM.process.utils.get_maxima_2D(
+        maxima_x, maxima_y, maxima_int = py4DSTEM.utils.get_maxima_2D(
             cc,
             sigma=sigma,
             edgeBoundary=edgeBoundary,
@@ -149,7 +149,7 @@ def _find_Bragg_disks_single_DP_FK(
 
         cc = numpy.maximum(numpy.real(numpy.fft.ifft2(ccc)), 0)
 
-        maxima_x, maxima_y, maxima_int = py4DSTEM.process.utils.get_maxima_2D(
+        maxima_x, maxima_y, maxima_int = py4DSTEM.utils.get_maxima_2D(
             cc,
             sigma=sigma,
             edgeBoundary=edgeBoundary,
@@ -170,7 +170,7 @@ def _find_Bragg_disks_single_DP_FK(
             xyShift[0] = numpy.round(xyShift[0] * 2) / 2
             xyShift[1] = numpy.round(xyShift[1] * 2) / 2
 
-            subShift = py4DSTEM.process.utils.multicorr.upsampled_correlation(
+            subShift = py4DSTEM.utils.multicorr.upsampled_correlation(
                 ccc, upsample_factor, xyShift
             )
             maxima_x[ipeak] = subShift[0]
