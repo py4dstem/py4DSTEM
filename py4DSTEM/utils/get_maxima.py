@@ -1,5 +1,6 @@
 import numpy as np
 from scipy.ndimage import gaussian_filter
+from scipy.signal import medfilt
 try:
     import cupy as cp
 except (ModuleNotFoundError, ImportError):
@@ -75,11 +76,14 @@ def get_maxima_1D(ar, sigma=0, minSpacing=0, minRelativeIntensity=0, relativeToP
 def filter_2D_maxima(
     maxima,
     minAbsoluteIntensity=0,
+    minProminence=0,
+    prominenceKernelSize=3,
     minRelativeIntensity=0,
     relativeToPeak=0,
     minSpacing=0,
     edgeBoundary=1,
     maxNumPeaks=1,
+    _ar = None,
 ):
     """
     Parameters
@@ -87,6 +91,11 @@ def filter_2D_maxima(
     maxima : a numpy structured array with fields 'x', 'y', 'intensity'
     minAbsoluteIntensity : number
         delete counts with intensity below this value
+    minProminence : number
+        delete counts whose intensity above the local median is
+        below this value. _ar must be passed with this arg
+    prominenceKernelSize : odd number
+        kernel size for prominence local median comparison
     minRelativeIntensity : number
         delete counts with intensity below this value times
         the intensity of the i'th peak, where i is given by `relativeToPeak`
@@ -99,6 +108,8 @@ def filter_2D_maxima(
         delete peaks within this distance of the image edge
     maxNumPeaks : int
         maximum number of peaks to return
+    _ar : array or None
+        if minProminence is passed, this must be the array
 
     Returns
     -------
@@ -108,6 +119,17 @@ def filter_2D_maxima(
     # Remove maxima which are too dim
     if minAbsoluteIntensity > 0:
         deletemask = maxima["intensity"] < minAbsoluteIntensity
+        maxima = maxima[~deletemask]
+
+    # Remove maxima which are too dim relative to local median
+    if minProminence > 0:
+        assert(_ar is not None), "Array for median filter wasn't passed"
+        med = medfilt(_ar,prominenceKernelSize)
+        compare = maxima["intensity"] - med[
+            maxima['x'].astype(int),
+            maxima['y'].astype(int)
+        ]
+        deletemask = compare < minProminence
         maxima = maxima[~deletemask]
 
     # Remove maxima which are too dim, compared to the n-th brightest
@@ -141,15 +163,14 @@ def filter_2D_maxima(
 
 
 
-
-
-
 def get_maxima_2D(
     ar,
     subpixel="poly",
     upsample_factor=16,
     sigma=0,
     minAbsoluteIntensity=0,
+    minProminence=0,
+    prominenceKernelSize=3,
     minRelativeIntensity=0,
     relativeToPeak=0,
     minSpacing=0,
@@ -177,6 +198,11 @@ def get_maxima_2D(
         the maximum number of maxima to return
     minAbsoluteIntensity : number
         minimum intensity threshold
+    minProminence : number
+        intensity threshold, in absolute units, above the local
+        median
+    prominenceKernelSize : odd number
+        kernel size for prominence local median comparison
     minRelativeIntensity : number
         intensity threshold relative to the N'th brightest peak,
         where N is given by `relativeToPeak`
@@ -241,11 +267,14 @@ def get_maxima_2D(
     maxima = filter_2D_maxima(
         maxima,
         minAbsoluteIntensity=minAbsoluteIntensity,
+        minProminence=minProminence,
+        prominenceKernelSize=prominenceKernelSize,
         minRelativeIntensity=minRelativeIntensity,
         relativeToPeak=relativeToPeak,
         minSpacing=minSpacing,
         edgeBoundary=edgeBoundary,
         maxNumPeaks=maxNumPeaks,
+        _ar = ar
     )
 
     if subpixel == "pixel":

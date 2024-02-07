@@ -338,9 +338,10 @@ class BraggFinder(object):
             'edge' : 0,
             'sigma' : 0,
             'n_peaks_max' : 10000,
+            'min_prominence' : 0,
+            'prominence_kernel_size' : 3,
             'min_rel_intensity' : 0,
             'ref_peak' : 0,
-            'method' : "prominence",
         }
         corr = corr_defaults if corr is None else corr_defaults | corr
         thresh = thresh_defaults if thresh is None else thresh_defaults | thresh
@@ -409,46 +410,40 @@ class BraggFinder(object):
             return cc
 
         # threshold
-        method_options = [
-            'prominence',
-            'absolute'
-        ]
-        assert(thresh['method'] in method_options)
         def _threshold(cc):
             """ vec = _threshold(cc)
             """
-            if thresh['method'] == 'prominence':
-                # TODO
-                raise Exception("prominence method has not been implemented yet")
-
+            cc_real = np.maximum(np.real(np.fft.ifft2(cc)),0)
+            if thresh['subpixel'] == 'multicorr':
+                return get_maxima_2D(
+                    cc_real,
+                    subpixel='multicorr',
+                    upsample_factor=thresh['upsample_factor'],
+                    sigma=thresh['sigma'],
+                    minAbsoluteIntensity=thresh['min_intensity'],
+                    minProminence=thresh['min_prominence'],
+                    prominenceKernelSize=thresh['prominence_kernel_size'],
+                    minRelativeIntensity=thresh['min_rel_intensity'],
+                    relativeToPeak=thresh['ref_peak'],
+                    minSpacing=thresh['min_spacing'],
+                    edgeBoundary=thresh['edge'],
+                    maxNumPeaks=thresh['n_peaks_max'],
+                    _ar_FT=cc,
+                )
             else:
-                cc_real = np.maximum(np.real(np.fft.ifft2(cc)),0)
-                if thresh['subpixel'] == 'multicorr':
-                    return get_maxima_2D(
-                        cc_real,
-                        subpixel='multicorr',
-                        upsample_factor=thresh['upsample_factor'],
-                        sigma=thresh['sigma'],
-                        minAbsoluteIntensity=thresh['min_intensity'],
-                        minRelativeIntensity=thresh['min_rel_intensity'],
-                        relativeToPeak=thresh['ref_peak'],
-                        minSpacing=thresh['min_spacing'],
-                        edgeBoundary=thresh['edge'],
-                        maxNumPeaks=thresh['n_peaks_max'],
-                        _ar_FT=cc,
-                    )
-                else:
-                    return get_maxima_2D(
-                        cc_real,
-                        subpixel=thresh['subpixel'],
-                        sigma=thresh['sigma'],
-                        minAbsoluteIntensity=thresh['min_intensity'],
-                        minRelativeIntensity=thresh['min_rel_intensity'],
-                        relativeToPeak=thresh['ref_peak'],
-                        minSpacing=thresh['min_spacing'],
-                        edgeBoundary=thresh['edge'],
-                        maxNumPeaks=thresh['n_peaks_max'],
-                    )
+                return get_maxima_2D(
+                    cc_real,
+                    subpixel=thresh['subpixel'],
+                    sigma=thresh['sigma'],
+                    minAbsoluteIntensity=thresh['min_intensity'],
+                    minProminence=thresh['min_prominence'],
+                    prominenceKernelSize=thresh['prominence_kernel_size'],
+                    minRelativeIntensity=thresh['min_rel_intensity'],
+                    relativeToPeak=thresh['ref_peak'],
+                    minSpacing=thresh['min_spacing'],
+                    edgeBoundary=thresh['edge'],
+                    maxNumPeaks=thresh['n_peaks_max'],
+                )
 
 
         # prepare the template
