@@ -473,25 +473,26 @@ class SingleslicePtychography(
         self._probe_initial = self._probe.copy()
         self._probe_initial_aperture = xp.abs(xp.fft.fft2(self._probe))
 
-        # overlaps
-        if max_batch_size is None:
-            max_batch_size = self._num_diffraction_patterns
+        if object_fov_mask is None or plot_probe_overlaps:
+            # overlaps
+            if max_batch_size is None:
+                max_batch_size = self._num_diffraction_patterns
 
-        probe_overlap = xp.zeros(self._object_shape, dtype=xp.float32)
+            probe_overlap = xp.zeros(self._object_shape, dtype=xp.float32)
 
-        for start, end in generate_batches(
-            self._num_diffraction_patterns, max_batch=max_batch_size
-        ):
-            # batch indices
-            positions_px = self._positions_px[start:end]
-            positions_px_fractional = positions_px - xp_storage.round(positions_px)
+            for start, end in generate_batches(
+                self._num_diffraction_patterns, max_batch=max_batch_size
+            ):
+                # batch indices
+                positions_px = self._positions_px[start:end]
+                positions_px_fractional = positions_px - xp_storage.round(positions_px)
 
-            shifted_probes = fft_shift(self._probe, positions_px_fractional, xp)
-            probe_overlap += self._sum_overlapping_patches_bincounts(
-                xp.abs(shifted_probes) ** 2, positions_px
-            )
+                shifted_probes = fft_shift(self._probe, positions_px_fractional, xp)
+                probe_overlap += self._sum_overlapping_patches_bincounts(
+                    xp.abs(shifted_probes) ** 2, positions_px
+                )
 
-        del shifted_probes
+            del shifted_probes
 
         # initialize object_fov_mask
         if object_fov_mask is None:
@@ -501,14 +502,16 @@ class SingleslicePtychography(
                 probe_overlap_blurred > 0.25 * probe_overlap_blurred.max()
             )
             del probe_overlap_blurred
+        elif object_fov_mask is True:
+            self._object_fov_mask = np.full(self._object_shape, True)
         else:
             self._object_fov_mask = np.asarray(object_fov_mask)
         self._object_fov_mask_inverse = np.invert(self._object_fov_mask)
 
-        probe_overlap = asnumpy(probe_overlap)
-
         # plot probe overlaps
         if plot_probe_overlaps:
+            probe_overlap = asnumpy(probe_overlap)
+
             figsize = kwargs.pop("figsize", (9, 4))
             chroma_boost = kwargs.pop("chroma_boost", 1)
             power = kwargs.pop("power", 2)

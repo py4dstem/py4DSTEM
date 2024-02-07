@@ -231,7 +231,7 @@ class PtychographicTomography(
         force_angular_sampling: float = None,
         force_reciprocal_sampling: float = None,
         progress_bar: bool = True,
-        object_fov_mask: np.ndarray = None,
+        object_fov_mask: np.ndarray = True,
         crop_patterns: bool = False,
         main_tilt_axis: str = "vertical",
         device: str = None,
@@ -386,8 +386,16 @@ class PtychographicTomography(
         if force_com_measured is None:
             force_com_measured = [None] * self._num_measurements
 
+        if self._positions_offset_ang is None:
+            self._positions_offset_ang = [None] * self._num_measurements
+
         self._rotation_best_rad = np.deg2rad(diffraction_patterns_rotate_degrees)
         self._rotation_best_transpose = diffraction_patterns_transpose
+
+        if progress_bar:
+            # turn off verbosity to play nice with tqdm
+            verbose = self._verbose
+            self._verbose = False
 
         # loop over DPs for preprocessing
         for index in tqdmnd(
@@ -501,6 +509,10 @@ class PtychographicTomography(
                 self._positions_offset_ang[index],
             )
 
+        if progress_bar:
+            # reset verbosity
+            self._verbose = verbose
+
         # handle semiangle specified in pixels
         if self._semiangle_cutoff_pixels:
             self._semiangle_cutoff = (
@@ -594,65 +606,16 @@ class PtychographicTomography(
             self._slice_thicknesses,
         )
 
-        # overlaps
-        if max_batch_size is None:
-            max_batch_size = self._num_diffraction_patterns
-
-        if object_fov_mask is None:
-            probe_overlap_3D = xp.zeros_like(self._object)
-            old_rot_matrix = np.eye(3)  # identity
-
-            for index in range(self._num_measurements):
-                idx_start = self._cum_probes_per_measurement[index]
-                idx_end = self._cum_probes_per_measurement[index + 1]
-
-                rot_matrix = self._tilt_orientation_matrices[index]
-
-                probe_overlap_3D = self._rotate_zxy_volume(
-                    probe_overlap_3D,
-                    rot_matrix @ old_rot_matrix.T,
-                )
-
-                probe_overlap = xp.zeros(self._object_shape, dtype=xp.float32)
-
-                num_diffraction_patterns = idx_end - idx_start
-                shuffled_indices = np.arange(idx_start, idx_end)
-
-                for start, end in generate_batches(
-                    num_diffraction_patterns, max_batch=max_batch_size
-                ):
-                    # batch indices
-                    batch_indices = shuffled_indices[start:end]
-                    positions_px = self._positions_px_all[batch_indices]
-                    positions_px_fractional = positions_px - xp_storage.round(
-                        positions_px
-                    )
-
-                    shifted_probes = fft_shift(
-                        self._probes_all[index], positions_px_fractional, xp
-                    )
-                    probe_overlap += self._sum_overlapping_patches_bincounts(
-                        xp.abs(shifted_probes) ** 2, positions_px
-                    )
-
-                del shifted_probes
-
-                probe_overlap_3D += probe_overlap[None]
-                old_rot_matrix = rot_matrix
-
-            probe_overlap_3D = self._rotate_zxy_volume(
-                probe_overlap_3D,
-                old_rot_matrix.T,
-            )
-
-            gaussian_filter = self._scipy.ndimage.gaussian_filter
-            probe_overlap_3D_blurred = gaussian_filter(probe_overlap_3D, 1.0)
-            self._object_fov_mask = asnumpy(
-                probe_overlap_3D_blurred > 0.25 * probe_overlap_3D_blurred.max()
-            )
-
+        if object_fov_mask is not True:
+            raise NotImplementedError()
         else:
-            self._object_fov_mask = np.asarray(object_fov_mask)
+            self._object_fov_mask = np.full(self._object_shape, True)
+        self._object_fov_mask_inverse = np.invert(self._object_fov_mask)
+
+        # plot probe overlaps
+        if plot_probe_overlaps:
+            if max_batch_size is None:
+                max_batch_size = self._num_diffraction_patterns
 
             probe_overlap = xp.zeros(self._object_shape, dtype=xp.float32)
 
@@ -671,13 +634,8 @@ class PtychographicTomography(
                 )
 
             del shifted_probes
+            probe_overlap = asnumpy(probe_overlap)
 
-        self._object_fov_mask_inverse = np.invert(self._object_fov_mask)
-
-        probe_overlap = asnumpy(probe_overlap)
-
-        # plot probe overlaps
-        if plot_probe_overlaps:
             figsize = kwargs.pop("figsize", (13, 4))
             chroma_boost = kwargs.pop("chroma_boost", 1)
             power = kwargs.pop("power", 2)

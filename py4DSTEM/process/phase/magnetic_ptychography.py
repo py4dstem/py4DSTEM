@@ -217,7 +217,7 @@ class MagneticPtychography(
         force_angular_sampling: float = None,
         force_reciprocal_sampling: float = None,
         progress_bar: bool = True,
-        object_fov_mask: np.ndarray = None,
+        object_fov_mask: np.ndarray = True,
         crop_patterns: bool = False,
         device: str = None,
         clear_fft_cache: bool = None,
@@ -424,8 +424,16 @@ class MagneticPtychography(
         if self._scan_positions is None:
             self._scan_positions = [None] * self._num_measurements
 
+        if self._positions_offset_ang is None:
+            self._positions_offset_ang = [None] * self._num_measurements
+
         # Ensure plot_center_of_mass is not in kwargs
         kwargs.pop("plot_center_of_mass", None)
+
+        if progress_bar:
+            # turn off verbosity to play nice with tqdm
+            verbose = self._verbose
+            self._verbose = False
 
         # loop over DPs for preprocessing
         for index in tqdmnd(
@@ -563,8 +571,12 @@ class MagneticPtychography(
                 self._scan_positions[index],
                 self._positions_mask[index],
                 self._object_padding_px,
-                self._positions_offset_ang,
+                self._positions_offset_ang[index],
             )
+
+        if progress_bar:
+            # reset verbosity
+            self._verbose = verbose
 
         # handle semiangle specified in pixels
         if self._semiangle_cutoff_pixels:
@@ -642,25 +654,28 @@ class MagneticPtychography(
             device=self._device,
         )._evaluate_ctf()
 
-        # overlaps
-        if max_batch_size is None:
-            max_batch_size = self._num_diffraction_patterns
+        if object_fov_mask is None or plot_probe_overlaps:
+            # overlaps
+            if max_batch_size is None:
+                max_batch_size = self._num_diffraction_patterns
 
-        probe_overlap = xp.zeros(self._object_shape, dtype=xp.float32)
+            probe_overlap = xp.zeros(self._object_shape, dtype=xp.float32)
 
-        for start, end in generate_batches(
-            self._cum_probes_per_measurement[1], max_batch=max_batch_size
-        ):
-            # batch indices
-            positions_px = self._positions_px_all[start:end]
-            positions_px_fractional = positions_px - xp_storage.round(positions_px)
+            for start, end in generate_batches(
+                self._cum_probes_per_measurement[1], max_batch=max_batch_size
+            ):
+                # batch indices
+                positions_px = self._positions_px_all[start:end]
+                positions_px_fractional = positions_px - xp_storage.round(positions_px)
 
-            shifted_probes = fft_shift(self._probes_all[0], positions_px_fractional, xp)
-            probe_overlap += self._sum_overlapping_patches_bincounts(
-                xp.abs(shifted_probes) ** 2, positions_px
-            )
+                shifted_probes = fft_shift(
+                    self._probes_all[0], positions_px_fractional, xp
+                )
+                probe_overlap += self._sum_overlapping_patches_bincounts(
+                    xp.abs(shifted_probes) ** 2, positions_px
+                )
 
-        del shifted_probes
+            del shifted_probes
 
         # initialize object_fov_mask
         if object_fov_mask is None:
@@ -670,14 +685,15 @@ class MagneticPtychography(
                 probe_overlap_blurred > 0.25 * probe_overlap_blurred.max()
             )
             del probe_overlap_blurred
+        elif object_fov_mask is True:
+            self._object_fov_mask = np.full(self._object_shape, True)
         else:
             self._object_fov_mask = np.asarray(object_fov_mask)
         self._object_fov_mask_inverse = np.invert(self._object_fov_mask)
 
-        probe_overlap = asnumpy(probe_overlap)
-
         # plot probe overlaps
         if plot_probe_overlaps:
+            probe_overlap = asnumpy(probe_overlap)
             figsize = kwargs.pop("figsize", (9, 4))
             chroma_boost = kwargs.pop("chroma_boost", 1)
             power = kwargs.pop("power", 2)
