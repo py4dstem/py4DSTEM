@@ -1,6 +1,7 @@
 import numpy as np
 from scipy.ndimage import gaussian_filter
-from scipy.signal import medfilt
+#from scipy.signal import medfilt
+from scipy.ndimage import median_filter
 try:
     import cupy as cp
 except (ModuleNotFoundError, ImportError):
@@ -124,7 +125,15 @@ def filter_2D_maxima(
     # Remove maxima which are too dim relative to local median
     if minProminence > 0:
         assert(_ar is not None), "Array for median filter wasn't passed"
-        med = medfilt(_ar,prominenceKernelSize)
+        #med = medfilt(_ar,prominenceKernelSize)
+        assert(prominenceKernelSize%2==1), f"prominenceKernelSize must be odd, not {prominenceKernelSize}"
+        pks = prominenceKernelSize
+        footprint = np.ones((pks,pks), dtype=bool)
+        footprint[1:-1,1:-1] = 0
+        med = median_filter(
+            _ar,
+            footprint = footprint
+        )
         compare = maxima["intensity"] - med[
             maxima['x'].astype(int),
             maxima['y'].astype(int)
