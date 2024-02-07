@@ -1407,27 +1407,30 @@ class PhaseReconstruction(Custom):
             )
 
         counter = 0
-        for rx in range(diffraction_intensities.shape[0]):
-            for ry in range(diffraction_intensities.shape[1]):
-                if positions_mask is not None:
-                    if not positions_mask[rx, ry]:
-                        continue
-                intensities = get_shifted_ar(
-                    diffraction_intensities[rx, ry],
-                    -com_fitted_x[rx, ry],
-                    -com_fitted_y[rx, ry],
-                    bilinear=True,
-                    device="cpu",
-                )
+        for rx, ry in tqdmnd(
+            diffraction_intensities.shape[0],
+            diffraction_intensities.shape[1],
+            desc="Normalizing amplitudes",
+            unit="probe position",
+            disable=not self._verbose,
+        ):
+            if positions_mask is not None:
+                if not positions_mask[rx, ry]:
+                    continue
+            intensities = get_shifted_ar(
+                diffraction_intensities[rx, ry],
+                -com_fitted_x[rx, ry],
+                -com_fitted_y[rx, ry],
+                bilinear=True,
+                device="cpu",
+            )
 
-                if crop_patterns:
-                    intensities = intensities[crop_mask].reshape(
-                        region_of_interest_shape
-                    )
+            if crop_patterns:
+                intensities = intensities[crop_mask].reshape(region_of_interest_shape)
 
-                mean_intensity += np.sum(intensities)
-                amplitudes[counter] = np.sqrt(np.maximum(intensities, 0))
-                counter += 1
+            mean_intensity += np.sum(intensities)
+            amplitudes[counter] = np.sqrt(np.maximum(intensities, 0))
+            counter += 1
 
         mean_intensity /= amplitudes.shape[0]
 
