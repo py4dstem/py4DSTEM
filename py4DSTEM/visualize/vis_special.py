@@ -504,20 +504,28 @@ def show_origin_meas(data):
     show_image_grid(get_ar=lambda i: [qx, qy][i], H=1, W=2, cmap="RdBu")
 
 
-def show_origin_fit(data):
+def show_origin_fit(
+    data,
+    plot_range = None,
+    ):
     """
     Show the measured, fit, and residuals of the origin positions.
 
-    Args:
-        data (DataCube or Calibration or (3,2)-tuple of arrays
-            ((qx0_meas,qy0_meas),(qx0_fit,qy0_fit),(qx0_residuals,qy0_residuals))
+    Parameters
+    ----------
+    data (DataCube or Calibration or (3,2)-tuple of arrays
+        ((qx0_meas,qy0_meas),(qx0_fit,qy0_fit),(qx0_residuals,qy0_residuals))
+    plot_range: float
+        Plotting range in pixels, i.e. vmin,vmax = -plot_range,plot_range
+
+
     """
     from py4DSTEM.data import Calibration
     from py4DSTEM.datacube import DataCube
 
     if isinstance(data, tuple):
         assert len(data) == 3
-        qx0_meas, qy_meas = data[0]
+        qx0_meas, qy0_meas = data[0]
         qx0_fit, qy0_fit = data[1]
         qx0_residuals, qy0_residuals = data[2]
     elif isinstance(data, DataCube):
@@ -531,19 +539,37 @@ def show_origin_fit(data):
     else:
         raise Exception("data must be of type Datacube or Calibration or tuple")
 
-    show_image_grid(
-        get_ar=lambda i: [
-            qx0_meas,
-            qx0_fit,
-            qx0_residuals,
-            qy0_meas,
-            qy0_fit,
-            qy0_residuals,
-        ][i],
-        H=2,
-        W=3,
-        cmap="RdBu",
-    )
+    if plot_range is None:
+        show_image_grid(
+            get_ar=lambda i: [
+                qx0_meas,
+                qx0_fit,
+                qx0_residuals,
+                qy0_meas,
+                qy0_fit,
+                qy0_residuals,
+            ][i],
+            H=2,
+            W=3,
+            cmap="RdBu_r",
+        )
+    else:
+        show_image_grid(
+            get_ar=lambda i: [
+                qx0_meas - np.median(qx0_meas),
+                qx0_fit - np.median(qx0_fit),
+                qx0_residuals,
+                qy0_meas - np.median(qy0_meas),
+                qy0_fit - np.median(qy0_fit),
+                qy0_residuals,
+            ][i],
+            H=2,
+            W=3,
+            cmap="RdBu_r",
+            intensity_range = 'absolute',
+            vmin = -plot_range,
+            vmax = plot_range,
+        )
 
 
 def show_selected_dps(

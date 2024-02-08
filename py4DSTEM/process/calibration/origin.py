@@ -340,7 +340,7 @@ def get_origin(
 #     return (DP.shape[0] + dx) / 2, (DP.shape[1] + dy) / 2
 
 
-def get_origin_beamstop(
+def get_origin_correlation(
     datacube: DataCube, 
     mask = None,
     **kwargs
@@ -373,19 +373,10 @@ def get_origin_beamstop(
     qx0 = np.zeros(datacube.data.shape[:2])
     qy0 = np.zeros_like(qx0)
 
-    # # Precompute flipped mask, and FFTs of both masks
-    # mask_flip = np.rot90(mask,2)
-    # M = np.fft.fft2(mask)
-    # M_flip = np.fft.fft2(mask_flip)
-
-    # for rx, ry in tqdmnd(
-    #     datacube.R_Nx, 
-    #     datacube.R_Ny
-    #     ):
-
+    # main loop over all probe positions
     for rx, ry in tqdmnd(
-        range(0,1), 
-        range(49,50), 
+        datacube.R_Nx, 
+        datacube.R_Ny
         ):
         if mask is None:
             im = datacube.data[rx, ry, :, :]
@@ -405,21 +396,8 @@ def get_origin_beamstop(
             
         # Correlation peak, moved to image center shift
         xp, yp = np.unravel_index(np.argmax(cc), im.shape)
-        x = ((xp/2 + im.shape[0] / 2) % im.shape[0])
-        y = ((yp/2 + im.shape[1] / 2) % im.shape[1])
+        qx0[rx, ry] = ((xp/2 + im.shape[0] / 2) % im.shape[0])
+        qy0[rx, ry] = ((yp/2 + im.shape[1] / 2) % im.shape[1])
 
-
-        fig,ax = plt.subplots(figsize=(8,8))
-        ax.imshow(im)
-        ax.scatter(
-            y,
-            x,
-            s = 100,
-            marker = '+',
-            color = (1,0,0),
-            )
-
-        qx0[rx, ry] = x
-        qy0[rx, ry] = y
 
     return qx0, qy0
