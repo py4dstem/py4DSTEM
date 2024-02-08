@@ -342,7 +342,7 @@ def get_origin(
 
 def get_origin_beamstop(
     datacube: DataCube, 
-    mask: np.ndarray, 
+    mask = None,
     **kwargs
     ):
     """
@@ -356,11 +356,12 @@ def get_origin_beamstop(
     ----------
     datacube: (DataCube)
         The 4D dataset.
-    mask: (np array)
+    mask: (np arra, optional)
         Boolean mask which is False under the beamstop and True
         in the diffraction pattern. One approach to generating this mask
         is to apply a suitable threshold on the average diffraction pattern
         and use binary opening/closing to remove any holes.
+        If no mask is provided, this method will likely not work with a beamstop!
 
     Returns
     -------
@@ -383,17 +384,25 @@ def get_origin_beamstop(
     #     ):
 
     for rx, ry in tqdmnd(
-        range(10,11), 
-        range(10,11), 
+        range(0,1), 
+        range(49,50), 
         ):
-        im = datacube.data[rx, ry, :, :]
-        G = np.fft.fft2(im * mask)
-        M = np.fft.fft2(mask)
+        if mask is None:
+            im = datacube.data[rx, ry, :, :]
+            G = np.fft.fft2(im )
 
-        # Masked cross correlation of masked image with it's inverse
-        cc = np.real(np.fft.ifft2(G**2)) \
-            - np.real(np.fft.ifft2(G * M))**2 / np.real(np.fft.ifft2(M**2))
-        
+            # Masked cross correlation of masked image with it's inverse
+            cc = np.real(np.fft.ifft2(G**2))
+
+        else:
+            im = datacube.data[rx, ry, :, :]
+            G = np.fft.fft2(im * mask)
+            M = np.fft.fft2(mask)
+
+            # Masked cross correlation of masked image with it's inverse
+            cc = np.real(np.fft.ifft2(G**2)) \
+                - np.real(np.fft.ifft2(G * M))**2 / np.real(np.fft.ifft2(M**2))
+            
         # Correlation peak, moved to image center shift
         xp, yp = np.unravel_index(np.argmax(cc), im.shape)
         x = ((xp/2 + im.shape[0] / 2) % im.shape[0])
