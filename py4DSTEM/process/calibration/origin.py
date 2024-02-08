@@ -2,6 +2,7 @@
 
 import functools
 import numpy as np
+import matplotlib.pyplot as plt
 from scipy.ndimage import gaussian_filter
 from scipy.optimize import leastsq
 
@@ -309,56 +310,105 @@ def get_origin(
     return qx0, qy0, mask
 
 
-def get_origin_single_dp_beamstop(DP: np.ndarray, mask: np.ndarray, **kwargs):
+# def get_origin_single_dp_beamstop(DP: np.ndarray, mask: np.ndarray, **kwargs):
+#     """
+#     Find the origin for a single diffraction pattern, assuming there is a beam stop.
+
+#     Args:
+#         DP (np array): diffraction pattern
+#         mask (np array): boolean mask which is False under the beamstop and True
+#             in the diffraction pattern. One approach to generating this mask
+#             is to apply a suitable threshold on the average diffraction pattern
+#             and use binary opening/closing to remove and holes
+
+#     Returns:
+#         qx0, qy0 (tuple) measured center position of diffraction pattern
+#     """
+
+#     imCorr = np.real(
+#         np.fft.ifft2(
+#             np.fft.fft2(DP * mask)
+#             * np.conj(np.fft.fft2(np.rot90(DP, 2) * np.rot90(mask, 2)))
+#         )
+#     )
+
+#     xp, yp = np.unravel_index(np.argmax(imCorr), imCorr.shape)
+
+#     dx = ((xp + DP.shape[0] / 2) % DP.shape[0]) - DP.shape[0] / 2
+#     dy = ((yp + DP.shape[1] / 2) % DP.shape[1]) - DP.shape[1] / 2
+
+#     return (DP.shape[0] + dx) / 2, (DP.shape[1] + dy) / 2
+
+
+def get_origin_beamstop(
+    datacube: DataCube, 
+    mask: np.ndarray, 
+    **kwargs
+    ):
     """
-    Find the origin for a single diffraction pattern, assuming there is a beam stop.
+    Fit the origin for each diffraction pattern, with or without a beam stop.
+    The method we have developed here is a heavily modified version of masked 
+    cross correlation. More details about how this method works can be found in:
+    https://doi.org/10.1109/TIP.2011.2181402
+    by Dirk Padfield.
 
-    Args:
-        DP (np array): diffraction pattern
-        mask (np array): boolean mask which is False under the beamstop and True
-            in the diffraction pattern. One approach to generating this mask
-            is to apply a suitable threshold on the average diffraction pattern
-            and use binary opening/closing to remove and holes
+    Parameters
+    ----------
+    datacube: (DataCube)
+        The 4D dataset.
+    mask: (np array)
+        Boolean mask which is False under the beamstop and True
+        in the diffraction pattern. One approach to generating this mask
+        is to apply a suitable threshold on the average diffraction pattern
+        and use binary opening/closing to remove any holes.
 
-    Returns:
-        qx0, qy0 (tuple) measured center position of diffraction pattern
+    Returns
+    -------
+    qx0, qy0
+        (tuple of np arrays) measured center position of each diffraction pattern
     """
 
-    imCorr = np.real(
-        np.fft.ifft2(
-            np.fft.fft2(DP * mask)
-            * np.conj(np.fft.fft2(np.rot90(DP, 2) * np.rot90(mask, 2)))
-        )
-    )
-
-    xp, yp = np.unravel_index(np.argmax(imCorr), imCorr.shape)
-
-    dx = ((xp + DP.shape[0] / 2) % DP.shape[0]) - DP.shape[0] / 2
-    dy = ((yp + DP.shape[1] / 2) % DP.shape[1]) - DP.shape[1] / 2
-
-    return (DP.shape[0] + dx) / 2, (DP.shape[1] + dy) / 2
-
-
-def get_origin_beamstop(datacube: DataCube, mask: np.ndarray, **kwargs):
-    """
-    Find the origin for each diffraction pattern, assuming there is a beam stop.
-
-    Args:
-        datacube (DataCube)
-        mask (np array): boolean mask which is False under the beamstop and True
-            in the diffraction pattern. One approach to generating this mask
-            is to apply a suitable threshold on the average diffraction pattern
-            and use binary opening/closing to remove any holes
-
-    Returns:
-        qx0, qy0 (tuple of np arrays) measured center position of each diffraction pattern
-    """
-
+    # init measurement arrays
     qx0 = np.zeros(datacube.data.shape[:2])
     qy0 = np.zeros_like(qx0)
 
-    for rx, ry in tqdmnd(datacube.R_Nx, datacube.R_Ny):
-        x, y = get_origin_single_dp_beamstop(datacube.data[rx, ry, :, :], mask)
+    # # Precompute flipped mask, and FFTs of both masks
+    # mask_flip = np.rot90(mask,2)
+    # M = np.fft.fft2(mask)
+    # M_flip = np.fft.fft2(mask_flip)
+
+    # for rx, ry in tqdmnd(
+    #     datacube.R_Nx, 
+    #     datacube.R_Ny
+    #     ):
+
+    for rx, ry in tqdmnd(
+        range(10,11), 
+        range(10,11), 
+        ):
+        im = datacube.data[rx, ry, :, :]
+        G = np.fft.fft2(im * mask)
+        M = np.fft.fft2(mask)
+
+        # Masked cross correlation of masked image with it's inverse
+        cc = np.real(np.fft.ifft2(G**2)) \
+            - np.real(np.fft.ifft2(G * M))**2 / np.real(np.fft.ifft2(M**2))
+        
+        # Correlation peak, moved to image center shift
+        xp, yp = np.unravel_index(np.argmax(cc), im.shape)
+        x = ((xp/2 + im.shape[0] / 2) % im.shape[0])
+        y = ((yp/2 + im.shape[1] / 2) % im.shape[1])
+
+
+        fig,ax = plt.subplots(figsize=(8,8))
+        ax.imshow(im)
+        ax.scatter(
+            y,
+            x,
+            s = 100,
+            marker = '+',
+            color = (1,0,0),
+            )
 
         qx0[rx, ry] = x
         qy0[rx, ry] = y
