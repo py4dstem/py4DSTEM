@@ -553,8 +553,16 @@ def add_bragg_index_labels(ax, d):
     assert "bragg_directions" in d.keys()
     bragg_directions = d["bragg_directions"]
     assert isinstance(bragg_directions, PointList)
-    for k in ("qx", "qy", "h", "k"):
-        assert k in bragg_directions.data.dtype.fields
+    # check pointlist has ("qx", "qy", "h", "k") or ("qx", "qy", "g1_ind", "g2_ind") fields
+    assert all(
+        key in bragg_directions.data.dtype.names for key in ("qx", "qy", "h", "k")
+    ) or all(
+        key in bragg_directions.data.dtype.names
+        for key in ("qx", "qy", "g1_ind", "g2_ind")
+    ), 'pointlist must contain ("qx", "qy", "h", "k") or ("qx", "qy", "g1_ind", "g2_ind") fields'
+
+    # for k in ("qx", "qy", "h", "k"):
+    #     assert k in bragg_directions.data.dtype.fields
     include_l = True if "l" in bragg_directions.data.dtype.fields else False
     # offsets
     hoffset = d["hoffset"] if "hoffset" in d.keys() else 0
@@ -586,10 +594,21 @@ def add_bragg_index_labels(ax, d):
         x, y = bragg_directions.data["qx"][i], bragg_directions.data["qy"][i]
         x -= voffset
         y += hoffset
-        h, k = bragg_directions.data["h"][i], bragg_directions.data["k"][i]
+        # bit of a hack to get either "h" or "g1_ind"
+        h = (
+            bragg_directions.data["h"][i]
+            if not ValueError
+            else bragg_directions.data["g1_ind"][i]
+        )
+        k = (
+            bragg_directions.data["k"][i]
+            if not ValueError
+            else bragg_directions.data["g2_ind"][i]
+        )
         h = str(h) if h >= 0 else r"$\overline{{{}}}$".format(np.abs(h))
         k = str(k) if k >= 0 else r"$\overline{{{}}}$".format(np.abs(k))
         s = h + "," + k
+        # TODO might need to to add g3_ind check
         if include_l:
             l = bragg_directions.data["l"][i]
             l = str(l) if l >= 0 else r"$\overline{{{}}}$".format(np.abs(l))
