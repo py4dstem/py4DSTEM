@@ -771,6 +771,7 @@ class PtychographicTomography(
         object_positivity: bool = True,
         shrinkage_rad: float = 0.0,
         fix_potential_baseline: bool = True,
+        detector_fourier_mask: np.ndarray = None,
         tv_denoise: bool = True,
         tv_denoise_weights: float = None,
         tv_denoise_inner_iter=40,
@@ -879,6 +880,11 @@ class PtychographicTomography(
             if True perform collective measurement updates (i.e. one per tilt)
         shrinkage_rad: float
             Phase shift in radians to be subtracted from the potential at each iteration
+        fix_potential_baseline: bool
+            If true, the potential mean outside the FOV is forced to zero at each iteration
+        detector_fourier_mask: np.ndarray
+            Corner-centered mask to apply at the detector-plane for zeroing-out unreliable gradients.
+            Useful when detector has artifacts such as dead-pixels. Usually binary.
         store_iterations: bool, optional
             If True, reconstructed objects and probes are stored at each iteration
         progress_bar: bool, optional
@@ -950,6 +956,11 @@ class PtychographicTomography(
             np.random.seed(seed_random)
         else:
             max_batch_size = self._num_diffraction_patterns
+
+        if detector_fourier_mask is None:
+            detector_fourier_mask = xp.ones(self._amplitudes[0].shape)
+        else:
+            detector_fourier_mask = xp.asarray(detector_fourier_mask)
 
         # initialization
         self._reset_reconstruction(store_iterations, reset, use_projection_scheme)
@@ -1045,6 +1056,7 @@ class PtychographicTomography(
                         positions_px_fractional,
                         amplitudes_device,
                         self._exit_waves,
+                        detector_fourier_mask,
                         use_projection_scheme,
                         projection_a,
                         projection_b,
