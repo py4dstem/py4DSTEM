@@ -645,6 +645,7 @@ class PtychographyOptimizer:
     def _set_optimizer_defaults(
         self,
         verbose=False,
+        clear_fft_cache=False,
         plot_center_of_mass=False,
         plot_rotation=False,
         plot_probe_overlaps=False,
@@ -656,7 +657,7 @@ class PtychographyOptimizer:
         Set all of the verbose and plotting to False, allowing for user-overwrite.
         """
         self._init_static_args["verbose"] = verbose
-        self._init_static_args["clear_fft_cache"] = False
+        self._init_static_args["clear_fft_cache"] = clear_fft_cache
 
         self._preprocess_static_args["plot_center_of_mass"] = plot_center_of_mass
         self._preprocess_static_args["plot_rotation"] = plot_rotation
