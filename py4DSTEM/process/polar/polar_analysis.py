@@ -67,22 +67,6 @@ def calculate_radial_statistics(
         Optional - returned iff returnfig is True. Plot of the radial variances.
     """
 
-    # init radial data arrays
-    self.radial_all = np.zeros(
-        (
-            self._datacube.shape[0],
-            self._datacube.shape[1],
-            self.polar_shape[1],
-        )
-    )
-    self.radial_all_std = np.zeros(
-        (
-            self._datacube.shape[0],
-            self._datacube.shape[1],
-            self.polar_shape[1],
-        )
-    )
-
     # Compute the radial mean and standard deviation for each probe position
     for rx, ry in tqdmnd(
         self._datacube.shape[0],
@@ -584,8 +568,12 @@ def plot_pdf(
 
 def calculate_FEM_local(
     self,
-    figsize=(8, 6),
-    returnfig=False,
+    use_median = False,
+    plot_normalized_variance = True,
+    figsize = (8, 4),
+    return_values = False,
+    returnfig = False,
+    progress_bar = True,
 ):
     """
     Calculate fluctuation electron microscopy (FEM) statistics, including radial mean,
@@ -596,18 +584,87 @@ def calculate_FEM_local(
     --------
     self: PolarDatacube
         Polar datacube used for measuring FEM properties.
+    use_median: Bool
+        Use median instead of mean for statistics.
 
     Returns
     --------
-    radial_avg: np.array
-        Average radial intensity
-    radial_var: np.array
-        Variance in the radial dimension
+    local_radial_mean: np.array
+        Average radial intensity of each probe position
+    local_radial_var: np.array
+        Variance in the radial dimension of each probe position
 
 
     """
 
-    pass
+    # init radial data arrays
+    self.local_radial_mean = np.zeros(
+        (
+            self._datacube.shape[0],
+            self._datacube.shape[1],
+            self.polar_shape[1],
+        )
+    )
+    self.local_radial_var = np.zeros(
+        (
+            self._datacube.shape[0],
+            self._datacube.shape[1],
+            self.polar_shape[1],
+        )
+    )
+
+    # Compute the radial mean and standard deviation for each probe position
+    for rx, ry in tqdmnd(
+        self._datacube.shape[0],
+        self._datacube.shape[1],
+        desc="Radial statistics",
+        unit=" probe positions",
+        disable=not progress_bar,
+    ):
+        im = self.data[rx, ry]
+
+        if use_median:
+            im_mean = np.ma.mean(im, axis = 0)
+            im_var = np.ma.mean((im - im_mean)**2, axis=0)
+        else:
+            im_mean = np.ma.median(im, axis = 0)
+            im_var = np.ma.median((im - im_mean)**2, axis=0)
+
+        self.local_radial_mean[rx, ry] = im_mean
+        self.local_radial_var[rx, ry] = im_var
+
+
+    if plot_normalized_variance:
+        fig,ax = plt.subplots(figsize = figsize)
+
+        sig = self.local_radial_var / self.local_radial_mean**2
+        if use_median:
+            sig_plot = np.median(sig,axis=(0,1))
+        else:
+            sig_plot = np.mean(sig,axis=(0,1))
+
+        ax.plot(
+            self.qq,
+            sig_plot,
+        )
+        ax.set_xlabel("Scattering Vector (" + self.calibration.get_Q_pixel_units() + ")")
+        ax.set_ylabel("Normalized Variance")
+        ax.set_xlim((self.qq[0], self.qq[-1]))
+
+
+        # self.radial_all_std[rx, ry] = np.sqrt(
+        #     np.mean((self.data[rx, ry] - self.radial_all[rx, ry][None]) ** 2, axis=0)
+        # )
+
+    if return_values:
+        if returnfig:
+            return self.local_radial_mean, self.local_radial_var, fig, ax
+        else:
+            return self.local_radial_mean, self.local_radial_var
+    else:
+        if returnfig:
+            return fig, ax
+
 
 
 def scattering_model(k2, *coefs):
