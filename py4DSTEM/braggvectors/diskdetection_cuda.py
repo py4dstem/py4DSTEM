@@ -156,9 +156,11 @@ def find_Bragg_disks_CUDA(
                 patt_idx = batch_idx * batch_size + subbatch_idx
                 rx, ry = np.unravel_index(patt_idx, (datacube.R_Nx, datacube.R_Ny))
                 batched_subcube[subbatch_idx, :, :] = cp.array(
-                    datacube.data[rx, ry, :, :]
-                    if filter_function is None
-                    else filter_function(datacube.data[rx, ry, :, :]),
+                    (
+                        datacube.data[rx, ry, :, :]
+                        if filter_function is None
+                        else filter_function(datacube.data[rx, ry, :, :])
+                    ),
                     dtype=cp.float32,
                 )
 

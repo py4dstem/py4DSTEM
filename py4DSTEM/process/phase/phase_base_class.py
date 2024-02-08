@@ -997,17 +997,21 @@ class PhaseReconstruction(Custom):
                     if _rotation_best_transpose:
                         ax.plot(
                             rotation_angles_deg,
-                            asnumpy(rotation_div_transpose)
-                            if maximize_divergence
-                            else asnumpy(rotation_curl_transpose),
+                            (
+                                asnumpy(rotation_div_transpose)
+                                if maximize_divergence
+                                else asnumpy(rotation_curl_transpose)
+                            ),
                             label="CoM after transpose",
                         )
                     else:
                         ax.plot(
                             rotation_angles_deg,
-                            asnumpy(rotation_div)
-                            if maximize_divergence
-                            else asnumpy(rotation_curl),
+                            (
+                                asnumpy(rotation_div)
+                                if maximize_divergence
+                                else asnumpy(rotation_curl)
+                            ),
                             label="CoM",
                         )
 
@@ -1159,16 +1163,20 @@ class PhaseReconstruction(Custom):
 
                     ax.plot(
                         rotation_angles_deg,
-                        asnumpy(rotation_div)
-                        if maximize_divergence
-                        else asnumpy(rotation_curl),
+                        (
+                            asnumpy(rotation_div)
+                            if maximize_divergence
+                            else asnumpy(rotation_curl)
+                        ),
                         label="CoM",
                     )
                     ax.plot(
                         rotation_angles_deg,
-                        asnumpy(rotation_div_transpose)
-                        if maximize_divergence
-                        else asnumpy(rotation_curl_transpose),
+                        (
+                            asnumpy(rotation_div_transpose)
+                            if maximize_divergence
+                            else asnumpy(rotation_curl_transpose)
+                        ),
                         label="CoM after transpose",
                     )
                     y_r = ax.get_ylim()
