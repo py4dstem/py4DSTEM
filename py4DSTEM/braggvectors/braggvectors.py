@@ -336,7 +336,7 @@ class BVects:
     """
     Enables
 
-        >>> v.qx,v.qy,v.I
+        >>> v.qx,v.qy,v.I, optionally, v.h,v.k,v.l
 
     -like access to a collection of Bragg vector.
     """
@@ -361,12 +361,60 @@ class BVects:
     def data(self):
         return self._data
 
+    @property
+    def h(self):
+        try:
+            return self._data["h"]
+        except ValueError:
+            raise AttributeError("h indicies not set")
+
+    @property
+    def k(self):
+        try:
+            return self._data["k"]
+        except ValueError:
+            raise AttributeError("k indicies not set")
+
+    @property
+    def l(self):
+        try:
+            return self._data["l"]
+        except ValueError:
+            raise AttributeError("l indicies not set")
+
     def __repr__(self):
         space = " " * len(self.__class__.__name__) + "  "
         string = f"{self.__class__.__name__}( "
         string += f"A set of {len(self.data)} bragg vectors."
-        string += " Access data with .qx, .qy, .I, or .data.)"
+        string += " Access data with .qx, .qy, .I, or .data. Optionally .h, .k, and.l, if indexed)"
         return string
+
+    def plot(
+        self,
+        returnfig: bool = False,
+        **kwargs,
+    ):
+        """
+        Plot the diffraction pattern.
+        Calls `py4DSTEM.process.diffraction.plot_diffraction_pattern` and passes kwargs to it.
+
+        Parameters
+        ----------
+        returnfig: bool
+            If True the figure is returned, else its ploted but not returned. Defaults to False
+
+        Returns
+        -------
+        figure : matplotlib object
+            If `returnfig` is True, the figure is returned.
+
+        """
+        from py4DSTEM.process.diffraction import plot_diffraction_pattern
+
+        if returnfig:
+            return plot_diffraction_pattern(self, returnfig=returnfig, **kwargs)
+        else:
+            plot_diffraction_pattern(self, **kwargs)
 
 
 class RawVectorGetter:
@@ -385,7 +433,7 @@ class RawVectorGetter:
     def __repr__(self):
         space = " " * len(self.__class__.__name__) + "  "
         string = f"{self.__class__.__name__}( "
-        string += f"Retrieves raw bragg vectors. Get vectors for scan position x,y with [x,y]. )"
+        string += "Retrieves raw bragg vectors. Get vectors for scan position x,y with [x,y]. )"
         return string
 
 

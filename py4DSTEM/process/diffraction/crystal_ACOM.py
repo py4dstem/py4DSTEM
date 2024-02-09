@@ -14,7 +14,7 @@ from numpy.linalg import lstsq
 
 try:
     import cupy as cp
-except ModuleNotFoundError:
+except (ModuleNotFoundError, ImportError):
     cp = None
 
 
@@ -59,7 +59,7 @@ def orientation_plan(
 
         angle_step_in_plane (float):  Approximate angular step size for in-plane rotation [degrees]
         accel_voltage (float):        Accelerating voltage for electrons [Volts]
-        corr_kernel_size (float):        Correlation kernel size length in Angstroms
+        corr_kernel_size (float):      Correlation kernel size length. The size of the overlap kernel between the measured Bragg peaks and diffraction library Bragg peaks. [1/Angstroms]
         radial_power (float):          Power for scaling the correlation intensity as a function of the peak radius
         intensity_power (float):       Power for scaling the correlation intensity as a function of the peak intensity
         calculate_correlation_array (bool):     Set to false to skip calculating the correlation array.
@@ -798,12 +798,12 @@ def match_orientations(
     )
 
     # check cal state
-    if bragg_peaks_array.calstate["ellipse"] == False:
+    if bragg_peaks_array.calstate["ellipse"] is False:
         ellipse = False
         warn("Warning: bragg peaks not elliptically calibrated")
     else:
         ellipse = True
-    if bragg_peaks_array.calstate["rotate"] == False:
+    if bragg_peaks_array.calstate["rotate"] is False:
         rotate = False
         warn("bragg peaks not rotationally calibrated")
     else:
@@ -1840,7 +1840,9 @@ def cluster_grains(
             xr = np.clip(x + np.arange(-1, 2, dtype="int"), 0, sig.shape[0] - 1)
             yr = np.clip(y + np.arange(-1, 2, dtype="int"), 0, sig.shape[1] - 1)
             inds_cand = inds_all[xr[:, None], yr[None], :].ravel()
-            inds_cand = np.delete(inds_cand, mark.ravel()[inds_cand] == False)
+            inds_cand = np.delete(
+                inds_cand, mark.ravel()[inds_cand] == False  # noqa: E712
+            )
 
             if inds_cand.size == 0:
                 grow = False
@@ -1893,7 +1895,7 @@ def cluster_grains(
 
                 inds_grain = np.append(inds_grain, inds_cand[keep])
                 inds_cand = np.unique(
-                    np.delete(inds_new, mark.ravel()[inds_new] == False)
+                    np.delete(inds_new, mark.ravel()[inds_new] == False)  # noqa: E712
                 )
 
                 if inds_cand.size == 0:
@@ -2083,12 +2085,12 @@ def calculate_strain(
     radius_max_2 = corr_kernel_size**2
 
     # check cal state
-    if bragg_peaks_array.calstate["ellipse"] == False:
+    if bragg_peaks_array.calstate["ellipse"] is False:
         ellipse = False
         warn("bragg peaks not elliptically calibrated")
     else:
         ellipse = True
-    if bragg_peaks_array.calstate["rotate"] == False:
+    if bragg_peaks_array.calstate["rotate"] is False:
         rotate = False
         warn("bragg peaks not rotationally calibrated")
     else:

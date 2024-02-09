@@ -4,6 +4,7 @@ Functions for finding Braggdisks using cupy
 """
 
 import numpy as np
+
 import cupy as cp
 from cupyx.scipy.ndimage import gaussian_filter
 import cupyx.scipy.fft as cufft
@@ -482,7 +483,7 @@ def get_maxima_2D(
         if minSpacing > 0:
             deletemask = np.zeros(len(maxima), dtype=bool)
             for i in range(len(maxima)):
-                if deletemask[i] == False:
+                if deletemask[i] == False:  # noqa: E712
                     tooClose = (
                         (maxima["x"] - maxima["x"][i]) ** 2
                         + (maxima["y"] - maxima["y"][i]) ** 2

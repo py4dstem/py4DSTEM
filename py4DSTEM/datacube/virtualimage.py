@@ -197,13 +197,13 @@ class DataCubeVirtualImager:
         # Get mask
         mask = self.make_detector(self.Qshape, mode, g)
         # if return_mask is True, skip computation
-        if return_mask == True and shift_center == False:
+        if return_mask is True and shift_center is False:
             return mask
 
         # Calculate virtual image
 
         # no center shifting
-        if shift_center == False:
+        if shift_center is False:
             # single CPU
             if not dask:
                 # allocate space
@@ -220,7 +220,7 @@ class DataCubeVirtualImager:
                     virtual_image[rx, ry] = np.sum(self.data[rx, ry] * mask)
 
             # dask
-            if dask == True:
+            if dask is True:
                 # set up a generalized universal function for dask distribution
                 def _apply_mask_dask(self, mask):
                     virtual_image = np.sum(
@@ -444,7 +444,7 @@ class DataCubeVirtualImager:
         # shift center
         if shift_center is None:
             shift_center = False
-        elif shift_center == True:
+        elif shift_center is True:
             assert isinstance(
                 data, tuple
             ), "If shift_center is set to True, `data` should be a 2-tuple (rx,ry). \
@@ -552,7 +552,7 @@ class DataCubeVirtualImager:
         # Convert units into detector pixels
 
         # Shift center
-        if centered == True:
+        if centered is True:
             if mode == "point":
                 g = (g[0] + x0_mean, g[1] + y0_mean)
             if mode in ("circle", "circular", "annulus", "annular"):
@@ -561,7 +561,7 @@ class DataCubeVirtualImager:
                 g = (g[0] + x0_mean, g[1] + x0_mean, g[2] + y0_mean, g[3] + y0_mean)
 
         # Scale by the detector pixel size
-        if calibrated == True:
+        if calibrated is True:
             if mode == "point":
                 g = (g[0] / unit_conversion, g[1] / unit_conversion)
             if mode in ("circle", "circular"):
@@ -681,6 +681,8 @@ class DataCubeVirtualImager:
         origin,
         max_q,
         return_sum=True,
+        include_origin=True,
+        rotation_deg=0,
         **kwargs,
     ):
         """
@@ -696,12 +698,21 @@ class DataCubeVirtualImager:
             return_sum (bool): if False, return a 3D array, where each
                 slice contains a single disk; if False, return a single
                 2D masks of all disks
+            include_origin (bool) : if False, removes origin disk
+            rotation_deg (float) : rotate g1 and g2 vectors
 
         Returns:
             (2 or 3D array) the mask
         """
-        nas = np.asarray
-        g1, g2, origin = nas(g1), nas(g2), nas(origin)
+        g1, g2, origin = np.asarray(g1), np.asarray(g2), np.asarray(origin)
+
+        rotation_rad = np.deg2rad(rotation_deg)
+        cost = np.cos(rotation_rad)
+        sint = np.sin(rotation_rad)
+        rotation_matrix = np.array(((cost, sint), (-sint, cost)))
+
+        g1 = np.dot(g1, rotation_matrix)
+        g2 = np.dot(g2, rotation_matrix)
 
         # Get N,M, the maximum indices to tile out to
         L1 = np.sqrt(np.sum(g1**2))
@@ -722,15 +733,18 @@ class DataCubeVirtualImager:
         N = 0
         for h in range(-H, H + 1):
             for k in range(-K, K + 1):
-                v = h * g1 + k * g2
-                if np.sqrt(v.dot(v)) < max_q:
-                    center = origin + v
-                    mask[:, :, N] = self.make_detector(
-                        Qshape,
-                        mode="circle",
-                        geometry=(center, radius),
-                    )
-                    N += 1
+                if h == 0 and k == 0 and include_origin is False:
+                    continue
+                else:
+                    v = h * g1 + k * g2
+                    if np.sqrt(v.dot(v)) < max_q:
+                        center = origin + v
+                        mask[:, :, N] = self.make_detector(
+                            Qshape,
+                            mode="circle",
+                            geometry=(center, radius),
+                        )
+                        N += 1
 
         if return_sum:
             mask = np.sum(mask, axis=2)
