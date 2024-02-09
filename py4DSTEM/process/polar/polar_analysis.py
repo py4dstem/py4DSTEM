@@ -773,6 +773,17 @@ def calculate_annular_symmetry(
             self.annular_symmetry[rx,ry,:,:] = \
                 np.abs(np.fft.fft(polar_corr, axis = 0))[1:max_symmetry+1]
 
+            import py4DSTEM
+            py4DSTEM.show(
+                np.repeat(
+                    self.annular_symmetry[rx,ry,:,:],
+                    8,
+                    axis = 0
+                ),
+                figsize = (6,6),
+            )
+
+
     if returnval:
         return self.annular_symmetry
 

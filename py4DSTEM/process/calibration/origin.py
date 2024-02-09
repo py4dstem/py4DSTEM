@@ -391,8 +391,11 @@ def get_origin_correlation(
             M = np.fft.fft2(mask)
 
             # Masked cross correlation of masked image with it's inverse
-            cc = np.real(np.fft.ifft2(G**2)) \
-                - np.real(np.fft.ifft2(G * M))**2 / np.real(np.fft.ifft2(M**2))
+            cc_num = np.real(np.fft.ifft2(G * M))**2
+            cc_den = np.real(np.fft.ifft2(M**2))
+            sub = cc_den > 0
+            cc = np.real(np.fft.ifft2(G**2))
+            cc[sub] =- cc_num[sub] / cc_den[sub]
             
         # Correlation peak, moved to image center shift
         xp, yp = np.unravel_index(np.argmax(cc), im.shape)
