@@ -514,10 +514,10 @@ def median_filter_masked_pixels(datacube, mask, kernel_width: int = 3):
         if y_min < 0:
             y_min = 0
 
-        if x_max > datacube.Rshape[0]:
-            x_max = datacube.Rshape[0]
-        if y_max > datacube.Rshape[1]:
-            y_max = datacube.Rshape[1]
+        if x_max > datacube.Qshape[0]:
+            x_max = datacube.Qshape[0]
+        if y_max > datacube.Qshape[1]:
+            y_max = datacube.Qshape[1]
 
         datacube.data[:, :, index_x, index_y] = np.median(
             datacube.data[:, :, x_min:x_max, y_min:y_max], axis=(2, 3)
