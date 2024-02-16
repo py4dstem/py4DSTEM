@@ -382,6 +382,9 @@ def get_origin_friedel(
     More details about how the correlation step can be found in:
     https://doi.org/10.1109/TIP.2011.2181402
 
+    TODO - add subpixel correlation shifts.
+
+
     Parameters
     ----------
     datacube: (DataCube)
@@ -393,7 +396,6 @@ def get_origin_friedel(
         and use binary opening/closing to remove any holes.
         If no mask is provided, this method will likely not work with a beamstop!
 
-    TODO - add subpixel correlation shifts
 
     Returns
     -------
@@ -420,10 +422,6 @@ def get_origin_friedel(
         datacube.R_Nx, 
         datacube.R_Ny
         ):
-    # for rx, ry in tqdmnd(
-    #     np.arange(2,3), 
-    #     np.arange(0,1),
-    #     ):
         if mask is None:
             # pad image
             im = np.pad(
@@ -449,28 +447,7 @@ def get_origin_friedel(
 
         # Correlation peak, moved to image center shift
         xp, yp = np.unravel_index(np.argmax(cc), im.shape)
-        qx0[rx, ry] = ((xp/2 + 0*datacube.data.shape[2] / 2) % datacube.data.shape[2])
-        qy0[rx, ry] = ((yp/2 + 0*datacube.data.shape[3] / 2) % datacube.data.shape[3])
-
-        # fig,ax = plt.subplots(1,2,figsize=(12,6))
-        # ax[0].imshow(
-        #     datacube.data[rx, ry, :, :],
-        #     cmap = 'gray')
-        # ax[0].scatter(
-        #     qy0[rx, ry],
-        #     qx0[rx, ry],
-        #     color = (1,0,0),
-        #     marker = '+',
-        #     s = 400,
-        #     )
-        # ax[1].imshow(
-        #     cc,
-        #     cmap = 'gray')
-
-
-
-        # print(np.round(qx0[rx, ry],2),
-        #     np.round(qy0[rx, ry],2),
-        #     )
+        qx0[rx, ry] = ((xp/2) % datacube.data.shape[2])
+        qy0[rx, ry] = ((yp/2) % datacube.data.shape[3])
 
     return qx0, qy0
