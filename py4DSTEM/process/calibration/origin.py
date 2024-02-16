@@ -381,7 +381,6 @@ def get_origin_friedel(
 
     More details about how the correlation step can be found in:
     https://doi.org/10.1109/TIP.2011.2181402
-    by Dirk Padfield.
 
     Parameters
     ----------
@@ -416,14 +415,14 @@ def get_origin_friedel(
         )
 
     # main loop over all probe positions
-    # for rx, ry in tqdmnd(
-    #     datacube.R_Nx, 
-    #     datacube.R_Ny
-    #     ):
     for rx, ry in tqdmnd(
-        np.arange(2,3), 
-        np.arange(0,1),
+        datacube.R_Nx, 
+        datacube.R_Ny
         ):
+    # for rx, ry in tqdmnd(
+    #     np.arange(2,3), 
+    #     np.arange(0,1),
+    #     ):
         if mask is None:
             # pad image
             im = np.pad(
@@ -440,16 +439,21 @@ def get_origin_friedel(
                 datacube.data[rx, ry, :, :],(
                 (0,datacube.data.shape[2]),
                 (0,datacube.data.shape[3])))
-            G = np.fft.fft2(im * mask_pad)
+            G = np.fft.fft2(im)
             M = np.fft.fft2(mask_pad)
+            GM = np.fft.fft2(im * mask_pad)
+            D = np.fft.fft2(im**2)
 
             # Masked cross correlation of masked image with its inverse
-            cc_num = np.real(np.fft.ifft2(G * M))**2
-            cc_den = np.real(np.fft.ifft2(M**2))
-            sub = cc_den > 0
-            cc = np.real(np.fft.ifft2(G**2))
-            cc[sub] =- cc_num[sub] / cc_den[sub]
-            # cc[np.logical_not(sub)] = 0.0
+            cc = np.real(
+                (np.fft.ifft2(G**2)*np.fft.ifft2(M**2) - np.fft.ifft2(GM)) / \
+                (np.fft.ifft2(D*M) - np.fft.ifft2(GM)))
+            # cc_num = np.real(np.fft.ifft2(G * M))**2
+            # cc_den = np.real(np.fft.ifft2(M**2))
+            # sub = cc_den > 0
+            # cc = np.real(np.fft.ifft2(G**2))
+            # cc[sub] =- cc_num[sub] / cc_den[sub]
+            # # cc[np.logical_not(sub)] = 0.0
 
         # Correlation peak, moved to image center shift
         xp, yp = np.unravel_index(np.argmax(cc), im.shape)
