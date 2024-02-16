@@ -413,6 +413,7 @@ def get_origin_friedel(
             (0,datacube.data.shape[3])),
             constant_values = (1.0,1.0),
         )
+        M = np.fft.fft2(mask_pad)
 
     # main loop over all probe positions
     for rx, ry in tqdmnd(
@@ -439,43 +440,32 @@ def get_origin_friedel(
                 datacube.data[rx, ry, :, :],(
                 (0,datacube.data.shape[2]),
                 (0,datacube.data.shape[3])))
-            G = np.fft.fft2(im)
-            M = np.fft.fft2(mask_pad)
-            GM = np.fft.fft2(im * mask_pad)
-            D = np.fft.fft2(im**2)
 
             # Masked cross correlation of masked image with its inverse
-            cc = np.real(
-                (np.fft.ifft2(G**2)*np.fft.ifft2(M**2) - np.fft.ifft2(GM)) / \
-                (np.fft.ifft2(D*M) - np.fft.ifft2(GM)))
-            # cc_num = np.real(np.fft.ifft2(G * M))**2
-            # cc_den = np.real(np.fft.ifft2(M**2))
-            # sub = cc_den > 0
-            # cc = np.real(np.fft.ifft2(G**2))
-            # cc[sub] =- cc_num[sub] / cc_den[sub]
-            # # cc[np.logical_not(sub)] = 0.0
+            term1 = np.real(np.fft.ifft2(np.fft.fft2(im)**2)*np.fft.ifft2(M**2))
+            term2 = np.real(np.fft.ifft2(np.fft.fft2(im**2)*M))
+            term3 = np.real(np.fft.ifft2(np.fft.fft2(im * mask_pad)))
+            cc = (term1 - term3) / (term2 - term3)
 
         # Correlation peak, moved to image center shift
         xp, yp = np.unravel_index(np.argmax(cc), im.shape)
         qx0[rx, ry] = ((xp/2 + 0*datacube.data.shape[2] / 2) % datacube.data.shape[2])
         qy0[rx, ry] = ((yp/2 + 0*datacube.data.shape[3] / 2) % datacube.data.shape[3])
-        # qx0[rx, ry] = ((xp) % im.shape[0])
-        # qy0[rx, ry] = ((yp) % im.shape[1])
 
-        fig,ax = plt.subplots(1,2,figsize=(12,6))
-        ax[0].imshow(
-            datacube.data[rx, ry, :, :],
-            cmap = 'gray')
-        ax[0].scatter(
-            qy0[rx, ry],
-            qx0[rx, ry],
-            color = (1,0,0),
-            marker = '+',
-            s = 400,
-            )
-        ax[1].imshow(
-            cc,
-            cmap = 'gray')
+        # fig,ax = plt.subplots(1,2,figsize=(12,6))
+        # ax[0].imshow(
+        #     datacube.data[rx, ry, :, :],
+        #     cmap = 'gray')
+        # ax[0].scatter(
+        #     qy0[rx, ry],
+        #     qx0[rx, ry],
+        #     color = (1,0,0),
+        #     marker = '+',
+        #     s = 400,
+        #     )
+        # ax[1].imshow(
+        #     cc,
+        #     cmap = 'gray')
 
 
 
