@@ -4,6 +4,7 @@ import functools
 import numpy as np
 from scipy.ndimage import gaussian_filter
 from scipy.optimize import leastsq
+import matplotlib.pyplot as plt
 
 from emdfile import tqdmnd, PointListArray
 from py4DSTEM.datacube import DataCube
@@ -367,7 +368,7 @@ def get_origin(
 
 
 
-def get_origin_correlation(
+def get_origin_friedel(
     datacube: DataCube, 
     mask = None,
     **kwargs
@@ -375,7 +376,10 @@ def get_origin_correlation(
     """
     Fit the origin for each diffraction pattern, with or without a beam stop.
     The method we have developed here is a heavily modified version of masked 
-    cross correlation. More details about how this method works can be found in:
+    cross correlation, where we use Friedel symmetry of the diffraction pattern
+    to find the common center. 
+
+    More details about how the correlation step can be found in:
     https://doi.org/10.1109/TIP.2011.2181402
     by Dirk Padfield.
 
@@ -390,6 +394,8 @@ def get_origin_correlation(
         and use binary opening/closing to remove any holes.
         If no mask is provided, this method will likely not work with a beamstop!
 
+    TODO - add subpixel correlation shifts
+
     Returns
     -------
     qx0, qy0
@@ -400,34 +406,77 @@ def get_origin_correlation(
     qx0 = np.zeros(datacube.data.shape[:2])
     qy0 = np.zeros_like(qx0)
 
+    # pad the mask
+    if mask is not None:
+        mask_pad = np.pad(
+            mask.astype('float'),(
+            (0,datacube.data.shape[2]),
+            (0,datacube.data.shape[3])),
+            constant_values = (1.0,1.0),
+        )
+
     # main loop over all probe positions
+    # for rx, ry in tqdmnd(
+    #     datacube.R_Nx, 
+    #     datacube.R_Ny
+    #     ):
     for rx, ry in tqdmnd(
-        datacube.R_Nx, 
-        datacube.R_Ny
+        np.arange(2,3), 
+        np.arange(0,1),
         ):
         if mask is None:
-            im = datacube.data[rx, ry, :, :]
-            G = np.fft.fft2(im )
+            # pad image
+            im = np.pad(
+                datacube.data[rx, ry, :, :],(
+                (0,datacube.data.shape[2]),
+                (0,datacube.data.shape[3])))
+            G = np.fft.fft2(im)
 
-            # Masked cross correlation of masked image with it's inverse
+            # Masked cross correlation of masked image with its inverse
             cc = np.real(np.fft.ifft2(G**2))
 
         else:
-            im = datacube.data[rx, ry, :, :]
-            G = np.fft.fft2(im * mask)
-            M = np.fft.fft2(mask)
+            im = np.pad(
+                datacube.data[rx, ry, :, :],(
+                (0,datacube.data.shape[2]),
+                (0,datacube.data.shape[3])))
+            G = np.fft.fft2(im * mask_pad)
+            M = np.fft.fft2(mask_pad)
 
-            # Masked cross correlation of masked image with it's inverse
+            # Masked cross correlation of masked image with its inverse
             cc_num = np.real(np.fft.ifft2(G * M))**2
             cc_den = np.real(np.fft.ifft2(M**2))
             sub = cc_den > 0
             cc = np.real(np.fft.ifft2(G**2))
             cc[sub] =- cc_num[sub] / cc_den[sub]
-            
+            # cc[np.logical_not(sub)] = 0.0
+
         # Correlation peak, moved to image center shift
         xp, yp = np.unravel_index(np.argmax(cc), im.shape)
-        qx0[rx, ry] = ((xp/2 + im.shape[0] / 2) % im.shape[0])
-        qy0[rx, ry] = ((yp/2 + im.shape[1] / 2) % im.shape[1])
+        qx0[rx, ry] = ((xp/2 + 0*datacube.data.shape[2] / 2) % datacube.data.shape[2])
+        qy0[rx, ry] = ((yp/2 + 0*datacube.data.shape[3] / 2) % datacube.data.shape[3])
+        # qx0[rx, ry] = ((xp) % im.shape[0])
+        # qy0[rx, ry] = ((yp) % im.shape[1])
 
+        fig,ax = plt.subplots(1,2,figsize=(12,6))
+        ax[0].imshow(
+            datacube.data[rx, ry, :, :],
+            cmap = 'gray')
+        ax[0].scatter(
+            qy0[rx, ry],
+            qx0[rx, ry],
+            color = (1,0,0),
+            marker = '+',
+            s = 400,
+            )
+        ax[1].imshow(
+            cc,
+            cmap = 'gray')
+
+
+
+        # print(np.round(qx0[rx, ry],2),
+        #     np.round(qy0[rx, ry],2),
+        #     )
 
     return qx0, qy0
