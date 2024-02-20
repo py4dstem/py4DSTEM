@@ -371,7 +371,7 @@ def get_origin_friedel(
     datacube: DataCube, 
     mask = None,
     upsample_factor = 1,
-    device = 'cpu'
+    device = 'cpu',
     ):
     """
     Fit the origin for each diffraction pattern, with or without a beam stop.
@@ -455,8 +455,16 @@ def get_origin_friedel(
             term3 = np.real(np.fft.ifft2(np.fft.fft2(im * mask_pad)))
             cc = (term1 - term3) / (term2 - term3)
 
-        # Get correlation peak
+        # get correlation peak
         xp, yp = np.unravel_index(np.argmax(cc), im.shape)
+
+        # half pixel upsampling / parabola subpixel fitting
+        dx = (cc[xp+1,yp]-cc[xp-1,yp]) / (4.0*cc[xp,yp] - 2.0*cc[xp+1,yp] - 2.0*cc[xp-1,yp]) 
+        dy = (cc[xp,yp+1]-cc[xp,yp-1]) / (4.0*cc[xp,yp] - 2.0*cc[xp,yp+1] - 2.0*cc[xp,yp-1]) 
+        # xp += np.round(dx*2.0)/2.0
+        # yp += np.round(dy*2.0)/2.0
+        xp += dx
+        yp += dy
 
         # upsample peak if needed
         if upsample_factor > 1:
