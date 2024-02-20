@@ -10,8 +10,7 @@ from emdfile import tqdmnd, PointListArray
 from py4DSTEM.datacube import DataCube
 from py4DSTEM.process.calibration.probe import get_probe_size
 from py4DSTEM.process.fit import plane, parabola, bezier_two, fit_2D
-from py4DSTEM.process.utils import get_CoM, add_to_2D_array_from_floats, get_maxima_2D
-
+from py4DSTEM.process.utils import get_CoM, add_to_2D_array_from_floats, get_maxima_2D, upsampled_correlation
 
 #
 # # origin setting decorators
@@ -371,7 +370,8 @@ def get_origin(
 def get_origin_friedel(
     datacube: DataCube, 
     mask = None,
-    xp = np,
+    upsample_factor = 1,
+    device = 'cpu'
     ):
     """
     Fit the origin for each diffraction pattern, with or without a beam stop.
@@ -394,8 +394,11 @@ def get_origin_friedel(
         in the diffraction pattern. One approach to generating this mask
         is to apply a suitable threshold on the average diffraction pattern
         and use binary opening/closing to remove any holes.
-        If no mask is provided, this method will likely not work with a beamstop!
-    xp: 
+        If no mask is provided, this method will likely not work with a beamstop.
+    upsample_factor: (int)
+        Upsample factor for subpixel fitting of the image shifts.
+    device: string
+         'cpu' or 'gpu' to select device
 
 
     Returns
@@ -404,13 +407,19 @@ def get_origin_friedel(
         (tuple of np arrays) measured center position of each diffraction pattern
     """
 
+    # Select device
+    if device == 'cpu':
+        xp = np
+    elif device == 'gpu':
+        xp = cp
+
     # init measurement arrays
-    qx0 = np.zeros(datacube.data.shape[:2])
-    qy0 = np.zeros_like(qx0)
+    qx0 = xp.zeros(datacube.data.shape[:2])
+    qy0 = xp.zeros_like(qx0)
 
     # pad the mask
     if mask is not None:
-        mask_pad = np.pad(
+        mask_pad = xp.pad(
             mask.astype('float'),(
             (0,datacube.data.shape[2]),
             (0,datacube.data.shape[3])),
@@ -446,8 +455,19 @@ def get_origin_friedel(
             term3 = np.real(np.fft.ifft2(np.fft.fft2(im * mask_pad)))
             cc = (term1 - term3) / (term2 - term3)
 
-        # Correlation peak, moved to image center shift
+        # Get correlation peak
         xp, yp = np.unravel_index(np.argmax(cc), im.shape)
+
+        # upsample peak if needed
+        if upsample_factor > 1:
+            xp, yp = upsampled_correlation(
+                np.fft.fft2(cc), 
+                upsampleFactor = upsample_factor, 
+                xyShift = np.array((xp, yp)), 
+                device=device,
+            )
+
+        # Correlation peak, moved to image center shift
         qx0[rx, ry] = ((xp/2) % datacube.data.shape[2])
         qy0[rx, ry] = ((yp/2) % datacube.data.shape[3])
 
