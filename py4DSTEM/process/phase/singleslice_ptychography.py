@@ -236,6 +236,7 @@ class SingleslicePtychography(
             2D fitting function for CoM fitting. One of 'plane','parabola','bezier_two'
         get_origin_friedel: bool
             Use Friedel origin finding instead of center of mass.
+            TODO - fix GPU implementation.
         plot_center_of_mass: str, optional
             If 'default', the corrected CoM arrays will be displayed
             If 'all', the computed and fitted CoM arrays will be displayed
