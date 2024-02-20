@@ -38,6 +38,8 @@ from py4DSTEM.process.phase.utils import (
     polar_symbols,
 )
 
+from py4DSTEM.process.calibration import get_origin_friedel
+from py4DSTEM.process.calibration import fit_origin
 
 class SingleslicePtychography(
     VisualizationsMixin,
@@ -191,6 +193,7 @@ class SingleslicePtychography(
         region_of_interest_shape: Tuple[int, int] = None,
         dp_mask: np.ndarray = None,
         fit_function: str = "plane",
+        find_origin_friedel = False,
         plot_center_of_mass: str = "default",
         plot_rotation: bool = True,
         maximize_divergence: bool = False,
@@ -231,6 +234,8 @@ class SingleslicePtychography(
             Mask for datacube intensities (Qx,Qy)
         fit_function: str, optional
             2D fitting function for CoM fitting. One of 'plane','parabola','bezier_two'
+        get_origin_friedel: bool
+            Use Friedel origin finding instead of center of mass.
         plot_center_of_mass: str, optional
             If 'default', the corrected CoM arrays will be displayed
             If 'all', the computed and fitted CoM arrays will be displayed
@@ -339,22 +344,47 @@ class SingleslicePtychography(
                 self._semiangle_cutoff_pixels * self._angular_sampling[0]
             )
 
-        # calculate CoM
-        (
-            self._com_measured_x,
-            self._com_measured_y,
-            self._com_fitted_x,
-            self._com_fitted_y,
-            self._com_normalized_x,
-            self._com_normalized_y,
-        ) = self._calculate_intensities_center_of_mass(
-            _intensities,
-            dp_mask=self._dp_mask,
-            fit_function=fit_function,
-            com_shifts=force_com_shifts,
-            vectorized_calculation=vectorized_com_calculation,
-            com_measured=force_com_measured,
-        )
+        # find origins
+        if find_origin_friedel:
+            (
+                self._com_measured_x, 
+                self._com_measured_y,
+            ) = get_origin_friedel(
+                self._datacube,
+                upsample_factor = 10,
+                # mask = mask,
+                # device = self._device,
+                # device = self._storage,
+            )
+            (
+                self._com_fitted_x,
+                self._com_fitted_y,
+                self._com_res_x,
+                self._com_res_y,
+            ) = fit_origin(
+                (self._com_measured_x,self._com_measured_y),
+                robust = True,
+            )
+            self._com_normalized_x = self._com_measured_x - np.mean(self._com_measured_x)
+            self._com_normalized_y = self._com_measured_x - np.mean(self._com_measured_x)
+
+        else:
+            # calculate CoM
+            (
+                self._com_measured_x,
+                self._com_measured_y,
+                self._com_fitted_x,
+                self._com_fitted_y,
+                self._com_normalized_x,
+                self._com_normalized_y,
+            ) = self._calculate_intensities_center_of_mass(
+                _intensities,
+                dp_mask=self._dp_mask,
+                fit_function=fit_function,
+                com_shifts=force_com_shifts,
+                vectorized_calculation=vectorized_com_calculation,
+                com_measured=force_com_measured,
+            )
 
         # estimate rotation / transpose
         (
