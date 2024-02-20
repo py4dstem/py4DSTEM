@@ -371,7 +371,7 @@ def get_origin(
 def get_origin_friedel(
     datacube: DataCube, 
     mask = None,
-    **kwargs
+    xp = np,
     ):
     """
     Fit the origin for each diffraction pattern, with or without a beam stop.
@@ -389,12 +389,13 @@ def get_origin_friedel(
     ----------
     datacube: (DataCube)
         The 4D dataset.
-    mask: (np arra, optional)
+    mask: (np array, optional)
         Boolean mask which is False under the beamstop and True
         in the diffraction pattern. One approach to generating this mask
         is to apply a suitable threshold on the average diffraction pattern
         and use binary opening/closing to remove any holes.
         If no mask is provided, this method will likely not work with a beamstop!
+    xp: 
 
 
     Returns
