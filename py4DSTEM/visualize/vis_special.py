@@ -507,16 +507,22 @@ def show_origin_meas(data):
 def show_origin_fit(
     data,
     plot_range = None,
+    axsize = (3,3),
     ):
     """
     Show the measured, fit, and residuals of the origin positions.
 
     Parameters
     ----------
-    data (DataCube or Calibration or (3,2)-tuple of arrays
+    data: (DataCube or Calibration or (3,2)-tuple of arrays    
         ((qx0_meas,qy0_meas),(qx0_fit,qy0_fit),(qx0_residuals,qy0_residuals))
-    plot_range: float
-        Plotting range in pixels, i.e. vmin,vmax = -plot_range,plot_range
+    plot_range: (tuple, list, or np.array)
+        Plotting range in units of pixels
+    axsize: (tuple)
+        Size of each plot axis
+
+    Returns
+    -------
 
 
     """
@@ -539,37 +545,41 @@ def show_origin_fit(
     else:
         raise Exception("data must be of type Datacube or Calibration or tuple")
 
+    # Centered intensity plots
+    qx0_meas_plot = qx0_meas - np.median(qx0_meas)
+    qy0_meas_plot = qy0_meas - np.median(qy0_meas)
+    qx0_fit_plot = qx0_fit - np.median(qx0_fit)
+    qy0_fit_plot = qy0_fit - np.median(qy0_fit)
+
+
+    # Determine plotting range
     if plot_range is None:
-        show_image_grid(
-            get_ar=lambda i: [
-                qx0_meas,
-                qx0_fit,
-                qx0_residuals,
-                qy0_meas,
-                qy0_fit,
-                qy0_residuals,
-            ][i],
-            H=2,
-            W=3,
-            cmap="RdBu_r",
-        )
+        plot_range = np.array((-1.0,1.0)) * \
+            np.max((np.abs(qx0_fit_plot),np.abs(qy0_fit_plot)))
     else:
-        show_image_grid(
-            get_ar=lambda i: [
-                qx0_meas - np.median(qx0_meas),
-                qx0_fit - np.median(qx0_fit),
-                qx0_residuals,
-                qy0_meas - np.median(qy0_meas),
-                qy0_fit - np.median(qy0_fit),
-                qy0_residuals,
-            ][i],
-            H=2,
-            W=3,
-            cmap="RdBu_r",
-            intensity_range = 'absolute',
-            vmin = -plot_range,
-            vmax = plot_range,
-        )
+        plot_range = np.array(plot_range)
+        if plot_range.ndim == 0:
+            plot_range = np.array((-1.0,1.0)) * plot_range
+
+
+    # plotting
+    show_image_grid(
+        get_ar=lambda i: [
+            qx0_meas_plot,
+            qx0_fit_plot,
+            qx0_residuals,
+            qy0_meas_plot,
+            qy0_fit_plot,
+            qy0_residuals,
+        ][i],
+        H=2,
+        W=3,
+        cmap="RdBu",
+        intensity_range = 'absolute',
+        vmin = plot_range[0],
+        vmax = plot_range[1],
+        axsize = axsize,
+    )
 
 
 def show_selected_dps(

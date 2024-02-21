@@ -1224,6 +1224,7 @@ class ProbeMixedConstraintsMixin:
         fit_probe_aberrations_max_radial_order,
         fit_probe_aberrations_remove_initial,
         fit_probe_aberrations_using_scikit_image,
+        num_probes_fit_aberrations,
         fix_probe_aperture,
         initial_probe_aperture,
         constrain_probe_fourier_amplitude,
@@ -1243,7 +1244,9 @@ class ProbeMixedConstraintsMixin:
 
         # Fourier phase (aberrations) fitting
         if fit_probe_aberrations:
-            for probe_idx in range(self._num_probes):
+            if num_probes_fit_aberrations > self._num_probes:
+                num_probes_fit_aberrations = self._num_probes
+            for probe_idx in range(num_probes_fit_aberrations):
                 current_probe[probe_idx] = self._probe_aberration_fitting_constraint(
                     current_probe[probe_idx],
                     fit_probe_aberrations_max_angular_order,
