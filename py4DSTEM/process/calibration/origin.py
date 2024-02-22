@@ -387,7 +387,7 @@ def get_origin_friedel(
     More details about how the correlation step can be found in:
     https://doi.org/10.1109/TIP.2011.2181402
 
-    TODO - add subpixel correlation shifts.
+    TODO - Finish cuda GPU support.
 
 
     Parameters
@@ -429,35 +429,35 @@ def get_origin_friedel(
             ((0, datacube.data.shape[2]), (0, datacube.data.shape[3])),
             constant_values=(1.0, 1.0),
         )
-        M = np.fft.fft2(mask_pad)
+        M = xp.fft.fft2(mask_pad)
 
     # main loop over all probe positions
     for rx, ry in tqdmnd(datacube.R_Nx, datacube.R_Ny):
         if mask is None:
             # pad image
-            im = np.pad(
+            im = xp.pad(
                 datacube.data[rx, ry, :, :],
                 ((0, datacube.data.shape[2]), (0, datacube.data.shape[3])),
             )
-            G = np.fft.fft2(im)
+            G = xp.fft.fft2(im)
 
             # Masked cross correlation of masked image with its inverse
-            cc = np.real(np.fft.ifft2(G**2))
+            cc = xp.real(xp.fft.ifft2(G**2))
 
         else:
-            im = np.pad(
+            im = xp.pad(
                 datacube.data[rx, ry, :, :],
                 ((0, datacube.data.shape[2]), (0, datacube.data.shape[3])),
             )
 
             # Masked cross correlation of masked image with its inverse
-            term1 = np.real(np.fft.ifft2(np.fft.fft2(im) ** 2) * np.fft.ifft2(M**2))
-            term2 = np.real(np.fft.ifft2(np.fft.fft2(im**2) * M))
-            term3 = np.real(np.fft.ifft2(np.fft.fft2(im * mask_pad)))
+            term1 = xp.real(np.fft.ifft2(xp.fft.fft2(im) ** 2) * np.fft.ifft2(M**2))
+            term2 = xp.real(np.fft.ifft2(xp.fft.fft2(im**2) * M))
+            term3 = xp.real(np.fft.ifft2(xp.fft.fft2(im * mask_pad)))
             cc = (term1 - term3) / (term2 - term3)
 
         # get correlation peak
-        xp, yp = np.unravel_index(np.argmax(cc), im.shape)
+        xp, yp = xp.unravel_index(xp.argmax(cc), im.shape)
 
         # half pixel upsampling / parabola subpixel fitting
         dx = (cc[xp + 1, yp] - cc[xp - 1, yp]) / (
@@ -474,7 +474,7 @@ def get_origin_friedel(
         # upsample peak if needed
         if upsample_factor > 1:
             xp, yp = upsampled_correlation(
-                np.fft.fft2(cc),
+                xp.fft.fft2(cc),
                 upsampleFactor=upsample_factor,
                 xyShift=np.array((xp, yp)),
                 device=device,
