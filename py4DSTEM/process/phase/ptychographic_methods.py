@@ -1480,7 +1480,7 @@ class ObjectNDProbeMethodsMixin:
         xp = self._xp
         return xp.abs(fourier_overlap)
 
-    def _gradient_descent_fourier_projection(self, amplitudes, overlap, fourier_mask):
+    def _gradient_descent_fourier_projection(self, amplitudes, overlap):
         """
         Ptychographic fourier projection method for GD method.
 
@@ -1490,9 +1490,6 @@ class ObjectNDProbeMethodsMixin:
             Normalized measured amplitudes
         overlap: np.ndarray
             object * probe overlap
-        fourier_mask: np.ndarray
-            Mask to apply at the detector-plane for zeroing-out unreliable gradients
-            Useful when detector has artifacts such as dead-pixels
 
         Returns
         --------
@@ -1510,16 +1507,14 @@ class ObjectNDProbeMethodsMixin:
                 overlap, output_size=amplitudes.shape[-2:], xp=xp
             )
 
-        fourier_overlap = xp.fft.fft2(overlap)  # * fourier_mask # GV votes to include
+        fourier_overlap = xp.fft.fft2(overlap)
         farfield_amplitudes = self._return_farfield_amplitudes(fourier_overlap)
         error = xp.sum(xp.abs(amplitudes - farfield_amplitudes) ** 2)
 
         fourier_modified_overlap = amplitudes * xp.exp(1j * xp.angle(fourier_overlap))
 
-        fourier_modified_overlap = (
-            fourier_modified_overlap - fourier_overlap
-        ) * fourier_mask
-        exit_waves = xp.fft.ifft2(fourier_modified_overlap)
+        modified_overlap = xp.fft.ifft2(fourier_modified_overlap)
+        exit_waves = modified_overlap - overlap
 
         # resample back to region_of_interest_shape, note: this needs to happen in real-space
         if self._resample_exit_waves:
@@ -1530,14 +1525,7 @@ class ObjectNDProbeMethodsMixin:
         return exit_waves, error
 
     def _projection_sets_fourier_projection(
-        self,
-        amplitudes,
-        overlap,
-        exit_waves,
-        fourier_mask,
-        projection_a,
-        projection_b,
-        projection_c,
+        self, amplitudes, overlap, exit_waves, projection_a, projection_b, projection_c
     ):
         """
         Ptychographic fourier projection method for DM_AP and RAAR methods.
@@ -1562,10 +1550,6 @@ class ObjectNDProbeMethodsMixin:
             object * probe overlap
         exit_waves: np.ndarray
             previously estimated exit waves
-        fourier_mask: np.ndarray
-            Mask to apply at the detector-plane for zeroing-out unreliable gradients
-            Useful when detector has artifacts such as dead-pixels
-            Currently not implemented for projection-sets
         projection_a: float
         projection_b: float
         projection_c: float
@@ -1577,9 +1561,6 @@ class ObjectNDProbeMethodsMixin:
         error: float
             Reconstruction error
         """
-
-        if fourier_mask is not None:
-            raise NotImplementedError()
 
         xp = self._xp
         projection_x = 1 - projection_a - projection_b
@@ -1629,7 +1610,6 @@ class ObjectNDProbeMethodsMixin:
         positions_px_fractional,
         amplitudes,
         exit_waves,
-        fourier_mask,
         use_projection_scheme,
         projection_a,
         projection_b,
@@ -1649,9 +1629,6 @@ class ObjectNDProbeMethodsMixin:
             Normalized measured amplitudes
         exit_waves: np.ndarray
             previously estimated exit waves
-        fourier_mask: np.ndarray
-            Mask to apply at the detector-plane for zeroing-out unreliable gradients
-            Useful when detector has artifacts such as dead-pixels
         use_projection_scheme: bool,
             If True, use generalized projection update
         projection_a: float
@@ -1687,7 +1664,6 @@ class ObjectNDProbeMethodsMixin:
                 amplitudes,
                 overlap,
                 exit_waves,
-                fourier_mask,
                 projection_a,
                 projection_b,
                 projection_c,
@@ -1695,9 +1671,7 @@ class ObjectNDProbeMethodsMixin:
 
         else:
             exit_waves, error = self._gradient_descent_fourier_projection(
-                amplitudes,
-                overlap,
-                fourier_mask,
+                amplitudes, overlap
             )
 
         return shifted_probes, object_patches, overlap, exit_waves, error
@@ -2605,7 +2579,7 @@ class ObjectNDProbeMixedMethodsMixin:
         xp = self._xp
         return xp.sqrt(xp.sum(xp.abs(fourier_overlap) ** 2, axis=1))
 
-    def _gradient_descent_fourier_projection(self, amplitudes, overlap, fourier_mask):
+    def _gradient_descent_fourier_projection(self, amplitudes, overlap):
         """
         Ptychographic fourier projection method for GD method.
 
@@ -2615,9 +2589,6 @@ class ObjectNDProbeMixedMethodsMixin:
             Normalized measured amplitudes
         overlap: np.ndarray
             object * probe overlap
-        fourier_mask: np.ndarray
-            Mask to apply at the detector-plane for zeroing-out unreliable gradients
-            Useful when detector has artifacts such as dead-pixels
 
         Returns
         --------
@@ -2635,7 +2606,7 @@ class ObjectNDProbeMixedMethodsMixin:
                 overlap, output_size=amplitudes.shape[-2:], xp=xp
             )
 
-        fourier_overlap = xp.fft.fft2(overlap)  # * fourier_mask # GV votes to include
+        fourier_overlap = xp.fft.fft2(overlap)
         farfield_amplitudes = self._return_farfield_amplitudes(fourier_overlap)
         error = xp.sum(xp.abs(amplitudes - farfield_amplitudes) ** 2)
 
@@ -2643,11 +2614,9 @@ class ObjectNDProbeMixedMethodsMixin:
         amplitude_modification = amplitudes / farfield_amplitudes
 
         fourier_modified_overlap = amplitude_modification[:, None] * fourier_overlap
+        modified_overlap = xp.fft.ifft2(fourier_modified_overlap)
 
-        fourier_modified_overlap = (
-            fourier_modified_overlap - fourier_overlap
-        ) * fourier_mask
-        exit_waves = xp.fft.ifft2(fourier_modified_overlap)
+        exit_waves = modified_overlap - overlap
 
         # resample back to region_of_interest_shape, note: this needs to happen in real-space
         if self._resample_exit_waves:
@@ -2658,14 +2627,7 @@ class ObjectNDProbeMixedMethodsMixin:
         return exit_waves, error
 
     def _projection_sets_fourier_projection(
-        self,
-        amplitudes,
-        overlap,
-        exit_waves,
-        fourier_mask,
-        projection_a,
-        projection_b,
-        projection_c,
+        self, amplitudes, overlap, exit_waves, projection_a, projection_b, projection_c
     ):
         """
         Ptychographic fourier projection method for DM_AP and RAAR methods.
@@ -2690,10 +2652,6 @@ class ObjectNDProbeMixedMethodsMixin:
             object * probe overlap
         exit_waves: np.ndarray
             previously estimated exit waves
-        fourier_mask: np.ndarray
-            Mask to apply at the detector-plane for zeroing-out unreliable gradients
-            Useful when detector has artifacts such as dead-pixels
-            Currently not implemented for projection sets
         projection_a: float
         projection_b: float
         projection_c: float
@@ -2705,9 +2663,6 @@ class ObjectNDProbeMixedMethodsMixin:
         error: float
             Reconstruction error
         """
-
-        if fourier_mask is not None:
-            raise NotImplementedError()
 
         xp = self._xp
         projection_x = 1 - projection_a - projection_b

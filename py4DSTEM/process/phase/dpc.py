@@ -193,8 +193,6 @@ class DPC(PhaseReconstruction):
             "name": instance_md["name"],
             "verbose": True,  # for compatibility
             "device": "cpu",  # for compatibility
-            "storage": "cpu",  # for compatibility
-            "clear_fft_cache": True,  # for compatibility
         }
 
         return kwargs

@@ -758,7 +758,7 @@ class VisualizationsMixin:
         pix_output[np.logical_not(sub)] = 1
         pix_output = pix_output[padding[0] : -padding[0], padding[1] : -padding[1]]
         pix_output, _, _ = return_scaled_histogram_ordering(
-            asnumpy(pix_output), normalize=True
+            pix_output.get(), normalize=True
         )
 
         ## Visualization

@@ -101,8 +101,6 @@ class MagneticPtychography(
     initial_scan_positions: np.ndarray, optional
         Probe positions in Å for each diffraction intensity
         If None, initialized to a grid scan
-    positions_offset_ang: np.ndarray, optional
-        Offset of positions in A
     verbose: bool, optional
         If True, class methods will inherit this and print additional information
     device: str, optional
@@ -138,7 +136,6 @@ class MagneticPtychography(
         initial_object_guess: np.ndarray = None,
         initial_probe_guess: np.ndarray = None,
         initial_scan_positions: np.ndarray = None,
-        positions_offset_ang: np.ndarray = None,
         object_type: str = "complex",
         verbose: bool = True,
         device: str = "cpu",
@@ -182,7 +179,6 @@ class MagneticPtychography(
         # Common Metadata
         self._vacuum_probe_intensity = vacuum_probe_intensity
         self._scan_positions = initial_scan_positions
-        self._positions_offset_ang = positions_offset_ang
         self._energy = energy
         self._semiangle_cutoff = semiangle_cutoff
         self._semiangle_cutoff_pixels = semiangle_cutoff_pixels
@@ -210,14 +206,13 @@ class MagneticPtychography(
         plot_probe_overlaps: bool = True,
         force_com_rotation: float = None,
         force_com_transpose: float = None,
-        force_com_shifts: Sequence[np.ndarray] = None,
-        force_com_measured: Sequence[np.ndarray] = None,
+        force_com_shifts: float = None,
         vectorized_com_calculation: bool = True,
         force_scan_sampling: float = None,
         force_angular_sampling: float = None,
         force_reciprocal_sampling: float = None,
         progress_bar: bool = True,
-        object_fov_mask: np.ndarray = True,
+        object_fov_mask: np.ndarray = None,
         crop_patterns: bool = False,
         device: str = None,
         clear_fft_cache: bool = None,
@@ -270,8 +265,6 @@ class MagneticPtychography(
             Amplitudes come from diffraction patterns shifted with
             the CoM in the upper left corner for each probe unless
             shift is overwritten.
-        force_com_measured: tuple of ndarrays (CoMx measured, CoMy measured)
-            Force CoM measured shifts
         vectorized_com_calculation: bool, optional
             If True (default), the memory-intensive CoM calculation is vectorized
         force_scan_sampling: float, optional
@@ -418,22 +411,11 @@ class MagneticPtychography(
         if force_com_shifts is None:
             force_com_shifts = [None] * self._num_measurements
 
-        if force_com_measured is None:
-            force_com_measured = [None] * self._num_measurements
-
         if self._scan_positions is None:
             self._scan_positions = [None] * self._num_measurements
 
-        if self._positions_offset_ang is None:
-            self._positions_offset_ang = [None] * self._num_measurements
-
         # Ensure plot_center_of_mass is not in kwargs
         kwargs.pop("plot_center_of_mass", None)
-
-        if progress_bar:
-            # turn off verbosity to play nice with tqdm
-            verbose = self._verbose
-            self._verbose = False
 
         # loop over DPs for preprocessing
         for index in tqdmnd(
@@ -449,7 +431,6 @@ class MagneticPtychography(
                     self._vacuum_probe_intensity,
                     self._dp_mask,
                     force_com_shifts[index],
-                    force_com_measured[index],
                 ) = self._preprocess_datacube_and_vacuum_probe(
                     self._datacube[index],
                     diffraction_intensities_shape=self._diffraction_intensities_shape,
@@ -458,7 +439,6 @@ class MagneticPtychography(
                     vacuum_probe_intensity=self._vacuum_probe_intensity,
                     dp_mask=self._dp_mask,
                     com_shifts=force_com_shifts[index],
-                    com_measured=force_com_measured[index],
                 )
 
             else:
@@ -467,7 +447,6 @@ class MagneticPtychography(
                     _,
                     _,
                     force_com_shifts[index],
-                    force_com_measured[index],
                 ) = self._preprocess_datacube_and_vacuum_probe(
                     self._datacube[index],
                     diffraction_intensities_shape=self._diffraction_intensities_shape,
@@ -476,7 +455,6 @@ class MagneticPtychography(
                     vacuum_probe_intensity=None,
                     dp_mask=None,
                     com_shifts=force_com_shifts[index],
-                    com_measured=force_com_measured[index],
                 )
 
             # calibrations
@@ -502,7 +480,6 @@ class MagneticPtychography(
                 fit_function=fit_function,
                 com_shifts=force_com_shifts[index],
                 vectorized_calculation=vectorized_com_calculation,
-                com_measured=force_com_measured[index],
             )
 
             # estimate rotation / transpose using first measurement
@@ -571,12 +548,7 @@ class MagneticPtychography(
                 self._scan_positions[index],
                 self._positions_mask[index],
                 self._object_padding_px,
-                self._positions_offset_ang[index],
             )
-
-        if progress_bar:
-            # reset verbosity
-            self._verbose = verbose
 
         # handle semiangle specified in pixels
         if self._semiangle_cutoff_pixels:
@@ -654,28 +626,25 @@ class MagneticPtychography(
             device=self._device,
         )._evaluate_ctf()
 
-        if object_fov_mask is None or plot_probe_overlaps:
-            # overlaps
-            if max_batch_size is None:
-                max_batch_size = self._num_diffraction_patterns
+        # overlaps
+        if max_batch_size is None:
+            max_batch_size = self._num_diffraction_patterns
 
-            probe_overlap = xp.zeros(self._object_shape, dtype=xp.float32)
+        probe_overlap = xp.zeros(self._object_shape, dtype=xp.float32)
 
-            for start, end in generate_batches(
-                self._cum_probes_per_measurement[1], max_batch=max_batch_size
-            ):
-                # batch indices
-                positions_px = self._positions_px_all[start:end]
-                positions_px_fractional = positions_px - xp_storage.round(positions_px)
+        for start, end in generate_batches(
+            self._cum_probes_per_measurement[1], max_batch=max_batch_size
+        ):
+            # batch indices
+            positions_px = self._positions_px_all[start:end]
+            positions_px_fractional = positions_px - xp_storage.round(positions_px)
 
-                shifted_probes = fft_shift(
-                    self._probes_all[0], positions_px_fractional, xp
-                )
-                probe_overlap += self._sum_overlapping_patches_bincounts(
-                    xp.abs(shifted_probes) ** 2, positions_px
-                )
+            shifted_probes = fft_shift(self._probes_all[0], positions_px_fractional, xp)
+            probe_overlap += self._sum_overlapping_patches_bincounts(
+                xp.abs(shifted_probes) ** 2, positions_px
+            )
 
-            del shifted_probes
+        del shifted_probes
 
         # initialize object_fov_mask
         if object_fov_mask is None:
@@ -685,15 +654,14 @@ class MagneticPtychography(
                 probe_overlap_blurred > 0.25 * probe_overlap_blurred.max()
             )
             del probe_overlap_blurred
-        elif object_fov_mask is True:
-            self._object_fov_mask = np.full(self._object_shape, True)
         else:
             self._object_fov_mask = np.asarray(object_fov_mask)
         self._object_fov_mask_inverse = np.invert(self._object_fov_mask)
 
+        probe_overlap = asnumpy(probe_overlap)
+
         # plot probe overlaps
         if plot_probe_overlaps:
-            probe_overlap = asnumpy(probe_overlap)
             figsize = kwargs.pop("figsize", (9, 4))
             chroma_boost = kwargs.pop("chroma_boost", 1)
             power = kwargs.pop("power", 2)
@@ -1169,7 +1137,6 @@ class MagneticPtychography(
         object_positivity: bool = True,
         shrinkage_rad: float = 0.0,
         fix_potential_baseline: bool = True,
-        detector_fourier_mask: np.ndarray = None,
         store_iterations: bool = False,
         collective_measurement_updates: bool = True,
         progress_bar: bool = True,
@@ -1283,9 +1250,6 @@ class MagneticPtychography(
             Phase shift in radians to be subtracted from the potential at each iteration
         fix_potential_baseline: bool
             If true, the potential mean outside the FOV is forced to zero at each iteration
-        detector_fourier_mask: np.ndarray
-            Corner-centered mask to apply at the detector-plane for zeroing-out unreliable gradients.
-            Useful when detector has artifacts such as dead-pixels. Usually binary.
         store_iterations: bool, optional
             If True, reconstructed objects and probes are stored at each iteration
         collective_measurement_updates: bool
@@ -1375,11 +1339,6 @@ class MagneticPtychography(
         else:
             max_batch_size = self._num_diffraction_patterns
 
-        if detector_fourier_mask is None:
-            detector_fourier_mask = xp.ones(self._amplitudes[0].shape)
-        else:
-            detector_fourier_mask = xp.asarray(detector_fourier_mask)
-
         # initialization
         self._reset_reconstruction(store_iterations, reset, use_projection_scheme)
 
@@ -1464,7 +1423,6 @@ class MagneticPtychography(
                         positions_px_fractional,
                         amplitudes_device,
                         self._exit_waves,
-                        detector_fourier_mask,
                         use_projection_scheme=use_projection_scheme,
                         projection_a=projection_a,
                         projection_b=projection_b,

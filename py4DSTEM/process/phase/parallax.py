@@ -155,8 +155,11 @@ class Parallax(PhaseReconstruction):
 
         if hasattr(self, "aberration_dict_cartesian"):
             self.metadata = Metadata(
-                name="aberrations_polar_metadata",
-                data=self.aberration_dict_polar,
+                name="aberrations_metadata",
+                data={
+                    v["aberration name"]: v["value [Ang]"]
+                    for k, v in self.aberration_dict_cartesian.items()
+                },
             )
 
         self.metadata = Metadata(
@@ -209,8 +212,6 @@ class Parallax(PhaseReconstruction):
             "name": instance_md["name"],
             "verbose": True,  # for compatibility
             "device": "cpu",  # for compatibility
-            "storage": "cpu",  # for compatibility
-            "clear_fft_cache": True,  # for compatibility
         }
 
         return kwargs
