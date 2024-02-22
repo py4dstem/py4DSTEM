@@ -457,31 +457,31 @@ def get_origin_friedel(
             cc = (term1 - term3) / (term2 - term3)
 
         # get correlation peak
-        xp, yp = xp.unravel_index(xp.argmax(cc), im.shape)
+        x, y = xp.unravel_index(xp.argmax(cc), im.shape)
 
         # half pixel upsampling / parabola subpixel fitting
-        dx = (cc[xp + 1, yp] - cc[xp - 1, yp]) / (
-            4.0 * cc[xp, yp] - 2.0 * cc[xp + 1, yp] - 2.0 * cc[xp - 1, yp]
+        dx = (cc[x + 1, y] - cc[x - 1, y]) / (
+            4.0 * cc[x, y] - 2.0 * cc[x + 1, y] - 2.0 * cc[x - 1, y]
         )
-        dy = (cc[xp, yp + 1] - cc[xp, yp - 1]) / (
-            4.0 * cc[xp, yp] - 2.0 * cc[xp, yp + 1] - 2.0 * cc[xp, yp - 1]
+        dy = (cc[x, y + 1] - cc[x, y - 1]) / (
+            4.0 * cc[x, y] - 2.0 * cc[x, y + 1] - 2.0 * cc[x, y - 1]
         )
         # xp += np.round(dx*2.0)/2.0
         # yp += np.round(dy*2.0)/2.0
-        xp += dx
-        yp += dy
+        x += dx
+        y += dy
 
         # upsample peak if needed
         if upsample_factor > 1:
-            xp, yp = upsampled_correlation(
+            x, y = upsampled_correlation(
                 xp.fft.fft2(cc),
                 upsampleFactor=upsample_factor,
-                xyShift=np.array((xp, yp)),
+                xyShift=np.array((x, y)),
                 device=device,
             )
 
         # Correlation peak, moved to image center shift
-        qx0[rx, ry] = (xp / 2) % datacube.data.shape[2]
-        qy0[rx, ry] = (yp / 2) % datacube.data.shape[3]
+        qx0[rx, ry] = (x / 2) % datacube.data.shape[2]
+        qy0[rx, ry] = (y / 2) % datacube.data.shape[3]
 
     return qx0, qy0
