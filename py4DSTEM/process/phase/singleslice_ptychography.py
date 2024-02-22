@@ -41,6 +41,7 @@ from py4DSTEM.process.phase.utils import (
 from py4DSTEM.process.calibration import get_origin_friedel
 from py4DSTEM.process.calibration import fit_origin
 
+
 class SingleslicePtychography(
     VisualizationsMixin,
     PositionsConstraintsMixin,
@@ -193,7 +194,7 @@ class SingleslicePtychography(
         region_of_interest_shape: Tuple[int, int] = None,
         dp_mask: np.ndarray = None,
         fit_function: str = "plane",
-        find_origin_friedel = False,
+        find_origin_friedel=False,
         plot_center_of_mass: str = "default",
         plot_rotation: bool = True,
         maximize_divergence: bool = False,
@@ -348,11 +349,11 @@ class SingleslicePtychography(
         # find origins
         if find_origin_friedel:
             (
-                self._com_measured_x, 
+                self._com_measured_x,
                 self._com_measured_y,
             ) = get_origin_friedel(
                 self._datacube,
-                upsample_factor = 10,
+                upsample_factor=10,
                 # mask = mask,
                 # device = self._device,
                 # device = self._storage,
@@ -363,11 +364,15 @@ class SingleslicePtychography(
                 self._com_res_x,
                 self._com_res_y,
             ) = fit_origin(
-                (self._com_measured_x,self._com_measured_y),
-                robust = True,
+                (self._com_measured_x, self._com_measured_y),
+                robust=True,
             )
-            self._com_normalized_x = self._com_measured_x - np.mean(self._com_measured_x)
-            self._com_normalized_y = self._com_measured_x - np.mean(self._com_measured_x)
+            self._com_normalized_x = self._com_measured_x - np.mean(
+                self._com_measured_x
+            )
+            self._com_normalized_y = self._com_measured_x - np.mean(
+                self._com_measured_x
+            )
 
         else:
             # calculate CoM

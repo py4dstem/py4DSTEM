@@ -584,12 +584,12 @@ def plot_pdf(
 
 def calculate_FEM_local(
     self,
-    use_median = False,
-    plot_normalized_variance = True,
-    figsize = (8, 4),
-    return_values = False,
-    returnfig = False,
-    progress_bar = True,
+    use_median=False,
+    plot_normalized_variance=True,
+    figsize=(8, 4),
+    return_values=False,
+    returnfig=False,
+    progress_bar=True,
 ):
     """
     Calculate fluctuation electron microscopy (FEM) statistics, including radial mean,
@@ -640,33 +640,33 @@ def calculate_FEM_local(
         im = self.data[rx, ry]
 
         if use_median:
-            im_mean = np.ma.mean(im, axis = 0)
-            im_var = np.ma.mean((im - im_mean)**2, axis=0)
+            im_mean = np.ma.mean(im, axis=0)
+            im_var = np.ma.mean((im - im_mean) ** 2, axis=0)
         else:
-            im_mean = np.ma.median(im, axis = 0)
-            im_var = np.ma.median((im - im_mean)**2, axis=0)
+            im_mean = np.ma.median(im, axis=0)
+            im_var = np.ma.median((im - im_mean) ** 2, axis=0)
 
         self.local_radial_mean[rx, ry] = im_mean
         self.local_radial_var[rx, ry] = im_var
 
-
     if plot_normalized_variance:
-        fig,ax = plt.subplots(figsize = figsize)
+        fig, ax = plt.subplots(figsize=figsize)
 
         sig = self.local_radial_var / self.local_radial_mean**2
         if use_median:
-            sig_plot = np.median(sig,axis=(0,1))
+            sig_plot = np.median(sig, axis=(0, 1))
         else:
-            sig_plot = np.mean(sig,axis=(0,1))
+            sig_plot = np.mean(sig, axis=(0, 1))
 
         ax.plot(
             self.qq,
             sig_plot,
         )
-        ax.set_xlabel("Scattering Vector (" + self.calibration.get_Q_pixel_units() + ")")
+        ax.set_xlabel(
+            "Scattering Vector (" + self.calibration.get_Q_pixel_units() + ")"
+        )
         ax.set_ylabel("Normalized Variance")
         ax.set_xlim((self.qq[0], self.qq[-1]))
-
 
         # self.radial_all_std[rx, ry] = np.sqrt(
         #     np.mean((self.data[rx, ry] - self.radial_all[rx, ry][None]) ** 2, axis=0)
@@ -683,38 +683,35 @@ def calculate_FEM_local(
 
 
 def calculate_annular_symmetry(
-    self, 
-    max_symmetry = 12,
-    mask_realspace = None,
-    returnval = False
-    ):
-
+    self, max_symmetry=12, mask_realspace=None, returnval=False
+):
     """
-    This function calculates radial symmetry of diffraction patterns, typically apply 
+    This function calculates radial symmetry of diffraction patterns, typically apply
     to amorphous scattering.
 
     """
 
     # Initialize outputs
     self.annular_symmetry_max = max_symmetry
-    self.annular_symmetry = np.zeros((
-        self.data_raw.shape[0],
-        self.data_raw.shape[1],
-        max_symmetry,
-        self.polar_shape[1],
-        ))
-
+    self.annular_symmetry = np.zeros(
+        (
+            self.data_raw.shape[0],
+            self.data_raw.shape[1],
+            max_symmetry,
+            self.polar_shape[1],
+        )
+    )
 
     # Loop over all probe positions
-    for rx in range(10,11):# range(10,11):#polardata.data_raw.shape[0]):
-        for ry in range(10,11):#range(14,15):#polardata.data_raw.shape[1]):
+    for rx in range(10, 11):  # range(10,11):#polardata.data_raw.shape[0]):
+        for ry in range(10, 11):  # range(14,15):#polardata.data_raw.shape[1]):
             # polar_im, polar_mask, = polardata.transform(
             # polar_im, polar_im_norm, polar_im_norm_array, polar_mask = polardata.transform(
             #     polardata.data_raw.data[rx,ry],
             #     returnval = 'all',
             # )
             im = self.transform(
-                self.data_raw.data[rx,ry],
+                self.data_raw.data[rx, ry],
                 # returnval = 'zeros',
             )
             polar_im = np.ma.getdata(im)
@@ -727,20 +724,26 @@ def calculate_annular_symmetry(
                 np.fft.ifft(
                     np.abs(
                         np.fft.fft(
-                            polar_im, 
-                            axis = 0,
+                            polar_im,
+                            axis=0,
                         )
-                    )**2,
-                    axis = 0,
+                    )
+                    ** 2,
+                    axis=0,
                 ),
-            ) 
-            polar_corr_norm = np.sum(
-                polar_im, 
-                axis = 0,
-            )**2
+            )
+            polar_corr_norm = (
+                np.sum(
+                    polar_im,
+                    axis=0,
+                )
+                ** 2
+            )
             sub = polar_corr_norm > 0
-            polar_corr[:, sub] /= polar_corr_norm[sub] #gets rid of divide by 0 (False near center)
-            polar_corr[:,sub] -= 1
+            polar_corr[:, sub] /= polar_corr_norm[
+                sub
+            ]  # gets rid of divide by 0 (False near center)
+            polar_corr[:, sub] -= 1
             # print(np.min(polar_corr[:, sub]),
             #      np.max(polar_corr[:, sub]),
             #      )
@@ -750,39 +753,42 @@ def calculate_annular_symmetry(
                 np.fft.ifft(
                     np.abs(
                         np.fft.fft(
-                            polar_mask.astype('float'), 
-                            axis = 0,
+                            polar_mask.astype("float"),
+                            axis=0,
                         )
-                    )**2,
-                    axis = 0,
+                    )
+                    ** 2,
+                    axis=0,
                 ),
             )
-            mask_corr_norm = np.sum(
-                polar_mask.astype('float'), 
-                axis = 0,
-            )**2
+            mask_corr_norm = (
+                np.sum(
+                    polar_mask.astype("float"),
+                    axis=0,
+                )
+                ** 2
+            )
             sub = mask_corr_norm > 0
-            mask_corr[:, sub] /= mask_corr_norm[sub] #gets rid of divide by 0 (False near center)
-            mask_corr[:,sub] -= 1
-                 
+            mask_corr[:, sub] /= mask_corr_norm[
+                sub
+            ]  # gets rid of divide by 0 (False near center)
+            mask_corr[:, sub] -= 1
+
             # Normalize polar correlation by mask correlation (beam stop removal)
             sub = np.abs(mask_corr) > 0
             polar_corr[sub] -= mask_corr[sub]
 
             # Measure symmetry
-            self.annular_symmetry[rx,ry,:,:] = \
-                np.abs(np.fft.fft(polar_corr, axis = 0))[1:max_symmetry+1]
+            self.annular_symmetry[rx, ry, :, :] = np.abs(
+                np.fft.fft(polar_corr, axis=0)
+            )[1 : max_symmetry + 1]
 
             import py4DSTEM
-            py4DSTEM.show(
-                np.repeat(
-                    self.annular_symmetry[rx,ry,:,:],
-                    8,
-                    axis = 0
-                ),
-                figsize = (6,6),
-            )
 
+            py4DSTEM.show(
+                np.repeat(self.annular_symmetry[rx, ry, :, :], 8, axis=0),
+                figsize=(6, 6),
+            )
 
     if returnval:
         return self.annular_symmetry
@@ -790,19 +796,18 @@ def calculate_annular_symmetry(
 
 def plot_annular_symmetry(
     self,
-    symmetry_orders = None,
-    ):
+    symmetry_orders=None,
+):
     """
     Plot the symmetry orders
     """
 
     if symmetry_orders is None:
-        symmetry_orders = np.arange(1,self.annular_symmetry_max+1)
+        symmetry_orders = np.arange(1, self.annular_symmetry_max + 1)
     else:
         symmetry_orders = np.array(symmetry_orders)
 
     print(symmetry_orders)
-
 
 
 def scattering_model(k2, *coefs):

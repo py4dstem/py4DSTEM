@@ -506,15 +506,15 @@ def show_origin_meas(data):
 
 def show_origin_fit(
     data,
-    plot_range = None,
-    axsize = (3,3),
-    ):
+    plot_range=None,
+    axsize=(3, 3),
+):
     """
     Show the measured, fit, and residuals of the origin positions.
 
     Parameters
     ----------
-    data: (DataCube or Calibration or (3,2)-tuple of arrays    
+    data: (DataCube or Calibration or (3,2)-tuple of arrays
         ((qx0_meas,qy0_meas),(qx0_fit,qy0_fit),(qx0_residuals,qy0_residuals))
     plot_range: (tuple, list, or np.array)
         Plotting range in units of pixels
@@ -551,16 +551,15 @@ def show_origin_fit(
     qx0_fit_plot = qx0_fit - np.median(qx0_fit)
     qy0_fit_plot = qy0_fit - np.median(qy0_fit)
 
-
     # Determine plotting range
     if plot_range is None:
-        plot_range = np.array((-1.0,1.0)) * \
-            np.max((np.abs(qx0_fit_plot),np.abs(qy0_fit_plot)))
+        plot_range = np.array((-1.0, 1.0)) * np.max(
+            (np.abs(qx0_fit_plot), np.abs(qy0_fit_plot))
+        )
     else:
         plot_range = np.array(plot_range)
         if plot_range.ndim == 0:
-            plot_range = np.array((-1.0,1.0)) * plot_range
-
+            plot_range = np.array((-1.0, 1.0)) * plot_range
 
     # plotting
     show_image_grid(
@@ -575,10 +574,10 @@ def show_origin_fit(
         H=2,
         W=3,
         cmap="RdBu",
-        intensity_range = 'absolute',
-        vmin = plot_range[0],
-        vmax = plot_range[1],
-        axsize = axsize,
+        intensity_range="absolute",
+        vmin=plot_range[0],
+        vmax=plot_range[1],
+        axsize=axsize,
     )
 
 
