@@ -688,6 +688,7 @@ def calculate_annular_symmetry(
     plot_result=False,
     figsize=(8, 4),
     returnval=False,
+    progress_bar=True,
 ):
     """
     This function calculates radial symmetry of diffraction patterns, typically applied
@@ -701,8 +702,14 @@ def calculate_annular_symmetry(
         Symmetry orders will be computed from 1 to max_symmetry for n-fold symmetry orders.
     mask_realspace: np.array
         Boolean mask, symmetries will only be computed at probe positions wheremask is True.
+    plot_result: bool
+        Plot the resulting array
+    figsize: (float, float)
+        Size of the plot.
     returnval: bool
         Set to true to return the symmetry array.
+    progress_bar: bool
+        Show progress bar during calculation.
 
     Returns
     --------
@@ -723,90 +730,88 @@ def calculate_annular_symmetry(
     )
 
     # Loop over all probe positions
-    for rx in range(2, 3):  # range(10,11):#polardata.data_raw.shape[0]):
-        for ry in range(2, 3):  # range(14,15):#polardata.data_raw.shape[1]):
-            # polar_im, polar_mask, = polardata.transform(
-            # polar_im, polar_im_norm, polar_im_norm_array, polar_mask = polardata.transform(
-            #     polardata.data_raw.data[rx,ry],
-            #     returnval = 'all',
-            # )
-            im = self.transform(
-                self.data_raw.data[rx, ry],
-                # returnval = 'zeros',
-            )
-            polar_im = np.ma.getdata(im)
-            polar_mask = np.ma.getmask(im)
-            polar_im[polar_mask] = 0
-            polar_mask = np.logical_not(polar_mask)
+    for rx, ry in tqdmnd(
+        self._datacube.shape[0],
+        self._datacube.shape[1],
+        desc="Annular symmetry",
+        unit=" probe positions",
+        disable=not progress_bar,
+    ):
+        # Get polar transformed image
+        im = self.transform(
+            self.data_raw.data[rx, ry],
+            # returnval = 'zeros',
+        )
+        polar_im = np.ma.getdata(im)
+        polar_mask = np.ma.getmask(im)
+        polar_im[polar_mask] = 0
+        polar_mask = np.logical_not(polar_mask)
 
-            # Calculate normalized correlation of polar image along angular direction (axis = 0)
-            polar_corr = np.real(
-                np.fft.ifft(
-                    np.abs(
-                        np.fft.fft(
-                            polar_im,
-                            axis=0,
-                        )
+        # Calculate normalized correlation of polar image along angular direction (axis = 0)
+        polar_corr = np.real(
+            np.fft.ifft(
+                np.abs(
+                    np.fft.fft(
+                        polar_im,
+                        axis=0,
                     )
-                    ** 2,
-                    axis=0,
-                ),
-            )
-            polar_corr_norm = (
-                np.sum(
-                    polar_im,
-                    axis=0,
                 )
-                ** 2
+                ** 2,
+                axis=0,
+            ),
+        )
+        polar_corr_norm = (
+            np.sum(
+                polar_im,
+                axis=0,
             )
-            sub = polar_corr_norm > 0
-            polar_corr[:, sub] /= polar_corr_norm[
-                sub
-            ]  # gets rid of divide by 0 (False near center)
-            polar_corr[:, sub] -= 1
-            # print(np.min(polar_corr[:, sub]),
-            #      np.max(polar_corr[:, sub]),
-            #      )
+            ** 2
+        )
+        sub = polar_corr_norm > 0
+        polar_corr[:, sub] /= polar_corr_norm[
+            sub
+        ]  # gets rid of divide by 0 (False near center)
+        polar_corr[:, sub] -= 1
 
-            # Calculate normalized correlation of polar mask along angular direction (axis = 0)
-            mask_corr = np.real(
-                np.fft.ifft(
-                    np.abs(
-                        np.fft.fft(
-                            polar_mask.astype("float"),
-                            axis=0,
-                        )
+        # Calculate normalized correlation of polar mask along angular direction (axis = 0)
+        mask_corr = np.real(
+            np.fft.ifft(
+                np.abs(
+                    np.fft.fft(
+                        polar_mask.astype("float"),
+                        axis=0,
                     )
-                    ** 2,
-                    axis=0,
-                ),
-            )
-            mask_corr_norm = (
-                np.sum(
-                    polar_mask.astype("float"),
-                    axis=0,
                 )
-                ** 2
+                ** 2,
+                axis=0,
+            ),
+        )
+        mask_corr_norm = (
+            np.sum(
+                polar_mask.astype("float"),
+                axis=0,
             )
-            sub = mask_corr_norm > 0
-            mask_corr[:, sub] /= mask_corr_norm[
-                sub
-            ]  # gets rid of divide by 0 (False near center)
-            mask_corr[:, sub] -= 1
+            ** 2
+        )
+        sub = mask_corr_norm > 0
+        mask_corr[:, sub] /= mask_corr_norm[
+            sub
+        ]  # gets rid of divide by 0 (False near center)
+        mask_corr[:, sub] -= 1
 
-            # Normalize polar correlation by mask correlation (beam stop removal)
-            sub = np.abs(mask_corr) > 0
-            polar_corr[sub] -= mask_corr[sub]
+        # Normalize polar correlation by mask correlation (beam stop removal)
+        sub = np.abs(mask_corr) > 0
+        polar_corr[sub] -= mask_corr[sub]
 
-            # Measure symmetry
-            self.annular_symmetry[rx, ry, :, :] = np.abs(
-                np.fft.fft(polar_corr, axis=0)
-            )[1 : max_symmetry + 1]
+        # Measure symmetry
+        self.annular_symmetry[rx, ry, :, :] = np.abs(
+            np.fft.fft(polar_corr, axis=0)
+        )[1 : max_symmetry + 1]
 
     if plot_result:
         fig, ax = plt.subplots(figsize=figsize)
         ax.imshow(
-            self.annular_symmetry[rx, ry, :, :],
+            np.mean(self.annular_symmetry,axis=(0,1)),
             aspect="auto",
             extent=[
                 self.qq[0],
@@ -829,6 +834,12 @@ def calculate_annular_symmetry(
 def plot_annular_symmetry(
     self,
     symmetry_orders=None,
+    plot_std=False,
+    normalize_by_mean=False,
+    cmap = 'turbo',
+    vmin = 0.01,
+    vmax = 0.99,
+    figsize=(8,4),
 ):
     """
     Plot the symmetry orders
@@ -839,7 +850,49 @@ def plot_annular_symmetry(
     else:
         symmetry_orders = np.array(symmetry_orders)
 
-    print(symmetry_orders)
+    # plotting image
+    if plot_std:
+        im_plot = np.std(
+            self.annular_symmetry,
+            axis=(0,1),
+        )[symmetry_orders-1,:]
+    else:
+        im_plot = np.mean(
+            self.annular_symmetry,
+            axis=(0,1),
+        )[symmetry_orders-1,:]
+    if normalize_by_mean:
+        im_plot /= self.radial_mean[None,:]
+
+    # plotting range
+    int_vals = np.sort(im_plot.ravel())
+    ind0 = np.clip(np.round(im_plot.size * vmin).astype('int'),0,im_plot.size-1)
+    ind1 = np.clip(np.round(im_plot.size * vmax).astype('int'),0,im_plot.size-1)
+    vmin = int_vals[ind0]
+    vmax = int_vals[ind1]
+
+    # plot image
+    fig, ax = plt.subplots(figsize=figsize)
+    ax.imshow(
+        im_plot,
+        aspect="auto",
+        extent=[
+            self.qq[0],
+            self.qq[-1],
+            np.max(symmetry_orders),
+            np.min(symmetry_orders)-1,
+        ],
+        cmap = cmap,
+        vmin = vmin,
+        vmax = vmax,
+    )
+    ax.set_yticks(
+        symmetry_orders - 0.5,
+        symmetry_orders,
+    )
+    ax.set_xlabel("Scattering angle (1/A)")
+    ax.set_ylabel("Symmetry Order")
+
 
 
 def scattering_model(k2, *coefs):
