@@ -17,6 +17,13 @@ from py4DSTEM.process.utils import (
     get_maxima_2D,
     upsampled_correlation,
 )
+from py4DSTEM.process.phase.utils import copy_to_device
+
+try:
+    import cupy as cp
+except (ImportError, ModuleNotFoundError):
+    cp = np
+
 
 #
 # # origin setting decorators
@@ -315,68 +322,12 @@ def get_origin(
     return qx0, qy0, mask
 
 
-# def get_origin_single_dp_beamstop(DP: np.ndarray, mask: np.ndarray, **kwargs):
-#     """
-#     Find the origin for a single diffraction pattern, assuming there is a beam stop.
-
-#     Args:
-#         DP (np array): diffraction pattern
-#         mask (np array): boolean mask which is False under the beamstop and True
-#             in the diffraction pattern. One approach to generating this mask
-#             is to apply a suitable threshold on the average diffraction pattern
-#             and use binary opening/closing to remove and holes
-
-#     Returns:
-#         qx0, qy0 (tuple) measured center position of diffraction pattern
-#     """
-
-#     imCorr = np.real(
-#         np.fft.ifft2(
-#             np.fft.fft2(DP * mask)
-#             * np.conj(np.fft.fft2(np.rot90(DP, 2) * np.rot90(mask, 2)))
-#         )
-#     )
-
-#     xp, yp = np.unravel_index(np.argmax(imCorr), imCorr.shape)
-
-#     dx = ((xp + DP.shape[0] / 2) % DP.shape[0]) - DP.shape[0] / 2
-#     dy = ((yp + DP.shape[1] / 2) % DP.shape[1]) - DP.shape[1] / 2
-
-#     return (DP.shape[0] + dx) / 2, (DP.shape[1] + dy) / 2
-
-
-# def get_origin_beamstop(datacube: DataCube, mask: np.ndarray, **kwargs):
-#     """
-#     Find the origin for each diffraction pattern, assuming there is a beam stop.
-
-#     Args:
-#         datacube (DataCube)
-#         mask (np array): boolean mask which is False under the beamstop and True
-#             in the diffraction pattern. One approach to generating this mask
-#             is to apply a suitable threshold on the average diffraction pattern
-#             and use binary opening/closing to remove any holes
-
-#     Returns:
-#         qx0, qy0 (tuple of np arrays) measured center position of each diffraction pattern
-#     """
-
-#     qx0 = np.zeros(datacube.data.shape[:2])
-#     qy0 = np.zeros_like(qx0)
-
-#     for rx, ry in tqdmnd(datacube.R_Nx, datacube.R_Ny):
-#         x, y = get_origin_single_dp_beamstop(datacube.data[rx, ry, :, :], mask)
-
-#         qx0[rx, ry] = x
-#         qy0[rx, ry] = y
-
-#     return qx0, qy0
-
-
 def get_origin_friedel(
     datacube: DataCube,
     mask=None,
     upsample_factor=1,
     device="cpu",
+    return_cpu = True,
 ):
     """
     Fit the origin for each diffraction pattern, with or without a beam stop.
@@ -386,9 +337,6 @@ def get_origin_friedel(
 
     More details about how the correlation step can be found in:
     https://doi.org/10.1109/TIP.2011.2181402
-
-    TODO - Finish cuda GPU support.
-
 
     Parameters
     ----------
@@ -404,6 +352,8 @@ def get_origin_friedel(
         Upsample factor for subpixel fitting of the image shifts.
     device: string
          'cpu' or 'gpu' to select device
+    return_cpu: bool
+        Return arrays on cpu.
 
 
     Returns
@@ -424,8 +374,9 @@ def get_origin_friedel(
 
     # pad the mask
     if mask is not None:
+        mask = xp.asarray(mask).astype('float')
         mask_pad = xp.pad(
-            mask.astype("float"),
+            mask,
             ((0, datacube.data.shape[2]), (0, datacube.data.shape[3])),
             constant_values=(1.0, 1.0),
         )
@@ -435,8 +386,9 @@ def get_origin_friedel(
     for rx, ry in tqdmnd(datacube.R_Nx, datacube.R_Ny):
         if mask is None:
             # pad image
+            im_xp = xp.asarray(datacube.data[rx, ry, :, :])
             im = xp.pad(
-                datacube.data[rx, ry, :, :],
+                im_xp,
                 ((0, datacube.data.shape[2]), (0, datacube.data.shape[3])),
             )
             G = xp.fft.fft2(im)
@@ -445,15 +397,16 @@ def get_origin_friedel(
             cc = xp.real(xp.fft.ifft2(G**2))
 
         else:
+            im_xp = xp.asarray(datacube.data[rx, ry, :, :])
             im = xp.pad(
-                datacube.data[rx, ry, :, :],
+                im_xp,
                 ((0, datacube.data.shape[2]), (0, datacube.data.shape[3])),
             )
 
             # Masked cross correlation of masked image with its inverse
-            term1 = xp.real(np.fft.ifft2(xp.fft.fft2(im) ** 2) * np.fft.ifft2(M**2))
-            term2 = xp.real(np.fft.ifft2(xp.fft.fft2(im**2) * M))
-            term3 = xp.real(np.fft.ifft2(xp.fft.fft2(im * mask_pad)))
+            term1 = xp.real(xp.fft.ifft2(xp.fft.fft2(im) ** 2) * xp.fft.ifft2(M**2))
+            term2 = xp.real(xp.fft.ifft2(xp.fft.fft2(im**2) * M))
+            term3 = xp.real(xp.fft.ifft2(xp.fft.fft2(im * mask_pad)))
             cc = (term1 - term3) / (term2 - term3)
 
         # get correlation peak
@@ -468,15 +421,15 @@ def get_origin_friedel(
         )
         # xp += np.round(dx*2.0)/2.0
         # yp += np.round(dy*2.0)/2.0
-        x += dx
-        y += dy
+        x = x.astype('float') + dx
+        y = y.astype('float') + dy
 
         # upsample peak if needed
         if upsample_factor > 1:
             x, y = upsampled_correlation(
                 xp.fft.fft2(cc),
                 upsampleFactor=upsample_factor,
-                xyShift=np.array((x, y)),
+                xyShift=xp.array((x, y)),
                 device=device,
             )
 
@@ -484,4 +437,9 @@ def get_origin_friedel(
         qx0[rx, ry] = (x / 2) % datacube.data.shape[2]
         qy0[rx, ry] = (y / 2) % datacube.data.shape[3]
 
-    return qx0, qy0
+
+    if return_cpu:
+        return copy_to_device(qx0), copy_to_device(qy0)
+    else:
+        return qx0, qy0
+
