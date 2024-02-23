@@ -4,7 +4,6 @@ from scipy.ndimage import binary_opening, binary_closing, gaussian_filter1d
 
 
 class PolarDatacube:
-
     """
     An interface to a 4D-STEM datacube under polar-elliptical transformation.
     """

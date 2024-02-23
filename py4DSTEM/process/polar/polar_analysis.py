@@ -610,7 +610,6 @@ def calculate_FEM_local(
     local_radial_var: np.array
         Variance in the radial dimension of each probe position
 
-
     """
 
     # init radial data arrays
@@ -683,11 +682,32 @@ def calculate_FEM_local(
 
 
 def calculate_annular_symmetry(
-    self, max_symmetry=12, mask_realspace=None, returnval=False
+    self,
+    max_symmetry=12,
+    mask_realspace=None,
+    plot_result=False,
+    figsize=(8, 4),
+    returnval=False,
 ):
     """
-    This function calculates radial symmetry of diffraction patterns, typically apply
-    to amorphous scattering.
+    This function calculates radial symmetry of diffraction patterns, typically applied
+    to amorphous scattering, but it can also be used for crystalline Bragg diffraction.
+
+    Parameters
+    --------
+    self: PolarDatacube
+        Polar transformation datacube
+    max_symmetry: int
+        Symmetry orders will be computed from 1 to max_symmetry for n-fold symmetry orders.
+    mask_realspace: np.array
+        Boolean mask, symmetries will only be computed at probe positions wheremask is True.
+    returnval: bool
+        Set to true to return the symmetry array.
+
+    Returns
+    --------
+    annular_symmetry: np.array
+        Array with annular symmetry magnitudes, with shape [max_symmetry, num_radial_bins]
 
     """
 
@@ -703,8 +723,8 @@ def calculate_annular_symmetry(
     )
 
     # Loop over all probe positions
-    for rx in range(10, 11):  # range(10,11):#polardata.data_raw.shape[0]):
-        for ry in range(10, 11):  # range(14,15):#polardata.data_raw.shape[1]):
+    for rx in range(2, 3):  # range(10,11):#polardata.data_raw.shape[0]):
+        for ry in range(2, 3):  # range(14,15):#polardata.data_raw.shape[1]):
             # polar_im, polar_mask, = polardata.transform(
             # polar_im, polar_im_norm, polar_im_norm_array, polar_mask = polardata.transform(
             #     polardata.data_raw.data[rx,ry],
@@ -783,12 +803,24 @@ def calculate_annular_symmetry(
                 np.fft.fft(polar_corr, axis=0)
             )[1 : max_symmetry + 1]
 
-            import py4DSTEM
-
-            py4DSTEM.show(
-                np.repeat(self.annular_symmetry[rx, ry, :, :], 8, axis=0),
-                figsize=(6, 6),
-            )
+    if plot_result:
+        fig, ax = plt.subplots(figsize=figsize)
+        ax.imshow(
+            self.annular_symmetry[rx, ry, :, :],
+            aspect="auto",
+            extent=[
+                self.qq[0],
+                self.qq[-1],
+                max_symmetry,
+                0,
+            ],
+        )
+        ax.set_yticks(
+            np.arange(max_symmetry) + 0.5,
+            range(1, max_symmetry + 1),
+        )
+        ax.set_xlabel("Scattering angle (1/A)")
+        ax.set_ylabel("Symmetry Order")
 
     if returnval:
         return self.annular_symmetry
