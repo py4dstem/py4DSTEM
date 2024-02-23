@@ -323,16 +323,18 @@ class PtychographyOptimizer:
                 **skopt_kwargs,
             )
 
-            # Remove the optimization result's reference to the function, as it potentially contains a 
+            # Remove the optimization result's reference to the function, as it potentially contains a
             # copy of the ptycho object
-            del self._skopt_result['fun']
+            del self._skopt_result["fun"]
 
             # If using the GPU, free some cached stuff
             if self._init_args.get("device", "cpu") == "gpu":
                 import cupy as cp
+
                 cp.get_default_memory_pool().free_all_blocks()
                 cp.get_default_pinned_memory_pool().free_all_blocks()
                 from cupy.fft.config import get_plan_cache
+
                 get_plan_cache().clear()
 
             print("Optimized parameters:")
