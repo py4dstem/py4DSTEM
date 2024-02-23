@@ -804,14 +804,14 @@ def calculate_annular_symmetry(
         polar_corr[sub] -= mask_corr[sub]
 
         # Measure symmetry
-        self.annular_symmetry[rx, ry, :, :] = np.abs(
-            np.fft.fft(polar_corr, axis=0)
-        )[1 : max_symmetry + 1]
+        self.annular_symmetry[rx, ry, :, :] = np.abs(np.fft.fft(polar_corr, axis=0))[
+            1 : max_symmetry + 1
+        ]
 
     if plot_result:
         fig, ax = plt.subplots(figsize=figsize)
         ax.imshow(
-            np.mean(self.annular_symmetry,axis=(0,1)),
+            np.mean(self.annular_symmetry, axis=(0, 1)),
             aspect="auto",
             extent=[
                 self.qq[0],
@@ -836,10 +836,10 @@ def plot_annular_symmetry(
     symmetry_orders=None,
     plot_std=False,
     normalize_by_mean=False,
-    cmap = 'turbo',
-    vmin = 0.01,
-    vmax = 0.99,
-    figsize=(8,4),
+    cmap="turbo",
+    vmin=0.01,
+    vmax=0.99,
+    figsize=(8, 4),
 ):
     """
     Plot the symmetry orders
@@ -854,20 +854,20 @@ def plot_annular_symmetry(
     if plot_std:
         im_plot = np.std(
             self.annular_symmetry,
-            axis=(0,1),
-        )[symmetry_orders-1,:]
+            axis=(0, 1),
+        )[symmetry_orders - 1, :]
     else:
         im_plot = np.mean(
             self.annular_symmetry,
-            axis=(0,1),
-        )[symmetry_orders-1,:]
+            axis=(0, 1),
+        )[symmetry_orders - 1, :]
     if normalize_by_mean:
-        im_plot /= self.radial_mean[None,:]
+        im_plot /= self.radial_mean[None, :]
 
     # plotting range
     int_vals = np.sort(im_plot.ravel())
-    ind0 = np.clip(np.round(im_plot.size * vmin).astype('int'),0,im_plot.size-1)
-    ind1 = np.clip(np.round(im_plot.size * vmax).astype('int'),0,im_plot.size-1)
+    ind0 = np.clip(np.round(im_plot.size * vmin).astype("int"), 0, im_plot.size - 1)
+    ind1 = np.clip(np.round(im_plot.size * vmax).astype("int"), 0, im_plot.size - 1)
     vmin = int_vals[ind0]
     vmax = int_vals[ind1]
 
@@ -880,11 +880,11 @@ def plot_annular_symmetry(
             self.qq[0],
             self.qq[-1],
             np.max(symmetry_orders),
-            np.min(symmetry_orders)-1,
+            np.min(symmetry_orders) - 1,
         ],
-        cmap = cmap,
-        vmin = vmin,
-        vmax = vmax,
+        cmap=cmap,
+        vmin=vmin,
+        vmax=vmax,
     )
     ax.set_yticks(
         symmetry_orders - 0.5,
@@ -892,7 +892,6 @@ def plot_annular_symmetry(
     )
     ax.set_xlabel("Scattering angle (1/A)")
     ax.set_ylabel("Symmetry Order")
-
 
 
 def scattering_model(k2, *coefs):
