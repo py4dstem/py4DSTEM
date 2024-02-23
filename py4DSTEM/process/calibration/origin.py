@@ -327,7 +327,7 @@ def get_origin_friedel(
     mask=None,
     upsample_factor=1,
     device="cpu",
-    return_cpu = True,
+    return_cpu=True,
 ):
     """
     Fit the origin for each diffraction pattern, with or without a beam stop.
@@ -374,7 +374,7 @@ def get_origin_friedel(
 
     # pad the mask
     if mask is not None:
-        mask = xp.asarray(mask).astype('float')
+        mask = xp.asarray(mask).astype("float")
         mask_pad = xp.pad(
             mask,
             ((0, datacube.data.shape[2]), (0, datacube.data.shape[3])),
@@ -421,8 +421,8 @@ def get_origin_friedel(
         )
         # xp += np.round(dx*2.0)/2.0
         # yp += np.round(dy*2.0)/2.0
-        x = x.astype('float') + dx
-        y = y.astype('float') + dy
+        x = x.astype("float") + dx
+        y = y.astype("float") + dy
 
         # upsample peak if needed
         if upsample_factor > 1:
@@ -437,9 +437,7 @@ def get_origin_friedel(
         qx0[rx, ry] = (x / 2) % datacube.data.shape[2]
         qy0[rx, ry] = (y / 2) % datacube.data.shape[3]
 
-
     if return_cpu:
         return copy_to_device(qx0), copy_to_device(qy0)
     else:
         return qx0, qy0
-
