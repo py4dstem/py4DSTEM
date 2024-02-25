@@ -386,14 +386,14 @@ def get_origin_friedel(
     for rx, ry in tqdmnd(datacube.R_Nx, datacube.R_Ny):
         if mask is None:
             # pad image
-            im_xp = xp.asarray(datacube.data[rx, ry, :, :])
+            im_xp = xp.asarray(datacube.data[rx, ry])
             im = xp.pad(
                 im_xp,
                 ((0, datacube.data.shape[2]), (0, datacube.data.shape[3])),
             )
             G = xp.fft.fft2(im)
 
-            # Masked cross correlation of masked image with its inverse
+            # Cross correlation of masked image with its inverse
             cc = xp.real(xp.fft.ifft2(G**2))
 
         else:

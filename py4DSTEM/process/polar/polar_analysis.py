@@ -667,10 +667,6 @@ def calculate_FEM_local(
         ax.set_ylabel("Normalized Variance")
         ax.set_xlim((self.qq[0], self.qq[-1]))
 
-        # self.radial_all_std[rx, ry] = np.sqrt(
-        #     np.mean((self.data[rx, ry] - self.radial_all[rx, ry][None]) ** 2, axis=0)
-        # )
-
     if return_values:
         if returnfig:
             return self.local_radial_mean, self.local_radial_var, fig, ax
@@ -687,7 +683,7 @@ def calculate_annular_symmetry(
     mask_realspace=None,
     plot_result=False,
     figsize=(8, 4),
-    returnval=False,
+    return_symmetry_map=False,
     progress_bar=True,
 ):
     """
@@ -697,16 +693,16 @@ def calculate_annular_symmetry(
     Parameters
     --------
     self: PolarDatacube
-        Polar transformation datacube
+        Polar transformed datacube
     max_symmetry: int
         Symmetry orders will be computed from 1 to max_symmetry for n-fold symmetry orders.
     mask_realspace: np.array
-        Boolean mask, symmetries will only be computed at probe positions wheremask is True.
+        Boolean mask, symmetries will only be computed at probe positions where mask is True.
     plot_result: bool
         Plot the resulting array
     figsize: (float, float)
         Size of the plot.
-    returnval: bool
+    return_symmetry_map: bool
         Set to true to return the symmetry array.
     progress_bar: bool
         Show progress bar during calculation.
@@ -740,7 +736,6 @@ def calculate_annular_symmetry(
         # Get polar transformed image
         im = self.transform(
             self.data_raw.data[rx, ry],
-            # returnval = 'zeros',
         )
         polar_im = np.ma.getdata(im)
         polar_mask = np.ma.getmask(im)
@@ -824,10 +819,10 @@ def calculate_annular_symmetry(
             np.arange(max_symmetry) + 0.5,
             range(1, max_symmetry + 1),
         )
-        ax.set_xlabel("Scattering angle (1/A)")
+        ax.set_xlabel("Scattering angle (1/Å)")
         ax.set_ylabel("Symmetry Order")
 
-    if returnval:
+    if return_symmetry_map:
         return self.annular_symmetry
 
 
