@@ -639,11 +639,11 @@ def calculate_FEM_local(
         im = self.data[rx, ry]
 
         if use_median:
-            im_mean = np.ma.mean(im, axis=0)
-            im_var = np.ma.mean((im - im_mean) ** 2, axis=0)
-        else:
             im_mean = np.ma.median(im, axis=0)
             im_var = np.ma.median((im - im_mean) ** 2, axis=0)
+        else:
+            im_mean = np.ma.mean(im, axis=0)
+            im_var = np.ma.mean((im - im_mean) ** 2, axis=0)
 
         self.local_radial_mean[rx, ry] = im_mean
         self.local_radial_var[rx, ry] = im_var
