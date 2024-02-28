@@ -2224,6 +2224,9 @@ def save_ang_file(
         pixel_units=pixel_units,
         return_color_key=False,
 
+        transpose_xy = transpose_xy,
+        flip_x = flip_x,
+        flip_y = flip_y,
     )
 
     file_writer(file_name, xmap)
