@@ -1055,7 +1055,7 @@ class Crystal:
             np.linalg.norm(lat_real[:,0:2],axis=1)
         )[1:3]
         m_tile = lat_real[inds_tile,:]
-        # Vector projected along zone axis
+        # Vector projected along optic axis
         m_proj = np.squeeze(np.delete(lat_real,inds_tile,axis=0))
 
         # Determine tiling range
@@ -1116,13 +1116,6 @@ class Crystal:
             atom_sf = single_atom_scatter([atoms_ID[a0]])
             atoms_lookup[a0,:,:] = atom_sf.projected_potential(atoms_ID[a0], R_2D)
 
-        # Projected thickness
-        num_proj = thickness_angstroms / m_proj[2]
-        vec_proj = num_proj / pixel_size_angstroms * m_proj[:2]
-        print(m_proj)
-        print(vec_proj)
-
-
         # initialize potential
         im_potential = np.zeros(im_size)
 
@@ -1142,6 +1135,59 @@ class Crystal:
             )
 
             im_potential[x_ind[x_sub][:,None],y_ind[y_sub][None,:]] += atoms_lookup[ind][x_sub,:][:,y_sub]
+            
+        # Projected thickness
+        num_proj = thickness_angstroms / m_proj[2]
+        vec_proj = num_proj / pixel_size_angstroms * m_proj[:2]
+        num_points = (np.ceil(np.linalg.norm(vec_proj))*2+1).astype('int')
+        x = np.linspace(-0.5,0.5,num_points)*vec_proj[0] + im_size[0]/2
+        y = np.linspace(-0.5,0.5,num_points)*vec_proj[1] + im_size[1]/2
+        xF = np.floor(x).astype('int')
+        yF = np.floor(y).astype('int')
+        dx = x - xF
+        dy = y - yF
+        im_thickness = np.reshape(
+            np.bincount(
+                np.ravel_multi_index((xF  ,yF  ),im_size,mode='wrap'),
+                (1-dx)*(1-dy) / num_points,
+                np.prod(im_size),
+            ) + \
+            np.bincount(
+                np.ravel_multi_index((xF+1,yF  ),im_size,mode='wrap'),
+                (  dx)*(1-dy) / num_points,
+                np.prod(im_size),
+            ) + \
+            np.bincount(
+                np.ravel_multi_index((xF  ,yF+1),im_size,mode='wrap'),
+                (1-dx)*(  dy) / num_points,
+                np.prod(im_size),
+            ) + \
+            np.bincount(
+                np.ravel_multi_index((xF+1,yF+1),im_size,mode='wrap'),
+                (  dx)*(  dy) / num_points,
+                np.prod(im_size),
+            ),
+            im_size,
+        )
+        # pad images and perform correlation in Fourier space
+        im_potential = np.real(
+            np.fft.ifft2(
+                np.fft.fft2(np.pad(im_potential,((0,im_size[0]),(0,im_size[1])))) \
+                * np.fft.fft2(np.pad(im_thickness,((0,im_size[0]),(0,im_size[1])))),
+            ),
+        )[im_size[0]//2:im_size[0]+im_size[0]//2,im_size[1]//2:im_size[1]+im_size[1]//2]
+
+        # fig,ax = plt.subplots(figsize=(12,12))
+        # ax.imshow(
+        #     np.pad(im_thickness,((0,im_size[0]),(0,im_size[1]))),
+        # )
+        # im_thickness = np.zeros(im_size)
+        # for a0 in range(num_points):
+        #     x = 
+
+
+
+
 
         # if needed, apply gaussian blurring
         if sigma_image_blur_angstroms > 0:
@@ -1151,6 +1197,7 @@ class Crystal:
                 sigma_image_blur,
                 mode = 'nearest',
                 )
+
 
         if plot_result:
             # test plotting
