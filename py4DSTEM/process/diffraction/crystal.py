@@ -988,19 +988,44 @@ class Crystal:
         proj_x_cartesian: Optional[np.ndarray] = None,
     ):
         """
-        Generate a single diffraction pattern, return all peaks as a pointlist.
+        Generate an image of the projected potential of crystal in real space,
+        using cell tiling, and a lookup table of the atomic potentials.
 
         Parameters
         ----------
-        edge_blend: int, optional
-            Pixels to blend image at the border
+        im_size: tuple, list, np.array
+            (2,) vector specifying the output size in pixels.
+        pixel_size_Ang: float
+            Pixel size in Angstroms.
+        potential_radius_Ang: float
+            Radius in Angstroms for how far to integrate the atomic potentials
+        sigma_image_blur_Ang: float
+            Image blurring in Angstroms.
+        plot_result: bool
+            Plot the projected potential image.
+        figsize:
+            (2,) vector giving the size of the output.
+        
+        orientation: Orientation 
+            An Orientation class object
+        ind_orientation: int
+            If input is an Orientation class object with multiple orientations,
+            this input can be used to select a specific orientation.
+        orientation_matrix: array      
+            (3,3) orientation matrix, where columns represent projection directions.
+        zone_axis_lattice: array       
+            (3,) projection direction in lattice indices
+        proj_x_lattice: array)       
+            (3,) x-axis direction in lattice indices
+        zone_axis_cartesian: array   
+            (3,) cartesian projection direction
+        proj_x_cartesian: array       
+            (3,) cartesian projection direction
 
         Returns
         --------
-            orientation (Orientation):       an Orientation class object
-            
-        Returns:
-        im_potential: (np.array)       
+        im_potential: (np.array)   
+            Output image of the projected potential.
 
         """
 
