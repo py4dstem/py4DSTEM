@@ -978,6 +978,7 @@ class Crystal:
         potential_radius_angstroms =  3.0,
         sigma_image_blur_angstroms = 0.1,
         thickness_angstroms = 100,
+        power_scale = 1.0,
         plot_result = False,
         figsize = (6,6),
         orientation: Optional[Orientation] = None,
@@ -1003,7 +1004,10 @@ class Crystal:
         sigma_image_blur_angstroms: float
             Image blurring in Angstroms.
         thickness_angstroms: float
-            Thickness of the sample in Angstroms.
+            Thickness of the sample in Angstroms. 
+            Set thickness_thickness_angstroms = 0 to skip thickness projection.
+        power_scale: float
+            Power law scaling of potentials.  Set to 2.0 to approximate Z^2 images.
         plot_result: bool
             Plot the projected potential image.
         figsize:
@@ -1090,10 +1094,10 @@ class Crystal:
         x = xyz_atoms_ang[:,0] / pixel_size_angstroms + im_size[0]/2.0
         y = xyz_atoms_ang[:,1] / pixel_size_angstroms + im_size[1]/2.0
         atoms_del = np.logical_or.reduce((
-            x < 0,
-            y < 0,
-            x > im_size[0],
-            y > im_size[1],
+            x <= -potential_radius_angstroms/2,
+            y <= -potential_radius_angstroms/2,
+            x >= im_size[0] + potential_radius_angstroms/2,
+            y >= im_size[1] + potential_radius_angstroms/2,
         ))
         x = np.delete(x, atoms_del)
         y = np.delete(y, atoms_del)
@@ -1115,6 +1119,15 @@ class Crystal:
         for a0 in range(atoms_ID.shape[0]):
             atom_sf = single_atom_scatter([atoms_ID[a0]])
             atoms_lookup[a0,:,:] = atom_sf.projected_potential(atoms_ID[a0], R_2D)
+        atoms_lookup **= power_scale
+
+        # Thickness 
+        if thickness_angstroms > 0:
+            thickness_proj = thickness_angstroms / m_proj[2]
+            vec_proj = thickness_proj / pixel_size_angstroms * m_proj[:2]
+            num_proj = (np.ceil(np.linalg.norm(vec_proj))+1).astype('int')
+            x_proj = np.linspace(-0.5,0.5,num_proj)*vec_proj[0]
+            y_proj = np.linspace(-0.5,0.5,num_proj)*vec_proj[1]
 
         # initialize potential
         im_potential = np.zeros(im_size)
@@ -1123,71 +1136,37 @@ class Crystal:
         for a0 in range(atoms_ID_all.shape[0]):
             ind = np.argmin(np.abs(atoms_ID - atoms_ID_all[a0]))
 
-            x_ind = np.round(x[a0]).astype('int') + R_ind
-            y_ind = np.round(y[a0]).astype('int') + R_ind
-            x_sub = np.logical_and(
-                x_ind >= 0,
-                x_ind < im_size[0],
-            )
-            y_sub = np.logical_and(
-                y_ind >= 0,
-                y_ind < im_size[1],
-            )
+            if thickness_angstroms > 0:
+                for a1 in range(num_proj):
+                    x_ind = np.round(x[a0]+x_proj[a1]).astype('int') + R_ind
+                    y_ind = np.round(y[a0]+y_proj[a1]).astype('int') + R_ind
+                    x_sub = np.logical_and(
+                        x_ind >= 0,
+                        x_ind < im_size[0],
+                    )
+                    y_sub = np.logical_and(
+                        y_ind >= 0,
+                        y_ind < im_size[1],
+                    )
 
-            im_potential[x_ind[x_sub][:,None],y_ind[y_sub][None,:]] += atoms_lookup[ind][x_sub,:][:,y_sub]
+                    im_potential[x_ind[x_sub][:,None],y_ind[y_sub][None,:]] += atoms_lookup[ind][x_sub,:][:,y_sub]
             
-        # Projected thickness
-        num_proj = thickness_angstroms / m_proj[2]
-        vec_proj = num_proj / pixel_size_angstroms * m_proj[:2]
-        num_points = (np.ceil(np.linalg.norm(vec_proj))*2+1).astype('int')
-        x = np.linspace(-0.5,0.5,num_points)*vec_proj[0] + im_size[0]/2
-        y = np.linspace(-0.5,0.5,num_points)*vec_proj[1] + im_size[1]/2
-        xF = np.floor(x).astype('int')
-        yF = np.floor(y).astype('int')
-        dx = x - xF
-        dy = y - yF
-        im_thickness = np.reshape(
-            np.bincount(
-                np.ravel_multi_index((xF  ,yF  ),im_size,mode='wrap'),
-                (1-dx)*(1-dy) / num_points,
-                np.prod(im_size),
-            ) + \
-            np.bincount(
-                np.ravel_multi_index((xF+1,yF  ),im_size,mode='wrap'),
-                (  dx)*(1-dy) / num_points,
-                np.prod(im_size),
-            ) + \
-            np.bincount(
-                np.ravel_multi_index((xF  ,yF+1),im_size,mode='wrap'),
-                (1-dx)*(  dy) / num_points,
-                np.prod(im_size),
-            ) + \
-            np.bincount(
-                np.ravel_multi_index((xF+1,yF+1),im_size,mode='wrap'),
-                (  dx)*(  dy) / num_points,
-                np.prod(im_size),
-            ),
-            im_size,
-        )
-        # pad images and perform correlation in Fourier space
-        im_potential = np.real(
-            np.fft.ifft2(
-                np.fft.fft2(np.pad(im_potential,((0,im_size[0]),(0,im_size[1])))) \
-                * np.fft.fft2(np.pad(im_thickness,((0,im_size[0]),(0,im_size[1])))),
-            ),
-        )[im_size[0]//2:im_size[0]+im_size[0]//2,im_size[1]//2:im_size[1]+im_size[1]//2]
+            else:
+                x_ind = np.round(x[a0]).astype('int') + R_ind
+                y_ind = np.round(y[a0]).astype('int') + R_ind
+                x_sub = np.logical_and(
+                    x_ind >= 0,
+                    x_ind < im_size[0],
+                )
+                y_sub = np.logical_and(
+                    y_ind >= 0,
+                    y_ind < im_size[1],
+                )
 
-        # fig,ax = plt.subplots(figsize=(12,12))
-        # ax.imshow(
-        #     np.pad(im_thickness,((0,im_size[0]),(0,im_size[1]))),
-        # )
-        # im_thickness = np.zeros(im_size)
-        # for a0 in range(num_points):
-        #     x = 
+                im_potential[x_ind[x_sub][:,None],y_ind[y_sub][None,:]] += atoms_lookup[ind][x_sub,:][:,y_sub]
 
-
-
-
+        if thickness_angstroms > 0:
+            im_potential /= num_proj
 
         # if needed, apply gaussian blurring
         if sigma_image_blur_angstroms > 0:
@@ -1198,15 +1177,21 @@ class Crystal:
                 mode = 'nearest',
                 )
 
-
         if plot_result:
-            # test plotting
+            # quick plotting of the result
+            int_vals = np.sort(im_potential.ravel())
+            int_range = np.array((
+                int_vals[np.round(0.02*int_vals.size).astype('int')],
+                int_vals[np.round(0.98*int_vals.size).astype('int')],
+            ))
+
             fig,ax = plt.subplots(figsize = figsize)
             ax.imshow(
                 im_potential,
                 cmap = 'turbo',
+                vmin = int_range[0],
+                vmax = int_range[1],
                 )
-            # ax.scatter(y,x)
             ax.set_axis_off()
             ax.set_aspect('equal')
 
