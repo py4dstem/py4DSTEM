@@ -75,7 +75,7 @@ def import_file(
         "gatan_K2_bin",
         "mib",
         "arina",
-        "abTEM"
+        "abTEM",
         # "kitware_counted",
     ], "Error: filetype not recognized"
 

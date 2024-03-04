@@ -361,7 +361,7 @@ def Array_to_h5(array, group):
     data = grp.create_dataset(
         "data",
         shape=array.data.shape,
-        data=array.data
+        data=array.data,
         # dtype = type(array.data)
     )
     data.attrs.create(

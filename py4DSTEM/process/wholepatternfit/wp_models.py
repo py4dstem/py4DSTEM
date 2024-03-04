@@ -289,12 +289,16 @@ class GaussianRing(WPFModel):
             "radius": Parameter(radius),
             "sigma": Parameter(sigma),
             "intensity": Parameter(intensity),
-            "x center": WPF.coordinate_model.params["x center"]
-            if global_center
-            else Parameter(x0),
-            "y center": WPF.coordinate_model.params["y center"]
-            if global_center
-            else Parameter(y0),
+            "x center": (
+                WPF.coordinate_model.params["x center"]
+                if global_center
+                else Parameter(x0)
+            ),
+            "y center": (
+                WPF.coordinate_model.params["y center"]
+                if global_center
+                else Parameter(y0)
+            ),
         }
 
         super().__init__(name, params, model_type=WPFModelType.AMORPHOUS)
@@ -1117,7 +1121,7 @@ class ComplexOverlapKernelDiskLattice(WPFModel):
         name="Complex Overlapped Disk Lattice",
         verbose=False,
     ):
-        return NotImplementedError(
+        raise NotImplementedError(
             "This model type has not been updated for use with the new architecture."
         )
 

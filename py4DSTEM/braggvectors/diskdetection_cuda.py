@@ -4,6 +4,7 @@ Functions for finding Braggdisks using cupy
 """
 
 import numpy as np
+
 import cupy as cp
 from cupyx.scipy.ndimage import gaussian_filter
 import cupyx.scipy.fft as cufft
@@ -155,9 +156,11 @@ def find_Bragg_disks_CUDA(
                 patt_idx = batch_idx * batch_size + subbatch_idx
                 rx, ry = np.unravel_index(patt_idx, (datacube.R_Nx, datacube.R_Ny))
                 batched_subcube[subbatch_idx, :, :] = cp.array(
-                    datacube.data[rx, ry, :, :]
-                    if filter_function is None
-                    else filter_function(datacube.data[rx, ry, :, :]),
+                    (
+                        datacube.data[rx, ry, :, :]
+                        if filter_function is None
+                        else filter_function(datacube.data[rx, ry, :, :])
+                    ),
                     dtype=cp.float32,
                 )
 
@@ -482,7 +485,7 @@ def get_maxima_2D(
         if minSpacing > 0:
             deletemask = np.zeros(len(maxima), dtype=bool)
             for i in range(len(maxima)):
-                if deletemask[i] is False:
+                if deletemask[i] == False:  # noqa: E712
                     tooClose = (
                         (maxima["x"] - maxima["x"][i]) ** 2
                         + (maxima["y"] - maxima["y"][i]) ** 2

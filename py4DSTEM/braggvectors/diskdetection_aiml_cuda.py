@@ -17,8 +17,9 @@ from py4DSTEM.braggvectors.diskdetection_aiml import _get_latest_model
 
 try:
     import cupy as cp
-except ModuleNotFoundError:
-    raise ImportError("AIML CUDA Requires cupy")
+    from cupyx.scipy.ndimage import gaussian_filter
+except (ModuleNotFoundError, ImportError) as e:
+    raise ImportError("AIML CUDA Requires cupy") from e
 
 try:
     import tensorflow as tf
@@ -28,8 +29,6 @@ except:
         + "https://www.tensorflow.org/install"
         + "for more information"
     )
-
-from cupyx.scipy.ndimage import gaussian_filter
 
 
 def find_Bragg_disks_aiml_CUDA(
@@ -125,8 +124,9 @@ def find_Bragg_disks_aiml_CUDA(
     """
 
     # Make the peaks PointListArray
-    # dtype = [('qx',float),('qy',float),('intensity',float)]
-    peaks = BraggVectors(datacube.Rshape, datacube.Qshape)
+    dtype = [("qx", float), ("qy", float), ("intensity", float)]
+    # peaks = BraggVectors(datacube.Rshape, datacube.Qshape)
+    peaks = PointListArray(dtype=dtype, shape=(datacube.R_Nx, datacube.R_Ny))
 
     # check that the filtered DP is the right size for the probe kernel:
     if filter_function:
@@ -222,7 +222,7 @@ def find_Bragg_disks_aiml_CUDA(
             subpixel=subpixel,
             upsample_factor=upsample_factor,
             filter_function=filter_function,
-            peaks=peaks.vectors_uncal.get_pointlist(Rx, Ry),
+            peaks=peaks.get_pointlist(Rx, Ry),
             get_maximal_points=get_maximal_points,
             blocks=blocks,
             threads=threads,
@@ -496,7 +496,7 @@ def get_maxima_2D_cp(
         if minSpacing > 0:
             deletemask = np.zeros(len(maxima), dtype=bool)
             for i in range(len(maxima)):
-                if deletemask[i] is False:
+                if deletemask[i] == False:  # noqa: E712
                     tooClose = (
                         (maxima["x"] - maxima["x"][i]) ** 2
                         + (maxima["y"] - maxima["y"][i]) ** 2

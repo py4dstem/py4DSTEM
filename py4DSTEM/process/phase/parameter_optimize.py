@@ -1,10 +1,11 @@
 from functools import partial
+from itertools import product
 from typing import Callable, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.gridspec import GridSpec
-from py4DSTEM.process.phase.iterative_base_class import PhaseReconstruction
+from py4DSTEM.process.phase.phase_base_class import PhaseReconstruction
 from py4DSTEM.process.phase.utils import AffineTransform
 from skopt import gp_minimize
 from skopt.plots import plot_convergence as skopt_plot_convergence
@@ -102,6 +103,151 @@ class PtychographyOptimizer:
 
         self._set_optimizer_defaults()
 
+    def _generate_inclusive_boundary_grid(
+        self,
+        parameter,
+        n_points,
+    ):
+        """ """
+
+        # Categorical
+        if hasattr(parameter, "categories"):
+            return np.array(parameter.categories)
+
+        # Real or Integer
+        else:
+            return np.unique(
+                np.linspace(parameter.low, parameter.high, n_points).astype(
+                    parameter.dtype
+                )
+            )
+
+    def grid_search(
+        self,
+        n_points: Union[tuple, int] = 3,
+        error_metric: Union[Callable, str] = "log",
+        plot_reconstructed_objects: bool = True,
+        return_reconstructed_objects: bool = False,
+        **kwargs: dict,
+    ):
+        """
+        Run optimizer
+
+        Parameters
+        ----------
+        n_initial_points: int
+            Number of uniformly spaced trial points to run on a grid
+        error_metric: Callable or str
+            Function used to compute the reconstruction error.
+            When passed as a string, may be one of:
+                'log': log(NMSE) of final object
+                'linear': NMSE of final object
+                'log-converged': log(NMSE) of final object if
+                    NMSE is decreasing, 0 if NMSE increasing
+                'linear-converged': NMSE of final object if
+                    NMSE is decreasing, 1 if NMSE increasing
+                'TV': sum( abs( grad( object ) ) ) / sum( abs( object ) )
+                'std': negative standard deviation of cropped object
+                'std-phase': negative standard deviation of
+                    phase of the cropped object
+                'entropy-phase': entropy of the phase of the
+                    cropped object
+            When passed as a Callable, a function that takes the
+                PhaseReconstruction object as its only argument
+                and returns the error metric as a single float
+
+        """
+
+        num_params = len(self._parameter_list)
+
+        if isinstance(n_points, int):
+            n_points = [n_points] * num_params
+        elif len(n_points) != num_params:
+            raise ValueError()
+
+        params_grid = [
+            self._generate_inclusive_boundary_grid(param, n_pts)
+            for param, n_pts in zip(self._parameter_list, n_points)
+        ]
+        params_grid = list(product(*params_grid))
+        num_evals = len(params_grid)
+
+        error_metric = self._get_error_metric(error_metric)
+        pbar = tqdm(total=num_evals, desc="Searching parameters")
+
+        def evaluation_callback(ptycho):
+            if plot_reconstructed_objects or return_reconstructed_objects:
+                pbar.update(1)
+                return (
+                    ptycho._return_projected_cropped_potential(),
+                    error_metric(ptycho),
+                )
+            else:
+                pbar.update(1)
+                error_metric(ptycho)
+
+        grid_search_function = self._get_optimization_function(
+            self._reconstruction_type,
+            self._parameter_list,
+            self._init_static_args,
+            self._affine_static_args,
+            self._preprocess_static_args,
+            self._reconstruction_static_args,
+            self._init_optimize_args,
+            self._affine_optimize_args,
+            self._preprocess_optimize_args,
+            self._reconstruction_optimize_args,
+            evaluation_callback,
+        )
+
+        grid_search_res = list(map(grid_search_function, params_grid))
+        pbar.close()
+
+        if plot_reconstructed_objects:
+            if len(n_points) == 2:
+                nrows, ncols = n_points
+            else:
+                nrows = kwargs.pop("nrows", int(np.sqrt(num_evals)))
+                ncols = kwargs.pop("ncols", int(np.ceil(num_evals / nrows)))
+            if nrows * ncols < num_evals:
+                raise ValueError()
+
+            spec = GridSpec(
+                ncols=ncols,
+                nrows=nrows,
+                hspace=0.15,
+                wspace=0.15,
+            )
+
+            sx, sy = grid_search_res[0][0].shape
+
+            separator = kwargs.pop("separator", "\n")
+            cmap = kwargs.pop("cmap", "magma")
+            figsize = kwargs.pop("figsize", (2.5 * ncols, 3 / sy * sx * nrows))
+            fig = plt.figure(figsize=figsize)
+
+            for index, (params, res) in enumerate(zip(params_grid, grid_search_res)):
+                row_index, col_index = np.unravel_index(index, (nrows, ncols))
+
+                ax = fig.add_subplot(spec[row_index, col_index])
+                ax.imshow(res[0], cmap=cmap)
+
+                title_substrings = [
+                    f"{param.name}: {val}"
+                    for param, val in zip(self._parameter_list, params)
+                ]
+                title_substrings.append(f"error: {res[1]:.3e}")
+                title = separator.join(title_substrings)
+                ax.set_xticks([])
+                ax.set_yticks([])
+                ax.set_title(title)
+            spec.tight_layout(fig)
+
+            if return_reconstructed_objects:
+                return grid_search_res
+        else:
+            return grid_search_res
+
     def optimize(
         self,
         n_calls: int = 50,
@@ -144,7 +290,7 @@ class PtychographyOptimizer:
 
         error_metric = self._get_error_metric(error_metric)
 
-        self._optimization_function = self._get_optimization_function(
+        optimization_function = self._get_optimization_function(
             self._reconstruction_type,
             self._parameter_list,
             self._init_static_args,
@@ -166,22 +312,37 @@ class PtychographyOptimizer:
         def callback(*args, **kwargs):
             pbar.update(1)
 
-        self._skopt_result = gp_minimize(
-            self._optimization_function,
-            self._parameter_list,
-            n_calls=n_calls,
-            n_initial_points=n_initial_points,
-            x0=self._x0,
-            callback=callback,
-            **skopt_kwargs,
-        )
+        try:
+            self._skopt_result = gp_minimize(
+                optimization_function,
+                self._parameter_list,
+                n_calls=n_calls,
+                n_initial_points=n_initial_points,
+                x0=self._x0,
+                callback=callback,
+                **skopt_kwargs,
+            )
 
-        print("Optimized parameters:")
-        for p, x in zip(self._parameter_list, self._skopt_result.x):
-            print(f"{p.name}: {x}")
+            # Remove the optimization result's reference to the function, as it potentially contains a
+            # copy of the ptycho object
+            del self._skopt_result["fun"]
 
-        # Finish the tqdm progressbar so subsequent things behave nicely
-        pbar.close()
+            # If using the GPU, free some cached stuff
+            if self._init_args.get("device", "cpu") == "gpu":
+                import cupy as cp
+
+                cp.get_default_memory_pool().free_all_blocks()
+                cp.get_default_pinned_memory_pool().free_all_blocks()
+                from cupy.fft.config import get_plan_cache
+
+                get_plan_cache().clear()
+
+            print("Optimized parameters:")
+            for p, x in zip(self._parameter_list, self._skopt_result.x):
+                print(f"{p.name}: {x}")
+        finally:
+            # close the pbar gracefully on interrupt
+            pbar.close()
 
         return self
 
@@ -498,6 +659,7 @@ class PtychographyOptimizer:
     def _set_optimizer_defaults(
         self,
         verbose=False,
+        clear_fft_cache=False,
         plot_center_of_mass=False,
         plot_rotation=False,
         plot_probe_overlaps=False,
@@ -509,6 +671,7 @@ class PtychographyOptimizer:
         Set all of the verbose and plotting to False, allowing for user-overwrite.
         """
         self._init_static_args["verbose"] = verbose
+        self._init_static_args["clear_fft_cache"] = clear_fft_cache
 
         self._preprocess_static_args["plot_center_of_mass"] = plot_center_of_mass
         self._preprocess_static_args["plot_rotation"] = plot_rotation
