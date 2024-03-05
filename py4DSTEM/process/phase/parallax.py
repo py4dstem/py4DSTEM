@@ -2193,16 +2193,16 @@ class Parallax(PhaseReconstruction):
                 measured_shifts_sx = xp.zeros(
                     self._region_of_interest_shape, dtype=xp.float32
                 )
-                measured_shifts_sx[
-                    self._xy_inds[:, 0], self._xy_inds[:, 1]
-                ] = self._xy_shifts_Ang[:, 0]
+                measured_shifts_sx[self._xy_inds[:, 0], self._xy_inds[:, 1]] = (
+                    self._xy_shifts_Ang[:, 0]
+                )
 
                 measured_shifts_sy = xp.zeros(
                     self._region_of_interest_shape, dtype=xp.float32
                 )
-                measured_shifts_sy[
-                    self._xy_inds[:, 0], self._xy_inds[:, 1]
-                ] = self._xy_shifts_Ang[:, 1]
+                measured_shifts_sy[self._xy_inds[:, 0], self._xy_inds[:, 1]] = (
+                    self._xy_shifts_Ang[:, 1]
+                )
 
                 fitted_shifts = (
                     xp.tensordot(gradients, xp.array(self._aberrations_coefs), axes=1)
@@ -2213,16 +2213,16 @@ class Parallax(PhaseReconstruction):
                 fitted_shifts_sx = xp.zeros(
                     self._region_of_interest_shape, dtype=xp.float32
                 )
-                fitted_shifts_sx[
-                    self._xy_inds[:, 0], self._xy_inds[:, 1]
-                ] = fitted_shifts[:, 0]
+                fitted_shifts_sx[self._xy_inds[:, 0], self._xy_inds[:, 1]] = (
+                    fitted_shifts[:, 0]
+                )
 
                 fitted_shifts_sy = xp.zeros(
                     self._region_of_interest_shape, dtype=xp.float32
                 )
-                fitted_shifts_sy[
-                    self._xy_inds[:, 0], self._xy_inds[:, 1]
-                ] = fitted_shifts[:, 1]
+                fitted_shifts_sy[self._xy_inds[:, 0], self._xy_inds[:, 1]] = (
+                    fitted_shifts[:, 1]
+                )
 
                 max_shift = xp.max(
                     xp.array(
@@ -2519,8 +2519,7 @@ class Parallax(PhaseReconstruction):
                 SNR_inv = (
                     xp.sqrt(
                         1
-                        + (kra2**k_info_power)
-                        / ((k_info_limit) ** (2 * k_info_power))
+                        + (kra2**k_info_power) / ((k_info_limit) ** (2 * k_info_power))
                     )
                     / Wiener_signal_noise_ratio
                 )

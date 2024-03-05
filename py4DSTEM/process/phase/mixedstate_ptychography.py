@@ -973,9 +973,12 @@ class MixedstatePtychography(
                 tv_denoise_inner_iter=tv_denoise_inner_iter,
                 object_positivity=object_positivity,
                 shrinkage_rad=shrinkage_rad,
-                object_mask=self._object_fov_mask_inverse
-                if fix_potential_baseline and self._object_fov_mask_inverse.sum() > 0
-                else None,
+                object_mask=(
+                    self._object_fov_mask_inverse
+                    if fix_potential_baseline
+                    and self._object_fov_mask_inverse.sum() > 0
+                    else None
+                ),
                 pure_phase_object=pure_phase_object and self._object_type == "complex",
             )
 

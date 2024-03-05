@@ -384,9 +384,11 @@ class VisualizationsMixin:
         grid = ImageGrid(
             fig,
             spec[0],
-            nrows_ncols=(1, iterations_grid[1])
-            if (plot_probe or plot_fourier_probe)
-            else iterations_grid,
+            nrows_ncols=(
+                (1, iterations_grid[1])
+                if (plot_probe or plot_fourier_probe)
+                else iterations_grid
+            ),
             axes_pad=(0.75, 0.5) if cbar else 0.5,
             cbar_mode="each" if cbar else None,
             cbar_pad="2.5%" if cbar else None,

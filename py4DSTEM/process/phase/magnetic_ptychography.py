@@ -1489,20 +1489,20 @@ class MagneticPtychography(
 
                     # position correction
                     if not fix_positions and a0 > 0:
-                        self._positions_px_all[
-                            batch_indices
-                        ] = self._position_correction(
-                            self._object,
-                            vectorized_patch_indices_row,
-                            vectorized_patch_indices_col,
-                            shifted_probes,
-                            overlap,
-                            amplitudes_device,
-                            positions_px,
-                            positions_px_initial,
-                            positions_step_size,
-                            max_position_update_distance,
-                            max_position_total_distance,
+                        self._positions_px_all[batch_indices] = (
+                            self._position_correction(
+                                self._object,
+                                vectorized_patch_indices_row,
+                                vectorized_patch_indices_col,
+                                shifted_probes,
+                                overlap,
+                                amplitudes_device,
+                                positions_px,
+                                positions_px_initial,
+                                positions_step_size,
+                                max_position_update_distance,
+                                max_position_total_distance,
+                            )
                         )
 
                     measurement_error += batch_error
@@ -1597,10 +1597,12 @@ class MagneticPtychography(
                         tv_denoise_inner_iter=tv_denoise_inner_iter,
                         object_positivity=object_positivity,
                         shrinkage_rad=shrinkage_rad,
-                        object_mask=self._object_fov_mask_inverse
-                        if fix_potential_baseline
-                        and self._object_fov_mask_inverse.sum() > 0
-                        else None,
+                        object_mask=(
+                            self._object_fov_mask_inverse
+                            if fix_potential_baseline
+                            and self._object_fov_mask_inverse.sum() > 0
+                            else None
+                        ),
                         pure_phase_object=pure_phase_object
                         and self._object_type == "complex",
                     )
@@ -1630,10 +1632,12 @@ class MagneticPtychography(
                     tv_denoise_inner_iter=tv_denoise_inner_iter,
                     object_positivity=object_positivity,
                     shrinkage_rad=shrinkage_rad,
-                    object_mask=self._object_fov_mask_inverse
-                    if fix_potential_baseline
-                    and self._object_fov_mask_inverse.sum() > 0
-                    else None,
+                    object_mask=(
+                        self._object_fov_mask_inverse
+                        if fix_potential_baseline
+                        and self._object_fov_mask_inverse.sum() > 0
+                        else None
+                    ),
                     pure_phase_object=pure_phase_object
                     and self._object_type == "complex",
                 )

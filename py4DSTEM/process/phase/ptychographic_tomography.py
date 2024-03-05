@@ -1079,20 +1079,20 @@ class PtychographicTomography(
 
                     # position correction
                     if not fix_positions:
-                        self._positions_px_all[
-                            batch_indices
-                        ] = self._position_correction(
-                            object_sliced,
-                            vectorized_patch_indices_row,
-                            vectorized_patch_indices_col,
-                            shifted_probes,
-                            overlap,
-                            amplitudes_device,
-                            positions_px,
-                            positions_px_initial,
-                            positions_step_size,
-                            max_position_update_distance,
-                            max_position_total_distance,
+                        self._positions_px_all[batch_indices] = (
+                            self._position_correction(
+                                object_sliced,
+                                vectorized_patch_indices_row,
+                                vectorized_patch_indices_col,
+                                shifted_probes,
+                                overlap,
+                                amplitudes_device,
+                                positions_px,
+                                positions_px_initial,
+                                positions_step_size,
+                                max_position_update_distance,
+                                max_position_total_distance,
+                            )
                         )
 
                     measurement_error += batch_error
@@ -1192,10 +1192,12 @@ class PtychographicTomography(
                         butterworth_order=butterworth_order,
                         object_positivity=object_positivity,
                         shrinkage_rad=shrinkage_rad,
-                        object_mask=self._object_fov_mask_inverse
-                        if fix_potential_baseline
-                        and self._object_fov_mask_inverse.sum() > 0
-                        else None,
+                        object_mask=(
+                            self._object_fov_mask_inverse
+                            if fix_potential_baseline
+                            and self._object_fov_mask_inverse.sum() > 0
+                            else None
+                        ),
                         tv_denoise=tv_denoise and tv_denoise_weights is not None,
                         tv_denoise_weights=tv_denoise_weights,
                         tv_denoise_inner_iter=tv_denoise_inner_iter,
@@ -1222,10 +1224,12 @@ class PtychographicTomography(
                     butterworth_order=butterworth_order,
                     object_positivity=object_positivity,
                     shrinkage_rad=shrinkage_rad,
-                    object_mask=self._object_fov_mask_inverse
-                    if fix_potential_baseline
-                    and self._object_fov_mask_inverse.sum() > 0
-                    else None,
+                    object_mask=(
+                        self._object_fov_mask_inverse
+                        if fix_potential_baseline
+                        and self._object_fov_mask_inverse.sum() > 0
+                        else None
+                    ),
                     tv_denoise=tv_denoise and tv_denoise_weights is not None,
                     tv_denoise_weights=tv_denoise_weights,
                     tv_denoise_inner_iter=tv_denoise_inner_iter,

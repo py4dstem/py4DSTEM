@@ -15,13 +15,13 @@ jobs:
     runs-on: ubuntu-latest
     name: Check if version.py is changed and update if the version.py is not changed
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0        
           token: ${{ secrets.GH_ACTION_VERSION_UPDATE }}      
       - name: Get changed files
         id: changed-files-specific
-        uses: tj-actions/changed-files@v41
+        uses: tj-actions/changed-files@v42
         with:
           files: |
             py4DSTEM/version.py
@@ -46,7 +46,7 @@ jobs:
     name: Sync main with dev
     steps:
       - name: Sync main with dev
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           ref: dev
           fetch-depth: 0
@@ -63,11 +63,11 @@ jobs:
     runs-on: ubuntu-latest
     name: Deploy to PyPI
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           ref: dev
       - name: Set up Python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v5
         with:
           python-version: 3.8
       - name: Install dependencies
