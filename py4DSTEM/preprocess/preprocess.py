@@ -617,6 +617,10 @@ def resample_data_diffraction(
             if resampling_factor.shape == ():
                 resampling_factor = np.tile(resampling_factor, 2)
 
+            output_size = np.round(
+                resampling_factor * np.array(datacube.shape[-2:])
+            ).astype("int")
+
         else:
             if output_size is None:
                 raise ValueError(
@@ -630,12 +634,25 @@ def resample_data_diffraction(
 
             resampling_factor = np.array(output_size) / np.array(datacube.shape[-2:])
 
-        resampling_factor = np.concatenate(((1, 1), resampling_factor))
-        datacube.data = zoom(
-            datacube.data, resampling_factor, order=1, mode="grid-wrap", grid_mode=True
-        )
+        output_data = np.zeros(datacube.Rshape + tuple(output_size))
+        for Rx, Ry in tqdmnd(
+            datacube.shape[0],
+            datacube.shape[1],
+            desc="Resampling 4D datacube",
+            unit="DP",
+            unit_scale=True,
+        ):
+            output_data[Rx, Ry] = zoom(
+                datacube.data[Rx, Ry].astype(np.float32),
+                resampling_factor,
+                order=1,
+                mode="grid-wrap",
+                grid_mode=True,
+            )
+
+        datacube.data = output_data
         datacube.calibration.set_Q_pixel_size(
-            datacube.calibration.get_Q_pixel_size() / resampling_factor[2]
+            datacube.calibration.get_Q_pixel_size() / resampling_factor[0]
         )
 
     else:
