@@ -2025,6 +2025,9 @@ def calculate_strain(
     tol_intensity: float = 1e-4,
     k_max: Optional[float] = None,
     min_num_peaks=5,
+    intensity_weighting = False,
+    robust = True,
+    robust_thresh = 3.0,
     rotation_range=None,
     mask_from_corr=True,
     corr_range=(0, 2),
@@ -2039,24 +2042,46 @@ def calculate_strain(
 
     TODO: add robust fitting?
 
-    Args:
-        bragg_peaks_array (PointListArray):   All Bragg peaks
-        orientation_map (OrientationMap):     Orientation map generated from ACOM
-        corr_kernel_size (float):           Correlation kernel size - if user does
-                                            not specify, uses self.corr_kernel_size.
-        sigma_excitation_error (float):  sigma value for envelope applied to s_g (excitation errors) in units of inverse Angstroms
-        tol_excitation_error_mult (float): tolerance in units of sigma for s_g inclusion
-        tol_intensity (np float):        tolerance in intensity units for inclusion of diffraction spots
-        k_max (float):                   Maximum scattering vector
-        min_num_peaks (int):             Minimum number of peaks required.
-        rotation_range (float):          Maximum rotation range in radians (for symmetry reduction).
-        progress_bar (bool):             Show progress bar
-        mask_from_corr (bool):           Use ACOM correlation signal for mask
-        corr_range (np.ndarray):         Range of correlation signals for mask
-        corr_normalize (bool):           Normalize correlation signal before masking
+    Parameters
+    ----------
+    bragg_peaks_array (PointListArray):   
+        All Bragg peaks
+    orientation_map (OrientationMap):     
+        Orientation map generated from ACOM
+    corr_kernel_size (float):           
+        Correlation kernel size - if user does
+        not specify, uses self.corr_kernel_size.
+    sigma_excitation_error (float):  
+        sigma value for envelope applied to s_g (excitation errors) in units of inverse Angstroms
+    tol_excitation_error_mult (float): 
+        tolerance in units of sigma for s_g inclusion
+    tol_intensity (np float):        
+        tolerance in intensity units for inclusion of diffraction spots
+    k_max (float):                   
+        Maximum scattering vector
+    min_num_peaks (int):             
+        Minimum number of peaks required.
+    intensity_weighting: bool
+        Set to True to weight least squares by experimental peak intensity.
+    robust_fitting: bool
+        Set to True to use robust fitting, which performs outlier rejection.
+    robust_thresh: float
+        Threshold for robust fitting weights.
+    rotation_range (float):          
+        Maximum rotation range in radians (for symmetry reduction).
+    progress_bar (bool):             
+        Show progress bar
+    mask_from_corr (bool):           
+        Use ACOM correlation signal for mask
+    corr_range (np.ndarray):         
+        Range of correlation signals for mask
+    corr_normalize (bool):           
+        Normalize correlation signal before masking
 
-    Returns:
-        strain_map (RealSlice):  strain tensor
+    Returns
+    --------
+    strain_map (RealSlice):  
+        strain tensor
 
     """
 
@@ -2098,6 +2123,8 @@ def calculate_strain(
 
     # Loop over all probe positions
     for rx, ry in tqdmnd(
+        # range(220,221),
+        # range(40,41),
         *bragg_peaks_array.shape,
         desc="Calculating strains",
         unit=" PointList",
@@ -2143,16 +2170,43 @@ def calculate_strain(
                 (p_ref.data["qx"][inds_match[keep]], p_ref.data["qy"][inds_match[keep]])
             ).T
 
-            # Apply intensity weighting from experimental measurements
-            qxy *= p.data["intensity"][keep, None]
-            qxy_ref *= p.data["intensity"][keep, None]
 
             # Fit transformation matrix
             # Note - not sure about transpose here
             # (though it might not matter if rotation isn't included)
-            m = lstsq(qxy_ref, qxy, rcond=None)[0].T
+            if intensity_weighting:
+                weights = np.sqrt(p.data["intensity"][keep, None])*0+1
+                m = lstsq(
+                    qxy_ref * weights, 
+                    qxy * weights, 
+                    rcond=None,
+                )[0].T
+            else:
+                m = lstsq(
+                    qxy_ref, 
+                    qxy, 
+                    rcond=None,
+                )[0].T
 
-            # Get the infinitesimal strain matrix
+            # Robust fitting
+            if robust:
+                for a0 in range(5):
+                    # calculate new weights
+                    qxy_fit = qxy_ref @ m
+                    diff2 = np.sum((qxy_fit - qxy)**2,axis=1)
+
+                    weights = np.exp(diff2 / ((-2*robust_thresh**2)*np.median(diff2)))[:,None]
+                    if intensity_weighting:
+                        weights *= np.sqrt(p.data["intensity"][keep, None])
+
+                    # calculate new fits
+                    m = lstsq(
+                        qxy_ref * weights, 
+                        qxy * weights, 
+                        rcond=None,
+                    )[0].T
+
+            # Set values into the infinitesimal strain matrix
             strain_map.get_slice("e_xx").data[rx, ry] = 1 - m[0, 0]
             strain_map.get_slice("e_yy").data[rx, ry] = 1 - m[1, 1]
             strain_map.get_slice("e_xy").data[rx, ry] = -(m[0, 1] + m[1, 0]) / 2.0
@@ -2160,7 +2214,7 @@ def calculate_strain(
 
             # Add finite rotation from ACOM orientation map.
             # I am not sure about the relative signs here.
-            # Also, I need to add in the mirror operator.
+            # Also, maybe I need to add in the mirror operator?
             if orientation_map.mirror[rx, ry, 0]:
                 strain_map.get_slice("theta").data[rx, ry] += (
                     orientation_map.angles[rx, ry, 0, 0]
