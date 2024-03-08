@@ -6,8 +6,8 @@ from py4DSTEM.process.utils.multicorr import upsampled_correlation
 
 try:
     import cupy as cp
-except ImportError:
-    cp = None
+except (ModuleNotFoundError, ImportError):
+    cp = np
 
 
 def get_cross_correlation(ar, template, corrPower=1, _returnval="real"):

@@ -114,7 +114,7 @@ class DataCubeVirtualDiffraction:
         # Calculate
 
         # ...with no center shifting
-        if shift_center == False:
+        if shift_center is False:
             # ...for the whole pattern
             if mask is None:
                 if method == "mean":

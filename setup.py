@@ -21,7 +21,7 @@ setup(
     author_email="ben.savitzky@gmail.com",
     license="GNU GPLv3",
     keywords="STEM 4DSTEM",
-    python_requires=">=3.9,<3.12",
+    python_requires=">=3.10",
     install_requires=[
         "numpy >= 1.19",
         "scipy >= 1.5.2",
@@ -37,28 +37,36 @@ setup(
         "gdown >= 4.7.1",
         "dask >= 2.3.0",
         "distributed >= 2.3.0",
-        "emdfile >= 0.0.13",
+        "emdfile >= 0.0.14",
         "mpire >= 2.7.1",
         "threadpoolctl >= 3.1.0",
+        "pylops >= 2.1.0",
+        "colorspacious >= 1.1.2",
     ],
     extras_require={
         "ipyparallel": ["ipyparallel >= 6.2.4", "dill >= 0.3.3"],
         "cuda": ["cupy >= 10.0.0"],
         "acom": ["pymatgen >= 2022", "mp-api == 0.24.1"],
-        "aiml": ["tensorflow == 2.4.1", "tensorflow-addons <= 0.14.0", "crystal4D"],
+        "aiml": [
+            "tensorflow <= 2.10.0",
+            "tensorflow-addons <= 0.16.1",
+            "crystal4D",
+            "typeguard == 2.7",
+        ],
         "aiml-cuda": [
-            "tensorflow == 2.4.1",
-            "tensorflow-addons <= 0.14.0",
+            "tensorflow <= 2.10.0",
+            "tensorflow-addons <= 0.16.1",
             "crystal4D",
             "cupy >= 10.0.0",
+            "typeguard == 2.7",
         ],
         "numba": ["numba >= 0.49.1"],
     },
     package_data={
         "py4DSTEM": [
             "process/utils/scattering_factors.txt",
-            "process/diskdetection/multicorr_row_kernel.cu",
-            "process/diskdetection/multicorr_col_kernel.cu",
+            "braggvectors/multicorr_row_kernel.cu",
+            "braggvectors/multicorr_col_kernel.cu",
         ]
     },
 )

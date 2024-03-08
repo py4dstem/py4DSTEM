@@ -80,7 +80,7 @@ def get_1D_polar_background(
     # Crop polar data to maximum distance which contains information from original image
     if (polarData.mask.sum(axis=(0)) == polarData.shape[0]).any():
         ii = polarData.data.shape[1] - 1
-        while polarData.mask[:, ii].all() == True:
+        while polarData.mask[:, ii].all() == True:  # noqa: E712
             ii = ii - 1
         maximalDistance = ii
         polarData = polarData[:, 0:maximalDistance]
@@ -105,16 +105,16 @@ def get_1D_polar_background(
 
     background1D = np.maximum(background1D, min_background_value)
 
-    if smoothing == True:
-        if smoothing_log == True:
+    if smoothing is True:
+        if smoothing_log is True:
             background1D = np.log(background1D)
 
         background1D = savgol_filter(
             background1D, smoothingWindowSize, smoothingPolyOrder
         )
-        if smoothing_log == True:
+        if smoothing_log is True:
             background1D = np.exp(background1D)
-    if return_polararr == True:
+    if return_polararr is True:
         return (background1D, r_bins, polarData)
     else:
         return (background1D, r_bins)
