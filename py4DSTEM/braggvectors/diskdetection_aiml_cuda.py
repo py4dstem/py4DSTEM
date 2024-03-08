@@ -8,7 +8,7 @@ from time import time
 
 from emdfile import tqdmnd
 from py4DSTEM.braggvectors.braggvectors import BraggVectors
-from emdfile import PointList
+from emdfile import PointList, PointListArray
 from py4DSTEM.braggvectors.kernels import kernels
 from py4DSTEM.braggvectors.diskdetection_aiml import _get_latest_model
 
