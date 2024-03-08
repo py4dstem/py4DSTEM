@@ -92,10 +92,12 @@ def calculate_radial_statistics(
         unit=" probe positions",
         disable=not progress_bar,
     ):
-        if mask_realspace is None or mask_realspace[rx,ry]:
+        if mask_realspace is None or mask_realspace[rx, ry]:
             self.radial_all[rx, ry] = np.mean(self.data[rx, ry], axis=0)
             self.radial_all_std[rx, ry] = np.sqrt(
-                np.mean((self.data[rx, ry] - self.radial_all[rx, ry][None]) ** 2, axis=0)
+                np.mean(
+                    (self.data[rx, ry] - self.radial_all[rx, ry][None]) ** 2, axis=0
+                )
             )
 
     if mask_realspace is None:
@@ -108,9 +110,9 @@ def calculate_radial_statistics(
         self.radial_mean = np.sum(self.radial_all, axis=(0, 1)) / np.sum(mask_realspace)
         self.radial_var = np.zeros_like(self.radial_mean)
         for rx in range(self._datacube.shape[0]):
-            for ry in  range(self._datacube.shape[1]):
-                if mask_realspace[rx,ry]:
-                    self.radial_var += (self.radial_all[rx,ry] - self.radial_mean) ** 2
+            for ry in range(self._datacube.shape[1]):
+                if mask_realspace[rx, ry]:
+                    self.radial_var += (self.radial_all[rx, ry] - self.radial_mean) ** 2
         self.radial_var /= np.sum(mask_realspace)
 
     # Compute normalized variance
