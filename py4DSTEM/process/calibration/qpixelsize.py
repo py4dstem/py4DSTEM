@@ -56,6 +56,6 @@ def get_dq_from_indexed_peaks(qs, hkl, a):
     # Get pixel size
     dq = 1 / (c * a)
     qs_fit = d_inv[mask] / a
-    hkl_fit = [hkl[i] for i in range(len(hkl)) if mask[i] == True]
+    hkl_fit = [hkl[i] for i in range(len(hkl)) if mask[i] == True]  # noqa: E712
 
     return dq, qs_fit, hkl_fit

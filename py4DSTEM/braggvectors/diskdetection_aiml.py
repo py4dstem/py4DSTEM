@@ -7,6 +7,8 @@ import os
 import json
 import shutil
 import numpy as np
+from pathlib import Path
+
 
 from time import time
 
@@ -440,9 +442,9 @@ def find_Bragg_disks_aiml_serial(
         )
 
     # Make the peaks PointListArray
-    # dtype = [('qx',float),('qy',float),('intensity',float)]
-    peaks = BraggVectors(datacube.Rshape, datacube.Qshape)
-
+    dtype = [("qx", float), ("qy", float), ("intensity", float)]
+    # peaks = BraggVectors(datacube.Rshape, datacube.Qshape)
+    peaks = PointListArray(dtype=dtype, shape=(datacube.R_Nx, datacube.R_Ny))
     # check that the filtered DP is the right size for the probe kernel:
     if filter_function:
         assert callable(filter_function), "filter_function must be callable"
@@ -521,7 +523,7 @@ def find_Bragg_disks_aiml_serial(
             subpixel=subpixel,
             upsample_factor=upsample_factor,
             filter_function=filter_function,
-            peaks=peaks.vectors_uncal.get_pointlist(Rx, Ry),
+            peaks=peaks.get_pointlist(Rx, Ry),
             model_path=model_path,
         )
     t2 = time() - t0
@@ -531,7 +533,7 @@ def find_Bragg_disks_aiml_serial(
         )
     )
 
-    if global_threshold == True:
+    if global_threshold is True:
         from py4DSTEM.braggvectors import universal_threshold
 
         peaks = universal_threshold(
@@ -890,7 +892,7 @@ def _get_latest_model(model_path=None):
             + "https://www.tensorflow.org/install"
             + "for more information"
         )
-    from py4DSTEM.io.google_drive_downloader import download_file_from_google_drive
+    from py4DSTEM.io.google_drive_downloader import gdrive_download
 
     tf.keras.backend.clear_session()
 
@@ -903,7 +905,12 @@ def _get_latest_model(model_path=None):
             pass
             # raise e
         # download the json file with the meta data
-        download_file_from_google_drive("FCU-Net", "./tmp/model_metadata.json")
+        gdrive_download(
+            "FCU-Net",
+            destination="./tmp/",
+            filename="model_metadata.json",
+            overwrite=True,
+        )
         with open("./tmp/model_metadata.json") as f:
             metadata = json.load(f)
             file_id = metadata["file_id"]
@@ -928,7 +935,8 @@ def _get_latest_model(model_path=None):
         else:
             print("Checking the latest model on the cloud... \n")
             filename = file_path + file_type
-            download_file_from_google_drive(file_id, filename)
+            filename = Path(filename)
+            gdrive_download(file_id, destination="./tmp", filename=filename.name)
             try:
                 shutil.unpack_archive(filename, "./tmp", format="zip")
             except Exception:

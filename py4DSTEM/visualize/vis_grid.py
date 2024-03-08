@@ -205,7 +205,7 @@ def show_image_grid(
             ax = axs[i, j]
             N = i * W + j
             # make titles
-            if isinstance(title, list):
+            if type(title) == list and N < len(title):
                 print_title = title[N]
             else:
                 print_title = None
@@ -281,7 +281,11 @@ def show_image_grid(
                     )
                 else:
                     _, _ = show(
-                        ar, figax=(fig, ax), returnfig=True, title=print_title, **kwargs
+                        ar,
+                        figax=(fig, ax),
+                        returnfig=True,
+                        title=print_title,
+                        **kwargs,
                     )
             except IndexError:
                 ax.axis("off")

@@ -1,12 +1,11 @@
 # Defines the Strain class
 
 import warnings
-from typing import Optional
+from typing import Optional, List, Tuple, Union
 
 import matplotlib.pyplot as plt
 from matplotlib.patches import Circle
 from matplotlib.collections import PatchCollection
-from mpl_toolkits.axes_grid1 import make_axes_locatable
 import numpy as np
 from py4DSTEM import PointList, PointListArray, tqdmnd
 from py4DSTEM.braggvectors import BraggVectors
@@ -61,7 +60,7 @@ class StrainMap(RealSlice, Data):
                     braggvectors.Rshape[1],
                 )
             ),
-            slicelabels=["exx", "eyy", "exy", "theta", "mask", "error"],
+            slicelabels=["e_xx", "e_yy", "e_xy", "theta", "mask", "error"],
         )
 
         # set up braggvectors
@@ -81,7 +80,7 @@ class StrainMap(RealSlice, Data):
         # re-calibration are issued
         self.calstate = self.braggvectors.calstate
         assert self.calstate["center"], "braggvectors must be centered"
-        if self.calstate["rotate"] == False:
+        if self.calstate["rotate"] is False:
             warnings.warn(
                 ("Real to reciprocal space rotation not calibrated"),
                 UserWarning,
@@ -387,6 +386,78 @@ class StrainMap(RealSlice, Data):
         else:
             return
 
+    def set_hkl(
+        self,
+        g1_hkl: Union[List[int], Tuple[int, int, int], np.ndarray[np.int64]],
+        g2_hkl: Union[List[int], Tuple[int, int, int], np.ndarray[np.int64]],
+    ):
+        """
+        calculate the [h,k,l] reflections from the `g1_ind`,`g2_ind` from known 'g1_hkl` and 'g2_hkl' reflections.
+        Creates 'bragg_vectors_indexed_hkl' attribute
+        Args:
+            g1_hkl (list[int] | tuple[int,int,int] | np.ndarray[int]): known [h,k,l] reflection for g1_vector
+            g2_hkl (list[int] | tuple[int,int,int] | np.ndarray[int]): known [h,k,l] reflection for g1_vector
+        """
+
+        g1_hkl = np.array(g1_hkl)
+        g2_hkl = np.array(g2_hkl)
+
+        # Initialize a PLA
+        bvs_hkl = PointListArray(
+            shape=self.shape,
+            dtype=[
+                ("qx", float),
+                ("qy", float),
+                ("intensity", float),
+                ("h", int),
+                ("k", int),
+                ("l", int),
+            ],
+        )
+        # loop over the probe posistions
+        for Rx, Ry in tqdmnd(
+            self.shape[0],
+            self.shape[1],
+            desc="Converting (g1_ind,g2_ind) to (h,k,l)",
+            unit="DP",
+            unit_scale=True,
+        ):
+            # get a single indexed
+            braggvectors_indexed_dp = self.bragg_vectors_indexed[Rx, Ry]
+
+            # make a Pointlsit
+            bvs_hkl_curr = PointList(
+                data=np.empty(len(braggvectors_indexed_dp), dtype=bvs_hkl.dtype)
+            )
+            # populate qx, qy and intensity fields
+            bvs_hkl_curr.data["qx"] = braggvectors_indexed_dp["qx"]
+            bvs_hkl_curr.data["qy"] = braggvectors_indexed_dp["qy"]
+            bvs_hkl_curr.data["intensity"] = braggvectors_indexed_dp["intensity"]
+
+            # calcuate the hkl vectors
+            vectors_hkl = (
+                g1_hkl[:, np.newaxis] * braggvectors_indexed_dp["g1_ind"]
+                + g2_hkl[:, np.newaxis] * braggvectors_indexed_dp["g2_ind"]
+            )
+            # self.vectors_hkl = vectors_hkl
+
+            # populate h,k,l fields
+            # print(vectors_hkl.shape)
+            # bvs_hkl_curr.data['h'] = vectors_hkl[0,:]
+            # bvs_hkl_curr.data['k'] = vectors_hkl[1,:]
+            # bvs_hkl_curr.data['l'] = vectors_hkl[2,:]
+            (
+                bvs_hkl_curr.data["h"],
+                bvs_hkl_curr.data["k"],
+                bvs_hkl_curr.data["l"],
+            ) = np.vsplit(vectors_hkl, 3)
+
+            # add to the PLA
+            bvs_hkl[Rx, Ry] += bvs_hkl_curr
+
+        # add the PLA to the Strainmap object
+        self.bragg_vectors_indexed_hkl = bvs_hkl
+
     def set_max_peak_spacing(
         self,
         max_peak_spacing,
@@ -502,8 +573,8 @@ class StrainMap(RealSlice, Data):
                 ("qx", float),
                 ("qy", float),
                 ("intensity", float),
-                ("h", int),
-                ("k", int),
+                ("g1_ind", int),
+                ("g2_ind", int),
             ],
             shape=self.braggvectors.Rshape,
         )
@@ -539,8 +610,8 @@ class StrainMap(RealSlice, Data):
                                 pl.data["qx"][i],
                                 pl.data["qy"][i],
                                 pl.data["intensity"][i],
-                                self.braggdirections.data["h"][ind],
-                                self.braggdirections.data["k"][ind],
+                                self.braggdirections.data["g1_ind"][ind],
+                                self.braggdirections.data["g2_ind"][ind],
                             )
                         )
         self.bragg_vectors_indexed = indexed_braggpeaks
@@ -580,6 +651,7 @@ class StrainMap(RealSlice, Data):
             amount, in degrees
         returncal : bool
             It True, returns rotated map
+        **kwargs: keywords passed to py4DSTEM show function
         """
         # confirm that the calstate hasn't changed
         assert (
@@ -659,7 +731,6 @@ class StrainMap(RealSlice, Data):
         vrange_exx=None,
         vrange_exy=None,
         vrange_eyy=None,
-        bkgrd=True,
         show_cbars=None,
         bordercolor="k",
         borderwidth=1,
@@ -671,6 +742,7 @@ class StrainMap(RealSlice, Data):
         cmap_theta="PRGn",
         mask_color="k",
         color_axes="k",
+        show_legend=True,
         show_gvects=True,
         color_gvects="r",
         legend_camera_length=1.6,
@@ -678,6 +750,7 @@ class StrainMap(RealSlice, Data):
         layout="square",
         figsize=None,
         returnfig=False,
+        **kwargs,
     ):
         """
         Display a strain map, showing the 4 strain components
@@ -735,384 +808,54 @@ class StrainMap(RealSlice, Data):
             Scaling for the legend g-vectors relative to the coordinate axes
         layout : int
             Determines the layout of the grid which the strain components
-            will be plotted in.  Must be in (0,1,2).  0=(2x2), 1=(1x4), 2=(4x1).
+            will be plotted in.  Options are "square", "horizontal", "vertical."
         figsize : length 2 tuple of numbers
             Size of the figure
         returnfig : bool
             Toggles returning the figure
+        **kwargs: keywords passed to py4DSTEM show function
         """
-        # Lookup table for different layouts
-        assert layout in ("square", "horizontal", "vertical")
-        layout_lookup = {
-            "square": ["left", "right", "left", "right"],
-            "horizontal": ["bottom", "bottom", "bottom", "bottom"],
-            "vertical": ["right", "right", "right", "right"],
-        }
 
-        layout_p = layout_lookup[layout]
+        from py4DSTEM.visualize import show_strain
 
-        # Set which colorbars to display
-        if show_cbars is None:
-            if np.all(
-                [
-                    v is None
-                    for v in (
-                        vrange_exx,
-                        vrange_eyy,
-                        vrange_exy,
-                    )
-                ]
-            ):
-                show_cbars = ("eyy", "theta")
-            else:
-                show_cbars = ("exx", "eyy", "exy", "theta")
-        else:
-            assert np.all([v in ("exx", "eyy", "exy", "theta") for v in show_cbars])
-
-        # Contrast limits
-        if vrange_exx is None:
-            vrange_exx = vrange
-        if vrange_exy is None:
-            vrange_exy = vrange
-        if vrange_eyy is None:
-            vrange_eyy = vrange
-        for vrange in (vrange_exx, vrange_eyy, vrange_exy, vrange_theta):
-            assert len(vrange) == 2, "vranges must have length 2"
-        vmin_exx, vmax_exx = vrange_exx[0] / 100.0, vrange_exx[1] / 100.0
-        vmin_eyy, vmax_eyy = vrange_eyy[0] / 100.0, vrange_eyy[1] / 100.0
-        vmin_exy, vmax_exy = vrange_exy[0] / 100.0, vrange_exy[1] / 100.0
-        # theta is plotted in units of degrees
-        vmin_theta, vmax_theta = vrange_theta[0] / (180.0 / np.pi), vrange_theta[1] / (
-            180.0 / np.pi
-        )
-
-        # Get images
-        e_xx = np.ma.array(
-            self.get_slice("exx").data, mask=self.get_slice("mask").data == False
-        )
-        e_yy = np.ma.array(
-            self.get_slice("eyy").data, mask=self.get_slice("mask").data == False
-        )
-        e_xy = np.ma.array(
-            self.get_slice("exy").data, mask=self.get_slice("mask").data == False
-        )
-        theta = np.ma.array(
-            self.get_slice("theta").data,
-            mask=self.get_slice("mask").data == False,
-        )
-
-        ## Plot
-
-        # if figsize hasn't been set, set it based on the
-        # chosen layout and the image shape
-        if figsize is None:
-            ratio = np.sqrt(self.rshape[1] / self.rshape[0])
-            if layout == "square":
-                figsize = (13 * ratio, 8 / ratio)
-            elif layout == "horizontal":
-                figsize = (10 * ratio, 4 / ratio)
-            else:
-                figsize = (4 * ratio, 10 / ratio)
-
-        # set up layout
-        if layout == "square":
-            fig, ((ax11, ax12, ax_legend1), (ax21, ax22, ax_legend2)) = plt.subplots(
-                2, 3, figsize=figsize
-            )
-        elif layout == "horizontal":
-            figsize = (figsize[0] * np.sqrt(2), figsize[1] / np.sqrt(2))
-            fig, (ax11, ax12, ax21, ax22, ax_legend) = plt.subplots(
-                1, 5, figsize=figsize
-            )
-        else:
-            figsize = (figsize[0] / np.sqrt(2), figsize[1] * np.sqrt(2))
-            fig, (ax11, ax12, ax21, ax22, ax_legend) = plt.subplots(
-                5, 1, figsize=figsize
-            )
-
-        # display images, returning cbar axis references
-        cax11 = show(
-            e_xx,
-            figax=(fig, ax11),
-            vmin=vmin_exx,
-            vmax=vmax_exx,
-            intensity_range="absolute",
+        fig, ax = show_strain(
+            self,
+            vrange=vrange,
+            vrange_theta=vrange_theta,
+            vrange_exx=vrange_exx,
+            vrange_exy=vrange_exy,
+            vrange_eyy=vrange_eyy,
+            show_cbars=show_cbars,
+            bordercolor=bordercolor,
+            borderwidth=borderwidth,
+            titlesize=titlesize,
+            ticklabelsize=ticklabelsize,
+            ticknumber=ticknumber,
+            unitlabelsize=unitlabelsize,
             cmap=cmap,
-            mask=self.mask,
+            cmap_theta=cmap_theta,
             mask_color=mask_color,
-            returncax=True,
+            color_axes=color_axes,
+            show_legend=show_legend,
+            rotation_deg=np.rad2deg(self.coordinate_rotation_radians),
+            show_gvects=show_gvects,
+            g1=self.g1,
+            g2=self.g2,
+            color_gvects=color_gvects,
+            legend_camera_length=legend_camera_length,
+            scale_gvects=scale_gvects,
+            layout=layout,
+            figsize=figsize,
+            returnfig=True,
+            **kwargs,
         )
-        cax12 = show(
-            e_yy,
-            figax=(fig, ax12),
-            vmin=vmin_eyy,
-            vmax=vmax_eyy,
-            intensity_range="absolute",
-            cmap=cmap,
-            mask=self.mask,
-            mask_color=mask_color,
-            returncax=True,
-        )
-        cax21 = show(
-            e_xy,
-            figax=(fig, ax21),
-            vmin=vmin_exy,
-            vmax=vmax_exy,
-            intensity_range="absolute",
-            cmap=cmap,
-            mask=self.mask,
-            mask_color=mask_color,
-            returncax=True,
-        )
-        cax22 = show(
-            theta,
-            figax=(fig, ax22),
-            vmin=vmin_theta,
-            vmax=vmax_theta,
-            intensity_range="absolute",
-            cmap=cmap_theta,
-            mask=self.mask,
-            mask_color=mask_color,
-            returncax=True,
-        )
-        ax11.set_title(r"$\epsilon_{xx}$", size=titlesize)
-        ax12.set_title(r"$\epsilon_{yy}$", size=titlesize)
-        ax21.set_title(r"$\epsilon_{xy}$", size=titlesize)
-        ax22.set_title(r"$\theta$", size=titlesize)
-
-        # Add black background
-        if bkgrd:
-            mask = np.ma.masked_where(
-                self.get_slice("mask").data.astype(bool),
-                np.zeros_like(self.get_slice("mask").data),
-            )
-            ax11.matshow(mask, cmap="gray")
-            ax12.matshow(mask, cmap="gray")
-            ax21.matshow(mask, cmap="gray")
-            ax22.matshow(mask, cmap="gray")
-
-        # add colorbars
-        show_cbars = np.array(
-            [
-                "exx" in show_cbars,
-                "eyy" in show_cbars,
-                "exy" in show_cbars,
-                "theta" in show_cbars,
-            ]
-        )
-        if np.any(show_cbars):
-            divider11 = make_axes_locatable(ax11)
-            divider12 = make_axes_locatable(ax12)
-            divider21 = make_axes_locatable(ax21)
-            divider22 = make_axes_locatable(ax22)
-            cbax11 = divider11.append_axes(layout_p[0], size="4%", pad=0.15)
-            cbax12 = divider12.append_axes(layout_p[1], size="4%", pad=0.15)
-            cbax21 = divider21.append_axes(layout_p[2], size="4%", pad=0.15)
-            cbax22 = divider22.append_axes(layout_p[3], size="4%", pad=0.15)
-            for ind, show_cbar, cax, cbax, vmin, vmax, tickside, tickunits in zip(
-                range(4),
-                show_cbars,
-                (cax11, cax12, cax21, cax22),
-                (cbax11, cbax12, cbax21, cbax22),
-                (vmin_exx, vmin_eyy, vmin_exy, vmin_theta),
-                (vmax_exx, vmax_eyy, vmax_exy, vmax_theta),
-                (layout_p[0], layout_p[1], layout_p[2], layout_p[3]),
-                ("% ", " %", "% ", r" $^\circ$"),
-            ):
-                if show_cbar:
-                    ticks = np.linspace(vmin, vmax, ticknumber, endpoint=True)
-                    if ind < 3:
-                        ticklabels = np.round(
-                            np.linspace(
-                                100 * vmin, 100 * vmax, ticknumber, endpoint=True
-                            ),
-                            decimals=2,
-                        ).astype(str)
-                    else:
-                        ticklabels = np.round(
-                            np.linspace(
-                                (180 / np.pi) * vmin,
-                                (180 / np.pi) * vmax,
-                                ticknumber,
-                                endpoint=True,
-                            ),
-                            decimals=2,
-                        ).astype(str)
-
-                    if tickside in ("left", "right"):
-                        cb = plt.colorbar(
-                            cax, cax=cbax, ticks=ticks, orientation="vertical"
-                        )
-                        cb.ax.set_yticklabels(ticklabels, size=ticklabelsize)
-                        cbax.yaxis.set_ticks_position(tickside)
-                        cbax.set_ylabel(tickunits, size=unitlabelsize, rotation=0)
-                        cbax.yaxis.set_label_position(tickside)
-                    else:
-                        cb = plt.colorbar(
-                            cax, cax=cbax, ticks=ticks, orientation="horizontal"
-                        )
-                        cb.ax.set_xticklabels(ticklabels, size=ticklabelsize)
-                        cbax.xaxis.set_ticks_position(tickside)
-                        cbax.set_xlabel(tickunits, size=unitlabelsize, rotation=0)
-                        cbax.xaxis.set_label_position(tickside)
-                else:
-                    cbax.axis("off")
-
-        # Add borders
-        if bordercolor is not None:
-            for ax in (ax11, ax12, ax21, ax22):
-                for s in ["bottom", "top", "left", "right"]:
-                    ax.spines[s].set_color(bordercolor)
-                    ax.spines[s].set_linewidth(borderwidth)
-                ax.set_xticks([])
-                ax.set_yticks([])
-
-        # Legend
-
-        # for layout "square", combine vertical plots on the right end
-        if layout == "square":
-            # get gridspec object
-            gs = ax_legend1.get_gridspec()
-            # remove last two axes
-            ax_legend1.remove()
-            ax_legend2.remove()
-            # make new axis
-            ax_legend = fig.add_subplot(gs[:, -1])
-
-        # get the coordinate axes' directions
-        rotation = self.coordinate_rotation_radians
-        xaxis_vectx = np.cos(rotation)
-        xaxis_vecty = np.sin(rotation)
-        yaxis_vectx = np.cos(rotation + np.pi / 2)
-        yaxis_vecty = np.sin(rotation + np.pi / 2)
-
-        # make the coordinate axes
-        ax_legend.arrow(
-            x=0,
-            y=0,
-            dx=xaxis_vecty,
-            dy=xaxis_vectx,
-            color=color_axes,
-            length_includes_head=True,
-            width=0.01,
-            head_width=0.1,
-        )
-        ax_legend.arrow(
-            x=0,
-            y=0,
-            dx=yaxis_vecty,
-            dy=yaxis_vectx,
-            color=color_axes,
-            length_includes_head=True,
-            width=0.01,
-            head_width=0.1,
-        )
-        ax_legend.text(
-            x=xaxis_vecty * 1.16,
-            y=xaxis_vectx * 1.16,
-            s="x",
-            fontsize=14,
-            color=color_axes,
-            horizontalalignment="center",
-            verticalalignment="center",
-        )
-        ax_legend.text(
-            x=yaxis_vecty * 1.16,
-            y=yaxis_vectx * 1.16,
-            s="y",
-            fontsize=14,
-            color=color_axes,
-            horizontalalignment="center",
-            verticalalignment="center",
-        )
-
-        # make the g-vectors
-        if show_gvects:
-            # get the g-vectors directions
-            g1q = np.array(self.g1)
-            g2q = np.array(self.g2)
-            g1norm = np.linalg.norm(g1q)
-            g2norm = np.linalg.norm(g2q)
-            g1q /= g1norm
-            g2q /= g2norm
-            # set the lengths
-            g_ratio = g2norm / g1norm
-            if g_ratio > 1:
-                g1q /= g_ratio
-            else:
-                g2q *= g_ratio
-            g1_x, g1_y = g1q
-            g2_x, g2_y = g2q
-
-            # draw the g vectors
-            ax_legend.arrow(
-                x=0,
-                y=0,
-                dx=g1_y * scale_gvects,
-                dy=g1_x * scale_gvects,
-                color=color_gvects,
-                length_includes_head=True,
-                width=0.005,
-                head_width=0.05,
-            )
-            ax_legend.arrow(
-                x=0,
-                y=0,
-                dx=g2_y * scale_gvects,
-                dy=g2_x * scale_gvects,
-                color=color_gvects,
-                length_includes_head=True,
-                width=0.005,
-                head_width=0.05,
-            )
-            ax_legend.text(
-                x=g1_y * scale_gvects * 1.2,
-                y=g1_x * scale_gvects * 1.2,
-                s=r"$g_1$",
-                fontsize=12,
-                color=color_gvects,
-                horizontalalignment="center",
-                verticalalignment="center",
-            )
-            ax_legend.text(
-                x=g2_y * scale_gvects * 1.2,
-                y=g2_x * scale_gvects * 1.2,
-                s=r"$g_2$",
-                fontsize=12,
-                color=color_gvects,
-                horizontalalignment="center",
-                verticalalignment="center",
-            )
-
-        # find center and extent
-        xmin = np.min([0, 0, xaxis_vectx, yaxis_vectx])
-        xmax = np.max([0, 0, xaxis_vectx, yaxis_vectx])
-        ymin = np.min([0, 0, xaxis_vecty, yaxis_vecty])
-        ymax = np.max([0, 0, xaxis_vecty, yaxis_vecty])
-        if show_gvects:
-            xmin = np.min([xmin, g1_x, g2_x])
-            xmax = np.max([xmax, g1_x, g2_x])
-            ymin = np.min([ymin, g1_y, g2_y])
-            ymax = np.max([ymax, g1_y, g2_y])
-        x0 = np.mean([xmin, xmax])
-        y0 = np.mean([ymin, ymax])
-        xL = (xmax - x0) * legend_camera_length
-        yL = (ymax - y0) * legend_camera_length
-
-        # set the extent and aspect
-        ax_legend.set_xlim([y0 - yL, y0 + yL])
-        ax_legend.set_ylim([x0 - xL, x0 + xL])
-        ax_legend.invert_yaxis()
-        ax_legend.set_aspect("equal")
-        ax_legend.axis("off")
 
         # show/return
         if not returnfig:
             plt.show()
             return
         else:
-            axs = ((ax11, ax12), (ax21, ax22))
-            return fig, axs
+            return fig, ax
 
     def show_reference_directions(
         self,
@@ -1507,11 +1250,16 @@ class StrainMap(RealSlice, Data):
             The display image
         bragg_directions : PointList
             The Bragg scattering directions.  Must have coordinates
-            'qx','qy','h', and 'k'. Optionally may also have 'l'.
+            ('qx','qy','h', and 'k') or ('qx','qy','g1_ind', and 'g2_ind'. Optionally may also have 'l'.
         """
         assert isinstance(bragg_directions, PointList)
-        for k in ("qx", "qy", "h", "k"):
-            assert k in bragg_directions.data.dtype.fields
+        # checking if it has h, k or g1_ind, g2_ind
+        assert all(
+            key in bragg_directions.data.dtype.names for key in ("qx", "qy", "h", "k")
+        ) or all(
+            key in bragg_directions.data.dtype.names
+            for key in ("qx", "qy", "g1_ind", "g2_ind")
+        ), 'pointlist must contain ("qx", "qy", "h", "k") or ("qx", "qy", "g1_ind", "g2_ind") fields'
 
         if figax is None:
             fig, ax = show(ar, returnfig=True, **kwargs)
@@ -1530,6 +1278,7 @@ class StrainMap(RealSlice, Data):
             "pointsize": pointsize,
             "pointcolor": pointcolor,
         }
+        # this can take ("qx", "qy", "h", "k") or ("qx", "qy", "g1_ind", "g2_ind") fields
         add_bragg_index_labels(ax, d)
 
         if returnfig:

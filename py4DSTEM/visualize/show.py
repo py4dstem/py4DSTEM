@@ -76,6 +76,7 @@ def show(
     theta=None,
     title=None,
     show_fft=False,
+    apply_hanning_window=True,
     show_cbar=False,
     **kwargs,
 ):
@@ -305,6 +306,8 @@ def show(
             which will attempt to use it to overlay a scalebar. If True, uses calibraiton or pixelsize/pixelunits
             for scalebar. If False, no scalebar is added.
         show_fft (bool): if True, plots 2D-fft of array
+        apply_hanning_window (bool)
+            If True, a 2D Hann window is applied to the array before applying the FFT
         show_cbar (bool) : if True, adds cbar
         **kwargs: any keywords accepted by matplotlib's ax.matshow()
 
@@ -312,7 +315,7 @@ def show(
         if returnfig==False (default), the figure is plotted and nothing is returned.
         if returnfig==True, return the figure and the axis.
     """
-    if scalebar == True:
+    if scalebar is True:
         scalebar = {}
 
     # Alias dep
@@ -369,9 +372,12 @@ def show(
             from py4DSTEM.visualize import show
 
             if show_fft:
-                n0 = ar.shape
-                w0 = np.hanning(n0[1]) * np.hanning(n0[0])[:, None]
-                ar = np.abs(np.fft.fftshift(np.fft.fft2(w0 * ar.copy())))
+                if apply_hanning_window:
+                    n0 = ar.shape
+                    w0 = np.hanning(n0[1]) * np.hanning(n0[0])[:, None]
+                    ar = np.abs(np.fft.fftshift(np.fft.fft2(w0 * ar.copy())))
+                else:
+                    ar = np.abs(np.fft.fftshift(np.fft.fft2(ar.copy())))
             for a0 in range(num_images):
                 im = show(
                     ar[a0],
@@ -415,7 +421,7 @@ def show(
         if (
             hasattr(ar, "calibration")
             and (ar.calibration is not None)
-            and (scalebar != False)
+            and (scalebar is not False)
         ):
             cal = ar.calibration
             er = ".calibration attribute must be a Calibration instance"
@@ -451,7 +457,12 @@ def show(
     # Otherwise, plot one image
     if show_fft:
         if combine_images is False:
-            ar = np.abs(np.fft.fftshift(np.fft.fft2(ar.copy())))
+            if apply_hanning_window:
+                n0 = ar.shape
+                w0 = np.hanning(n0[1]) * np.hanning(n0[0])[:, None]
+                ar = np.abs(np.fft.fftshift(np.fft.fft2(w0 * ar.copy())))
+            else:
+                ar = np.abs(np.fft.fftshift(np.fft.fft2(ar.copy())))
 
     # get image from a masked array
     if mask is not None:
@@ -493,12 +504,12 @@ def show(
         if np.all(np.isnan(_ar)):
             _ar[:, :] = 0
         if intensity_range == "absolute":
-            if vmin != None:
+            if vmin is not None:
                 if vmin > 0.0:
                     vmin = np.log(vmin)
                 else:
                     vmin = np.min(_ar[_mask])
-            if vmax != None:
+            if vmax is not None:
                 vmax = np.log(vmax)
     elif scaling == "power":
         if power_offset is False:
@@ -514,9 +525,9 @@ def show(
                 _ar = np.power(ar.copy(), power)
             _mask = np.ones_like(_ar.data, dtype=bool)
             if intensity_range == "absolute":
-                if vmin != None:
+                if vmin is not None:
                     vmin = np.power(vmin, power)
-                if vmax != None:
+                if vmax is not None:
                     vmax = np.power(vmax, power)
     else:
         raise Exception

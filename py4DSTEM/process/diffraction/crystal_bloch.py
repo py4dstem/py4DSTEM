@@ -26,7 +26,6 @@ def calculate_dynamical_structure_factors(
     tol_structure_factor: float = 0.0,
     recompute_kinematic_structure_factors=True,
     g_vec_precision=None,
-    verbose=True,
 ):
     """
     Calculate and store the relativistic corrected structure factors used for Bloch computations
@@ -91,7 +90,7 @@ def calculate_dynamical_structure_factors(
 
     # Calculate the reciprocal lattice points to include based on k_max
 
-    k_max = np.asarray(k_max)
+    k_max: np.ndarray = np.asarray(k_max)
 
     if recompute_kinematic_structure_factors:
         if hasattr(self, "struct_factors"):
@@ -214,7 +213,9 @@ def calculate_dynamical_structure_factors(
 
     # Calculate structure factors
     struct_factors = np.sum(
-        f_e * np.exp(2.0j * np.pi * np.squeeze(self.positions[:, None, :] @ hkl)),
+        f_e
+        * self.occupancy[:, None]
+        * np.exp(2.0j * np.pi * np.squeeze(self.positions[:, None, :] @ hkl)),
         axis=0,
     )
 

@@ -4,6 +4,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.ndimage import gaussian_filter1d
+from scipy.optimize import curve_fit
 
 from matplotlib.colors import hsv_to_rgb
 from matplotlib.colors import rgb_to_hsv
@@ -1002,6 +1003,7 @@ def make_flowline_combined_image(
 def orientation_correlation(
     orient_hist,
     radius_max=None,
+    progress_bar=True,
 ):
     """
     Take in the 4D orientation histogram, and compute the distance-angle (auto)correlations
@@ -1089,43 +1091,50 @@ def orientation_correlation(
 
     # Main correlation calculation
     ind_output = 0
-    for a0 in range(size_input[0]):
-        for a1 in range(size_input[0]):
-            if a0 <= a1:
-                # Correlation
-                c = np.real(
-                    np.fft.ifftn(
-                        orient_hist_pad[a0, :, :, :]
-                        * np.conj(orient_hist_pad[a1, :, :, :]),
-                        axes=(0, 1, 2),
-                    )
+    for a0, a1 in tqdmnd(
+        range(size_input[0]),
+        range(size_input[0]),
+        desc="Calculate correlation plots",
+        unit=" probe positions",
+        disable=not progress_bar,
+    ):
+        # for a0 in range(size_input[0]):
+        #     for a1 in range(size_input[0]):
+        if a0 <= a1:
+            # Correlation
+            c = np.real(
+                np.fft.ifftn(
+                    orient_hist_pad[a0, :, :, :]
+                    * np.conj(orient_hist_pad[a1, :, :, :]),
+                    axes=(0, 1, 2),
                 )
+            )
 
-                # Loop over all angles from 0 to pi/2  (half of indices)
-                for a2 in range((size_input[3] / 2 + 1).astype("int")):
-                    orient_corr[ind_output, a2, :] = np.bincount(
-                        inds,
-                        weights=weights
-                        * np.concatenate((c[:, :, a2][sub0], c[:, :, a2][sub1])),
-                        minlength=radius_max,
-                    )
-
-                # normalize
-                c_norm = np.real(
-                    np.fft.ifftn(
-                        orient_norm_pad[a0, :, :] * np.conj(orient_norm_pad[a1, :, :]),
-                        axes=(0, 1),
-                    )
-                )
-                sig_norm = np.bincount(
+            # Loop over all angles from 0 to pi/2  (half of indices)
+            for a2 in range((size_input[3] / 2 + 1).astype("int")):
+                orient_corr[ind_output, a2, :] = np.bincount(
                     inds,
-                    weights=weights * np.concatenate((c_norm[sub0], c_norm[sub1])),
+                    weights=weights
+                    * np.concatenate((c[:, :, a2][sub0], c[:, :, a2][sub1])),
                     minlength=radius_max,
                 )
-                orient_corr[ind_output, :, :] /= sig_norm[None, :]
 
-                # increment output index
-                ind_output += 1
+            # normalize
+            c_norm = np.real(
+                np.fft.ifftn(
+                    orient_norm_pad[a0, :, :] * np.conj(orient_norm_pad[a1, :, :]),
+                    axes=(0, 1),
+                )
+            )
+            sig_norm = np.bincount(
+                inds,
+                weights=weights * np.concatenate((c_norm[sub0], c_norm[sub1])),
+                minlength=radius_max,
+            )
+            orient_corr[ind_output, :, :] /= sig_norm[None, :]
+
+            # increment output index
+            ind_output += 1
 
     return orient_corr
 
@@ -1133,32 +1142,62 @@ def orientation_correlation(
 def plot_orientation_correlation(
     orient_corr,
     prob_range=[0.1, 10.0],
+    calculate_coefs=False,
+    fraction_coefs=0.5,
+    length_fit_slope=10,
+    plot_overlaid_coefs=True,
     inds_plot=None,
     pixel_size=None,
     pixel_units=None,
-    size_fig=[8, 6],
-    return_fig=False,
+    fontsize=10,
+    figsize=(8, 6),
+    returnfig=False,
 ):
     """
     Plot the distance-angle (auto)correlations in orient_corr.
 
-    Args:
-        orient_corr (array):    3D or 4D array containing correlation images as function of (dr,dtheta)
-                                1st index represents each pair of rings.
-        prob_range (array):     Plotting range in units of "multiples of random distribution".
-        inds_plot (float):      Which indices to plot for orient_corr.  Set to "None" to plot all pairs.
-        pixel_size (float):     Pixel size for x axis.
-        pixel_units (str):      units of pixels.
-        size_fig (array):       Size of the figure panels.
-        return_fig (bool):      Whether to return figure axes.
+    Parameters
+    ----------
+    orient_corr (array):
+        3D or 4D array containing correlation images as function of (dr,dtheta)
+        1st index represents each pair of rings.
+    prob_range (array):
+        Plotting range in units of "multiples of random distribution".
+    calculate_coefs (bool):
+        If this value is True, the 0.5 and 0.1 distribution fraction of the
+        radial and annular correlations will be calculated and printed.
+    fraction_coefs (float):
+        What fraction to calculate the correlation distribution coefficients for.
+    length_fit_slope (int):
+        Number of pixels to fit the slope of angular vs radial intercept.
+    plot_overlaid_coefs (bool):
+        If this value is True, the 0.5 and 0.1 distribution fraction of the
+        radial and annular correlations will be overlaid onto the plots.
+    inds_plot (float):
+        Which indices to plot for orient_corr.  Set to "None" to plot all pairs.
+    pixel_size (float):
+        Pixel size for x axis.
+    pixel_units (str):
+        units of pixels.
+    fontsize (float):
+        Font size.  Title will be slightly larger, axis slightly smaller.
+    figsize (array):
+        Size of the figure panels.
+    returnfig (bool):
+        Set to True to return figure axes.
 
-    Returns:
-        fig, ax                 Figure and axes handles (optional).
+    Returns
+    --------
+    fig, ax (handles):
+        Figure and axes handles (optional).
+
     """
 
     # Make sure range is an numpy array
     prob_range = np.array(prob_range)
 
+    if pixel_size is None:
+        pixel_size = 1.0
     if pixel_units is None:
         pixel_units = "pixels"
 
@@ -1202,9 +1241,18 @@ def plot_orientation_correlation(
     cvals[int(N * 3 / 4) : N, 0] = 1 - 0.5 * c
     new_cmap = ListedColormap(cvals)
 
+    if calculate_coefs:
+        # Perform fitting
+        def fit_dist(x, *coefs):
+            int0 = coefs[0]
+            int_bg = coefs[1]
+            sigma = coefs[2]
+            p = coefs[3]
+            return (int0 - int_bg) * np.exp(np.abs(x) ** p / (-1 * sigma**p)) + int_bg
+
     # plotting
     num_plot = inds_plot.shape[0]
-    fig, ax = plt.subplots(num_plot, 1, figsize=(size_fig[0], num_plot * size_fig[1]))
+    fig, ax = plt.subplots(num_plot, 1, figsize=(figsize[0], num_plot * figsize[1]))
 
     # loop over indices
     for count, ind in enumerate(inds_plot):
@@ -1234,35 +1282,153 @@ def plot_orientation_correlation(
             t_lab.append(f"{10**t[a1]:.2g}")
 
         cbar.set_ticks(t)
-        cbar.ax.set_yticklabels(t_lab)
-        cbar.ax.set_ylabel("Probability [mult. of rand. dist.]", fontsize=12)
+        cbar.ax.set_yticklabels(t_lab, fontsize=fontsize * 0.8)
+        cbar.ax.set_ylabel("Probability (m.r.d.)", fontsize=fontsize)
 
         ind_0 = pair_inds[0, ind]
         ind_1 = pair_inds[1, ind]
 
         if ind_0 != ind_1:
             ax_handle.set_title(
-                "Correlation of Rings " + str(ind_0) + " and " + str(ind_1), fontsize=16
+                "Correlation of Rings " + str(ind_0) + " and " + str(ind_1),
+                fontsize=fontsize * 1.2,
             )
         else:
-            ax_handle.set_title("Autocorrelation of Ring " + str(ind_0), fontsize=16)
+            ax_handle.set_title(
+                "Autocorrelation of Ring " + str(ind_0), fontsize=fontsize * 1.2
+            )
 
         # x axis labels
-        if pixel_size is not None:
-            x_t = ax_handle.get_xticks()
-            sub = np.logical_or(x_t < 0, x_t > orient_corr.shape[2])
-            x_t_new = np.delete(x_t, sub)
-            ax_handle.set_xticks(x_t_new)
-            ax_handle.set_xticklabels(x_t_new * pixel_size)
-        ax_handle.set_xlabel("Radial Distance [" + pixel_units + "]", fontsize=12)
+        # if pixel_size is not None:
+        x_t = ax_handle.get_xticks()
+        sub = np.logical_or(x_t < 0, x_t > orient_corr.shape[2])
+        x_t_new = np.delete(x_t, sub)
+        ax_handle.set_xticks(x_t_new)
+        ax_handle.set_xticklabels(x_t_new * pixel_size, fontsize=fontsize * 0.8)
+        ax_handle.set_xlabel("Radial Distance (" + pixel_units + ")", fontsize=fontsize)
 
         # y axis labels
         ax_handle.invert_yaxis()
-        ax_handle.set_ylabel("Relative Grain Orientation [degrees]", fontsize=12)
-        ax_handle.set_yticks([0, 10, 20, 30, 40, 50, 60, 70, 80, 90])
-        ax_handle.set_yticklabels(["0", "", "", "30", "", "", "60", "", "", "90"])
+        ax_handle.set_ylabel("Relative Orientation (°)", fontsize=fontsize)
+        y_ticks = np.linspace(0.0, orient_corr.shape[1] - 1, 10, endpoint=True)
+        ax_handle.set_yticks(y_ticks)
+        ax_handle.set_yticklabels(
+            ["0", "", "", "30", "", "", "60", "", "", "90"], fontsize=fontsize * 0.8
+        )
 
-    if return_fig is True:
+        if calculate_coefs:
+            # Radial fractions
+            y = np.arange(orient_corr.shape[2])
+            if orient_corr[ind, 0, 0] > orient_corr[ind, -1, 0]:
+                z = orient_corr[ind, 0, :]
+            else:
+                z = orient_corr[ind, -1, :]
+            coefs = [np.max(z), np.min(z), y[-1] * 0.25, 2]
+            bounds = ((1e-3, 0, 1e-3, 1.0), (np.inf, np.inf, np.inf, np.inf))
+            coefs = curve_fit(fit_dist, y, z, p0=coefs, bounds=bounds)[0]
+            coef_radial = coefs[2] * (np.log(1 / fraction_coefs) ** (1 / coefs[3]))
+
+            # Annular fractions
+            x = np.arange(orient_corr.shape[1])
+            if orient_corr[ind, 0, 0] > orient_corr[ind, -1, 0]:
+                z = orient_corr[ind, :, 0]
+            else:
+                z = np.flip(orient_corr[ind, :, 0], axis=0)
+            z = np.maximum(z, 1.0)
+            coefs = [np.max(z), np.min(z), x[-1] * 0.25, 2]
+            bounds = ((1e-3, 0, 1e-3, 1.0), (np.inf, np.inf, np.inf, np.inf))
+            coefs = curve_fit(fit_dist, x, z, p0=coefs, bounds=bounds)[0]
+            coef_annular = coefs[2] * (np.log(1 / fraction_coefs) ** (1 / coefs[3]))
+            if orient_corr[ind, 0, 0] <= orient_corr[ind, -1, 0]:
+                coef_annular = orient_corr.shape[1] - 1 - coef_annular
+            pixel_size_annular = 90 / (orient_corr.shape[1] - 1)
+
+            # Slope of annular vs radial correlations as radius --> 0
+            x_slope = np.argmin(
+                np.abs(orient_corr[ind, :, :length_fit_slope] - 1.0), axis=0
+            )
+            y_slope = np.arange(length_fit_slope)
+            coefs_slope = np.polyfit(y_slope, x_slope, 1)
+
+            # Print results
+            if ind_0 != ind_1:
+                print("Correlation of Rings " + str(ind_0) + " and " + str(ind_1))
+            else:
+                print("Autocorrelation of Ring " + str(ind_0))
+            print(
+                str(np.round(fraction_coefs * 100).astype("int"))
+                + "% probability radial distance = "
+                + str(np.round(coef_radial * pixel_size, 2))
+                + " "
+                + pixel_units
+            )
+            print(
+                str(np.round(fraction_coefs * 100).astype("int"))
+                + "% probability annular distance = "
+                + str(np.round(coef_annular * pixel_size_annular, 2))
+                + " degrees"
+            )
+            print(
+                "slope = "
+                + str(np.round(coefs_slope[0] * pixel_size_annular / pixel_size, 2))
+                + " degrees/"
+                + pixel_units
+            )
+            print()
+
+        if plot_overlaid_coefs:
+            if num_plot > 1:
+                ax_handle = ax[count]
+            else:
+                ax_handle = ax
+
+            if orient_corr[ind, 0, 0] > orient_corr[ind, -1, 0]:
+                ax_handle.plot(
+                    np.array((coef_radial, coef_radial, 0.0)),
+                    np.array((0.0, coef_annular, coef_annular)),
+                    color=(1.0, 1.0, 1.0),
+                )
+                ax_handle.plot(
+                    np.array((coef_radial, coef_radial, 0.0)),
+                    np.array((0.0, coef_annular, coef_annular)),
+                    color=(0.0, 0.0, 0.0),
+                    linestyle="--",
+                )
+            else:
+                ax_handle.plot(
+                    np.array((coef_radial, coef_radial, 0.0)),
+                    np.array(
+                        (
+                            orient_corr.shape[1] - 1,
+                            coef_annular,
+                            coef_annular,
+                        )
+                    ),
+                    color=(1.0, 1.0, 1.0),
+                )
+                ax_handle.plot(
+                    np.array((coef_radial, coef_radial, 0.0)),
+                    np.array(
+                        (
+                            orient_corr.shape[1] - 1,
+                            coef_annular,
+                            coef_annular,
+                        )
+                    ),
+                    color=(0.0, 0.0, 0.0),
+                    linestyle="--",
+                )
+            ax_handle.plot(
+                y_slope,
+                y_slope.astype("float") * coefs_slope[0] + coefs_slope[1],
+                color=(0.0, 0.0, 0.0),
+                linestyle="--",
+            )
+
+    # Fix spacing
+    fig.tight_layout(pad=1.0)
+
+    if returnfig:
         return fig, ax
     plt.show()
 

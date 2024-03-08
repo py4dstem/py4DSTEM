@@ -1,5 +1,5 @@
 # BraggVectors methods
-
+from __future__ import annotations
 import inspect
 from warnings import warn
 
@@ -99,12 +99,12 @@ class BraggVectorMethods:
         # then scale by the sampling factor
         else:
             # get pixel calibration
-            if self.calstate["pixel"] == True:
+            if self.calstate["pixel"] is True:
                 qpix = self.calibration.get_Q_pixel_size()
                 qx /= qpix
                 qy /= qpix
             # origin calibration
-            if self.calstate["center"] == True:
+            if self.calstate["center"] is True:
                 origin = self.calibration.get_origin_mean()
                 qx += origin[0]
                 qy += origin[1]
@@ -153,12 +153,12 @@ class BraggVectorMethods:
         ).reshape(Q_Nx, Q_Ny)
 
         # determine the resampled grid center and pixel size
-        if mode == "cal" and self.calstate["center"] == True:
+        if mode == "cal" and self.calstate["center"] is True:
             x0 = sampling * origin[0]
             y0 = sampling * origin[1]
         else:
             x0, y0 = 0, 0
-        if mode == "cal" and self.calstate["pixel"] == True:
+        if mode == "cal" and self.calstate["pixel"] is True:
             pixelsize = qpix / sampling
         else:
             pixelsize = 1 / sampling
@@ -812,6 +812,56 @@ class BraggVectorMethods:
         from py4DSTEM.process.strain import StrainMap
 
         return StrainMap(self, name) if name else StrainMap(self)
+
+    def plot(
+        self,
+        index: tuple[int, int] | list[int],
+        cal: str = "cal",
+        returnfig: bool = False,
+        **kwargs,
+    ):
+        """
+        Plot Bragg vector, from a specified index.
+        Calls py4DSTEM.process.diffraction.plot_diffraction_pattern(braggvectors.<cal/raw>[index], **kwargs).
+        Optionally can return the figure.
+
+        Parameters
+        ----------
+        index : tuple[int,int] | list[int]
+            scan position for which Bragg vectors to plot
+        cal : str, optional
+            Choice to plot calibrated or raw Bragg vectors must be 'raw' or 'cal', by default 'cal'
+        returnfig : bool, optional
+            Boolean to return figure or not, by default False
+
+        Returns
+        -------
+        tuple (figure, axes)
+            matplotlib figure, axes returned if `returnfig` is True
+        """
+        cal = cal.lower()
+        assert cal in (
+            "cal",
+            "raw",
+        ), f"'cal' must be in ('cal', 'raw') {cal = } passed"
+        from py4DSTEM.process.diffraction import plot_diffraction_pattern
+
+        if cal == "cal":
+            pl = self.cal[index]
+        else:
+            pl = self.raw[index]
+
+        if returnfig:
+            return plot_diffraction_pattern(
+                pl,
+                returnfig=returnfig,
+                **kwargs,
+            )
+        else:
+            plot_diffraction_pattern(
+                pl,
+                **kwargs,
+            )
 
 
 ######### END BraggVectorMethods CLASS ########

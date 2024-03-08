@@ -86,7 +86,7 @@ def fit_2D(
     xy = np.vstack((rx_1D, ry_1D))
 
     # if robust fitting is turned off, set number of robust iterations to 0
-    if robust == False:
+    if robust is False:
         robust_steps = 0
 
     # least squares fitting
@@ -107,7 +107,7 @@ def fit_2D(
                 fit_mean_square_error
                 > np.mean(fit_mean_square_error) * robust_thresh**2
             )
-            mask[_mask] == False
+            mask[_mask] = False
 
         # perform fitting
         popt, pcov = curve_fit(
@@ -169,8 +169,7 @@ def polar_gaussian_2D(
     # t2 = np.min(np.vstack([t,1-t]))
     t2 = np.square(t - mu_t)
     return (
-        I0 * np.exp(-(t2 / (2 * sigma_t**2) + (q - mu_q) ** 2 / (2 * sigma_q**2)))
-        + C
+        I0 * np.exp(-(t2 / (2 * sigma_t**2) + (q - mu_q) ** 2 / (2 * sigma_q**2))) + C
     )
 
 
