@@ -12,7 +12,7 @@ from pathlib import Path
 
 from time import time
 
-from emdfile import tqdmnd
+from emdfile import tqdmnd, PointListArray
 from py4DSTEM.braggvectors.braggvectors import BraggVectors
 from py4DSTEM.data import QPoints
 from py4DSTEM.process.utils import get_maxima_2D
