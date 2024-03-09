@@ -2198,7 +2198,7 @@ class PtychographicReconstruction(PhaseReconstruction):
 
         return tuple(
             electron_wavelength_angstrom(self._energy) * 1e3 / dk / n
-            for dk, n in zip(self.angular_sampling, self._region_of_interest_shape)
+            for dk, n in zip(self.angular_sampling, self._amplitudes_shape)
         )
 
     @property

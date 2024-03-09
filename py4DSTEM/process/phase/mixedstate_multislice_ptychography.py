@@ -258,7 +258,7 @@ class MixedstateMultislicePtychography(
     def preprocess(
         self,
         diffraction_intensities_shape: Tuple[int, int] = None,
-        reshaping_method: str = "fourier",
+        reshaping_method: str = "bilinear",
         padded_diffraction_intensities_shape: Tuple[int, int] = None,
         region_of_interest_shape: Tuple[int, int] = None,
         dp_mask: np.ndarray = None,
@@ -488,6 +488,7 @@ class MixedstateMultislicePtychography(
         del _intensities
 
         self._num_diffraction_patterns = self._amplitudes.shape[0]
+        self._amplitudes_shape = np.array(self._amplitudes.shape[-2:])
 
         if region_of_interest_shape is not None:
             self._resample_exit_waves = True

@@ -2244,17 +2244,18 @@ def lanczos_kernel_density_estimate(
     return pix_output
 
 
-def vectorized_bilinear_resample(
+def bilinear_resample(
     array,
     scale=None,
     output_size=None,
     mode="grid-wrap",
     grid_mode=True,
+    vectorized=True,
     xp=np,
 ):
     """
     Resize an array along its final two axes.
-    Note, this is vectorized and thus very memory-intensive.
+    Note, this is vectorized by default and thus very memory-intensive.
 
     The scaling of the array can be specified by passing either `scale`, which sets
     the scaling factor along both axes to be scaled; or by passing `output_size`,
@@ -2298,9 +2299,27 @@ def vectorized_bilinear_resample(
     scale_output = (1,) * (array_size.size - input_size.size) + scale_output
 
     if xp is np:
-        array = zoom(array, scale_output, order=1, mode=mode, grid_mode=grid_mode)
+        zoom_xp = zoom
     else:
-        array = zoom_cp(array, scale_output, order=1, mode=mode, grid_mode=grid_mode)
+        zoom_xp = zoom_cp
+
+    if vectorized:
+        array = zoom_xp(array, scale_output, order=1, mode=mode, grid_mode=grid_mode)
+    else:
+        flat_array = array.reshape((-1,) + tuple(input_size))
+        out_array = xp.zeros(
+            (flat_array.shape[0],) + tuple(output_size), flat_array.dtype
+        )
+        for idx in range(flat_array.shape[0]):
+            out_array[idx] = zoom_xp(
+                flat_array[idx],
+                scale_output[-2:],
+                order=1,
+                mode=mode,
+                grid_mode=grid_mode,
+            )
+
+        array = out_array.reshape(tuple(array_size[:-2]) + tuple(output_size))
 
     return array
 

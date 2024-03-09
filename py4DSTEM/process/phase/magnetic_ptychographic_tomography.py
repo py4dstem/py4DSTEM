@@ -221,7 +221,7 @@ class MagneticPtychographicTomography(
     def preprocess(
         self,
         diffraction_intensities_shape: Tuple[int, int] = None,
-        reshaping_method: str = "fourier",
+        reshaping_method: str = "bilinear",
         padded_diffraction_intensities_shape: Tuple[int, int] = None,
         region_of_interest_shape: Tuple[int, int] = None,
         dp_mask: np.ndarray = None,
@@ -373,6 +373,7 @@ class MagneticPtychographicTomography(
             (self._num_diffraction_patterns,) + roi_shape
         )
 
+        self._amplitudes_shape = np.array(self._amplitudes.shape[-2:])
         if region_of_interest_shape is not None:
             self._resample_exit_waves = True
             self._region_of_interest_shape = np.array(region_of_interest_shape)

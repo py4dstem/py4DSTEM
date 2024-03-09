@@ -8,15 +8,20 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from py4DSTEM.process.phase.utils import (
     AffineTransform,
     ComplexProbe,
+    bilinear_resample,
     copy_to_device,
     fft_shift,
     generate_batches,
     partition_list,
     rotate_point,
     spatial_frequencies,
-    vectorized_bilinear_resample,
 )
-from py4DSTEM.process.utils import electron_wavelength_angstrom, get_CoM, get_shifted_ar
+from py4DSTEM.process.utils import (
+    align_and_shift_images,
+    electron_wavelength_angstrom,
+    get_CoM,
+    get_shifted_ar,
+)
 from py4DSTEM.visualize import return_scaled_histogram_ordering, show, show_complex
 from scipy.ndimage import gaussian_filter, rotate
 
@@ -993,6 +998,17 @@ class ProbeMethodsMixin:
                 vacuum_probe_intensity = xp.asarray(
                     vacuum_probe_intensity, dtype=xp.float32
                 )
+
+                sx, sy = vacuum_probe_intensity.shape
+                tx, ty = region_of_interest_shape
+                if sx != tx or sy != ty:
+                    vacuum_probe_intensity = bilinear_resample(
+                        vacuum_probe_intensity,
+                        output_size=(tx, ty),
+                        vectorized=True,
+                        xp=xp,
+                    )
+
                 probe_x0, probe_y0 = get_CoM(
                     vacuum_probe_intensity,
                     device=device,
@@ -1502,28 +1518,35 @@ class ObjectNDProbeMethodsMixin:
 
         xp = self._xp
 
-        # resample to match data, note: this needs to happen in real-space
+        fourier_overlap = xp.fft.fft2(overlap)  # * fourier_mask # GV votes to include
+
+        # resample to match data, note: this needs to happen in reciprocal-space
         if self._resample_exit_waves:
-            overlap = vectorized_bilinear_resample(
-                overlap, output_size=amplitudes.shape[-2:], xp=xp
+            fourier_overlap = bilinear_resample(
+                fourier_overlap,
+                output_size=self._amplitudes_shape,
+                vectorized=True,
+                xp=xp,
             )
 
-        fourier_overlap = xp.fft.fft2(overlap)  # * fourier_mask # GV votes to include
         farfield_amplitudes = self._return_farfield_amplitudes(fourier_overlap)
         error = xp.sum(xp.abs(amplitudes - farfield_amplitudes) ** 2)
-
         fourier_modified_overlap = amplitudes * xp.exp(1j * xp.angle(fourier_overlap))
 
         fourier_modified_overlap = (
             fourier_modified_overlap - fourier_overlap
         ) * fourier_mask
-        exit_waves = xp.fft.ifft2(fourier_modified_overlap)
 
-        # resample back to region_of_interest_shape, note: this needs to happen in real-space
+        # resample back to region_of_interest_shape, note: this needs to happen in reciprocal-space
         if self._resample_exit_waves:
-            exit_waves = vectorized_bilinear_resample(
-                exit_waves, output_size=self._region_of_interest_shape, xp=xp
+            fourier_modified_overlap = bilinear_resample(
+                fourier_modified_overlap,
+                output_size=self._region_of_interest_shape,
+                vectorized=True,
+                xp=xp,
             )
+
+        exit_waves = xp.fft.ifft2(fourier_modified_overlap)
 
         return exit_waves, error
 
@@ -1587,14 +1610,17 @@ class ObjectNDProbeMethodsMixin:
             exit_waves = overlap.copy()
 
         factor_to_be_projected = projection_c * overlap + projection_y * exit_waves
+        fourier_projected_factor = xp.fft.fft2(factor_to_be_projected)
 
-        # resample to match data, note: this needs to happen in real-space
+        # resample to match data, note: this needs to happen in reciprocal-space
         if self._resample_exit_waves:
-            factor_to_be_projected = vectorized_bilinear_resample(
-                factor_to_be_projected, output_size=amplitudes.shape[-2:], xp=xp
+            fourier_projected_factor = bilinear_resample(
+                fourier_projected_factor,
+                output_size=self._amplitudes_shape,
+                vectorized=True,
+                xp=xp,
             )
 
-        fourier_projected_factor = xp.fft.fft2(factor_to_be_projected)
         farfield_amplitudes = self._return_farfield_amplitudes(fourier_projected_factor)
         error = xp.sum(xp.abs(amplitudes - farfield_amplitudes) ** 2)
 
@@ -1602,13 +1628,16 @@ class ObjectNDProbeMethodsMixin:
             1j * xp.angle(fourier_projected_factor)
         )
 
-        projected_factor = xp.fft.ifft2(fourier_projected_factor)
-
-        # resample back to region_of_interest_shape, note: this needs to happen in real-space
+        # resample back to region_of_interest_shape, note: this needs to happen in reciprocal-space
         if self._resample_exit_waves:
-            projected_factor = vectorized_bilinear_resample(
-                projected_factor, output_size=self._region_of_interest_shape, xp=xp
+            fourier_projected_factor = bilinear_resample(
+                fourier_projected_factor,
+                output_size=self._region_of_interest_shape,
+                vectorized=True,
+                xp=xp,
             )
+
+        projected_factor = xp.fft.ifft2(fourier_projected_factor)
 
         exit_waves = (
             projection_x * exit_waves
@@ -1998,14 +2027,15 @@ class ObjectNDProbeMethodsMixin:
         xp = self._xp
         storage = self._storage
 
-        # resample to match data, note: this needs to happen in real-space
+        overlap_fft = xp.fft.fft2(overlap)
+
+        # resample to match data, note: this needs to happen in reciprocal-space
         if self._resample_exit_waves:
-            overlap = vectorized_bilinear_resample(
-                overlap, output_size=amplitudes.shape[-2:], xp=xp
+            overlap_fft = bilinear_resample(
+                overlap_fft, output_size=self._amplitudes_shape, vectorized=True, xp=xp
             )
 
         # unperturbed
-        overlap_fft = xp.fft.fft2(overlap)
         overlap_fft_conj = xp.conj(overlap_fft)
 
         estimated_intensity = self._return_farfield_amplitudes(overlap_fft) ** 2
@@ -2033,18 +2063,27 @@ class ObjectNDProbeMethodsMixin:
             shifted_probes,
         )
 
-        # resample to match data, note: this needs to happen in real-space
+        overlap_dx_fft = xp.fft.fft2(overlap_dx)
+        overlap_dy_fft = xp.fft.fft2(overlap_dy)
+
+        # resample to match data, note: this needs to happen in reciprocal-space
         if self._resample_exit_waves:
-            overlap_dx = vectorized_bilinear_resample(
-                overlap_dx, output_size=amplitudes.shape[-2:], xp=xp
+            overlap_dx_fft = bilinear_resample(
+                overlap_dx_fft,
+                output_size=self._amplitudes_shape,
+                vectorized=True,
+                xp=xp,
             )
-            overlap_dy = vectorized_bilinear_resample(
-                overlap_dy, output_size=amplitudes.shape[-2:], xp=xp
+            overlap_dy_fft = bilinear_resample(
+                overlap_dy_fft,
+                output_size=self._amplitudes_shape,
+                vectorized=True,
+                xp=xp,
             )
 
         # partial intensities
-        overlap_dx_fft = overlap_fft - xp.fft.fft2(overlap_dx)
-        overlap_dy_fft = overlap_fft - xp.fft.fft2(overlap_dy)
+        overlap_dx_fft = overlap_fft - overlap_dx_fft
+        overlap_dy_fft = overlap_fft - overlap_dy_fft
         partial_intensity_dx = 2 * xp.real(overlap_dx_fft * overlap_fft_conj)
         partial_intensity_dy = 2 * xp.real(overlap_dy_fft * overlap_fft_conj)
 
@@ -2135,13 +2174,17 @@ class ObjectNDProbeMethodsMixin:
                 shifted_probes,
             )
 
-            # resample to match data, note: this needs to happen in real-space
+            fourier_overlap = xp.fft.fft2(overlap)
+
+            # resample to match data, note: this needs to happen in reciprocal-space
             if self._resample_exit_waves:
-                overlap = vectorized_bilinear_resample(
-                    overlap, output_size=amplitudes_device.shape[-2:], xp=xp
+                fourier_overlap = bilinear_resample(
+                    fourier_overlap,
+                    output_size=self._amplitudes_shape,
+                    vectorized=True,
+                    xp=xp,
                 )
 
-            fourier_overlap = xp.fft.fft2(overlap)
             farfield_amplitudes = self._return_farfield_amplitudes(fourier_overlap)
 
             # Normalized mean-squared errors
@@ -2627,13 +2670,17 @@ class ObjectNDProbeMixedMethodsMixin:
 
         xp = self._xp
 
-        # resample to match data, note: this needs to happen in real-space
+        fourier_overlap = xp.fft.fft2(overlap)  # * fourier_mask # GV votes to include
+
+        # resample to match data, note: this needs to happen in reciprocal-space
         if self._resample_exit_waves:
-            overlap = vectorized_bilinear_resample(
-                overlap, output_size=amplitudes.shape[-2:], xp=xp
+            fourier_overlap = bilinear_resample(
+                fourier_overlap,
+                output_size=self._amplitudes_shape,
+                vectorized=True,
+                xp=xp,
             )
 
-        fourier_overlap = xp.fft.fft2(overlap)  # * fourier_mask # GV votes to include
         farfield_amplitudes = self._return_farfield_amplitudes(fourier_overlap)
         error = xp.sum(xp.abs(amplitudes - farfield_amplitudes) ** 2)
 
@@ -2645,13 +2692,17 @@ class ObjectNDProbeMixedMethodsMixin:
         fourier_modified_overlap = (
             fourier_modified_overlap - fourier_overlap
         ) * fourier_mask
-        exit_waves = xp.fft.ifft2(fourier_modified_overlap)
 
-        # resample back to region_of_interest_shape, note: this needs to happen in real-space
+        # resample back to region_of_interest_shape, note: this needs to happen in reciprocal-space
         if self._resample_exit_waves:
-            exit_waves = vectorized_bilinear_resample(
-                exit_waves, output_size=self._region_of_interest_shape, xp=xp
+            fourier_modified_overlap = bilinear_resample(
+                fourier_modified_overlap,
+                output_size=self._region_of_interest_shape,
+                vectorized=True,
+                xp=xp,
             )
+
+        exit_waves = xp.fft.ifft2(fourier_modified_overlap)
 
         return exit_waves, error
 
@@ -2715,14 +2766,17 @@ class ObjectNDProbeMixedMethodsMixin:
             exit_waves = overlap.copy()
 
         factor_to_be_projected = projection_c * overlap + projection_y * exit_waves
+        fourier_projected_factor = xp.fft.fft2(factor_to_be_projected)
 
-        # resample to match data, note: this needs to happen in real-space
+        # resample to match data, note: this needs to happen in reciprocal-space
         if self._resample_exit_waves:
-            factor_to_be_projected = vectorized_bilinear_resample(
-                factor_to_be_projected, output_size=amplitudes.shape[-2:], xp=xp
+            fourier_projected_factor = bilinear_resample(
+                fourier_projected_factor,
+                output_size=self._amplitudes_shape,
+                vectorized=True,
+                xp=xp,
             )
 
-        fourier_projected_factor = xp.fft.fft2(factor_to_be_projected)
         farfield_amplitudes = self._return_farfield_amplitudes(fourier_projected_factor)
         error = xp.sum(xp.abs(amplitudes - farfield_amplitudes) ** 2)
 
@@ -2730,13 +2784,17 @@ class ObjectNDProbeMixedMethodsMixin:
         amplitude_modification = amplitudes / farfield_amplitudes
 
         fourier_projected_factor *= amplitude_modification[:, None]
-        projected_factor = xp.fft.ifft2(fourier_projected_factor)
 
         # resample back to region_of_interest_shape, note: this needs to happen in real-space
         if self._resample_exit_waves:
-            projected_factor = vectorized_bilinear_resample(
-                projected_factor, output_size=self._region_of_interest_shape, xp=xp
+            fourier_projected_factor = bilinear_resample(
+                fourier_projected_factor,
+                output_size=self._region_of_interest_shape,
+                vectorized=True,
+                xp=xp,
             )
+
+        projected_factor = xp.fft.ifft2(fourier_projected_factor)
 
         exit_waves = (
             projection_x * exit_waves
