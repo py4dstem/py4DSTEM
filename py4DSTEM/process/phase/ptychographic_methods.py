@@ -3,6 +3,7 @@ from typing import Sequence, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
+from emdfile import tqdmnd
 from matplotlib.gridspec import GridSpec
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from py4DSTEM.process.phase.utils import (
@@ -1493,6 +1494,47 @@ class ObjectNDProbeMethodsMixin:
 
         xp = self._xp
         return xp.abs(fourier_overlap)
+
+    def cross_correlate_amplitudes_to_probe_aperture(
+        self, upsample_factor=4, progress_bar=True, probe=None
+    ):
+        """
+        Cross-correlates the measured amplitudes with the current probe aperture.
+        Modifies self._amplitudes in-place.
+
+        Parameters
+        ----------
+        upsample_factor: float
+            Upsampling factor used in cross-correlation. Must be larger than 2
+        probe: np.ndarray, optional
+            Probe to use for centering. Passed to _return_single_probe(probe)
+
+        Returns
+        -------
+        self to accommodate chaining
+        """
+        xp = self._xp
+        storage = self._storage
+
+        num_dps = self._num_diffraction_patterns
+
+        single_probe = self._return_single_probe(probe)
+        probe_aperture = copy_to_device(xp.abs(xp.fft.fft2(single_probe)), storage)
+
+        for idx in tqdmnd(
+            num_dps,
+            desc="Cross-correlating amplitudes",
+            unit="DP",
+            disable=not progress_bar,
+        ):
+            self._amplitudes[idx] = align_and_shift_images(
+                probe_aperture,
+                self._amplitudes[idx],
+                upsample_factor=upsample_factor,
+                device=storage,
+            )
+
+        return self
 
     def _gradient_descent_fourier_projection(self, amplitudes, overlap, fourier_mask):
         """
