@@ -1047,16 +1047,21 @@ class MixedstateMultislicePtychography(
                 butterworth_order=butterworth_order,
                 kz_regularization_filter=kz_regularization_filter
                 and kz_regularization_gamma is not None,
-                kz_regularization_gamma=kz_regularization_gamma[a0]
-                if kz_regularization_gamma is not None
-                and isinstance(kz_regularization_gamma, np.ndarray)
-                else kz_regularization_gamma,
+                kz_regularization_gamma=(
+                    kz_regularization_gamma[a0]
+                    if kz_regularization_gamma is not None
+                    and isinstance(kz_regularization_gamma, np.ndarray)
+                    else kz_regularization_gamma
+                ),
                 identical_slices=identical_slices,
                 object_positivity=object_positivity,
                 shrinkage_rad=shrinkage_rad,
-                object_mask=self._object_fov_mask_inverse
-                if fix_potential_baseline and self._object_fov_mask_inverse.sum() > 0
-                else None,
+                object_mask=(
+                    self._object_fov_mask_inverse
+                    if fix_potential_baseline
+                    and self._object_fov_mask_inverse.sum() > 0
+                    else None
+                ),
                 pure_phase_object=pure_phase_object and self._object_type == "complex",
                 tv_denoise_chambolle=tv_denoise_chambolle
                 and tv_denoise_weight_chambolle is not None,
