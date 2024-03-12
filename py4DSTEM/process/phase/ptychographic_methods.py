@@ -1007,6 +1007,7 @@ class ProbeMethodsMixin:
                         vacuum_probe_intensity,
                         output_size=(tx, ty),
                         vectorized=True,
+                        conserve_array_sums=True,
                         xp=xp,
                     )
 
@@ -1568,6 +1569,7 @@ class ObjectNDProbeMethodsMixin:
                 fourier_overlap,
                 output_size=self._amplitudes_shape,
                 vectorized=True,
+                conserve_array_sums=True,
                 xp=xp,
             )
 
@@ -1585,6 +1587,7 @@ class ObjectNDProbeMethodsMixin:
                 fourier_modified_overlap,
                 output_size=self._region_of_interest_shape,
                 vectorized=True,
+                conserve_array_sums=True,
                 xp=xp,
             )
 
@@ -1660,6 +1663,7 @@ class ObjectNDProbeMethodsMixin:
                 fourier_projected_factor,
                 output_size=self._amplitudes_shape,
                 vectorized=True,
+                conserve_array_sums=True,
                 xp=xp,
             )
 
@@ -1676,6 +1680,7 @@ class ObjectNDProbeMethodsMixin:
                 fourier_projected_factor,
                 output_size=self._region_of_interest_shape,
                 vectorized=True,
+                conserve_array_sums=True,
                 xp=xp,
             )
 
@@ -2074,7 +2079,11 @@ class ObjectNDProbeMethodsMixin:
         # resample to match data, note: this needs to happen in reciprocal-space
         if self._resample_exit_waves:
             overlap_fft = bilinear_resample(
-                overlap_fft, output_size=self._amplitudes_shape, vectorized=True, xp=xp
+                overlap_fft,
+                output_size=self._amplitudes_shape,
+                vectorized=True,
+                conserve_array_sums=True,
+                xp=xp,
             )
 
         # unperturbed
@@ -2114,12 +2123,14 @@ class ObjectNDProbeMethodsMixin:
                 overlap_dx_fft,
                 output_size=self._amplitudes_shape,
                 vectorized=True,
+                conserve_array_sums=True,
                 xp=xp,
             )
             overlap_dy_fft = bilinear_resample(
                 overlap_dy_fft,
                 output_size=self._amplitudes_shape,
                 vectorized=True,
+                conserve_array_sums=True,
                 xp=xp,
             )
 
@@ -2224,6 +2235,7 @@ class ObjectNDProbeMethodsMixin:
                     fourier_overlap,
                     output_size=self._amplitudes_shape,
                     vectorized=True,
+                    conserve_array_sums=True,
                     xp=xp,
                 )
 
@@ -2720,6 +2732,7 @@ class ObjectNDProbeMixedMethodsMixin:
                 fourier_overlap,
                 output_size=self._amplitudes_shape,
                 vectorized=True,
+                conserve_array_sums=True,
                 xp=xp,
             )
 
@@ -2741,6 +2754,7 @@ class ObjectNDProbeMixedMethodsMixin:
                 fourier_modified_overlap,
                 output_size=self._region_of_interest_shape,
                 vectorized=True,
+                conserve_array_sums=True,
                 xp=xp,
             )
 
@@ -2816,6 +2830,7 @@ class ObjectNDProbeMixedMethodsMixin:
                 fourier_projected_factor,
                 output_size=self._amplitudes_shape,
                 vectorized=True,
+                conserve_array_sums=True,
                 xp=xp,
             )
 
@@ -2833,6 +2848,7 @@ class ObjectNDProbeMixedMethodsMixin:
                 fourier_projected_factor,
                 output_size=self._region_of_interest_shape,
                 vectorized=True,
+                conserve_array_sums=True,
                 xp=xp,
             )
 

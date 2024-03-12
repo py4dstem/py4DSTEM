@@ -446,6 +446,7 @@ def fourier_resample(
     bandlimit_nyquist=None,
     bandlimit_power=2,
     dtype=np.float32,
+    conserve_array_sums=False,
 ):
     """
     Resize a 2D array along any dimension, using Fourier interpolation / extrapolation.
@@ -464,6 +465,7 @@ def fourier_resample(
         bandlimit_nyquist (float): Gaussian filter information limit in Nyquist units (0.5 max in both directions)
         bandlimit_power (float): Gaussian filter power law scaling (higher is sharper)
         dtype (numpy dtype): datatype for binned array. default is single precision float
+        conserve_arrray_sums (bool): If True, the sums of the array are conserved
 
     Returns:
         the resized array (2D/4D numpy array)
@@ -661,7 +663,8 @@ def fourier_resample(
         array_resize = np.maximum(array_resize, 0)
 
     # Normalization
-    array_resize = array_resize * scale_output
+    if not conserve_array_sums:
+        array_resize = array_resize * scale_output
 
     return array_resize
 

@@ -2251,6 +2251,7 @@ def bilinear_resample(
     mode="grid-wrap",
     grid_mode=True,
     vectorized=True,
+    conserve_array_sums=False,
     xp=np,
 ):
     """
@@ -2321,6 +2322,9 @@ def bilinear_resample(
 
         array = out_array.reshape(tuple(array_size[:-2]) + tuple(output_size))
 
+    if conserve_array_sums:
+        array = array / np.array(scale_output).prod()
+
     return array
 
 
@@ -2328,6 +2332,7 @@ def vectorized_fourier_resample(
     array,
     scale=None,
     output_size=None,
+    conserve_array_sums=False,
     xp=np,
 ):
     """
@@ -2489,7 +2494,8 @@ def vectorized_fourier_resample(
     array_resize = xp.real(xp.fft.ifft2(array_resize)).astype(xp.float32)
 
     # Normalization
-    array_resize *= scale_output
+    if not conserve_array_sums:
+        array_resize = array_resize * scale_output
 
     return array_resize
 

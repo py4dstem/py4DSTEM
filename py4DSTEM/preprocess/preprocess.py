@@ -573,7 +573,11 @@ def datacube_diffraction_shift(
 
 
 def resample_data_diffraction(
-    datacube, resampling_factor=None, output_size=None, method="bilinear"
+    datacube,
+    resampling_factor=None,
+    output_size=None,
+    method="bilinear",
+    conserve_array_sums=False,
 ):
     """
     Performs diffraction space resampling of data by resampling_factor or to match output_size.
@@ -594,7 +598,10 @@ def resample_data_diffraction(
         old_size = datacube.data.shape
 
         datacube.data = fourier_resample(
-            datacube.data, scale=resampling_factor, output_size=output_size
+            datacube.data,
+            scale=resampling_factor,
+            output_size=output_size,
+            conserve_array_sums=conserve_array_sums,
         )
 
         if not resampling_factor:
@@ -649,6 +656,9 @@ def resample_data_diffraction(
                 mode="grid-wrap",
                 grid_mode=True,
             )
+
+        if conserve_array_sums:
+            output_data = output_data / resampling_factor.prod()
 
         datacube.data = output_data
         datacube.calibration.set_Q_pixel_size(

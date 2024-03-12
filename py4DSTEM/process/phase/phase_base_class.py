@@ -346,34 +346,49 @@ class PhaseReconstruction(Custom):
 
             elif reshaping_method == "fourier":
                 datacube = datacube.resample_Q(
-                    N=resampling_factor_x, method=reshaping_method
+                    N=resampling_factor_x,
+                    method=reshaping_method,
+                    conserve_array_sums=True,
                 )
                 if vacuum_probe_intensity is not None:
                     vacuum_probe_intensity = fourier_resample(
                         vacuum_probe_intensity,
                         output_size=diffraction_intensities_shape,
                         force_nonnegative=True,
+                        conserve_array_sums=True,
                     )
                 if dp_mask is not None:
                     dp_mask = fourier_resample(
                         dp_mask,
                         output_size=diffraction_intensities_shape,
                         force_nonnegative=True,
+                        conserve_array_sums=False,
                     )
 
             elif reshaping_method == "bilinear":
                 datacube = datacube.resample_Q(
-                    N=resampling_factor_x, method=reshaping_method
+                    N=resampling_factor_x,
+                    method=reshaping_method,
+                    conserve_array_sums=True,
                 )
                 if vacuum_probe_intensity is not None:
                     vacuum_probe_intensity = zoom(
                         vacuum_probe_intensity,
                         (resampling_factor_x, resampling_factor_x),
                         order=1,
+                        mode="grid-wrap",
+                        grid_mode=True,
+                    )
+                    vacuum_probe_intensity = (
+                        vacuum_probe_intensity / resampling_factor_x**2
                     )
                 if dp_mask is not None:
                     dp_mask = zoom(
-                        dp_mask, (resampling_factor_x, resampling_factor_x), order=1
+                        dp_mask,
+                        (resampling_factor_x, resampling_factor_x),
+                        order=1,
+                        mode="grid-wrap",
+                        grid_mode=True,
                     )
 
             else:
