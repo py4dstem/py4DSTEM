@@ -8,7 +8,7 @@ from py4DSTEM.process.phase.utils import (
     fit_aberration_surface,
     regularize_probe_amplitude,
 )
-from py4DSTEM.process.utils import get_CoM
+from py4DSTEM.utils import get_CoM
 
 try:
     import cupy as cp

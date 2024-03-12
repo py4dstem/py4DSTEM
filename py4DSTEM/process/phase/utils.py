@@ -19,9 +19,9 @@ except (ImportError, ModuleNotFoundError):
         return np
 
 
-from py4DSTEM.process.utils import get_CoM
-from py4DSTEM.process.utils.cross_correlate import align_and_shift_images
-from py4DSTEM.process.utils.utils import electron_wavelength_angstrom
+from py4DSTEM.utils import get_CoM
+from py4DSTEM.utils import align_and_shift_images
+from py4DSTEM.utils import electron_wavelength_angstrom
 from skimage.restoration import unwrap_phase
 
 # fmt: off

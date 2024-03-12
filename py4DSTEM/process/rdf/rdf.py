@@ -6,7 +6,7 @@ import numpy as np
 from scipy.special import erf
 from scipy.fftpack import dst, idst
 
-from py4DSTEM.process.utils import single_atom_scatter
+from py4DSTEM.utils import single_atom_scatter
 
 
 def get_radial_intensity(polar_img, polar_mask):

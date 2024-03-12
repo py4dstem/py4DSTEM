@@ -10,7 +10,7 @@ import numpy as np
 from py4DSTEM import PointList, PointListArray, tqdmnd
 from py4DSTEM.braggvectors import BraggVectors
 from py4DSTEM.data import Data, RealSlice
-from py4DSTEM.preprocess.utils import get_maxima_2D
+from py4DSTEM.utils import get_maxima_2D
 from py4DSTEM.process.strain.latticevectors import (
     fit_lattice_vectors_all_DPs,
     get_reference_g1g2,
@@ -185,6 +185,7 @@ class StrainMap(RealSlice, Data):
         index_origin : int
             selected index for the origin
         subpixel : str in ('pixel','poly','multicorr')
+<<<<<<< HEAD
             See the docstring for py4DSTEM.preprocess.get_maxima_2D
         upsample_factor : int
             See the py4DSTEM.preprocess.get_maxima_2D docstring
@@ -202,6 +203,25 @@ class StrainMap(RealSlice, Data):
             See the py4DSTEM.preprocess.get_maxima_2D docstring
         maxNumPeaks : int
             See the py4DSTEM.preprocess.get_maxima_2D docstring
+=======
+            See the docstring for py4DSTEM.utils.get_maxima_2D
+        upsample_factor : int
+            See the py4DSTEM.utils.get_maxima_2D docstring
+        sigma : number
+            See the py4DSTEM.utils.get_maxima_2D docstring
+        minAbsoluteIntensity : number
+            See the py4DSTEM.utils.get_maxima_2D docstring
+        minRelativeIntensity : number
+            See the py4DSTEM.utils.get_maxima_2D docstring
+        relativeToPeak : int
+            See the py4DSTEM.utils.get_maxima_2D docstring
+        minSpacing : number
+            See the py4DSTEM.utils.get_maxima_2D docstring
+        edgeBoundary : number
+            See the py4DSTEM.utils.get_maxima_2D docstring
+        maxNumPeaks : int
+            See the py4DSTEM.utils.get_maxima_2D docstring
+>>>>>>> v15
         figsize : 2-tuple
             the size of the figure
         c_indices : color

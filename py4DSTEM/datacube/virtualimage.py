@@ -1,8 +1,7 @@
-# Virtual imaging from a datacube. Includes:
-#  * VirtualImage - a container for virtual image data + metadata
-#  * DataCubeVirtualImager - methods inherited by DataCube for virt imaging
-#
-# for bragg virtual imaging methods, goto diskdetection.virtualimage.py
+# Contains-
+# 1) Datacube methods, in VirtualImager, and
+# 2) A container class, VirtualImage
+
 
 import numpy as np
 import dask.array as da
@@ -11,58 +10,15 @@ import inspect
 
 from emdfile import tqdmnd, Metadata
 from py4DSTEM.data import Calibration, RealSlice, Data, DiffractionSlice
-from py4DSTEM.preprocess import get_shifted_ar
+from py4DSTEM.utils import get_shifted_ar
 from py4DSTEM.visualize import show
 
 
-# Virtual image container class
+
+# DataCube methods
 
 
-class VirtualImage(RealSlice, Data):
-    """
-    A container for storing virtual image data and metadata,
-    including the real-space shaped 2D image and metadata
-    indicating how this image was generated from a datacube.
-    """
-
-    def __init__(
-        self,
-        data: np.ndarray,
-        name: Optional[str] = "virtualimage",
-    ):
-        """
-        Parameters
-        ----------
-        data : np.ndarray
-            the 2D data
-        name : str
-            the name
-        """
-        # initialize as a RealSlice
-        RealSlice.__init__(
-            self,
-            data=data,
-            name=name,
-        )
-
-    # read
-    @classmethod
-    def _get_constructor_args(cls, group):
-        """
-        Returns a dictionary of args/values to pass to the class constructor
-        """
-        ar_constr_args = RealSlice._get_constructor_args(group)
-        args = {
-            "data": ar_constr_args["data"],
-            "name": ar_constr_args["name"],
-        }
-        return args
-
-
-# DataCube virtual imaging methods
-
-
-class DataCubeVirtualImager:
+class VirtualImager:
     def __init__(self):
         pass
 
@@ -749,3 +705,55 @@ class DataCubeVirtualImager:
         if return_sum:
             mask = np.sum(mask, axis=2)
         return mask
+
+
+
+
+
+
+# Container class
+
+
+class VirtualImage(RealSlice, Data):
+    """
+    A container for storing virtual image data and metadata,
+    including the real-space shaped 2D image and metadata
+    indicating how this image was generated from a datacube.
+    """
+
+    def __init__(
+        self,
+        data: np.ndarray,
+        name: Optional[str] = "virtualimage",
+    ):
+        """
+        Parameters
+        ----------
+        data : np.ndarray
+            the 2D data
+        name : str
+            the name
+        """
+        # initialize as a RealSlice
+        RealSlice.__init__(
+            self,
+            data=data,
+            name=name,
+        )
+
+    # read
+    @classmethod
+    def _get_constructor_args(cls, group):
+        """
+        Returns a dictionary of args/values to pass to the class constructor
+        """
+        ar_constr_args = RealSlice._get_constructor_args(group)
+        args = {
+            "data": ar_constr_args["data"],
+            "name": ar_constr_args["name"],
+        }
+        return args
+
+
+
+
