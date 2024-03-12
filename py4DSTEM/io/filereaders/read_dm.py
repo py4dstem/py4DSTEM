@@ -6,7 +6,8 @@ from ncempy.io import dm
 from emdfile import tqdmnd, Array
 
 from py4DSTEM.datacube import DataCube
-from py4DSTEM.preprocess.utils import bin2D
+from py4DSTEM.utils import bin2D, electron_wavelength_angstrom
+
 
 
 def read_dm(filepath, name="dm_dataset", mem="RAM", binfactor=1, **kwargs):
@@ -79,8 +80,6 @@ def read_dm(filepath, name="dm_dataset", mem="RAM", binfactor=1, **kwargs):
                         if "Microscope Info.Voltage" in t
                     ]
                     if len(voltage) >= 1:
-                        from py4DSTEM.process.utils import electron_wavelength_angstrom
-
                         wavelength = electron_wavelength_angstrom(voltage[0])
                         Q_pixel_units = "A^-1"
                         Q_pixel_size = (

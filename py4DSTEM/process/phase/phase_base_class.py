@@ -27,7 +27,7 @@ from py4DSTEM.process.phase.utils import (
     get_array_module,
     polar_aliases,
 )
-from py4DSTEM.process.utils import (
+from py4DSTEM.utils import (
     electron_wavelength_angstrom,
     fourier_resample,
     get_shifted_ar,

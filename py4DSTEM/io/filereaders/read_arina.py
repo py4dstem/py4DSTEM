@@ -2,7 +2,7 @@ import h5py
 import hdf5plugin
 import numpy as np
 from py4DSTEM.datacube import DataCube
-from py4DSTEM.preprocess.utils import bin2D
+from py4DSTEM.utils import bin2D
 
 
 def read_arina(

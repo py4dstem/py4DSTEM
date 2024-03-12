@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from py4DSTEM.process.utils.elliptical_coords import *  ## What else is used here? These fns have
+from py4DSTEM.utils.elliptical_coords import *  ## What else is used here? These fns have
 
 ## moved around some. In general, specifying
 ## the fns is better practice. TODO: change

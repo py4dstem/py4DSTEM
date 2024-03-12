@@ -13,7 +13,7 @@ from matplotlib.gridspec import GridSpec
 from matplotlib.ticker import PercentFormatter
 from mpl_toolkits.axes_grid1.axes_divider import make_axes_locatable
 from py4DSTEM import Calibration, DataCube
-from py4DSTEM.preprocess.utils import get_shifted_ar
+from py4DSTEM.utils import get_shifted_ar
 from py4DSTEM.process.phase.phase_base_class import PhaseReconstruction
 from py4DSTEM.process.phase.utils import (
     AffineTransform,
@@ -23,8 +23,8 @@ from py4DSTEM.process.phase.utils import (
     lanczos_kernel_density_estimate,
     pixel_rolling_kernel_density_estimate,
 )
-from py4DSTEM.process.utils.cross_correlate import align_images_fourier
-from py4DSTEM.process.utils.utils import electron_wavelength_angstrom
+from py4DSTEM.utils import align_images_fourier
+from py4DSTEM.utils import electron_wavelength_angstrom
 from py4DSTEM.visualize import return_scaled_histogram_ordering, show
 from scipy.linalg import polar
 from scipy.ndimage import distance_transform_edt

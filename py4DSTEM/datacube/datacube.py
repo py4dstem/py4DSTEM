@@ -8,21 +8,27 @@ from scipy.ndimage import (
     distance_transform_edt,
     binary_fill_holes,
     gaussian_filter1d,
-    gaussian_filter,
-)
+    gaussian_filter,)
 from typing import Optional, Union
 
 from emdfile import Array, Metadata, Node, Root, tqdmnd
 from py4DSTEM.data import Data, Calibration
-from py4DSTEM.datacube.virtualimage import DataCubeVirtualImager
-from py4DSTEM.datacube.virtualdiffraction import DataCubeVirtualDiffraction
+from py4DSTEM.datacube.preprocess import Preprocessor
+from py4DSTEM.datacube.virtualimage import VirtualImager
+from py4DSTEM.datacube.virtualdiffraction import VirtualDiffractioner
+from py4DSTEM.datacube.diskdetection import BraggFinder
+from py4DSTEM.datacube.diskdetection import ProbeMaker
+
 
 
 class DataCube(
     Array,
     Data,
-    DataCubeVirtualImager,
-    DataCubeVirtualDiffraction,
+    Preprocessor,
+    VirtualImager,
+    VirtualDiffractioner,
+    BraggFinder,
+    ProbeMaker,
 ):
     """
     Storage and processing methods for 4D-STEM datasets.
@@ -304,16 +310,6 @@ class DataCube(
         if isinstance(data, np.ndarray):
             data = Array(data=data, name=name)
         self.attach(data)
-
-    def set_scan_shape(self, Rshape):
-        """
-        Reshape the data given the real space scan shape.
-
-        Accepts:
-            Rshape (2-tuple)
-        """
-        from py4DSTEM.preprocess import set_scan_shape
-
         assert len(Rshape) == 2, "Rshape must have a length of 2"
         d = set_scan_shape(self, Rshape[0], Rshape[1])
         return d
@@ -1342,3 +1338,4 @@ class DataCube(
             qr = np.hypot(self.qxx_raw - vects.qx[idx], self.qyy_raw - vects.qy[idx])
             mask = np.logical_and(mask, qr > radius)
         return mask
+

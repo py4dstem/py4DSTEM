@@ -6,7 +6,7 @@ from tqdm import tqdm
 from emdfile import tqdmnd, PointList, PointListArray
 from py4DSTEM.data import RealSlice
 from py4DSTEM.process.diffraction.utils import Orientation, OrientationMap, axisEqual3D
-from py4DSTEM.process.utils import electron_wavelength_angstrom
+from py4DSTEM.utils import electron_wavelength_angstrom
 
 from warnings import warn
 
