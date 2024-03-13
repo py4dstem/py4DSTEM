@@ -825,7 +825,7 @@ class MultislicePtychography(
         fix_potential_baseline: bool
             If true, the potential mean outside the FOV is forced to zero at each iteration
         detector_fourier_mask: np.ndarray
-            Corner-centered mask to apply at the detector-plane for zeroing-out unreliable gradients.
+            Corner-centered mask to multiply the detector-plane gradients with (a value of zero supresses those pixels).
             Useful when detector has artifacts such as dead-pixels. Usually binary.
         pure_phase_object: bool, optional
             If True, object amplitude is set to unity

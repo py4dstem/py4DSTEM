@@ -1285,7 +1285,7 @@ class MagneticPtychography(
         fix_potential_baseline: bool
             If true, the potential mean outside the FOV is forced to zero at each iteration
         detector_fourier_mask: np.ndarray
-            Corner-centered mask to apply at the detector-plane for zeroing-out unreliable gradients.
+            Corner-centered mask to multiply the detector-plane gradients with (a value of zero supresses those pixels).
             Useful when detector has artifacts such as dead-pixels. Usually binary.
         store_iterations: bool, optional
             If True, reconstructed objects and probes are stored at each iteration
