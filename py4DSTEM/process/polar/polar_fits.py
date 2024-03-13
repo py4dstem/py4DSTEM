@@ -3,15 +3,18 @@ import matplotlib.pyplot as plt
 
 # from scipy.optimize import leastsq
 from scipy.optimize import curve_fit
+from emdfile import tqdmnd
 
 
 def fit_amorphous_ring(
-    im,
+    im=None,
+    datacube=None,
     center=None,
     radial_range=None,
     coefs=None,
     mask_dp=None,
     show_fit_mask=False,
+    fit_all_images=False,
     maxfev=None,
     verbose=False,
     plot_result=True,
@@ -19,6 +22,7 @@ def fit_amorphous_ring(
     plot_int_scale=(-3, 3),
     figsize=(8, 8),
     return_all_coefs=True,
+    progress_bar=None,
 ):
     """
     Fit an amorphous halo with a two-sided Gaussian model, plus a background
@@ -28,6 +32,8 @@ def fit_amorphous_ring(
     --------
     im: np.array
         2D image array to perform fitting on
+    datacube: py4DSTEM.DataCube
+        datacube to perform the fitting on
     center: np.array
         (x,y) center coordinates for fitting mask. If not specified
         by the user, we will assume the center coordinate is (im.shape-1)/2.
@@ -40,6 +46,8 @@ def fit_amorphous_ring(
         Dark field mask for fitting, in addition to the radial range specified above.
     show_fit_mask: bool
         Set to true to preview the fitting mask and initial guess for the ellipse params
+    fit_all_images: bool
+        Fit the elliptic parameters to all images
     maxfev: int
         Max number of fitting evaluations for curve_fit.
     verbose: bool
@@ -62,6 +70,12 @@ def fit_amorphous_ring(
     params_ellipse_fit: np.array (optional)
         11 parameter elliptic fit coefficients
     """
+
+    # If passing in a DataCube, use mean diffraction pattern for initial guess
+    if im is None:
+        im = datacube.get_dp_mean()
+        if progress_bar is None:
+            progress_bar = True
 
     # Default values
     if center is None:
@@ -193,7 +207,44 @@ def fit_amorphous_ring(
             )[0]
         coefs[4] = np.mod(coefs[4], 2 * np.pi)
         coefs[5:8] *= int_mean
-        # bounds=bounds
+
+        # Perform the fit on each individual diffration pattern
+        if fit_all_images:
+            coefs_all = np.zeros((datacube.shape[0], datacube.shape[1], coefs.size))
+
+            for rx, ry in tqdmnd(
+                datacube.shape[0],
+                datacube.shape[1],
+                desc="Radial statistics",
+                unit=" probe positions",
+                disable=not progress_bar,
+            ):
+                vals = datacube.data[rx, ry][mask]
+                int_mean = np.mean(vals)
+
+                if maxfev is None:
+                    coefs_single = curve_fit(
+                        amorphous_model,
+                        basis,
+                        vals / int_mean,
+                        p0=coefs,
+                        xtol=1e-8,
+                        bounds=(lb, ub),
+                    )[0]
+                else:
+                    coefs_single = curve_fit(
+                        amorphous_model,
+                        basis,
+                        vals / int_mean,
+                        p0=coefs,
+                        xtol=1e-8,
+                        bounds=(lb, ub),
+                        maxfev=maxfev,
+                    )[0]
+                coefs_single[4] = np.mod(coefs_single[4], 2 * np.pi)
+                coefs_single[5:8] *= int_mean
+
+                coefs_all[rx, ry] = coefs_single
 
     if verbose:
         print("x0 = " + str(np.round(coefs[0], 3)) + " px")
@@ -214,9 +265,15 @@ def fit_amorphous_ring(
 
     # Return fit parameters
     if return_all_coefs:
-        return coefs
+        if fit_all_images:
+            return coefs_all
+        else:
+            return coefs
     else:
-        return coefs[:5]
+        if fit_all_images:
+            return coefs_all[:, :, :5]
+        else:
+            return coefs[:5]
 
 
 def plot_amorphous_ring(

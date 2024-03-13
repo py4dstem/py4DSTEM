@@ -516,7 +516,7 @@ class DataCube(
         ROI=None,
         align=True,
         mask=None,
-        threshold=0.2,
+        threshold=0.0,
         expansion=12,
         opening=3,
         verbose=False,
