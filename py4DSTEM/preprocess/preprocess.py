@@ -653,7 +653,7 @@ def resample_data_diffraction(
                 datacube.data[Rx, Ry].astype(np.float32),
                 resampling_factor,
                 order=1,
-                mode="grid-wrap",
+                mode="nearest",
                 grid_mode=True,
             )
 
