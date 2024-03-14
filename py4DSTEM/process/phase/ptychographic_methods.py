@@ -1561,7 +1561,7 @@ class ObjectNDProbeMethodsMixin:
 
         xp = self._xp
 
-        fourier_overlap = xp.fft.fft2(overlap)  # * fourier_mask # GV votes to include
+        fourier_overlap = xp.fft.fft2(overlap)
 
         # resample to match data, note: this needs to happen in reciprocal-space
         if self._resample_exit_waves:
@@ -1573,6 +1573,7 @@ class ObjectNDProbeMethodsMixin:
                 xp=xp,
             )
 
+        fourier_overlap *= fourier_mask
         farfield_amplitudes = self._return_farfield_amplitudes(fourier_overlap)
         error = xp.sum(xp.abs(amplitudes - farfield_amplitudes) ** 2)
         fourier_modified_overlap = amplitudes * xp.exp(1j * xp.angle(fourier_overlap))
@@ -2724,7 +2725,7 @@ class ObjectNDProbeMixedMethodsMixin:
 
         xp = self._xp
 
-        fourier_overlap = xp.fft.fft2(overlap)  # * fourier_mask # GV votes to include
+        fourier_overlap = xp.fft.fft2(overlap)
 
         # resample to match data, note: this needs to happen in reciprocal-space
         if self._resample_exit_waves:
@@ -2736,6 +2737,7 @@ class ObjectNDProbeMixedMethodsMixin:
                 xp=xp,
             )
 
+        fourier_overlap *= fourier_mask
         farfield_amplitudes = self._return_farfield_amplitudes(fourier_overlap)
         error = xp.sum(xp.abs(amplitudes - farfield_amplitudes) ** 2)
 
