@@ -939,6 +939,9 @@ class PtychographicTomography(
             step_size,
         )
 
+        # initialization
+        self._reset_reconstruction(store_iterations, reset, use_projection_scheme)
+
         if self._verbose:
             self._report_reconstruction_summary(
                 num_iter,
@@ -962,9 +965,6 @@ class PtychographicTomography(
             detector_fourier_mask = xp.ones(self._amplitudes[0].shape)
         else:
             detector_fourier_mask = xp.asarray(detector_fourier_mask)
-
-        # initialization
-        self._reset_reconstruction(store_iterations, reset, use_projection_scheme)
 
         # main loop
         for a0 in tqdmnd(
