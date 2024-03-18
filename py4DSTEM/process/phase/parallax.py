@@ -2547,7 +2547,8 @@ class Parallax(PhaseReconstruction):
 
     def depth_section(
         self,
-        depth_angstroms=np.arange(-250, 260, 100),
+        depth_angstroms=None,
+        use_CTF_fit=True,
         plot_depth_sections=True,
         k_info_limit: float = None,
         k_info_power: float = 1.0,
@@ -2576,7 +2577,6 @@ class Parallax(PhaseReconstruction):
 
         xp = self._xp
         asnumpy = self._asnumpy
-        depth_angstroms = xp.atleast_1d(depth_angstroms)
 
         if not hasattr(self, "aberration_C1"):
             raise ValueError(
@@ -2586,16 +2586,26 @@ class Parallax(PhaseReconstruction):
                 )
             )
 
+        if depth_angstroms is None:
+            depth_angstroms = np.linspace(-256, 256, 33)
+        depth_angstroms = xp.atleast_1d(depth_angstroms)
+
         # Fourier coordinates
-        kx = xp.fft.fftfreq(self._recon_BF.shape[0], self._scan_sampling[0])
-        ky = xp.fft.fftfreq(self._recon_BF.shape[1], self._scan_sampling[1])
+        sx, sy = self._scan_sampling
+        nx, ny = self._recon_BF.shape
+        kx = xp.fft.fftfreq(nx, sx)
+        ky = xp.fft.fftfreq(ny, sy)
         kra2 = (kx[:, None]) ** 2 + (ky[None, :]) ** 2
 
-        # information limit
-        if k_info_limit is not None:
-            k_filt = 1 / (
-                1 + (kra2**k_info_power) / ((k_info_limit) ** (2 * k_info_power))
+        if use_CTF_fit:
+            sin_chi = xp.sin(
+                self._calculate_CTF((nx, ny), (sx, sy), *self._aberrations_coefs)
             )
+        else:
+            sin_chi = xp.sin((xp.pi * self._wavelength * self.aberration_C1) * kra2)
+
+        CTF_corr = xp.sign(sin_chi)
+        CTF_corr[0, 0] = 0
 
         # init
         stack_depth = xp.zeros(
@@ -2630,26 +2640,21 @@ class Parallax(PhaseReconstruction):
             dz = depth_angstroms[a0]
 
             # Parallax
-            im_depth = xp.zeros_like(self._recon_BF, dtype="complex")
-            for a1 in range(self._stack_BF_shifted.shape[0]):
-                dx = self._probe_angles[a1, 0] * dz
-                dy = self._probe_angles[a1, 1] * dz
-                im_depth += xp.fft.fft2(self._stack_BF_shifted[a1]) * xp.exp(
-                    self._qx_shift * dx + self._qy_shift * dy
+            im_depth = xp.zeros_like(self._recon_BF, dtype=xp.complex64)
+            dx = -self._probe_angles[:, 0] * dz / self._scan_sampling[0]
+            dy = -self._probe_angles[:, 1] * dz / self._scan_sampling[1]
+            shift_op = xp.exp(
+                self._qx_shift[None] * dx[:, None, None]
+                + self._qy_shift[None] * dy[:, None, None]
+            )
+            im_depth = xp.fft.fft2(self._stack_BF_shifted) * shift_op * CTF_corr
+
+            if k_info_limit is not None:
+                im_depth /= 1 + (kra2**k_info_power) / (
+                    (k_info_limit) ** (2 * k_info_power)
                 )
 
-            # CTF correction
-            sin_chi = xp.sin((xp.pi * self._wavelength * (self.aberration_C1)) * kra2)
-            CTF_corr = xp.sign(sin_chi)
-            CTF_corr[0, 0] = 0
-            if k_info_limit is not None:
-                CTF_corr *= k_filt
-
-            # apply correction to mean reconstructed BF image
-            stack_depth[a0] = (
-                xp.real(xp.fft.ifft2(im_depth * CTF_corr))
-                / self._stack_BF_shifted.shape[0]
-            )
+            stack_depth[a0] = xp.real(xp.fft.ifft2(im_depth)).mean(0)
 
             if plot_depth_sections:
                 row_index, col_index = np.unravel_index(a0, (nrows, ncols))
@@ -2673,13 +2678,9 @@ class Parallax(PhaseReconstruction):
 
                 ax.set_xticks([])
                 ax.set_yticks([])
-                ax.set_title(f"Depth section: {dz}A")
+                ax.set_title(f"Depth section: {dz} A")
 
-        if self._device == "gpu":
-            xp = self._xp
-            xp._default_memory_pool.free_all_blocks()
-            xp.clear_memo()
-
+        self.clear_device_mem(self._device, self._clear_fft_cache)
         return stack_depth
 
     def _crop_padded_object(
