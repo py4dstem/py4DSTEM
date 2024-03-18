@@ -2441,9 +2441,6 @@ class Parallax(PhaseReconstruction):
         plot_corrected_phase: bool = True,
         k_info_limit: float = None,
         k_info_power: float = 1.0,
-        Wiener_filter=False,
-        Wiener_signal_noise_ratio: float = 1.0,
-        Wiener_filter_low_only: bool = False,
         upsampled: bool = True,
         **kwargs,
     ):
@@ -2461,12 +2458,6 @@ class Parallax(PhaseReconstruction):
             maximum allowed frequency in butterworth filter
         k_info_power: float, optional
             power of butterworth filter
-        Wiener_filter: bool, optional
-            Use Wiener filtering instead of CTF sign correction.
-        Wiener_signal_noise_ratio: float, optional
-            Signal to noise radio at k = 0 for Wiener filter
-        Wiener_filter_low_only: bool, optional
-            Apply Wiener filtering only to the CTF portions before the 1st CTF maxima.
         """
 
         xp = self._xp
@@ -2500,58 +2491,23 @@ class Parallax(PhaseReconstruction):
                 use_CTF_fit = True
 
         if use_CTF_fit:
-            sin_chi = np.sin(
+            sin_chi = xp.sin(
                 self._calculate_CTF(im.shape, (sx, sy), *self._aberrations_coefs)
             )
-
-            CTF_corr = xp.sign(sin_chi)
-            CTF_corr[0, 0] = 0
-
-            # apply correction to mean reconstructed BF image
-            im_fft_corr = xp.fft.fft2(im) * CTF_corr
-
-            # if needed, add low pass filter output image
-            if k_info_limit is not None:
-                im_fft_corr /= 1 + (kra2**k_info_power) / (
-                    (k_info_limit) ** (2 * k_info_power)
-                )
         else:
-            # CTF
             sin_chi = xp.sin((xp.pi * self._wavelength * self.aberration_C1) * kra2)
 
-            if Wiener_filter:
-                SNR_inv = (
-                    xp.sqrt(
-                        1
-                        + (kra2**k_info_power) / ((k_info_limit) ** (2 * k_info_power))
-                    )
-                    / Wiener_signal_noise_ratio
-                )
-                CTF_corr = xp.sign(sin_chi) / (sin_chi**2 + SNR_inv)
-                if Wiener_filter_low_only:
-                    # limit Wiener filter to only the part of the CTF before 1st maxima
-                    k_thresh = 1 / xp.sqrt(
-                        2.0 * self._wavelength * xp.abs(self.aberration_C1)
-                    )
-                    k_mask = kra2 >= k_thresh**2
-                    CTF_corr[k_mask] = xp.sign(sin_chi[k_mask])
+        CTF_corr = xp.sign(sin_chi)
+        CTF_corr[0, 0] = 0
 
-                # apply correction to mean reconstructed BF image
-                im_fft_corr = xp.fft.fft2(im) * CTF_corr
+        # apply correction to mean reconstructed BF image
+        im_fft_corr = xp.fft.fft2(im) * CTF_corr
 
-            else:
-                # CTF without tilt correction (beyond the parallax operator)
-                CTF_corr = xp.sign(sin_chi)
-                CTF_corr[0, 0] = 0
-
-                # apply correction to mean reconstructed BF image
-                im_fft_corr = xp.fft.fft2(im) * CTF_corr
-
-                # if needed, add low pass filter output image
-                if k_info_limit is not None:
-                    im_fft_corr /= 1 + (kra2**k_info_power) / (
-                        (k_info_limit) ** (2 * k_info_power)
-                    )
+        # if needed, add low pass filter output image
+        if k_info_limit is not None:
+            im_fft_corr /= 1 + (kra2**k_info_power) / (
+                (k_info_limit) ** (2 * k_info_power)
+            )
 
         # Output phase image
         self._recon_phase_corrected = xp.real(xp.fft.ifft2(im_fft_corr))
@@ -2683,9 +2639,7 @@ class Parallax(PhaseReconstruction):
                 )
 
             # CTF correction
-            sin_chi = xp.sin(
-                (xp.pi * self._wavelength * (self.aberration_C1 + dz)) * kra2
-            )
+            sin_chi = xp.sin((xp.pi * self._wavelength * (self.aberration_C1)) * kra2)
             CTF_corr = xp.sign(sin_chi)
             CTF_corr[0, 0] = 0
             if k_info_limit is not None:
