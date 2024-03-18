@@ -875,6 +875,9 @@ class MultislicePtychography(
             ]
             self.copy_attributes_to_device(attrs, device)
 
+        # initialization
+        self._reset_reconstruction(store_iterations, reset)
+
         if object_type is not None:
             self._switch_object_type(object_type)
 
@@ -926,9 +929,6 @@ class MultislicePtychography(
             detector_fourier_mask = xp.ones(self._amplitudes[0].shape)
         else:
             detector_fourier_mask = xp.asarray(detector_fourier_mask)
-
-        # initialization
-        self._reset_reconstruction(store_iterations, reset)
 
         # main loop
         for a0 in tqdmnd(

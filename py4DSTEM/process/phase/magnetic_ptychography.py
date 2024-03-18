@@ -1321,9 +1321,6 @@ class MagneticPtychography(
             ]
             self.copy_attributes_to_device(attrs, device)
 
-        if object_type is not None:
-            self._switch_object_type(object_type)
-
         xp = self._xp
         xp_storage = self._xp_storage
         device = self._device
@@ -1357,6 +1354,12 @@ class MagneticPtychography(
                 "Magnetic ptychography is currently only implemented for gradient descent."
             )
 
+        # initialization
+        self._reset_reconstruction(store_iterations, reset, use_projection_scheme)
+
+        if object_type is not None:
+            self._switch_object_type(object_type)
+
         if self._verbose:
             self._report_reconstruction_summary(
                 num_iter,
@@ -1380,9 +1383,6 @@ class MagneticPtychography(
             detector_fourier_mask = xp.ones(self._amplitudes[0].shape)
         else:
             detector_fourier_mask = xp.asarray(detector_fourier_mask)
-
-        # initialization
-        self._reset_reconstruction(store_iterations, reset, use_projection_scheme)
 
         if gaussian_filter_sigma_m is None:
             gaussian_filter_sigma_m = gaussian_filter_sigma_e
