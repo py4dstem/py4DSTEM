@@ -1755,6 +1755,8 @@ class Parallax(PhaseReconstruction):
 
         self.clear_device_mem(self._device, self._clear_fft_cache)
 
+        return self
+
     def _interpolate_array(
         self,
         image,
@@ -2390,6 +2392,8 @@ class Parallax(PhaseReconstruction):
 
         self.clear_device_mem(self._device, self._clear_fft_cache)
 
+        return self
+
     def _calculate_CTF(self, alpha_shape, sampling, *coefs):
         xp = self._xp
 
@@ -2583,6 +2587,7 @@ class Parallax(PhaseReconstruction):
             ax.set_title("Parallax-Corrected Phase Image")
 
         self.clear_device_mem(self._device, self._clear_fft_cache)
+        return self
 
     def depth_section(
         self,
