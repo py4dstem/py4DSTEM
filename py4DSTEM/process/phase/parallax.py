@@ -2750,19 +2750,33 @@ class Parallax(PhaseReconstruction):
 
         if upsampled:
             pad_x = np.round(
+                self._object_padding_px[0] * self._kde_upsample_factor
+            ).astype("int")
+            pad_x_left = np.round(
                 self._object_padding_px[0] / 2 * self._kde_upsample_factor
             ).astype("int")
+            pad_x_right = pad_x - pad_x_left
+
             pad_y = np.round(
+                self._object_padding_px[1] * self._kde_upsample_factor
+            ).astype("int")
+            pad_y_left = np.round(
                 self._object_padding_px[1] / 2 * self._kde_upsample_factor
             ).astype("int")
+            pad_y_right = pad_y - pad_y_left
+
         else:
-            pad_x = self._object_padding_px[0] // 2
-            pad_y = self._object_padding_px[1] // 2
+            pad_x_left = self._object_padding_px[0] // 2
+            pad_x_right = self._object_padding_px[0] - pad_x_left
+            pad_y_left = self._object_padding_px[1] // 2
+            pad_y_right = self._object_padding_px[1] - pad_y_left
 
-        pad_x -= remaining_padding
-        pad_y -= remaining_padding
+        pad_x_left -= remaining_padding
+        pad_x_right -= remaining_padding
+        pad_y_left -= remaining_padding
+        pad_y_right -= remaining_padding
 
-        return asnumpy(padded_object[pad_x:-pad_x, pad_y:-pad_y])
+        return asnumpy(padded_object[pad_x_left:-pad_x_right, pad_y_left:-pad_y_right])
 
     def _visualize_figax(
         self,
