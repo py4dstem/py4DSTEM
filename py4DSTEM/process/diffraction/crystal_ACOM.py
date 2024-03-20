@@ -2025,9 +2025,9 @@ def calculate_strain(
     tol_intensity: float = 1e-4,
     k_max: Optional[float] = None,
     min_num_peaks=5,
-    intensity_weighting = False,
-    robust = True,
-    robust_thresh = 3.0,
+    intensity_weighting=False,
+    robust=True,
+    robust_thresh=3.0,
     rotation_range=None,
     mask_from_corr=True,
     corr_range=(0, 2),
@@ -2044,22 +2044,22 @@ def calculate_strain(
 
     Parameters
     ----------
-    bragg_peaks_array (PointListArray):   
+    bragg_peaks_array (PointListArray):
         All Bragg peaks
-    orientation_map (OrientationMap):     
+    orientation_map (OrientationMap):
         Orientation map generated from ACOM
-    corr_kernel_size (float):           
+    corr_kernel_size (float):
         Correlation kernel size - if user does
         not specify, uses self.corr_kernel_size.
-    sigma_excitation_error (float):  
+    sigma_excitation_error (float):
         sigma value for envelope applied to s_g (excitation errors) in units of inverse Angstroms
-    tol_excitation_error_mult (float): 
+    tol_excitation_error_mult (float):
         tolerance in units of sigma for s_g inclusion
-    tol_intensity (np float):        
+    tol_intensity (np float):
         tolerance in intensity units for inclusion of diffraction spots
-    k_max (float):                   
+    k_max (float):
         Maximum scattering vector
-    min_num_peaks (int):             
+    min_num_peaks (int):
         Minimum number of peaks required.
     intensity_weighting: bool
         Set to True to weight least squares by experimental peak intensity.
@@ -2067,20 +2067,20 @@ def calculate_strain(
         Set to True to use robust fitting, which performs outlier rejection.
     robust_thresh: float
         Threshold for robust fitting weights.
-    rotation_range (float):          
+    rotation_range (float):
         Maximum rotation range in radians (for symmetry reduction).
-    progress_bar (bool):             
+    progress_bar (bool):
         Show progress bar
-    mask_from_corr (bool):           
+    mask_from_corr (bool):
         Use ACOM correlation signal for mask
-    corr_range (np.ndarray):         
+    corr_range (np.ndarray):
         Range of correlation signals for mask
-    corr_normalize (bool):           
+    corr_normalize (bool):
         Normalize correlation signal before masking
 
     Returns
     --------
-    strain_map (RealSlice):  
+    strain_map (RealSlice):
         strain tensor
 
     """
@@ -2170,21 +2170,20 @@ def calculate_strain(
                 (p_ref.data["qx"][inds_match[keep]], p_ref.data["qy"][inds_match[keep]])
             ).T
 
-
             # Fit transformation matrix
             # Note - not sure about transpose here
             # (though it might not matter if rotation isn't included)
             if intensity_weighting:
-                weights = np.sqrt(p.data["intensity"][keep, None])*0+1
+                weights = np.sqrt(p.data["intensity"][keep, None]) * 0 + 1
                 m = lstsq(
-                    qxy_ref * weights, 
-                    qxy * weights, 
+                    qxy_ref * weights,
+                    qxy * weights,
                     rcond=None,
                 )[0].T
             else:
                 m = lstsq(
-                    qxy_ref, 
-                    qxy, 
+                    qxy_ref,
+                    qxy,
                     rcond=None,
                 )[0].T
 
@@ -2193,16 +2192,18 @@ def calculate_strain(
                 for a0 in range(5):
                     # calculate new weights
                     qxy_fit = qxy_ref @ m
-                    diff2 = np.sum((qxy_fit - qxy)**2,axis=1)
+                    diff2 = np.sum((qxy_fit - qxy) ** 2, axis=1)
 
-                    weights = np.exp(diff2 / ((-2*robust_thresh**2)*np.median(diff2)))[:,None]
+                    weights = np.exp(
+                        diff2 / ((-2 * robust_thresh**2) * np.median(diff2))
+                    )[:, None]
                     if intensity_weighting:
                         weights *= np.sqrt(p.data["intensity"][keep, None])
 
                     # calculate new fits
                     m = lstsq(
-                        qxy_ref * weights, 
-                        qxy * weights, 
+                        qxy_ref * weights,
+                        qxy * weights,
                         rcond=None,
                     )[0].T
 
