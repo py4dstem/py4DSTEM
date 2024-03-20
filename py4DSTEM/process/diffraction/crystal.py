@@ -1036,6 +1036,7 @@ class Crystal:
 
         """
 
+
         # Determine image size in Angstroms
         im_size = np.array(im_size)
         im_size_Ang = im_size * pixel_size_angstroms
@@ -1123,11 +1124,15 @@ class Crystal:
 
         # Thickness 
         if thickness_angstroms > 0:
-            thickness_proj = thickness_angstroms / m_proj[2]
-            vec_proj = thickness_proj / pixel_size_angstroms * m_proj[:2]
-            num_proj = (np.ceil(np.linalg.norm(vec_proj))+1).astype('int')
-            x_proj = np.linspace(-0.5,0.5,num_proj)*vec_proj[0]
-            y_proj = np.linspace(-0.5,0.5,num_proj)*vec_proj[1]
+            num_proj = np.round(thickness_angstroms / np.abs(m_proj[2])).astype('int')
+            if num_proj > 1:
+                vec_proj = m_proj[:2] / pixel_size_angstroms
+                shifts = np.arange(num_proj).astype('float')
+                shifts -= np.mean(shifts)
+                x_proj = shifts * vec_proj[0]
+                y_proj = shifts * vec_proj[1]
+        else:
+            num_proj = 1
 
         # initialize potential
         im_potential = np.zeros(im_size)
@@ -1136,7 +1141,7 @@ class Crystal:
         for a0 in range(atoms_ID_all.shape[0]):
             ind = np.argmin(np.abs(atoms_ID - atoms_ID_all[a0]))
 
-            if thickness_angstroms > 0:
+            if num_proj > 1:
                 for a1 in range(num_proj):
                     x_ind = np.round(x[a0]+x_proj[a1]).astype('int') + R_ind
                     y_ind = np.round(y[a0]+y_proj[a1]).astype('int') + R_ind
