@@ -21,7 +21,7 @@ jobs:
           token: ${{ secrets.GH_ACTION_VERSION_UPDATE }}      
       - name: Get changed files
         id: changed-files-specific
-        uses: tj-actions/changed-files@v42
+        uses: tj-actions/changed-files@v43
         with:
           files: |
             py4DSTEM/version.py

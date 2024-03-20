@@ -34,7 +34,7 @@ setup(
         "scikit-optimize >= 0.9.0",
         "tqdm >= 4.46.1",
         "dill >= 0.3.3",
-        "gdown >= 4.7.1",
+        "gdown >= 5.1.0",
         "dask >= 2.3.0",
         "distributed >= 2.3.0",
         "emdfile >= 0.0.14",
