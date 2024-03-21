@@ -989,6 +989,9 @@ class Crystal:
         """
         Generate an image of the projected potential of crystal in real space,
         using cell tiling, and a lookup table of the atomic potentials.
+        Note that we round atomic positions to the nearest pixel for speed.
+
+        TODO - fix scattering prefactor so that output units are sensible.
 
         Parameters
         ----------
