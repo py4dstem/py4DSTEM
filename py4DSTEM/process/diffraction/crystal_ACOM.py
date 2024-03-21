@@ -2123,8 +2123,6 @@ def calculate_strain(
 
     # Loop over all probe positions
     for rx, ry in tqdmnd(
-        # range(220,221),
-        # range(40,41),
         *bragg_peaks_array.shape,
         desc="Calculating strains",
         unit=" PointList",
