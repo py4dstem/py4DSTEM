@@ -155,11 +155,8 @@ class Parallax(PhaseReconstruction):
 
         if hasattr(self, "aberration_dict_cartesian"):
             self.metadata = Metadata(
-                name="aberrations_metadata",
-                data={
-                    v["aberration name"]: v["value [Ang]"]
-                    for k, v in self.aberration_dict_cartesian.items()
-                },
+                name="aberrations_polar_metadata",
+                data=self.aberration_dict_polar,
             )
 
         self.metadata = Metadata(
@@ -212,6 +209,8 @@ class Parallax(PhaseReconstruction):
             "name": instance_md["name"],
             "verbose": True,  # for compatibility
             "device": "cpu",  # for compatibility
+            "storage": "cpu",  # for compatibility
+            "clear_fft_cache": True,  # for compatibility
         }
 
         return kwargs
@@ -1756,6 +1755,8 @@ class Parallax(PhaseReconstruction):
 
         self.clear_device_mem(self._device, self._clear_fft_cache)
 
+        return self
+
     def _interpolate_array(
         self,
         image,
@@ -2194,16 +2195,16 @@ class Parallax(PhaseReconstruction):
                 measured_shifts_sx = xp.zeros(
                     self._region_of_interest_shape, dtype=xp.float32
                 )
-                measured_shifts_sx[
-                    self._xy_inds[:, 0], self._xy_inds[:, 1]
-                ] = self._xy_shifts_Ang[:, 0]
+                measured_shifts_sx[self._xy_inds[:, 0], self._xy_inds[:, 1]] = (
+                    self._xy_shifts_Ang[:, 0]
+                )
 
                 measured_shifts_sy = xp.zeros(
                     self._region_of_interest_shape, dtype=xp.float32
                 )
-                measured_shifts_sy[
-                    self._xy_inds[:, 0], self._xy_inds[:, 1]
-                ] = self._xy_shifts_Ang[:, 1]
+                measured_shifts_sy[self._xy_inds[:, 0], self._xy_inds[:, 1]] = (
+                    self._xy_shifts_Ang[:, 1]
+                )
 
                 fitted_shifts = (
                     xp.tensordot(gradients, xp.array(self._aberrations_coefs), axes=1)
@@ -2214,16 +2215,16 @@ class Parallax(PhaseReconstruction):
                 fitted_shifts_sx = xp.zeros(
                     self._region_of_interest_shape, dtype=xp.float32
                 )
-                fitted_shifts_sx[
-                    self._xy_inds[:, 0], self._xy_inds[:, 1]
-                ] = fitted_shifts[:, 0]
+                fitted_shifts_sx[self._xy_inds[:, 0], self._xy_inds[:, 1]] = (
+                    fitted_shifts[:, 0]
+                )
 
                 fitted_shifts_sy = xp.zeros(
                     self._region_of_interest_shape, dtype=xp.float32
                 )
-                fitted_shifts_sy[
-                    self._xy_inds[:, 0], self._xy_inds[:, 1]
-                ] = fitted_shifts[:, 1]
+                fitted_shifts_sy[self._xy_inds[:, 0], self._xy_inds[:, 1]] = (
+                    fitted_shifts[:, 1]
+                )
 
                 max_shift = xp.max(
                     xp.array(
@@ -2391,6 +2392,8 @@ class Parallax(PhaseReconstruction):
 
         self.clear_device_mem(self._device, self._clear_fft_cache)
 
+        return self
+
     def _calculate_CTF(self, alpha_shape, sampling, *coefs):
         xp = self._xp
 
@@ -2438,9 +2441,6 @@ class Parallax(PhaseReconstruction):
         plot_corrected_phase: bool = True,
         k_info_limit: float = None,
         k_info_power: float = 1.0,
-        Wiener_filter=False,
-        Wiener_signal_noise_ratio: float = 1.0,
-        Wiener_filter_low_only: bool = False,
         upsampled: bool = True,
         **kwargs,
     ):
@@ -2458,12 +2458,6 @@ class Parallax(PhaseReconstruction):
             maximum allowed frequency in butterworth filter
         k_info_power: float, optional
             power of butterworth filter
-        Wiener_filter: bool, optional
-            Use Wiener filtering instead of CTF sign correction.
-        Wiener_signal_noise_ratio: float, optional
-            Signal to noise radio at k = 0 for Wiener filter
-        Wiener_filter_low_only: bool, optional
-            Apply Wiener filtering only to the CTF portions before the 1st CTF maxima.
         """
 
         xp = self._xp
@@ -2497,59 +2491,35 @@ class Parallax(PhaseReconstruction):
                 use_CTF_fit = True
 
         if use_CTF_fit:
-            sin_chi = np.sin(
-                self._calculate_CTF(im.shape, (sx, sy), *self._aberrations_coefs)
-            )
+            even_radial_orders = (self._aberrations_mn[:, 0] % 2) == 1
+            odd_radial_orders = (self._aberrations_mn[:, 0] % 2) == 0
 
-            CTF_corr = xp.sign(sin_chi)
-            CTF_corr[0, 0] = 0
+            odd_coefs = self._aberrations_coefs.copy()
+            odd_coefs[even_radial_orders] = 0
+            chi_odd = self._calculate_CTF(im.shape, (sx, sy), *odd_coefs)
 
-            # apply correction to mean reconstructed BF image
-            im_fft_corr = xp.fft.fft2(im) * CTF_corr
+            even_coefs = self._aberrations_coefs.copy()
+            even_coefs[odd_radial_orders] = 0
+            chi_even = self._calculate_CTF(im.shape, (sx, sy), *even_coefs)
 
-            # if needed, add low pass filter output image
-            if k_info_limit is not None:
-                im_fft_corr /= 1 + (kra2**k_info_power) / (
-                    (k_info_limit) ** (2 * k_info_power)
-                )
+            if not chi_even.any():  # check if all zeros
+                chi_even = xp.ones_like(chi_even)
+
         else:
-            # CTF
-            sin_chi = xp.sin((xp.pi * self._wavelength * self.aberration_C1) * kra2)
+            chi_even = (xp.pi * self._wavelength * self.aberration_C1) * kra2
+            chi_odd = xp.zeros_like(chi_even)
 
-            if Wiener_filter:
-                SNR_inv = (
-                    xp.sqrt(
-                        1
-                        + (kra2**k_info_power)
-                        / ((k_info_limit) ** (2 * k_info_power))
-                    )
-                    / Wiener_signal_noise_ratio
-                )
-                CTF_corr = xp.sign(sin_chi) / (sin_chi**2 + SNR_inv)
-                if Wiener_filter_low_only:
-                    # limit Wiener filter to only the part of the CTF before 1st maxima
-                    k_thresh = 1 / xp.sqrt(
-                        2.0 * self._wavelength * xp.abs(self.aberration_C1)
-                    )
-                    k_mask = kra2 >= k_thresh**2
-                    CTF_corr[k_mask] = xp.sign(sin_chi[k_mask])
+        CTF_corr = xp.sign(xp.sin(chi_even)) * xp.exp(-1j * chi_odd)
+        CTF_corr[0, 0] = 0
 
-                # apply correction to mean reconstructed BF image
-                im_fft_corr = xp.fft.fft2(im) * CTF_corr
+        # apply correction to mean reconstructed BF image
+        im_fft_corr = xp.fft.fft2(im) * CTF_corr
 
-            else:
-                # CTF without tilt correction (beyond the parallax operator)
-                CTF_corr = xp.sign(sin_chi)
-                CTF_corr[0, 0] = 0
-
-                # apply correction to mean reconstructed BF image
-                im_fft_corr = xp.fft.fft2(im) * CTF_corr
-
-                # if needed, add low pass filter output image
-                if k_info_limit is not None:
-                    im_fft_corr /= 1 + (kra2**k_info_power) / (
-                        (k_info_limit) ** (2 * k_info_power)
-                    )
+        # if needed, add low pass filter output image
+        if k_info_limit is not None:
+            im_fft_corr /= 1 + (kra2**k_info_power) / (
+                (k_info_limit) ** (2 * k_info_power)
+            )
 
         # Output phase image
         self._recon_phase_corrected = xp.real(xp.fft.ifft2(im_fft_corr))
@@ -2585,10 +2555,12 @@ class Parallax(PhaseReconstruction):
             ax.set_title("Parallax-Corrected Phase Image")
 
         self.clear_device_mem(self._device, self._clear_fft_cache)
+        return self
 
     def depth_section(
         self,
-        depth_angstroms=np.arange(-250, 260, 100),
+        depth_angstroms=None,
+        use_CTF_fit=True,
         plot_depth_sections=True,
         k_info_limit: float = None,
         k_info_power: float = 1.0,
@@ -2617,7 +2589,6 @@ class Parallax(PhaseReconstruction):
 
         xp = self._xp
         asnumpy = self._asnumpy
-        depth_angstroms = xp.atleast_1d(depth_angstroms)
 
         if not hasattr(self, "aberration_C1"):
             raise ValueError(
@@ -2627,16 +2598,26 @@ class Parallax(PhaseReconstruction):
                 )
             )
 
+        if depth_angstroms is None:
+            depth_angstroms = np.linspace(-256, 256, 33)
+        depth_angstroms = xp.atleast_1d(depth_angstroms)
+
         # Fourier coordinates
-        kx = xp.fft.fftfreq(self._recon_BF.shape[0], self._scan_sampling[0])
-        ky = xp.fft.fftfreq(self._recon_BF.shape[1], self._scan_sampling[1])
+        sx, sy = self._scan_sampling
+        nx, ny = self._recon_BF.shape
+        kx = xp.fft.fftfreq(nx, sx)
+        ky = xp.fft.fftfreq(ny, sy)
         kra2 = (kx[:, None]) ** 2 + (ky[None, :]) ** 2
 
-        # information limit
-        if k_info_limit is not None:
-            k_filt = 1 / (
-                1 + (kra2**k_info_power) / ((k_info_limit) ** (2 * k_info_power))
+        if use_CTF_fit:
+            sin_chi = xp.sin(
+                self._calculate_CTF((nx, ny), (sx, sy), *self._aberrations_coefs)
             )
+        else:
+            sin_chi = xp.sin((xp.pi * self._wavelength * self.aberration_C1) * kra2)
+
+        CTF_corr = xp.sign(sin_chi)
+        CTF_corr[0, 0] = 0
 
         # init
         stack_depth = xp.zeros(
@@ -2671,28 +2652,21 @@ class Parallax(PhaseReconstruction):
             dz = depth_angstroms[a0]
 
             # Parallax
-            im_depth = xp.zeros_like(self._recon_BF, dtype="complex")
-            for a1 in range(self._stack_BF_shifted.shape[0]):
-                dx = self._probe_angles[a1, 0] * dz
-                dy = self._probe_angles[a1, 1] * dz
-                im_depth += xp.fft.fft2(self._stack_BF_shifted[a1]) * xp.exp(
-                    self._qx_shift * dx + self._qy_shift * dy
+            im_depth = xp.zeros_like(self._recon_BF, dtype=xp.complex64)
+            dx = -self._probe_angles[:, 0] * dz / self._scan_sampling[0]
+            dy = -self._probe_angles[:, 1] * dz / self._scan_sampling[1]
+            shift_op = xp.exp(
+                self._qx_shift[None] * dx[:, None, None]
+                + self._qy_shift[None] * dy[:, None, None]
+            )
+            im_depth = xp.fft.fft2(self._stack_BF_shifted) * shift_op * CTF_corr
+
+            if k_info_limit is not None:
+                im_depth /= 1 + (kra2**k_info_power) / (
+                    (k_info_limit) ** (2 * k_info_power)
                 )
 
-            # CTF correction
-            sin_chi = xp.sin(
-                (xp.pi * self._wavelength * (self.aberration_C1 + dz)) * kra2
-            )
-            CTF_corr = xp.sign(sin_chi)
-            CTF_corr[0, 0] = 0
-            if k_info_limit is not None:
-                CTF_corr *= k_filt
-
-            # apply correction to mean reconstructed BF image
-            stack_depth[a0] = (
-                xp.real(xp.fft.ifft2(im_depth * CTF_corr))
-                / self._stack_BF_shifted.shape[0]
-            )
+            stack_depth[a0] = xp.real(xp.fft.ifft2(im_depth)).mean(0)
 
             if plot_depth_sections:
                 row_index, col_index = np.unravel_index(a0, (nrows, ncols))
@@ -2716,13 +2690,9 @@ class Parallax(PhaseReconstruction):
 
                 ax.set_xticks([])
                 ax.set_yticks([])
-                ax.set_title(f"Depth section: {dz}A")
+                ax.set_title(f"Depth section: {dz} A")
 
-        if self._device == "gpu":
-            xp = self._xp
-            xp._default_memory_pool.free_all_blocks()
-            xp.clear_memo()
-
+        self.clear_device_mem(self._device, self._clear_fft_cache)
         return stack_depth
 
     def _crop_padded_object(
@@ -2752,19 +2722,33 @@ class Parallax(PhaseReconstruction):
 
         if upsampled:
             pad_x = np.round(
+                self._object_padding_px[0] * self._kde_upsample_factor
+            ).astype("int")
+            pad_x_left = np.round(
                 self._object_padding_px[0] / 2 * self._kde_upsample_factor
             ).astype("int")
+            pad_x_right = pad_x - pad_x_left
+
             pad_y = np.round(
+                self._object_padding_px[1] * self._kde_upsample_factor
+            ).astype("int")
+            pad_y_left = np.round(
                 self._object_padding_px[1] / 2 * self._kde_upsample_factor
             ).astype("int")
+            pad_y_right = pad_y - pad_y_left
+
         else:
-            pad_x = self._object_padding_px[0] // 2
-            pad_y = self._object_padding_px[1] // 2
+            pad_x_left = self._object_padding_px[0] // 2
+            pad_x_right = self._object_padding_px[0] - pad_x_left
+            pad_y_left = self._object_padding_px[1] // 2
+            pad_y_right = self._object_padding_px[1] - pad_y_left
 
-        pad_x -= remaining_padding
-        pad_y -= remaining_padding
+        pad_x_left -= remaining_padding
+        pad_x_right -= remaining_padding
+        pad_y_left -= remaining_padding
+        pad_y_right -= remaining_padding
 
-        return asnumpy(padded_object[pad_x:-pad_x, pad_y:-pad_y])
+        return asnumpy(padded_object[pad_x_left:-pad_x_right, pad_y_left:-pad_y_right])
 
     def _visualize_figax(
         self,

@@ -186,7 +186,7 @@ class PtychographyOptimizer:
                 pbar.update(1)
                 error_metric(ptycho)
 
-        self._grid_search_function = self._get_optimization_function(
+        grid_search_function = self._get_optimization_function(
             self._reconstruction_type,
             self._parameter_list,
             self._init_static_args,
@@ -200,7 +200,7 @@ class PtychographyOptimizer:
             evaluation_callback,
         )
 
-        grid_search_res = list(map(self._grid_search_function, params_grid))
+        grid_search_res = list(map(grid_search_function, params_grid))
         pbar.close()
 
         if plot_reconstructed_objects:
@@ -290,7 +290,7 @@ class PtychographyOptimizer:
 
         error_metric = self._get_error_metric(error_metric)
 
-        self._optimization_function = self._get_optimization_function(
+        optimization_function = self._get_optimization_function(
             self._reconstruction_type,
             self._parameter_list,
             self._init_static_args,
@@ -312,22 +312,37 @@ class PtychographyOptimizer:
         def callback(*args, **kwargs):
             pbar.update(1)
 
-        self._skopt_result = gp_minimize(
-            self._optimization_function,
-            self._parameter_list,
-            n_calls=n_calls,
-            n_initial_points=n_initial_points,
-            x0=self._x0,
-            callback=callback,
-            **skopt_kwargs,
-        )
+        try:
+            self._skopt_result = gp_minimize(
+                optimization_function,
+                self._parameter_list,
+                n_calls=n_calls,
+                n_initial_points=n_initial_points,
+                x0=self._x0,
+                callback=callback,
+                **skopt_kwargs,
+            )
 
-        print("Optimized parameters:")
-        for p, x in zip(self._parameter_list, self._skopt_result.x):
-            print(f"{p.name}: {x}")
+            # Remove the optimization result's reference to the function, as it potentially contains a
+            # copy of the ptycho object
+            del self._skopt_result["fun"]
 
-        # Finish the tqdm progressbar so subsequent things behave nicely
-        pbar.close()
+            # If using the GPU, free some cached stuff
+            if self._init_args.get("device", "cpu") == "gpu":
+                import cupy as cp
+
+                cp.get_default_memory_pool().free_all_blocks()
+                cp.get_default_pinned_memory_pool().free_all_blocks()
+                from cupy.fft.config import get_plan_cache
+
+                get_plan_cache().clear()
+
+            print("Optimized parameters:")
+            for p, x in zip(self._parameter_list, self._skopt_result.x):
+                print(f"{p.name}: {x}")
+        finally:
+            # close the pbar gracefully on interrupt
+            pbar.close()
 
         return self
 
@@ -644,6 +659,7 @@ class PtychographyOptimizer:
     def _set_optimizer_defaults(
         self,
         verbose=False,
+        clear_fft_cache=False,
         plot_center_of_mass=False,
         plot_rotation=False,
         plot_probe_overlaps=False,
@@ -655,6 +671,7 @@ class PtychographyOptimizer:
         Set all of the verbose and plotting to False, allowing for user-overwrite.
         """
         self._init_static_args["verbose"] = verbose
+        self._init_static_args["clear_fft_cache"] = clear_fft_cache
 
         self._preprocess_static_args["plot_center_of_mass"] = plot_center_of_mass
         self._preprocess_static_args["plot_rotation"] = plot_rotation

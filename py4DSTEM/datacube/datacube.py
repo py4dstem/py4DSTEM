@@ -405,7 +405,9 @@ class DataCube(
         d = pad_data_diffraction(self, pad_factor=N, output_size=output_size)
         return d
 
-    def resample_Q(self, N=None, output_size=None, method="bilinear"):
+    def resample_Q(
+        self, N=None, output_size=None, method="bilinear", conserve_array_sums=False
+    ):
         """
         Resamples the data in diffraction space by resampling factor N, or to match output_size,
         using either 'fourier' or 'bilinear' interpolation.
@@ -418,7 +420,11 @@ class DataCube(
         from py4DSTEM.preprocess import resample_data_diffraction
 
         d = resample_data_diffraction(
-            self, resampling_factor=N, output_size=output_size, method=method
+            self,
+            resampling_factor=N,
+            output_size=output_size,
+            method=method,
+            conserve_array_sums=conserve_array_sums,
         )
         return d
 
@@ -479,13 +485,29 @@ class DataCube(
         """
         from py4DSTEM.preprocess import filter_hot_pixels
 
-        d = filter_hot_pixels(
+        datacube = filter_hot_pixels(
             self,
             thresh,
             ind_compare,
             return_mask,
         )
-        return d
+        return datacube
+
+    def median_filter_masked_pixels(self, mask, kernel_width: int = 3):
+        """
+        This function fixes a datacube where the same pixels are consistently
+        bad. It requires a mask that identifies all the bad pixels in the dataset.
+        Then for each diffraction pattern, a median kernel is applied around each
+        bad pixel with the specified width.
+        """
+        from py4DSTEM.preprocess import median_filter_masked_pixels
+
+        datacube = median_filter_masked_pixels(
+            self,
+            mask,
+            kernel_width,
+        )
+        return datacube
 
     # Probe
 
@@ -494,7 +516,7 @@ class DataCube(
         ROI=None,
         align=True,
         mask=None,
-        threshold=0.2,
+        threshold=0.0,
         expansion=12,
         opening=3,
         verbose=False,

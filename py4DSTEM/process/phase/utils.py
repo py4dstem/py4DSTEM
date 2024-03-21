@@ -203,9 +203,7 @@ class ComplexProbe:
         self, alpha: Union[float, np.ndarray]
     ) -> Union[float, np.ndarray]:
         xp = self._xp
-        return xp.exp(
-            -0.5 * self._gaussian_spread**2 * alpha**2 / self._wavelength**2
-        )
+        return xp.exp(-0.5 * self._gaussian_spread**2 * alpha**2 / self._wavelength**2)
 
     def evaluate_spatial_envelope(
         self, alpha: Union[float, np.ndarray], phi: Union[float, np.ndarray]
@@ -2246,17 +2244,19 @@ def lanczos_kernel_density_estimate(
     return pix_output
 
 
-def vectorized_bilinear_resample(
+def bilinear_resample(
     array,
     scale=None,
     output_size=None,
     mode="grid-wrap",
     grid_mode=True,
+    vectorized=True,
+    conserve_array_sums=False,
     xp=np,
 ):
     """
     Resize an array along its final two axes.
-    Note, this is vectorized and thus very memory-intensive.
+    Note, this is vectorized by default and thus very memory-intensive.
 
     The scaling of the array can be specified by passing either `scale`, which sets
     the scaling factor along both axes to be scaled; or by passing `output_size`,
@@ -2300,9 +2300,30 @@ def vectorized_bilinear_resample(
     scale_output = (1,) * (array_size.size - input_size.size) + scale_output
 
     if xp is np:
-        array = zoom(array, scale_output, order=1, mode=mode, grid_mode=grid_mode)
+        zoom_xp = zoom
     else:
-        array = zoom_cp(array, scale_output, order=1, mode=mode, grid_mode=grid_mode)
+        zoom_xp = zoom_cp
+
+    if vectorized:
+        array = zoom_xp(array, scale_output, order=1, mode=mode, grid_mode=grid_mode)
+    else:
+        flat_array = array.reshape((-1,) + tuple(input_size))
+        out_array = xp.zeros(
+            (flat_array.shape[0],) + tuple(output_size), flat_array.dtype
+        )
+        for idx in range(flat_array.shape[0]):
+            out_array[idx] = zoom_xp(
+                flat_array[idx],
+                scale_output[-2:],
+                order=1,
+                mode=mode,
+                grid_mode=grid_mode,
+            )
+
+        array = out_array.reshape(tuple(array_size[:-2]) + tuple(output_size))
+
+    if conserve_array_sums:
+        array = array / np.array(scale_output).prod()
 
     return array
 
@@ -2311,6 +2332,7 @@ def vectorized_fourier_resample(
     array,
     scale=None,
     output_size=None,
+    conserve_array_sums=False,
     xp=np,
 ):
     """
@@ -2472,7 +2494,8 @@ def vectorized_fourier_resample(
     array_resize = xp.real(xp.fft.ifft2(array_resize)).astype(xp.float32)
 
     # Normalization
-    array_resize *= scale_output
+    if not conserve_array_sums:
+        array_resize = array_resize * scale_output
 
     return array_resize
 
