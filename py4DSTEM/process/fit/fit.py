@@ -169,8 +169,7 @@ def polar_gaussian_2D(
     # t2 = np.min(np.vstack([t,1-t]))
     t2 = np.square(t - mu_t)
     return (
-        I0 * np.exp(-(t2 / (2 * sigma_t**2) + (q - mu_q) ** 2 / (2 * sigma_q**2)))
-        + C
+        I0 * np.exp(-(t2 / (2 * sigma_t**2) + (q - mu_q) ** 2 / (2 * sigma_q**2))) + C
     )
 
 
