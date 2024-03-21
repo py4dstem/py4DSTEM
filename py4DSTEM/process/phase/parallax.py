@@ -2491,13 +2491,25 @@ class Parallax(PhaseReconstruction):
                 use_CTF_fit = True
 
         if use_CTF_fit:
-            sin_chi = xp.sin(
-                self._calculate_CTF(im.shape, (sx, sy), *self._aberrations_coefs)
-            )
-        else:
-            sin_chi = xp.sin((xp.pi * self._wavelength * self.aberration_C1) * kra2)
+            even_radial_orders = (self._aberrations_mn[:, 0] % 2) == 1
+            odd_radial_orders = (self._aberrations_mn[:, 0] % 2) == 0
 
-        CTF_corr = xp.sign(sin_chi)
+            odd_coefs = self._aberrations_coefs.copy()
+            odd_coefs[even_radial_orders] = 0
+            chi_odd = self._calculate_CTF(im.shape, (sx, sy), *odd_coefs)
+
+            even_coefs = self._aberrations_coefs.copy()
+            even_coefs[odd_radial_orders] = 0
+            chi_even = self._calculate_CTF(im.shape, (sx, sy), *even_coefs)
+
+            if not chi_even.any():  # check if all zeros
+                chi_even = xp.ones_like(chi_even)
+
+        else:
+            chi_even = (xp.pi * self._wavelength * self.aberration_C1) * kra2
+            chi_odd = xp.zeros_like(chi_even)
+
+        CTF_corr = xp.sign(xp.sin(chi_even)) * xp.exp(-1j * chi_odd)
         CTF_corr[0, 0] = 0
 
         # apply correction to mean reconstructed BF image
