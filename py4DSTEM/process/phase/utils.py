@@ -1874,25 +1874,40 @@ def bilinearly_interpolate_array(
     dx = xa - xF
     dy = ya - yF
 
-    all_inds = [
-        [xF, yF],
-        [xF + 1, yF],
-        [xF, yF + 1],
-        [xF + 1, yF + 1],
-    ]
+    #     all_inds = [
+    #         [xF, yF],
+    #         [xF + 1, yF],
+    #         [xF, yF + 1],
+    #         [xF + 1, yF + 1],
+    #     ]
 
-    all_weights = [
-        (1 - dx) * (1 - dy),
-        (dx) * (1 - dy),
-        (1 - dx) * (dy),
-        (dx) * (dy),
-    ]
+    #     all_weights = [
+    #         (1 - dx) * (1 - dy),
+    #         (dx) * (1 - dy),
+    #         (1 - dx) * (dy),
+    #         (dx) * (dy),
+    #     ]
 
     raveled_image = image.ravel()
     intensities = xp.zeros(xa.shape, dtype=xp.float32)
     # filter_weights = xp.zeros(xa.shape, dtype=xp.float32)
 
-    for inds, weights in zip(all_inds, all_weights):
+    #     for inds, weights in zip(all_inds, all_weights):
+    for basis_index in range(4):
+        match basis_index:
+            case 0:
+                inds = [xF, yF]
+                weights = (1 - dx) * (1 - dy)
+            case 1:
+                inds = [xF + 1, yF]
+                weights = (dx) * (1 - dy)
+            case 2:
+                inds = [xF, yF + 1]
+                weights = (1 - dx) * (dy)
+            case 3:
+                inds = [xF + 1, yF + 1]
+                weights = (dx) * (dy)
+
         intensities += (
             raveled_image[
                 xp.ravel_multi_index(
@@ -1940,33 +1955,29 @@ def lanczos_interpolate_array(
     dx = xa - xF
     dy = ya - yF
 
-    all_inds = []
-    all_weights = []
-
-    for i in range(-alpha + 1, alpha + 1):
-        for j in range(-alpha + 1, alpha + 1):
-            all_inds.append([xF + i, yF + j])
-            all_weights.append(
-                (xp.sinc(i - dx) * xp.sinc((i - dx) / alpha))
-                * (xp.sinc(j - dy) * xp.sinc((i - dy) / alpha))
-            )
-
     raveled_image = image.ravel()
     intensities = xp.zeros(xa.shape, dtype=xp.float32)
     filter_weights = xp.zeros(xa.shape, dtype=xp.float32)
 
-    for inds, weights in zip(all_inds, all_weights):
-        intensities += (
-            raveled_image[
-                xp.ravel_multi_index(
-                    inds,
-                    image.shape,
-                    mode=["wrap", "wrap"],
-                )
-            ]
-            * weights
-        )
-        filter_weights += weights
+    for i in range(-alpha + 1, alpha + 1):
+        for j in range(-alpha + 1, alpha + 1):
+
+            inds = [xF + i, yF + j]
+            weights = (xp.sinc(i - dx) * xp.sinc((i - dx) / alpha)) * (
+                xp.sinc(j - dy) * xp.sinc((i - dy) / alpha)
+            )
+
+            intensities += (
+                raveled_image[
+                    xp.ravel_multi_index(
+                        inds,
+                        image.shape,
+                        mode=["wrap", "wrap"],
+                    )
+                ]
+                * weights
+            )
+            filter_weights += weights
 
     return intensities / filter_weights
 
@@ -2080,25 +2091,40 @@ def bilinear_kernel_density_estimate(
     dx = xa.ravel() - xF
     dy = ya.ravel() - yF
 
-    all_inds = [
-        [xF, yF],
-        [xF + 1, yF],
-        [xF, yF + 1],
-        [xF + 1, yF + 1],
-    ]
+    #     all_inds = [
+    #         [xF, yF],
+    #         [xF + 1, yF],
+    #         [xF, yF + 1],
+    #         [xF + 1, yF + 1],
+    #     ]
 
-    all_weights = [
-        (1 - dx) * (1 - dy),
-        (dx) * (1 - dy),
-        (1 - dx) * (dy),
-        (dx) * (dy),
-    ]
+    #     all_weights = [
+    #         (1 - dx) * (1 - dy),
+    #         (dx) * (1 - dy),
+    #         (1 - dx) * (dy),
+    #         (dx) * (dy),
+    #     ]
 
     raveled_intensities = intensities.ravel()
     pix_count = xp.zeros(np.prod(output_shape), dtype=xp.float32)
     pix_output = xp.zeros(np.prod(output_shape), dtype=xp.float32)
 
-    for inds, weights in zip(all_inds, all_weights):
+    #     for inds, weights in zip(all_inds, all_weights):
+    for basis_index in range(4):
+        match basis_index:
+            case 0:
+                inds = [xF, yF]
+                weights = (1 - dx) * (1 - dy)
+            case 1:
+                inds = [xF + 1, yF]
+                weights = (dx) * (1 - dy)
+            case 2:
+                inds = [xF, yF + 1]
+                weights = (1 - dx) * (dy)
+            case 3:
+                inds = [xF + 1, yF + 1]
+                weights = (dx) * (dy)
+
         inds_1D = xp.ravel_multi_index(
             inds,
             output_shape,
@@ -2185,38 +2211,33 @@ def lanczos_kernel_density_estimate(
     dx = xa.ravel() - xF
     dy = ya.ravel() - yF
 
-    all_inds = []
-    all_weights = []
-
-    for i in range(-alpha + 1, alpha + 1):
-        for j in range(-alpha + 1, alpha + 1):
-            all_inds.append([xF + i, yF + j])
-            all_weights.append(
-                (xp.sinc(i - dx) * xp.sinc((i - dx) / alpha))
-                * (xp.sinc(j - dy) * xp.sinc((i - dy) / alpha))
-            )
-
     raveled_intensities = intensities.ravel()
     pix_count = xp.zeros(np.prod(output_shape), dtype=xp.float32)
     pix_output = xp.zeros(np.prod(output_shape), dtype=xp.float32)
 
-    for inds, weights in zip(all_inds, all_weights):
-        inds_1D = xp.ravel_multi_index(
-            inds,
-            output_shape,
-            mode=["wrap", "wrap"],
-        )
+    for i in range(-alpha + 1, alpha + 1):
+        for j in range(-alpha + 1, alpha + 1):
+            inds = [xF + i, yF + j]
+            weights = (xp.sinc(i - dx) * xp.sinc((i - dx) / alpha)) * (
+                xp.sinc(j - dy) * xp.sinc((i - dy) / alpha)
+            )
 
-        pix_count += xp.bincount(
-            inds_1D,
-            weights=weights,
-            minlength=np.prod(output_shape),
-        )
-        pix_output += xp.bincount(
-            inds_1D,
-            weights=weights * raveled_intensities,
-            minlength=np.prod(output_shape),
-        )
+            inds_1D = xp.ravel_multi_index(
+                inds,
+                output_shape,
+                mode=["wrap", "wrap"],
+            )
+
+            pix_count += xp.bincount(
+                inds_1D,
+                weights=weights,
+                minlength=np.prod(output_shape),
+            )
+            pix_output += xp.bincount(
+                inds_1D,
+                weights=weights * raveled_intensities,
+                minlength=np.prod(output_shape),
+            )
 
     # reshape 1D arrays to 2D
     pix_count = xp.reshape(
