@@ -2535,25 +2535,12 @@ class Parallax(PhaseReconstruction):
         # plotting
         if plot_corrected_phase:
             figsize = kwargs.pop("figsize", (6, 6))
-            cmap = kwargs.pop("cmap", "magma")
-
             fig, ax = plt.subplots(figsize=figsize)
 
-            cropped_object = self._crop_padded_object(
-                self._recon_phase_corrected, upsampled=upsampled
-            )
-
-            extent = [
-                0,
-                sy * cropped_object.shape[1],
-                sx * cropped_object.shape[0],
-                0,
-            ]
-
-            ax.imshow(
-                cropped_object,
-                extent=extent,
-                cmap=cmap,
+            self._visualize_figax(
+                fig,
+                ax,
+                upsampled=upsampled,
                 **kwargs,
             )
 
@@ -2734,7 +2721,7 @@ class Parallax(PhaseReconstruction):
             pad_x_left = np.round(
                 self._object_padding_px[0] / 2 * self._kde_upsample_factor
             ).astype("int")
-            pad_x_right = pad_x - pad_x_left
+            pad_x_right = pad_x_left - pad_x
 
             pad_y = np.round(
                 self._object_padding_px[1] * self._kde_upsample_factor
@@ -2742,20 +2729,27 @@ class Parallax(PhaseReconstruction):
             pad_y_left = np.round(
                 self._object_padding_px[1] / 2 * self._kde_upsample_factor
             ).astype("int")
-            pad_y_right = pad_y - pad_y_left
+            pad_y_right = pad_y_left - pad_y
 
         else:
             pad_x_left = self._object_padding_px[0] // 2
-            pad_x_right = self._object_padding_px[0] - pad_x_left
+            pad_x_right = pad_x_left - self._object_padding_px[0]
             pad_y_left = self._object_padding_px[1] // 2
-            pad_y_right = self._object_padding_px[1] - pad_y_left
+            pad_y_right = pad_y_left - self._object_padding_px[1]
 
         pad_x_left -= remaining_padding
-        pad_x_right -= remaining_padding
+        pad_x_right += remaining_padding
         pad_y_left -= remaining_padding
-        pad_y_right -= remaining_padding
+        pad_y_right += remaining_padding
 
-        return asnumpy(padded_object[pad_x_left:-pad_x_right, pad_y_left:-pad_y_right])
+        sx = slice(
+            pad_x_left if pad_x_left else None, pad_x_right if pad_x_right else None
+        )
+        sy = slice(
+            pad_y_left if pad_y_left else None, pad_y_right if pad_y_right else None
+        )
+
+        return asnumpy(padded_object[sx, sy])
 
     def _visualize_figax(
         self,
