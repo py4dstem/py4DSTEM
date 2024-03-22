@@ -266,6 +266,7 @@ class Parallax(PhaseReconstruction):
         vectorized_com_calculation: bool = True,
         device: str = None,
         clear_fft_cache: bool = None,
+        store_initial_arrays: bool = True,
         **kwargs,
     ):
         """
@@ -306,7 +307,9 @@ class Parallax(PhaseReconstruction):
         device: str, optional
             if not none, overwrites self._device to set device preprocess will be perfomed on.
         clear_fft_cache: bool, optional
-            if true, and device = 'gpu', clears the cached fft plan at the end of function calls
+            If True, and device = 'gpu', clears the cached fft plan at the end of function calls
+        store_initial_arrays: bool, optional
+            If True, stores a copy of the arrays necessary to reinitialize in reconstruct
 
         Returns
         --------
@@ -330,15 +333,15 @@ class Parallax(PhaseReconstruction):
             )
 
         # extract calibrations
-        self._intensities = self._extract_intensities_and_calibrations_from_datacube(
+        intensities = self._extract_intensities_and_calibrations_from_datacube(
             self._datacube,
             require_calibrations=True,
         )
 
-        self._intensities = xp.asarray(self._intensities)
+        intensities = xp.asarray(intensities)
 
-        self._region_of_interest_shape = np.array(self._intensities.shape[-2:])
-        self._scan_shape = np.array(self._intensities.shape[:2])
+        self._region_of_interest_shape = np.array(intensities.shape[-2:])
+        self._scan_shape = np.array(intensities.shape[:2])
 
         # descan correction
         if descan_correction_fit_function is not None:
@@ -350,7 +353,7 @@ class Parallax(PhaseReconstruction):
                 _,
                 _,
             ) = self._calculate_intensities_center_of_mass(
-                self._intensities,
+                intensities,
                 dp_mask=None,
                 fit_function=descan_correction_fit_function,
                 com_shifts=None,
@@ -360,8 +363,8 @@ class Parallax(PhaseReconstruction):
 
             com_fitted_x = asnumpy(com_fitted_x)
             com_fitted_y = asnumpy(com_fitted_y)
-            intensities = asnumpy(self._intensities)
-            intensities_shifted = np.zeros_like(intensities)
+            intensities_np = asnumpy(intensities)
+            intensities_shifted = np.zeros_like(intensities_np)
 
             center_x = com_fitted_x.mean()
             center_y = com_fitted_y.mean()
@@ -369,7 +372,7 @@ class Parallax(PhaseReconstruction):
             for rx in range(intensities_shifted.shape[0]):
                 for ry in range(intensities_shifted.shape[1]):
                     intensity_shifted = get_shifted_ar(
-                        intensities[rx, ry],
+                        intensities_np[rx, ry],
                         -com_fitted_x[rx, ry] + center_x,
                         -com_fitted_y[rx, ry] + center_y,
                         bilinear=True,
@@ -378,12 +381,12 @@ class Parallax(PhaseReconstruction):
 
                     intensities_shifted[rx, ry] = intensity_shifted
 
-            self._intensities = xp.asarray(intensities_shifted, xp.float32)
+            intensities = xp.asarray(intensities_shifted, xp.float32)
 
         if dp_mask is not None:
             self._dp_mask = xp.asarray(dp_mask)
         else:
-            dp_mean = self._intensities.mean((0, 1))
+            dp_mean = intensities.mean((0, 1))
             self._dp_mask = dp_mean >= (xp.max(dp_mean) * threshold_intensity)
 
         # select virtual detector pixels
@@ -454,7 +457,7 @@ class Parallax(PhaseReconstruction):
 
         # Collect BF images
         all_bfs = xp.moveaxis(
-            self._intensities[:, :, self._xy_inds[:, 0], self._xy_inds[:, 1]],
+            intensities[:, :, self._xy_inds[:, 0], self._xy_inds[:, 1]],
             (0, 1, 2),
             (1, 2, 0),
         )
@@ -646,13 +649,16 @@ class Parallax(PhaseReconstruction):
             Gs = xp.fft.fft2(self._stack_BF_shifted)
 
             self._xy_shifts = (
-                -self._probe_angles * defocus_guess / xp.array(self._scan_sampling)
+                -self._probe_angles
+                * defocus_guess
+                / xp.array(self._scan_sampling, dtype=xp.float32)
             )
 
             if rotation_guess:
                 angle = xp.deg2rad(rotation_guess)
                 rotation_matrix = xp.array(
-                    [[np.cos(angle), np.sin(angle)], [-np.sin(angle), np.cos(angle)]]
+                    [[np.cos(angle), np.sin(angle)], [-np.sin(angle), np.cos(angle)]],
+                    dtype=xp.float32,
                 )
                 self._xy_shifts = xp.dot(self._xy_shifts, rotation_matrix)
 
@@ -693,11 +699,12 @@ class Parallax(PhaseReconstruction):
             / self._mask_sum
         )
 
-        self._recon_BF_initial = self._recon_BF.copy()
-        self._stack_BF_shifted_initial = self._stack_BF_shifted.copy()
-        self._stack_mask_initial = self._stack_mask.copy()
-        self._recon_mask_initial = self._recon_mask.copy()
-        self._xy_shifts_initial = self._xy_shifts.copy()
+        if store_initial_arrays:
+            self._recon_BF_initial = self._recon_BF.copy()
+            self._stack_BF_shifted_initial = self._stack_BF_shifted.copy()
+            self._stack_mask_initial = self._stack_mask.copy()
+            self._recon_mask_initial = self._recon_mask.copy()
+            self._xy_shifts_initial = self._xy_shifts.copy()
 
         self.recon_BF = asnumpy(self._recon_BF)
 
