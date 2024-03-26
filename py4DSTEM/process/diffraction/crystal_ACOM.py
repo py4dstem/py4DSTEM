@@ -550,142 +550,143 @@ def orientation_plan(
         ).astype("int")
         self.orientation_inds[:, 2] = orientation_sector
 
-    # If needed, create coarse orientation sieve
-    if self.orientation_refine:
-        self.orientation_sieve = np.logical_and(
-            np.mod(self.orientation_inds[:, 0], self.orientation_refine_ratio) == 0,
-            np.mod(self.orientation_inds[:, 1], self.orientation_refine_ratio) == 0,
-        )
-        if self.CUDA:
-            self.orientation_sieve_CUDA = cp.asarray(self.orientation_sieve)
-
-    # Convert to spherical coordinates
-    elev = np.arctan2(
-        np.hypot(self.orientation_vecs[:, 0], self.orientation_vecs[:, 1]),
-        self.orientation_vecs[:, 2],
-    )
-    # azim = np.pi / 2 + np.arctan2(
-    #     self.orientation_vecs[:, 1], self.orientation_vecs[:, 0]
-    # )
-    azim = np.arctan2(self.orientation_vecs[:, 0], self.orientation_vecs[:, 1])
-
-    # Solve for number of angular steps along in-plane rotation direction
-    self.orientation_in_plane_steps = np.round(360 / angle_step_in_plane).astype(
-        np.integer
-    )
-
-    # Calculate -z angles (Euler angle 3)
-    self.orientation_gamma = np.linspace(
-        0, 2 * np.pi, self.orientation_in_plane_steps, endpoint=False
-    )
-
-    # Determine the radii of all spherical shells
-    radii_test = np.round(self.g_vec_leng / tol_distance) * tol_distance
-    radii = np.unique(radii_test)
-    # Remove zero beam
-    keep = np.abs(radii) > tol_distance
-    self.orientation_shell_radii = radii[keep]
-
-    # init
-    self.orientation_shell_index = -1 * np.ones(self.g_vec_all.shape[1], dtype="int")
-    self.orientation_shell_count = np.zeros(self.orientation_shell_radii.size)
-
-    # Assign each structure factor point to a radial shell
-    for a0 in range(self.orientation_shell_radii.size):
-        sub = np.abs(self.orientation_shell_radii[a0] - radii_test) <= tol_distance / 2
-
-        self.orientation_shell_index[sub] = a0
-        self.orientation_shell_count[a0] = np.sum(sub)
-        self.orientation_shell_radii[a0] = np.mean(self.g_vec_leng[sub])
-
-    # init storage arrays
-    self.orientation_rotation_angles = np.zeros((self.orientation_num_zones, 3))
-    self.orientation_rotation_matrices = np.zeros((self.orientation_num_zones, 3, 3))
-
-    # If possible,  Get symmetry operations for this spacegroup, store in matrix form
-    if self.pymatgen_available:
-        # get operators
-        ops = self.pointgroup.get_point_group_operations()
-
-        # Inverse of lattice
-        zone_axis_range_inv = np.linalg.inv(self.orientation_zone_axis_range)
-
-        # init
-        num_sym = len(ops)
-        self.symmetry_operators = np.zeros((num_sym, 3, 3))
-        self.symmetry_reduction = np.zeros((num_sym, 3, 3))
-
-        # calculate symmetry and reduction matrices
-        for a0 in range(num_sym):
-            self.symmetry_operators[a0] = (
-                self.lat_inv.T @ ops[a0].rotation_matrix.T @ self.lat_real
+        # Calculate rotation matrices for zone axes
+        for a0 in np.arange(self.orientation_num_zones):
+            m1z = np.array(
+                [
+                    [np.cos(azim[a0]), np.sin(azim[a0]), 0],
+                    [-np.sin(azim[a0]), np.cos(azim[a0]), 0],
+                    [0, 0, 1],
+                ]
             )
-            self.symmetry_reduction[a0] = (
-                zone_axis_range_inv.T @ self.symmetry_operators[a0]
-            ).T
-
-        # Remove duplicates
-        keep = np.ones(num_sym, dtype="bool")
-        for a0 in range(num_sym):
-            if keep[a0]:
-                diff = np.sum(
-                    np.abs(self.symmetry_operators - self.symmetry_operators[a0]),
-                    axis=(1, 2),
-                )
-                sub = diff < 1e-3
-                sub[: a0 + 1] = False
-                keep[sub] = False
-        self.symmetry_operators = self.symmetry_operators[keep]
-        self.symmetry_reduction = self.symmetry_reduction[keep]
-
-        if (
-            self.orientation_fiber_angles is not None
-            and np.abs(self.orientation_fiber_angles[0] - 180.0) < 1e-3
-        ):
-            zone_axis_range_flip = self.orientation_zone_axis_range.copy()
-            zone_axis_range_flip[0, :] = -1 * zone_axis_range_flip[0, :]
-            zone_axis_range_inv = np.linalg.inv(zone_axis_range_flip)
-
-            num_sym = self.symmetry_operators.shape[0]
-            self.symmetry_operators = np.tile(self.symmetry_operators, [2, 1, 1])
-            self.symmetry_reduction = np.tile(self.symmetry_reduction, [2, 1, 1])
-
-            for a0 in range(num_sym):
-                self.symmetry_reduction[a0 + num_sym] = (
-                    zone_axis_range_inv.T @ self.symmetry_operators[a0 + num_sym]
-                ).T
-
-    # Calculate rotation matrices for zone axes
-    for a0 in np.arange(self.orientation_num_zones):
-        m1z = np.array(
-            [
-                [np.cos(azim[a0]), np.sin(azim[a0]), 0],
-                [-np.sin(azim[a0]), np.cos(azim[a0]), 0],
-                [0, 0, 1],
-            ]
-        )
-        m2x = np.array(
-            [
-                [1, 0, 0],
-                [0, np.cos(elev[a0]), np.sin(elev[a0])],
-                [0, -np.sin(elev[a0]), np.cos(elev[a0])],
-            ]
-        )
-        m3z = np.array(
-            [
-                [np.cos(azim[a0]), -np.sin(azim[a0]), 0],
-                [np.sin(azim[a0]), np.cos(azim[a0]), 0],
-                [0, 0, 1],
-            ]
-        )
-        self.orientation_rotation_matrices[a0, :, :] = m1z @ m2x @ m3z
-        self.orientation_rotation_angles[a0, :] = [azim[a0], elev[a0], -azim[a0]]
-
-    # Calculate reference arrays for all orientations
-    k0 = np.array([0.0, 0.0, -1.0 / self.wavelength])
-    n = np.array([0.0, 0.0, -1.0])
-
+            m2x = np.array(
+                [
+                    [1, 0, 0],
+                    [0, np.cos(elev[a0]), np.sin(elev[a0])],
+                    [0, -np.sin(elev[a0]), np.cos(elev[a0])],
+                ]
+            )
+            m3z = np.array(
+                [
+                    [np.cos(azim[a0]), -np.sin(azim[a0]), 0],
+                    [np.sin(azim[a0]), np.cos(azim[a0]), 0],
+                    [0, 0, 1],
+                ]
+            )
+            self.orientation_rotation_matrices[a0, :, :] = m1z @ m2x @ m3z
+            self.orientation_rotation_angles[a0, :] = [azim[a0], elev[a0], -azim[a0]]
+    
+    # Rest of this function is only required for calculating orientation arrays
     if calculate_correlation_array:
+        # If needed, create coarse orientation sieve
+        if self.orientation_refine:
+            self.orientation_sieve = np.logical_and(
+                np.mod(self.orientation_inds[:, 0], self.orientation_refine_ratio) == 0,
+                np.mod(self.orientation_inds[:, 1], self.orientation_refine_ratio) == 0,
+            )
+            if self.CUDA:
+                self.orientation_sieve_CUDA = cp.asarray(self.orientation_sieve)
+        
+        # Convert to spherical coordinates
+        elev = np.arctan2(
+            np.hypot(self.orientation_vecs[:, 0], self.orientation_vecs[:, 1]),
+            self.orientation_vecs[:, 2],
+        )
+        # azim = np.pi / 2 + np.arctan2(
+        #     self.orientation_vecs[:, 1], self.orientation_vecs[:, 0]
+        # )
+        azim = np.arctan2(self.orientation_vecs[:, 0], self.orientation_vecs[:, 1])
+        
+        # Solve for number of angular steps along in-plane rotation direction
+        self.orientation_in_plane_steps = np.round(360 / angle_step_in_plane).astype(
+            np.integer
+        )
+        
+        # Calculate -z angles (Euler angle 3)
+        self.orientation_gamma = np.linspace(
+            0, 2 * np.pi, self.orientation_in_plane_steps, endpoint=False
+        )
+        
+        # Determine the radii of all spherical shells
+        radii_test = np.round(self.g_vec_leng / tol_distance) * tol_distance
+        radii = np.unique(radii_test)
+        # Remove zero beam
+        keep = np.abs(radii) > tol_distance
+        self.orientation_shell_radii = radii[keep]
+        
+        # init
+        self.orientation_shell_index = -1 * np.ones(self.g_vec_all.shape[1], dtype="int")
+        self.orientation_shell_count = np.zeros(self.orientation_shell_radii.size)
+        
+        # Assign each structure factor point to a radial shell
+        for a0 in range(self.orientation_shell_radii.size):
+            sub = np.abs(self.orientation_shell_radii[a0] - radii_test) <= tol_distance / 2
+        
+            self.orientation_shell_index[sub] = a0
+            self.orientation_shell_count[a0] = np.sum(sub)
+            self.orientation_shell_radii[a0] = np.mean(self.g_vec_leng[sub])
+        
+        # init storage arrays
+        self.orientation_rotation_angles = np.zeros((self.orientation_num_zones, 3))
+        self.orientation_rotation_matrices = np.zeros((self.orientation_num_zones, 3, 3))
+        
+        # If possible,  Get symmetry operations for this spacegroup, store in matrix form
+        if self.pymatgen_available:
+            # get operators
+            ops = self.pointgroup.get_point_group_operations()
+        
+            # Inverse of lattice
+            zone_axis_range_inv = np.linalg.inv(self.orientation_zone_axis_range)
+        
+            # init
+            num_sym = len(ops)
+            self.symmetry_operators = np.zeros((num_sym, 3, 3))
+            self.symmetry_reduction = np.zeros((num_sym, 3, 3))
+        
+            # calculate symmetry and reduction matrices
+            for a0 in range(num_sym):
+                self.symmetry_operators[a0] = (
+                    self.lat_inv.T @ ops[a0].rotation_matrix.T @ self.lat_real
+                )
+                self.symmetry_reduction[a0] = (
+                    zone_axis_range_inv.T @ self.symmetry_operators[a0]
+                ).T
+        
+            # Remove duplicates
+            keep = np.ones(num_sym, dtype="bool")
+            for a0 in range(num_sym):
+                if keep[a0]:
+                    diff = np.sum(
+                        np.abs(self.symmetry_operators - self.symmetry_operators[a0]),
+                        axis=(1, 2),
+                    )
+                    sub = diff < 1e-3
+                    sub[: a0 + 1] = False
+                    keep[sub] = False
+            self.symmetry_operators = self.symmetry_operators[keep]
+            self.symmetry_reduction = self.symmetry_reduction[keep]
+        
+            if (
+                self.orientation_fiber_angles is not None
+                and np.abs(self.orientation_fiber_angles[0] - 180.0) < 1e-3
+            ):
+                zone_axis_range_flip = self.orientation_zone_axis_range.copy()
+                zone_axis_range_flip[0, :] = -1 * zone_axis_range_flip[0, :]
+                zone_axis_range_inv = np.linalg.inv(zone_axis_range_flip)
+        
+                num_sym = self.symmetry_operators.shape[0]
+                self.symmetry_operators = np.tile(self.symmetry_operators, [2, 1, 1])
+                self.symmetry_reduction = np.tile(self.symmetry_reduction, [2, 1, 1])
+        
+                for a0 in range(num_sym):
+                    self.symmetry_reduction[a0 + num_sym] = (
+                        zone_axis_range_inv.T @ self.symmetry_operators[a0 + num_sym]
+                    ).T
+        
+        # Calculate reference arrays for all orientations
+        k0 = np.array([0.0, 0.0, -1.0 / self.wavelength])
+        n = np.array([0.0, 0.0, -1.0])
+
         # initialize empty correlation array
         self.orientation_ref = np.zeros(
             (
