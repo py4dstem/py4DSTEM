@@ -1073,11 +1073,11 @@ class Crystal:
                 num_proj = 1
         else:
             num_proj = 1
-        
+
         # Determine tiling range
         if thickness_angstroms > 0:
-            # dx = m_proj[0] * num_proj * 0.5 
-            # dy = m_proj[1] * num_proj * 0.5 
+            # dx = m_proj[0] * num_proj * 0.5
+            # dy = m_proj[1] * num_proj * 0.5
             # include the cell height
             dz = m_proj[2] * num_proj * 0.5
             p_corners = np.array(
@@ -1101,11 +1101,8 @@ class Crystal:
                     [im_size_Ang[0] * 0.5, im_size_Ang[1] * 0.5, 0.0],
                 ]
             )
-            
-        ab = np.linalg.lstsq(
-            m_tile[:, :2].T, 
-            p_corners[:, :2].T, 
-            rcond=None)[0]
+
+        ab = np.linalg.lstsq(m_tile[:, :2].T, p_corners[:, :2].T, rcond=None)[0]
         ab = np.floor(ab)
         a_range = np.array((np.min(ab[0]) - 1, np.max(ab[0]) + 2))
         b_range = np.array((np.min(ab[1]) - 1, np.max(ab[1]) + 2))
@@ -1128,9 +1125,9 @@ class Crystal:
 
         # if needed, tile atoms in the projection direction
         if num_proj > 1:
-            x = (x0[:,None] + x_proj[None,:]).ravel()
-            y = (y0[:,None] + y_proj[None,:]).ravel()
-            atoms_ID_all = np.tile(atoms_ID_all_0,(num_proj,1))
+            x = (x0[:, None] + x_proj[None, :]).ravel()
+            y = (y0[:, None] + y_proj[None, :]).ravel()
+            atoms_ID_all = np.tile(atoms_ID_all_0, (num_proj, 1))
         else:
             x = x0
             y = y0
@@ -1206,9 +1203,9 @@ class Crystal:
                 y_ind < im_size[1],
             )
 
-            im_potential[
-                x_ind[x_sub][:, None], y_ind[y_sub][None, :]
-            ] += atoms_lookup[ind][x_sub, :][:, y_sub]
+            im_potential[x_ind[x_sub][:, None], y_ind[y_sub][None, :]] += atoms_lookup[
+                ind
+            ][x_sub, :][:, y_sub]
 
         if thickness_angstroms > 0:
             im_potential /= num_proj

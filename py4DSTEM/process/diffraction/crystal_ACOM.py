@@ -76,6 +76,13 @@ def orientation_plan(
         progress_bar (bool):    If false no progress bar is displayed
     """
 
+    # Check to make sure structure factors have been calculated if we want to calculate the correlation array.
+    if calculate_correlation_array is True:
+        if not hasattr(self, "g_vec_leng"):
+            raise ValueError(
+                "Run .calculate_structure_factors() before calculating orientation plan"
+            )
+
     # Store inputs
     self.accel_voltage = np.asarray(accel_voltage)
     self.orientation_kernel_size = np.asarray(corr_kernel_size)
@@ -550,6 +557,13 @@ def orientation_plan(
         ).astype("int")
         self.orientation_inds[:, 2] = orientation_sector
 
+        # Convert to spherical coordinates
+        elev = np.arctan2(
+            np.hypot(self.orientation_vecs[:, 0], self.orientation_vecs[:, 1]),
+            self.orientation_vecs[:, 2],
+        )
+        azim = np.arctan2(self.orientation_vecs[:, 0], self.orientation_vecs[:, 1])
+
         # Calculate rotation matrices for zone axes
         for a0 in np.arange(self.orientation_num_zones):
             m1z = np.array(
@@ -587,16 +601,9 @@ def orientation_plan(
             if self.CUDA:
                 self.orientation_sieve_CUDA = cp.asarray(self.orientation_sieve)
 
-        # Convert to spherical coordinates
-        elev = np.arctan2(
-            np.hypot(self.orientation_vecs[:, 0], self.orientation_vecs[:, 1]),
-            self.orientation_vecs[:, 2],
-        )
         # azim = np.pi / 2 + np.arctan2(
         #     self.orientation_vecs[:, 1], self.orientation_vecs[:, 0]
         # )
-        azim = np.arctan2(self.orientation_vecs[:, 0], self.orientation_vecs[:, 1])
-
         # Solve for number of angular steps along in-plane rotation direction
         self.orientation_in_plane_steps = np.round(360 / angle_step_in_plane).astype(
             np.integer
