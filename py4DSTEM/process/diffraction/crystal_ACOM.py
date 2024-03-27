@@ -78,8 +78,10 @@ def orientation_plan(
 
     # Check to make sure user has calculated the structure factors if needed
     if calculate_correlation_array:
-        if not hasattr(self,'g_vec_leng'):
-            raise ValueError('Run .calculate_structure_factors() before calculating an orientation plan.')
+        if not hasattr(self, "g_vec_leng"):
+            raise ValueError(
+                "Run .calculate_structure_factors() before calculating an orientation plan."
+            )
 
     # Store inputs
     self.accel_voltage = np.asarray(accel_voltage)
@@ -681,17 +683,21 @@ def orientation_plan(
         self.orientation_shell_radii = radii[keep]
 
         # init
-        self.orientation_shell_index = -1 * np.ones(self.g_vec_all.shape[1], dtype="int")
+        self.orientation_shell_index = -1 * np.ones(
+            self.g_vec_all.shape[1], dtype="int"
+        )
         self.orientation_shell_count = np.zeros(self.orientation_shell_radii.size)
 
         # Assign each structure factor point to a radial shell
         for a0 in range(self.orientation_shell_radii.size):
-            sub = np.abs(self.orientation_shell_radii[a0] - radii_test) <= tol_distance / 2
+            sub = (
+                np.abs(self.orientation_shell_radii[a0] - radii_test)
+                <= tol_distance / 2
+            )
 
             self.orientation_shell_index[sub] = a0
             self.orientation_shell_count[a0] = np.sum(sub)
             self.orientation_shell_radii[a0] = np.mean(self.g_vec_leng[sub])
-
 
         # initialize empty correlation array
         self.orientation_ref = np.zeros(
