@@ -381,7 +381,9 @@ class PtychographyOptimizer:
 
             fig = plt.figure(figsize=figsize)
             ax = fig.add_subplot(spec[0])
-            skopt_plot_gaussian_process(self._skopt_result, ax=ax, **kwargs)
+            skopt_plot_gaussian_process(
+                self._skopt_result, ax=ax, show_title=False, **kwargs
+            )
 
             if plot_convergence:
                 ax = fig.add_subplot(spec[1])

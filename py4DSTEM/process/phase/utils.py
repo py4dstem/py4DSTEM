@@ -1961,7 +1961,6 @@ def lanczos_interpolate_array(
 
     for i in range(-alpha + 1, alpha + 1):
         for j in range(-alpha + 1, alpha + 1):
-
             inds = [xF + i, yF + j]
             weights = (xp.sinc(i - dx) * xp.sinc((i - dx) / alpha)) * (
                 xp.sinc(j - dy) * xp.sinc((i - dy) / alpha)
