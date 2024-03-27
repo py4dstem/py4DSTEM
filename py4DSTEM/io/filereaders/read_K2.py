@@ -124,7 +124,7 @@ class K2DataArray(Sequence):
             # this may be wrong for binned data... in which case the reader doesn't work anyway!
             Q_Nx = gtg.allTags[".SI Image Tags.Acquisition.Parameters.Detector.height"]
             Q_Ny = gtg.allTags[".SI Image Tags.Acquisition.Parameters.Detector.width"]
-        except:
+        except (ValueError, KeyError, AttributeError):
             print("Warning: diffraction pattern shape not detected!")
             print("Assuming 1920x1792 as the diffraction pattern size!")
             Q_Nx = 1792

@@ -144,7 +144,6 @@ def electron_count_GPU(
     See electron_count() for additional documentation.
     """
     import torch
-    import dm
 
     assert isinstance(output, str), "output must be a str"
     assert output in [
@@ -417,7 +416,6 @@ def counted_pointlistarray_to_datacube(counted_pointlistarray, shape, subpixel=F
 
 
 if __name__ == "__main__":
-    from py4DSTEM.process.preprocess import get_darkreference
     from py4DSTEM.io import DataCube, save
     from ncempy.io import dm
 

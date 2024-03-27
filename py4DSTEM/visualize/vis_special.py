@@ -4,18 +4,14 @@ from matplotlib.patches import Wedge
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.spatial import Voronoi
 
-from emdfile import PointList
 from py4DSTEM.visualize import show
 from py4DSTEM.visualize.overlay import (
     add_pointlabels,
-    add_vector,
-    add_bragg_index_labels,
     add_ellipses,
     add_points,
     add_scalebar,
 )
 from py4DSTEM.visualize.vis_grid import show_image_grid
-from py4DSTEM.visualize.vis_RQ import ax_addaxes, ax_addaxes_QtoR
 from colorspacious import cspace_convert
 
 
@@ -616,7 +612,7 @@ def show_selected_dps(
     assert isinstance(datacube, DataCube)
     N = len(positions)
     assert all(
-        [len(x) == 2 for x in positions]
+        len(x) == 2 for x in positions
     ), "Improperly formated argument `positions`"
     if bragg_pos is not None:
         show_disk_pos = True
@@ -639,7 +635,7 @@ def show_selected_dps(
         H = int(np.ceil(N / W))
     else:
         H, W = HW
-    assert all([isinstance(x, (int, np.integer)) for x in (H, W)])
+    assert all(isinstance(x, (int, np.integer)) for x in (H, W))
 
     x = [i[0] for i in positions]
     y = [i[1] for i in positions]

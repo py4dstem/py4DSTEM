@@ -1,7 +1,5 @@
 import numpy as np
-from copy import copy
 from typing import Optional
-import h5py
 
 from py4DSTEM.io.legacy.legacy13.v13_emd_classes.tree import Tree
 from py4DSTEM.io.legacy.legacy13.v13_emd_classes.metadata import Metadata

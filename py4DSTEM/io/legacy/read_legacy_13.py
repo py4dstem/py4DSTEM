@@ -1,7 +1,6 @@
 # File reader for py4DSTEM v13 files
 
 import h5py
-import numpy as np
 import warnings
 from os.path import exists, basename, dirname, join
 from typing import Optional, Union

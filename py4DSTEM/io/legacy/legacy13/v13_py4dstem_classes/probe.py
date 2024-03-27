@@ -1,14 +1,13 @@
 # Defines the Probe class, which stores vacuum probes
 # and cross-correlation kernels derived from them
 
-from py4DSTEM.io.legacy.legacy13.v13_emd_classes.array import Array, Metadata
+from py4DSTEM.io.legacy.legacy13.v13_emd_classes.array import Metadata
 from py4DSTEM.io.legacy.legacy13.v13_py4dstem_classes.diffractionslice import (
     DiffractionSlice,
 )
 
-from typing import Optional, Union
+from typing import Optional
 import numpy as np
-import h5py
 
 
 class Probe(DiffractionSlice):

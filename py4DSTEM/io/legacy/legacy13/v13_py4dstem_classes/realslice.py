@@ -2,7 +2,6 @@ from py4DSTEM.io.legacy.legacy13.v13_emd_classes.array import Array
 
 from typing import Optional, Union
 import numpy as np
-import h5py
 
 
 class RealSlice(Array):
@@ -30,9 +29,9 @@ class RealSlice(Array):
             A new RealSlice instance
         """
         # expand pixel inputs to include 2 dimensions
-        if type(pixel_size) is not list:
+        if not isinstance(pixel_size, list):
             pixel_size = [pixel_size, pixel_size]
-        if type(pixel_units) is not list:
+        if not isinstance(pixel_units, list):
             pixel_units = [pixel_units, pixel_units]
 
         # initialize as an Array
@@ -63,7 +62,7 @@ class RealSlice(Array):
 
     @pixel_size.setter
     def pixel_size(self, x):
-        if type(x) is not list:
+        if not isinstance(x, list):
             x = [x, x]
         self.set_dim(0, [0, x[0]])
         self.set_dim(1, [0, x[1]])
@@ -75,7 +74,7 @@ class RealSlice(Array):
 
     @pixel_units.setter
     def pixel_units(self, x):
-        if type(x) is not list:
+        if not isinstance(x, list):
             x = [x, x]
         self.dim_units[0] = x[0]
         self.dim_units[1] = x[1]

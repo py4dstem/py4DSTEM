@@ -23,13 +23,13 @@ def add_rectangles(ax, d):
         lims = [lims]
     assert isinstance(lims, list)
     N = len(lims)
-    assert all([isinstance(t, tuple) for t in lims])
-    assert all([len(t) == 4 for t in lims])
+    assert all(isinstance(t, tuple) for t in lims)
+    assert all(len(t) == 4 for t in lims)
     # color
     color = d["color"] if "color" in d.keys() else "r"
     if isinstance(color, list):
         assert len(color) == N
-        assert all([is_color_like(c) for c in color])
+        assert all(is_color_like(c) for c in color)
     else:
         assert is_color_like(color)
         color = [color for i in range(N)]
@@ -40,7 +40,7 @@ def add_rectangles(ax, d):
     else:
         assert isinstance(fill, list)
         assert len(fill) == N
-        assert all([isinstance(f, bool) for f in fill])
+        assert all(isinstance(f, bool) for f in fill)
     # alpha
     alpha = d["alpha"] if "alpha" in d.keys() else 1
     if isinstance(alpha, (float, int, np.float64)):
@@ -48,7 +48,7 @@ def add_rectangles(ax, d):
     else:
         assert isinstance(alpha, list)
         assert len(alpha) == N
-        assert all([isinstance(a, (float, int, np.float64)) for a in alpha])
+        assert all(isinstance(a, (float, int, np.float64)) for a in alpha)
     # linewidth
     linewidth = d["linewidth"] if "linewidth" in d.keys() else 2
     if isinstance(linewidth, (float, int, np.float64)):
@@ -56,12 +56,12 @@ def add_rectangles(ax, d):
     else:
         assert isinstance(linewidth, list)
         assert len(linewidth) == N
-        assert all([isinstance(lw, (float, int, np.float64)) for lw in linewidth])
+        assert all(isinstance(lw, (float, int, np.float64)) for lw in linewidth)
     # additional parameters
     kws = [
         k for k in d.keys() if k not in ("lims", "color", "fill", "alpha", "linewidth")
     ]
-    kwargs = dict()
+    kwargs = {}
     for k in kws:
         kwargs[k] = d[k]
 
@@ -97,8 +97,8 @@ def add_circles(ax, d):
         center = [center]
     assert isinstance(center, list)
     N = len(center)
-    assert all([isinstance(x, tuple) for x in center])
-    assert all([len(x) == 2 for x in center])
+    assert all(isinstance(x, tuple) for x in center)
+    assert all(len(x) == 2 for x in center)
     # radius
     assert "R" in d.keys()
     R = d["R"]
@@ -106,12 +106,12 @@ def add_circles(ax, d):
         R = [R for i in range(N)]
     assert isinstance(R, list)
     assert len(R) == N
-    assert all([isinstance(i, Number) for i in R])
+    assert all(isinstance(i, Number) for i in R)
     # color
     color = d["color"] if "color" in d.keys() else "r"
     if isinstance(color, list):
         assert len(color) == N
-        assert all([is_color_like(c) for c in color])
+        assert all(is_color_like(c) for c in color)
     else:
         assert is_color_like(color)
         color = [color for i in range(N)]
@@ -122,7 +122,7 @@ def add_circles(ax, d):
     else:
         assert isinstance(fill, list)
         assert len(fill) == N
-        assert all([isinstance(f, bool) for f in fill])
+        assert all(isinstance(f, bool) for f in fill)
     # alpha
     alpha = d["alpha"] if "alpha" in d.keys() else 1
     if isinstance(alpha, (float, int, np.float64)):
@@ -130,7 +130,7 @@ def add_circles(ax, d):
     else:
         assert isinstance(alpha, list)
         assert len(alpha) == N
-        assert all([isinstance(a, (float, int, np.float64)) for a in alpha])
+        assert all(isinstance(a, (float, int, np.float64)) for a in alpha)
     # linewidth
     linewidth = d["linewidth"] if "linewidth" in d.keys() else 2
     if isinstance(linewidth, (float, int, np.float64)):
@@ -138,14 +138,14 @@ def add_circles(ax, d):
     else:
         assert isinstance(linewidth, list)
         assert len(linewidth) == N
-        assert all([isinstance(lw, (float, int, np.float64)) for lw in linewidth])
+        assert all(isinstance(lw, (float, int, np.float64)) for lw in linewidth)
     # additional parameters
     kws = [
         k
         for k in d.keys()
         if k not in ("center", "R", "color", "fill", "alpha", "linewidth")
     ]
-    kwargs = dict()
+    kwargs = {}
     for k in kws:
         kwargs[k] = d[k]
 
@@ -194,8 +194,8 @@ def add_annuli(ax, d):
         assert len(center) == 2
         center = [center] * N
     # assert(isinstance(center,list))
-    assert all([isinstance(x, tuple) for x in center])
-    assert all([len(x) == 2 for x in center])
+    assert all(isinstance(x, tuple) for x in center)
+    assert all(len(x) == 2 for x in center)
     # radii
     if isinstance(radii, tuple):
         assert len(radii) == 2
@@ -203,17 +203,17 @@ def add_annuli(ax, d):
         ro = [radii[1] for i in range(N)]
     else:
         assert isinstance(radii, list)
-        assert all([isinstance(x, tuple) for x in radii])
+        assert all(isinstance(x, tuple) for x in radii)
         assert len(radii) == N
         ri = [radii[i][0] for i in range(N)]
         ro = [radii[i][1] for i in range(N)]
-    assert all([isinstance(i, Number) for i in ri])
-    assert all([isinstance(i, Number) for i in ro])
+    assert all(isinstance(i, Number) for i in ri)
+    assert all(isinstance(i, Number) for i in ro)
     # color
     color = d["color"] if "color" in d.keys() else "r"
     if isinstance(color, list):
         assert len(color) == N
-        assert all([is_color_like(c) for c in color])
+        assert all(is_color_like(c) for c in color)
     else:
         assert is_color_like(color)
         color = [color for i in range(N)]
@@ -224,7 +224,7 @@ def add_annuli(ax, d):
     else:
         assert isinstance(fill, list)
         assert len(fill) == N
-        assert all([isinstance(f, bool) for f in fill])
+        assert all(isinstance(f, bool) for f in fill)
     # alpha
     alpha = d["alpha"] if "alpha" in d.keys() else 1
     if isinstance(alpha, (float, int, np.float64)):
@@ -232,7 +232,7 @@ def add_annuli(ax, d):
     else:
         assert isinstance(alpha, list)
         assert len(alpha) == N
-        assert all([isinstance(a, (float, int, np.float64)) for a in alpha])
+        assert all(isinstance(a, (float, int, np.float64)) for a in alpha)
     # linewidth
     linewidth = d["linewidth"] if "linewidth" in d.keys() else 2
     if isinstance(linewidth, (float, int, np.float64)):
@@ -240,14 +240,14 @@ def add_annuli(ax, d):
     else:
         assert isinstance(linewidth, list)
         assert len(linewidth) == N
-        assert all([isinstance(lw, (float, int, np.float64)) for lw in linewidth])
+        assert all(isinstance(lw, (float, int, np.float64)) for lw in linewidth)
     # additional parameters
     kws = [
         k
         for k in d.keys()
         if k not in ("center", "radii", "color", "fill", "alpha", "linewidth")
     ]
-    kwargs = dict()
+    kwargs = {}
     for k in kws:
         kwargs[k] = d[k]
 
@@ -303,7 +303,7 @@ def add_ellipses(ax, d):
         a = [a]
     assert isinstance(a, list)
     N = len(a)
-    assert all([isinstance(i, Number) for i in a])
+    assert all(isinstance(i, Number) for i in a)
     # semiminor axis length
     assert "b" in d.keys()
     b = d["b"]
@@ -311,7 +311,7 @@ def add_ellipses(ax, d):
         b = [b]
     assert isinstance(b, list)
     assert len(b) == N
-    assert all([isinstance(i, Number) for i in b])
+    assert all(isinstance(i, Number) for i in b)
     # center
     assert "center" in d.keys()
     center = d["center"]
@@ -320,8 +320,8 @@ def add_ellipses(ax, d):
         center = [center for i in range(N)]
     assert isinstance(center, list)
     assert len(center) == N
-    assert all([isinstance(x, tuple) for x in center])
-    assert all([len(x) == 2 for x in center])
+    assert all(isinstance(x, tuple) for x in center)
+    assert all(len(x) == 2 for x in center)
     # theta
     assert "theta" in d.keys()
     theta = d["theta"]
@@ -329,12 +329,12 @@ def add_ellipses(ax, d):
         theta = [theta for i in range(N)]
     assert isinstance(theta, list)
     assert len(theta) == N
-    assert all([isinstance(i, Number) for i in theta])
+    assert all(isinstance(i, Number) for i in theta)
     # color
     color = d["color"] if "color" in d.keys() else "r"
     if isinstance(color, list):
         assert len(color) == N
-        assert all([is_color_like(c) for c in color])
+        assert all(is_color_like(c) for c in color)
     else:
         assert is_color_like(color)
         color = [color for i in range(N)]
@@ -345,7 +345,7 @@ def add_ellipses(ax, d):
     else:
         assert isinstance(fill, list)
         assert len(fill) == N
-        assert all([isinstance(f, bool) for f in fill])
+        assert all(isinstance(f, bool) for f in fill)
     # alpha
     alpha = d["alpha"] if "alpha" in d.keys() else 1
     if isinstance(alpha, (float, int, np.float64)):
@@ -353,7 +353,7 @@ def add_ellipses(ax, d):
     else:
         assert isinstance(alpha, list)
         assert len(alpha) == N
-        assert all([isinstance(alp, (float, int, np.float64)) for alp in alpha])
+        assert all(isinstance(alp, (float, int, np.float64)) for alp in alpha)
     # linewidth
     linewidth = d["linewidth"] if "linewidth" in d.keys() else 2
     if isinstance(linewidth, (float, int, np.float64)):
@@ -361,7 +361,7 @@ def add_ellipses(ax, d):
     else:
         assert isinstance(linewidth, list)
         assert len(linewidth) == N
-        assert all([isinstance(lw, (float, int, np.float64)) for lw in linewidth])
+        assert all(isinstance(lw, (float, int, np.float64)) for lw in linewidth)
     # linestyle
     linestyle = d["linestyle"] if "linestyle" in d.keys() else "-"
     if isinstance(linestyle, (str)):
@@ -369,7 +369,7 @@ def add_ellipses(ax, d):
     else:
         assert isinstance(linestyle, list)
         assert len(linestyle) == N
-        assert all([isinstance(lw, (str)) for lw in linestyle])
+        assert all(isinstance(lw, (str)) for lw in linestyle)
     # additional parameters
     kws = [
         k
@@ -387,7 +387,7 @@ def add_ellipses(ax, d):
             "linestyle",
         )
     ]
-    kwargs = dict()
+    kwargs = {}
     for k in kws:
         kwargs[k] = d[k]
 
@@ -454,7 +454,7 @@ def add_points(ax, d):
     color = d["pointcolor"] if "pointcolor" in d.keys() else "r"
     if isinstance(color, (list, np.ndarray)):
         assert len(color) == N
-        assert all([is_color_like(c) for c in color])
+        assert all(is_color_like(c) for c in color)
     else:
         assert is_color_like(color)
         color = [color for i in range(N)]
@@ -470,7 +470,7 @@ def add_points(ax, d):
         for k in d.keys()
         if k not in ("x", "y", "s", "scale", "pointcolor", "alpha", "open_circles")
     ]
-    kwargs = dict()
+    kwargs = {}
     for k in kws:
         kwargs[k] = d[k]
 
@@ -521,7 +521,7 @@ def add_pointlabels(ax, d):
     kws = [
         k for k in d.keys() if k not in ("x", "y", "size", "color", "alpha", "labels")
     ]
-    kwargs = dict()
+    kwargs = {}
     for k in kws:
         kwargs[k] = d[k]
 
@@ -668,7 +668,7 @@ def add_vector(ax, d):
             "labelcolor",
         )
     ]
-    kwargs = dict()
+    kwargs = {}
     for k in kws:
         kwargs[k] = d[k]
 
@@ -720,7 +720,7 @@ def add_grid_overlay(ax, d):
         for k in d.keys()
         if k not in ("x0", "y0", "xL", "yL", "color", "alpha", "linewidth")
     ]
-    kwargs = dict()
+    kwargs = {}
     for k in kws:
         kwargs[k] = d[k]
 
@@ -817,7 +817,7 @@ def add_scalebar(ax, d):
             "ticks",
         )
     ]
-    kwargs = dict()
+    kwargs = {}
     for k in kws:
         kwargs[k] = d[k]
 
@@ -956,7 +956,7 @@ def add_cartesian_grid(ax, d):
             "alpha",
         )
     ]
-    kwargs = dict()
+    kwargs = {}
     for k in kws:
         kwargs[k] = d[k]
 
@@ -1122,7 +1122,7 @@ def add_polarelliptical_grid(ax, d):
             "alpha",
         )
     ]
-    kwargs = dict()
+    kwargs = {}
     for k in kws:
         kwargs[k] = d[k]
 

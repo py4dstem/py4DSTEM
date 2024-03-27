@@ -4,7 +4,7 @@
 
 import numpy as np
 from scipy.special import erf
-from scipy.fftpack import dst, idst
+from scipy.fftpack import dst
 
 from py4DSTEM.process.utils import single_atom_scatter
 

@@ -2,9 +2,8 @@
 
 from py4DSTEM.io.legacy.legacy13.v13_emd_classes.pointlist import PointList
 
-from typing import Optional, Union
+from typing import Optional
 import numpy as np
-import h5py
 
 
 class QPoints(PointList):

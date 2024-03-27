@@ -199,7 +199,7 @@ def fit_ellipse_amorphous_ring(data, center, fitradii, p0=None, mask=None):
     A, B, C = convert_ellipse_params_r(R, R, 0)
 
     # Populate initial parameters
-    p0_guess = tuple([I0, I1, sigma0, sigma1, sigma2, c_bkgd, x0, y0, A, B, C])
+    p0_guess = (I0, I1, sigma0, sigma1, sigma2, c_bkgd, x0, y0, A, B, C)
     if p0 is None:
         _p0 = p0_guess
     else:

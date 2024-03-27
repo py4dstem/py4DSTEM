@@ -856,7 +856,7 @@ def get_initial_classes(
         seed_new_class = True
         while seed_new_class:
             ind1, ind2 = np.unravel_index(np.argmax(n_point_function), (N, N))
-            BP_set = set([ind1, ind2])
+            BP_set = {ind1, ind2}
             grow_class = True
             while grow_class:
                 frequencies = np.zeros(N)
@@ -910,7 +910,7 @@ def get_initial_classes(
         seed_new_class = True
         while seed_new_class:
             ind1, ind2, ind3 = np.unravel_index(np.argmax(n_point_function), (N, N, N))
-            BP_set = set([ind1, ind2, ind3])
+            BP_set = {ind1, ind2, ind3}
             grow_class = True
             while grow_class:
                 frequencies = np.zeros(N)

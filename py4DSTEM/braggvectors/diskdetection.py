@@ -221,7 +221,7 @@ def find_Bragg_disks(
                 mode = "dp"
             elif data.ndim == 3:
                 mode = "dp_stack"
-        except:
+        except Exception:
             er = f"entry {data} for `data` could not be parsed"
             raise Exception(er)
 
