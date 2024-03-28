@@ -1076,8 +1076,6 @@ class Crystal:
 
         # Determine tiling range
         if thickness_angstroms > 0:
-            # dx = m_proj[0] * num_proj * 0.5
-            # dy = m_proj[1] * num_proj * 0.5
             # include the cell height
             dz = m_proj[2] * num_proj * 0.5
             p_corners = np.array(
