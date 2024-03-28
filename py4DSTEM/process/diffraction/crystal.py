@@ -1135,12 +1135,13 @@ class Crystal:
         # print(x.shape, y.shape)
 
         # delete atoms outside the field of view
+        bound = potential_radius_angstroms / pixel_size_angstroms
         atoms_del = np.logical_or.reduce(
             (
-                x <= -potential_radius_angstroms / 2,
-                y <= -potential_radius_angstroms / 2,
-                x >= im_size[0] + potential_radius_angstroms / 2,
-                y >= im_size[1] + potential_radius_angstroms / 2,
+                x <= -bound,
+                y <= -bound,
+                x >= im_size[0] + bound,
+                y >= im_size[1] + bound,
             )
         )
         x = np.delete(x, atoms_del)
@@ -1165,6 +1166,14 @@ class Crystal:
         for a0 in range(atoms_ID.shape[0]):
             atom_sf = single_atom_scatter([atoms_ID[a0]])
             atoms_lookup[a0, :, :] = atom_sf.projected_potential(atoms_ID[a0], R_2D)
+
+            # if needed, apply gaussian blurring to each atom
+            if sigma_image_blur_angstroms > 0:
+                atoms_lookup[a0, :, :] = gaussian_filter(
+                    atoms_lookup[a0, :, :],
+                    sigma_image_blur_angstroms / pixel_size_angstroms,
+                    mode="nearest",
+                )
         atoms_lookup **= power_scale
 
         # initialize potential
@@ -1174,24 +1183,6 @@ class Crystal:
         for a0 in range(atoms_ID_all.shape[0]):
             ind = np.argmin(np.abs(atoms_ID - atoms_ID_all[a0]))
 
-            # if num_proj > 1:
-            #     for a1 in range(num_proj):
-            #         x_ind = np.round(x[a0] + x_proj[a1]).astype("int") + R_ind
-            #         y_ind = np.round(y[a0] + y_proj[a1]).astype("int") + R_ind
-            #         x_sub = np.logical_and(
-            #             x_ind >= 0,
-            #             x_ind < im_size[0],
-            #         )
-            #         y_sub = np.logical_and(
-            #             y_ind >= 0,
-            #             y_ind < im_size[1],
-            #         )
-
-            #         im_potential[
-            #             x_ind[x_sub][:, None], y_ind[y_sub][None, :]
-            #         ] += atoms_lookup[ind][x_sub, :][:, y_sub]
-
-            # else:
             x_ind = np.round(x[a0]).astype("int") + R_ind
             y_ind = np.round(y[a0]).astype("int") + R_ind
             x_sub = np.logical_and(
@@ -1202,22 +1193,12 @@ class Crystal:
                 y_ind >= 0,
                 y_ind < im_size[1],
             )
-
             im_potential[x_ind[x_sub][:, None], y_ind[y_sub][None, :]] += atoms_lookup[
                 ind
-            ][x_sub, :][:, y_sub]
+            ][x_sub][:, y_sub]
 
         if thickness_angstroms > 0:
             im_potential /= num_proj
-
-        # if needed, apply gaussian blurring
-        if sigma_image_blur_angstroms > 0:
-            sigma_image_blur = sigma_image_blur_angstroms / pixel_size_angstroms
-            im_potential = gaussian_filter(
-                im_potential,
-                sigma_image_blur,
-                mode="nearest",
-            )
 
         if plot_result:
             # quick plotting of the result
@@ -1225,7 +1206,7 @@ class Crystal:
             int_range = np.array(
                 (
                     int_vals[np.round(0.02 * int_vals.size).astype("int")],
-                    int_vals[np.round(0.98 * int_vals.size).astype("int")],
+                    int_vals[np.round(0.999 * int_vals.size).astype("int")],
                 )
             )
 
@@ -1236,12 +1217,7 @@ class Crystal:
                 vmin=int_range[0],
                 vmax=int_range[1],
             )
-            # if num_proj > 1:
-            #     for a1 in range(x_proj.size):
-            #         ax.scatter(y+y_proj[a1],x+x_proj[a1], c='r')
-
-            # ax.scatter(y+y_proj[0],x+x_proj[0], c='r')
-            # ax.scatter(y+y_proj[-1],x+x_proj[-1], c='g')
+            # ax.scatter(y,x,c='r')  # for testing
             ax.set_axis_off()
             ax.set_aspect("equal")
 
