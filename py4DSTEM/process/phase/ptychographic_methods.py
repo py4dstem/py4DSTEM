@@ -1000,17 +1000,6 @@ class ProbeMethodsMixin:
                     vacuum_probe_intensity, dtype=xp.float32
                 )
 
-                sx, sy = vacuum_probe_intensity.shape
-                tx, ty = region_of_interest_shape
-                if sx != tx or sy != ty and self._resample_exit_waves is True:
-                    vacuum_probe_intensity = bilinear_resample(
-                        vacuum_probe_intensity,
-                        output_size=(tx, ty),
-                        vectorized=True,
-                        conserve_array_sums=True,
-                        xp=xp,
-                    )
-
                 probe_x0, probe_y0 = get_CoM(
                     vacuum_probe_intensity,
                     device=device,
@@ -1025,7 +1014,18 @@ class ProbeMethodsMixin:
 
                 if crop_patterns:
                     vacuum_probe_intensity = vacuum_probe_intensity[crop_mask].reshape(
-                        region_of_interest_shape
+                        self._diffraction_intensities_shape_crop
+                    )
+
+                sx, sy = vacuum_probe_intensity.shape
+                tx, ty = region_of_interest_shape
+                if sx != tx or sy != ty and self._resample_exit_waves is True:
+                    vacuum_probe_intensity = bilinear_resample(
+                        vacuum_probe_intensity,
+                        output_size=(tx, ty),
+                        vectorized=True,
+                        conserve_array_sums=True,
+                        xp=xp,
                     )
 
             _probe = (
