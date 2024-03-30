@@ -1002,7 +1002,7 @@ class ProbeMethodsMixin:
 
                 sx, sy = vacuum_probe_intensity.shape
                 tx, ty = region_of_interest_shape
-                if sx != tx or sy != ty:
+                if sx != tx or sy != ty and self._resample_exit_waves is True:
                     vacuum_probe_intensity = bilinear_resample(
                         vacuum_probe_intensity,
                         output_size=(tx, ty),
