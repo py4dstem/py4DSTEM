@@ -125,6 +125,7 @@ def find_peaks_single_pattern(
         self._datacube.data[x, y],
         mask=mask,
         returnval="all_zeros",
+        origin=(self.calibration.qx0[x, y], self.calibration.qy0[x, y]),
     )
     # Change sign convention of mask
     mask_bool = np.logical_not(mask_bool)
