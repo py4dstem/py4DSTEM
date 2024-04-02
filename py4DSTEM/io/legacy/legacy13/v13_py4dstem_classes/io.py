@@ -1,6 +1,5 @@
 # Functions for reading and writing subclasses of the base EMD types
 
-import numpy as np
 import h5py
 from os.path import basename
 

@@ -477,7 +477,8 @@ class Featurization(object):
                     datacube.data.shape[2],
                     datacube.data.shape[3],
                 )
-            except:
+            # TODO Work out if its a ValueError
+            except Exception:
                 raise ValueError(
                     "Datacube must have same R_Nx and R_Ny dimensions as Featurization instance."
                 )
@@ -586,7 +587,7 @@ class Featurization(object):
         """
         class_maps = []
         if classification_method == "NMF":
-            if type(self.W) == list:
+            if isinstance(self.W, list):
                 for l in range(len(self.W)):
                     small_class_maps = []
                     for k in range(self.W[l].shape[1]):
@@ -599,7 +600,7 @@ class Featurization(object):
                     class_maps.append(self.W[:, l].reshape(self.R_Nx, self.R_Ny))
                 class_maps = [class_maps]
         elif classification_method == "GMM":
-            if type(self.gmm_labels) == list:
+            if isinstance(self.gmm_labels, list):
                 for l in range(len(self.gmm_labels)):
                     small_class_maps = []
                     for k in range(np.max(self.gmm_labels[l])):

@@ -1,7 +1,7 @@
 # Defines the BraggVectors class
 
 from py4DSTEM.data import Data
-from emdfile import Custom, PointListArray, PointList, Metadata
+from emdfile import Custom, PointListArray, Metadata
 from py4DSTEM.braggvectors.braggvector_methods import BraggVectorMethods
 from os.path import basename
 import numpy as np

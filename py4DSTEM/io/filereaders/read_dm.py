@@ -1,7 +1,6 @@
 # Reads a digital micrograph 4D-STEM dataset
 
 import numpy as np
-from pathlib import Path
 from ncempy.io import dm
 from emdfile import tqdmnd, Array
 

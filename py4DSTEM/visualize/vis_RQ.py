@@ -1,6 +1,5 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib.axes import Axes
 
 from py4DSTEM.visualize.show import show, show_points
 

@@ -3,8 +3,6 @@
 # structured arrays.
 
 import numpy as np
-import h5py
-from copy import copy
 from typing import Optional
 
 from py4DSTEM.io.legacy.legacy13.v13_emd_classes.tree import Tree

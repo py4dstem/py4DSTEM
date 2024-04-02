@@ -1,9 +1,7 @@
 # Defines the Calibration class, which stores calibration metadata
 
 import numpy as np
-from numbers import Number
 from typing import Optional
-from warnings import warn
 
 from emdfile import Metadata, Root
 from py4DSTEM.data.propagating_calibration import call_calibrate
@@ -505,7 +503,7 @@ class Calibration(Metadata):
         qx0 = self._get_value("qx0", rx, ry)
         qy0 = self._get_value("qy0", rx, ry)
         ans = (qx0, qy0)
-        if any([x is None for x in ans]):
+        if any(x is None for x in ans):
             ans = None
         return ans
 
@@ -518,7 +516,7 @@ class Calibration(Metadata):
         qx0 = self._get_value("qx0_shift", rx, ry)
         qy0 = self._get_value("qy0_shift", rx, ry)
         ans = (qx0, qy0)
-        if any([x is None for x in ans]):
+        if any(x is None for x in ans):
             ans = None
         return ans
 
@@ -540,7 +538,7 @@ class Calibration(Metadata):
         qx0 = self._get_value("qx0_meas", rx, ry)
         qy0 = self._get_value("qy0_meas", rx, ry)
         ans = (qx0, qy0)
-        if any([x is None for x in ans]):
+        if any(x is None for x in ans):
             ans = None
         return ans
 
@@ -615,7 +613,7 @@ class Calibration(Metadata):
         b = self.get_b(rx, ry)
         theta = self.get_theta(rx, ry)
         ans = (a, b, theta)
-        if any([x is None for x in ans]):
+        if any(x is None for x in ans):
             ans = None
         return ans
 
@@ -778,7 +776,7 @@ class Calibration(Metadata):
         qx0 = self._get_value("qx0")
         qy0 = self._get_value("qy0")
         ans = (probe_semiangle, qx0, qy0)
-        if any([x is None for x in ans]):
+        if any(x is None for x in ans):
             ans = None
         return ans
 

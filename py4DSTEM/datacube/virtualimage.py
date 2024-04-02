@@ -414,7 +414,7 @@ class DataCubeVirtualImager:
                 try:
                     image = self.tree(k)
                     break
-                except:
+                except AssertionError:
                     pass
             if image is None:
                 image = self[0, 0]

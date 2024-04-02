@@ -289,7 +289,7 @@ def show_image_grid(
                     )
             except IndexError:
                 ax.axis("off")
-    if type(title) == str:
+    if isinstance(title, str):
         fig.suptitle(title)
     if suptitle:
         fig.suptitle(suptitle)

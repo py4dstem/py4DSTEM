@@ -1,13 +1,13 @@
 import numpy as np
-from typing import Union, Optional
+from typing import Union
 from scipy.optimize import curve_fit
 
-from py4DSTEM.process.diffraction.utils import Orientation, calc_1D_profile
+from py4DSTEM.process.diffraction.utils import calc_1D_profile
 
 try:
     from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
     from pymatgen.core.structure import Structure
-except ImportError:
+except (ImportError, ModuleNotFoundError):
     pass
 
 

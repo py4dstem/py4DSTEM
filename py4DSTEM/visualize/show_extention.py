@@ -9,7 +9,7 @@ def _show_grid(**kwargs):
 
     # parse grid of images
     if isinstance(ar[0], list):
-        assert all([isinstance(ar[i], list) for i in range(len(ar))])
+        assert all(isinstance(ar[i], list) for i in range(len(ar)))
         W = len(ar[0])
         H = len(ar)
 

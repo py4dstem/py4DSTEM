@@ -6,7 +6,6 @@ from py4DSTEM.io.legacy.legacy13.v13_py4dstem_classes.parenttree import ParentTr
 
 from typing import Optional, Union
 import numpy as np
-import h5py
 
 
 class DataCube(Array):
@@ -108,7 +107,7 @@ class DataCube(Array):
 
     @R_pixel_size.setter
     def R_pixel_size(self, x):
-        if type(x) is not list:
+        if not isinstance(x, list):
             x = [x, x]
         self.set_dim(0, [0, x[0]])
         self.set_dim(1, [0, x[1]])
@@ -120,7 +119,7 @@ class DataCube(Array):
 
     @R_pixel_units.setter
     def R_pixel_units(self, x):
-        if type(x) is not list:
+        if not isinstance(x, list):
             x = [x, x]
         self.dim_units[0] = x[0]
         self.dim_units[1] = x[1]
@@ -133,7 +132,7 @@ class DataCube(Array):
 
     @Q_pixel_size.setter
     def Q_pixel_size(self, x):
-        if type(x) is not list:
+        if not isinstance(x, list):
             x = [x, x]
         self.set_dim(2, [0, x[0]])
         self.set_dim(3, [0, x[1]])
@@ -145,7 +144,7 @@ class DataCube(Array):
 
     @Q_pixel_units.setter
     def Q_pixel_units(self, x):
-        if type(x) is not list:
+        if not isinstance(x, list):
             x = [x, x]
         self.dim_units[2] = x[0]
         self.dim_units[3] = x[1]

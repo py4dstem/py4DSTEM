@@ -34,7 +34,6 @@ from py4DSTEM.data import (
     Calibration,
     DiffractionSlice,
     RealSlice,
-    QPoints,
 )
 from py4DSTEM.datacube import (
     DataCube,

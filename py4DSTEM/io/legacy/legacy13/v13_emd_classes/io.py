@@ -160,7 +160,7 @@ def Metadata_to_h5(metadata, group):
                 dset.attrs["type"] = np.string_("tuple")
 
             # of tuples
-            elif any([isinstance(v[i], tuple) for i in range(len(v))]):
+            elif any(isinstance(v[i], tuple) for i in range(len(v))):
                 dset_grp = grp.create_group(k)
                 dset_grp.attrs["type"] = np.string_("tuple_of_tuples")
                 dset_grp.attrs["length"] = len(v)

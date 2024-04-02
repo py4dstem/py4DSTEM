@@ -1,6 +1,6 @@
 import numpy as np
 from py4DSTEM.datacube import DataCube
-from scipy.ndimage import binary_opening, binary_closing, gaussian_filter1d
+from scipy.ndimage import gaussian_filter1d
 
 
 class PolarDatacube:
