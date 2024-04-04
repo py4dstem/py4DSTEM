@@ -3,19 +3,25 @@ from typing import Mapping, Tuple, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
+from scipy.fft import dctn, idctn
+from scipy.ndimage import gaussian_filter, uniform_filter1d, zoom
 from scipy.optimize import curve_fit
 
 try:
     import cupy as cp
-    from cupyx.scipy.fft import rfft
+    from cupyx.scipy.ndimage import zoom as zoom_cp
+
+    get_array_module = cp.get_array_module
 except (ImportError, ModuleNotFoundError):
     cp = None
-    from scipy.fft import dstn, idstn
+
+    def get_array_module(*args):
+        return np
+
 
 from py4DSTEM.process.utils import get_CoM
 from py4DSTEM.process.utils.cross_correlate import align_and_shift_images
 from py4DSTEM.process.utils.utils import electron_wavelength_angstrom
-from scipy.ndimage import gaussian_filter, uniform_filter1d
 from skimage.restoration import unwrap_phase
 
 # fmt: off
@@ -197,9 +203,7 @@ class ComplexProbe:
         self, alpha: Union[float, np.ndarray]
     ) -> Union[float, np.ndarray]:
         xp = self._xp
-        return xp.exp(
-            -0.5 * self._gaussian_spread**2 * alpha**2 / self._wavelength**2
-        )
+        return xp.exp(-0.5 * self._gaussian_spread**2 * alpha**2 / self._wavelength**2)
 
     def evaluate_spatial_envelope(
         self, alpha: Union[float, np.ndarray], phi: Union[float, np.ndarray]
@@ -404,16 +408,14 @@ class ComplexProbe:
 
     def get_spatial_frequencies(self):
         xp = self._xp
-        kx, ky = spatial_frequencies(self._gpts, self._sampling)
-        kx = xp.asarray(kx, dtype=xp.float32)
-        ky = xp.asarray(ky, dtype=xp.float32)
+        kx, ky = spatial_frequencies(self._gpts, self._sampling, xp)
         return kx, ky
 
     def polar_coordinates(self, x, y):
         """Calculate a polar grid for a given Cartesian grid."""
         xp = self._xp
-        alpha = xp.sqrt(x.reshape((-1, 1)) ** 2 + y.reshape((1, -1)) ** 2)
-        phi = xp.arctan2(x.reshape((-1, 1)), y.reshape((1, -1)))
+        alpha = xp.sqrt(x[:, None] ** 2 + y[None, :] ** 2)
+        phi = xp.arctan2(y[None, :], x[:, None])
         return alpha, phi
 
     def build(self):
@@ -440,7 +442,7 @@ class ComplexProbe:
         return self
 
 
-def spatial_frequencies(gpts: Tuple[int, int], sampling: Tuple[float, float]):
+def spatial_frequencies(gpts: Tuple[int, int], sampling: Tuple[float, float], xp=np):
     """
     Calculate spatial frequencies of a grid.
 
@@ -457,7 +459,7 @@ def spatial_frequencies(gpts: Tuple[int, int], sampling: Tuple[float, float]):
     """
 
     return tuple(
-        np.fft.fftfreq(n, d).astype(np.float32) for n, d in zip(gpts, sampling)
+        xp.fft.fftfreq(n, d).astype(xp.float32) for n, d in zip(gpts, sampling)
     )
 
 
@@ -489,16 +491,14 @@ def fourier_translation_operator(
     if len(positions_shape) == 1:
         positions = positions[None]
 
-    kx, ky = spatial_frequencies(shape, (1.0, 1.0))
-    kx = kx.reshape((1, -1, 1))
-    ky = ky.reshape((1, 1, -1))
-    kx = xp.asarray(kx, dtype=xp.float32)
-    ky = xp.asarray(ky, dtype=xp.float32)
+    kx, ky = spatial_frequencies(shape, (1.0, 1.0), xp=xp)
     positions = xp.asarray(positions, dtype=xp.float32)
-    x = positions[:, 0].reshape((-1,) + (1, 1))
-    y = positions[:, 1].reshape((-1,) + (1, 1))
+    x = positions[:, 0].ravel()[:, None, None]
+    y = positions[:, 1].ravel()[:, None, None]
 
-    result = xp.exp(-2.0j * np.pi * kx * x) * xp.exp(-2.0j * np.pi * ky * y)
+    result = xp.exp(-2.0j * np.pi * kx[None, :, None] * x) * xp.exp(
+        -2.0j * np.pi * ky[None, None, :] * y
+    )
 
     if len(positions_shape) == 1:
         return result[0]
@@ -1150,114 +1150,79 @@ def fourier_rotate_real_volume(array, angle, axes=(0, 1), xp=np):
     return output_arr
 
 
-### Divergence Projection Functions
-
-
-def compute_divergence(vector_field, spacings, xp=np):
-    """Computes divergence of vector_field"""
-    num_dims = len(spacings)
-    div = xp.zeros_like(vector_field[0])
-
-    for i in range(num_dims):
-        div += xp.gradient(vector_field[i], spacings[i], axis=i)
-
-    return div
-
-
-def compute_gradient(scalar_field, spacings, xp=np):
-    """Computes gradient of scalar_field"""
-    num_dims = len(spacings)
-    grad = xp.zeros((num_dims,) + scalar_field.shape)
-
-    for i in range(num_dims):
-        grad[i] = xp.gradient(scalar_field, spacings[i], axis=i)
-
-    return grad
-
-
 def array_slice(axis, ndim, start, end, step=1):
     """Returns array slice along dynamic axis"""
     return (slice(None),) * (axis % ndim) + (slice(start, end, step),)
 
 
-def make_array_rfft_compatible(array_nd, axis=0, xp=np):
-    """Expand array to be rfft compatible"""
-    array_shape = np.array(array_nd.shape)
-    d = array_nd.ndim
-    n = array_shape[axis]
-    array_shape[axis] = (n + 1) * 2
-
-    dtype = array_nd.dtype
-    padded_array = xp.zeros(array_shape, dtype=dtype)
-
-    padded_array[array_slice(axis, d, 1, n + 1)] = -array_nd
-    padded_array[array_slice(axis, d, None, -n - 1, -1)] = array_nd
-
-    return padded_array
+### Divergence Projection Functions
 
 
-def dst_I(array_nd, xp=np):
-    """1D rfft-based DST-I"""
-    d = array_nd.ndim
-    for axis in range(d):
-        crop_slice = array_slice(axis, d, 1, -1)
-        array_nd = rfft(
-            make_array_rfft_compatible(array_nd, axis=axis, xp=xp), axis=axis
-        )[crop_slice].imag
-
-    return array_nd
-
-
-def idst_I(array_nd, xp=np):
-    """1D rfft-based iDST-I"""
-    scaling = np.prod((np.array(array_nd.shape) + 1) * 2)
-    return dst_I(array_nd, xp=xp) / scaling
-
-
-def preconditioned_laplacian(num_exterior, spacing=1, xp=np):
-    """DST-I eigenvalues"""
-    n = num_exterior - 1
-    evals_1d = 2 - 2 * xp.cos(np.pi * xp.arange(1, num_exterior) / num_exterior)
-
-    op = (
-        xp.repeat(evals_1d, n**2)
-        + xp.tile(evals_1d, n**2)
-        + xp.tile(xp.repeat(evals_1d, n), n)
+def periodic_centered_difference(array, spacing, axis, xp=np):
+    """Computes second-order centered difference with periodic BCs"""
+    return (xp.roll(array, -1, axis=axis) - xp.roll(array, 1, axis=axis)) / (
+        2 * spacing
     )
 
-    return -op / spacing**2
+
+def compute_divergence_periodic(vector_field, spacings, xp=np):
+    """Computes divergence of vector_field"""
+    num_dims = len(spacings)
+    div = xp.zeros_like(vector_field[0])
+
+    for i in range(num_dims):
+        div += periodic_centered_difference(vector_field[i], spacings[i], axis=i, xp=xp)
+
+    return div
 
 
-def preconditioned_poisson_solver(rhs_interior, spacing=1, xp=np):
-    """DST-I based poisson solver"""
-    nx, ny, nz = rhs_interior.shape
-    if nx != ny or nx != nz:
-        raise ValueError()
+def compute_gradient_periodic(scalar_field, spacings, xp=np):
+    """Computes gradient of scalar_field"""
+    num_dims = len(spacings)
+    grad = xp.zeros((num_dims,) + scalar_field.shape)
 
-    op = preconditioned_laplacian(nx + 1, spacing=spacing, xp=xp)
-    if xp is np:
-        dst_rhs = dstn(rhs_interior, type=1).ravel()
-        dst_u = (dst_rhs / op).reshape((nx, ny, nz))
-        sol = idstn(dst_u, type=1)
-    else:
-        dst_rhs = dst_I(rhs_interior, xp=xp).ravel()
-        dst_u = (dst_rhs / op).reshape((nx, ny, nz))
-        sol = idst_I(dst_u, xp=xp)
+    for i in range(num_dims):
+        grad[i] = periodic_centered_difference(scalar_field, spacings[i], axis=i, xp=xp)
 
+    return grad
+
+
+def preconditioned_laplacian_periodic_3D(shape, xp=np):
+    """FFT eigenvalues"""
+    n, m, p = shape
+    i, j, k = xp.ogrid[0:n, 0:m, 0:p]
+
+    op = 6 - 2 * xp.cos(2 * np.pi * i / n) * xp.cos(2 * np.pi * j / m) * xp.cos(
+        2 * np.pi * k / p
+    )
+    op[0, 0, 0] = 1  # gauge invariance
+    return -op
+
+
+def preconditioned_poisson_solver_periodic_3D(rhs, gauge=None, xp=np):
+    """FFT based poisson solver"""
+    op = preconditioned_laplacian_periodic_3D(rhs.shape, xp=xp)
+
+    if gauge is None:
+        gauge = xp.mean(rhs)
+
+    fft_rhs = xp.fft.fftn(rhs)
+    fft_rhs[0, 0, 0] = gauge  # gauge invariance
+    sol = xp.fft.ifftn(fft_rhs / op).real
     return sol
 
 
-def project_vector_field_divergence(vector_field, spacings=(1, 1, 1), xp=np):
+def project_vector_field_divergence_periodic_3D(vector_field, xp=np):
     """
     Returns solenoidal part of vector field using projection:
 
     f - \\grad{p}
     s.t. \\laplacian{p} = \\div{f}
     """
-
-    div_v = compute_divergence(vector_field, spacings, xp=xp)
-    p = preconditioned_poisson_solver(div_v, spacings[0], xp=xp)
-    grad_p = compute_gradient(p, spacings, xp=xp)
+    spacings = (1, 1, 1)
+    div_v = compute_divergence_periodic(vector_field, spacings, xp=xp)
+    p = preconditioned_poisson_solver_periodic_3D(div_v, xp=xp)
+    grad_p = compute_gradient_periodic(p, spacings, xp=xp)
     return vector_field - grad_p
 
 
@@ -1610,25 +1575,226 @@ def aberrations_basis_function(
     return aberrations_basis, aberrations_mn
 
 
+def interleave_ndarray_symmetrically(array_nd, axis, xp=np):
+    """[a,b,c,d,e,f] -> [a,c,e,f,d,b]"""
+    array_shape = np.array(array_nd.shape)
+    d = array_nd.ndim
+    n = array_shape[axis]
+
+    array = xp.empty_like(array_nd)
+    array[array_slice(axis, d, None, (n - 1) // 2 + 1)] = array_nd[
+        array_slice(axis, d, None, None, 2)
+    ]
+
+    if n % 2:  # odd
+        array[array_slice(axis, d, (n - 1) // 2 + 1, None)] = array_nd[
+            array_slice(axis, d, -2, None, -2)
+        ]
+    else:  # even
+        array[array_slice(axis, d, (n - 1) // 2 + 1, None)] = array_nd[
+            array_slice(axis, d, None, None, -2)
+        ]
+
+    return array
+
+
+def return_exp_factors(size, ndim, axis, xp=np):
+    none_axes = [None] * ndim
+    none_axes[axis] = slice(None)
+    exp_factors = 2 * xp.exp(-1j * np.pi * xp.arange(size) / (2 * size))
+    return exp_factors[tuple(none_axes)]
+
+
+def dct_II_using_FFT_base(array_nd, xp=np):
+    """FFT-based DCT-II"""
+    d = array_nd.ndim
+
+    for axis in range(d):
+        n = array_nd.shape[axis]
+        interleaved_array = interleave_ndarray_symmetrically(array_nd, axis=axis, xp=xp)
+        exp_factors = return_exp_factors(n, d, axis, xp)
+        interleaved_array = xp.fft.fft(interleaved_array, axis=axis)
+        interleaved_array *= exp_factors
+        array_nd = interleaved_array.real
+
+    return array_nd
+
+
+def dct_II_using_FFT(array_nd, xp=np):
+    if xp.iscomplexobj(array_nd):
+        real = dct_II_using_FFT_base(array_nd.real, xp=xp)
+        imag = dct_II_using_FFT_base(array_nd.imag, xp=xp)
+        return real + 1j * imag
+    else:
+        return dct_II_using_FFT_base(array_nd, xp=xp)
+
+
+def interleave_ndarray_symmetrically_inverse(array_nd, axis, xp=np):
+    """[a,c,e,f,d,b] -> [a,b,c,d,e,f]"""
+    array_shape = np.array(array_nd.shape)
+    d = array_nd.ndim
+    n = array_shape[axis]
+
+    array = xp.empty_like(array_nd)
+    array[array_slice(axis, d, None, None, 2)] = array_nd[
+        array_slice(axis, d, None, (n - 1) // 2 + 1)
+    ]
+
+    if n % 2:  # odd
+        array[array_slice(axis, d, -2, None, -2)] = array_nd[
+            array_slice(axis, d, (n - 1) // 2 + 1, None)
+        ]
+    else:  # even
+        array[array_slice(axis, d, None, None, -2)] = array_nd[
+            array_slice(axis, d, (n - 1) // 2 + 1, None)
+        ]
+
+    return array
+
+
+def return_exp_factors_inverse(size, ndim, axis, xp=np):
+    none_axes = [None] * ndim
+    none_axes[axis] = slice(None)
+    exp_factors = xp.exp(1j * np.pi * xp.arange(size) / (2 * size)) / 2
+    return exp_factors[tuple(none_axes)]
+
+
+def idct_II_using_FFT_base(array_nd, xp=np):
+    """FFT-based IDCT-II"""
+    d = array_nd.ndim
+
+    for axis in range(d):
+        n = array_nd.shape[axis]
+        reversed_array = xp.roll(
+            array_nd[array_slice(axis, d, None, None, -1)], 1, axis=axis
+        )  # C(N-k)
+        reversed_array[array_slice(axis, d, 0, 1)] = 0  # set C(N) = 0
+
+        interleaved_array = array_nd - 1j * reversed_array
+        exp_factors = return_exp_factors_inverse(n, d, axis, xp)
+        interleaved_array *= exp_factors
+
+        array_nd = xp.fft.ifft(interleaved_array, axis=axis).real
+        array_nd = interleave_ndarray_symmetrically_inverse(array_nd, axis=axis, xp=xp)
+
+    return array_nd
+
+
+def idct_II_using_FFT(array_nd, xp=np):
+    """FFT-based IDCT-II"""
+    if xp.iscomplexobj(array_nd):
+        real = idct_II_using_FFT_base(array_nd.real, xp=xp)
+        imag = idct_II_using_FFT_base(array_nd.imag, xp=xp)
+        return real + 1j * imag
+    else:
+        return idct_II_using_FFT_base(array_nd, xp=xp)
+
+
+def preconditioned_laplacian_neumann_2D(shape, xp=np):
+    """DCT eigenvalues"""
+    n, m = shape
+    i, j = xp.ogrid[0:n, 0:m]
+
+    op = 4 - 2 * xp.cos(np.pi * i / n) - 2 * xp.cos(np.pi * j / m)
+    op[0, 0] = 1  # gauge invariance
+    return -op
+
+
+def preconditioned_poisson_solver_neumann_2D(rhs, gauge=None, xp=np):
+    """DCT based poisson solver"""
+    op = preconditioned_laplacian_neumann_2D(rhs.shape, xp=xp)
+
+    if gauge is None:
+        gauge = xp.mean(rhs)
+
+    if xp is np:
+        fft_rhs = dctn(rhs, type=2)
+        fft_rhs[0, 0] = gauge  # gauge invariance
+        sol = idctn(fft_rhs / op, type=2).real
+    else:
+        fft_rhs = dct_II_using_FFT(rhs, xp)
+        fft_rhs[0, 0] = gauge  # gauge invariance
+        sol = idct_II_using_FFT(fft_rhs / op, xp)
+
+    return sol
+
+
+def unwrap_phase_2d(array, weights=None, gauge=None, corner_centered=True, xp=np):
+    """Weigted phase unwrapping using DCT-based poisson solver"""
+
+    if np.iscomplexobj(array):
+        raise ValueError()
+
+    if corner_centered:
+        array = xp.fft.fftshift(array)
+        if weights is not None:
+            weights = xp.fft.fftshift(weights)
+
+    dx = xp.mod(xp.diff(array, axis=0) + np.pi, 2 * np.pi) - np.pi
+    dy = xp.mod(xp.diff(array, axis=1) + np.pi, 2 * np.pi) - np.pi
+
+    if weights is not None:
+        # normalize weights
+        weights -= weights.min()
+        weights /= weights.max()
+
+        ww = weights**2
+        dx *= xp.minimum(ww[:-1, :], ww[1:, :])
+        dy *= xp.minimum(ww[:, :-1], ww[:, 1:])
+
+    rho = xp.diff(dx, axis=0, prepend=0, append=0)
+    rho += xp.diff(dy, axis=1, prepend=0, append=0)
+
+    unwrapped_array = preconditioned_poisson_solver_neumann_2D(rho, gauge=gauge, xp=xp)
+    unwrapped_array -= unwrapped_array.min()
+
+    if corner_centered:
+        unwrapped_array = xp.fft.ifftshift(unwrapped_array)
+
+    return unwrapped_array
+
+
+def unwrap_phase_2d_skimage(array, corner_centered=True, xp=np):
+    if xp is np:
+        array = array.astype(np.float64)
+        unwrapped_array = unwrap_phase(array, wrap_around=corner_centered).astype(
+            xp.float32
+        )
+    else:
+        array = xp.asnumpy(array).astype(np.float64)
+        unwrapped_array = unwrap_phase(array, wrap_around=corner_centered)
+        unwrapped_array = xp.asarray(unwrapped_array).astype(xp.float32)
+
+    return unwrapped_array
+
+
 def fit_aberration_surface(
     complex_probe,
     probe_sampling,
     energy,
     max_angular_order,
     max_radial_order,
+    use_scikit_image,
     xp=np,
 ):
     """ """
     probe_amp = xp.abs(complex_probe)
     probe_angle = -xp.angle(complex_probe)
 
-    if xp is np:
-        probe_angle = probe_angle.astype(np.float64)
-        unwrapped_angle = unwrap_phase(probe_angle, wrap_around=True).astype(xp.float32)
+    if use_scikit_image:
+        unwrapped_angle = unwrap_phase_2d_skimage(
+            probe_angle,
+            corner_centered=True,
+            xp=xp,
+        )
+
     else:
-        probe_angle = xp.asnumpy(probe_angle).astype(np.float64)
-        unwrapped_angle = unwrap_phase(probe_angle, wrap_around=True)
-        unwrapped_angle = xp.asarray(unwrapped_angle).astype(xp.float32)
+        unwrapped_angle = unwrap_phase_2d(
+            probe_angle,
+            weights=probe_amp,
+            corner_centered=True,
+            xp=xp,
+        )
 
     raveled_basis, _ = aberrations_basis_function(
         complex_probe.shape,
@@ -1646,6 +1812,8 @@ def fit_aberration_surface(
     coeff = xp.linalg.lstsq(Aw, bw, rcond=None)[0]
 
     fitted_angle = xp.tensordot(raveled_basis, coeff, axes=1).reshape(probe_angle.shape)
+    angle_offset = fitted_angle[0, 0] - probe_angle[0, 0]
+    fitted_angle -= angle_offset
 
     return fitted_angle, coeff
 
@@ -1674,3 +1842,685 @@ def rotate_point(origin, point, angle):
     qx = ox + np.cos(angle) * (px - ox) - np.sin(angle) * (py - oy)
     qy = oy + np.sin(angle) * (px - ox) + np.cos(angle) * (py - oy)
     return qx, qy
+
+
+def bilinearly_interpolate_array(
+    image,
+    xa,
+    ya,
+    xp=np,
+):
+    """
+    Bilinear sampling of intensities from an image array and pixel positions.
+
+    Parameters
+    ----------
+    image: np.ndarray
+        Image array to sample from
+    xa: np.ndarray
+        Vertical interpolation sampling positions of image array in pixels
+    ya: np.ndarray
+        Horizontal interpolation sampling positions of image array in pixels
+
+    Returns
+    -------
+    intensities: np.ndarray
+        Bilinearly-sampled intensities of array at (xa,ya) positions
+
+    """
+
+    xF = xp.floor(xa).astype("int")
+    yF = xp.floor(ya).astype("int")
+    dx = xa - xF
+    dy = ya - yF
+
+    all_inds = [
+        [xF, yF],
+        [xF + 1, yF],
+        [xF, yF + 1],
+        [xF + 1, yF + 1],
+    ]
+
+    all_weights = [
+        (1 - dx) * (1 - dy),
+        (dx) * (1 - dy),
+        (1 - dx) * (dy),
+        (dx) * (dy),
+    ]
+
+    raveled_image = image.ravel()
+    intensities = xp.zeros(xa.shape, dtype=xp.float32)
+    # filter_weights = xp.zeros(xa.shape, dtype=xp.float32)
+
+    for inds, weights in zip(all_inds, all_weights):
+        intensities += (
+            raveled_image[
+                xp.ravel_multi_index(
+                    inds,
+                    image.shape,
+                    mode=["wrap", "wrap"],
+                )
+            ]
+            * weights
+        )
+        # filter_weights += weights
+
+    return intensities  # / filter_weights # unnecessary, sums up to unity
+
+
+def lanczos_interpolate_array(
+    image,
+    xa,
+    ya,
+    alpha,
+    xp=np,
+):
+    """
+    Lanczos sampling of intensities from an image array and pixel positions.
+
+    Parameters
+    ----------
+    image: np.ndarray
+        Image array to sample from
+    xa: np.ndarray
+        Vertical Interpolation sampling positions of image array in pixels
+    ya: np.ndarray
+        Horizontal interpolation sampling positions of image array in pixels
+    alpha: int
+        Lanczos kernel order
+
+    Returns
+    -------
+    intensities: np.ndarray
+        Lanczos-sampled intensities of array at (xa,ya) positions
+
+    """
+    xF = xp.floor(xa).astype("int")
+    yF = xp.floor(ya).astype("int")
+    dx = xa - xF
+    dy = ya - yF
+
+    all_inds = []
+    all_weights = []
+
+    for i in range(-alpha + 1, alpha + 1):
+        for j in range(-alpha + 1, alpha + 1):
+            all_inds.append([xF + i, yF + j])
+            all_weights.append(
+                (xp.sinc(i - dx) * xp.sinc((i - dx) / alpha))
+                * (xp.sinc(j - dy) * xp.sinc((i - dy) / alpha))
+            )
+
+    raveled_image = image.ravel()
+    intensities = xp.zeros(xa.shape, dtype=xp.float32)
+    filter_weights = xp.zeros(xa.shape, dtype=xp.float32)
+
+    for inds, weights in zip(all_inds, all_weights):
+        intensities += (
+            raveled_image[
+                xp.ravel_multi_index(
+                    inds,
+                    image.shape,
+                    mode=["wrap", "wrap"],
+                )
+            ]
+            * weights
+        )
+        filter_weights += weights
+
+    return intensities / filter_weights
+
+
+def pixel_rolling_kernel_density_estimate(
+    stack,
+    shifts,
+    upsampling_factor,
+    kde_sigma,
+    lowpass_filter=False,
+    xp=np,
+    gaussian_filter=gaussian_filter,
+):
+    """
+    kernel density estimate from a set coordinates (xa,ya) and intensity weights.
+
+    Parameters
+    ----------
+    stack: np.ndarray
+        Unshifted image stack, shape (N,P,S)
+    shifts: np.ndarray
+        Shifts for each image in stack, shape: (N,2)
+    upsampling_factor: int
+        Upsampling factor
+    kde_sigma: float
+        KDE gaussian kernel bandwidth in upsampled pixels
+    lowpass_filter: bool, optional
+        If True, the resulting KDE upsampled image is lowpass-filtered using a sinc-function
+
+    Returns
+    -------
+    pix_output: np.ndarray
+        Upsampled intensity image
+    """
+    upsampled_shape = np.array(stack.shape)
+    upsampled_shape *= (1, upsampling_factor, upsampling_factor)
+
+    upsampled_shifts = shifts * upsampling_factor
+    upsampled_shifts_int = xp.modf(upsampled_shifts)[-1].astype("int")
+
+    upsampled_stack = xp.zeros(upsampled_shape, dtype=xp.float32)
+    upsampled_stack[..., ::upsampling_factor, ::upsampling_factor] = stack
+    pix_output = xp.zeros(upsampled_shape[-2:], dtype=xp.float32)
+
+    for BF_index in range(upsampled_stack.shape[0]):
+        shift = upsampled_shifts_int[BF_index]
+        pix_output += xp.roll(upsampled_stack[BF_index], shift, axis=(0, 1))
+
+    upsampled_stack[..., ::upsampling_factor, ::upsampling_factor] = 1
+    pix_count = xp.zeros(upsampled_shape[-2:], dtype=xp.float32)
+
+    # sequential looping for memory reasons
+    for BF_index in range(upsampled_stack.shape[0]):
+        shift = upsampled_shifts_int[BF_index]
+        pix_count += xp.roll(upsampled_stack[BF_index], shift, axis=(0, 1))
+
+    # kernel density estimate
+    pix_count = gaussian_filter(pix_count, kde_sigma)
+    pix_output = gaussian_filter(pix_output, kde_sigma)
+
+    sub = pix_count > 1e-3
+    pix_output[sub] /= pix_count[sub]
+    pix_output[np.logical_not(sub)] = 1
+
+    if lowpass_filter:
+        pix_fft = xp.fft.fft2(pix_output)
+        pix_fft /= xp.sinc(xp.fft.fftfreq(pix_output.shape[0], d=1.0))[:, None]
+        pix_fft /= xp.sinc(xp.fft.fftfreq(pix_output.shape[1], d=1.0))[None]
+        pix_output = xp.real(xp.fft.ifft2(pix_fft))
+
+    return pix_output
+
+
+def bilinear_kernel_density_estimate(
+    xa,
+    ya,
+    intensities,
+    output_shape,
+    kde_sigma,
+    lowpass_filter=False,
+    xp=np,
+    gaussian_filter=gaussian_filter,
+):
+    """
+    kernel density estimate from a set coordinates (xa,ya) and intensity weights.
+
+    Parameters
+    ----------
+    xa: np.ndarray
+        Vertical positions of intensity array in pixels
+    ya: np.ndarray
+        Horizontal positions of intensity array in pixels
+    intensities: np.ndarray
+        Intensity array weights
+    output_shape: (int,int)
+        Upsampled intensities shape
+    kde_sigma: float
+        KDE gaussian kernel bandwidth in upsampled pixels
+    lowpass_filter: bool, optional
+        If True, the resulting KDE upsampled image is lowpass-filtered using a sinc-function
+
+    Returns
+    -------
+    pix_output: np.ndarray
+        Upsampled intensity image
+    """
+
+    # interpolation
+    xF = xp.floor(xa.ravel()).astype("int")
+    yF = xp.floor(ya.ravel()).astype("int")
+    dx = xa.ravel() - xF
+    dy = ya.ravel() - yF
+
+    all_inds = [
+        [xF, yF],
+        [xF + 1, yF],
+        [xF, yF + 1],
+        [xF + 1, yF + 1],
+    ]
+
+    all_weights = [
+        (1 - dx) * (1 - dy),
+        (dx) * (1 - dy),
+        (1 - dx) * (dy),
+        (dx) * (dy),
+    ]
+
+    raveled_intensities = intensities.ravel()
+    pix_count = xp.zeros(np.prod(output_shape), dtype=xp.float32)
+    pix_output = xp.zeros(np.prod(output_shape), dtype=xp.float32)
+
+    for inds, weights in zip(all_inds, all_weights):
+        inds_1D = xp.ravel_multi_index(
+            inds,
+            output_shape,
+            mode=["wrap", "wrap"],
+        )
+
+        pix_count += xp.bincount(
+            inds_1D,
+            weights=weights,
+            minlength=np.prod(output_shape),
+        )
+        pix_output += xp.bincount(
+            inds_1D,
+            weights=weights * raveled_intensities,
+            minlength=np.prod(output_shape),
+        )
+
+    # reshape 1D arrays to 2D
+    pix_count = xp.reshape(
+        pix_count,
+        output_shape,
+    )
+    pix_output = xp.reshape(
+        pix_output,
+        output_shape,
+    )
+
+    # kernel density estimate
+    pix_count = gaussian_filter(pix_count, kde_sigma)
+    pix_output = gaussian_filter(pix_output, kde_sigma)
+    sub = pix_count > 1e-3
+    pix_output[sub] /= pix_count[sub]
+    pix_output[np.logical_not(sub)] = 1
+
+    if lowpass_filter:
+        pix_fft = xp.fft.fft2(pix_output)
+        pix_fft /= xp.sinc(xp.fft.fftfreq(pix_output.shape[0], d=1.0))[:, None]
+        pix_fft /= xp.sinc(xp.fft.fftfreq(pix_output.shape[1], d=1.0))[None]
+        pix_output = xp.real(xp.fft.ifft2(pix_fft))
+
+    return pix_output
+
+
+def lanczos_kernel_density_estimate(
+    xa,
+    ya,
+    intensities,
+    output_shape,
+    kde_sigma,
+    alpha,
+    lowpass_filter=False,
+    xp=np,
+    gaussian_filter=gaussian_filter,
+):
+    """
+    kernel density estimate from a set coordinates (xa,ya) and intensity weights.
+
+    Parameters
+    ----------
+    xa: np.ndarray
+        Vertical positions of intensity array in pixels
+    ya: np.ndarray
+        Horizontal positions of intensity array in pixels
+    intensities: np.ndarray
+        Intensity array weights
+    output_shape: (int,int)
+        Upsampled intensities shape
+    kde_sigma: float
+        KDE gaussian kernel bandwidth in upsampled pixels
+    alpha: int
+        Lanczos kernel order
+    lowpass_filter: bool, optional
+        If True, the resulting KDE upsampled image is lowpass-filtered using a sinc-function
+
+    Returns
+    -------
+    pix_output: np.ndarray
+        Upsampled intensity image
+    """
+
+    # interpolation
+    xF = xp.floor(xa.ravel()).astype("int")
+    yF = xp.floor(ya.ravel()).astype("int")
+    dx = xa.ravel() - xF
+    dy = ya.ravel() - yF
+
+    all_inds = []
+    all_weights = []
+
+    for i in range(-alpha + 1, alpha + 1):
+        for j in range(-alpha + 1, alpha + 1):
+            all_inds.append([xF + i, yF + j])
+            all_weights.append(
+                (xp.sinc(i - dx) * xp.sinc((i - dx) / alpha))
+                * (xp.sinc(j - dy) * xp.sinc((i - dy) / alpha))
+            )
+
+    raveled_intensities = intensities.ravel()
+    pix_count = xp.zeros(np.prod(output_shape), dtype=xp.float32)
+    pix_output = xp.zeros(np.prod(output_shape), dtype=xp.float32)
+
+    for inds, weights in zip(all_inds, all_weights):
+        inds_1D = xp.ravel_multi_index(
+            inds,
+            output_shape,
+            mode=["wrap", "wrap"],
+        )
+
+        pix_count += xp.bincount(
+            inds_1D,
+            weights=weights,
+            minlength=np.prod(output_shape),
+        )
+        pix_output += xp.bincount(
+            inds_1D,
+            weights=weights * raveled_intensities,
+            minlength=np.prod(output_shape),
+        )
+
+    # reshape 1D arrays to 2D
+    pix_count = xp.reshape(
+        pix_count,
+        output_shape,
+    )
+    pix_output = xp.reshape(
+        pix_output,
+        output_shape,
+    )
+
+    # kernel density estimate
+    pix_count = gaussian_filter(pix_count, kde_sigma)
+    pix_output = gaussian_filter(pix_output, kde_sigma)
+    sub = pix_count > 1e-3
+    pix_output[sub] /= pix_count[sub]
+    pix_output[np.logical_not(sub)] = 1
+
+    if lowpass_filter:
+        pix_fft = xp.fft.fft2(pix_output)
+        pix_fft /= xp.sinc(xp.fft.fftfreq(pix_output.shape[0], d=1.0))[:, None]
+        pix_fft /= xp.sinc(xp.fft.fftfreq(pix_output.shape[1], d=1.0))[None]
+        pix_output = xp.real(xp.fft.ifft2(pix_fft))
+
+    return pix_output
+
+
+def bilinear_resample(
+    array,
+    scale=None,
+    output_size=None,
+    mode="grid-wrap",
+    grid_mode=True,
+    vectorized=True,
+    conserve_array_sums=False,
+    xp=np,
+):
+    """
+    Resize an array along its final two axes.
+    Note, this is vectorized by default and thus very memory-intensive.
+
+    The scaling of the array can be specified by passing either `scale`, which sets
+    the scaling factor along both axes to be scaled; or by passing `output_size`,
+    which specifies the final dimensions of the scaled axes.
+
+    Parameters
+    ----------
+    array: np.ndarray
+        Input array to be resampled
+    scale: float
+        Scalar value giving the scaling factor for all dimensions
+    output_size: (int,int)
+        Tuple of two values giving the output size for the final two axes
+    xp: Callable
+        Array computing module
+
+    Returns
+    -------
+    resampled_array: np.ndarray
+        Resampled array
+    """
+
+    array_size = np.array(array.shape)
+    input_size = array_size[-2:].copy()
+
+    if scale is not None:
+        scale = np.array(scale)
+        if scale.size == 1:
+            scale = np.tile(scale, 2)
+
+        output_size = (input_size * scale).astype("int")
+    else:
+        if output_size is None:
+            raise ValueError("One of `scale` or `output_size` must be provided.")
+        output_size = np.array(output_size)
+        if output_size.size != 2:
+            raise ValueError("`output_size` must contain exactly two values.")
+        output_size = np.array(output_size)
+
+    scale_output = tuple(output_size / input_size)
+    scale_output = (1,) * (array_size.size - input_size.size) + scale_output
+
+    if xp is np:
+        zoom_xp = zoom
+    else:
+        zoom_xp = zoom_cp
+
+    if vectorized:
+        array = zoom_xp(array, scale_output, order=1, mode=mode, grid_mode=grid_mode)
+    else:
+        flat_array = array.reshape((-1,) + tuple(input_size))
+        out_array = xp.zeros(
+            (flat_array.shape[0],) + tuple(output_size), flat_array.dtype
+        )
+        for idx in range(flat_array.shape[0]):
+            out_array[idx] = zoom_xp(
+                flat_array[idx],
+                scale_output[-2:],
+                order=1,
+                mode=mode,
+                grid_mode=grid_mode,
+            )
+
+        array = out_array.reshape(tuple(array_size[:-2]) + tuple(output_size))
+
+    if conserve_array_sums:
+        array = array / np.array(scale_output).prod()
+
+    return array
+
+
+def vectorized_fourier_resample(
+    array,
+    scale=None,
+    output_size=None,
+    conserve_array_sums=False,
+    xp=np,
+):
+    """
+    Resize a 2D array along any dimension, using Fourier interpolation.
+    For 4D input arrays, only the final two axes can be resized.
+    Note, this is vectorized and thus very memory-intensive.
+
+    The scaling of the array can be specified by passing either `scale`, which sets
+    the scaling factor along both axes to be scaled; or by passing `output_size`,
+    which specifies the final dimensions of the scaled axes (and allows for different
+    scaling along the x,y or kx,ky axes.)
+
+    Parameters
+    ----------
+    array: np.ndarray
+        Input 2D/4D array to be resampled
+    scale: float
+        Scalar value giving the scaling factor for all dimensions
+    output_size: (int,int)
+        Tuple of two values giving eith the (x,y) or (kx,ky) output size for 2D and 4D respectively.
+    xp: Callable
+        Array computing module
+
+    Returns
+    -------
+    resampled_array: np.ndarray
+        Resampled 2D/4D array
+    """
+
+    array_size = np.array(array.shape)
+    input_size = array_size[-2:].copy()
+
+    if scale is not None:
+        scale = np.array(scale)
+        if scale.size == 1:
+            scale = np.tile(scale, 2)
+
+        output_size = (input_size * scale).astype("int")
+    else:
+        if output_size is None:
+            raise ValueError("One of `scale` or `output_size` must be provided.")
+        output_size = np.array(output_size)
+        if output_size.size != 2:
+            raise ValueError("`output_size` must contain exactly two values.")
+        output_size = np.array(output_size)
+
+    scale_output = np.prod(output_size) / np.prod(input_size)
+
+    # x slices
+    if output_size[0] > input_size[0]:
+        # x dimension increases
+        x0 = (input_size[0] + 1) // 2
+        x1 = input_size[0] // 2
+
+        x_ul_out = slice(0, x0)
+        x_ul_in_ = slice(0, x0)
+
+        x_ll_out = slice(0 - x1 + output_size[0], output_size[0])
+        x_ll_in_ = slice(0 - x1 + input_size[0], input_size[0])
+
+        x_ur_out = slice(0, x0)
+        x_ur_in_ = slice(0, x0)
+
+        x_lr_out = slice(0 - x1 + output_size[0], output_size[0])
+        x_lr_in_ = slice(0 - x1 + input_size[0], input_size[0])
+
+    elif output_size[0] < input_size[0]:
+        # x dimension decreases
+        x0 = (output_size[0] + 1) // 2
+        x1 = output_size[0] // 2
+
+        x_ul_out = slice(0, x0)
+        x_ul_in_ = slice(0, x0)
+
+        x_ll_out = slice(0 - x1 + output_size[0], output_size[0])
+        x_ll_in_ = slice(0 - x1 + input_size[0], input_size[0])
+
+        x_ur_out = slice(0, x0)
+        x_ur_in_ = slice(0, x0)
+
+        x_lr_out = slice(0 - x1 + output_size[0], output_size[0])
+        x_lr_in_ = slice(0 - x1 + input_size[0], input_size[0])
+
+    else:
+        # x dimension does not change
+        x_ul_out = slice(None)
+        x_ul_in_ = slice(None)
+
+        x_ll_out = slice(None)
+        x_ll_in_ = slice(None)
+
+        x_ur_out = slice(None)
+        x_ur_in_ = slice(None)
+
+        x_lr_out = slice(None)
+        x_lr_in_ = slice(None)
+
+    # y slices
+    if output_size[1] > input_size[1]:
+        # y increases
+        y0 = (input_size[1] + 1) // 2
+        y1 = input_size[1] // 2
+
+        y_ul_out = slice(0, y0)
+        y_ul_in_ = slice(0, y0)
+
+        y_ll_out = slice(0, y0)
+        y_ll_in_ = slice(0, y0)
+
+        y_ur_out = slice(0 - y1 + output_size[1], output_size[1])
+        y_ur_in_ = slice(0 - y1 + input_size[1], input_size[1])
+
+        y_lr_out = slice(0 - y1 + output_size[1], output_size[1])
+        y_lr_in_ = slice(0 - y1 + input_size[1], input_size[1])
+
+    elif output_size[1] < input_size[1]:
+        # y decreases
+        y0 = (output_size[1] + 1) // 2
+        y1 = output_size[1] // 2
+
+        y_ul_out = slice(0, y0)
+        y_ul_in_ = slice(0, y0)
+
+        y_ll_out = slice(0, y0)
+        y_ll_in_ = slice(0, y0)
+
+        y_ur_out = slice(0 - y1 + output_size[1], output_size[1])
+        y_ur_in_ = slice(0 - y1 + input_size[1], input_size[1])
+
+        y_lr_out = slice(0 - y1 + output_size[1], output_size[1])
+        y_lr_in_ = slice(0 - y1 + input_size[1], input_size[1])
+
+    else:
+        # y dimension does not change
+        y_ul_out = slice(None)
+        y_ul_in_ = slice(None)
+
+        y_ll_out = slice(None)
+        y_ll_in_ = slice(None)
+
+        y_ur_out = slice(None)
+        y_ur_in_ = slice(None)
+
+        y_lr_out = slice(None)
+        y_lr_in_ = slice(None)
+
+    # image array
+    array_size[-2:] = output_size
+    array_resize = xp.zeros(array_size, dtype=xp.complex64)
+    array_fft = xp.fft.fft2(array)
+
+    # copy each quadrant into the resize array
+    array_resize[..., x_ul_out, y_ul_out] = array_fft[..., x_ul_in_, y_ul_in_]
+    array_resize[..., x_ll_out, y_ll_out] = array_fft[..., x_ll_in_, y_ll_in_]
+    array_resize[..., x_ur_out, y_ur_out] = array_fft[..., x_ur_in_, y_ur_in_]
+    array_resize[..., x_lr_out, y_lr_out] = array_fft[..., x_lr_in_, y_lr_in_]
+
+    # Back to real space
+    array_resize = xp.real(xp.fft.ifft2(array_resize)).astype(xp.float32)
+
+    # Normalization
+    if not conserve_array_sums:
+        array_resize = array_resize * scale_output
+
+    return array_resize
+
+
+def partition_list(lst, size):
+    """Partitions lst into chunks of size. Returns a generator."""
+    for i in range(0, len(lst), size):
+        yield lst[i : i + size]
+
+
+def copy_to_device(array, device="cpu"):
+    """Copies array to device. Default allows one to use this as asnumpy()"""
+    xp = get_array_module(array)
+
+    if xp is np:
+        if device == "cpu":
+            return np.asarray(array)
+        elif device == "gpu":
+            return cp.asarray(array)
+        else:
+            raise ValueError(f"device must be either 'cpu' or 'gpu', not {device}")
+    else:
+        if device == "cpu":
+            return cp.asnumpy(array)
+        elif device == "gpu":
+            return cp.asarray(array)
+        else:
+            raise ValueError(f"device must be either 'cpu' or 'gpu', not {device}")

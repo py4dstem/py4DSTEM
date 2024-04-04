@@ -1,7 +1,7 @@
 
 > :warning: **py4DSTEM version 0.14 update** :warning: Warning: this is a major update and we expect some workflows to break.  You can still install previous versions of py4DSTEM [as discussed here](#legacyinstall)
 
-
+> :warning: **Phase retrieval refactor version 0.14.9** :warning: Warning: The phase-retrieval modules in py4DSTEM (DPC, parallax, and ptychography) underwent a major refactor in version 0.14.9 and as such older tutorial notebooks will not work as expected. Notably, class names have been pruned to remove the trailing "Reconstruction" (`DPCReconstruction` -> `DPC` etc.), and regularization functions have dropped the `_iter` suffix (and are instead specified as boolean flags). We are working on updating the tutorial notebooks to reflect these changes. In the meantime, there's some more information in the relevant pull request [here](https://github.com/py4dstem/py4DSTEM/pull/597#issuecomment-1890325568).
 
 ![py4DSTEM logo](/images/py4DSTEM_logo.png)
 
@@ -11,6 +11,7 @@ Additional information:
 - [Installation instructions](#install)
 - [The py4DSTEM documentation pages](https://py4dstem.readthedocs.io/en/latest/index.html).
 - [Tutorials and example code](https://github.com/py4dstem/py4DSTEM_tutorials)
+- [Want to get involved?](#Contributing)
 - [Our open access py4DSTEM publication in Microscopy and Microanalysis](https://doi.org/10.1017/S1431927621000477) describing this project and demonstrating a variety of applications.
 - [Our open access 4D-STEM review in Microscopy and Microanalysis](https://doi.org/10.1017/S1431927619000497) describing this project and demonstrating a variety of applications.
 
@@ -181,16 +182,18 @@ Links to the data used in each notebook are provided in the intro cell of each n
 
 
 # More information
+<a id='Contributing'></a>
+
+## Contributing Guide 
+We are grateful for your interest in contributing to py4DSTEM. There are many ways to contribute to py4DSTEM, including Reporting bugs, Submitting feature requests, Improving documentation and Developing new code
+
+For more information checkout our [Contributors Guide](CONTRIBUTORS.md)
+
 
 ## Documentation
 
 Our documentation pages are [available here](https://py4dstem.readthedocs.io/en/latest/index.html).
 
-
-
-## For contributors
-
-Please see [here](https://gist.github.com/bsavitzky/8b1ee4c1244814940e7cff4500535dba).
 
 
 ## Scientific papers which use **py4DSTEM**

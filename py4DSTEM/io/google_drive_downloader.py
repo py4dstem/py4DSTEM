@@ -57,7 +57,7 @@ file_ids = {
     ),
     "small_dm3_3Dstack": ("small_dm3_3Dstack.dm3", "1B-xX3F65JcWzAg0v7f1aVwnawPIfb5_o"),
     "FCU-Net": (
-        "filename.name",
+        "model_metadata.json",
         "1-KX0saEYfhZ9IJAOwabH38PCVtfXidJi",
     ),
     "small_datacube": (
@@ -221,7 +221,8 @@ def gdrive_download(
         kwargs = {"fuzzy": True}
         if id_ in file_ids:
             f = file_ids[id_]
-            filename = f[0]
+            # Use the name in the collection filename passed
+            filename = filename if filename is not None else f[0]
             kwargs["id"] = f[1]
 
         # if its not in the list of files we expect

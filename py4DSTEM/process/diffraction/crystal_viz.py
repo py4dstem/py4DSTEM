@@ -3,6 +3,8 @@ from matplotlib.figure import Figure
 from matplotlib.axes import Axes
 import matplotlib.tri as mtri
 from mpl_toolkits.mplot3d import Axes3D, art3d
+from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+
 from scipy.signal import medfilt
 from scipy.ndimage import gaussian_filter
 from scipy.ndimage import distance_transform_edt
@@ -91,18 +93,26 @@ def plot_structure(
 
     # Fractional atomic coordinates
     pos = self.positions
+    occ = self.occupancy
+
     # x tile
     sub = pos[:, 0] < tol_distance
     pos = np.vstack([pos, pos[sub, :] + np.array([1, 0, 0])])
     ID = np.hstack([ID, ID[sub]])
+    if occ is not None:
+        occ = np.hstack([occ, occ[sub]])
     # y tile
     sub = pos[:, 1] < tol_distance
     pos = np.vstack([pos, pos[sub, :] + np.array([0, 1, 0])])
     ID = np.hstack([ID, ID[sub]])
+    if occ is not None:
+        occ = np.hstack([occ, occ[sub]])
     # z tile
     sub = pos[:, 2] < tol_distance
     pos = np.vstack([pos, pos[sub, :] + np.array([0, 0, 1])])
     ID = np.hstack([ID, ID[sub]])
+    if occ is not None:
+        occ = np.hstack([occ, occ[sub]])
 
     # Cartesian atomic positions
     xyz = pos @ self.lat_real
@@ -141,17 +151,109 @@ def plot_structure(
 
     # atoms
     ID_all = np.unique(ID)
-    for ID_plot in ID_all:
-        sub = ID == ID_plot
-        ax.scatter(
-            xs=xyz[sub, 1],  # + d[0],
-            ys=xyz[sub, 0],  # + d[1],
-            zs=xyz[sub, 2],  # + d[2],
-            s=size_marker,
-            linewidth=2,
-            facecolors=atomic_colors(ID_plot),
-            edgecolor=[0, 0, 0],
-        )
+    if occ is None:
+        for ID_plot in ID_all:
+            sub = ID == ID_plot
+            ax.scatter(
+                xs=xyz[sub, 1],  # + d[0],
+                ys=xyz[sub, 0],  # + d[1],
+                zs=xyz[sub, 2],  # + d[2],
+                s=size_marker,
+                linewidth=2,
+                facecolors=atomic_colors(ID_plot),
+                edgecolor=[0, 0, 0],
+            )
+    else:
+        # init
+        tol = 1e-4
+        num_seg = 180
+        radius = 0.7
+        zp = np.zeros(num_seg + 1)
+
+        mark = np.ones(xyz.shape[0], dtype="bool")
+        for a0 in range(xyz.shape[0]):
+            if mark[a0]:
+                xyz_plot = xyz[a0, :]
+                inds = np.argwhere(np.sum((xyz - xyz_plot) ** 2, axis=1) < tol)
+                occ_plot = occ[inds]
+                mark[inds] = False
+                ID_plot = ID[inds]
+
+                if np.sum(occ_plot) < 1.0:
+                    occ_plot = np.append(occ_plot, 1 - np.sum(occ_plot))
+                    ID_plot = np.append(ID_plot, -1)
+                else:
+                    occ_plot = occ_plot[0]
+                    ID_plot = ID_plot[0]
+
+                # Plot site as series of filled arcs
+                theta0 = 0
+                for a1 in range(occ_plot.shape[0]):
+                    theta1 = theta0 + occ_plot[a1] * 2.0 * np.pi
+                    theta = np.linspace(theta0, theta1, num_seg + 1)
+                    xp = np.cos(theta) * radius
+                    yp = np.sin(theta) * radius
+
+                    # Rotate towards camera
+                    xyz_rot = np.vstack((xp.ravel(), yp.ravel(), zp.ravel()))
+                    if occ_plot[a1] < 1.0:
+                        xyz_rot = np.append(
+                            xyz_rot, np.array((0, 0, 0))[:, None], axis=1
+                        )
+                    xyz_rot = orientation_matrix @ xyz_rot
+
+                    # add to plot
+                    verts = [
+                        list(
+                            zip(
+                                xyz_rot[1, :] + xyz_plot[1],
+                                xyz_rot[0, :] + xyz_plot[0],
+                                xyz_rot[2, :] + xyz_plot[2],
+                            )
+                        )
+                    ]
+                    # ax.add_collection3d(
+                    #     Poly3DCollection(
+                    #         verts
+                    #     )
+                    # )
+                    collection = Poly3DCollection(
+                        verts,
+                        linewidths=2.0,
+                        alpha=1.0,
+                        edgecolors="k",
+                    )
+                    face_color = [
+                        0.5,
+                        0.5,
+                        1,
+                    ]  # alternative: matplotlib.colors.rgb2hex([0.5, 0.5, 1])
+                    if ID_plot[a1] == -1:
+                        collection.set_facecolor((1.0, 1.0, 1.0))
+                    else:
+                        collection.set_facecolor(atomic_colors(ID_plot[a1]))
+                    ax.add_collection3d(collection)
+
+                    # update start point
+                    if a1 < occ_plot.size:
+                        theta0 = theta1
+
+        # for ID_plot in ID_all:
+        #     sub = ID == ID_plot
+        #     ax.scatter(
+        #         xs=xyz[sub, 1],  # + d[0],
+        #         ys=xyz[sub, 0],  # + d[1],
+        #         zs=xyz[sub, 2],  # + d[2],
+        #         s=size_marker,
+        #         linewidth=2,
+        #         facecolors='none',
+        #         edgecolor=[0, 0, 0],
+        #     )
+        # poly = PolyCollection(
+        #     verts,
+        #     facecolors=['r', 'g', 'b', 'y'],
+        #     alpha = 0.6)
+        # ax.add_collection3d(poly, zs=zs, zdir='y')
 
     # plot limit
     if plot_limit is None:
@@ -352,8 +454,7 @@ def plot_scattering_intensity(
     int_sf_plot = calc_1D_profile(
         k,
         self.g_vec_leng,
-        (self.struct_factors_int**int_power_scale)
-        * (self.g_vec_leng**k_power_scale),
+        (self.struct_factors_int**int_power_scale) * (self.g_vec_leng**k_power_scale),
         remove_origin=True,
         k_broadening=k_broadening,
         int_scale=int_scale,

@@ -1,11 +1,13 @@
 # Functions for calculating diffraction patterns, matching them to experiments, and creating orientation and phase maps.
 
 import numpy as np
+from scipy.ndimage import gaussian_filter
 import matplotlib.pyplot as plt
 from matplotlib.patches import Circle
 from fractions import Fraction
 from typing import Union, Optional
 import sys
+import warnings
 
 from emdfile import PointList
 from py4DSTEM.process.utils import single_atom_scatter, electron_wavelength_angstrom
@@ -66,6 +68,7 @@ class Crystal:
         positions,
         numbers,
         cell,
+        occupancy=None,
     ):
         """
         Args:
@@ -76,7 +79,7 @@ class Crystal:
                 3 numbers: the three lattice parameters for an orthorhombic cell
                 6 numbers: the a,b,c lattice parameters and ɑ,β,ɣ angles for any cell
                 3x3 array: row vectors containing the (u,v,w) lattice vectors.
-
+            occupancy (np.array): Partial occupancy values for each atomic site. Must match the length of positions
         """
         # Initialize Crystal
         self.positions = np.asarray(positions)  #: fractional atomic coordinates
@@ -130,6 +133,17 @@ class Crystal:
             self.cell = (a, b, c, alpha, beta, gamma)
         else:
             raise Exception("Cell cannot contain " + np.size(cell) + " entries")
+
+        # occupancy
+        if occupancy is not None:
+            self.occupancy = np.array(occupancy)
+            # check the occupancy shape makes sense
+            if self.occupancy.shape[0] != self.positions.shape[0]:
+                raise Warning(
+                    f"Number of occupancies ({self.occupancy.shape[0]}) and atomic positions ({self.positions.shape[0]}) do not match"
+                )
+        else:
+            self.occupancy = np.ones(self.positions.shape[0], dtype=np.float32)
 
         # pymatgen flag
         if "pymatgen" in sys.modules:
@@ -257,7 +271,70 @@ class Crystal:
         else:
             return crystal_strained
 
-    def from_CIF(CIF, conventional_standard_structure=True):
+    @staticmethod
+    def from_ase(
+        atoms,
+    ):
+        """
+        Create a py4DSTEM Crystal object from an ASE atoms object
+
+        Args:
+            atoms (ase.Atoms): an ASE atoms object
+
+        """
+        # get the occupancies from the atoms object
+        occupancies = (
+            atoms.arrays["occupancies"]
+            if "occupancies" in atoms.arrays.keys()
+            else None
+        )
+
+        if "occupancy" in atoms.info.keys():
+            warnings.warn(
+                "This Atoms object contains occupancy information but it will be ignored."
+            )
+
+        xtal = Crystal(
+            positions=atoms.get_scaled_positions(),  # fractional coords
+            numbers=atoms.numbers,
+            cell=atoms.cell.array,
+            occupancy=occupancies,
+        )
+        return xtal
+
+    @staticmethod
+    def from_prismatic(filepath):
+        """
+        Create a py4DSTEM Crystal object from an prismatic style xyz co-ordinate file
+
+        Args:
+            filepath (str|Pathlib.Path): path to the prismatic format xyz file
+
+        """
+
+        from ase import io
+
+        # read the atoms using ase
+        atoms = io.read(filepath, format="prismatic")
+
+        # get the occupancies from the atoms object
+        occupancies = (
+            atoms.arrays["occupancies"]
+            if "occupancies" in atoms.arrays.keys()
+            else None
+        )
+        xtal = Crystal(
+            positions=atoms.get_scaled_positions(),  # fractional coords
+            numbers=atoms.numbers,
+            cell=atoms.cell.array,
+            occupancy=occupancies,
+        )
+        return xtal
+
+    @staticmethod
+    def from_CIF(
+        CIF, primitive: bool = True, conventional_standard_structure: bool = True
+    ):
         """
         Create a Crystal object from a CIF file, using pymatgen to import the CIF
 
@@ -273,12 +350,13 @@ class Crystal:
 
         parser = CifParser(CIF)
 
-        structure = parser.get_structures(False)[0]
+        structure = parser.get_structures(primitive=primitive)[0]
 
         return Crystal.from_pymatgen_structure(
             structure, conventional_standard_structure=conventional_standard_structure
         )
 
+    @staticmethod
     def from_pymatgen_structure(
         structure=None,
         formula=None,
@@ -375,8 +453,6 @@ class Crystal:
                     else selected["structure"]
                 )
 
-        positions = structure.frac_coords  #: fractional atomic coordinates
-
         cell = np.array(
             [
                 structure.lattice.a,
@@ -388,10 +464,22 @@ class Crystal:
             ]
         )
 
-        numbers = np.array([s.species.elements[0].Z for s in structure])
+        site_data = np.array(
+            [
+                (*site.frac_coords, elem.number, comp)
+                for site in structure
+                for elem, comp in site.species.items()
+            ]
+        )
+        positions = site_data[:, :3]
+        numbers = site_data[:, 3]
+        occupancies = site_data[:, 4]
 
-        return Crystal(positions, numbers, cell)
+        return Crystal(
+            positions=positions, numbers=numbers, cell=cell, occupancy=occupancies
+        )
 
+    @staticmethod
     def from_unitcell_parameters(
         latt_params,
         elements,
@@ -575,10 +663,14 @@ class Crystal:
         # Calculate structure factors
         self.struct_factors = np.zeros(np.size(self.g_vec_leng, 0), dtype="complex64")
         for a0 in range(self.positions.shape[0]):
-            self.struct_factors += f_all[:, a0] * np.exp(
-                (2j * np.pi)
-                * np.sum(
-                    self.hkl * np.expand_dims(self.positions[a0, :], axis=1), axis=0
+            self.struct_factors += (
+                f_all[:, a0]
+                * self.occupancy[a0]
+                * np.exp(
+                    (2j * np.pi)
+                    * np.sum(
+                        self.hkl * np.expand_dims(self.positions[a0, :], axis=1), axis=0
+                    )
                 )
             )
 
@@ -875,6 +967,259 @@ class Crystal:
 
         if return_calc is True:
             return radii_unique, intensity_unique
+
+    def generate_projected_potential(
+        self,
+        im_size=(256, 256),
+        pixel_size_angstroms=0.1,
+        potential_radius_angstroms=3.0,
+        sigma_image_blur_angstroms=0.1,
+        thickness_angstroms=100,
+        power_scale=1.0,
+        plot_result=False,
+        figsize=(6, 6),
+        orientation: Optional[Orientation] = None,
+        ind_orientation: Optional[int] = 0,
+        orientation_matrix: Optional[np.ndarray] = None,
+        zone_axis_lattice: Optional[np.ndarray] = None,
+        proj_x_lattice: Optional[np.ndarray] = None,
+        zone_axis_cartesian: Optional[np.ndarray] = None,
+        proj_x_cartesian: Optional[np.ndarray] = None,
+    ):
+        """
+        Generate an image of the projected potential of crystal in real space,
+        using cell tiling, and a lookup table of the atomic potentials.
+        Note that we round atomic positions to the nearest pixel for speed.
+
+        TODO - fix scattering prefactor so that output units are sensible.
+
+        Parameters
+        ----------
+        im_size: tuple, list, np.array
+            (2,) vector specifying the output size in pixels.
+        pixel_size_angstroms: float
+            Pixel size in Angstroms.
+        potential_radius_angstroms: float
+            Radius in Angstroms for how far to integrate the atomic potentials
+        sigma_image_blur_angstroms: float
+            Image blurring in Angstroms.
+        thickness_angstroms: float
+            Thickness of the sample in Angstroms.
+            Set thickness_thickness_angstroms = 0 to skip thickness projection.
+        power_scale: float
+            Power law scaling of potentials.  Set to 2.0 to approximate Z^2 images.
+        plot_result: bool
+            Plot the projected potential image.
+        figsize:
+            (2,) vector giving the size of the output.
+
+        orientation: Orientation
+            An Orientation class object
+        ind_orientation: int
+            If input is an Orientation class object with multiple orientations,
+            this input can be used to select a specific orientation.
+        orientation_matrix: array
+            (3,3) orientation matrix, where columns represent projection directions.
+        zone_axis_lattice: array
+            (3,) projection direction in lattice indices
+        proj_x_lattice: array)
+            (3,) x-axis direction in lattice indices
+        zone_axis_cartesian: array
+            (3,) cartesian projection direction
+        proj_x_cartesian: array
+            (3,) cartesian projection direction
+
+        Returns
+        --------
+        im_potential: (np.array)
+            Output image of the projected potential.
+
+        """
+
+        # Determine image size in Angstroms
+        im_size = np.array(im_size)
+        im_size_Ang = im_size * pixel_size_angstroms
+
+        # Parse orientation inputs
+        if orientation is not None:
+            if ind_orientation is None:
+                orientation_matrix = orientation.matrix[0]
+            else:
+                orientation_matrix = orientation.matrix[ind_orientation]
+        elif orientation_matrix is None:
+            orientation_matrix = self.parse_orientation(
+                zone_axis_lattice, proj_x_lattice, zone_axis_cartesian, proj_x_cartesian
+            )
+
+        # Rotate unit cell into projection direction
+        lat_real = self.lat_real.copy() @ orientation_matrix
+
+        # Determine unit cell axes to tile over, by selecting 2/3 with largest in-plane component
+        inds_tile = np.argsort(np.linalg.norm(lat_real[:, 0:2], axis=1))[1:3]
+        m_tile = lat_real[inds_tile, :]
+        # Vector projected along optic axis
+        m_proj = np.squeeze(np.delete(lat_real, inds_tile, axis=0))
+
+        # Thickness
+        if thickness_angstroms > 0:
+            num_proj = np.round(thickness_angstroms / np.abs(m_proj[2])).astype("int")
+            if num_proj > 1:
+                vec_proj = m_proj[:2] / pixel_size_angstroms
+                shifts = np.arange(num_proj).astype("float")
+                shifts -= np.mean(shifts)
+                x_proj = shifts * vec_proj[0]
+                y_proj = shifts * vec_proj[1]
+            else:
+                num_proj = 1
+        else:
+            num_proj = 1
+
+        # Determine tiling range
+        if thickness_angstroms > 0:
+            # include the cell height
+            dz = m_proj[2] * num_proj * 0.5
+            p_corners = np.array(
+                [
+                    [-im_size_Ang[0] * 0.5, -im_size_Ang[1] * 0.5, dz],
+                    [im_size_Ang[0] * 0.5, -im_size_Ang[1] * 0.5, dz],
+                    [-im_size_Ang[0] * 0.5, im_size_Ang[1] * 0.5, dz],
+                    [im_size_Ang[0] * 0.5, im_size_Ang[1] * 0.5, dz],
+                    [-im_size_Ang[0] * 0.5, -im_size_Ang[1] * 0.5, -dz],
+                    [im_size_Ang[0] * 0.5, -im_size_Ang[1] * 0.5, -dz],
+                    [-im_size_Ang[0] * 0.5, im_size_Ang[1] * 0.5, -dz],
+                    [im_size_Ang[0] * 0.5, im_size_Ang[1] * 0.5, -dz],
+                ]
+            )
+        else:
+            p_corners = np.array(
+                [
+                    [-im_size_Ang[0] * 0.5, -im_size_Ang[1] * 0.5, 0.0],
+                    [im_size_Ang[0] * 0.5, -im_size_Ang[1] * 0.5, 0.0],
+                    [-im_size_Ang[0] * 0.5, im_size_Ang[1] * 0.5, 0.0],
+                    [im_size_Ang[0] * 0.5, im_size_Ang[1] * 0.5, 0.0],
+                ]
+            )
+
+        ab = np.linalg.lstsq(m_tile[:, :2].T, p_corners[:, :2].T, rcond=None)[0]
+        ab = np.floor(ab)
+        a_range = np.array((np.min(ab[0]) - 1, np.max(ab[0]) + 2))
+        b_range = np.array((np.min(ab[1]) - 1, np.max(ab[1]) + 2))
+
+        # Tile unit cell
+        a_ind, b_ind, atoms_ind = np.meshgrid(
+            np.arange(a_range[0], a_range[1]),
+            np.arange(b_range[0], b_range[1]),
+            np.arange(self.positions.shape[0]),
+        )
+        abc_atoms = self.positions[atoms_ind.ravel(), :]
+        abc_atoms[:, inds_tile[0]] += a_ind.ravel()
+        abc_atoms[:, inds_tile[1]] += b_ind.ravel()
+        xyz_atoms_ang = abc_atoms @ lat_real
+        atoms_ID_all_0 = self.numbers[atoms_ind.ravel()]
+
+        # Center atoms on image plane
+        x0 = xyz_atoms_ang[:, 0] / pixel_size_angstroms + im_size[0] / 2.0
+        y0 = xyz_atoms_ang[:, 1] / pixel_size_angstroms + im_size[1] / 2.0
+
+        # if needed, tile atoms in the projection direction
+        if num_proj > 1:
+            x = (x0[:, None] + x_proj[None, :]).ravel()
+            y = (y0[:, None] + y_proj[None, :]).ravel()
+            atoms_ID_all = np.tile(atoms_ID_all_0, (num_proj, 1))
+        else:
+            x = x0
+            y = y0
+            atoms_ID_all = atoms_ID_all_0
+        # print(x.shape, y.shape)
+
+        # delete atoms outside the field of view
+        bound = potential_radius_angstroms / pixel_size_angstroms
+        atoms_del = np.logical_or.reduce(
+            (
+                x <= -bound,
+                y <= -bound,
+                x >= im_size[0] + bound,
+                y >= im_size[1] + bound,
+            )
+        )
+        x = np.delete(x, atoms_del)
+        y = np.delete(y, atoms_del)
+        atoms_ID_all = np.delete(atoms_ID_all, atoms_del)
+
+        # Coordinate system for atomic projected potentials
+        potential_radius = np.ceil(potential_radius_angstroms / pixel_size_angstroms)
+        R = np.arange(0.5 - potential_radius, potential_radius + 0.5)
+        R_ind = R.astype("int")
+        R_2D = np.sqrt(R[:, None] ** 2 + R[None, :] ** 2)
+
+        # Lookup table for atomic projected potentials
+        atoms_ID = np.unique(self.numbers)
+        atoms_lookup = np.zeros(
+            (
+                atoms_ID.shape[0],
+                R_2D.shape[0],
+                R_2D.shape[1],
+            )
+        )
+        for a0 in range(atoms_ID.shape[0]):
+            atom_sf = single_atom_scatter([atoms_ID[a0]])
+            atoms_lookup[a0, :, :] = atom_sf.projected_potential(atoms_ID[a0], R_2D)
+
+            # if needed, apply gaussian blurring to each atom
+            if sigma_image_blur_angstroms > 0:
+                atoms_lookup[a0, :, :] = gaussian_filter(
+                    atoms_lookup[a0, :, :],
+                    sigma_image_blur_angstroms / pixel_size_angstroms,
+                    mode="nearest",
+                )
+        atoms_lookup **= power_scale
+
+        # initialize potential
+        im_potential = np.zeros(im_size)
+
+        # Add atoms to potential image
+        for a0 in range(atoms_ID_all.shape[0]):
+            ind = np.argmin(np.abs(atoms_ID - atoms_ID_all[a0]))
+
+            x_ind = np.round(x[a0]).astype("int") + R_ind
+            y_ind = np.round(y[a0]).astype("int") + R_ind
+            x_sub = np.logical_and(
+                x_ind >= 0,
+                x_ind < im_size[0],
+            )
+            y_sub = np.logical_and(
+                y_ind >= 0,
+                y_ind < im_size[1],
+            )
+            im_potential[x_ind[x_sub][:, None], y_ind[y_sub][None, :]] += atoms_lookup[
+                ind
+            ][x_sub][:, y_sub]
+
+        if thickness_angstroms > 0:
+            im_potential /= num_proj
+
+        if plot_result:
+            # quick plotting of the result
+            int_vals = np.sort(im_potential.ravel())
+            int_range = np.array(
+                (
+                    int_vals[np.round(0.02 * int_vals.size).astype("int")],
+                    int_vals[np.round(0.999 * int_vals.size).astype("int")],
+                )
+            )
+
+            fig, ax = plt.subplots(figsize=figsize)
+            ax.imshow(
+                im_potential,
+                cmap="gray",
+                vmin=int_range[0],
+                vmax=int_range[1],
+            )
+            # ax.scatter(y,x,c='r')  # for testing
+            ax.set_axis_off()
+            ax.set_aspect("equal")
+
+        return im_potential
 
     # Vector conversions and other utilities for Crystal classes
     def cartesian_to_lattice(self, vec_cartesian):
