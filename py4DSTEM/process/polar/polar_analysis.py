@@ -928,13 +928,13 @@ def scattering_model(k2, *coefs):
 
 def background_pca(
     self,
-    pca_index = 0,
-    intensity_range = (0,1),
-    normalize_mean = True,
-    normalize_std = True,
-    plot_result = True,
-    plot_coef = False,
-    ):
+    pca_index=0,
+    intensity_range=(0, 1),
+    normalize_mean=True,
+    normalize_std=True,
+    plot_result=True,
+    plot_coef=False,
+):
     """
     Generate PCA decompositions of the background signal
 
@@ -954,42 +954,36 @@ def background_pca(
 
     # PCA decomposition
     shape = self.radial_all.shape
-    A = np.reshape(self.radial_all, (shape[0]*shape[1],shape[2]))
+    A = np.reshape(self.radial_all, (shape[0] * shape[1], shape[2]))
     if normalize_mean:
-        A -= np.mean(A,axis=0)
+        A -= np.mean(A, axis=0)
     if normalize_std:
-        A /= np.std(A,axis=0)
-    pca = PCA(n_components=np.maximum(pca_index+1,2))
+        A /= np.std(A, axis=0)
+    pca = PCA(n_components=np.maximum(pca_index + 1, 2))
     pca.fit(A)
 
     components = pca.components_
     loadings = pca.transform(A)
 
     # output image data
-    sig_pca = np.reshape(loadings[:,pca_index], shape[0:2])
+    sig_pca = np.reshape(loadings[:, pca_index], shape[0:2])
     sig_pca -= intensity_range[0]
     sig_pca /= intensity_range[1] - intensity_range[0]
-    sig_pca = np.clip(sig_pca,0,1)
-    im_pca = np.tile(sig_pca[:,:,None],(1,1,3))
+    sig_pca = np.clip(sig_pca, 0, 1)
+    im_pca = np.tile(sig_pca[:, :, None], (1, 1, 3))
 
     # output PCA coefficient
-    coef_pca = np.vstack((
-        self.radial_bins,
-        components[pca_index,:]
-    )).T
+    coef_pca = np.vstack((self.radial_bins, components[pca_index, :])).T
 
     if plot_result:
-        fig, ax = plt.subplots(figsize=(8,8))
+        fig, ax = plt.subplots(figsize=(8, 8))
         ax.imshow(
             im_pca,
-            vmin = 0,
-            vmax = 5,
+            vmin=0,
+            vmax=5,
         )
     if plot_coef:
-        fig, ax = plt.subplots(figsize=(8,4))
-        ax.plot(
-            coef_pca[:,0],
-            coef_pca[:,1]
-            )
+        fig, ax = plt.subplots(figsize=(8, 4))
+        ax.plot(coef_pca[:, 0], coef_pca[:, 1])
 
     return im_pca, coef_pca
