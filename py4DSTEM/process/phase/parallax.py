@@ -2535,12 +2535,25 @@ class Parallax(PhaseReconstruction):
         # plotting
         if plot_corrected_phase:
             figsize = kwargs.pop("figsize", (6, 6))
+            cmap = kwargs.pop("cmap", "magma")
+
             fig, ax = plt.subplots(figsize=figsize)
 
-            self._visualize_figax(
-                fig,
-                ax,
-                upsampled=upsampled,
+            cropped_object = self._crop_padded_object(
+                self._recon_phase_corrected, upsampled=upsampled
+            )
+
+            extent = [
+                0,
+                sy * cropped_object.shape[1],
+                sx * cropped_object.shape[0],
+                0,
+            ]
+
+            ax.imshow(
+                cropped_object,
+                extent=extent,
+                cmap=cmap,
                 **kwargs,
             )
 
