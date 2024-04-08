@@ -4,6 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
 from scipy.ndimage import gaussian_filter
+from sklearn.decomposition import PCA
 
 from emdfile import tqdmnd
 
