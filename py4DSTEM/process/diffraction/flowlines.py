@@ -824,63 +824,31 @@ def make_flowline_rainbow_legend(
         im_legend (array):          Image array for the legend.
     """
 
-    # Color basis
-    c0 = np.array([1.0, 0.0, 0.0])
-    c1 = np.array([0.0, 0.7, 0.0])
-    c2 = np.array([0.0, 0.3, 1.0])
-
     # Coordinates
     x = np.linspace(-1, 1, im_size[0])
     y = np.linspace(-1, 1, im_size[1])
     ya, xa = np.meshgrid(-y, x)
     ra = np.sqrt(xa**2 + ya**2)
-    ta = np.arctan2(ya, xa)
+    ta = np.arctan2(ya, xa) + theta_offset
     ta_sym = ta * sym_rotation_order
 
     # mask
-    dr = xa[1, 0] - xa[0, 0]
-    mask = np.clip((radial_range[1] - ra) / dr + 0.5, 0, 1) * np.clip(
-        (ra - radial_range[0]) / dr + 0.5, 0, 1
-    )
+    mask = np.logical_and(ra > radial_range[0], ra < radial_range[1])
 
     # rgb image
-    b0 = np.maximum(
-        1
-        - np.abs(np.mod(theta_offset + ta_sym + np.pi, 2 * np.pi) - np.pi) ** 2
-        / (np.pi * 2 / 3) ** 2,
-        0,
-    )
-    b1 = np.maximum(
-        1
-        - np.abs(
-            np.mod(theta_offset + ta_sym - np.pi * 2 / 3 + np.pi, 2 * np.pi) - np.pi
-        )
-        ** 2
-        / (np.pi * 2 / 3) ** 2,
-        0,
-    )
-    b2 = np.maximum(
-        1
-        - np.abs(
-            np.mod(theta_offset + ta_sym - np.pi * 4 / 3 + np.pi, 2 * np.pi) - np.pi
-        )
-        ** 2
-        / (np.pi * 2 / 3) ** 2,
-        0,
-    )
-    im_legend = (
-        b0[:, :, None] * c0[None, None, :]
-        + b1[:, :, None] * c1[None, None, :]
-        + b2[:, :, None] * c2[None, None, :]
-    )
-    im_legend = im_legend * mask[:, :, None]
+    z = mask * np.exp(1j * ta_sym)
+    hue_start = -90
+    amp = np.abs(z)
+    vmin = np.min(amp)
+    vmax = np.max(amp)
+    ph = np.angle(z, deg=1) + hue_start
+    h = (ph % 360) / 360
+    s = 0.85 * np.ones_like(h)
+    v = (amp - vmin) / (vmax - vmin)
+    im_legend = hsv_to_rgb(np.dstack((h, s, v)))
 
     if white_background is True:
-        im_legend = rgb_to_hsv(im_legend)
-        im_v = im_legend[:, :, 2]
-        im_legend[:, :, 1] = im_v
-        im_legend[:, :, 2] = 1
-        im_legend = hsv_to_rgb(im_legend)
+        im_legend[im_legend.sum(2) == 0] = 1
 
     # plotting
     if plot_legend:
@@ -890,16 +858,6 @@ def make_flowline_rainbow_legend(
         # ax.set_axis_off()
         ax.axis("off")
 
-    # # angles
-    # theta = np.linspace(0,np.pi,num_angle_bins,endpoint=False)
-    # theta_color = theta * sym_rotation_order
-
-    # # color projections
-    # b0 =  np.maximum(1 - np.abs(np.mod(theta_color + np.pi, 2*np.pi) - np.pi)**2 / (np.pi*2/3)**2, 0)
-    # b1 =  np.maximum(1 - np.abs(np.mod(theta_color - np.pi*2/3 + np.pi, 2*np.pi) - np.pi)**2 / (np.pi*2/3)**2, 0)
-    # b2 =  np.maximum(1 - np.abs(np.mod(theta_color - np.pi*4/3 + np.pi, 2*np.pi) - np.pi)**2 / (np.pi*2/3)**2, 0)
-
-    # print(b0.shape)
     if return_image:
         return im_legend
 
