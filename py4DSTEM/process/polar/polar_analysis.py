@@ -1,5 +1,6 @@
 # Analysis scripts for amorphous 4D-STEM data using polar transformations.
 
+from typing import Tuple
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
@@ -929,20 +930,32 @@ def scattering_model(k2, *coefs):
 
 def background_pca(
     self,
-    pca_index=0,
-    intensity_range=(0, 1),
-    normalize_mean=True,
-    normalize_std=True,
-    plot_result=True,
-    plot_coef=False,
+    pca_index: int = 0,
+    n_components: int = None,
+    intensity_range: Tuple[float, float] = (0, 1),
+    normalize_mean: bool = True,
+    normalize_std: bool = True,
+    plot_result: bool = True,
+    plot_coef: bool = False,
 ):
     """
-    Generate PCA decompositions of the background signal
+    Generate PCA decompositions of the background signal.
+    This function must be run after `calculate_radial_statistics`.
 
     Parameters
     --------
-    progress_bar: bool
-        Turns on the progress bar for the polar transformation
+    pca_index: int
+        index of PCA component and loadings to return
+    intensity_range: tuple (float, float)
+        intensity range for plotting
+    normalize_mean: bool
+        if True, normalize mean of radial data before PCA
+    normalize_std: bool
+        if True, normalize standard deviation of radial data before PCA
+    plot_results: bool
+        if True, plot results
+    plot_coef: bool
+        if True, plot radial PCA component selected
 
     Returns
     --------
@@ -950,7 +963,6 @@ def background_pca(
         rgb image array
     coef_pca: np.array
         radial PCA component selected
-
     """
 
     # PCA decomposition
@@ -960,6 +972,7 @@ def background_pca(
         A -= np.mean(A, axis=0)
     if normalize_std:
         A /= np.std(A, axis=0)
+
     pca = PCA(n_components=np.maximum(pca_index + 1, 2))
     pca.fit(A)
 
