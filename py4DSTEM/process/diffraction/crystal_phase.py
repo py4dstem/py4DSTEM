@@ -78,20 +78,22 @@ class Crystal_Phase:
         pointlistarray: PointListArray,
         xy_position = (0,0),
         corr_kernel_size = 0.04,
-        allow_strain = True,
-        # corr_distance_scale = 1.0,
-        include_false_positives = True,
-        weight_false_positives = 1.0,
-        max_number_phases = 1,
-        sigma_excitation_error = 0.04,
+        sigma_excitation_error = 0.02,
         power_experiment = 0.25,
         power_calculated = 0.25,
+        max_number_patterns = 3,
+        single_phase = False,
+        allow_strain = True,
+        strain_iterations = 5,
+        strain_max = 0.02,
+        include_false_positives = True,
+        weight_false_positives = 1.0,
         plot_result = True,
         plot_only_nonzero_phases = True,
         plot_unmatched_peaks = False,
         plot_correlation_radius = False,
         scale_markers_experiment = 40,
-        scale_markers_calculated = 500,
+        scale_markers_calculated = 200,
         crystal_inds_plot = None,
         phase_colors = None,
         figsize = (10,7),
@@ -161,6 +163,8 @@ class Crystal_Phase:
             basis = np.zeros((intensity.shape[0], self.num_fits))
         if allow_strain:
             m_strains = np.zeros((self.num_fits,2,2))
+            m_strains[:,0,0] = 1.0
+            m_strains[:,1,1] = 1.0
 
         # kernel radius squared
         radius_max_2 = corr_kernel_size**2
@@ -202,56 +206,71 @@ class Crystal_Phase:
                 matches = np.zeros((bragg_peaks_fit.data.shape[0]),dtype='bool')
 
             if allow_strain:
-                # Initial peak pairing to find best-fit strain distortion
-                pair_sub = np.zeros(bragg_peaks_fit.data.shape[0],dtype='bool')
-                pair_inds = np.zeros(bragg_peaks_fit.data.shape[0],dtype='int')
-                for a1 in range(bragg_peaks_fit.data.shape[0]):
-                    dist2 = (bragg_peaks_fit.data['qx'][a1] - qx)**2 \
-                        +   (bragg_peaks_fit.data['qy'][a1] - qy)**2
-                    ind_min = np.argmin(dist2)
-                    val_min = dist2[ind_min]
+                for a1 in range(strain_iterations):
+                    # Initial peak pairing to find best-fit strain distortion
+                    pair_sub = np.zeros(bragg_peaks_fit.data.shape[0],dtype='bool')
+                    pair_inds = np.zeros(bragg_peaks_fit.data.shape[0],dtype='int')
+                    for a1 in range(bragg_peaks_fit.data.shape[0]):
+                        dist2 = (bragg_peaks_fit.data['qx'][a1] - qx)**2 \
+                            +   (bragg_peaks_fit.data['qy'][a1] - qy)**2
+                        ind_min = np.argmin(dist2)
+                        val_min = dist2[ind_min]
 
-                    if val_min < radius_max_2:
-                        pair_sub[a1] = True
-                        pair_inds[a1] = ind_min
+                        if val_min < radius_max_2:
+                            pair_sub[a1] = True
+                            pair_inds[a1] = ind_min
 
-                # calculate best-fit strain tensor, weighted by the intensities.
-                # requires at least 4 peak pairs
-                if np.sum(pair_sub) >= 4:
-                    pair_basis = np.vstack((
-                        qx[pair_inds[pair_sub]],
-                        qy[pair_inds[pair_sub]],
-                    )).T
-                    pair_obs = np.vstack((
-                        bragg_peaks_fit.data['qx'][pair_sub],
-                        bragg_peaks_fit.data['qy'][pair_sub],
-                    )).T
+                    # calculate best-fit strain tensor, weighted by the intensities.
+                    # requires at least 4 peak pairs
+                    if np.sum(pair_sub) >= 4:
+                        # pair_obs = bragg_peaks_fit.data[['qx','qy']][pair_sub]
+                        pair_basis = np.vstack((
+                            bragg_peaks_fit.data['qx'][pair_sub],
+                            bragg_peaks_fit.data['qy'][pair_sub],
+                        )).T
+                        pair_obs = np.vstack((
+                            qx[pair_inds[pair_sub]],
+                            qy[pair_inds[pair_sub]],
+                        )).T
 
-                    # weights
-                    dists = np.sqrt(
-                        (bragg_peaks_fit.data['qx'][pair_sub] - qx[pair_inds[pair_sub]])**2 + \
-                        (bragg_peaks_fit.data['qx'][pair_sub] - qx[pair_inds[pair_sub]])**2)
-                    weights = np.sqrt(
-                        int_fit[pair_sub] * intensity[pair_inds[pair_sub]]
-                    ) * (1 - dists / corr_kernel_size)
+                        # weights
+                        dists = np.sqrt(
+                            (bragg_peaks_fit.data['qx'][pair_sub] - qx[pair_inds[pair_sub]])**2 + \
+                            (bragg_peaks_fit.data['qx'][pair_sub] - qx[pair_inds[pair_sub]])**2)
+                        weights = np.sqrt(
+                            int_fit[pair_sub] * intensity[pair_inds[pair_sub]]
+                        ) * (1 - dists / corr_kernel_size)
+                        # weights = 1 - dists / corr_kernel_size
 
-                    # wtrain tensor
-                    m_strain = np.linalg.lstsq(
-                        pair_basis * weights[:,None],
-                        pair_obs * weights[:,None],
-                        rcond = None,
-                    )[0]
-                    m_strains[a0] = m_strain
+                        # strain tensor
+                        m_strain = np.linalg.lstsq(
+                            pair_basis * weights[:,None],
+                            pair_obs * weights[:,None],
+                            rcond = None,
+                        )[0]
 
-                    # Transformed peak positions
-                    qx_copy = qx.copy()
-                    qy_copy = qy.copy()
-                    qx = qx_copy*m_strain[0,0] + qy_copy*m_strain[1,0]
-                    qy = qx_copy*m_strain[0,1] + qy_copy*m_strain[1,1]
+                        # Clamp strains to be within the user-specified limit
+                        m_strain = np.clip(
+                            m_strain,
+                            np.eye(2) - strain_max,
+                            np.eye(2) + strain_max,
+                        )
+                        m_strains[a0] *= m_strain
 
-                    # dist = np.mean(np.sqrt((bragg_peaks_fit.data['qx'][pair_sub] - qx[pair_inds[pair_sub]])**2 + \
-                    #      (bragg_peaks_fit.data['qx'][pair_sub] - qx[pair_inds[pair_sub]])**2))
-                    # print(np.round(dist,4))
+                        # Transformed peak positions
+                        qx_copy = bragg_peaks_fit.data['qx']
+                        qy_copy = bragg_peaks_fit.data['qy']
+                        bragg_peaks_fit.data['qx'] = qx_copy*m_strain[0,0] + qy_copy*m_strain[1,0]
+                        bragg_peaks_fit.data['qy'] = qx_copy*m_strain[0,1] + qy_copy*m_strain[1,1]                        
+
+                        # qx_copy = qx.copy()
+                        # qy_copy = qy.copy()
+                        # qx = qx_copy*m_strain[0,0] + qy_copy*m_strain[1,0]
+                        # qy = qx_copy*m_strain[0,1] + qy_copy*m_strain[1,1]
+
+                        # dist = np.mean(np.sqrt((bragg_peaks_fit.data['qx'][pair_sub] - qx[pair_inds[pair_sub]])**2 + \
+                        #      (bragg_peaks_fit.data['qx'][pair_sub] - qx[pair_inds[pair_sub]])**2))
+                        # print(np.round(dist,4))
 
             # Loop over all peaks, pair experiment to library
             for a1 in range(bragg_peaks_fit.data.shape[0]):
@@ -289,25 +308,53 @@ class Crystal_Phase:
         else:
             obs = intensity
         
-        # Solve for phase coefficients
+        # Solve for phase weight coefficients
         try:
             phase_weights = np.zeros(self.num_fits)
-            inds_solve = np.ones(self.num_fits,dtype='bool')
 
-            search = True
-            while search is True:
-                phase_weights_cand, phase_residual_cand = nnls(
-                    basis[:,inds_solve],
-                    obs,
+            if single_phase:
+                # loop through each crystal structure and determine the best fit structure,
+                # which can contain multiple orienations.
+                crystal_res = np.zeros(self.num_crystals)
+
+                for a0 in range(self.num_crystals):
+                    sub = self.crystal_identity[:,0] == a0
+
+                    phase_weights_cand, phase_residual_cand = nnls(
+                        basis[:,sub],
+                        obs,
+                    )
+                    phase_weights[sub] = phase_weights_cand
+                    crystal_res[a0] = phase_residual_cand
+
+                ind_best_fit = np.argmin(crystal_res)
+                phase_residual = crystal_res[ind_best_fit]
+                sub = np.logical_not(
+                    self.crystal_identity[:,0] == ind_best_fit
                 )
+                phase_weights[sub] = 0.0
 
-                if np.count_nonzero(phase_weights_cand > 0.0) <= max_number_phases:
-                    phase_weights[inds_solve] = phase_weights_cand
-                    phase_residual = phase_residual_cand
-                    search = False
-                else:
-                    inds = np.where(inds_solve)[0]
-                    inds_solve[inds[np.argmin(phase_weights_cand)]] = False
+                # Estimate reliability as difference between best fit and 2nd best fit
+                crystal_res = np.sort(crystal_res)
+                phase_reliability = crystal_res[1] - crystal_res[0]
+
+            else:
+                # Allow all crystals and orientation matches in the pattern
+                inds_solve = np.ones(self.num_fits,dtype='bool')
+                search = True
+                while search is True:
+                    phase_weights_cand, phase_residual_cand = nnls(
+                        basis[:,inds_solve],
+                        obs,
+                    )
+
+                    if np.count_nonzero(phase_weights_cand > 0.0) <= max_number_patterns:
+                        phase_weights[inds_solve] = phase_weights_cand
+                        phase_residual = phase_residual_cand
+                        search = False
+                    else:
+                        inds = np.where(inds_solve)[0]
+                        inds_solve[inds[np.argmin(phase_weights_cand)]] = False
 
         except:
             phase_weights = np.zeros(self.num_fits)
@@ -322,7 +369,7 @@ class Crystal_Phase:
                 c = self.crystal_identity[a0,0]
                 m = self.crystal_identity[a0,1]
                 line = '{:>12} {:>8}   {:<12}'.format(
-                    np.round(phase_weights[a0],decimals=2), 
+                    f'{phase_weights[a0]:.2f}',
                     m,
                     self.crystal_names[c]
                     )
@@ -330,7 +377,17 @@ class Crystal_Phase:
                     print('\033[1m' + line + '\033[0m')
                 else:
                     print(line)
-            # print()
+            print('----------------------------')
+            line = '{:>12} {:>15}'.format(
+                f'{sum(phase_weights):.2f}',
+                'fit total'
+                )
+            print('\033[1m' + line + '\033[0m')
+            line = '{:>12} {:>15}'.format(
+                f'{phase_residual:.2f}',
+                'fit residual'
+                )
+            print(line)
 
         # Plotting
         if plot_result:
@@ -380,7 +437,7 @@ class Crystal_Phase:
                 "family": "sans-serif",
                 "fontweight": "normal",
                 "color": "k",
-                "size": 14,
+                "size": 12,
             }
             if plot_correlation_radius:
                 ax_leg.plot(
@@ -422,6 +479,7 @@ class Crystal_Phase:
             # ))
             mvals = ['v','^','<','>','d','s',]
 
+            count_leg = 0
             for a0 in range(self.num_fits):
                 c = self.crystal_identity[a0,0]
                 m = self.crystal_identity[a0,1]
@@ -431,83 +489,84 @@ class Crystal_Phase:
                     qx_fit = library_peaks[a0].data['qx']
                     qy_fit = library_peaks[a0].data['qy']
 
-                    # if allow_strain:
-                    #     m_strain = m_strains[a0]
-                    #     # Transformed peak positions
-                    #     qx_copy = qx_fit.copy()
-                    #     qy_copy = qy_fit.copy()
-                    #     qx_fit = qx_copy*m_strain[0,0] + qy_copy*m_strain[1,0]
-                    #     qy_fit = qx_copy*m_strain[0,1] + qy_copy*m_strain[1,1]
+                    if allow_strain:
+                        m_strain = m_strains[a0]
+                        # Transformed peak positions
+                        qx_copy = qx_fit.copy()
+                        qy_copy = qy_fit.copy()
+                        qx_fit = qx_copy*m_strain[0,0] + qy_copy*m_strain[1,0]
+                        qy_fit = qx_copy*m_strain[0,1] + qy_copy*m_strain[1,1]
 
                     int_fit = library_int[a0]
                     matches_fit = library_matches[a0]
 
                     if plot_only_nonzero_phases is False or phase_weights[a0] > 0:
 
-                        if np.mod(m,2) == 0:
+                        # if np.mod(m,2) == 0:
+                        ax.scatter(
+                            qy_fit[matches_fit],
+                            qx_fit[matches_fit],
+                            s = scale_markers_calculated * int_fit[matches_fit],
+                            marker = mvals[c],
+                            facecolor = phase_colors[c,:],
+                            )
+                        if plot_unmatched_peaks:
                             ax.scatter(
-                                qy_fit[matches_fit],
-                                qx_fit[matches_fit],
-                                s = scale_markers_calculated * int_fit[matches_fit],
+                                qy_fit[np.logical_not(matches_fit)],
+                                qx_fit[np.logical_not(matches_fit)],
+                                s = scale_markers_calculated * int_fit[np.logical_not(matches_fit)],
                                 marker = mvals[c],
                                 facecolor = phase_colors[c,:],
                                 )
-                            if plot_unmatched_peaks:
-                                ax.scatter(
-                                    qy_fit[np.logical_not(matches_fit)],
-                                    qx_fit[np.logical_not(matches_fit)],
-                                    s = scale_markers_calculated * int_fit[np.logical_not(matches_fit)],
-                                    marker = mvals[c],
-                                    facecolor = phase_colors[c,:],
-                                    )
 
-                            # legend
-                            ax_leg.scatter(
-                                0,
-                                dx_leg*(a0+1),
-                                s = 200,
-                                marker = mvals[c],
-                                facecolor = phase_colors[c,:],
-                                )
-                        else:
-                            ax.scatter(
-                                qy_fit[matches_fit],
-                                qx_fit[matches_fit],
-                                s = scale_markers_calculated * int_fit[matches_fit],
-                                marker = mvals[c],
-                                edgecolors = uvals[c,:],
-                                facecolors = (uvals[c,0],uvals[c,1],uvals[c,2],0.3),
-                                # facecolors = (1,1,1,0.5),
-                                linewidth = 2,
-                                )
-                            if plot_unmatched_peaks:
-                                ax.scatter(
-                                    qy_fit[np.logical_not(matches_fit)],
-                                    qx_fit[np.logical_not(matches_fit)],
-                                    s = scale_markers_calculated * int_fit[np.logical_not(matches_fit)],
-                                    marker = mvals[c],
-                                    edgecolors = uvals[c,:],
-                                    facecolors = (1,1,1,0.5),
-                                    linewidth = 2,
-                                    )
+                    # legend
+                    if m == 0:
+                        ax_leg.text(
+                            dy_leg,
+                            (count_leg+1)*dx_leg,
+                            self.crystal_names[c],
+                            **text_params)
+                        ax_leg.scatter(
+                            0,
+                            (count_leg+1) * dx_leg,
+                            s = 200,
+                            marker = mvals[c],
+                            facecolor = phase_colors[c,:],
+                            )
+                        count_leg += 1
+                        # else:
+                        #     ax.scatter(
+                        #         qy_fit[matches_fit],
+                        #         qx_fit[matches_fit],
+                        #         s = scale_markers_calculated * int_fit[matches_fit],
+                        #         marker = mvals[c],
+                        #         edgecolors = uvals[c,:],
+                        #         facecolors = (uvals[c,0],uvals[c,1],uvals[c,2],0.3),
+                        #         # facecolors = (1,1,1,0.5),
+                        #         linewidth = 2,
+                        #         )
+                        #     if plot_unmatched_peaks:
+                        #         ax.scatter(
+                        #             qy_fit[np.logical_not(matches_fit)],
+                        #             qx_fit[np.logical_not(matches_fit)],
+                        #             s = scale_markers_calculated * int_fit[np.logical_not(matches_fit)],
+                        #             marker = mvals[c],
+                        #             edgecolors = uvals[c,:],
+                        #             facecolors = (1,1,1,0.5),
+                        #             linewidth = 2,
+                        #             )
 
-                            # legend
-                            ax_leg.scatter(
-                                0,
-                                dx_leg*(a0+1),
-                                s = 200,
-                                marker = mvals[c],
-                                edgecolors = uvals[c,:],
-                                facecolors = (uvals[c,0],uvals[c,1],uvals[c,2],0.3),
-                                # facecolors = (1,1,1,0.5),
-                                )
+                        #     # legend
+                        #     ax_leg.scatter(
+                        #         0,
+                        #         dx_leg*(a0+1),
+                        #         s = 200,
+                        #         marker = mvals[c],
+                        #         edgecolors = uvals[c,:],
+                        #         facecolors = (uvals[c,0],uvals[c,1],uvals[c,2],0.3),
+                        #         # facecolors = (1,1,1,0.5),
+                        #         )
 
-                    # legend text
-                    ax_leg.text(
-                        dy_leg,
-                        (a0+1)*dx_leg,
-                        self.crystal_names[c],
-                        **text_params)
 
 
             # appearance
@@ -531,7 +590,7 @@ class Crystal_Phase:
         allow_strain = True,
         include_false_positives = True,
         weight_false_positives = 1.0,
-        max_number_phases = 2,
+        max_number_patterns = 2,
         sigma_excitation_error = 0.02,
         power_experiment = 0.25,
         power_calculated = 0.25,
@@ -571,7 +630,7 @@ class Crystal_Phase:
                 # corr_distance_scale = corr_distance_scale,
                 include_false_positives = include_false_positives,
                 weight_false_positives = weight_false_positives,
-                max_number_phases = max_number_phases,
+                max_number_patterns = max_number_patterns,
                 sigma_excitation_error = sigma_excitation_error,
                 power_experiment = power_experiment,
                 power_calculated = power_calculated,
