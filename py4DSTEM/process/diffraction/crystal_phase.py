@@ -263,15 +263,6 @@ class Crystal_Phase:
                         bragg_peaks_fit.data['qx'] = qx_copy*m_strain[0,0] + qy_copy*m_strain[1,0]
                         bragg_peaks_fit.data['qy'] = qx_copy*m_strain[0,1] + qy_copy*m_strain[1,1]                        
 
-                        # qx_copy = qx.copy()
-                        # qy_copy = qy.copy()
-                        # qx = qx_copy*m_strain[0,0] + qy_copy*m_strain[1,0]
-                        # qy = qx_copy*m_strain[0,1] + qy_copy*m_strain[1,1]
-
-                        # dist = np.mean(np.sqrt((bragg_peaks_fit.data['qx'][pair_sub] - qx[pair_inds[pair_sub]])**2 + \
-                        #      (bragg_peaks_fit.data['qx'][pair_sub] - qx[pair_inds[pair_sub]])**2))
-                        # print(np.round(dist,4))
-
             # Loop over all peaks, pair experiment to library
             for a1 in range(bragg_peaks_fit.data.shape[0]):
                 dist2 = (bragg_peaks_fit.data['qx'][a1] - qx)**2 \
@@ -356,9 +347,33 @@ class Crystal_Phase:
                         inds = np.where(inds_solve)[0]
                         inds_solve[inds[np.argmin(phase_weights_cand)]] = False
 
+                # Estimate the phase reliability
+                inds_solve = np.ones(self.num_fits,dtype='bool')
+                inds_solve[phase_weights > 1e-8] = False
+                search = True
+                while search is True:
+                    phase_weights_cand, phase_residual_cand = nnls(
+                        basis[:,inds_solve],
+                        obs,
+                    )
+                    if np.count_nonzero(phase_weights_cand > 0.0) <= max_number_patterns:
+                        phase_residual_2nd = phase_residual_cand
+                        search = False
+                    else:
+                        inds = np.where(inds_solve)[0]
+                        inds_solve[inds[np.argmin(phase_weights_cand)]] = False
+
+                # print(inds_solve)
+                # phase_weights_cand, phase_residual_cand = nnls(
+                #     basis[:,inds_solve],
+                #     obs,
+                # )
+                phase_reliability = phase_residual_2nd - phase_residual
+
         except:
             phase_weights = np.zeros(self.num_fits)
             phase_residual = np.sqrt(np.sum(intensity**2))
+            phase_reliability = 0.0
 
         if verbose:
             ind_max = np.argmax(phase_weights)
@@ -578,22 +593,24 @@ class Crystal_Phase:
             ax_leg.set_axis_off()
 
         if returnfig:
-            return phase_weights, phase_residual, int_total, fig, ax
+            return phase_weights, phase_residual, phase_reliability, int_total, fig, ax
         else:
-            return phase_weights, phase_residual, int_total
+            return phase_weights, phase_residual, phase_reliability, int_total
 
     def quantify_phase(
         self,
         pointlistarray: PointListArray,
         corr_kernel_size = 0.04,
-        # corr_distance_scale = 1.0,
-        allow_strain = True,
-        include_false_positives = True,
-        weight_false_positives = 1.0,
-        max_number_patterns = 2,
         sigma_excitation_error = 0.02,
         power_experiment = 0.25,
         power_calculated = 0.25,
+        max_number_patterns = 3,
+        single_phase = False,
+        allow_strain = True,
+        strain_iterations = 5,
+        strain_max = 0.02,
+        include_false_positives = True,
+        weight_false_positives = 1.0,
         progress_bar = True,
         ):
         """
@@ -610,36 +627,44 @@ class Crystal_Phase:
             pointlistarray.shape[0],
             pointlistarray.shape[1],
         ))
+        self.phase_reliability = np.zeros((
+            pointlistarray.shape[0],
+            pointlistarray.shape[1],
+        ))
         self.int_total = np.zeros((
             pointlistarray.shape[0],
             pointlistarray.shape[1],
         ))
+        self.single_phase = single_phase
         
         for rx, ry in tqdmnd(
                 *pointlistarray.shape,
-                desc="Matching Orientations",
+                desc="Quantifying Phase",
                 unit=" PointList",
                 disable=not progress_bar,
             ):
             # calculate phase weights
-            phase_weights, phase_residual, int_peaks = self.quantify_single_pattern(
+            phase_weights, phase_residual, phase_reliability, int_peaks = self.quantify_single_pattern(
                 pointlistarray = pointlistarray,
                 xy_position = (rx,ry),
                 corr_kernel_size = corr_kernel_size,
-                allow_strain = allow_strain,
-                # corr_distance_scale = corr_distance_scale,
-                include_false_positives = include_false_positives,
-                weight_false_positives = weight_false_positives,
-                max_number_patterns = max_number_patterns,
                 sigma_excitation_error = sigma_excitation_error,
                 power_experiment = power_experiment,
                 power_calculated = power_calculated,
+                max_number_patterns = max_number_patterns,
+                single_phase = single_phase,
+                allow_strain = allow_strain,
+                strain_iterations = strain_iterations,
+                strain_max = strain_max,
+                include_false_positives = include_false_positives,
+                weight_false_positives = weight_false_positives,
                 plot_result = False,
                 verbose = False,
                 returnfig = False,
                 )
             self.phase_weights[rx,ry] = phase_weights
             self.phase_residuals[rx,ry] = phase_residual
+            self.phase_reliability[rx,ry] = phase_reliability
             self.int_total[rx,ry] = int_peaks
 
 
@@ -877,7 +902,7 @@ class Crystal_Phase:
 
     def plot_dominant_phase(
         self,
-        rel_range = (0.0,1.0),
+        reliability_range = (0.0,1.0),
         sigma = 0.0,
         phase_colors = None,
         figsize = (6,6),
@@ -918,52 +943,33 @@ class Crystal_Phase:
                     mode = 'nearest',
                     )
 
-
         # find highest correlation score for each crystal and match index
         for a0 in range(self.num_crystals):
             sub = phase_sig[a0] > phase_corr 
             phase_map[sub] = a0
             phase_corr[sub] = phase_sig[a0][sub]
         
-        # find the second correlation score for each crystal and match index
-        for a0 in range(self.num_crystals):
-            corr = phase_sig[a0].copy()
-            corr[phase_map==a0] = 0.0
-            sub = corr > phase_corr_2nd
-            phase_corr_2nd[sub] = corr[sub]
-            
+        if self.single_phase:
+            phase_scale = np.clip(
+                (self.phase_reliability - reliability_range[0]) / (reliability_range[1] - reliability_range[0]),
+                0,
+                1)
 
+        else:
 
-
-
-        #     for a1 in range(crystals[a0].orientation_map.corr.shape[2]):
-        #         sub = crystals[a0].orientation_map.corr[:,:,a1] > phase_corr
-        #         phase_map[sub] = a0
-        #         phase_corr[sub] = crystals[a0].orientation_map.corr[:,:,a1][sub]
-
-        # # find the second correlation score for each crystal and match index
-        # for a0 in range(len(crystals)):
-        #     for a1 in range(crystals[a0].orientation_map.corr.shape[2]):
-        #         corr = crystals[a0].orientation_map.corr[:,:,a1].copy()
-        #         corr[phase_map==a0] = 0.0
-        #         sub = corr > phase_corr_2nd
-        #         phase_corr_2nd[sub] = corr[sub]
-        
-        # Estimate the reliability
-        phase_rel = phase_corr - phase_corr_2nd
-
-        # # Generate a color plotting image
-        # c_vals = np.array([
-        #     [0.7,0.5,0.3],        
-        #     [1,0,0],        
-        #     [0,0.7,0],        
-        #     [0,0.7,1],        
-        #     [0,0.7,1],        
-        # ])
-        phase_scale = np.clip(
-            (phase_rel - rel_range[0]) / (rel_range[1] - rel_range[0]),
-            0,
-            1)
+            # find the second correlation score for each crystal and match index
+            for a0 in range(self.num_crystals):
+                corr = phase_sig[a0].copy()
+                corr[phase_map==a0] = 0.0
+                sub = corr > phase_corr_2nd
+                phase_corr_2nd[sub] = corr[sub]
+                
+            # Estimate the reliability
+            phase_rel = phase_corr - phase_corr_2nd
+            phase_scale = np.clip(
+                (phase_rel - reliability_range[0]) / (reliability_range[1] - reliability_range[0]),
+                0,
+                1)
 
 
         phase_rgb = np.zeros((scan_shape[0],scan_shape[1],3))
