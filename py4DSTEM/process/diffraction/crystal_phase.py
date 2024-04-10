@@ -84,7 +84,7 @@ class Crystal_Phase:
         max_number_patterns = 3,
         single_phase = False,
         allow_strain = True,
-        strain_iterations = 5,
+        strain_iterations = 3,
         strain_max = 0.02,
         include_false_positives = True,
         weight_false_positives = 1.0,
@@ -270,17 +270,33 @@ class Crystal_Phase:
                 ind_min = np.argmin(dist2)
                 val_min = dist2[ind_min]
 
-                if val_min < radius_max_2:
-                    # weight = 1 - np.sqrt(dist2[ind_min]) / corr_kernel_size
-                    # weight = 1 + corr_distance_scale * \
-                    #     np.sqrt(dist2[ind_min]) / corr_kernel_size
-                    # basis[ind_min,a0] = weight * int_fit[a1]
-                    basis[ind_min,a0] = int_fit[a1]
-                    if plot_result:
+                if include_false_positives:
+                    weight = np.clip(1 - np.sqrt(dist2[ind_min]) / corr_kernel_size,0,1)
+                    basis[ind_min,a0] = int_fit[a1] * weight
+                    unpaired_peaks.append([
+                        a0,
+                        int_fit[a1] * (1 - weight),
+                    ])
+                    if weight > 1e-8 and plot_result:
                         matches[a1] = True
-                elif include_false_positives:
-                    # unpaired_peaks.append([a0,int_fit[a1]*(1 + corr_distance_scale)])
-                    unpaired_peaks.append([a0,int_fit[a1]])
+                else:
+                    if val_min < radius_max_2:
+                        basis[ind_min,a0] = int_fit[a1]
+                        if plot_result:
+                            matches[a1] = True
+
+
+                # if val_min < radius_max_2:
+                #     # weight = 1 - np.sqrt(dist2[ind_min]) / corr_kernel_size
+                #     # weight = 1 + corr_distance_scale * \
+                #     #     np.sqrt(dist2[ind_min]) / corr_kernel_size
+                #     # basis[ind_min,a0] = weight * int_fit[a1]
+                #     basis[ind_min,a0] = int_fit[a1]
+                #     if plot_result:
+                #         matches[a1] = True
+                # elif include_false_positives:
+                #     # unpaired_peaks.append([a0,int_fit[a1]*(1 + corr_distance_scale)])
+                #     unpaired_peaks.append([a0,int_fit[a1]])
 
             if plot_result:
                 library_peaks.append(bragg_peaks_fit)                
@@ -347,33 +363,38 @@ class Crystal_Phase:
                         inds = np.where(inds_solve)[0]
                         inds_solve[inds[np.argmin(phase_weights_cand)]] = False
 
+
                 # Estimate the phase reliability
                 inds_solve = np.ones(self.num_fits,dtype='bool')
                 inds_solve[phase_weights > 1e-8] = False
-                search = True
-                while search is True:
+
+                if np.all(inds_solve == False):
+                    phase_reliability = 0.0
+                else:
+                    search = True
+                    while search is True:
+                        phase_weights_cand, phase_residual_cand = nnls(
+                            basis[:,inds_solve],
+                            obs,
+                        )
+                        if np.count_nonzero(phase_weights_cand > 0.0) <= max_number_patterns:
+                            phase_residual_2nd = phase_residual_cand
+                            search = False
+                        else:
+                            inds = np.where(inds_solve)[0]
+                            inds_solve[inds[np.argmin(phase_weights_cand)]] = False
+
                     phase_weights_cand, phase_residual_cand = nnls(
                         basis[:,inds_solve],
                         obs,
                     )
-                    if np.count_nonzero(phase_weights_cand > 0.0) <= max_number_patterns:
-                        phase_residual_2nd = phase_residual_cand
-                        search = False
-                    else:
-                        inds = np.where(inds_solve)[0]
-                        inds_solve[inds[np.argmin(phase_weights_cand)]] = False
-
-                # print(inds_solve)
-                # phase_weights_cand, phase_residual_cand = nnls(
-                #     basis[:,inds_solve],
-                #     obs,
-                # )
-                phase_reliability = phase_residual_2nd - phase_residual
+                    phase_reliability = phase_residual_2nd - phase_residual
 
         except:
             phase_weights = np.zeros(self.num_fits)
             phase_residual = np.sqrt(np.sum(intensity**2))
             phase_reliability = 0.0
+
 
         if verbose:
             ind_max = np.argmax(phase_weights)
