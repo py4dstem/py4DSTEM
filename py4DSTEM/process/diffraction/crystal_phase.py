@@ -628,7 +628,7 @@ class Crystal_Phase:
         max_number_patterns = 3,
         single_phase = False,
         allow_strain = True,
-        strain_iterations = 5,
+        strain_iterations = 3,
         strain_max = 0.02,
         include_false_positives = True,
         weight_false_positives = 1.0,
