@@ -76,6 +76,9 @@ class DataCube(
         # polar coords
         self.polar = None
 
+        # Bragg detection
+        BraggFinder.__init__(self)
+
     def calibrate(self):
         """
         Calibrate the coordinate axes of the datacube. Using the calibrations

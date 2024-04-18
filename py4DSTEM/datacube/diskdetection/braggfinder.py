@@ -1,9 +1,8 @@
 import numpy as np
-from typing import Optional
 from scipy.ndimage import gaussian_filter
+import inspect
 
-from emdfile import tqdmnd
-from emdfile import Metadata
+from emdfile import tqdmnd, Metadata
 from py4DSTEM.utils import get_maxima_2D, get_cross_correlation_FT
 from py4DSTEM.data import QPoints
 from py4DSTEM.braggvectors import BraggVectors
@@ -17,7 +16,68 @@ class BraggFinder(object):
     def __init__(
         self,
     ):
-        pass
+        self.bragg_detection_defaults = {
+            'template' : None,
+            'preprocess' : False,
+            'corr_power' : 1,
+            'corr_sigma' : 0,
+            'sigma' : 2,
+            'min_intensity' : 0,
+            'min_spacing' : 5,
+            'subpixel' : 'poly',
+            'upsample_factor' : 16,
+            'edge_boundary' : 1,
+            'n_peaks_max' : 10000,
+            'min_prominence' : 0,
+            'prominence_kernel_size' : 3,
+            'min_rel_intensity' : 0,
+            'ref_peak' : 0,
+            'device' : False,
+            'ML' : False,
+        }
+
+    def update_defaults(
+        self,
+        template=None,
+        preprocess=None,
+        corr_power=None,
+        corr_sigma=None,
+        sigma=None,
+        subpixel=None,
+        upsample_factor=None,
+        min_intensity=None,
+        min_prominence=None,
+        prominence_kernel_size=None,
+        min_rel_intensity=None,
+        ref_peak=None,
+        min_spacing=None,
+        edge_boundary=None,
+        n_peaks_max=None,
+        device=None,
+        ML=None,
+    ):
+        # add new defaults to a dict
+        new_defaults = {}
+        if template is not None: new_defaults['template'] = template
+        if preprocess is not None: new_defaults['preprocess'] = preprocess
+        if corr_power is not None: new_defaults['corr_power'] = corr_power
+        if corr_sigma is not None: new_defaults['corr_sigma'] = corr_sigma
+        if sigma is not None: new_defaults['sigma'] = sigma
+        if subpixel is not None: new_defaults['subpixel'] = subpixel
+        if upsample_factor is not None: new_defaults['upsample_factor'] = upsample_factor
+        if min_intensity is not None: new_defaults['min_intensity'] = min_intensity
+        if min_prominence is not None: new_defaults['min_prominence'] = min_prominence
+        if prominence_kernel_size is not None: new_defaults['prominence_kernel_size'] = prominence_kernel_size
+        if min_rel_intensity is not None: new_defaults['min_rel_intensity'] = min_rel_intensity
+        if ref_peak is not None: new_defaults['ref_peak'] = ref_peak
+        if min_spacing is not None: new_defaults['min_spacing'] = min_spacing
+        if edge_boundary is not None: new_defaults['edge_boundary'] = edge_boundary
+        if n_peaks_max is not None: new_defaults['n_peaks_max'] = n_peaks_max
+        if device is not None: new_defaults['device'] = device
+        if ML is not None: new_defaults['ML'] = ML
+
+        # update
+        self.bragg_detection_defaults = self.bragg_detection_defaults | new_defaults
 
 
     def find_bragg_vectors(
@@ -25,24 +85,42 @@ class BraggFinder(object):
         template,
         data=None,
         preprocess=None,
-        corr=None,
-        thresh=None,
+        corr_power=None,
+        corr_sigma=None,
+        sigma=None,
+        subpixel=None,
+        upsample_factor=None,
+        min_intensity=None,
+        min_prominence=None,
+        prominence_kernel_size=None,
+        min_rel_intensity=None,
+        ref_peak=None,
+        min_spacing=None,
+        edge_boundary=None,
+        n_peaks_max=None,
         device=None,
         ML=None,
         return_cc=False,
         name = 'braggvectors',
         returncalc = True,
         _return_cc = False,
+        **kwargs,
     ):
-
         """
         Finds Bragg scattering vectors.
 
         In normal operation, localizes Bragg scattering using template matching,
         by (1) optional preprocessing, (2) cross-correlating with the template,
-        and (3) finding local maxima, thresholding and returning. See
-        `preprocess`, `corr`, and `thresh` below. Accelration is handle with
-        `device`.
+        and (3) finding local maxima, thresholding and returning. Acceleration is
+        handled with `device`.
+
+        Input parameters are stored internally once they're set, and will be
+        reused in subsequent function calls unless new values are provided, which
+        will replace the set prior values.  Currently set values are available at
+        .bragg_detection_defaults. BraggVectors instances returned by this method
+        (i.e. return values when the full datacube is used) also store the input
+        parameters used by this method to create them as a Metadata dictionary in
+        vectors.metadata['gen_params'].
 
         Invoking `ML` makes use of a custom neural network called FCU-net
         instead of template matching. If you use FCU-net in your work,
@@ -50,32 +128,34 @@ class BraggFinder(object):
         8.1 (2022): 254".
 
 
-        Examples (CPU + cross-correlation)
-        ----------------------------------
+        Basic Usage (CPU + cross-correlation)
+        -------------------------------------
 
         >>> datacube.get_bragg_vectors( template )
 
         will find bragg scattering for the entire datacube using cross-
-        correlative template matching on the CPU with a correlation power of 1,
-        gaussian blurring on each correlagram of 2 pixels, polynomial subpixel
-        refinement, and the default thresholding parameters.
+        correlative template matching on the CPU using the currently set
+        detection parameters or, if no parameters have been set, with the
+        default parameters.
 
         >>> datacube.get_bragg_vectors(
         >>>     template,
-        >>>     corr = {
-        >>>         'corrPower' : 1,
-        >>>         'sigma' : 2,
-        >>>         'subpixel' : 'multicorr',
-        >>>         'upsample_factor' : 16
-        >>>     },
+        >>>     corr_power = 1,
+        >>>     sigma = 2,
+        >>>     subpixel = 'multicorr',
+        >>>     upsample_factor = 16,
         >>> )
 
-        will perform the same computation but use Fourier upsampling for
-        subpixel refinement, and
+        will perform the same computation now using a cross-correlation power
+        of 1 (i.e. a normal cross correlatin), a guassian blur after cross
+        cross correlation but before peak detection of 2 pixels, Fourier
+        upsampling for subpixel refinement with an upsampling factor of 16,
+        and the currently set or defaults for the remaining paramters.
+
+        Subsequently calling
 
         >>> datacube.get_bragg_vectors(
         >>>     template,
-        >>>     thresh = {
         >>>         'minAboluteIntensity' : 100,
         >>>         'minPeakSpacing' : 18,
         >>>         'edgeBoundary' : 10,
@@ -83,9 +163,18 @@ class BraggFinder(object):
         >>>     },
         >>> )
 
-        will perform the same computation but threshold the detected
-        maxima using an absolute rather than relative intensity threshhold,
-        and modify the other threshold params as above.
+        will perform the same computation with the parameters set previously,
+        now using thresholds for the absolute peak intensity, the spacing
+        between the peaks, the distance of the peaks from the image edge,
+        and the number of peaks as specified.
+
+        Each of the calls above performs disk detection on the full datacube
+        and returns a BraggVectors instance, which has the input parameters
+        stored in its .metadata['gen_params']  attribute.
+
+
+        Running on Subsets of Data (e.g. Testing)
+        -----------------------------------------
 
         Using
 
@@ -95,7 +184,8 @@ class BraggFinder(object):
         >>> )
 
         will perform template matching against the diffraction image at
-        scan position (5,6), and using
+        scan position (5,6) only, returning a single set of detected
+        peaks as a QPoints instance, and
 
         >>> datacube.get_bragg_vectors(
         >>>     template,
@@ -103,166 +193,245 @@ class BraggFinder(object):
         >>> )
 
         will perform template matching against the 3 diffraction images at
-        scan positions (4,10), (5,11), (6,12).
+        scan positions (4,10), (5,11), (6,12), returning a list of 3
+        QPoints instances.  Note that in these two examples, the inputs
+        describing the function call *are* stored internally in the calling
+        datacube instance its new disk detection defaults, however they are
+        *not* stored in any metadata associated with the output object, as
+        they would be with a run on the full datacube.
 
+
+        Running without Cross Correlation (i.e. simple peak finding)
+        ------------------------------------------------------------
+
+        Data with sharp peaks instead of disks at the Bragg points, either
+        due to a very small convergence angle or a parallel beam, may not
+        require a cross correlation; simply locating the maxima may suffice.
         Using
 
         >>> datacube.fing_bragg_vectors(
-        >>>     template = None,
-        >>>     corr = {
-        >>>         'sigma' : 5,
-        >>>         'subpixel' : 'poly'
-        >>>     },
+        >>>     template = False,
         >>> )
 
-        will not cross-correlate at all, and will instead perform maximum
-        detection on the raw data of the entire datacube, after applying
-        a gaussian blur to each diffraction image of 5 pixels, and using
-        polynomial subpixel refinement.
+        will skip the cross-correlation step, and will instead perform maximum
+        detection on the raw data of the entire datacube, applying whichever
+        other filtering or preprocessing arguments that have been specified.
+
+
+        Preprocessing - Pre-set Methods
+        -------------------------------
+
+        Several types of preprocessing - methods run on each diffraction
+        pattern before the cross-correlation step - are possible, including
+        pre-set methods and custom methods.
 
         Using
 
         >>> datacube.find_bragg_vectors(
         >>>     template,
-        >>>     preprocess = {
-        >>>         'sigma' : 2,
-        >>>     },
-        >>>     corr = {
-        >>>         'sigma' : 4,
-        >>>     }
+        >>>     preprocess = 'local_average'
         >>> )
 
-        will apply a 2-pixel gaussian blur to the diffraction image, then
-        cross correlate, then apply a 4-pixel gaussian blur to the cross-
-        correlation before finding maxima. Using
-
-        >>> datacube.find_bragg_vectors(
-        >>>     template,
-        >>>     preprocess = {
-        >>>         'radial_bkgrd' : True,
-        >>>         'localave' : True,
-        >>>     },
-        >>> )
-
-        will subtract the radial median from each diffraction image, then
-        obtain the weighted average diffraction image with a 3x3 gaussian
-        footprint in real space (i.e.
+        will use the local 3x3 gaussian averaged pattern at each scan position,
+        i.e. the weighted average diffraction image with a 3x3 gaussian
+        footprint in real space
 
             [[ 1, 2, 1 ],
              [ 2, 4, 2 ],  *  (1/16)
              [ 1, 2, 1 ]]
 
-        ) and perform template matching against the resulting images.
+        is used in lieu of the raw diffraction pattern.
+
         Using
+
+        >>> datacube.find_bragg_vectors(
+        >>>     template,
+        >>>     preprocess = 'radial_background_subtraction'
+        >>> )
+
+        will calculate and subtract the radial median from each diffraction
+        image; using this option requires the the origin has been located
+        and set (e.g. with the .fit_origin method) and that a PolarDatacube
+        as been initialized, e.g. using
+
+        >>> polarcube = py4DSTEM.PolarDatacube(
+        >>>     datacube,
+        >>>     n_annular = 180,
+        >>>     qstep = 1,
+        >>> )
+
+        The aliases 'bs' and 'la' can be used, respectively, instead of
+        'radial_background_subtraction' and 'local_average'.
+
+        Using
+
+        >>> datacube.find_bragg_vectors(
+        >>>     template,
+        >>>     preprocess = ['la','bs']
+        >>> )
+
+        Will perform a local average then a background subtraction in
+        succession.
+
+
+        Preprocessing - Custom Methods
+        ------------------------------
+
+        Custom preprocessing methods may be specified as well.  Using
 
         >>> def preprocess_fn(data):
         >>>     return py4DSTEM.utils.bin2D(data,2)
         >>> datacube.find_bragg_vectors(
         >>>     template,
-        >>>     preprocess = {
-        >>>         'filter_function' : preprocess_fn
-        >>>     },
+        >>>     preprocess = preprocess_fn
         >>> )
 
         will bin each diffraction image by 2 before cross-correlating.
         Note that the template shape must match the final, preprocessed
-        data shape.
+        data shape.  Note also that in this case the `preprocess_fn`
+        function takes only a single input, which must be a 2D array
+        representing a diffraction pattern.
+
+        To use a custom preprocessing method which includes arguments,
+        use
+
+        >>> def preprocess_fn_with_args(data,N):
+        >>>     return py4DSTEM.utils.bin2D(data,N)
+        >>> datacube.find_bragg_vectors(
+        >>>     template,
+        >>>     preprocess = {
+        >>>         'f' : preprocess_fn_with_args,
+        >>>         'N' : 2
+        >>> )
+
+        where the dictionary element 'f' must point to the preprocessing
+        function to be used, and all other function inputs must be
+        represented by a dictionary keyword-argument pair.
+
+        It can be useful to write preprocessing methods which make use
+        of the scan position values, e.g. to retrieve calibration values
+        which vary by scan position. In this case, use
+
+        >>> def preprocess_fn_with_args_and_scan_pos(data,N,x,y):
+        >>>     return py4DSTEM.utils.bin2D(data,N)
+        >>> datacube.find_bragg_vectors(
+        >>>     template,
+        >>>     preprocess = {
+        >>>         'f' : preprocess_fn_with_args_and_scan_pos,
+        >>>         'N' : 2,
+        >>>         'x' : None,
+        >>>         'y' : None,
+        >>> )
+
+        The values passed for 'x' and 'y' in the dictionary are ignored,
+        and will be replaced by the scan position integers for each
+        pattern.
 
 
         Examples (GPU acceleration, cluster acceleration, and ML)
         -------------------------------------------------------
         # TODO!
 
+        device=None,
+        ML=None,
+        return_cc=False,
+        name = 'braggvectors',
+        returncalc = True,
+        _return_cc = False,
+
 
         Parameters
         ----------
-        template : qshape'd 2d np.ndarray or Probe or None
+        template : 2d np.ndarray (Qshape) or Probe or False
             The matching template. If an ndarray is passed, must be centered
-            about the origin. If a Probe is passed, probe.kernel must be
-            populated. If None is passed, cross correlation is skipped and
-            the maxima are taken directly from the (possibly preprocessed)
-            diffraction data
+            about the origin in the FFT sense (i.e. the corner). If a Probe is
+            passed, probe.kernel is used (and must be populated). If False is
+            passed, cross correlation is skipped and the maxima are taken
+            directly from the (possibly preprocessed) diffraction data
         data : None or 2-tuple or 2D numpy ndarray
-            Specifies the data in which to find the Bragg scattering. Valid
-            entries and their behavoirs are:
-                * None: use the entire DataCube, and return a BraggVectors
-                  instance
-                * 2-tuple of ints: use the diffraction pattern at scan
-                  position (rx,ry), and return a QPoints instance
-                * 2-tuple of arrays of ints: use the diffraction patterns
-                  at scan positions (rxs,rys), and return a list of QPoints
-                  instances
-                * 2D numpy array, real-space shaped, boolean: run on the
-                  diffraction images specified by the True pixels in the
-                  input array, and return a list of QPoints instances
-                * 2D numpy array, diffraction-space shaped: run on the
-                  input array, and return a QPoints instance
-        preprocess : None or dict
-            If None, no preprocessing is performed.  Otherwise, should be a
-            dictionary with the following valid keys:
-                * radial_bkgrd (bool): if True, finds and subtracts the local
-                  median of each diffraction image.  Origin must be calibrated.
-                * localave (bool): if True, takes the local 3x3 gaussian
-                  average of each diffraction image
-                * sigma (number): if >0, applies a gaussian blur to the data
-                  before cross correlating
-                * filter_function (callable): function applied to each
-                  diffraction image before peak finding. Must be a function of
-                  only one argument (the diffr image) which returns the pre-
-                  processed image. The shape of the returned DP must match
-                  the shape of the probe. If using distributed disk detection,
-                  the function must be able to be pickled with dill.
-            If more than one key is passed then all requested preprocessing
-            steps are performed, in the order they're listed here.
-        corr : None or dict
-            If None, no cross correlation is performed, and maximum detection
-            is performed on the (possibly preprocessed) diffraction data with
-            no subpixel refinement applied. Otherwise, should be a dictionary
-            with valid keys:
-                * corrPower (number, 0-1): type of correlation to perform,
-                  where 1 is a cross correlation, 0 is a phase correlation,
-                  and values in between are hybrid correlations. Pure cross
-                  correlation is recommend to minimize noise
-                * sigma (number): if >0, apply a gaussian blur to the cross
-                  correlation before detecting maxima
-                * subpixel ('none' or 'poly' or 'multicorr'): controls
-                  subpixel refinement of maxima. 'none' returns the values
-                  to pixel precision. 'poly' performs polynomial (2D
-                  parabolic) numerical refinement. 'multicorr' performs
-                  Fourier upsampling subpixel refinement, and requires
-                  the `upsample_factor` keyword also be specified. 'poly'
-                  is fast; 'multicorr' is much slower but allows greater
-                  precision.
-                * upsample_factor (int): the upsampling factor used for
-                  'multicorr' subpixel refinement and defining the precision
-                  of the refinement. Ignored if `subpixel` is not 'multicorr'
-            Note that passing `template=None` skips cross-correlation but not
-            maxmimum detection - in this case, `corrPower` is ignored, but all
-            parameters in this dictionary are used.
-            Note also that if this dictionary is specified (i.e. is not None)
-            but corrPower or sigma or subpixel or upsample_factor are not
-            specified, their default values (corrPower=1, sigma=2,
-            subpixel='poly', upsample_factor=16) are used.
-        thresh : None or dict
-            If None, no thresholding is performed (not recommended!).  Otherwise,
-            should be a dictionary with valid keys:
-                * minAbsoluteIntensity (number): maxima with intensities below
-                  `this value are removed. Ignored if set to 0.
-                * minRelativeIntensity (number): maxima with intensities below a
-                  reference maximum * (this value) are removed. The refernce
-                  maximum is selected for each diffraction image according to
-                  the `relativeToPeak` argument: 0 specifies the brightest
-                  maximum, 1 specifies the second brightest, etc.
-                * relativeToPeak (int): specifies the reference maximum used
-                  int the `minRelativeIntensity` threshold
-                * minPeakSpacing (number): if two maxima are closer together than
-                  this number of pixels, the dimmer maximum is removed
-                * edgeBoundary (number): maxima closer to the edge of the
-                  diffraction image than this value are removed
-                * maxNumPeaks (int): only the brightest `maxNumPeaks` maxima
-                  are kept
+            Specifies the input data and return value.
+            If None, uses the full datacube and return a BraggVectors instance.
+            If a 2-tuple (int,int), uses the diffraction pattern at this scan
+            position and returns a QPoints instance.
+            If a 2-tuple of arrays of ints, uses the diffraction patterns
+            at scan positions (rxs,rys) and return a list of QPoints instance
+            If a 2D boolean numpy array (Rshaped), runs on the diffraction
+            images where True and return a list of QPoints instances at scan
+            positions np.nonzero(ar)
+            If a 2D numpy array of floats (Qshaped), runs on the input array
+            and returns a QPoints instance
+        preprocess : (False,string,list,callable,dict)
+            If False, no preprocessing is performed.
+            Strings must be in ('radial_background_subtraction','bs',
+            'local_average','la'), where 'bs' and 'la' are aliases for their
+            preceding entries.  Lists indicate preprocessing steps to take in
+            succession, and may include the strings above and callables.
+            lists must contain only strings in the above list and callables.
+            Callables (i.e. functions) should accept a single input
+            corresponding to the diffraction array.  Preprocessing functions
+            of additional variables are invoked by passing a dictionary, which
+            must include the keyword 'f' with the callable function as its value
+            as well as keyword-argument pairs for each additional function input.
+            The keywords 'x' and 'y' are reserved; if these are included in the
+            function, at runtime their value will be replaced by the scan postion
+            (x,y) of ints of the pattern being analyzed
+        corr_power : number in [0-1]
+            type of correlation to perform, where 1 is a cross correlation, 0 is
+            a phase correlation, values in between are hybrid correlations given
+            by abs(CC)^corr_power * exp(arg(CC))
+        corr_sigma : number
+            if >0, apply a gaussian blur to the diffraction image before cross
+            correlating
+        sigma : number
+            if >0, apply a gaussian blur to the correlogram before finding maxima
+        subpixel: False, 'none', 'poly', or 'multicorr'
+            determines if and how the outputs are refined to better precision
+            than the pixel grid.  If False or 'none' is passed subpixel refinement
+            is skipped.  If 'poly' is used a polynomial (2D parabolic) numerical
+            fit is performed and if 'multicorr' is used Fourier upsampling (more
+            precise but slower) is used, with a precision determined by the value
+            of `upsample_factor`
+        upsample_factor : int
+            the upsampling factor used for 'multicorr' subpixel refinement.
+            Determines the precision of the refinement. Ignored if `subpixel` is
+            not 'multicorr'
+        min_intensity : number
+            maxima with intensities below this value are removed. Ignored if set
+            to 0.
+        minAbsoluteIntensity : number (Deprecated)
+            alias for `min_intensity`
+        min_prominence : number
+            maxima with intensity differences relative to their background less
+            than this value are removed. Ignored if set to 0.
+        prominence_kernel_size : odd integer
+            window size (footprint radius in pixels) used to determine the
+            background value used in `min_prominence` calculation
+        min_rel_intensity : number
+            maxima with intensities below a reference maximum * (this value) are
+            removed. The reference maximum is selected for each diffraction image
+            according to the `ref_peak` argument
+        minRelativeIntensity : number (Deprecated)
+            alias for `min_rel_intensity`
+        ref_peak : int
+            specifies the reference maximum used in `min_rel_intensity`
+            calculation. 0 = brightest maximum, 1 = second brightest maximum, etc
+        relativeToPeak : int (Deprecated)
+            alias for `ref_peak`
+        min_spacing=None : number
+            if two maxima are closer together than this value, the dimmer
+            maximum is removed
+        minPeakSpacing : number (Deprecated)
+            alias for `min_spacing`
+        edge_boundary : number
+            maxima closer to the edge of the image than this value are removed
+        edgeBoundary : number (Deprecated)
+            alias for edge_boundary
+        n_peaks_max : int
+            only the brightest n_peaks_max peaks are returned
+        maxNumPeaks : int (Deprecated)
+            alias for `n_peaks_max`
         device : None or dict
-            If None, uses the CPU.  Otherwise, should be a dictionary with
+            If False, uses the CPU.  Otherwise, should be a dictionary with
             valid keys:
                 * CUDA (bool): enable GPU acceleration
                 * CUDA_batched (bool): enable batched GPU computation
@@ -285,8 +454,8 @@ class BraggFinder(object):
             'cluster_path' must be specified if either 'ipyparallel' or 'dask'
             computation is selected. Note also that preprocessing is currently
             not performed for any device accelerated computations.
-        ML : None or dict
-            If None, does cross correlative template matching.  Otherwise, should
+        ML : False or dict
+            If False, does cross correlative template matching.  Otherwise, should
             be a dictionary with valid keys:
                 * num_attempts (int): Number of attempts to predict the Bragg
                   disks. More attempts (ideally) results in a more confident
@@ -317,36 +486,53 @@ class BraggFinder(object):
         returncalc : bool
             If True, return the answer
         """
+        # handle deprecated inputs
+        if 'minAbsoluteIntensity' in kwargs:
+            FutureWarning("'minAbsoluteIntensity' is deprecated and will be removed in a future version; use 'min_intensity' instead")
+        if 'minRelativeIntensity' in kwargs:
+            FutureWarning("'minRelativeIntensity' is deprecated and will be removed in a future version; use 'min_rel_intensity' instead")
+        if 'relativeToPeak' in kwargs:
+            FutureWarning("'relativeToPeak' is deprecated and will be removed in a future version; use 'ref_peak' instead")
+        if 'minPeakSpacing' in kwargs:
+            FutureWarning("'minPeakSpacing' is deprecated and will be removed in a future version; use 'min_spacing' instead")
+        if 'edgeBoundary' in kwargs:
+            FutureWarning("'edgeBoundary' is deprecated and will be removed in a future version; use 'edge_boundary' instead")
+        if 'maxNumPeaks' in kwargs:
+            FutureWarning("'maxNumPeaks' is deprecated and will be removed in a future version; use 'n_peaks_max' instead")
 
-        # use ML?
-        if ML:
-            raise Exception("ML isn't implemented here yet, please use find_Bragg_disks")
+        self.update_defaults(
+            template=template,
+            preprocess=preprocess,
+            corr_power=corr_power,
+            corr_sigma=corr_sigma,
+            sigma=sigma,
+            subpixel=subpixel,
+            upsample_factor=upsample_factor,
+            min_intensity=min_intensity,
+            min_prominence=min_prominence,
+            prominence_kernel_size=prominence_kernel_size,
+            min_rel_intensity=min_rel_intensity,
+            ref_peak=ref_peak,
+            min_spacing=min_spacing,
+            edge_boundary=edge_boundary,
+            n_peaks_max=n_peaks_max,
+            device=device,
+            ML=ML,
+        )
+        params = self.bragg_detection_defaults
+
+        # ensure there is a template or no cross-correlation has been selected
+        if params['template'] is None:
+            raise Exception('Please set the cross-correlation template with the `template` input. To skip cross-correlation, set it to `False`.')
         # use device?
         if device:
             raise Exception("Hardware acceleration isn't implemented here yet, please use find_Bragg_disks")
+        # use ML?
+        if ML:
+            raise Exception("ML isn't implemented here yet, please use find_Bragg_disks")
 
-        # parse inputs
-        corr_defaults = {
-            'sigma' : 0,
-            'corr_power' : 1,
-        }
-        thresh_defaults = {
-            'min_intensity' : 0,
-            'min_spacing' : 5,
-            'subpixel' : 'poly',
-            'upsample_factor' : 16,
-            'edge' : 0,
-            'sigma' : 0,
-            'n_peaks_max' : 10000,
-            'min_prominence' : 0,
-            'prominence_kernel_size' : 3,
-            'min_rel_intensity' : 0,
-            'ref_peak' : 0,
-        }
-        corr = corr_defaults if corr is None else corr_defaults | corr
-        thresh = thresh_defaults if thresh is None else thresh_defaults | thresh
 
-        ## Set up metamethods (preprocess, crosscorr, thresholding)
+        ## Set up metamethods (preprocess, crosscorr, threshold)
 
         # preprocess
         preprocess_options = [
@@ -355,17 +541,19 @@ class BraggFinder(object):
             "la",
             "local_averaging"
         ]
-        f = None
         # validate inputs
+        preprocess = params['preprocess']
         if isinstance(preprocess,list):
             for el in preprocess:
                 assert(isinstance(el,str) or callable(el))
                 if isinstance(el,str):
                     assert(el in preprocess_options)
+        # define the method
+        f = None
         def _preprocess(dp,x,y):
             """ dp = _preprocess_pattern(datacube.data[x,y])
             """
-            if preprocess is None:
+            if preprocess is False:
                 return dp
             elif callable(preprocess):
                 return preprocess(dp)
@@ -392,20 +580,20 @@ class BraggFinder(object):
                         elif el in ('la','local_averaging'):
                             dp = self.get_local_ave_dp(x,y)
                         else:
-                            raise Exception("How did you get here?? A preprocess option may have been added incorrectly")
+                            raise Exception(f"Unrecognized preprocess option {el}")
                 return dp
 
         # cross correlate
         def _cross_correlate(dp):
             """ cc = _cross_correlate(dp)
             """
-            if corr['sigma'] > 0:
-                dp = gaussian_filter(dp, corr['sigma'])
-            if template is not None:
+            if params['corr_sigma'] > 0:
+                dp = gaussian_filter(dp, params['corr_sigma'])
+            if template is not False:
                 cc = get_cross_correlation_FT(
                     dp,
                     template_FT,
-                    corr['corr_power'],
+                    params['corr_power'],
                     "fourier",
                 )
             else:
@@ -417,42 +605,40 @@ class BraggFinder(object):
             """ vec = _threshold(cc)
             """
             cc_real = np.maximum(np.real(np.fft.ifft2(cc)),0)
-            if thresh['subpixel'] == 'multicorr':
+            if params['subpixel'] == 'multicorr':
                 return get_maxima_2D(
                     cc_real,
                     subpixel='multicorr',
-                    upsample_factor=thresh['upsample_factor'],
-                    sigma=thresh['sigma'],
-                    minAbsoluteIntensity=thresh['min_intensity'],
-                    minProminence=thresh['min_prominence'],
-                    prominenceKernelSize=thresh['prominence_kernel_size'],
-                    minRelativeIntensity=thresh['min_rel_intensity'],
-                    relativeToPeak=thresh['ref_peak'],
-                    minSpacing=thresh['min_spacing'],
-                    edgeBoundary=thresh['edge'],
-                    maxNumPeaks=thresh['n_peaks_max'],
+                    upsample_factor=params['upsample_factor'],
+                    sigma=params['sigma'],
+                    minAbsoluteIntensity=params['min_intensity'],
+                    minProminence=params['min_prominence'],
+                    prominenceKernelSize=params['prominence_kernel_size'],
+                    minRelativeIntensity=params['min_rel_intensity'],
+                    relativeToPeak=params['ref_peak'],
+                    minSpacing=params['min_spacing'],
+                    edgeBoundary=params['edge_boundary'],
+                    maxNumPeaks=params['n_peaks_max'],
                     _ar_FT=cc,
                 )
             else:
                 return get_maxima_2D(
                     cc_real,
-                    subpixel=thresh['subpixel'],
-                    sigma=thresh['sigma'],
-                    minAbsoluteIntensity=thresh['min_intensity'],
-                    minProminence=thresh['min_prominence'],
-                    prominenceKernelSize=thresh['prominence_kernel_size'],
-                    minRelativeIntensity=thresh['min_rel_intensity'],
-                    relativeToPeak=thresh['ref_peak'],
-                    minSpacing=thresh['min_spacing'],
-                    edgeBoundary=thresh['edge'],
-                    maxNumPeaks=thresh['n_peaks_max'],
+                    subpixel=params['subpixel'],
+                    sigma=params['sigma'],
+                    minAbsoluteIntensity=params['min_intensity'],
+                    minProminence=params['min_prominence'],
+                    prominenceKernelSize=params['prominence_kernel_size'],
+                    minRelativeIntensity=params['min_rel_intensity'],
+                    relativeToPeak=params['ref_peak'],
+                    minSpacing=params['min_spacing'],
+                    edgeBoundary=params['edge_boundary'],
+                    maxNumPeaks=params['n_peaks_max'],
                 )
 
-
         # prepare the template
-        if template is not None:
+        if template is not False:
             template_FT = np.conj(np.fft.fft2(template))
-
 
         # prepare the data and output container for...
         if data is None:
@@ -463,7 +649,8 @@ class BraggFinder(object):
             vectors = BraggVectors(
                 self.Rshape,
                 self.Qshape,
-                calibration=self.calibration)
+                calibration=self.calibration
+            )
         elif isinstance(data,(tuple,list)):
             # ...specified indices
             rxs,rys = data
@@ -504,13 +691,21 @@ class BraggFinder(object):
                 if _return_cc:
                     ccs.append(cc)
 
+        # Attach metadata
+        if data is None:
+            vectors.metadata = Metadata(
+                name="gen_params",
+                data={
+                    "_calling_method": inspect.stack()[0][3],
+                    "_calling_class": __class__.__name__,
+                } | params,
+            )
 
         # Return
         if _return_cc is True:
             return vectors, ccs
         else:
             return vectors
-
 
 
 
