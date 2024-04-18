@@ -7,7 +7,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from emdfile import Array, Metadata, _read_metadata, tqdmnd
-from py4DSTEM import show
 from py4DSTEM.utils import get_CoM
 from py4DSTEM.datacube import VirtualImage
 
@@ -637,6 +636,7 @@ class BraggVectorMethods:
         axsize = kwargs.pop("axsize", axsize)
 
         # plot
+        from py4DSTEM.visualize import show
         fig, ax = show(
             [
                 [qx0_meas - qx0_mean, qx0_fit - qx0_mean, qx0_residuals],

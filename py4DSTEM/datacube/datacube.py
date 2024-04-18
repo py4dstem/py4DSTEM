@@ -189,6 +189,10 @@ class DataCube(
         return self.data.shape[3]
 
     @property
+    def Q_N(self):
+        return np.prod(self.data.shape[2:4])
+
+    @property
     def Rshape(self):
         return (self.data.shape[0], self.data.shape[1])
 

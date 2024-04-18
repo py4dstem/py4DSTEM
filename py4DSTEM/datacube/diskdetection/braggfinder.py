@@ -6,7 +6,7 @@ from emdfile import tqdmnd
 from emdfile import Metadata
 from py4DSTEM.utils import get_maxima_2D, get_cross_correlation_FT
 from py4DSTEM.data import QPoints
-
+from py4DSTEM.braggvectors import BraggVectors
 
 
 class BraggFinder(object):
@@ -355,6 +355,7 @@ class BraggFinder(object):
             "la",
             "local_averaging"
         ]
+        f = None
         # validate inputs
         if isinstance(preprocess,list):
             for el in preprocess:
@@ -371,7 +372,9 @@ class BraggFinder(object):
             # for dicts, element 'f' is a callable and
             # all others are arguments to pass to it
             elif isinstance(preprocess,dict):
-                f = preprocess.pop('f')
+                nonlocal f
+                if f is None:
+                    f = preprocess.pop('f')
                 # if x+y are keys in preprocess, the callable f should
                 # recieve scan positions 'x' and 'y' as inputs
                 if 'x' in preprocess.keys() and 'y' in preprocess.keys():
@@ -454,10 +457,13 @@ class BraggFinder(object):
         # prepare the data and output container for...
         if data is None:
             # ...all indices
-            rxs = np.tile(np.arange(self.Q_Nx),self.Q_Ny)
-            rys = np.tile(np.arange(self.Q_Ny),(self.Q_Nx,1)).T.reshape(datacube.Q_N)
-            N = len(rx)
-            vectors = BraggVectors(datacube.Rshape, datacube.Qshape)
+            rxs = np.tile(np.arange(self.R_Nx),self.R_Ny)
+            rys = np.tile(np.arange(self.R_Ny),(self.R_Nx,1)).T.reshape(self.R_N)
+            N = len(rxs)
+            vectors = BraggVectors(
+                self.Rshape,
+                self.Qshape,
+                calibration=self.calibration)
         elif isinstance(data,(tuple,list)):
             # ...specified indices
             rxs,rys = data
