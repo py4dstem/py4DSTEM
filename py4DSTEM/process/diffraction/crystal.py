@@ -710,7 +710,7 @@ class Crystal:
         zone_axis_cartesian: Optional[np.ndarray] = None,
         proj_x_cartesian: Optional[np.ndarray] = None,
         foil_normal_cartesian: Optional[Union[list, tuple, np.ndarray]] = None,
-        sigma_excitation_error: float = 0.02,
+        sigma_excitation_error: float = 0.01,
         tol_excitation_error_mult: float = 3,
         tol_intensity: float = 1e-5,
         k_max: Optional[float] = None,
