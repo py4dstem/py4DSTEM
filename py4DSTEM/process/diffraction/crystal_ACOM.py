@@ -29,6 +29,7 @@ def orientation_plan(
     corr_kernel_size: float = 0.08,
     radial_power: float = 1.0,
     intensity_power: float = 0.25,  # New default intensity power scaling
+    precession_angle_degrees = None,
     calculate_correlation_array=True,
     tol_peak_delete=None,
     tol_distance: float = 0.01,
@@ -41,39 +42,60 @@ def orientation_plan(
     """
     Calculate the rotation basis arrays for an SO(3) rotation correlogram.
 
-    Args:
-        zone_axis_range (float): Row vectors give the range for zone axis orientations.
-                                 If user specifies 2 vectors (2x3 array), we start at [0,0,1]
-                                    to make z-x-z rotation work.
-                                 If user specifies 3 vectors (3x3 array), plan will span these vectors.
-                                 Setting to 'full' as a string will use a hemispherical range.
-                                 Setting to 'half' as a string will use a quarter sphere range.
-                                 Setting to 'fiber' as a string will make a spherical cap around a given vector.
-                                 Setting to 'auto' will use pymatgen to determine the point group symmetry
-                                    of the structure and choose an appropriate zone_axis_range
-        angle_step_zone_axis (float): Approximate angular step size for zone axis search [degrees]
-        angle_coarse_zone_axis (float): Coarse step size for zone axis search [degrees]. Setting to
-                                        None uses the same value as angle_step_zone_axis.
-        angle_refine_range (float):   Range of angles to use for zone axis refinement. Setting to
-                                      None uses same value as angle_coarse_zone_axis.
+    Parameters
+    ----------
+    zone_axis_range (float):
+        Row vectors give the range for zone axis orientations.
+        If user specifies 2 vectors (2x3 array), we start at [0,0,1]
+        to make z-x-z rotation work.
+        If user specifies 3 vectors (3x3 array), plan will span these vectors.
+        Setting to 'full' as a string will use a hemispherical range.
+        Setting to 'half' as a string will use a quarter sphere range.
+        Setting to 'fiber' as a string will make a spherical cap around a given vector.
+        Setting to 'auto' will use pymatgen to determine the point group symmetry
+        of the structure and choose an appropriate zone_axis_range
+    angle_step_zone_axis (float): 
+        Approximate angular step size for zone axis search [degrees]
+    angle_coarse_zone_axis (float): 
+        Coarse step size for zone axis search [degrees]. Setting to
+        None uses the same value as angle_step_zone_axis.
+    angle_refine_range (float):   
+        Range of angles to use for zone axis refinement. Setting to
+        None uses same value as angle_coarse_zone_axis.
 
-        angle_step_in_plane (float):  Approximate angular step size for in-plane rotation [degrees]
-        accel_voltage (float):        Accelerating voltage for electrons [Volts]
-        corr_kernel_size (float):      Correlation kernel size length. The size of the overlap kernel between the measured Bragg peaks and diffraction library Bragg peaks. [1/Angstroms]
-        radial_power (float):          Power for scaling the correlation intensity as a function of the peak radius
-        intensity_power (float):       Power for scaling the correlation intensity as a function of the peak intensity
-        calculate_correlation_array (bool):     Set to false to skip calculating the correlation array.
-                                                This is useful when we only want the angular range / rotation matrices.
-        tol_peak_delete (float):      Distance to delete peaks for multiple matches.
-                                      Default is kernel_size * 0.5
-        tol_distance (float):         Distance tolerance for radial shell assignment [1/Angstroms]
-        fiber_axis (float):           (3,) vector specifying the fiber axis
-        fiber_angles (float):         (2,) vector specifying angle range from fiber axis, and in-plane angular range [degrees]
-        cartesian_directions (bool): When set to true, all zone axes and projection directions
-                                     are specified in Cartesian directions.
-        figsize (float):            (2,) vector giving the figure size
-        CUDA (bool):             Use CUDA for the Fourier operations.
-        progress_bar (bool):    If false no progress bar is displayed
+    angle_step_in_plane (float):  
+        Approximate angular step size for in-plane rotation [degrees]
+    accel_voltage (float):        
+        Accelerating voltage for electrons [Volts]
+    corr_kernel_size (float):      
+        Correlation kernel size length. The size of the overlap kernel between the measured Bragg peaks and diffraction library Bragg peaks. [1/Angstroms]
+    radial_power (float):          
+        Power for scaling the correlation intensity as a function of the peak radius
+    intensity_power (float):       
+        Power for scaling the correlation intensity as a function of the peak intensity
+    precession_angle_degrees (float)
+        Tilt angle of illuminaiton cone in degrees for precession electron diffraction (PED).
+    calculate_correlation_array (bool):     
+        Set to false to skip calculating the correlation array.
+        This is useful when we only want the angular range / rotation matrices.
+    tol_peak_delete (float):      
+        Distance to delete peaks for multiple matches.
+        Default is kernel_size * 0.5
+    tol_distance (float):         
+        Distance tolerance for radial shell assignment [1/Angstroms]
+    fiber_axis (float):           
+        (3,) vector specifying the fiber axis
+    fiber_angles (float):         
+        (2,) vector specifying angle range from fiber axis, and in-plane angular range [degrees]
+    cartesian_directions (bool): 
+        When set to true, all zone axes and projection directions
+        are specified in Cartesian directions.
+    figsize (float):            
+        (2,) vector giving the figure size
+    CUDA (bool):             
+        Use CUDA for the Fourier operations.
+    progress_bar (bool):    
+        If false no progress bar is displayed,
     """
 
     # Check to make sure user has calculated the structure factors if needed
@@ -717,7 +739,18 @@ def orientation_plan(
         ):
             # reciprocal lattice spots and excitation errors
             g = self.orientation_rotation_matrices[a0, :, :].T @ self.g_vec_all
-            sg = self.excitation_errors(g)
+            if precession_angle_degrees is None:
+                sg = self.excitation_errors(g)
+            else:
+                sg = np.min(
+                    np.abs(
+                        self.excitation_errors(
+                            g,
+                            precession_angle_degrees = precession_angle_degrees,
+                        ),
+                    ),
+                    axis = 1,
+                )
 
             # Keep only points that will contribute to this orientation plan slice
             keep = np.abs(sg) < self.orientation_kernel_size
