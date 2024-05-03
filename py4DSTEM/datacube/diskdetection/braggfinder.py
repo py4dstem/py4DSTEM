@@ -26,14 +26,18 @@ class BraggFinder(object):
             'min_spacing' : 5,
             'subpixel' : 'poly',
             'upsample_factor' : 16,
-            'edge_boundary' : 1,
+            'edge_filter' : 1,
             'n_peaks_max' : 10000,
             'min_prominence' : 0,
             'prominence_kernel_size' : 3,
             'min_rel_intensity' : 0,
-            'ref_peak' : 0,
+            'min_rel_ref_peak' : 0,
             'device' : False,
             'ML' : False,
+            'show_peaks' : True,
+            'show_peaks_params' : {
+                's_peaks' : 1,
+            },
         }
 
     def update_defaults(
@@ -49,12 +53,14 @@ class BraggFinder(object):
         min_prominence=None,
         prominence_kernel_size=None,
         min_rel_intensity=None,
-        ref_peak=None,
+        min_rel_ref_peak=None,
         min_spacing=None,
-        edge_boundary=None,
+        edge_filter=None,
         n_peaks_max=None,
         device=None,
         ML=None,
+        show_peaks=None,
+        show_peaks_params=None,
     ):
         # add new defaults to a dict
         new_defaults = {}
@@ -69,12 +75,14 @@ class BraggFinder(object):
         if min_prominence is not None: new_defaults['min_prominence'] = min_prominence
         if prominence_kernel_size is not None: new_defaults['prominence_kernel_size'] = prominence_kernel_size
         if min_rel_intensity is not None: new_defaults['min_rel_intensity'] = min_rel_intensity
-        if ref_peak is not None: new_defaults['ref_peak'] = ref_peak
+        if min_rel_ref_peak is not None: new_defaults['min_rel_ref_peak'] = min_rel_ref_peak
         if min_spacing is not None: new_defaults['min_spacing'] = min_spacing
-        if edge_boundary is not None: new_defaults['edge_boundary'] = edge_boundary
+        if edge_filter is not None: new_defaults['edge_filter'] = edge_filter
         if n_peaks_max is not None: new_defaults['n_peaks_max'] = n_peaks_max
         if device is not None: new_defaults['device'] = device
         if ML is not None: new_defaults['ML'] = ML
+        if show_peaks is not None: new_defaults['show_peaks'] = show_peaks
+        if show_peaks_params is not None: new_defaults['show_peaks_params'] = show_peaks_params
 
         # update
         self.bragg_detection_defaults = self.bragg_detection_defaults | new_defaults
@@ -82,24 +90,26 @@ class BraggFinder(object):
 
     def find_bragg_vectors(
         self,
-        template,
+        template=None,
         data=None,
         preprocess=None,
         corr_power=None,
         corr_sigma=None,
         sigma=None,
-        subpixel=None,
-        upsample_factor=None,
+        n_peaks_max=None,
+        min_spacing=None,
         min_intensity=None,
         min_prominence=None,
         prominence_kernel_size=None,
         min_rel_intensity=None,
-        ref_peak=None,
-        min_spacing=None,
-        edge_boundary=None,
-        n_peaks_max=None,
+        min_rel_ref_peak=None,
+        edge_filter=None,
+        subpixel=None,
+        upsample_factor=None,
         device=None,
         ML=None,
+        show_peaks=None,
+        show_peaks_params=None,
         return_cc=False,
         name = 'braggvectors',
         returncalc = True,
@@ -187,9 +197,13 @@ class BraggFinder(object):
         scan position (5,6) only, returning a single set of detected
         peaks as a QPoints instance, and
 
+        >>> datacube.select_patterns(
+        >>>     (np.array([4,5,6]),
+        >>>      np.array([10,11,12]))
+        >>> )
         >>> datacube.get_bragg_vectors(
         >>>     template,
-        >>>     data = (np.array([4,5,6]),np.array([10,11,12]))
+        >>>     data = 's')
         >>> )
 
         will perform template matching against the 3 diffraction images at
@@ -348,13 +362,13 @@ class BraggFinder(object):
             passed, probe.kernel is used (and must be populated). If False is
             passed, cross correlation is skipped and the maxima are taken
             directly from the (possibly preprocessed) diffraction data
-        data : None or 2-tuple or 2D numpy ndarray
+        data : None or 's' or (int,int) or Qshaped 2D array
             Specifies the input data and return value.
-            If None, uses the full datacube and return a BraggVectors instance.
-            If a 2-tuple (int,int), uses the diffraction pattern at this scan
-            position and returns a QPoints instance.
-            If a 2-tuple of arrays of ints, uses the diffraction patterns
-            at scan positions (rxs,rys) and return a list of QPoints instance
+            If None, use the full datacube and return a BraggVectors instance.
+            If 's', use the scan positions selected using .select_patterns and
+            and return a list of QPoints instance
+            If a 2-tuple (int,int), use the diffraction pattern at this scan
+            position and return a QPoints instance.
             If a 2D boolean numpy array (Rshaped), runs on the diffraction
             images where True and return a list of QPoints instances at scan
             positions np.nonzero(ar)
@@ -384,6 +398,29 @@ class BraggFinder(object):
             correlating
         sigma : number
             if >0, apply a gaussian blur to the correlogram before finding maxima
+        n_peaks_max : int
+            only the brightest n_peaks_max peaks are returned
+        min_spacing=None : number
+            if two maxima are closer together than this value, the dimmer
+            maximum is removed
+        min_intensity : number
+            maxima with intensities below this value are removed. Ignored if set
+            to 0.
+        min_prominence : number
+            maxima with intensity differences relative to their background less
+            than this value are removed. Ignored if set to 0.
+        prominence_kernel_size : odd integer
+            window size (footprint radius in pixels) used to determine the
+            background value used in `min_prominence` calculation
+        min_rel_intensity : number
+            maxima with intensities below a reference maximum * (this value) are
+            removed. The reference maximum is selected for each diffraction image
+            according to the `min_rel_ref_peak` argument
+        min_rel_ref_peak : int
+            specifies the reference maximum used in `min_rel_intensity`
+            calculation. 0 = brightest maximum, 1 = second brightest maximum, etc
+        edge_filter : number
+            maxima closer to the edge of the image than this value are removed
         subpixel: False, 'none', 'poly', or 'multicorr'
             determines if and how the outputs are refined to better precision
             than the pixel grid.  If False or 'none' is passed subpixel refinement
@@ -395,41 +432,6 @@ class BraggFinder(object):
             the upsampling factor used for 'multicorr' subpixel refinement.
             Determines the precision of the refinement. Ignored if `subpixel` is
             not 'multicorr'
-        min_intensity : number
-            maxima with intensities below this value are removed. Ignored if set
-            to 0.
-        minAbsoluteIntensity : number (Deprecated)
-            alias for `min_intensity`
-        min_prominence : number
-            maxima with intensity differences relative to their background less
-            than this value are removed. Ignored if set to 0.
-        prominence_kernel_size : odd integer
-            window size (footprint radius in pixels) used to determine the
-            background value used in `min_prominence` calculation
-        min_rel_intensity : number
-            maxima with intensities below a reference maximum * (this value) are
-            removed. The reference maximum is selected for each diffraction image
-            according to the `ref_peak` argument
-        minRelativeIntensity : number (Deprecated)
-            alias for `min_rel_intensity`
-        ref_peak : int
-            specifies the reference maximum used in `min_rel_intensity`
-            calculation. 0 = brightest maximum, 1 = second brightest maximum, etc
-        relativeToPeak : int (Deprecated)
-            alias for `ref_peak`
-        min_spacing=None : number
-            if two maxima are closer together than this value, the dimmer
-            maximum is removed
-        minPeakSpacing : number (Deprecated)
-            alias for `min_spacing`
-        edge_boundary : number
-            maxima closer to the edge of the image than this value are removed
-        edgeBoundary : number (Deprecated)
-            alias for edge_boundary
-        n_peaks_max : int
-            only the brightest n_peaks_max peaks are returned
-        maxNumPeaks : int (Deprecated)
-            alias for `n_peaks_max`
         device : None or dict
             If False, uses the CPU.  Otherwise, should be a dictionary with
             valid keys:
@@ -492,11 +494,11 @@ class BraggFinder(object):
         if 'minRelativeIntensity' in kwargs:
             FutureWarning("'minRelativeIntensity' is deprecated and will be removed in a future version; use 'min_rel_intensity' instead")
         if 'relativeToPeak' in kwargs:
-            FutureWarning("'relativeToPeak' is deprecated and will be removed in a future version; use 'ref_peak' instead")
+            FutureWarning("'relativeToPeak' is deprecated and will be removed in a future version; use 'min_rel_ref_peak' instead")
         if 'minPeakSpacing' in kwargs:
             FutureWarning("'minPeakSpacing' is deprecated and will be removed in a future version; use 'min_spacing' instead")
         if 'edgeBoundary' in kwargs:
-            FutureWarning("'edgeBoundary' is deprecated and will be removed in a future version; use 'edge_boundary' instead")
+            FutureWarning("'edgeBoundary' is deprecated and will be removed in a future version; use 'edge_filter' instead")
         if 'maxNumPeaks' in kwargs:
             FutureWarning("'maxNumPeaks' is deprecated and will be removed in a future version; use 'n_peaks_max' instead")
 
@@ -512,14 +514,35 @@ class BraggFinder(object):
             min_prominence=min_prominence,
             prominence_kernel_size=prominence_kernel_size,
             min_rel_intensity=min_rel_intensity,
-            ref_peak=ref_peak,
+            min_rel_ref_peak=min_rel_ref_peak,
             min_spacing=min_spacing,
-            edge_boundary=edge_boundary,
+            edge_filter=edge_filter,
             n_peaks_max=n_peaks_max,
             device=device,
             ML=ML,
+            show_peaks=show_peaks,
+            show_peaks_params=show_peaks_params,
         )
         params = self.bragg_detection_defaults
+        template = params['template']
+        preprocess = params['preprocess']
+        corr_power = params['corr_power']
+        corr_sigma = params['corr_sigma']
+        sigma = params['sigma']
+        subpixel = params['subpixel']
+        upsample_factor = params['upsample_factor']
+        min_intensity = params['min_intensity']
+        min_prominence = params['min_prominence']
+        prominence_kernel_size = params['prominence_kernel_size']
+        min_rel_intensity = params['min_rel_intensity']
+        min_rel_ref_peak = params['min_rel_ref_peak']
+        min_spacing = params['min_spacing']
+        edge_filter = params['edge_filter']
+        n_peaks_max = params['n_peaks_max']
+        device = params['device']
+        ML = params['ML']
+        show_peaks = params['show_peaks']
+        show_peaks_params = params['show_peaks_params']
 
         # ensure there is a template or no cross-correlation has been selected
         if params['template'] is None:
@@ -542,7 +565,6 @@ class BraggFinder(object):
             "local_averaging"
         ]
         # validate inputs
-        preprocess = params['preprocess']
         if isinstance(preprocess,list):
             for el in preprocess:
                 assert(isinstance(el,str) or callable(el))
@@ -587,13 +609,13 @@ class BraggFinder(object):
         def _cross_correlate(dp):
             """ cc = _cross_correlate(dp)
             """
-            if params['corr_sigma'] > 0:
-                dp = gaussian_filter(dp, params['corr_sigma'])
+            if corr_sigma > 0:
+                dp = gaussian_filter(dp, corr_sigma)
             if template is not False:
                 cc = get_cross_correlation_FT(
                     dp,
                     template_FT,
-                    params['corr_power'],
+                    corr_power,
                     "fourier",
                 )
             else:
@@ -605,35 +627,35 @@ class BraggFinder(object):
             """ vec = _threshold(cc)
             """
             cc_real = np.maximum(np.real(np.fft.ifft2(cc)),0)
-            if params['subpixel'] == 'multicorr':
+            if subpixel == 'multicorr':
                 return get_maxima_2D(
                     cc_real,
                     subpixel='multicorr',
-                    upsample_factor=params['upsample_factor'],
-                    sigma=params['sigma'],
-                    minAbsoluteIntensity=params['min_intensity'],
-                    minProminence=params['min_prominence'],
-                    prominenceKernelSize=params['prominence_kernel_size'],
-                    minRelativeIntensity=params['min_rel_intensity'],
-                    relativeToPeak=params['ref_peak'],
-                    minSpacing=params['min_spacing'],
-                    edgeBoundary=params['edge_boundary'],
-                    maxNumPeaks=params['n_peaks_max'],
+                    upsample_factor=upsample_factor,
+                    sigma=sigma,
+                    minAbsoluteIntensity=min_intensity,
+                    minProminence=min_prominence,
+                    prominenceKernelSize=prominence_kernel_size,
+                    minRelativeIntensity=min_rel_intensity,
+                    relativeToPeak=min_rel_ref_peak,
+                    minSpacing=min_spacing,
+                    edgeBoundary=edge_filter,
+                    maxNumPeaks=n_peaks_max,
                     _ar_FT=cc,
                 )
             else:
                 return get_maxima_2D(
                     cc_real,
-                    subpixel=params['subpixel'],
-                    sigma=params['sigma'],
-                    minAbsoluteIntensity=params['min_intensity'],
-                    minProminence=params['min_prominence'],
-                    prominenceKernelSize=params['prominence_kernel_size'],
-                    minRelativeIntensity=params['min_rel_intensity'],
-                    relativeToPeak=params['ref_peak'],
-                    minSpacing=params['min_spacing'],
-                    edgeBoundary=params['edge_boundary'],
-                    maxNumPeaks=params['n_peaks_max'],
+                    subpixel=subpixel,
+                    sigma=sigma,
+                    minAbsoluteIntensity=min_intensity,
+                    minProminence=min_prominence,
+                    prominenceKernelSize=prominence_kernel_size,
+                    minRelativeIntensity=min_rel_intensity,
+                    relativeToPeak=min_rel_ref_peak,
+                    minSpacing=min_spacing,
+                    edgeBoundary=edge_filter,
+                    maxNumPeaks=n_peaks_max,
                 )
 
         # prepare the template
@@ -651,9 +673,10 @@ class BraggFinder(object):
                 self.Qshape,
                 calibration=self.calibration
             )
-        elif isinstance(data,(tuple,list)):
-            # ...specified indices
-            rxs,rys = data
+        elif data == 's':
+            assert(hasattr(self,'_selected_patterns')), "no diffraction patterns selected - use .select_patterns"
+            data = self.selected_patterns
+            rxs,rys = data[0,:],data[1,:]
             N = len(rxs)
             vectors = []
             if _return_cc:
@@ -691,7 +714,7 @@ class BraggFinder(object):
                 if _return_cc:
                     ccs.append(cc)
 
-        # Attach metadata
+        # Attach metadata, link datacube
         if data is None:
             vectors.metadata = Metadata(
                 name="gen_params",
@@ -699,6 +722,14 @@ class BraggFinder(object):
                     "_calling_method": inspect.stack()[0][3],
                     "_calling_class": __class__.__name__,
                 } | params,
+            )
+            self.braggvectors = vectors
+
+        # Show
+        if data is not None and show_peaks:
+            self.show_selected_patterns(
+                peaks = vectors,
+                **show_peaks_params,
             )
 
         # Return
@@ -710,283 +741,3 @@ class BraggFinder(object):
 
 
 
-
-    def get_beamstop_mask(
-        self,
-        threshold=0.25,
-        distance_edge=2.0,
-        include_edges=True,
-        sigma=0,
-        use_max_dp=False,
-        scale_radial=None,
-        name="mask_beamstop",
-        returncalc=True,
-    ):
-        """
-        This function uses the mean diffraction pattern plus a threshold to
-        create a beamstop mask.
-
-        Args:
-            threshold (float):  Value from 0 to 1 defining initial threshold for
-                beamstop mask, taken from the sorted intensity values - 0 is the
-                dimmest pixel, while 1 uses the brighted pixels.
-            distance_edge (float): How many pixels to expand the mask.
-            include_edges (bool): If set to True, edge pixels will be included
-                in the mask.
-            sigma (float):
-                Gaussain blur std to apply to image before thresholding.
-            use_max_dp (bool):
-                Use the max DP instead of the mean DP.
-            scale_radial (float):
-                Scale from center of image by this factor (can help with edge)
-            name (string): Name of the output array.
-            returncalc (bool): Set to true to return the result.
-
-        Returns:
-            (Optional): if returncalc is True, returns the beamstop mask
-
-        """
-
-        if scale_radial is not None:
-            x = np.arange(self.data.shape[2]) * 2.0 / self.data.shape[2]
-            y = np.arange(self.data.shape[3]) * 2.0 / self.data.shape[3]
-            ya, xa = np.meshgrid(y - np.mean(y), x - np.mean(x))
-            im_scale = 1.0 + np.sqrt(xa**2 + ya**2) * scale_radial
-
-        # Get image for beamstop mask
-        if use_max_dp:
-            # if not "dp_mean" in self.tree.keys():
-            #     self.get_dp_max();
-            # im = self.tree["dp_max"].data.astype('float')
-            if not "dp_max" in self._branch.keys():
-                self.get_dp_max()
-            im = self.tree("dp_max").data.copy().astype("float")
-        else:
-            if not "dp_mean" in self._branch.keys():
-                self.get_dp_mean()
-            im = self.tree("dp_mean").data.copy()
-
-            # if not "dp_mean" in self.tree.keys():
-            #     self.get_dp_mean();
-            # im = self.tree["dp_mean"].data.astype('float')
-
-        # smooth and scale if needed
-        if sigma > 0.0:
-            im = gaussian_filter(im, sigma, mode="nearest")
-        if scale_radial is not None:
-            im *= im_scale
-
-        # Calculate beamstop mask
-        int_sort = np.sort(im.ravel())
-        ind = np.round(
-            np.clip(int_sort.shape[0] * threshold, 0, int_sort.shape[0])
-        ).astype("int")
-        intensity_threshold = int_sort[ind]
-        mask_beamstop = im >= intensity_threshold
-
-        # clean up mask
-        mask_beamstop = np.logical_not(binary_fill_holes(np.logical_not(mask_beamstop)))
-        mask_beamstop = binary_fill_holes(mask_beamstop)
-
-        # Edges
-        if include_edges:
-            mask_beamstop[0, :] = False
-            mask_beamstop[:, 0] = False
-            mask_beamstop[-1, :] = False
-            mask_beamstop[:, -1] = False
-
-        # Expand mask
-        mask_beamstop = distance_transform_edt(mask_beamstop) < distance_edge
-
-        # Wrap beamstop mask in a class
-        x = Array(data=mask_beamstop, name=name)
-
-        # Add metadata
-        x.metadata = Metadata(
-            name="gen_params",
-            data={
-                #'gen_func' :
-                "threshold": threshold,
-                "distance_edge": distance_edge,
-                "include_edges": include_edges,
-                "name": "mask_beamstop",
-                "returncalc": returncalc,
-            },
-        )
-
-        # Add to tree
-        self.tree(x)
-
-        # return
-        if returncalc:
-            return mask_beamstop
-
-
-
-
-
-
-
-
-
-
-#        ### OLD CODE
-#
-#        elif mode == "datacube":
-#            if distributed is None and CUDA == False:
-#                mode = "dc_CPU"
-#            elif distributed is None and CUDA == True:
-#                if CUDA_batched == False:
-#                    mode = "dc_GPU"
-#                else:
-#                    mode = "dc_GPU_batched"
-#            else:
-#                x = _parse_distributed(distributed)
-#                connect, data_file, cluster_path, distributed_mode = x
-#                if distributed_mode == "dask":
-#                    mode = "dc_dask"
-#                elif distributed_mode == "ipyparallel":
-#                    mode = "dc_ipyparallel"
-#                else:
-#                    er = f"unrecognized distributed mode {distributed_mode}"
-#                    raise Exception(er)
-#        # overwrite if ML selected
-#
-#        # select a function
-#        fn_dict = {
-#            "dp": _find_Bragg_disks_single,
-#            "dp_stack": _find_Bragg_disks_stack,
-#            "dc_CPU": _find_Bragg_disks_CPU,
-#            "dc_GPU": _find_Bragg_disks_CUDA_unbatched,
-#            "dc_GPU_batched": _find_Bragg_disks_CUDA_batched,
-#            "dc_dask": _find_Bragg_disks_dask,
-#            "dc_ipyparallel": _find_Bragg_disks_ipp,
-#            "dc_ml": find_Bragg_disks_aiml,
-#        }
-#        fn = fn_dict[mode]
-#
-#        # prepare kwargs
-#        kws = {}
-#        # distributed kwargs
-#        if distributed is not None:
-#            kws["connect"] = connect
-#            kws["data_file"] = data_file
-#            kws["cluster_path"] = cluster_path
-#        # ML arguments
-#        if ML == True:
-#            kws["CUDA"] = CUDA
-#            kws["model_path"] = ml_model_path
-#            kws["num_attempts"] = ml_num_attempts
-#            kws["batch_size"] = ml_batch_size
-#
-#        # if radial background subtraction is requested, add to args
-#        if radial_bksb and mode == "dc_CPU":
-#            kws["radial_bksb"] = radial_bksb
-#
-#        # run and return
-#        ans = fn(
-#            data,
-#            template,
-#            filter_function=filter_function,
-#            corrPower=corrPower,
-#            sigma_dp=sigma_dp,
-#            sigma_cc=sigma_cc,
-#            subpixel=subpixel,
-#            upsample_factor=upsample_factor,
-#            minAbsoluteIntensity=minAbsoluteIntensity,
-#            minRelativeIntensity=minRelativeIntensity,
-#            relativeToPeak=relativeToPeak,
-#            minPeakSpacing=minPeakSpacing,
-#            edgeBoundary=edgeBoundary,
-#            maxNumPeaks=maxNumPeaks,
-#            **kws,
-#        )
-#        return ans
-#
-#
-#
-#
-#
-#        # parse args
-#        if data is None:
-#            x = self
-#        elif isinstance(data, tuple):
-#            x = self, data[0], data[1]
-#        elif isinstance(data, np.ndarray):
-#            assert data.dtype == bool, "array must be boolean"
-#            assert data.shape == self.Rshape, "array must be Rspace shaped"
-#            x = self.data[data, :, :]
-#        else:
-#            raise Exception(f"unexpected type for `data` {type(data)}")
-#
-#
-#
-#
-#        # compute
-#        peaks = find_Bragg_disks(
-#            data=x,
-#            template=template,
-#            radial_bksb=radial_bksb,
-#            filter_function=filter_function,
-#            corrPower=corrPower,
-#            sigma_dp=sigma_dp,
-#            sigma_cc=sigma_cc,
-#            subpixel=subpixel,
-#            upsample_factor=upsample_factor,
-#            minAbsoluteIntensity=minAbsoluteIntensity,
-#            minRelativeIntensity=minRelativeIntensity,
-#            relativeToPeak=relativeToPeak,
-#            minPeakSpacing=minPeakSpacing,
-#            edgeBoundary=edgeBoundary,
-#            maxNumPeaks=maxNumPeaks,
-#            CUDA=CUDA,
-#            CUDA_batched=CUDA_batched,
-#            distributed=distributed,
-#            ML=ML,
-#            ml_model_path=ml_model_path,
-#            ml_num_attempts=ml_num_attempts,
-#            ml_batch_size=ml_batch_size,
-#        )
-#
-#        if isinstance(peaks, Node):
-#            # add metadata
-#            peaks.name = name
-#            peaks.metadata = Metadata(
-#                name="gen_params",
-#                data={
-#                    #'gen_func' :
-#                    "template": template,
-#                    "filter_function": filter_function,
-#                    "corrPower": corrPower,
-#                    "sigma_dp": sigma_dp,
-#                    "sigma_cc": sigma_cc,
-#                    "subpixel": subpixel,
-#                    "upsample_factor": upsample_factor,
-#                    "minAbsoluteIntensity": minAbsoluteIntensity,
-#                    "minRelativeIntensity": minRelativeIntensity,
-#                    "relativeToPeak": relativeToPeak,
-#                    "minPeakSpacing": minPeakSpacing,
-#                    "edgeBoundary": edgeBoundary,
-#                    "maxNumPeaks": maxNumPeaks,
-#                    "CUDA": CUDA,
-#                    "CUDA_batched": CUDA_batched,
-#                    "distributed": distributed,
-#                    "ML": ML,
-#                    "ml_model_path": ml_model_path,
-#                    "ml_num_attempts": ml_num_attempts,
-#                    "ml_batch_size": ml_batch_size,
-#                },
-#            )
-#
-#            # add to tree
-#            if data is None:
-#                self.attach(peaks)
-#
-#        # return
-#        if returncalc:
-#            return peaks
-#
-#    # aliases
-#    find_disks = find_bragg = find_bragg_disks = find_bragg_scattering = find_bragg_vectors
-#
-#

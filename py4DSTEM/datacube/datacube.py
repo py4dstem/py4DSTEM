@@ -10,15 +10,18 @@ from scipy.ndimage import (
     gaussian_filter1d,
     gaussian_filter,)
 from typing import Optional, Union
+from matplotlib import cm
+from matplotlib.colors import is_color_like
 
 from emdfile import Array, Metadata, Node, Root, tqdmnd
 from py4DSTEM.data import Data, Calibration
+from py4DSTEM.visualize import show_image_grid
 from py4DSTEM.datacube.preprocess import Preprocessor
 from py4DSTEM.datacube.virtualimage import VirtualImager
 from py4DSTEM.datacube.virtualdiffraction import VirtualDiffractioner
 from py4DSTEM.datacube.diskdetection import BraggFinder
 from py4DSTEM.datacube.diskdetection import ProbeMaker
-
+from py4DSTEM.braggvectors import BraggVectors
 
 
 class DataCube(
@@ -78,6 +81,17 @@ class DataCube(
 
         # Bragg detection
         BraggFinder.__init__(self)
+
+        # selected patterns
+        self.selected_patterns = SelectedPatterns(self)
+
+        @property
+        def braggvectors(self):
+            return self._braggvectors
+        @braggvectors.setter
+        def braggvectors(self,x):
+            assert(isinstance(x,BraggVectors))
+            self._braggvectors = x
 
     def calibrate(self):
         """
@@ -241,6 +255,7 @@ class DataCube(
     qpixunit = Q_pixel_units
     rpixsize = R_pixel_size
     rpixunit = R_pixel_units
+
 
     def copy(self):
         """
@@ -1345,4 +1360,195 @@ class DataCube(
             qr = np.hypot(self.qxx_raw - vects.qx[idx], self.qyy_raw - vects.qy[idx])
             mask = np.logical_and(mask, qr > radius)
         return mask
+
+
+    def show_selected_patterns(
+        self,
+        HW = None,
+        size = (4,4),
+        peaks = False,
+        s_peaks = 1,
+        **kwargs
+    ):
+        """
+        Display the selected diffraction patterns, which can be set using the
+        `select_patterns` method.
+
+        Parameters
+        ----------
+        HW : (int,int) or None or int
+            The grid shape for display.  None autoselects, an integer fixes the
+            number of columns, and an (int,int) tuple sets the grid shape
+        size : 2-tuple
+            The size of each panel (matplotlib axis) in the grid
+        colors : color or length N list/tuple of colors
+            The color for each pattern
+        peaks : bool or length N list of QPoints
+            If False, does nothing. If True, looks for BraggVectors and if found
+            makes an overlay showing these peaks. If a length N list of QPoints,
+            makes an overlay showing these points.
+        s_peaks : number
+            Scale the size of the circles showing peaks
+        **kwargs
+            Additional arguments are passed to show_image_grid
+        """
+        # validate inputs
+        try:
+            pos = self.selected_patterns.positions
+            colors = self.selected_patterns.colors
+        except AttributeError:
+            raise Exception("no selected patterns found; try running .select_patterns")
+
+        # Determine grid shape
+        if HW is None or isinstance(HW,int):
+            cols = 4 if HW is None else HW
+            rows = int(np.ceil(self.selected_patterns.n/cols))
+        else:
+            try:
+                rows,cols = HW
+            except:
+                raise Exception(f"invalid value for `HW` {HW}")
+
+        # Handle `peaks` argument
+        if peaks:
+            # list of QPoints
+            if isinstance(peaks,(list,tuple)):
+                assert(len(peaks)==self.selected_patterns.n), "length of peaks list doesn't match number of patterns"
+            else:
+                # look for a BraggVectors instance
+                # populate a list from datacube positions
+                assert(self.braggvectors is not None), "no braggvectors instance found with this datacube"
+                vects = self.braggvectors
+                peaks = [vects.raw[pos[0,i],pos[1,i]] for i in range(self.selected_patterns.n)]
+
+        # Show
+        if not peaks:
+            show_image_grid(
+                get_ar = lambda i: self[pos[0,i],pos[1,i],:,:],
+                H = rows,
+                W = cols,
+                axsize = size,
+                get_bordercolor = lambda i: colors[i],
+                **kwargs
+            )
+        else:
+            show_image_grid(
+                get_ar = lambda i: self[pos[0,i],pos[1,i],:,:],
+                H = rows,
+                W = cols,
+                axsize = size,
+                get_bordercolor = lambda i: colors[i],
+                get_x = lambda i: peaks[i].data['qx'],
+                get_y = lambda i: peaks[i].data['qy'],
+                get_pointcolors = lambda i: colors[i],
+                open_circles = True,
+                scale = 700 * s_peaks,
+                **kwargs
+            )
+
+    def select_patterns(
+        self,
+        pos,
+        colors = None,
+        show = True,
+        **kwargs
+    ):
+        """
+        Set selected diffraction pattern positions.
+
+        Parameters
+        ----------
+        pos : (2,N) shaped array or 2-tuple of length N vectors (rx,ry)
+            The selected scan positions
+        colors : color or length N list/tuple of colors or None
+            A color identifying each pattern
+        show : bool
+            If True, show the patterns
+        **kwargs
+            Additional arguments are passed to show_selected_patterns
+        """
+        # Validate inputs
+        if isinstance(pos,np.ndarray):
+            assert(pos.shape == 2), f"invalid array shape {pos.shape}"
+        elif isinstance(pos,(list,tuple)):
+            try:
+                rx,ry = pos
+                pos = np.stack([rx,ry])
+            except:
+                raise Exception("invalid value for argument `pos`")
+        else:
+            raise Exception(f"invalid value for argument `pos` {pos}")
+
+        # Set selected positions
+        self.selected_patterns.positions = pos
+
+        # Set colors
+        if colors is None:
+            colors = [tuple(cm.rainbow(x)) for x in np.linspace(0,1,self.selected_patterns.n)]
+        self.selected_patterns.colors = colors
+
+        if show:
+            self.show_selected_patterns(**kwargs)
+            # TODO
+            #self.show_selected_positions()
+
+
+class SelectedPatterns:
+
+    def __init__(self, datacube):
+        self.datacube = datacube
+        self._n = 0
+        self._positions = None
+        self._colors = None
+
+    @property
+    def positions(self):
+        return self._positions
+    @positions.setter
+    def positions(self,x):
+        if isinstance(x,np.ndarray):
+            assert(x.shape[0] == 2), "invalid shape for array of selected pattern positions"
+            assert(x.ndim == 2), "invalid shape for array of seelcted pattern positions"
+            self._n = x.shape[1]
+            self._positions = x
+        else:
+            try:
+                rx,ry = x
+                self._positions = np.stack([rx,ry])
+                self._n = len(rx)
+            except:
+                raise Exception("invlaid value assigned to `patterns`")
+
+    @property
+    def n(self):
+        return self._n
+
+    @property
+    def colors(self):
+        return self._colors
+    @colors.setter
+    def colors(self,x):
+         if not isinstance(x,(list,tuple)):
+            assert(is_color_like(x)), f"invalid color {x}"
+            self._colors = [x for i in range(self.n)]
+         else:
+            assert(len(x) == self.n), "inconsistent number of colors and number of selected patterns"
+            self._colors = x
+
+    # aliases
+    p = positions
+    pos = positions
+    c = colors
+
+    def __repr__(self):
+        if self.n == 0:
+            s = "No patterns have been selected yet"
+        else:
+            s = f"There are {self.n} selected patterns at positions:"
+            s += f"\n"
+            s += f"{self.pos}"
+        return s
+
+
+
 
