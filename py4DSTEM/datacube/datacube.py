@@ -12,10 +12,12 @@ from scipy.ndimage import (
 from typing import Optional, Union
 from matplotlib import cm
 from matplotlib.colors import is_color_like
+from matplotlib.patches import Rectangle
+import matplotlib.pyplot as plt
 
 from emdfile import Array, Metadata, Node, Root, tqdmnd
 from py4DSTEM.data import Data, Calibration
-from py4DSTEM.visualize import show_image_grid
+from py4DSTEM.visualize import show, show_image_grid
 from py4DSTEM.datacube.preprocess import Preprocessor
 from py4DSTEM.datacube.virtualimage import VirtualImager
 from py4DSTEM.datacube.virtualdiffraction import VirtualDiffractioner
@@ -84,6 +86,9 @@ class DataCube(
 
         # selected patterns
         self.selected_patterns = SelectedPatterns(self)
+
+        # visualization defaults
+        self.visualization_defaults = VisualizationDefaults(self)
 
         @property
         def braggvectors(self):
@@ -1362,6 +1367,53 @@ class DataCube(
         return mask
 
 
+    def select_patterns(
+        self,
+        pos,
+        colors = None,
+        show = True,
+        **kwargs
+    ):
+        """
+        Set selected diffraction pattern positions.
+
+        Parameters
+        ----------
+        pos : (2,N) shaped array or 2-tuple of length N vectors (rx,ry)
+            The selected scan positions
+        colors : color or length N list/tuple of colors or None
+            A color identifying each pattern
+        show : bool
+            If True, show the patterns
+        **kwargs
+            Additional arguments are passed to show_selected_patterns
+        """
+        # Validate inputs
+        if isinstance(pos,np.ndarray):
+            assert(pos.shape == 2), f"invalid array shape {pos.shape}"
+        elif isinstance(pos,(list,tuple)):
+            try:
+                rx,ry = pos
+                pos = np.stack([rx,ry])
+            except:
+                raise Exception("invalid value for argument `pos`")
+        else:
+            raise Exception(f"invalid value for argument `pos` {pos}")
+
+        # Set selected positions
+        self.selected_patterns.positions = pos
+
+        # Set colors
+        if colors is None:
+            colors = [tuple(cm.rainbow(x)) for x in np.linspace(0,1,self.selected_patterns.n)]
+        self.selected_patterns.colors = colors
+
+        if show:
+            self.show_selected_patterns(**kwargs)
+            # TODO
+            #self.show_selected_positions()
+
+
     def show_selected_patterns(
         self,
         HW = None,
@@ -1446,52 +1498,80 @@ class DataCube(
                 **kwargs
             )
 
-    def select_patterns(
+
+    # TODO
+    def show_selected_positions(
         self,
-        pos,
-        colors = None,
-        show = True,
+        overlay_image = None,
+        overlay_box_linewidth = None,
+        returnfig = False,
         **kwargs
     ):
         """
-        Set selected diffraction pattern positions.
+        Display the selected positions overlaid over a realspace image.
+        Selected positions can be set with the `select_patterns` method.
 
         Parameters
         ----------
-        pos : (2,N) shaped array or 2-tuple of length N vectors (rx,ry)
-            The selected scan positions
-        colors : color or length N list/tuple of colors or None
-            A color identifying each pattern
-        show : bool
-            If True, show the patterns
+        overlay_image : 2D array
+            The realspace image to use as an overlay
+        overlay_box_linewidth : number
+            The linewidth for the overlay boxes showing the selected positions
+        returnfigv : bool
+            Toggle returning the figure
         **kwargs
-            Additional arguments are passed to show_selected_patterns
+            Additional visualization arguments to pass to show
         """
+        # Update visualization defaults
+        if overlay_image is not None:
+            self.visualization_defaults.image = overlay_image
+        if overlay_box_linewidth is not None:
+            self.visualization_defaults.box_lw = overlay_box_linewidth
         # Validate inputs
-        if isinstance(pos,np.ndarray):
-            assert(pos.shape == 2), f"invalid array shape {pos.shape}"
-        elif isinstance(pos,(list,tuple)):
-            try:
-                rx,ry = pos
-                pos = np.stack([rx,ry])
-            except:
-                raise Exception("invalid value for argument `pos`")
+        try:
+            im = self.visualization_defaults.image
+        except AttributeError:
+            raise Exception("No default overlay image found; try passing `overlay_image`")
+        try:
+            box_lw = self.visualization_defaults.box_lw
+        except AttributeError:
+            raise Exception("No box linewidth found; try passing `overlay_box_linewidth`")
+        try:
+            pos = self.selected_patterns.positions
+            colors = self.selected_patterns.colors
+        except AttributeError:
+            raise Exception("no selected patterns found; try running .select_patterns")
+
+        # show
+        fig,ax = show(im, **kwargs, returnfig=True)
+        # overlay rectangles
+        rects = []
+        for idx in range(self.selected_patterns.n):
+            c = colors[idx]
+            p = pos[:,idx]
+            rect = Rectangle(
+                (p[1]-0.5,p[0]-0.5),
+                1,
+                1,
+                color = c,
+                linewidth = box_lw,
+                fill = False
+            )
+            rects.append(rect)
+            ax.add_patch(rect)
+        # TODO - change to a patch collection
+
+        # return
+        if returnfig:
+            return fig,ax
         else:
-            raise Exception(f"invalid value for argument `pos` {pos}")
+            plt.show()
 
-        # Set selected positions
-        self.selected_patterns.positions = pos
 
-        # Set colors
-        if colors is None:
-            colors = [tuple(cm.rainbow(x)) for x in np.linspace(0,1,self.selected_patterns.n)]
-        self.selected_patterns.colors = colors
 
-        if show:
-            self.show_selected_patterns(**kwargs)
-            # TODO
-            #self.show_selected_positions()
 
+
+# Storage helper classes
 
 class SelectedPatterns:
 
@@ -1549,6 +1629,34 @@ class SelectedPatterns:
             s += f"{self.pos}"
         return s
 
+
+class VisualizationDefaults:
+
+    def __init__(self,datacube):
+        self.datacube = datacube
+        self.box_lw = 1
+
+    @property
+    def image(self):
+        return self._image
+    @image.setter
+    def image(self,x):
+        assert(isinstance(x,np.ndarray)), "Default image must be an array!"
+        assert(x.shape == self.datacube.Rshape), "Default image must be realspace shaped!"
+        self._image = x
+
+    @property
+    def diffraction(self):
+        return self._diffraction
+    @diffraction.setter
+    def diffraction(self,x):
+        assert(isinstance(x,np.ndarray)), "Default diffraction pattern must be an array!"
+        assert(x.shape == self.datacube.Qshape), "Default diffraction pattern must be diffraction space shaped!"
+        self._diffraction = x
+
+    #aliases
+    im = image
+    dp = diffraction
 
 
 
