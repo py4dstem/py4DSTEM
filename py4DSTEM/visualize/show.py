@@ -78,6 +78,7 @@ def show(
     show_fft=False,
     apply_hanning_window=True,
     show_cbar=False,
+    interpolation=None,
     **kwargs,
 ):
     """
@@ -615,7 +616,14 @@ def show(
 
         # Plot the image
         if not hist:
-            cax = ax.matshow(_ar, vmin=vmin, vmax=vmax, cmap=cm, **kwargs)
+            cax = ax.matshow(
+                _ar,
+                vmin=vmin,
+                vmax=vmax,
+                cmap=cm,
+                interpolation=interpolation,
+                **kwargs,
+            )
             if np.any(_ar.mask):
                 mask_display = np.ma.array(data=_ar.data, mask=~_ar.mask)
                 ax.matshow(
@@ -623,7 +631,7 @@ def show(
                 )
             if show_cbar:
                 ax_divider = make_axes_locatable(ax)
-                c_axis = ax_divider.append_axes("right", size="7%")
+                c_axis = ax_divider.append_axes("right", size="5%", pad="2.5%")
                 fig.colorbar(cax, cax=c_axis)
         # ...or, plot its histogram
         else:
@@ -806,6 +814,8 @@ def show(
             ax.set_yticks([])
 
     # Show or return
+    fig.tight_layout()
+
     returnval = []
     if returnfig:
         returnval.append((fig, ax))
