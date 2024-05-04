@@ -814,7 +814,6 @@ def show(
             ax.set_yticks([])
 
     # Show or return
-    fig.tight_layout()
 
     returnval = []
     if returnfig:
@@ -832,6 +831,7 @@ def show(
         returnval.append(cax)
     if len(returnval) == 0:
         if figax is None:
+            plt.tight_layout()
             plt.show()
         return
     elif (len(returnval)) == 1:
