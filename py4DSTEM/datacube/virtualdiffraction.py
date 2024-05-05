@@ -28,6 +28,7 @@ class VirtualDiffractioner:
         verbose=True,
         name="virtual_diffraction",
         returncalc=True,
+        update_default_diffraction=False,
     ):
         """
         Function to calculate virtual diffraction images.
@@ -257,6 +258,11 @@ class VirtualDiffractioner:
 
         # add to the tree
         self.attach(ans)
+
+        # update default diffraction
+        if self.visualization_defaults.dp is None or \
+            update_default_diffraction == True:
+            self.visualization_defaults.dp = ans.data
 
         # return
         if returncalc:

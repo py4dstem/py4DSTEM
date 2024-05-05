@@ -35,6 +35,7 @@ class VirtualImager:
         return_mask=False,
         name="virtual_image",
         returncalc=True,
+        update_default_image=False,
         test_config=False,
     ):
         """
@@ -280,6 +281,11 @@ class VirtualImager:
         # add to the tree
         self.attach(ans)
 
+        # update default image
+        if self.visualization_defaults.im is None or \
+            update_default_image == True:
+            self.visualization_defaults.im = ans.data
+
         # return
         if returncalc:
             return ans
@@ -290,7 +296,7 @@ class VirtualImager:
         self,
         mode,
         geometry,
-        data=None,
+        overlay_data=None,
         centered=None,
         calibrated=None,
         shift_center=False,
@@ -362,40 +368,12 @@ class VirtualImager:
             "mask",
         ), "check doc strings for supported modes"
 
-        # data
-        if data is None:
-            image = None
-            keys = ["dp_mean", "dp_max", "dp_median"]
-            for k in keys:
-                try:
-                    image = self.tree(k)
-                    break
-                except:
-                    pass
-            if image is None:
-                image = self[0, 0]
-        elif isinstance(data, np.ndarray):
-            assert (
-                data.shape == self.Qshape
-            ), f"Can't position a detector over an image with a shape that is different \
-                from diffraction space.  Diffraction space in this dataset has shape {self.Qshape} \
-                but the image passed has shape {data.shape}"
-            image = data
-        elif isinstance(data, DiffractionSlice):
-            assert (
-                data.shape == self.Qshape
-            ), f"Can't position a detector over an image with a shape that is different \
-                from diffraction space.  Diffraction space in this dataset has shape {self.Qshape} \
-                but the image passed has shape {data.shape}"
-            image = data.data
-        elif isinstance(data, tuple):
-            rx, ry = data[:2]
-            image = self[rx, ry]
+        # get overlay data
+        if overlay_data is None:
+            assert(self.visualization_defaults.dp is not None), "No diffraction pattern for overlay found - pass one with `overlay_data` or set one"
         else:
-            raise Exception(
-                f"Invalid argument passed to `data`. Expected None or np.ndarray or \
-                    tuple, not type {type(data)}"
-            )
+            self.visualization_defaults.dp = overlay_data
+        image = self.visualization_defaults.dp
 
         # shift center
         if shift_center is None:

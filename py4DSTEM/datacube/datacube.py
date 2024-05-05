@@ -1409,9 +1409,10 @@ class DataCube(
         self.selected_patterns.colors = colors
 
         if show:
-            self.show_selected_patterns(**kwargs)
-            # TODO
-            #self.show_selected_positions()
+            fig,axs = self.show_selected_patterns(returnfig=True, **kwargs)
+            hsize = fig.bbox_inches.bounds[2]
+            fsize = (hsize, hsize*self.Rshape[1]/self.Rshape[0])
+            self.show_selected_positions(figsize=fsize)
 
 
     def show_selected_patterns(
@@ -1420,6 +1421,7 @@ class DataCube(
         size = (4,4),
         peaks = False,
         s_peaks = 1,
+        returnfig = False,
         **kwargs
     ):
         """
@@ -1441,6 +1443,8 @@ class DataCube(
             makes an overlay showing these points.
         s_peaks : number
             Scale the size of the circles showing peaks
+        returnfig : bool
+            Toggle returning the figure
         **kwargs
             Additional arguments are passed to show_image_grid
         """
@@ -1475,16 +1479,17 @@ class DataCube(
 
         # Show
         if not peaks:
-            show_image_grid(
+            fig,axs = show_image_grid(
                 get_ar = lambda i: self[pos[0,i],pos[1,i],:,:],
                 H = rows,
                 W = cols,
                 axsize = size,
                 get_bordercolor = lambda i: colors[i],
+                returnfig = True,
                 **kwargs
             )
         else:
-            show_image_grid(
+            fig,axs = show_image_grid(
                 get_ar = lambda i: self[pos[0,i],pos[1,i],:,:],
                 H = rows,
                 W = cols,
@@ -1495,11 +1500,17 @@ class DataCube(
                 get_pointcolors = lambda i: colors[i],
                 open_circles = True,
                 scale = 700 * s_peaks,
+                returnfig = True,
                 **kwargs
             )
 
+        # Return
+        if returnfig:
+            return fig,axs
+        else:
+            plt.show()
 
-    # TODO
+
     def show_selected_positions(
         self,
         overlay_image = None,
@@ -1517,7 +1528,7 @@ class DataCube(
             The realspace image to use as an overlay
         overlay_box_linewidth : number
             The linewidth for the overlay boxes showing the selected positions
-        returnfigv : bool
+        returnfig : bool
             Toggle returning the figure
         **kwargs
             Additional visualization arguments to pass to show
@@ -1635,6 +1646,8 @@ class VisualizationDefaults:
     def __init__(self,datacube):
         self.datacube = datacube
         self.box_lw = 1
+        self._image = None
+        self._diffraction = None
 
     @property
     def image(self):
