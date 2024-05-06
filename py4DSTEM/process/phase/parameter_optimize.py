@@ -389,43 +389,16 @@ class PtychographyOptimizer:
                 ax = fig.add_subplot(spec[1])
                 skopt_plot_convergence(self._skopt_result, ax=ax)
 
-        else:
-            if plot_convergence:
-                figsize = kwargs.pop("figsize", (4 * ndims, 4 * (ndims + 0.5)))
-                spec = GridSpec(
-                    nrows=ndims + 1,
-                    ncols=ndims,
-                    height_ratios=[2] * ndims + [1],
-                    hspace=0.15,
-                )
-            else:
-                figsize = kwargs.pop("figsize", (4 * ndims, 4 * ndims))
-                spec = GridSpec(nrows=ndims, ncols=ndims, hspace=0.15)
+            spec.tight_layout(fig)
 
+        else:
             if plot_evaluations:
-                axs = skopt_plot_evaluations(self._skopt_result)
+                skopt_plot_evaluations(self._skopt_result)
             elif plot_objective:
                 cmap = kwargs.pop("cmap", "magma")
-                axs = skopt_plot_objective(self._skopt_result, cmap=cmap, **kwargs)
+                skopt_plot_objective(self._skopt_result, cmap=cmap, **kwargs)
             elif plot_convergence:
                 skopt_plot_convergence(self._skopt_result)
-                return self
-
-            fig = axs[0, 0].figure
-            fig.set_size_inches(figsize)
-            for i in range(ndims):
-                for j in range(ndims):
-                    ax = axs[i, j]
-                    ax.remove()
-                    ax.figure = fig
-                    fig.add_axes(ax)
-                    ax.set_subplotspec(spec[i, j])
-
-            if plot_convergence:
-                ax = fig.add_subplot(spec[ndims, :])
-                skopt_plot_convergence(self._skopt_result, ax=ax)
-
-        spec.tight_layout(fig)
 
         return self
 
