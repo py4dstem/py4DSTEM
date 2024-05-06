@@ -848,6 +848,7 @@ def plot_orientation_plan(
     bragg_peaks = self.generate_diffraction_pattern(
         orientation_matrix=self.orientation_rotation_matrices[index_plot, :],
         sigma_excitation_error=self.orientation_kernel_size / 3,
+        precession_angle_degrees = self.orientation_precession_angle_degrees,
     )
 
     plot_diffraction_pattern(

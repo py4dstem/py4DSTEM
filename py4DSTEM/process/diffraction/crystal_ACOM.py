@@ -113,7 +113,11 @@ def orientation_plan(
     # Store inputs
     self.accel_voltage = np.asarray(accel_voltage)
     self.orientation_kernel_size = np.asarray(corr_kernel_size)
-    self.orientation_precession_angle_degrees = np.asarray(precession_angle_degrees)
+    if precession_angle_degrees is None:
+        self.orientation_precession_angle_degrees = None
+    else:
+        self.orientation_precession_angle_degrees = np.asarray(precession_angle_degrees) 
+        self.orientation_precession_angle = np.deg2rad(np.asarray(precession_angle_degrees))
     if tol_peak_delete is None:
         self.orientation_tol_peak_delete = self.orientation_kernel_size * 0.5
     else:
@@ -764,45 +768,67 @@ def orientation_plan(
                 self.orientation_shell_index >= 0,
             )
 
-            # in-plane rotation angle
-            phi = np.arctan2(g[1, :], g[0, :])
-
             # calculate intensity of spots
-            # if precession_angle_degrees is None:
-            #     Ig = np.exp(sg**2/(-2*sigma_excitation_error**2))
-            # else:
-            #     pass
+            if precession_angle_degrees is None:
+                Ig = np.exp(sg[keep]**2/(-2*sigma_excitation_error**2))
+            else:
+                # precession extension
+                prec = np.cos(np.linspace(0,2*np.pi,90,endpoint=False))
+                dsg = np.tan(self.orientation_precession_angle) * np.sum(g[:2,keep]**2,axis=0)
+                Ig = np.mean(np.exp((sg[keep,None] + dsg[:,None]*prec[None,:])**2 \
+                    / (-2*sigma_excitation_error**2)), axis = 1)
+
+            # in-plane rotation angle
+            phi = np.arctan2(g[1, keep], g[0, keep])
+            phi_ind = phi / self.orientation_gamma[1]  # step size of annular bins
+            phi_floor = np.floor(phi_ind).astype('int')
+            dphi = phi_ind - phi_floor
+
+            # write intensities into orientation plan slice
+            radial_inds = self.orientation_shell_index[keep]
+            self.orientation_ref[a0, radial_inds, phi_floor] += \
+                (1-dphi) * \
+                np.power(self.struct_factors_int[keep] * Ig, intensity_power) * \
+                np.power(self.orientation_shell_radii[radial_inds], radial_power)
+            self.orientation_ref[a0, radial_inds, np.mod(phi_floor+1,self.orientation_in_plane_steps)] += \
+                dphi * \
+                np.power(self.struct_factors_int[keep] * Ig, intensity_power) * \
+                np.power(self.orientation_shell_radii[radial_inds], radial_power)
 
 
-            # Loop over all peaks
-            for a1 in np.arange(self.g_vec_all.shape[1]):
-                ind_radial = self.orientation_shell_index[a1]
+            # # Loop over all peaks
+            # for a1 in np.arange(self.g_vec_all.shape[1]):
+            #     if keep[a1]:
 
-                if keep[a1] and ind_radial >= 0:
-                    # 2D orientation plan
-                    self.orientation_ref[a0, ind_radial, :] += (
-                        np.power(self.orientation_shell_radii[ind_radial], radial_power)
-                        * np.power(self.struct_factors_int[a1], intensity_power)
-                        * np.maximum(
-                            1
-                            - np.sqrt(
-                                sg[a1] ** 2
-                                + (
-                                    (
-                                        np.mod(
-                                            self.orientation_gamma - phi[a1] + np.pi,
-                                            2 * np.pi,
-                                        )
-                                        - np.pi
-                                    )
-                                    * self.orientation_shell_radii[ind_radial]
-                                )
-                                ** 2
-                            )
-                            / self.orientation_kernel_size,
-                            0,
-                        )
-                    )
+
+            # for a1 in np.arange(self.g_vec_all.shape[1]):
+            #     ind_radial = self.orientation_shell_index[a1]
+
+            #     if keep[a1] and ind_radial >= 0:
+            #         # 2D orientation plan
+            #         self.orientation_ref[a0, ind_radial, :] += (
+            #             np.power(self.orientation_shell_radii[ind_radial], radial_power)
+            #             * np.power(self.struct_factors_int[a1], intensity_power)
+            #             * np.maximum(
+            #                 1
+            #                 - np.sqrt(
+            #                     sg[a1] ** 2
+            #                     + (
+            #                         (
+            #                             np.mod(
+            #                                 self.orientation_gamma - phi[a1] + np.pi,
+            #                                 2 * np.pi,
+            #                             )
+            #                             - np.pi
+            #                         )
+            #                         * self.orientation_shell_radii[ind_radial]
+            #                     )
+            #                     ** 2
+            #                 )
+            #                 / self.orientation_kernel_size,
+            #                 0,
+            #             )
+            #         )
 
             orientation_ref_norm = np.sqrt(np.sum(self.orientation_ref[a0, :, :] ** 2))
             if orientation_ref_norm > 0:
