@@ -27,9 +27,10 @@ def orientation_plan(
     angle_step_in_plane: float = 2.0,
     accel_voltage: float = 300e3,
     corr_kernel_size: float = 0.08,
+    sigma_excitation_error: float = 0.01,
+    precession_angle_degrees = None,
     radial_power: float = 1.0,
     intensity_power: float = 0.25,  # New default intensity power scaling
-    precession_angle_degrees = None,
     calculate_correlation_array=True,
     tol_peak_delete=None,
     tol_distance: float = 0.01,
@@ -68,13 +69,17 @@ def orientation_plan(
     accel_voltage (float):        
         Accelerating voltage for electrons [Volts]
     corr_kernel_size (float):      
-        Correlation kernel size length. The size of the overlap kernel between the measured Bragg peaks and diffraction library Bragg peaks. [1/Angstroms]
+        Correlation kernel size length. The size of the overlap kernel between the 
+        measured Bragg peaks and diffraction library Bragg peaks. [1/Angstroms]
+    sigma_excitation_error (float):
+        The out of plane excitation error tolerance. [1/Angstroms]
+    precession_angle_degrees (float)
+        Tilt angle of illuminaiton cone in degrees for precession electron diffraction (PED).
+    
     radial_power (float):          
         Power for scaling the correlation intensity as a function of the peak radius
     intensity_power (float):       
         Power for scaling the correlation intensity as a function of the peak intensity
-    precession_angle_degrees (float)
-        Tilt angle of illuminaiton cone in degrees for precession electron diffraction (PED).
     calculate_correlation_array (bool):     
         Set to false to skip calculating the correlation array.
         This is useful when we only want the angular range / rotation matrices.
@@ -108,6 +113,7 @@ def orientation_plan(
     # Store inputs
     self.accel_voltage = np.asarray(accel_voltage)
     self.orientation_kernel_size = np.asarray(corr_kernel_size)
+    self.orientation_precession_angle_degrees = np.asarray(precession_angle_degrees)
     if tol_peak_delete is None:
         self.orientation_tol_peak_delete = self.orientation_kernel_size * 0.5
     else:
@@ -739,24 +745,34 @@ def orientation_plan(
         ):
             # reciprocal lattice spots and excitation errors
             g = self.orientation_rotation_matrices[a0, :, :].T @ self.g_vec_all
-            if precession_angle_degrees is None:
-                sg = self.excitation_errors(g)
-            else:
-                sg = np.min(
-                    np.abs(
-                        self.excitation_errors(
-                            g,
-                            precession_angle_degrees = precession_angle_degrees,
-                        ),
-                    ),
-                    axis = 1,
-                )
+            # if precession_angle_degrees is None:
+            sg = self.excitation_errors(g)
+            # else:
+            #     sg = np.min(
+            #         np.abs(
+            #             self.excitation_errors(
+            #                 g,
+            #                 precession_angle_degrees = precession_angle_degrees,
+            #             ),
+            #         ),
+            #         axis = 1,
+            #     )
 
             # Keep only points that will contribute to this orientation plan slice
-            keep = np.abs(sg) < self.orientation_kernel_size
+            keep = np.logical_and(
+                np.abs(sg) < self.orientation_kernel_size,
+                self.orientation_shell_index >= 0,
+            )
 
             # in-plane rotation angle
             phi = np.arctan2(g[1, :], g[0, :])
+
+            # calculate intensity of spots
+            # if precession_angle_degrees is None:
+            #     Ig = np.exp(sg**2/(-2*sigma_excitation_error**2))
+            # else:
+            #     pass
+
 
             # Loop over all peaks
             for a1 in np.arange(self.g_vec_all.shape[1]):
