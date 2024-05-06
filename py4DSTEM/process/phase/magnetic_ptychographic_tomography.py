@@ -239,6 +239,7 @@ class MagneticPtychographicTomography(
         force_reciprocal_sampling: float = None,
         object_fov_mask: np.ndarray = True,
         crop_patterns: bool = False,
+        store_initial_arrays: bool = True,
         device: str = None,
         clear_fft_cache: bool = None,
         max_batch_size: int = None,
@@ -295,6 +296,8 @@ class MagneticPtychographicTomography(
             If None, probe_overlap intensity is thresholded
         crop_patterns: bool
             if True, crop patterns to avoid wrap around of patterns when centering
+        store_initial_arrays: bool
+            If True, preprocesed object and probe arrays are stored allowing reset=True in reconstruct.
         device: str, optional
             if not none, overwrites self._device to set device preprocess will be perfomed on.
         clear_fft_cache: bool, optional
@@ -534,8 +537,10 @@ class MagneticPtychographicTomography(
         else:
             self._object = obj
 
-        self._object_initial = self._object.copy()
-        self._object_type_initial = self._object_type
+        if store_initial_arrays:
+            self._object_initial = self._object.copy()
+            self._object_type_initial = self._object_type
+
         self._object_shape = self._object.shape[-2:]
         self._num_voxels = self._object.shape[1]
 
@@ -565,9 +570,13 @@ class MagneticPtychographicTomography(
 
         # initialize probe
         self._probes_all = []
-        self._probes_all_initial = []
-        self._probes_all_initial_aperture = []
         list_Q = isinstance(self._probe_init, (list, tuple))
+
+        if store_initial_arrays:
+            self._probes_all_initial = []
+            self._probes_all_initial_aperture = []
+        else:
+            self._probes_all_initial_aperture = [None] * self._num_measurements
 
         for index in range(self._num_measurements):
             _probe, self._semiangle_cutoff = self._initialize_probe(
@@ -579,8 +588,9 @@ class MagneticPtychographicTomography(
             )
 
             self._probes_all.append(_probe)
-            self._probes_all_initial.append(_probe.copy())
-            self._probes_all_initial_aperture.append(xp.abs(xp.fft.fft2(_probe)))
+            if store_initial_arrays:
+                self._probes_all_initial.append(_probe.copy())
+                self._probes_all_initial_aperture.append(xp.abs(xp.fft.fft2(_probe)))
 
         del self._probe_init
 

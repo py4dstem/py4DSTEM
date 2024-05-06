@@ -278,6 +278,7 @@ class MixedstateMultislicePtychography(
         force_reciprocal_sampling: float = None,
         object_fov_mask: np.ndarray = None,
         crop_patterns: bool = False,
+        store_initial_arrays: bool = True,
         device: str = None,
         clear_fft_cache: bool = None,
         max_batch_size: int = None,
@@ -347,6 +348,8 @@ class MixedstateMultislicePtychography(
             If None, probe_overlap intensity is thresholded
         crop_patterns: bool
             if True, crop patterns to avoid wrap around of patterns when centering
+        store_initial_arrays: bool
+            If True, preprocesed object and probe arrays are stored allowing reset=True in reconstruct.
         device: str, optional
             If not None, overwrites self._device to set device preprocess will be perfomed on.
         clear_fft_cache: bool, optional
@@ -516,8 +519,9 @@ class MixedstateMultislicePtychography(
             self._object_type,
         )
 
-        self._object_initial = self._object.copy()
-        self._object_type_initial = self._object_type
+        if store_initial_arrays:
+            self._object_initial = self._object.copy()
+            self._object_type_initial = self._object_type
         self._object_shape = self._object.shape[-2:]
 
         # center probe positions
@@ -553,8 +557,11 @@ class MixedstateMultislicePtychography(
             device=self._device,
         )._evaluate_ctf()
 
-        self._probe_initial = self._probe.copy()
-        self._probe_initial_aperture = xp.abs(xp.fft.fft2(self._probe))
+        if store_initial_arrays:
+            self._probe_initial = self._probe.copy()
+            self._probe_initial_aperture = xp.abs(xp.fft.fft2(self._probe))
+        else:
+            self._probe_initial_aperture = None
 
         # precompute propagator arrays
         self._propagator_arrays = self._precompute_propagator_arrays(
