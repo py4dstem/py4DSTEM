@@ -1,15 +1,18 @@
 # Analysis scripts for amorphous 4D-STEM data using polar transformations.
 
+from typing import Tuple
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
 from scipy.ndimage import gaussian_filter
+from sklearn.decomposition import PCA
 
 from emdfile import tqdmnd
 
 
 def calculate_radial_statistics(
     self,
+    mask_realspace=None,
     plot_results_mean=False,
     plot_results_var=False,
     figsize=(8, 4),
@@ -91,16 +94,30 @@ def calculate_radial_statistics(
         unit=" probe positions",
         disable=not progress_bar,
     ):
-        self.radial_all[rx, ry] = np.mean(self.data[rx, ry], axis=0)
-        self.radial_all_std[rx, ry] = np.sqrt(
-            np.mean((self.data[rx, ry] - self.radial_all[rx, ry][None]) ** 2, axis=0)
+        if mask_realspace is None or mask_realspace[rx, ry]:
+            self.radial_all[rx, ry] = np.mean(self.data[rx, ry], axis=0)
+            self.radial_all_std[rx, ry] = np.sqrt(
+                np.mean(
+                    (self.data[rx, ry] - self.radial_all[rx, ry][None]) ** 2, axis=0
+                )
+            )
+
+    if mask_realspace is None:
+        self.radial_mean = np.mean(self.radial_all, axis=(0, 1))
+        self.radial_var = np.mean(
+            (self.radial_all - self.radial_mean[None, None]) ** 2, axis=(0, 1)
         )
 
-    self.radial_mean = np.mean(self.radial_all, axis=(0, 1))
-    self.radial_var = np.mean(
-        (self.radial_all - self.radial_mean[None, None]) ** 2, axis=(0, 1)
-    )
+    else:
+        self.radial_mean = np.sum(self.radial_all, axis=(0, 1)) / np.sum(mask_realspace)
+        self.radial_var = np.zeros_like(self.radial_mean)
+        for rx in range(self._datacube.shape[0]):
+            for ry in range(self._datacube.shape[1]):
+                if mask_realspace[rx, ry]:
+                    self.radial_var += (self.radial_all[rx, ry] - self.radial_mean) ** 2
+        self.radial_var /= np.sum(mask_realspace)
 
+    # Compute normalized variance
     self.radial_var_norm = np.copy(self.radial_var)
     sub = self.radial_mean > 0.0
     self.radial_var_norm[sub] /= self.radial_mean[sub] ** 2
@@ -924,3 +941,78 @@ def scattering_model(k2, *coefs):
     # int1*np.exp(k2/(-2*sigma1**2))
 
     return int_model
+
+
+def background_pca(
+    self,
+    pca_index: int = 0,
+    n_components: int = None,
+    intensity_range: Tuple[float, float] = (0, 1),
+    normalize_mean: bool = True,
+    normalize_std: bool = True,
+    plot_result: bool = True,
+    plot_coef: bool = False,
+):
+    """
+    Generate PCA decompositions of the background signal.
+    This function must be run after `calculate_radial_statistics`.
+
+    Parameters
+    --------
+    pca_index: int
+        index of PCA component and loadings to return
+    intensity_range: tuple (float, float)
+        intensity range for plotting
+    normalize_mean: bool
+        if True, normalize mean of radial data before PCA
+    normalize_std: bool
+        if True, normalize standard deviation of radial data before PCA
+    plot_results: bool
+        if True, plot results
+    plot_coef: bool
+        if True, plot radial PCA component selected
+
+    Returns
+    --------
+    im_pca: np,array
+        rgb image array
+    coef_pca: np.array
+        radial PCA component selected
+    """
+
+    # PCA decomposition
+    shape = self.radial_all.shape
+    A = np.reshape(self.radial_all, (shape[0] * shape[1], shape[2]))
+    if normalize_mean:
+        A -= np.mean(A, axis=0)
+    if normalize_std:
+        A /= np.std(A, axis=0)
+
+    pca = PCA(n_components=np.maximum(pca_index + 1, 2))
+    pca.fit(A)
+
+    components = pca.components_
+    loadings = pca.transform(A)
+
+    # output image data
+    sig_pca = np.reshape(loadings[:, pca_index], shape[0:2])
+    sig_pca -= intensity_range[0]
+    sig_pca /= intensity_range[1] - intensity_range[0]
+    sig_pca = np.clip(sig_pca, 0, 1)
+    im_pca = np.tile(sig_pca[:, :, None], (1, 1, 3))
+
+    # output PCA coefficient
+    coef_pca = np.vstack((self.radial_bins, components[pca_index, :])).T
+
+    if plot_result:
+        fig, ax = plt.subplots(figsize=(8, 8))
+        ax.imshow(
+            im_pca,
+            vmin=0,
+            vmax=5,
+        )
+    if plot_coef:
+        fig, ax = plt.subplots(figsize=(8, 4))
+        ax.plot(coef_pca[:, 0], coef_pca[:, 1])
+
+    return im_pca, coef_pca
