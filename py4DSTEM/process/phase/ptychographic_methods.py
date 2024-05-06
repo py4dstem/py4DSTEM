@@ -277,6 +277,11 @@ class ObjectNDMethodsMixin:
             else:
                 self.error_iterations = []
                 self._exit_waves = None
+        else:
+            # reset=False first start
+            if not hasattr(self, "error"):
+                self.error_iterations = []
+                self._exit_waves = None
 
     @property
     def object_fft(self):
@@ -3408,6 +3413,14 @@ class MultipleMeasurementsMethodsMixin:
 
             # first start
             else:
+                self.error_iterations = []
+                if use_projection_scheme:
+                    self._exit_waves = [None] * len(self._probes_all)
+                else:
+                    self._exit_waves = None
+        else:
+            # reset=False first start
+            if not hasattr(self, "error"):
                 self.error_iterations = []
                 if use_projection_scheme:
                     self._exit_waves = [None] * len(self._probes_all)
