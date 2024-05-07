@@ -29,8 +29,9 @@ def orientation_plan(
     corr_kernel_size: float = 0.08,
     sigma_excitation_error: float = 0.02,
     precession_angle_degrees = None,
-    radial_power: float = 1.0,
-    intensity_power: float = 0.25,  # New default intensity power scaling
+    power_radial: float = 1.0,
+    power_intensity: float = 0.25, 
+    power_intensity_experiment: float = 0.25,  
     calculate_correlation_array=True,
     tol_peak_delete=None,
     tol_distance: float = 0.01,
@@ -76,10 +77,12 @@ def orientation_plan(
     precession_angle_degrees (float)
         Tilt angle of illuminaiton cone in degrees for precession electron diffraction (PED).
     
-    radial_power (float):          
+    power_radial (float):          
         Power for scaling the correlation intensity as a function of the peak radius
-    intensity_power (float):       
-        Power for scaling the correlation intensity as a function of the peak intensity
+    power_intensity (float):       
+        Power for scaling the correlation intensity as a function of simulated peak intensity
+    power_intensity_experiment (float):       
+        Power for scaling the correlation intensity as a function of experimental peak intensity
     calculate_correlation_array (bool):     
         Set to false to skip calculating the correlation array.
         This is useful when we only want the angular range / rotation matrices.
@@ -136,8 +139,9 @@ def orientation_plan(
     self.wavelength = electron_wavelength_angstrom(self.accel_voltage)
 
     # store the radial and intensity scaling to use later for generating test patterns
-    self.orientation_radial_power = radial_power
-    self.orientation_intensity_power = intensity_power
+    self.orientation_power_radial = power_radial
+    self.orientation_power_intensity = power_intensity
+    self.orientation_power_intensity_experiment = power_intensity_experiment
 
     # Calculate the ratio between coarse and fine refinement
     if angle_coarse_zone_axis is not None:
@@ -788,12 +792,12 @@ def orientation_plan(
             radial_inds = self.orientation_shell_index[keep]
             self.orientation_ref[a0, radial_inds, phi_floor] += \
                 (1-dphi) * \
-                np.power(self.struct_factors_int[keep] * Ig, intensity_power) * \
-                np.power(self.orientation_shell_radii[radial_inds], radial_power)
+                np.power(self.struct_factors_int[keep] * Ig, power_intensity) * \
+                np.power(self.orientation_shell_radii[radial_inds], power_radial)
             self.orientation_ref[a0, radial_inds, np.mod(phi_floor+1,self.orientation_in_plane_steps)] += \
                 dphi * \
-                np.power(self.struct_factors_int[keep] * Ig, intensity_power) * \
-                np.power(self.orientation_shell_radii[radial_inds], radial_power)
+                np.power(self.struct_factors_int[keep] * Ig, power_intensity) * \
+                np.power(self.orientation_shell_radii[radial_inds], power_radial)
 
 
             # # Loop over all peaks
@@ -807,8 +811,8 @@ def orientation_plan(
             #     if keep[a1] and ind_radial >= 0:
             #         # 2D orientation plan
             #         self.orientation_ref[a0, ind_radial, :] += (
-            #             np.power(self.orientation_shell_radii[ind_radial], radial_power)
-            #             * np.power(self.struct_factors_int[a1], intensity_power)
+            #             np.power(self.orientation_shell_radii[ind_radial], power_radial)
+            #             * np.power(self.struct_factors_int[a1], power_intensity)
             #             * np.maximum(
             #                 1
             #                 - np.sqrt(
@@ -1034,7 +1038,11 @@ def match_single_pattern(
 
             if np.any(sub):
                 im_polar[ind_radial, :] = np.sum(
-                    np.maximum(
+                    np.power(
+                        np.maximum(intensity[sub, None], 0.0),
+                        self.orientation_power_intensity_experiment,
+                    )
+                    * np.maximum(
                         1
                         - np.sqrt(
                             dqr[sub, None] ** 2
@@ -1058,10 +1066,10 @@ def match_single_pattern(
                     axis=0,
                 )
                 # im_polar[ind_radial, :] = np.sum(
-                #     np.power(radius, self.orientation_radial_power)
+                #     np.power(radius, self.orientation_power_radial)
                 #     * np.power(
                 #         np.maximum(intensity[sub, None], 0.0),
-                #         self.orientation_intensity_power,
+                #         self.orientation_power_intensity,
                 #     )
                 #     * np.maximum(
                 #         1
