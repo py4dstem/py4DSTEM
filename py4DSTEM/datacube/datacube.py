@@ -22,7 +22,7 @@ from py4DSTEM.datacube.preprocess import Preprocessor
 from py4DSTEM.datacube.virtualimage import VirtualImager
 from py4DSTEM.datacube.virtualdiffraction import VirtualDiffractioner
 from py4DSTEM.datacube.diskdetection import BraggFinder
-from py4DSTEM.datacube.diskdetection import ProbeMaker
+from py4DSTEM.datacube.diskdetection import Probe, ProbeMaker
 from py4DSTEM.braggvectors import BraggVectors
 
 
@@ -581,7 +581,6 @@ class DataCube(
             the vacuum probe
         """
         from py4DSTEM.process.utils import get_shifted_ar, get_shift
-        from py4DSTEM.braggvectors import Probe
 
         # parse region to use
         if ROI is None:

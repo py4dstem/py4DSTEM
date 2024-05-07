@@ -6,6 +6,7 @@ from emdfile import tqdmnd, Metadata
 from py4DSTEM.utils import get_maxima_2D, get_cross_correlation_FT
 from py4DSTEM.data import QPoints
 from py4DSTEM.braggvectors import BraggVectors
+from py4DSTEM.datacube.diskdetection import Probe
 
 
 class BraggFinder(object):
@@ -18,6 +19,7 @@ class BraggFinder(object):
     ):
         self.bragg_detection_defaults = {
             'template' : None,
+            'data' : 'all',
             'preprocess' : False,
             'corr_power' : 1,
             'corr_sigma' : 0,
@@ -43,6 +45,7 @@ class BraggFinder(object):
     def update_defaults(
         self,
         template=None,
+        data=None,
         preprocess=None,
         corr_power=None,
         corr_sigma=None,
@@ -65,6 +68,7 @@ class BraggFinder(object):
         # add new defaults to a dict
         new_defaults = {}
         if template is not None: new_defaults['template'] = template
+        if data is not None: new_defaults['data'] = data
         if preprocess is not None: new_defaults['preprocess'] = preprocess
         if corr_power is not None: new_defaults['corr_power'] = corr_power
         if corr_sigma is not None: new_defaults['corr_sigma'] = corr_sigma
@@ -362,11 +366,14 @@ class BraggFinder(object):
             passed, probe.kernel is used (and must be populated). If False is
             passed, cross correlation is skipped and the maxima are taken
             directly from the (possibly preprocessed) diffraction data
-        data : None or 's' or (int,int) or Qshaped 2D array
+        data : None or string or (int,int) or Qshaped 2D array
             Specifies the input data and return value.
-            If None, use the full datacube and return a BraggVectors instance.
-            If 's', use the scan positions selected using .select_patterns and
-            and return a list of QPoints instance
+            If None, use the current default
+            If a string, must be in ('s', 'selected', 'a', 'all').
+            Either 's' or 'selected' runs the scan positions selected using
+            .select_patterns and return a list of QPoints instance.
+            Either 'a' or 'all' runs on the full dataset and returns a
+            BraggVectors instance.
             If a 2-tuple (int,int), use the diffraction pattern at this scan
             position and return a QPoints instance.
             If a 2D boolean numpy array (Rshaped), runs on the diffraction
@@ -504,6 +511,7 @@ class BraggFinder(object):
 
         self.update_defaults(
             template=template,
+            data=data,
             preprocess=preprocess,
             corr_power=corr_power,
             corr_sigma=corr_sigma,
@@ -525,6 +533,7 @@ class BraggFinder(object):
         )
         params = self.bragg_detection_defaults
         template = params['template']
+        data = params['data']
         preprocess = params['preprocess']
         corr_power = params['corr_power']
         corr_sigma = params['corr_sigma']
@@ -545,7 +554,7 @@ class BraggFinder(object):
         show_peaks_params = params['show_peaks_params']
 
         # ensure there is a template or no cross-correlation has been selected
-        if params['template'] is None:
+        if template is None:
             raise Exception('Please set the cross-correlation template with the `template` input. To skip cross-correlation, set it to `False`.')
         # use device?
         if device:
@@ -555,21 +564,29 @@ class BraggFinder(object):
             raise Exception("ML isn't implemented here yet, please use find_Bragg_disks")
 
 
-        ## Set up metamethods (preprocess, crosscorr, threshold)
+        ## Set up methods (preprocess, crosscorr, threshold)
 
         # preprocess
-        preprocess_options = [
-            "bs",
-            "radial_background_subtraction",
-            "la",
-            "local_averaging"
+        preprocess_options_rbs = [
+            'radial_background_subtraction',
+            'background_subtraction',
+            'rbs',
+            'bs'
         ]
+        preprocess_options_la = [
+            'local_averaging',
+            'local_average',
+            'la'
+        ]
+        preprocess_options = \
+            preprocess_options_rbs + \
+            preprocess_options_la
         # validate inputs
         if isinstance(preprocess,list):
             for el in preprocess:
                 assert(isinstance(el,str) or callable(el))
                 if isinstance(el,str):
-                    assert(el in preprocess_options)
+                    assert(el in preprocess_options), f"preprocessing options must be functions or strings from the options {preprocess_options}; received input {el}"
         # define the method
         f = None
         def _preprocess(dp,x,y):
@@ -584,7 +601,14 @@ class BraggFinder(object):
             elif isinstance(preprocess,dict):
                 nonlocal f
                 if f is None:
-                    f = preprocess.pop('f')
+                    assert(np.logical_xor(
+                        'f' in preprocess.keys(),
+                        'function' in preprocess.keys()
+                        )), "`preprocess` dict must contain exactly one of the keys 'f', 'function'"
+                    if 'f' in preprocess.keys():
+                        f = preprocess.pop('f')
+                    else:
+                        f = preprocess.pop('function')
                 # if x+y are keys in preprocess, the callable f should
                 # recieve scan positions 'x' and 'y' as inputs
                 if 'x' in preprocess.keys() and 'y' in preprocess.keys():
@@ -596,10 +620,10 @@ class BraggFinder(object):
                     if callable(el):
                         dp = el(dp)
                     else:
-                        if el in ('bs','radial_background_subtraction'):
+                        if el in preprocess_options_rbs:
                             dp = self.get_radial_bksb_dp(x,y,sigma=0)
                             pass
-                        elif el in ('la','local_averaging'):
+                        elif el in preprocess_options_la:
                             dp = self.get_local_ave_dp(x,y)
                         else:
                             raise Exception(f"Unrecognized preprocess option {el}")
@@ -660,10 +684,17 @@ class BraggFinder(object):
 
         # prepare the template
         if template is not False:
-            template_FT = np.conj(np.fft.fft2(template))
+            if isinstance(template,Probe):
+                assert(np.any(template.kernel)), "template.kernel is not populated - try running template.get_kernel"
+                template_FT = np.conj(np.fft.fft2(template.kernel))
+            else:
+                template_FT = np.conj(np.fft.fft2(template))
 
         # prepare the data and output container for...
-        if data is None:
+        data_options_selected = ['s','selected']
+        data_options_all = ['a','all']
+        data_options = data_options_selected + data_options_all
+        if data in data_options_all:
             # ...all indices
             rxs = np.tile(np.arange(self.R_Nx),self.R_Ny)
             rys = np.tile(np.arange(self.R_Ny),(self.R_Nx,1)).T.reshape(self.R_N)
@@ -673,16 +704,16 @@ class BraggFinder(object):
                 self.Qshape,
                 calibration=self.calibration
             )
-        elif data == 's':
-            assert(hasattr(self,'_selected_patterns')), "no diffraction patterns selected - use .select_patterns"
-            data = self.selected_patterns
-            rxs,rys = data[0,:],data[1,:]
+        elif data in data_options_selected:
+            assert(self.selected_patterns.n > 0), "no diffraction patterns selected - use .select_patterns"
+            data_pos = self.selected_patterns.pos
+            rxs,rys = data_pos[0,:],data_pos[1,:]
             N = len(rxs)
             vectors = []
             if _return_cc:
                 ccs = []
         else:
-            raise Exception(f"Invalid specification of data, {data}")
+            raise Exception(f"`data` must be in {data_options}; recived value {data}")
 
 
         # Compute
@@ -707,7 +738,7 @@ class BraggFinder(object):
 
             # store results
             peaks = QPoints(peaks)
-            if data is None:
+            if data in data_options_all:
                 vectors._v_uncal[rx,ry] = peaks
             else:
                 vectors.append(peaks)
@@ -715,7 +746,7 @@ class BraggFinder(object):
                     ccs.append(cc)
 
         # Attach metadata, link datacube
-        if data is None:
+        if data in data_options_all:
             vectors.metadata = Metadata(
                 name="gen_params",
                 data={
@@ -726,7 +757,7 @@ class BraggFinder(object):
             self.braggvectors = vectors
 
         # Show
-        if data is not None and show_peaks:
+        if data not in data_options_all and show_peaks:
             self.show_selected_patterns(
                 peaks = vectors,
                 **show_peaks_params,

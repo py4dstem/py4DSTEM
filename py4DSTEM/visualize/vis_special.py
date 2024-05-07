@@ -267,20 +267,25 @@ def show_kernel(kernel, R, L, W, figsize=(12, 6), returnfig=False, **kwargs):
     R is the kernel plot's window size.
     L and W are the length and width of the lineprofile.
     """
+    # If input is a Probe instance, get the kernel
+    from py4DSTEM.datacube.diskdetection import Probe
+    if isinstance(kernel,Probe):
+        kernel = kernel.kernel
+    # Get line profiles
     lineprofile_1 = np.concatenate(
         [np.sum(kernel[-L:, :W], axis=1), np.sum(kernel[:L, :W], axis=1)]
     )
     lineprofile_2 = np.concatenate(
         [np.sum(kernel[:W, -L:], axis=0), np.sum(kernel[:W, :L], axis=0)]
     )
-
+    # prepare image
     im_kernel = np.vstack(
         [
             np.hstack([kernel[-int(R) :, -int(R) :], kernel[-int(R) :, : int(R)]]),
             np.hstack([kernel[: int(R), -int(R) :], kernel[: int(R), : int(R)]]),
         ]
     )
-
+    # show
     fig, axs = plt.subplots(1, 2, figsize=figsize)
     axs[0].matshow(im_kernel, cmap="gray")
     axs[0].plot(np.ones(2 * R) * R, np.arange(2 * R), c="r")
@@ -288,7 +293,7 @@ def show_kernel(kernel, R, L, W, figsize=(12, 6), returnfig=False, **kwargs):
 
     axs[1].plot(np.arange(len(lineprofile_1)), lineprofile_1, c="r")
     axs[1].plot(np.arange(len(lineprofile_2)), lineprofile_2, c="c")
-
+    # return
     if not returnfig:
         plt.show()
         return
