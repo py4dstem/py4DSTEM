@@ -27,7 +27,7 @@ def orientation_plan(
     angle_step_in_plane: float = 2.0,
     accel_voltage: float = 300e3,
     corr_kernel_size: float = 0.08,
-    sigma_excitation_error: float = 0.01,
+    sigma_excitation_error: float = 0.02,
     precession_angle_degrees = None,
     radial_power: float = 1.0,
     intensity_power: float = 0.25,  # New default intensity power scaling
@@ -1034,12 +1034,7 @@ def match_single_pattern(
 
             if np.any(sub):
                 im_polar[ind_radial, :] = np.sum(
-                    np.power(radius, self.orientation_radial_power)
-                    * np.power(
-                        np.maximum(intensity[sub, None], 0.0),
-                        self.orientation_intensity_power,
-                    )
-                    * np.maximum(
+                    np.maximum(
                         1
                         - np.sqrt(
                             dqr[sub, None] ** 2
@@ -1062,6 +1057,35 @@ def match_single_pattern(
                     ),
                     axis=0,
                 )
+                # im_polar[ind_radial, :] = np.sum(
+                #     np.power(radius, self.orientation_radial_power)
+                #     * np.power(
+                #         np.maximum(intensity[sub, None], 0.0),
+                #         self.orientation_intensity_power,
+                #     )
+                #     * np.maximum(
+                #         1
+                #         - np.sqrt(
+                #             dqr[sub, None] ** 2
+                #             + (
+                #                 (
+                #                     np.mod(
+                #                         self.orientation_gamma[None, :]
+                #                         - qphi[sub, None]
+                #                         + np.pi,
+                #                         2 * np.pi,
+                #                     )
+                #                     - np.pi
+                #                 )
+                #                 * radius
+                #             )
+                #             ** 2
+                #         )
+                #         / self.orientation_kernel_size,
+                #         0,
+                #     ),
+                #     axis=0,
+                # )
 
         # Determine the RMS signal from im_polar for the first match.
         # Note that we use scaling slightly below RMS so that following matches
