@@ -834,6 +834,8 @@ def orientation_plan(
             #             )
             #         )
 
+            # normalization
+            # self.orientation_ref[a0, :, :] -= np.mean(self.orientation_ref[a0, :, :])
             orientation_ref_norm = np.sqrt(np.sum(self.orientation_ref[a0, :, :] ** 2))
             if orientation_ref_norm > 0:
                 self.orientation_ref[a0, :, :] /= orientation_ref_norm
@@ -1094,6 +1096,10 @@ def match_single_pattern(
                 #     ),
                 #     axis=0,
                 # )
+
+
+            # # normalization
+            # self.im_polar -= np.mean(im_polar)
 
         # Determine the RMS signal from im_polar for the first match.
         # Note that we use scaling slightly below RMS so that following matches
