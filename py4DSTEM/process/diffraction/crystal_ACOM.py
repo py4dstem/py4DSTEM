@@ -1039,34 +1039,62 @@ def match_single_pattern(
             sub = dqr < self.orientation_kernel_size
 
             if np.any(sub):
-                im_polar[ind_radial, :] = np.sum(
+
+                dist = im_polar[ind_radial, :] = np.sum(
                     np.power(
                         np.maximum(intensity[sub, None], 0.0),
                         self.orientation_power_intensity_experiment,
                     )
-                    * np.maximum(
-                        1
-                        - np.sqrt(
-                            dqr[sub, None] ** 2
-                            + (
-                                (
-                                    np.mod(
-                                        self.orientation_gamma[None, :]
-                                        - qphi[sub, None]
-                                        + np.pi,
-                                        2 * np.pi,
-                                    )
-                                    - np.pi
+                    * np.exp(
+                        (dqr[sub, None] ** 2
+                        + (
+                            (
+                                np.mod(
+                                    self.orientation_gamma[None, :]
+                                    - qphi[sub, None]
+                                    + np.pi,
+                                    2 * np.pi,
                                 )
-                                * radius
+                                - np.pi
                             )
-                            ** 2
+                            * radius
                         )
-                        / self.orientation_kernel_size,
-                        0,
+                        ** 2)
+                        / (-2*self.orientation_kernel_size**2)
                     ),
                     axis=0,
                 )
+
+                # im_polar[ind_radial, :] = np.sum(
+                #     np.power(
+                #         np.maximum(intensity[sub, None], 0.0),
+                #         self.orientation_power_intensity_experiment,
+                #     )
+                #     * np.maximum(
+                #         1
+                #         - np.sqrt(
+                #             dqr[sub, None] ** 2
+                #             + (
+                #                 (
+                #                     np.mod(
+                #                         self.orientation_gamma[None, :]
+                #                         - qphi[sub, None]
+                #                         + np.pi,
+                #                         2 * np.pi,
+                #                     )
+                #                     - np.pi
+                #                 )
+                #                 * radius
+                #             )
+                #             ** 2
+                #         )
+                #         / self.orientation_kernel_size,
+                #         0,
+                #     ),
+                #     axis=0,
+                # )
+
+
                 # im_polar[ind_radial, :] = np.sum(
                 #     np.power(radius, self.orientation_power_radial)
                 #     * np.power(
