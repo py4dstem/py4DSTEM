@@ -23,7 +23,7 @@ class BraggFinder(object):
             'preprocess' : False,
             'corr_power' : 1,
             'corr_sigma' : 0,
-            'sigma' : 2,
+            'sigma' : 0,
             'min_intensity' : 0,
             'min_spacing' : 5,
             'subpixel' : 'poly',
@@ -633,6 +633,7 @@ class BraggFinder(object):
         def _cross_correlate(dp):
             """ cc = _cross_correlate(dp)
             """
+            dp = dp.astype(np.float32)
             if corr_sigma > 0:
                 dp = gaussian_filter(dp, corr_sigma)
             if template is not False:
@@ -686,9 +687,16 @@ class BraggFinder(object):
         if template is not False:
             if isinstance(template,Probe):
                 assert(np.any(template.kernel)), "template.kernel is not populated - try running template.get_kernel"
-                template_FT = np.conj(np.fft.fft2(template.kernel))
+                template_FT = np.conj(np.fft.fft2(template.kernel)).astype(np.complex64)
             else:
-                template_FT = np.conj(np.fft.fft2(template))
+                template_FT = np.conj(np.fft.fft2(template)).astype(np.complex64)
+
+
+        # use device?
+        if device:
+            #raise Exception("Hardware acceleration isn't implemented here yet, please use find_Bragg_disks")
+            # goto cuda
+            return
 
         # prepare the data and output container for...
         data_options_selected = ['s','selected']
