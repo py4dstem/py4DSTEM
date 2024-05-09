@@ -46,7 +46,7 @@ class Probe(DiffractionSlice, Data):
         )
 
         # initialize metadata params
-        self.metadata = Metadata(name='params')
+        self.metadata = Metadata(name="params")
         self.alpha = None
         self.origin = None
 
@@ -55,6 +55,7 @@ class Probe(DiffractionSlice, Data):
     @property
     def probe(self):
         return self.get_slice("probe").data
+
     @probe.setter
     def probe(self, x):
         assert x.shape == (self.data.shape[1:])
@@ -63,6 +64,7 @@ class Probe(DiffractionSlice, Data):
     @property
     def kernel(self):
         return self.get_slice("kernel").data
+
     @kernel.setter
     def kernel(self, x):
         assert x.shape == (self.data.shape[1:])
@@ -70,17 +72,19 @@ class Probe(DiffractionSlice, Data):
 
     @property
     def alpha(self):
-        return self.metadata['params']['alpha']
+        return self.metadata["params"]["alpha"]
+
     @alpha.setter
     def alpha(self, x):
-        self.metadata['params']['alpha'] = x
+        self.metadata["params"]["alpha"] = x
 
     @property
     def origin(self):
-        return self.metadata['params']['origin']
+        return self.metadata["params"]["origin"]
+
     @origin.setter
     def origin(self, x):
-        self.metadata['params']['origin'] = x
+        self.metadata["params"]["origin"] = x
 
     # read
     @classmethod
@@ -278,7 +282,7 @@ class Probe(DiffractionSlice, Data):
         ans = r, x0, y0
         if data is None:
             self.alpha = r
-            self.origin = (x0,y0)
+            self.origin = (x0, y0)
             try:
                 self.calibration.set_probe_param(ans)
             except AttributeError:
@@ -288,28 +292,19 @@ class Probe(DiffractionSlice, Data):
                 pass
 
         if data is None and zero_vacuum:
-            self.zero_vacuum( alpha_max=alpha_max)
+            self.zero_vacuum(alpha_max=alpha_max)
 
         # show result
         if plot:
-            show(
-                im,
-                circle={
-                    'center' : (x0,y0),
-                    'R' : r,
-                    'fill' : True,
-                    'alpha' : 0.36
-                }
-            )
+            show(im, circle={"center": (x0, y0), "R": r, "fill": True, "alpha": 0.36})
 
         # return
         if returncalc:
             return ans
 
-
     def zero_vacuum(
         self,
-        alpha_max = 1.2,
+        alpha_max=1.2,
     ):
         """
         Sets pixels outside of the probe's central disk to zero.
@@ -326,19 +321,19 @@ class Probe(DiffractionSlice, Data):
             from the origin are set to zero
         """
         # validate inputs
-        assert(self.alpha is not None), "no probe semiconvergence angle found; try running `Probe.measure_disk`"
-        assert(self.origin is not None), "no probe origin found; try running `Probe.measure_disk`"
+        assert (
+            self.alpha is not None
+        ), "no probe semiconvergence angle found; try running `Probe.measure_disk`"
+        assert (
+            self.origin is not None
+        ), "no probe origin found; try running `Probe.measure_disk`"
         # make a mask
-        qyy,qxx = np.meshgrid(
-            np.arange(self.shape[1]),
-            np.arange(self.shape[0])
-        )
-        qrr = np.hypot(qxx-self.origin[0],qyy-self.origin[1])
-        mask = qrr < self.alpha*alpha_max
+        qyy, qxx = np.meshgrid(np.arange(self.shape[1]), np.arange(self.shape[0]))
+        qrr = np.hypot(qxx - self.origin[0], qyy - self.origin[1])
+        mask = qrr < self.alpha * alpha_max
         # zero the vacuum
         self.probe *= mask
         pass
-
 
     # Kernel generation methods
 
