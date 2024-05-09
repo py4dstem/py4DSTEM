@@ -116,6 +116,7 @@ def orientation_plan(
     # Store inputs
     self.accel_voltage = np.asarray(accel_voltage)
     self.orientation_kernel_size = np.asarray(corr_kernel_size)
+    self.orientation_sigma_excitation_error = sigma_excitation_error
     if precession_angle_degrees is None:
         self.orientation_precession_angle_degrees = None
     else:
@@ -837,6 +838,7 @@ def orientation_plan(
             # normalization
             # self.orientation_ref[a0, :, :] -= np.mean(self.orientation_ref[a0, :, :])
             orientation_ref_norm = np.sqrt(np.sum(self.orientation_ref[a0, :, :] ** 2))
+            # orientation_ref_norm = np.sum(self.orientation_ref[a0, :, :])
             if orientation_ref_norm > 0:
                 self.orientation_ref[a0, :, :] /= orientation_ref_norm
 
@@ -1327,6 +1329,7 @@ def match_single_pattern(
                             np.clip(
                                 np.sum(
                                     self.orientation_vecs
+                                    # self.orientation_vecs * np.array([1,-1,-1])[None,:]
                                     * self.orientation_vecs[inds_previous[a0], :],
                                     axis=1,
                                 ),
@@ -1625,7 +1628,8 @@ def match_single_pattern(
             bragg_peaks_fit = self.generate_diffraction_pattern(
                 orientation,
                 ind_orientation=match_ind,
-                sigma_excitation_error=self.orientation_kernel_size,
+                sigma_excitation_error = self.orientation_sigma_excitation_error,
+                precession_angle_degrees = self.orientation_precession_angle_degrees,
             )
 
             remove = np.zeros_like(qx, dtype="bool")
