@@ -1042,7 +1042,7 @@ def match_single_pattern(
 
             if np.any(sub):
 
-                dist = im_polar[ind_radial, :] = np.sum(
+                im_polar[ind_radial, :] = np.sum(
                     np.power(
                         np.maximum(intensity[sub, None], 0.0),
                         self.orientation_power_intensity_experiment,
@@ -1128,8 +1128,8 @@ def match_single_pattern(
                 # )
 
 
-            # # normalization
-            # self.im_polar -= np.mean(im_polar)
+            # normalization
+            # im_polar -= np.mean(im_polar)
 
         # Determine the RMS signal from im_polar for the first match.
         # Note that we use scaling slightly below RMS so that following matches
