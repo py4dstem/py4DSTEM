@@ -36,6 +36,7 @@ from py4DSTEM import visualize
 from py4DSTEM.visualize import show, show_complex
 
 # Analysis classes
+from py4DSTEM.tomography.tomography import Tomography
 from py4DSTEM.datacube import DataCube
 from py4DSTEM.datacube import VirtualImage, VirtualDiffraction
 from py4DSTEM.datacube.diskdetection import Probe
