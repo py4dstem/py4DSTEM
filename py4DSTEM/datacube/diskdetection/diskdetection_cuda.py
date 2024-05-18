@@ -1,6 +1,5 @@
 """
 Functions for finding Braggdisks using cupy
-
 """
 
 import numpy as np
@@ -16,6 +15,7 @@ from py4DSTEM import PointList, PointListArray
 from py4DSTEM.braggvectors.kernels import kernels
 
 
+# TODO update input parameters
 def find_Bragg_disks_CUDA(
     datacube,
     probe,
@@ -125,6 +125,8 @@ def find_Bragg_disks_CUDA(
         blocks = (DP.shape[0],)
         threads = (DP.shape[1],)
 
+    # TODO remove un-batched code
+    # TODO (maybe) - allow batch size specification
     t0 = time()
     if batching:
         # compute the batch size based on available VRAM:
@@ -155,6 +157,7 @@ def find_Bragg_disks_CUDA(
             for subbatch_idx in range(this_batch_size):
                 patt_idx = batch_idx * batch_size + subbatch_idx
                 rx, ry = np.unravel_index(patt_idx, (datacube.R_Nx, datacube.R_Ny))
+                # TODO update to include _preprocess from BraggFinder
                 batched_subcube[subbatch_idx, :, :] = cp.array(
                     (
                         datacube.data[rx, ry, :, :]
@@ -165,6 +168,7 @@ def find_Bragg_disks_CUDA(
                 )
 
             # Perform the FFT and multiplication by probe_kernel on the batched array
+            # TODO update with option to skip c.c. and with corr_sigma
             batched_crosscorr = (
                 cufft.fft2(batched_subcube, overwrite_x=True)
                 * probe_kernel_FT[None, :, :]
@@ -179,6 +183,7 @@ def find_Bragg_disks_CUDA(
                 ccc = cp.abs(subFFT) ** corrPower * cp.exp(1j * cp.angle(subFFT))
                 cc = cp.maximum(cp.real(cp.fft.ifft2(ccc)), 0)
 
+                # TODO remove this method and move relevant code (get_maxima_2D) here
                 _find_Bragg_disks_single_DP_FK_CUDA(
                     None,
                     None,
@@ -205,6 +210,7 @@ def find_Bragg_disks_CUDA(
         del batched_subcube, batched_crosscorr, subFFT, cc, ccc
         cp.get_default_memory_pool().free_all_blocks()
 
+    # TODO remove this clause
     else:
         # Loop over all diffraction patterns
         for Rx, Ry in tqdmnd(
@@ -242,6 +248,7 @@ def find_Bragg_disks_CUDA(
     return peaks
 
 
+# TODO remove this function, move functionality above into work loop
 def _find_Bragg_disks_single_DP_FK_CUDA(
     DP,
     probe_kernel_FT,
@@ -326,7 +333,7 @@ def _find_Bragg_disks_single_DP_FK_CUDA(
     Returns:
         peaks                (PointList) the Bragg peak positions and correlation intensities
     """
-
+    # TODO remove this clause
     # if we are in batching mode, cc and ccc will be provided. else, compute it
     if ccc is None:
         # Perform any prefiltering
@@ -345,6 +352,7 @@ def _find_Bragg_disks_single_DP_FK_CUDA(
             )
             cc = cp.maximum(cp.real(cp.fft.ifft2(ccc)), 0)
 
+    # TODO this will stay
     # Find the maxima
     maxima_x, maxima_y, maxima_int = get_maxima_2D(
         cc,
@@ -363,6 +371,7 @@ def _find_Bragg_disks_single_DP_FK_CUDA(
         threads=threads,
     )
 
+    # TODO update this syntax
     # Make peaks PointList
     if peaks is None:
         coords = [("qx", float), ("qy", float), ("intensity", float)]
@@ -374,7 +383,7 @@ def _find_Bragg_disks_single_DP_FK_CUDA(
     else:
         return peaks
 
-
+# TODO remove
 def get_cross_correlation_fk(ar, fourierkernel, corrPower=1, returnval="cc"):
     """
     Calculates the cross correlation of ar with fourierkernel.
@@ -397,6 +406,7 @@ def get_cross_correlation_fk(ar, fourierkernel, corrPower=1, returnval="cc"):
         return cp.real(cp.fft.ifft2(ccc))
 
 
+# TODO move to utils and combine with fn of same name
 def get_maxima_2D(
     ar,
     sigma=0,
