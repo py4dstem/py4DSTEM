@@ -850,9 +850,7 @@ class MixedstatePtychography(
         else:
             max_batch_size = self._num_diffraction_patterns
 
-        if detector_fourier_mask is None:
-            detector_fourier_mask = xp.ones(self._amplitudes[0].shape)
-        else:
+        if detector_fourier_mask is not None:
             detector_fourier_mask = xp.asarray(detector_fourier_mask)
 
         # main loop

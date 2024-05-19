@@ -1578,14 +1578,16 @@ class ObjectNDProbeMethodsMixin:
                 xp=xp,
             )
 
-        fourier_overlap *= fourier_mask
+        if fourier_mask is not None:
+            fourier_overlap *= fourier_mask
+
         farfield_amplitudes = self._return_farfield_amplitudes(fourier_overlap)
         error = xp.sum(xp.abs(amplitudes - farfield_amplitudes) ** 2)
         fourier_modified_overlap = amplitudes * xp.exp(1j * xp.angle(fourier_overlap))
 
-        fourier_modified_overlap = (
-            fourier_modified_overlap - fourier_overlap
-        ) * fourier_mask
+        fourier_modified_overlap = fourier_modified_overlap - fourier_overlap
+        if fourier_mask is not None:
+            fourier_modified_overlap *= fourier_mask
 
         # resample back to region_of_interest_shape, note: this needs to happen in reciprocal-space
         if self._resample_exit_waves:
@@ -2742,7 +2744,8 @@ class ObjectNDProbeMixedMethodsMixin:
                 xp=xp,
             )
 
-        fourier_overlap *= fourier_mask
+        if fourier_mask is not None:
+            fourier_overlap *= fourier_mask
         farfield_amplitudes = self._return_farfield_amplitudes(fourier_overlap)
         error = xp.sum(xp.abs(amplitudes - farfield_amplitudes) ** 2)
 
@@ -2751,9 +2754,9 @@ class ObjectNDProbeMixedMethodsMixin:
 
         fourier_modified_overlap = amplitude_modification[:, None] * fourier_overlap
 
-        fourier_modified_overlap = (
-            fourier_modified_overlap - fourier_overlap
-        ) * fourier_mask
+        fourier_modified_overlap = fourier_modified_overlap - fourier_overlap
+        if fourier_mask is not None:
+            fourier_modified_overlap *= fourier_mask
 
         # resample back to region_of_interest_shape, note: this needs to happen in reciprocal-space
         if self._resample_exit_waves:
