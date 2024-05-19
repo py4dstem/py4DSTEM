@@ -54,7 +54,7 @@ class Tomography:
         force_com_transpose=None,
         datacube_to_solve_rotation=0,
         force_centering_shifts: Sequence[Tuple] = None,
-        centering_mask: Union[np.ndarray, Sequence[np.ndarray]] = None,  # pass as mask
+        centering_mask_real_space: Union[np.ndarray, Sequence[np.ndarray]] = None,
         r=None,
         rscale=1.2,
         fast_center=False,
@@ -76,8 +76,6 @@ class Tomography:
 
         for a0 in range(self._num_datacubes):
 
-            
-
             if force_centering_shifts:
                 qx0_fit = force_centering_shifts[datacube_number][0]
                 qy0_fit = force_centering_shifts[datacube_number][1]
@@ -87,8 +85,8 @@ class Tomography:
                     datacube_number=a0,
                     r=r,
                     rscale=rscale,
-                    fast_center = fast_center,
-                    centering_mask=centering_mask,
+                    fast_center=fast_center,
+                    centering_mask_real_space=centering_mask_real_space,
                     fitfunction=fitfunction,
                     robust=robust,
                     robust_steps=robust_steps,
@@ -111,39 +109,39 @@ class Tomography:
         r,
         rscale,
         fast_center,
-        centering_mask,
+        centering_mask_real_space,
         fitfunction,
         robust,
         robust_steps,
         robust_thresh,
     ):
         """ """
-        if centering_mask is not None:
-            if type(centering_mask) is np.ndarray:
-                mask = centering_mask
+        if centering_mask_real_space is not None:
+            if type(centering_mask_real_space) is np.ndarray:
+                mask_real_space = centering_mask_real_space
             else:
-                mask = centering_mask[datacube_number]
+                mask_real_space = centering_mask_real_space[datacube_number]
         else:
-            mask = None
+            mask_real_space = None
 
-        
         (qx0, qy0, _) = get_origin(
             self._datacubes[datacube_number],
             r=r,
             rscale=rscale,
-            mask=centering_mask,
+            mask=mask_real_space,
             fast_center=fast_center,
+            verbose=False,
         )
 
         (qx0_fit, qy0_fit, qx0_res, qy0_res) = fit_origin(
             (qx0, qy0),
-            mask=mask,
+            mask=mask_real_space,
             fitfunction=fitfunction,
             returnfitp=False,
             robust=robust,
             robust_steps=robust_steps,
             robust_thresh=robust_thresh,
-        )   
+        )
 
         return qx0_fit, qy0_fit
 
@@ -167,10 +165,7 @@ class Tomography:
 
         return datacube_centered
 
-    def _align_and_ravel_diffraction_patterns(
-        self, 
-        datacube_centered
-    ):
+    def _align_and_ravel_diffraction_patterns(self, datacube_centered):
 
         xp = self._xp
 
@@ -422,7 +417,7 @@ class Tomography:
 
         test_object = xp_storage.zeros((sx, sy, sz, sq, sq, sq))
 
-        diffraction_cloud = self.make_diffraction_cloud(sq, q_max, [0, 0, 0])
+        diffraction_cloud = self._make_diffraction_cloud(sq, q_max, [0, 0, 0])
 
         test_object[:, :, :, 0, 0, 0] = diffraction_cloud.sum()
 

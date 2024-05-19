@@ -215,6 +215,7 @@ def get_origin(
     dp_max=None,
     mask=None,
     fast_center=False,
+    verbose=True,
 ):
     """
     Find the origin for all diffraction patterns in a datacube, assuming (a) there is no
@@ -264,6 +265,7 @@ def get_origin(
             desc="Finding origins",
             unit="DP",
             unit_scale=True,
+            disable=not verbose,
         ):
             dp = datacube.data[rx, ry, :, :]
             _qx0, _qy0 = np.unravel_index(
@@ -291,6 +293,7 @@ def get_origin(
             desc="Finding origins",
             unit="DP",
             unit_scale=True,
+            disable=not verbose,
         ):
             if mask[rx, ry]:
                 dp = datacube.data[rx, ry, :, :]
