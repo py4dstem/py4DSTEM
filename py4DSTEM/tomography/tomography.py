@@ -4,10 +4,12 @@ import numpy as np
 from py4DSTEM.datacube import DataCube
 from py4DSTEM.process.diffraction import Crystal
 from py4DSTEM.process.phase.utils import copy_to_device
+from py4DSTEM.process.calibration import get_origin, fit_origin
+from py4DSTEM.utils import get_shifted_ar
 
 from scipy.spatial.transform import Rotation as R
 
-from typing import Sequence
+from typing import Sequence, Union, Tuple
 
 try:
     import cupy as cp
@@ -44,6 +46,148 @@ class Tomography:
 
         self.set_device(device, clear_fft_cache)
         self.set_storage(storage)
+
+    def preproces(
+        self,
+        diffraction_intensities_shape=None,
+        force_com_rotation=None,
+        force_com_transpose=None,
+        datacube_to_solve_rotation=0,
+        force_centering_shifts: Sequence[Tuple] = None,
+        centering_mask: Union[np.ndarray, Sequence[np.ndarray]] = None,  # pass as mask
+        r=None,
+        rscale=1.2,
+        fast_center=False,
+        fitfunction="plane",
+        robust=False,
+        robust_steps=3,
+        robust_thresh=2,
+    ):
+        """ """
+        self._num_datacubes = len(self._datacubes)
+
+        ## diffraction_intensities_shape
+
+        # if force_transpose is not None and force_com_rotation is not None:
+        #     dc = self._datacubes[datacube_to_solve_rotation]
+        #     _solve_for_center_of_mass_relative_rotation():
+
+        self._diffraction_patterns = []
+
+        for a0 in range(self._num_datacubes):
+
+            
+
+            if force_centering_shifts:
+                qx0_fit = force_centering_shifts[datacube_number][0]
+                qy0_fit = force_centering_shifts[datacube_number][1]
+            else:
+                ### TODO these functions need device!
+                qx0_fit, qy0_fit = self._solve_for_diffraction_pattern_centering(
+                    datacube_number=a0,
+                    r=r,
+                    rscale=rscale,
+                    fast_center = fast_center,
+                    centering_mask=centering_mask,
+                    fitfunction=fitfunction,
+                    robust=robust,
+                    robust_steps=robust_steps,
+                    robust_thresh=robust_thresh,
+                )
+
+            datacube_centered = self._center_diffraction_patterns(
+                datacube_number=a0,
+                qx0_fit=qx0_fit,
+                qy0_fit=qy0_fit,
+            )
+
+            self._align_and_ravel_diffraction_patterns(datacube_centered)
+
+    # def _solve_for_center_of_mass_relative_rotation():
+
+    def _solve_for_diffraction_pattern_centering(
+        self,
+        datacube_number,
+        r,
+        rscale,
+        fast_center,
+        centering_mask,
+        fitfunction,
+        robust,
+        robust_steps,
+        robust_thresh,
+    ):
+        """ """
+        if centering_mask is not None:
+            if type(centering_mask) is np.ndarray:
+                mask = centering_mask
+            else:
+                mask = centering_mask[datacube_number]
+        else:
+            mask = None
+
+        
+        (qx0, qy0, _) = get_origin(
+            self._datacubes[datacube_number],
+            r=r,
+            rscale=rscale,
+            mask=centering_mask,
+            fast_center=fast_center,
+        )
+
+        (qx0_fit, qy0_fit, qx0_res, qy0_res) = fit_origin(
+            (qx0, qy0),
+            mask=mask,
+            fitfunction=fitfunction,
+            returnfitp=False,
+            robust=robust,
+            robust_steps=robust_steps,
+            robust_thresh=robust_thresh,
+        )   
+
+        return qx0_fit, qy0_fit
+
+    def _center_diffraction_patterns(
+        self,
+        datacube_number,
+        qx0_fit,
+        qy0_fit,
+    ):
+        """ """
+        datacube_centered = self._datacubes[datacube_number].copy()
+        for rx in range(datacube_centered.Rshape[0]):
+            for ry in range(datacube_centered.Rshape[1]):
+                datacube_centered.data[rx, ry] = get_shifted_ar(
+                    datacube_centered.data[rx, ry],
+                    -qx0_fit[rx, ry],
+                    -qy0_fit[rx, ry],
+                    bilinear=True,
+                    device="cpu",
+                )
+
+        return datacube_centered
+
+    def _align_and_ravel_diffraction_patterns(
+        self, 
+        datacube_centered
+    ):
+
+        xp = self._xp
+
+        s = datacube_centered.data.shape
+
+        diffraction_patterns = datacube_centered.data.reshape((s[0] * s[1], s[2], s[3]))
+
+        del datacube_centered
+
+        diffraction_patterns += xp.rot90(diffraction_patterns, 2, axes=(-1, -2))
+        s_cutoff = int(xp.ceil(s[-1] / 2))
+        diffraction_patterns = diffraction_patterns[:, :, 0:s_cutoff]
+        diffraction_patterns = diffraction_patterns.reshape(
+            (s[0] * s[1], s[2] * s_cutoff)
+        )
+
+        self._diffraction_patterns.append(diffraction_patterns)
 
     def forward(
         self,
@@ -288,13 +432,13 @@ class Tomography:
             h = xp_storage.random.randint(r, sz - r, size=1)
             t = xp_storage.random.randint(0, 360, size=3)
 
-            cloud = xp_storage.asarray(self.make_diffraction_cloud(sq, q_max, t))
+            cloud = xp_storage.asarray(self._make_diffraction_cloud(sq, q_max, t))
 
             test_object[s1 - r : s1 + r, s2 - r : s2 + r, h[0] - r : h[0] + r] = cloud
 
         return test_object
 
-    def make_diffraction_cloud(
+    def _make_diffraction_cloud(
         self,
         sq,
         q_max,
@@ -320,7 +464,7 @@ class Tomography:
         """
         xp = self._xp
 
-        gold = self.make_gold(q_max)
+        gold = self._make_gold(q_max)
 
         diffraction_cloud = xp.zeros((sq, sq, sq))
 
@@ -356,7 +500,7 @@ class Tomography:
 
         return diffraction_cloud
 
-    def make_gold(
+    def _make_gold(
         self,
         q_max,
     ):
