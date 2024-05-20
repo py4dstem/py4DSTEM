@@ -27,7 +27,8 @@ class Tomography:
 
     def __init__(
         self,
-        datacubes: Sequence[DataCube] = None,
+        datacubes: Union[Sequence[DataCube], Sequence[str]] = None,
+        import_kwargs: dict = {},
         rotation: Sequence[np.ndarray] = None,
         translaton: Sequence[np.ndarray] = None,
         initial_object_guess: np.ndarray = None,
@@ -40,6 +41,7 @@ class Tomography:
         """ """
 
         self._datacubes = datacubes
+        self._import_kwargs = import_kwargs
         self._rotation = rotation
         self._translaton = translaton
         self._verbose = verbose
@@ -62,27 +64,44 @@ class Tomography:
         robust=False,
         robust_steps=3,
         robust_thresh=2,
+        overwrite_datacube=True,
     ):
         """ """
         self._num_datacubes = len(self._datacubes)
 
-        ## diffraction_intensities_shape
-
-        # if force_transpose is not None and force_com_rotation is not None:
-        #     dc = self._datacubes[datacube_to_solve_rotation]
-        #     _solve_for_center_of_mass_relative_rotation():
-
         self._diffraction_patterns = []
 
         for a0 in range(self._num_datacubes):
+            # load
+            if type(self._datacubes[a0]) is str:
+                try:
+                    from py4DSTEM import import_file
 
+                    datacube = import_file(self._datacubes[a0], **self._import_kwargs)
+                
+                except:
+                    from py4DSTEM import read
+
+                    datacube = read(self._datacubes[a0], **self._import_kwargs)
+            else:
+                datacube = self._datacubes[a0]
+
+            # reshape
+
+            # solve for QR rotation if necessary
+            ## diffraction_intensities_shape
+
+            # if force_transpose is not None and force_com_rotation is not None:
+            #     dc = self._datacubes[datacube_to_solve_rotation]
+            #     _solve_for_center_of_mass_relative_rotation():
+
+            # align and reshape
             if force_centering_shifts:
                 qx0_fit = force_centering_shifts[datacube_number][0]
                 qy0_fit = force_centering_shifts[datacube_number][1]
             else:
-                ### TODO these functions need device!
                 qx0_fit, qy0_fit = self._solve_for_diffraction_pattern_centering(
-                    datacube_number=a0,
+                    datacube=datacube,
                     r=r,
                     rscale=rscale,
                     fast_center=fast_center,
@@ -94,9 +113,10 @@ class Tomography:
                 )
 
             datacube_centered = self._center_diffraction_patterns(
-                datacube_number=a0,
+                datacube=datacube,
                 qx0_fit=qx0_fit,
                 qy0_fit=qy0_fit,
+                overwrite_datacube=overwrite_datacube,
             )
 
             self._align_and_ravel_diffraction_patterns(datacube_centered)
@@ -105,7 +125,7 @@ class Tomography:
 
     def _solve_for_diffraction_pattern_centering(
         self,
-        datacube_number,
+        datacube,
         r,
         rscale,
         fast_center,
@@ -125,7 +145,7 @@ class Tomography:
             mask_real_space = None
 
         (qx0, qy0, _) = get_origin(
-            self._datacubes[datacube_number],
+            datacube,
             r=r,
             rscale=rscale,
             mask=mask_real_space,
@@ -147,12 +167,17 @@ class Tomography:
 
     def _center_diffraction_patterns(
         self,
-        datacube_number,
+        datacube,
         qx0_fit,
         qy0_fit,
+        overwrite_datacube,
     ):
         """ """
-        datacube_centered = self._datacubes[datacube_number].copy()
+        if overwrite_datacube is True:
+            datacube_centered = datacube
+        else:
+            datacube_centered = datacube.copy()
+
         for rx in range(datacube_centered.Rshape[0]):
             for ry in range(datacube_centered.Rshape[1]):
                 datacube_centered.data[rx, ry] = get_shifted_ar(
@@ -168,6 +193,7 @@ class Tomography:
     def _align_and_ravel_diffraction_patterns(self, datacube_centered):
 
         xp = self._xp
+        xp_storage = self._xp_storage
 
         s = datacube_centered.data.shape
 
@@ -181,6 +207,8 @@ class Tomography:
         diffraction_patterns = diffraction_patterns.reshape(
             (s[0] * s[1], s[2] * s_cutoff)
         )
+
+        diffraction_patterns = xp_storage.asarray(diffraction_patterns)
 
         self._diffraction_patterns.append(diffraction_patterns)
 
