@@ -6,8 +6,10 @@ from py4DSTEM.process.diffraction import Crystal
 from py4DSTEM.process.phase.utils import copy_to_device
 from py4DSTEM.process.calibration import get_origin, fit_origin
 from py4DSTEM.utils import get_shifted_ar
+from py4DSTEM.preprocess.utils import bin2D
 
 from scipy.spatial.transform import Rotation as R
+from scipy.ndimage import zoom
 
 from typing import Sequence, Union, Tuple
 
@@ -31,7 +33,7 @@ class Tomography:
         import_kwargs: dict = {},
         rotation: Sequence[np.ndarray] = None,
         translaton: Sequence[np.ndarray] = None,
-        initial_object_guess: np.ndarray = None,
+        initial_object: np.ndarray = None,
         verbose: bool = True,
         device: str = "cpu",
         storage: str = "cpu",
@@ -45,18 +47,22 @@ class Tomography:
         self._rotation = rotation
         self._translaton = translaton
         self._verbose = verbose
+        self.initial_object = initial_object
 
         self.set_device(device, clear_fft_cache)
         self.set_storage(storage)
 
     def preproces(
         self,
-        diffraction_intensities_shape: tuple = None,
+        diffraction_intensities_shape: int = None,
+        resizing_method: str = "bin",
+        bin_real_space: int = None,
         force_q_to_r_rotation_deg: float = None,
         force_q_to_r_transpose: bool = None,
         datacube_to_solve_rotation=0,
+        diffraction_space_mask_com=None,
         force_centering_shifts: Sequence[Tuple] = None,
-        centering_mask_real_space: Union[np.ndarray, Sequence[np.ndarray]] = None,
+        masks_real_space: Union[np.ndarray, Sequence[np.ndarray]] = None,
         r: float = None,
         rscale: float = 1.2,
         fast_center: bool = False,
@@ -67,8 +73,10 @@ class Tomography:
         overwrite_datacube=True,
     ):
         """
-        diffraction_intensites_shape: tuple
+        diffraction_intensites_shape: int
             shape of diffraction patterns to reshape data into
+        resizing_method: float
+            method to reshape diffraction space ("bin", "fourier", "bilinear")
         force_q_to_r_rotation_deg:float
             force q to r rotation in degrees. If False solves for rotation
             with datacube specified with `datacube_to_solve_rotation` using
@@ -79,12 +87,12 @@ class Tomography:
             center of mass method.
         datacube_to_solve_rotation: int
             specifies which datacube number to use to solve for q to r rotation
+        diffraction_space_mask_com: np.ndarray
+            applies mask to datacube while solving for CoM rotation
         force_centering_shifts: list of 2-tuples of np.ndarrays of Rshape
             forces the qx and qy shifts of diffraction patterns
-        centering_mask_real_space
-            if not None, should be an (R_Nx,R_Ny) shaped
-            boolean array. Origin is found only where mask==True, and masked
-            arrays are returned for qx0,qy0
+        masks_real_space: list of np.ndarray or np.ndarray
+            mask for real space. can be the same for each datacube of individually specified.
         r: (float or None)
             the approximate radius of the center disk. If None (default),
             tries to compute r using the get_probe_size method.  The data used for this
@@ -109,25 +117,24 @@ class Tomography:
         self._num_datacubes = len(self._datacubes)
 
         self._diffraction_patterns = []
+        self._positions = []
 
+        # preprocessing of diffraction data
         for a0 in range(self._num_datacubes):
-            # load
-            if type(self._datacubes[a0]) is str:
-                try:
-                    from py4DSTEM import import_file
+            # load and preprocess datacube
 
-                    datacube = import_file(self._datacubes[a0], **self._import_kwargs)
+            (datacube, mask_real_space, diffraction_space_mask_com) = (
+                self._prepare_datacube(
+                    datacube_number=a0,
+                    diffraction_intensities_shape=diffraction_intensities_shape,
+                    diffraction_space_mask_com=diffraction_space_mask_com,
+                    resizing_method=resizing_method,
+                    bin_real_space=bin_real_space,
+                    masks_real_space=masks_real_space,
+                )
+            )
 
-                except:
-                    from py4DSTEM import read
-
-                    datacube = read(self._datacubes[a0], **self._import_kwargs)
-            else:
-                datacube = self._datacubes[a0]
-
-            # reshape
-            # if diffraction_intensities_shape is not None:
-
+            # do we even need this?
             # solve for QR rotation if necessary
             ## diffraction_intensities_shape
 
@@ -140,12 +147,12 @@ class Tomography:
                 qx0_fit = force_centering_shifts[datacube_number][0]
                 qy0_fit = force_centering_shifts[datacube_number][1]
             else:
-                qx0_fit, qy0_fit = self._solve_for_diffraction_pattern_centering(
+                (qx0_fit, qy0_fit) = self._solve_for_diffraction_pattern_centering(
                     datacube=datacube,
                     r=r,
                     rscale=rscale,
                     fast_center=fast_center,
-                    centering_mask_real_space=centering_mask_real_space,
+                    mask_real_space=mask_real_space,
                     fitfunction=fitfunction,
                     robust=robust,
                     robust_steps=robust_steps,
@@ -159,9 +166,96 @@ class Tomography:
                 overwrite_datacube=overwrite_datacube,
             )
 
-            self._reshape_diffraction_patterns(datacube_centered)
+            self._reshape_diffraction_patterns(datacube_centered, mask_real_space)
 
             # positions
+
+    def _prepare_datacube(
+        self,
+        datacube_number,
+        diffraction_intensities_shape,
+        diffraction_space_mask_com,
+        resizing_method,
+        bin_real_space,
+        masks_real_space,
+    ):
+        if type(self._datacubes[datacube_number]) is str:
+            try:
+                from py4DSTEM import import_file
+
+                datacube = import_file(
+                    self._datacubes[datacube_number], **self._import_kwargs
+                )
+
+            except:
+                from py4DSTEM import read
+
+                datacube = read(self._datacubes[datacube_number], **self._import_kwargs)
+        else:
+            datacube = self._datacubes[datacube_number]
+
+        if masks_real_space is not None:
+            if type(masks_real_space) is np.ndarray:
+                mask_real_space = masks_real_space
+            else:
+                mask_real_space = masks_real_space[datacube_number]
+            mask_real_space = np.ndarray(masks_real_space, dtype="bool")
+        else:
+            mask_real_space = None
+
+        # resize diffraction space
+        if diffraction_intensities_shape is not None:
+            Q = datacube.shape[-1]
+            S = diffraction_intensities_shape
+            resampling_factor = S / Q
+            if resizing_method == "bin":
+                datacube = datacube.bin_Q(N=int(1 / resampling_factor))
+            if diffraction_space_mask_com is not None:
+                diffraction_space_mask_com = bin2D(
+                    diffraction_space_mask_com, int(1 / resampling_factor)
+                )
+
+            elif resizing_method == "fourier":
+                datacube = datacube.resample_Q(
+                    N=resampling_factor, method=resizing_method
+                )
+                if diffraction_space_mask_com is not None:
+                    diffraction_space_mask_com = fourier_resample(
+                        diffraction_space_mask_com,
+                        output_size=(S, S),
+                        force_nonnegative=True,
+                    )
+
+            elif resizing_method == "bilinear":
+                datacube = datacube.resample_Q(
+                    N=resampling_factor, method=resizing_method
+                )
+                if diffraction_space_mask_com is not None:
+                    diffraction_space_mask_com = zoom(
+                        diffraction_space_mask_com,
+                        (resampling_factor, resampling_factor),
+                        order=1,
+                    )
+
+            else:
+                raise ValueError(
+                    (
+                        "reshaping_method needs to be one of 'bilinear', 'fourier', or 'bin', "
+                        f"not {reshaping_method}."
+                    )
+                )
+
+        # bin real space
+        if bin_real_space is not None:
+            datacube.bin_R(bin_real_space)
+            if mask_real_space is not None:
+                mask_real_space = bin2D(mask_real_space, bin_real_space)
+                mask_real_space = np.floor(
+                    mask_real_space / bin_real_space / bin_real_space
+                )
+                mask_real_space = np.ndarray(masks_real_space, dtype="bool")
+
+        return datacube, mask_real_space, diffraction_space_mask_com
 
     # def _solve_for_center_of_mass_relative_rotation():
 
@@ -171,7 +265,7 @@ class Tomography:
         r,
         rscale,
         fast_center,
-        centering_mask_real_space,
+        mask_real_space,
         fitfunction,
         robust,
         robust_steps,
@@ -191,7 +285,7 @@ class Tomography:
             when taking its center of mass
         fast_center: (bool)
             skip the center of mass refinement step.
-        centering_mask_real_space: np.ndarray or None
+        mask_real_space: np.ndarray or None
             if not None, should be an (R_Nx,R_Ny) shaped
             boolean array. Origin is found only where mask==True, and masked
             arrays are returned for qx0,qy0
@@ -212,13 +306,6 @@ class Tomography:
             qx and qy shifts
 
         """
-        if centering_mask_real_space is not None:
-            if type(centering_mask_real_space) is np.ndarray:
-                mask_real_space = centering_mask_real_space
-            else:
-                mask_real_space = centering_mask_real_space[datacube_number]
-        else:
-            mask_real_space = None
 
         (qx0, qy0, _) = get_origin(
             datacube,
@@ -284,7 +371,7 @@ class Tomography:
 
         return datacube_centered
 
-    def _reshape_diffraction_patterns(self, datacube_centered):
+    def _reshape_diffraction_patterns(self, datacube_centered, mask_real_space):
         """
         Reshapes diffraction data into a 2x2 array
 
@@ -292,6 +379,8 @@ class Tomography:
         ----------
         datacube_centered: DataCube
             datacube to be rshaped
+        mask_real_space: np.ndarray
+            mask for real space.
         """
         xp = self._xp
         xp_storage = self._xp_storage
@@ -304,16 +393,20 @@ class Tomography:
 
         del datacube_centered
 
+        if mask_real_space is not None:
+            diffraction_patterns = diffraction_patterns[mask_real_space.ravel() == True]
+
         ind = np.arange(s[-1] * s[-2]).reshape((s[-1], s[-2]))
         ind_rot = np.fft.ifftshift(np.rot90(np.fft.fftshift(ind), 2)).flatten()
 
         diffraction_patterns += diffraction_patterns[:, ind_rot]
 
         s_cutoff = int(xp.ceil(s[-1] / 2))
-        diffraction_patterns = diffraction_patterns[:, :, 0:s_cutoff]
-        diffraction_patterns = diffraction_patterns.reshape(
-            (s[0] * s[1], s[2] * s_cutoff)
-        )
+        ind_crop = np.ones((s[2], s[3]), dtype="bool")
+        ind_crop[:, 0:s_cutoff] = False
+        ind_crop = ind_crop.ravel()
+
+        diffraction_patterns = diffraction_patterns[:, ind_crop == True]
 
         diffraction_patterns = xp_storage.asarray(diffraction_patterns)
 
