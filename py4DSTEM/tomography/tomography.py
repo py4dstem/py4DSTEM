@@ -59,7 +59,6 @@ class Tomography:
         bin_real_space: int = None,
         force_q_to_r_rotation_deg: float = None,
         force_q_to_r_transpose: bool = None,
-        datacube_to_solve_rotation=0,
         diffraction_space_mask_com=None,
         force_centering_shifts: Sequence[Tuple] = None,
         masks_real_space: Union[np.ndarray, Sequence[np.ndarray]] = None,
@@ -77,6 +76,8 @@ class Tomography:
             shape of diffraction patterns to reshape data into
         resizing_method: float
             method to reshape diffraction space ("bin", "fourier", "bilinear")
+        bin_real_space: int
+            factor for binnning in real space
         force_q_to_r_rotation_deg:float
             force q to r rotation in degrees. If False solves for rotation
             with datacube specified with `datacube_to_solve_rotation` using
@@ -85,8 +86,6 @@ class Tomography:
             force q to r transpose. If False, solves for transpose
             with datacube specified with `datacube_to_solve_rotation` using
             center of mass method.
-        datacube_to_solve_rotation: int
-            specifies which datacube number to use to solve for q to r rotation
         diffraction_space_mask_com: np.ndarray
             applies mask to datacube while solving for CoM rotation
         force_centering_shifts: list of 2-tuples of np.ndarrays of Rshape
@@ -134,10 +133,9 @@ class Tomography:
                 )
             )
 
-            # do we even need this?
+            # hmmm how to handle this? maybe with positions like phase
             # solve for QR rotation if necessary
-            ## diffraction_intensities_shape
-
+            # if a0 is 0 only
             # if force_transpose is not None and force_com_rotation is not None:
             #     dc = self._datacubes[datacube_to_solve_rotation]
             #     _solve_for_center_of_mass_relative_rotation():
@@ -179,6 +177,20 @@ class Tomography:
         bin_real_space,
         masks_real_space,
     ):
+        """
+        datacube_number: int
+            index of datacube
+        diffraction_intensites_shape: int
+            shape of diffraction patterns to reshape data into
+        diffraction_space_mask_com: np.ndarray
+            applies mask to datacube while solving for CoM rotation
+        resizing_method: float
+            method to reshape diffraction space ("bin", "fourier", "bilinear")
+        bin_real_space: int
+            factor for binnning in real space
+        masks_real_space: list of np.ndarray or np.ndarray
+            mask for real space. can be the same for each datacube of individually specified.
+        """
         if type(self._datacubes[datacube_number]) is str:
             try:
                 from py4DSTEM import import_file
