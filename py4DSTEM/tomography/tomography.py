@@ -51,22 +51,61 @@ class Tomography:
 
     def preproces(
         self,
-        diffraction_intensities_shape=None,
-        force_com_rotation=None,
-        force_com_transpose=None,
+        diffraction_intensities_shape: tuple = None,
+        force_q_to_r_rotation_deg: float = None,
+        force_q_to_r_transpose: bool = None,
         datacube_to_solve_rotation=0,
         force_centering_shifts: Sequence[Tuple] = None,
         centering_mask_real_space: Union[np.ndarray, Sequence[np.ndarray]] = None,
-        r=None,
-        rscale=1.2,
-        fast_center=False,
-        fitfunction="plane",
-        robust=False,
-        robust_steps=3,
-        robust_thresh=2,
+        r: float = None,
+        rscale: float = 1.2,
+        fast_center: bool = False,
+        fitfunction: str = "plane",
+        robust: bool = False,
+        robust_steps: int = 3,
+        robust_thresh: int = 2,
         overwrite_datacube=True,
     ):
-        """ """
+        """
+        diffraction_intensites_shape: tuple
+            shape of diffraction patterns to reshape data into
+        force_q_to_r_rotation_deg:float
+            force q to r rotation in degrees. If False solves for rotation
+            with datacube specified with `datacube_to_solve_rotation` using
+            center of mass method.
+        force_q_to_r_transpose: bool
+            force q to r transpose. If False, solves for transpose
+            with datacube specified with `datacube_to_solve_rotation` using
+            center of mass method.
+        datacube_to_solve_rotation: int
+            specifies which datacube number to use to solve for q to r rotation
+        force_centering_shifts: list of 2-tuples of np.ndarrays of Rshape
+            forces the qx and qy shifts of diffraction patterns
+        centering_mask_real_space
+            if not None, should be an (R_Nx,R_Ny) shaped
+            boolean array. Origin is found only where mask==True, and masked
+            arrays are returned for qx0,qy0
+        r: (float or None)
+            the approximate radius of the center disk. If None (default),
+            tries to compute r using the get_probe_size method.  The data used for this
+            is controlled by dp_max.
+        rscale (float)
+             expand 'r' by this amount to form a mask about the center disk
+            when taking its center of mass
+        fast_center: (bool)
+            skip the center of mass refinement step.
+            arrays are returned for qx0,qy0
+        fitfunction: "str"
+            fit function for origin ('plane' or 'parabola' or 'bezier_two' or 'constant').
+        robust: bool
+            If set to True, origin fit will be repeated with outliers
+            removed.
+        robust_steps: int
+            number of robust iterations performed after initial fit.
+        robust_thresh: int
+            threshold for including points, in units of root-mean-square (standard deviations) error
+            of the predicted values after fitting.
+        """
         self._num_datacubes = len(self._datacubes)
 
         self._diffraction_patterns = []
@@ -78,7 +117,7 @@ class Tomography:
                     from py4DSTEM import import_file
 
                     datacube = import_file(self._datacubes[a0], **self._import_kwargs)
-                
+
                 except:
                     from py4DSTEM import read
 
@@ -87,6 +126,7 @@ class Tomography:
                 datacube = self._datacubes[a0]
 
             # reshape
+            # if diffraction_intensities_shape is not None:
 
             # solve for QR rotation if necessary
             ## diffraction_intensities_shape
@@ -119,7 +159,9 @@ class Tomography:
                 overwrite_datacube=overwrite_datacube,
             )
 
-            self._align_and_ravel_diffraction_patterns(datacube_centered)
+            self._reshape_diffraction_patterns(datacube_centered)
+
+            # positions
 
     # def _solve_for_center_of_mass_relative_rotation():
 
@@ -135,7 +177,41 @@ class Tomography:
         robust_steps,
         robust_thresh,
     ):
-        """ """
+        """
+        Solve for qx and qy shifts
+
+        Parameters
+        ----------
+        r: (float or None)
+            the approximate radius of the center disk. If None (default),
+            tries to compute r using the get_probe_size method.  The data used for this
+            is controlled by dp_max.
+        rscale (float)
+             expand 'r' by this amount to form a mask about the center disk
+            when taking its center of mass
+        fast_center: (bool)
+            skip the center of mass refinement step.
+        centering_mask_real_space: np.ndarray or None
+            if not None, should be an (R_Nx,R_Ny) shaped
+            boolean array. Origin is found only where mask==True, and masked
+            arrays are returned for qx0,qy0
+        fitfunction: "str"
+            fit function for origin ('plane' or 'parabola' or 'bezier_two' or 'constant').
+        robust: bool
+            If set to True, origin fit will be repeated with outliers
+            removed.
+        robust_steps: int
+            number of robust iterations performed after initial fit.
+        robust_thresh: int
+            threshold for including points, in units of root-mean-square (standard deviations) error
+            of the predicted values after fitting.
+
+        Returns
+        --------
+        qx0_fit, qy0_fit: (np.ndarray, np.ndarray)
+            qx and qy shifts
+
+        """
         if centering_mask_real_space is not None:
             if type(centering_mask_real_space) is np.ndarray:
                 mask_real_space = centering_mask_real_space
@@ -172,7 +248,25 @@ class Tomography:
         qy0_fit,
         overwrite_datacube,
     ):
-        """ """
+        """
+        Centering of diffraciotn patterns
+
+        Parameters
+        ----------
+        datacube: DataCube
+            datacube to be centered
+        qx0_fit: np.ndarray
+            qx shifts
+        qy0_fit: int
+            qy shifts
+        overwrite_datacube: bool
+            if True, modifies datacube in place
+
+        Returns
+        --------
+        datacube_centered: DataCube
+            DataCube with centered patterns
+        """
         if overwrite_datacube is True:
             datacube_centered = datacube
         else:
@@ -190,8 +284,15 @@ class Tomography:
 
         return datacube_centered
 
-    def _align_and_ravel_diffraction_patterns(self, datacube_centered):
+    def _reshape_diffraction_patterns(self, datacube_centered):
+        """
+        Reshapes diffraction data into a 2x2 array
 
+        Parameters
+        ----------
+        datacube_centered: DataCube
+            datacube to be rshaped
+        """
         xp = self._xp
         xp_storage = self._xp_storage
 
