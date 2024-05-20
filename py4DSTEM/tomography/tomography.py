@@ -298,11 +298,17 @@ class Tomography:
 
         s = datacube_centered.data.shape
 
-        diffraction_patterns = datacube_centered.data.reshape((s[0] * s[1], s[2], s[3]))
+        diffraction_patterns = datacube_centered.data.reshape(
+            (s[0] * s[1], s[2] * s[3])
+        )
 
         del datacube_centered
 
-        diffraction_patterns += xp.rot90(diffraction_patterns, 2, axes=(-1, -2))
+        ind = np.arange(s[-1] * s[-2]).reshape((s[-1], s[-2]))
+        ind_rot = np.fft.ifftshift(np.rot90(np.fft.fftshift(ind), 2)).flatten()
+
+        diffraction_patterns += diffraction_patterns[:, ind_rot]
+
         s_cutoff = int(xp.ceil(s[-1] / 2))
         diffraction_patterns = diffraction_patterns[:, :, 0:s_cutoff]
         diffraction_patterns = diffraction_patterns.reshape(
