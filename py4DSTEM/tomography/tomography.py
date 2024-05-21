@@ -31,9 +31,13 @@ class Tomography:
         self,
         datacubes: Union[Sequence[DataCube], Sequence[str]] = None,
         import_kwargs: dict = {},
-        rotation: Sequence[np.ndarray] = None,
+        object_shape_x_y_z: Tuple = None,
+        voxel_size_A: float = None,
+        datacube_R_pixel_size_A: float = None,
+        datacube_Q_pixel_size_inv_A: float = None,
+        tilt_deg: Sequence[np.ndarray] = None,
         translaton: Sequence[np.ndarray] = None,
-        initial_object: np.ndarray = None,
+        initial_object_guess: np.ndarray = None,
         verbose: bool = True,
         device: str = "cpu",
         storage: str = "cpu",
@@ -44,11 +48,14 @@ class Tomography:
 
         self._datacubes = datacubes
         self._import_kwargs = import_kwargs
-        self._rotation = rotation
+        self._object_shape_x_y_z = object_shape_x_y_z
+        self._voxel_size_A = voxel_size_A
+        self._datacube_R_pixel_size_A = datacube_R_pixel_size_A
+        self._datacube_Q_pixel_size_inv_A = datacube_Q_pixel_size_inv_A
+        self._tilt_deg = tilt_deg
         self._translaton = translaton
         self._verbose = verbose
-        self.initial_object = initial_object
-
+        self._initial_object_guess = initial_object_guess
         self.set_device(device, clear_fft_cache)
         self.set_storage(storage)
 
@@ -113,6 +120,8 @@ class Tomography:
             threshold for including points, in units of root-mean-square (standard deviations) error
             of the predicted values after fitting.
         """
+        xp_storage = self._xp_storage
+
         self._num_datacubes = len(self._datacubes)
 
         self._diffraction_patterns = []
@@ -120,8 +129,8 @@ class Tomography:
 
         # preprocessing of diffraction data
         for a0 in range(self._num_datacubes):
-            # load and preprocess datacube
 
+            # load and preprocess datacube
             (datacube, mask_real_space, diffraction_space_mask_com) = (
                 self._prepare_datacube(
                     datacube_number=a0,
@@ -165,6 +174,21 @@ class Tomography:
             )
 
             self._reshape_diffraction_patterns(datacube_centered, mask_real_space)
+
+            # initialize object
+            if a0 == 0:
+                if self._initial_object_guess:
+                    self._object = xp_storage.asarray(self._initial_object_guess)
+                else:
+                    diffraction_shape = self._initial_datacube_shape[-1]
+                    self._object = xp_storage.zeros(
+                        self._object_shape_x_y_z
+                        + (
+                            diffraction_shape,
+                            diffraction_shape,
+                            diffraction_shape,
+                        ),
+                    )
 
             # positions
 
@@ -428,6 +452,7 @@ class Tomography:
         diffraction_patterns = xp_storage.asarray(diffraction_patterns)
 
         self._diffraction_patterns.append(diffraction_patterns)
+        self._initial_datacube_shape = s
 
     def forward(
         self,
