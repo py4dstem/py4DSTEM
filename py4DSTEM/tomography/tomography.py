@@ -135,7 +135,6 @@ class Tomography:
 
         # preprocessing of diffraction data
         for a0 in range(self._num_datacubes):
-
             # load and preprocess datacube
             (datacube, mask_real_space, diffraction_space_mask_com) = (
                 self._prepare_datacube(
@@ -206,7 +205,72 @@ class Tomography:
                 mask_real_space=mask_real_space,
             )
 
-            return self
+        return self
+
+    def reconstruct(
+        self,
+        num_iter: int = 1,
+        step_size: float = 0.5,
+        num_points: int = 60,
+    ):
+        """ """
+        for a0 in range(num_iter):
+            for a1 in range(self._num_datacubes):
+                for a2 in range(self._object.shape[0]):
+                    current_object_sliced = self._forward(
+                        current_object=self._object,
+                        tilt_deg=self._tilt_deg[a1],
+                        num_points=num_points,
+                    )
+
+                    # self._adjoint()
+
+        return self
+
+    # def _adjoint(
+    #     self
+    #     ):
+
+    def _forward(
+        self,
+        current_object: np.ndarray,
+        tilt_deg: int,
+        num_points: int,
+    ):
+        """
+        Forward projection of object for simulation of diffraction data
+
+        Parameters
+        ----------
+        current_object: np.ndarray
+            current object estimate
+        tilt_deg: float
+            tilt of object in degrees
+        num_points: float
+            number of points for bilinear interpolation
+
+        Returns
+        --------
+        current_object_sliced: np.ndarray
+            projection of current object sliced in diffraciton space
+        """
+        s = self._object.shape
+        current_object_sliced = np.zeros((s[0], s[1], s[-1], s[-1]))
+
+        for a0 in range(s[0]):
+            current_object_projected = self.real_space_radon(
+                current_object=current_object,
+                tilt_deg=tilt_deg,
+                x_index=a0,
+                num_points=num_points,
+            )
+
+            current_object_sliced[a0] = self.diffraction_space_slice(
+                current_object_projected=current_object_projected,
+                tilt_deg=tilt_deg,
+            )
+
+        return current_object_sliced
 
     def _prepare_datacube(
         self,
@@ -763,7 +827,7 @@ class Tomography:
 
         return self._asnumpy(current_object_sliced)
 
-    def make_test_object(
+    def _make_test_object(
         self,
         sx: int,
         sy: int,
