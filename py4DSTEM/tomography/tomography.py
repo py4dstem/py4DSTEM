@@ -34,9 +34,10 @@ class Tomography:
         object_shape_x_y_z: Tuple = None,
         voxel_size_A: float = None,
         datacube_R_pixel_size_A: float = None,
-        datacube_Q_pixel_size_inv_A: float = None,
+        datacube_Q_pixel_size_inv_A: float = None,  # do we even need this?
         tilt_deg: Sequence[np.ndarray] = None,
-        translaton: Sequence[np.ndarray] = None,
+        translation_px: Sequence[np.ndarray] = None,
+        scanning_to_tilt_rotation: float = None,
         initial_object_guess: np.ndarray = None,
         verbose: bool = True,
         device: str = "cpu",
@@ -53,9 +54,11 @@ class Tomography:
         self._datacube_R_pixel_size_A = datacube_R_pixel_size_A
         self._datacube_Q_pixel_size_inv_A = datacube_Q_pixel_size_inv_A
         self._tilt_deg = tilt_deg
-        self._translaton = translaton
+        self._translation_px = translation_px
+        self._scanning_to_tilt_rotation = scanning_to_tilt_rotation
         self._verbose = verbose
         self._initial_object_guess = initial_object_guess
+
         self.set_device(device, clear_fft_cache)
         self.set_storage(storage)
 
@@ -125,7 +128,10 @@ class Tomography:
         self._num_datacubes = len(self._datacubes)
 
         self._diffraction_patterns = []
-        self._positions = []
+        self._positions_ang = []
+        self._positions_vox = []
+        self._positions_vox_F = []
+        self._positions_vox_dF = []
 
         # preprocessing of diffraction data
         for a0 in range(self._num_datacubes):
@@ -142,12 +148,33 @@ class Tomography:
                 )
             )
 
+            # initialize object
+            if a0 == 0:
+                if self._initial_object_guess:
+                    self._object = xp_storage.asarray(self._initial_object_guess)
+                else:
+                    diffraction_shape = self._initial_datacube_shape[-1]
+                    self._object = xp_storage.zeros(
+                        self._object_shape_x_y_z
+                        + (
+                            diffraction_shape,
+                            diffraction_shape,
+                            diffraction_shape,
+                        ),
+                    )
+
             # hmmm how to handle this? we might need to rotate diffraction patterns
             # solve for QR rotation if necessary
             # if a0 is 0 only
             # if force_transpose is not None and force_com_rotation is not None:
             #     dc = self._datacubes[datacube_to_solve_rotation]
             #     _solve_for_center_of_mass_relative_rotation():
+
+            # initialize positions
+            mask_real_space = self._calculate_scan_positions(
+                datacube_number=a0,
+                mask_real_space=mask_real_space,
+            )
 
             # align and reshape
             if force_centering_shifts:
@@ -178,23 +205,6 @@ class Tomography:
                 datacube_centered=datacube_centered,
                 mask_real_space=mask_real_space,
             )
-
-            # initialize object
-            if a0 == 0:
-                if self._initial_object_guess:
-                    self._object = xp_storage.asarray(self._initial_object_guess)
-                else:
-                    diffraction_shape = self._initial_datacube_shape[-1]
-                    self._object = xp_storage.zeros(
-                        self._object_shape_x_y_z
-                        + (
-                            diffraction_shape,
-                            diffraction_shape,
-                            diffraction_shape,
-                        ),
-                    )
-
-            # positions
 
     def _prepare_datacube(
         self,
@@ -295,7 +305,93 @@ class Tomography:
                 )
                 mask_real_space = np.ndarray(masks_real_space, dtype="bool")
 
+        self._initial_datacube_shape = datacube.data.shape
+
         return datacube, mask_real_space, diffraction_space_mask_com
+
+    def _calculate_scan_positions(
+        self,
+        datacube_number,
+        mask_real_space,
+    ):
+        """
+        Calculate scan positions in angstroms and voxels
+
+        Parameters
+        ----------
+        datacube_number: int
+            index of datacube
+        mask_real_space: np.ndarray
+            mask for real space
+
+        Returns
+        --------
+        mask_real_space: np.ndarray
+            mask for real space
+
+        """
+        xp_storage = self._xp_storage
+
+        # calculate shape
+        field_of_view_px = self._object.shape[0:2]
+        self._field_of_view_A = (
+            self._voxel_size_A * field_of_view_px[0],
+            self._voxel_size_A * field_of_view_px[1],
+        )
+
+        # calculate positions
+        s = self._initial_datacube_shape
+
+        step_size = self._datacube_R_pixel_size_A
+
+        x = np.arange(s[0])
+        y = np.arange(s[1])
+
+        if self._translation_px is not None:
+            x += self._translation_px[datacube_number][0]
+            y += self._translation_px[datacube_number][1]
+
+        x *= step_size
+        y *= step_size
+
+        x, y = np.meshgrid(x, y, indexing="ij")
+
+        if self._scanning_to_tilt_rotation is not None:
+            rotation_angle = np.deg2rad(self._scanning_to_tilt_rotation)
+            x, y = x * np.cos(rotation_angle) + y * np.sin(rotation_angle), -x * np.sin(
+                rotation_angle
+            ) + y * np.cos(rotation_angle)
+
+        # remove data outside FOV
+        if mask_real_space is None:
+            mask_real_space = np.ones(x.shape, dtype="bool")
+        mask_real_space[x > self._field_of_view_A[0]] = False
+        mask_real_space[x < 0] = False
+        mask_real_space[y > self._field_of_view_A[1]] = False
+        mask_real_space[y < 0] = False
+
+        # calculate positions in voxels
+        x = x[mask_real_space].ravel()
+        y = y[mask_real_space].ravel()
+
+        x_vox = x / self._voxel_size_A
+        y_vox = y / self._voxel_size_A
+
+        x_vox_F = np.floor(x_vox).astype("int")
+        y_vox_F = np.floor(y_vox).astype("int")
+        dx = x_vox - x_vox_F
+        dy = y_vox - y_vox_F
+
+        # store pixels
+        x = xp_storage.asarray(x)
+        y = xp_storage.asarray(y)
+
+        self._positions_ang.append((x, y))
+        self._positions_vox.append((x_vox, y_vox))
+        self._positions_vox_F.append((x_vox_F, y_vox_F))
+        self._positions_vox_dF.append((dx, dy))
+
+        return mask_real_space
 
     # def _solve_for_center_of_mass_relative_rotation():
 
@@ -376,7 +472,7 @@ class Tomography:
         overwrite_datacube,
     ):
         """
-        Centering of diffraciotn patterns
+        Centering of diffraction patterns
 
         Parameters
         ----------
@@ -424,12 +520,12 @@ class Tomography:
         datacube_centered: DataCube
             datacube to be rshaped
         mask_real_space: np.ndarray
-            mask for real space.
+            mask for real space
         """
         xp = self._xp
         xp_storage = self._xp_storage
 
-        s = datacube_centered.data.shape
+        s = self._initial_datacube_shape
 
         diffraction_patterns = datacube_centered.data.reshape(
             (s[0] * s[1], s[2] * s[3])
@@ -465,7 +561,6 @@ class Tomography:
         diffraction_patterns = xp_storage.asarray(diffraction_patterns)
 
         self._diffraction_patterns.append(diffraction_patterns)
-        self._initial_datacube_shape = s
 
     def forward(
         self,
