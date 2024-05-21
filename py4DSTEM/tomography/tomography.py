@@ -62,7 +62,7 @@ class Tomography:
         self.set_device(device, clear_fft_cache)
         self.set_storage(storage)
 
-    def preproces(
+    def preprocess(
         self,
         diffraction_intensities_shape: int = None,
         resizing_method: str = "bin",
@@ -206,6 +206,8 @@ class Tomography:
                 mask_real_space=mask_real_space,
             )
 
+            return self
+
     def _prepare_datacube(
         self,
         datacube_number,
@@ -258,6 +260,9 @@ class Tomography:
             Q = datacube.shape[-1]
             S = diffraction_intensities_shape
             resampling_factor = S / Q
+            if datacube_number == 0:
+                self._datacube_Q_pixel_size_inv_A /= resampling_factor
+
             if resizing_method == "bin":
                 datacube = datacube.bin_Q(N=int(1 / resampling_factor))
             if diffraction_space_mask_com is not None:
@@ -304,6 +309,8 @@ class Tomography:
                     mask_real_space / bin_real_space / bin_real_space
                 )
                 mask_real_space = np.ndarray(masks_real_space, dtype="bool")
+            if datacube_number == 0:
+                self._datacube_R_pixel_size_A *= bin_real_space
 
         self._initial_datacube_shape = datacube.data.shape
 
@@ -562,7 +569,7 @@ class Tomography:
 
         self._diffraction_patterns.append(diffraction_patterns)
 
-    def forward(
+    def _forward_simulation(
         self,
         current_object: np.ndarray,
         tilt_deg: int,
@@ -570,7 +577,7 @@ class Tomography:
         num_points: np.ndarray = 60,
     ):
         """
-        Forward projection of object
+        Forward projection of object for simulation of diffraction data
 
         Parameters
         ----------
