@@ -173,7 +173,11 @@ class Tomography:
                 overwrite_datacube=overwrite_datacube,
             )
 
-            self._reshape_diffraction_patterns(datacube_centered, mask_real_space)
+            self._reshape_diffraction_patterns(
+                datacube_number=a0,
+                datacube_centered=datacube_centered,
+                mask_real_space=mask_real_space,
+            )
 
             # initialize object
             if a0 == 0:
@@ -407,12 +411,16 @@ class Tomography:
 
         return datacube_centered
 
-    def _reshape_diffraction_patterns(self, datacube_centered, mask_real_space):
+    def _reshape_diffraction_patterns(
+        self, datacube_number, datacube_centered, mask_real_space
+    ):
         """
         Reshapes diffraction data into a 2x2 array
 
         Parameters
         ----------
+        datacube_number: int
+            index of datacube
         datacube_centered: DataCube
             datacube to be rshaped
         mask_real_space: np.ndarray
@@ -438,16 +446,21 @@ class Tomography:
         diffraction_patterns += diffraction_patterns[:, ind_rot]
 
         # crop diffraction space
-        s_cutoff = int(xp.ceil(s[-1] / 2))
-        ind_crop = np.zeros((s[2], s[3]), dtype="bool")
-        ind_crop[:, 0:s_cutoff] = True
-        x = np.arange(s[-1])
-        y = np.arange(s[-1])
-        xx, yy = np.meshgrid(x, y)
-        ind_crop_2 = (xx**2 + yy**2) ** 0.5 <= (s[-1] - 1)
-        ind_crop_combine = np.logical_and(ind_crop, ind_crop_2)
-        ind_crop_combine = ind_crop_combine.ravel()
-        diffraction_patterns = diffraction_patterns[:, ind_crop_combine == True]
+        if datacube_number == 0:
+            s_cutoff = int(xp.ceil(s[-1] / 2))
+            ind_crop = np.zeros((s[2], s[3]), dtype="bool")
+            ind_crop[:, 0:s_cutoff] = True
+            x = np.arange(-(s[-1] - 1) / 2, (s[-1]) / 2)
+            y = np.arange(-(s[-1] - 1) / 2, (s[-1]) / 2)
+            xx, yy = np.meshgrid(x, y)
+            ind_crop_2 = np.fft.ifftshift((xx**2 + yy**2) ** 0.5 <= ((s[-1] - 1) / 2))
+            ind_diffraction_space = np.logical_and(ind_crop, ind_crop_2)
+            self._ind_diffraction_space = ind_diffraction_space
+            self._ind_diffraction_space_ravel = ind_diffraction_space.ravel()
+
+        diffraction_patterns = diffraction_patterns[
+            :, self._ind_diffraction_space_ravel == True
+        ]
 
         diffraction_patterns = xp_storage.asarray(diffraction_patterns)
 
