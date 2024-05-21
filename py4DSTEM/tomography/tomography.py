@@ -217,23 +217,22 @@ class Tomography:
         for a0 in range(num_iter):
             for a1 in range(self._num_datacubes):
                 for a2 in range(self._object.shape[0]):
-                    current_object_sliced = self._forward(
-                        current_object=self._object,
-                        tilt_deg=self._tilt_deg[a1],
-                        num_points=num_points,
+                    (current_object_sliced, diffraction_patterns_reshaped) = (
+                        self._forward(
+                            current_object=self._object,
+                            tilt_deg=self._tilt_deg[a1],
+                            num_points=num_points,
+                        )
                     )
 
                     # self._adjoint()
 
         return self
 
-    # def _adjoint(
-    #     self
-    #     ):
-
     def _forward(
         self,
         current_object: np.ndarray,
+        datacube_number: float,
         tilt_deg: int,
         num_points: int,
     ):
@@ -244,6 +243,8 @@ class Tomography:
         ----------
         current_object: np.ndarray
             current object estimate
+        datacube_number: int
+            index of datacube
         tilt_deg: float
             tilt of object in degrees
         num_points: float
@@ -253,6 +254,8 @@ class Tomography:
         --------
         current_object_sliced: np.ndarray
             projection of current object sliced in diffraciton space
+        diffraction_patterns_reshaped: np.ndarray
+            datacube with diffraction data reshapped in 2D arrays
         """
         s = self._object.shape
         current_object_sliced = np.zeros((s[0], s[1], s[-1], s[-1]))
@@ -270,7 +273,15 @@ class Tomography:
                 tilt_deg=tilt_deg,
             )
 
-        return current_object_sliced
+        diffraction_patterns_reshaped = self._forward_diffraction_intensities_reshape(
+            datacube_number=datacube_number,
+        )
+
+        return current_object_sliced, diffraction_patterns_reshaped
+
+    # def _adjoint(
+    #     self
+    #     ):
 
     def _prepare_datacube(
         self,
@@ -593,7 +604,6 @@ class Tomography:
         mask_real_space: np.ndarray
             mask for real space
         """
-        xp = self._xp
         xp_storage = self._xp_storage
 
         s = self._initial_datacube_shape
@@ -614,7 +624,7 @@ class Tomography:
 
         # crop diffraction space
         if datacube_number == 0:
-            s_cutoff = int(xp.ceil(s[-1] / 2))
+            s_cutoff = int(np.ceil(s[-1] / 2))
             ind_crop = np.zeros((s[2], s[3]), dtype="bool")
             ind_crop[:, 0:s_cutoff] = True
             x = np.arange(-(s[-1] - 1) / 2, (s[-1]) / 2)
@@ -622,8 +632,13 @@ class Tomography:
             xx, yy = np.meshgrid(x, y)
             ind_crop_2 = np.fft.ifftshift((xx**2 + yy**2) ** 0.5 <= ((s[-1] - 1) / 2))
             ind_diffraction_space = np.logical_and(ind_crop, ind_crop_2)
+
             self._ind_diffraction_space = ind_diffraction_space
             self._ind_diffraction_space_ravel = ind_diffraction_space.ravel()
+
+            self._reorder_patterns = np.fft.fftshift(
+                np.arange(s[2] * s[3]).reshape((s[2], s[3]))
+            ).ravel()
 
         diffraction_patterns = diffraction_patterns[
             :, self._ind_diffraction_space_ravel == True
@@ -826,6 +841,50 @@ class Tomography:
         current_object_sliced
 
         return self._asnumpy(current_object_sliced)
+
+    def _forward_diffraction_intensities_reshape(
+        self,
+        datacube_number,
+    ):
+        """
+        Reshape 1D diffraction data to full patterns
+
+        Parameters
+        ----------
+        datacube_number: int
+            index of datacube
+
+        Returns
+        --------
+        diffraction_patterns_reshaped: np.ndarray
+            datacube with diffraction data reshapped in 2D arrays
+        """
+        xp = self._xp
+        s = self._initial_datacube_shape
+
+        diffraction_patterns_flat = xp.asarray(
+            self._diffraction_patterns[datacube_number]
+        )
+        diffraction_patterns_reshaped = xp.zeros(
+            (diffraction_patterns_flat.shape[0], s[-1] * s[-1])
+        )
+
+        diffraction_patterns_reshaped[
+            :, xp.asarray(self._ind_diffraction_space_ravel)
+        ] = diffraction_patterns_flat
+        diffraction_patterns_reshaped = diffraction_patterns_reshaped[
+            :, self._reorder_patterns
+        ]
+
+        diffraction_patterns_reshaped = diffraction_patterns_reshaped.reshape(
+            (diffraction_patterns_flat.shape[0], s[-1], s[-1])
+        )
+
+        diffraction_patterns_reshaped += np.rot90(
+            diffraction_patterns_reshaped, 2, axes=(-1, -2)
+        )
+
+        return diffraction_patterns_reshaped
 
     def _make_test_object(
         self,
