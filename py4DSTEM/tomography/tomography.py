@@ -133,7 +133,7 @@ class Tomography:
                 )
             )
 
-            # hmmm how to handle this? maybe with positions like phase
+            # hmmm how to handle this? we might need to rotate diffraction patterns
             # solve for QR rotation if necessary
             # if a0 is 0 only
             # if force_transpose is not None and force_com_rotation is not None:
@@ -413,12 +413,17 @@ class Tomography:
 
         diffraction_patterns += diffraction_patterns[:, ind_rot]
 
+        # crop diffraction space
         s_cutoff = int(xp.ceil(s[-1] / 2))
-        ind_crop = np.ones((s[2], s[3]), dtype="bool")
-        ind_crop[:, 0:s_cutoff] = False
-        ind_crop = ind_crop.ravel()
-
-        diffraction_patterns = diffraction_patterns[:, ind_crop == True]
+        ind_crop = np.zeros((s[2], s[3]), dtype="bool")
+        ind_crop[:, 0:s_cutoff] = True
+        x = np.arange(s[-1])
+        y = np.arange(s[-1])
+        xx, yy = np.meshgrid(x, y)
+        ind_crop_2 = (xx**2 + yy**2) ** 0.5 <= (s[-1] - 1)
+        ind_crop_combine = np.logical_and(ind_crop, ind_crop_2)
+        ind_crop_combine = ind_crop_combine.ravel()
+        diffraction_patterns = diffraction_patterns[:, ind_crop_combine == True]
 
         diffraction_patterns = xp_storage.asarray(diffraction_patterns)
 
