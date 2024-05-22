@@ -216,22 +216,20 @@ class Tomography:
         """ """
         for a0 in range(num_iter):
             for a1 in range(self._num_datacubes):
-                for a2 in range(self._object.shape[0]):
-                    (current_object_sliced, diffraction_patterns_reshaped) = (
-                        self._forward(
-                            current_object=self._object,
-                            tilt_deg=self._tilt_deg[a1],
-                            num_points=num_points,
-                        )
-                    )
+                (current_object_sliced, diffraction_patterns_reshaped) = self._forward(
+                    tilt_deg=self._tilt_deg[a1],
+                    num_points=num_points,
+                )
 
-                    # self._adjoint()
+                self._adjoint(
+                    current_object_sliced=current_object_sliced,
+                    diffraction_patterns_reshaped=diffraction_patterns_reshaped,
+                )
 
         return self
 
     def _forward(
         self,
-        current_object: np.ndarray,
         datacube_number: float,
         tilt_deg: int,
         num_points: int,
@@ -241,8 +239,6 @@ class Tomography:
 
         Parameters
         ----------
-        current_object: np.ndarray
-            current object estimate
         datacube_number: int
             index of datacube
         tilt_deg: float
@@ -258,6 +254,7 @@ class Tomography:
             datacube with diffraction data reshapped in 2D arrays
         """
         s = self._object.shape
+        current_object = xp.asarray(self._object)
         current_object_sliced = np.zeros((s[0], s[1], s[-1], s[-1]))
 
         for a0 in range(s[0]):
@@ -280,7 +277,8 @@ class Tomography:
         return current_object_sliced, diffraction_patterns_reshaped
 
     # def _adjoint(
-    #     self
+    #     self,
+
     #     ):
 
     def _prepare_datacube(
@@ -729,7 +727,7 @@ class Tomography:
         offset = xp.arange(s[1], dtype="int")
 
         current_object_reshape = xp.pad(
-            xp.asarray(current_object[x_index]),
+            current_object[x_index],
             ((padding, padding), (0, 0), (0, 0), (0, 0), (0, 0)),
         ).reshape(((s[1] + padding * 2) * s[2], s[3], s[4], s[5]))
 
