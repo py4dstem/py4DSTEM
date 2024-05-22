@@ -216,14 +216,21 @@ class Tomography:
         """ """
         for a0 in range(num_iter):
             for a1 in range(self._num_datacubes):
-                (current_object_sliced, diffraction_patterns_reshaped) = self._forward(
+                (
+                    current_object_sliced,
+                    diffraction_patterns_weighted,
+                ) = self._forward(
+                    datacube_number=datacube_number,
                     tilt_deg=self._tilt_deg[a1],
                     num_points=num_points,
                 )
 
                 self._adjoint(
+                    datacube_number=datacube_number,
                     current_object_sliced=current_object_sliced,
-                    diffraction_patterns_reshaped=diffraction_patterns_reshaped,
+                    diffraction_patterns_weighted=diffraction_patterns_weighted,
+                    step_size=step_size,
+                    current_object_projected=current_object_projected,
                 )
 
         return self
@@ -253,9 +260,10 @@ class Tomography:
         diffraction_patterns_reshaped: np.ndarray
             datacube with diffraction data reshapped in 2D arrays
         """
+        xp = self._xp
         s = self._object.shape
         current_object = xp.asarray(self._object)
-        current_object_sliced = np.zeros((s[0], s[1], s[-1], s[-1]))
+        current_object_sliced = xp.zeros((s[0], s[1], s[-1], s[-1]))
 
         for a0 in range(s[0]):
             current_object_projected = self.real_space_radon(
@@ -274,12 +282,87 @@ class Tomography:
             datacube_number=datacube_number,
         )
 
-        return current_object_sliced, diffraction_patterns_reshaped
+        diffraction_patterns_weighted = self._calculate_diffraction_patterns_weighted(
+            datacube_number=datacube_number,
+            current_object_sliced=current_object_sliced,
+            diffraction_patterns_reshaped=diffraction_patterns_reshaped,
+        )
+
+        return (
+            current_object_sliced,
+            diffraction_patterns_weighted,
+        )
 
     # def _adjoint(
     #     self,
+    #     datacube_number,
+    #     current_object_sliced,
+    #     diffraction_patterns_weighted,
+    #     step_size,
+    #     tilt_deg,
+    # ):
+    #     """ """
+    #     # update sliced object
+    #     current_object_sliced = step_size * (
+    #         diffraction_patterns_weighted - current_object_sliced
+    #     )
 
-    #     ):
+    #     for a0 in range(self._object.shape[0]):
+
+    # def diffraction_space_adjoint(
+    #     self,
+    #     current_object_sliced: np.ndarray,
+    #     tilt_deg: int,
+    # ):
+    #     """
+    #     Slicing of diffraction space for rotated object
+
+    #     Parameters
+    #     ----------
+    #     current_object_rotated: np.ndarray
+    #         current object estimate projected
+    #     tilt_deg: float
+    #         tilt of object in degrees
+
+    #     Returns
+    #     --------
+    #     current_object_sliced: np.ndarray
+    #         projection of current object sliced in diffraciton space
+
+    #     """
+    #     xp = self._xp
+
+    #     # s = current_object_projected.shape
+
+    #     tilt = xp.deg2rad(tilt_deg)
+
+    #     line_y_diff = self._line_y_diff
+    #     line_z_diff = self._line_z_diff
+    #     yF_diff = self._yF_diff
+    #     zF_diff = self._zF_diff
+    #     dy_diff = self._dy_diff
+    #     dz_diff = self._dz_diff
+
+    #     current_object_projected_updated = current_object_projected.copy()
+
+    #     for basis_index in range(4):
+    #         match basis_index:
+    #             case 0:
+    #                 inds = [yF_diff, zF_diff]
+    #                 weights = (1 - dy_diff) * (1 - dz_diff)
+    #             case 1:
+    #                 inds = [yF_diff + 1, zF_diff]
+    #                 weights = (dy_diff) * (1 - dz_diff)
+    #             case 2:
+    #                 inds = [yF_diff, zF_diff + 1]
+    #                 weights = (1 - dy_diff) * (dz_diff)
+    #             case 3:
+    #                 inds = [yF_diff + 1, zF_diff + 1]
+    #                 weights = (dy_diff) * (dz_diff)
+
+    #         # current_object_projected -=
+
+    #     return self._asnumpy(current_object_sliced)
 
     def _prepare_datacube(
         self,
@@ -811,6 +894,13 @@ class Tomography:
         dy_diff = line_y_diff - yF_diff
         dz_diff = line_z_diff - zF_diff
 
+        self._line_y_diff = line_y_diff
+        self._line_z_diff = line_z_diff
+        self._yF_diff = yF_diff
+        self._zF_diff = xF_diff
+        self._dy_diff = dy_diff
+        self._dz_diff = dz_diff
+
         current_object_sliced = xp.zeros((s[0], s[-1], s[-1]))
         current_object_projected = xp.pad(
             current_object_projected, ((0, 0), (0, 0), (0, 1), (0, 1))
@@ -835,8 +925,6 @@ class Tomography:
                 current_object_projected[:, :, inds[0], inds[1]]
                 * weights[None, None, :]
             )
-
-        current_object_sliced
 
         return self._asnumpy(current_object_sliced)
 
@@ -871,7 +959,7 @@ class Tomography:
             :, xp.asarray(self._ind_diffraction_space_ravel)
         ] = diffraction_patterns_flat
         diffraction_patterns_reshaped = diffraction_patterns_reshaped[
-            :, self._reorder_patterns
+            :, xp.asarray(self._reorder_patterns)
         ]
 
         diffraction_patterns_reshaped = diffraction_patterns_reshaped.reshape(
@@ -883,6 +971,59 @@ class Tomography:
         )
 
         return diffraction_patterns_reshaped
+
+    def _calculate_diffraction_patterns_weighted(
+        self, datacube_number, current_object_sliced, diffraction_patterns_reshaped
+    ):
+        """
+        Calculate diffraction pattern re-weighted for voxels
+
+        Parameters
+        ----------
+        datacube_number: int
+            index of datacube
+        current_object_sliced: np.ndarray
+            projection of current object sliced in diffraciton space
+        diffraction_patterns_reshaped: np.ndarray
+            datacube with diffraction data reshapped in 2D arrays
+
+        Returns
+        --------
+        diffraction_patterns_weighted: np.ndarray
+            diffraction patterns reshaped for update
+
+        """
+        xp = self._xp
+
+        xF = xp.asarray(self._positions_vox_F[datacube_number][0])
+        yF = xp.asarray(self._positions_vox_F[datacube_number][1])
+
+        dx = xp.asarray(self._positions_vox_dF[datacube_number][0])
+        dy = xp.asarray(self._positions_vox_dF[datacube_number][1])
+
+        s = current_object_sliced.shape
+        diffraction_patterns_weighted = xp.zeros((s[0] + 1, s[1] + 1, s[2], s[3]))
+
+        for basis_index in range(4):
+            match basis_index:
+                case 0:
+                    inds = [xF, yF]
+                    weights = (1 - dx) * (1 - dy)
+                case 1:
+                    inds = [xF + 1, yF]
+                    weights = (dx) * (1 - dy)
+                case 2:
+                    inds = [xF, yF + 1]
+                    weights = (1 - dx) * (dy)
+                case 3:
+                    inds = [xF + 1, yF + 1]
+                    weights = (dx) * (dy)
+
+            diffraction_patterns_weighted[inds[0], inds[1]] += (
+                diffraction_patterns_reshaped * weights[:, None, None]
+            )
+
+        return diffraction_patterns_weighted[:-1, :-1]
 
     def _make_test_object(
         self,
