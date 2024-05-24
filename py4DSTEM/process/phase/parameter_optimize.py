@@ -506,7 +506,7 @@ class PtychographyOptimizer:
                 )
                 return np.log(ptycho.error) if converged else 0.0
 
-        elif error_metric == "log-linear":
+        elif error_metric == "linear-converged":
 
             def f(ptycho):
                 converged = ptycho.error_iterations[-1] <= np.min(

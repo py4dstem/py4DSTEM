@@ -710,6 +710,10 @@ def plot_radial_peaks(
         minlength=q_num,
     )
 
+    # storing arrays for further plotting
+    self.q_bins = q_bins
+    self.int_peaks = int_peaks
+
     # plotting
     fig, ax = plt.subplots(figsize=figsize)
     ax.plot(

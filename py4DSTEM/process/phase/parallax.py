@@ -745,7 +745,7 @@ class Parallax(PhaseReconstruction):
         alignment_bin_values: list = None,
         cross_correlation_upsample_factor: int = 8,
         regularizer_matrix_size: Tuple[int, int] = (1, 1),
-        regularize_shifts: bool = True,
+        regularize_shifts: bool = False,
         running_average: bool = True,
         progress_bar: bool = True,
         plot_aligned_bf: bool = True,
