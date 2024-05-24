@@ -162,6 +162,9 @@ class Tomography:
                         ),
                     )
 
+            # ellpitical fitting?! 
+
+
             # hmmm how to handle this? we might need to rotate diffraction patterns
             # solve for QR rotation if necessary
             # if a0 is 0 only
@@ -893,13 +896,6 @@ class Tomography:
         zF_diff = xp.floor(line_z_diff).astype("int")
         dy_diff = line_y_diff - yF_diff
         dz_diff = line_z_diff - zF_diff
-
-        self._line_y_diff = line_y_diff
-        self._line_z_diff = line_z_diff
-        self._yF_diff = yF_diff
-        self._zF_diff = xF_diff
-        self._dy_diff = dy_diff
-        self._dz_diff = dz_diff
 
         current_object_sliced = xp.zeros((s[0], s[-1], s[-1]))
         current_object_projected = xp.pad(
