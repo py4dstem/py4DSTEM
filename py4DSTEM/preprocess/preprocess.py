@@ -495,8 +495,8 @@ def median_filter_masked_pixels(datacube, mask, kernel_width: int = 3):
         width_min = kernel_width // 2
 
     else:
-        width_max = int(kernel_width / 2 + 0.5)
-        width_min = int(kernel_width / 2 - 0.5)
+        width_max = int(np.ceil(kernel_width / 2))
+        width_min = int(np.floor(kernel_width / 2))
 
     num_bad_pixels_indicies = np.array(np.where(mask))
     for a0 in range(num_bad_pixels_indicies.shape[1]):
@@ -523,6 +523,57 @@ def median_filter_masked_pixels(datacube, mask, kernel_width: int = 3):
             datacube.data[:, :, x_min:x_max, y_min:y_max], axis=(2, 3)
         )
     return datacube
+
+
+def median_filter_masked_pixels_2D(array, mask, kernel_width: int = 3):
+    """
+    Median filters a 2D array
+
+    Parameters
+    ----------
+    array:
+        array to be filtered
+    mask:
+        a boolean mask that specifies the bad pixels in the datacube
+    kernel_width (optional):
+        specifies the width of the median kernel
+
+    Returns
+    ----------
+    filtered datacube
+    """
+    if kernel_width % 2 == 0:
+        width_max = kernel_width // 2
+        width_min = kernel_width // 2
+
+    else:
+        width_max = int(np.ceil(kernel_width / 2))
+        width_min = int(np.floor(kernel_width / 2))
+
+    num_bad_pixels_indicies = np.array(np.where(mask))
+    for a0 in range(num_bad_pixels_indicies.shape[1]):
+        index_x = num_bad_pixels_indicies[0, a0]
+        index_y = num_bad_pixels_indicies[1, a0]
+
+        x_min = index_x - width_min
+        y_min = index_y - width_min
+
+        x_max = index_x + width_max
+        y_max = index_y + width_max
+
+        if x_min < 0:
+            x_min = 0
+        if y_min < 0:
+            y_min = 0
+
+        if x_max > array.shape[0]:
+            x_max = array.shape[0]
+        if y_max > array.shape[1]:
+            y_max = array.shape[1]
+
+        array[index_x, index_y] = np.median(array[x_min:x_max, y_min:y_max])
+
+    return array
 
 
 def datacube_diffraction_shift(
