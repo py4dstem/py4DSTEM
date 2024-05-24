@@ -30,7 +30,7 @@ setup(
         "ncempy >= 1.8.1",
         "matplotlib >= 3.2.2",
         "scikit-image >= 0.17.2",
-        "scikit-learn >= 0.23.2",
+        "scikit-learn >= 0.23.2, < 1.5",
         "scikit-optimize >= 0.9.0",
         "tqdm >= 4.46.1",
         "dill >= 0.3.3",
