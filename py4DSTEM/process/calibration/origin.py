@@ -226,6 +226,7 @@ def get_origin(
     dp_max=None,
     mask=None,
     fast_center=False,
+    remove_NaN=False,
 ):
     """
     Find the origin for all diffraction patterns in a datacube, assuming (a) there is no
@@ -253,6 +254,8 @@ def get_origin(
                     arrays are returned for qx0,qy0
         fast_center: (bool)
             Skip the center of mass refinement step.
+        remove_NaN: (bool)
+            If True, sets NaN to mean value
 
     Returns:
         (2-tuple of (R_Nx,R_Ny)-shaped ndarrays): the origin, (x,y) at each scan position
@@ -316,6 +319,10 @@ def get_origin(
                     qx0.data[rx, ry], qy0.data[rx, ry] = get_CoM(dp * _mask)
             else:
                 qx0.mask, qy0.mask = True, True
+
+    if remove_NaN:
+        qx0[np.isnan(qx0)] = np.mean(qx0[~np.isnan(qx0)])
+        qy0[np.isnan(qy0)] = np.mean(qy0[~np.isnan(qy0)])
 
     # return
     mask = np.ones(datacube.Rshape, dtype=bool)
