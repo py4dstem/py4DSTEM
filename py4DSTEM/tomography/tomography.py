@@ -127,7 +127,7 @@ class Tomography:
 
         self._num_datacubes = len(self._datacubes)
 
-        self._diffraction_patterns = []
+        self._diffraction_patterns_projected = []
         self._positions_ang = []
         self._positions_vox = []
         self._positions_vox_F = []
@@ -195,17 +195,12 @@ class Tomography:
                     robust_thresh=robust_thresh,
                 )
 
-            datacube_centered = self._center_diffraction_patterns(
-                datacube=datacube,
-                qx0_fit=qx0_fit,
-                qy0_fit=qy0_fit,
-                overwrite_datacube=overwrite_datacube,
-            )
-
             self._reshape_diffraction_patterns(
                 datacube_number=a0,
                 datacube_centered=datacube_centered,
                 mask_real_space=mask_real_space,
+                qx0 = qx0,
+                qy0 = qy0,
             )
 
         return self
@@ -630,51 +625,8 @@ class Tomography:
 
         return qx0_fit, qy0_fit
 
-    def _center_diffraction_patterns(
-        self,
-        datacube,
-        qx0_fit,
-        qy0_fit,
-        overwrite_datacube,
-    ):
-        """
-        Centering of diffraction patterns
-
-        Parameters
-        ----------
-        datacube: DataCube
-            datacube to be centered
-        qx0_fit: np.ndarray
-            qx shifts
-        qy0_fit: int
-            qy shifts
-        overwrite_datacube: bool
-            if True, modifies datacube in place
-
-        Returns
-        --------
-        datacube_centered: DataCube
-            DataCube with centered patterns
-        """
-        if overwrite_datacube is True:
-            datacube_centered = datacube
-        else:
-            datacube_centered = datacube.copy()
-
-        for rx in range(datacube_centered.Rshape[0]):
-            for ry in range(datacube_centered.Rshape[1]):
-                datacube_centered.data[rx, ry] = get_shifted_ar(
-                    datacube_centered.data[rx, ry],
-                    -qx0_fit[rx, ry],
-                    -qy0_fit[rx, ry],
-                    bilinear=True,
-                    device="cpu",
-                )
-
-        return datacube_centered
-
     def _reshape_diffraction_patterns(
-        self, datacube_number, datacube_centered, mask_real_space
+        self, datacube_number, datacube_centered, mask_real_space, qx0, qy0
     ):
         """
         Reshapes diffraction data into a 2x2 array
@@ -687,24 +639,28 @@ class Tomography:
             datacube to be rshaped
         mask_real_space: np.ndarray
             mask for real space
+        qx0_fit: np.ndarray
+            qx shifts
+        qy0_fit: int
+            qy shifts
         """
         xp_storage = self._xp_storage
 
         s = self._initial_datacube_shape
 
-        diffraction_patterns = datacube_centered.data.reshape(
+        diffraction_patterns_projected = datacube_centered.data.reshape(
             (s[0] * s[1], s[2] * s[3])
         )
 
         del datacube_centered
 
         if mask_real_space is not None:
-            diffraction_patterns = diffraction_patterns[mask_real_space.ravel() == True]
+            diffraction_patterns_projected = diffraction_patterns_projected[mask_real_space.ravel() == True]
 
         ind = np.arange(s[-1] * s[-2]).reshape((s[-1], s[-2]))
         ind_rot = np.fft.ifftshift(np.rot90(np.fft.fftshift(ind), 2)).flatten()
 
-        diffraction_patterns += diffraction_patterns[:, ind_rot]
+        diffraction_patterns_projected += diffraction_patterns_projected[:, ind_rot]
 
         # crop diffraction space
         if datacube_number == 0:
@@ -724,13 +680,13 @@ class Tomography:
                 np.arange(s[2] * s[3]).reshape((s[2], s[3]))
             ).ravel()
 
-        diffraction_patterns = diffraction_patterns[
+        diffraction_patterns_projected = diffraction_patterns_projected[
             :, self._ind_diffraction_space_ravel == True
         ]
 
-        diffraction_patterns = xp_storage.asarray(diffraction_patterns)
+        diffraction_patterns_projected = xp_storage.asarray(diffraction_patterns_projected)
 
-        self._diffraction_patterns.append(diffraction_patterns)
+        self._diffraction_patterns_projected.append(diffraction_patterns_projected)
 
     def _forward_simulation(
         self,
