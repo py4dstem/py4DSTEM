@@ -1406,7 +1406,7 @@ class PhaseReconstruction(Custom):
             )
 
             crop_w = np.minimum(crop_y, crop_x)
-            region_of_interest_shape = (crop_w * 2, crop_w * 2)
+            diffraction_intensities_shape_crop = (crop_w * 2, crop_w * 2)
             amplitudes = np.zeros(
                 (
                     number_of_patterns,
@@ -1424,9 +1424,10 @@ class PhaseReconstruction(Custom):
 
         else:
             crop_mask = None
-            region_of_interest_shape = diffraction_intensities.shape[-2:]
+            diffraction_intensities_shape_crop = diffraction_intensities.shape[-2:]
             amplitudes = np.zeros(
-                (number_of_patterns,) + region_of_interest_shape, dtype=np.float32
+                (number_of_patterns,) + diffraction_intensities_shape_crop,
+                dtype=np.float32,
             )
 
         counter = 0
@@ -1449,13 +1450,17 @@ class PhaseReconstruction(Custom):
             )
 
             if crop_patterns:
-                intensities = intensities[crop_mask].reshape(region_of_interest_shape)
+                intensities = intensities[crop_mask].reshape(
+                    diffraction_intensities_shape_crop
+                )
 
             mean_intensity += np.sum(intensities)
             amplitudes[counter] = np.sqrt(np.maximum(intensities, 0))
             counter += 1
 
         mean_intensity /= amplitudes.shape[0]
+
+        self._diffraction_intensities_shape_crop = diffraction_intensities_shape_crop
 
         return amplitudes, mean_intensity, crop_mask
 
@@ -1589,6 +1594,7 @@ class PtychographicReconstruction(PhaseReconstruction):
                 "data_transpose": self._rotation_best_transpose,
                 "positions_px": asnumpy(self._positions_px),
                 "region_of_interest_shape": self._region_of_interest_shape,
+                "amplitudes_shape": self._amplitudes_shape,
                 "num_diffraction_patterns": self._num_diffraction_patterns,
                 "sampling": self.sampling,
                 "angular_sampling": self.angular_sampling,
@@ -1730,6 +1736,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         self._positions_px = xp.asarray(preprocess_md["positions_px"])
         self._angular_sampling = preprocess_md["angular_sampling"]
         self._region_of_interest_shape = preprocess_md["region_of_interest_shape"]
+        self._amplitudes_shape = preprocess_md["amplitudes_shape"]
         self._num_diffraction_patterns = preprocess_md["num_diffraction_patterns"]
         self._positions_mask = preprocess_md["positions_mask"]
 

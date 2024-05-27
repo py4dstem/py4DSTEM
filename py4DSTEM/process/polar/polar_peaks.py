@@ -13,6 +13,7 @@ from py4DSTEM.process.fit import (
     polar_twofold_gaussian_2D,
     polar_twofold_gaussian_2D_background,
 )
+from py4DSTEM.visualize import show
 
 
 def find_peaks_single_pattern(
@@ -40,6 +41,7 @@ def find_peaks_single_pattern(
     plot_scale_size=10.0,
     figsize=(12, 6),
     returnfig=False,
+    **kwargs
 ):
     """
     Peak detection function for polar transformations.
@@ -125,6 +127,7 @@ def find_peaks_single_pattern(
         self._datacube.data[x, y],
         mask=mask,
         returnval="all_zeros",
+        origin=(self.calibration.qx0[x, y], self.calibration.qy0[x, y]),
     )
     # Change sign convention of mask
     mask_bool = np.logical_not(mask_bool)
@@ -307,10 +310,10 @@ def find_peaks_single_pattern(
 
         fig, ax = plt.subplots(figsize=figsize)
 
-        ax.imshow(
-            im_plot,
-            cmap="gray",
-        )
+        cmap = kwargs.pop("cmap", "gray")
+        vmax = kwargs.pop("vmax", 1)
+        vmin = kwargs.pop("vmin", 0)
+        show(im_plot, figax=(fig, ax), cmap=cmap, vmax=vmax, vmin=vmin, **kwargs)
 
         # peaks
         ax.scatter(
@@ -706,6 +709,10 @@ def plot_radial_peaks(
         weights=dq[sub] * intensity[sub],
         minlength=q_num,
     )
+
+    # storing arrays for further plotting
+    self.q_bins = q_bins
+    self.int_peaks = int_peaks
 
     # plotting
     fig, ax = plt.subplots(figsize=figsize)
