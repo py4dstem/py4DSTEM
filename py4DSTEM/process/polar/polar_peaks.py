@@ -164,6 +164,7 @@ def find_peaks_single_pattern(
         im_polar_sm,
         num_peaks=num_peaks_max,
         threshold_abs=threshold_abs,
+        exclude_border=False,
     )
 
     # check if peaks should be removed from the polar transformation mask
