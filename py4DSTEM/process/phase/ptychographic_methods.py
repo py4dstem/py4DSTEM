@@ -48,14 +48,24 @@ class ObjectNDMethodsMixin:
         xp = self._xp
 
         object_padding_px = self._object_padding_px
+        object_fov_ang = self._object_fov_ang
         region_of_interest_shape = self._region_of_interest_shape
 
         if initial_object is None:
-            pad_x = object_padding_px[0][1]
-            pad_y = object_padding_px[1][1]
-            p, q = np.round(np.max(positions_px, axis=0))
-            p = np.max([np.round(p + pad_x), region_of_interest_shape[0]]).astype("int")
-            q = np.max([np.round(q + pad_y), region_of_interest_shape[1]]).astype("int")
+            if object_fov_ang is None:
+                pad_x = object_padding_px[0][1]
+                pad_y = object_padding_px[1][1]
+                p, q = np.round(np.max(positions_px, axis=0))
+                p = np.max([np.round(p + pad_x), region_of_interest_shape[0]]).astype(
+                    "int"
+                )
+                q = np.max([np.round(q + pad_y), region_of_interest_shape[1]]).astype(
+                    "int"
+                )
+            else:
+                p, q = np.ceil(
+                    np.array(object_fov_ang) / np.array(self.sampling)
+                ).astype("int")
             if object_type == "potential":
                 _object = xp.zeros((p, q), dtype=xp.float32)
             elif object_type == "complex":
