@@ -101,6 +101,9 @@ class MagneticPtychography(
     initial_scan_positions: np.ndarray, optional
         Probe positions in Å for each diffraction intensity
         If None, initialized to a grid scan
+    object_fov_ang: Tuple[int,int], optional
+        Fixed object field of view in Å. If None, the fov is initialized using the
+        probe positions and object_padding_px
     positions_offset_ang: np.ndarray, optional
         Offset of positions in A
     verbose: bool, optional
@@ -138,6 +141,7 @@ class MagneticPtychography(
         initial_object_guess: np.ndarray = None,
         initial_probe_guess: np.ndarray = None,
         initial_scan_positions: np.ndarray = None,
+        object_fov_ang: Tuple[float, float] = None,
         positions_offset_ang: np.ndarray = None,
         object_type: str = "complex",
         verbose: bool = True,
@@ -189,6 +193,7 @@ class MagneticPtychography(
         self._rolloff = rolloff
         self._object_type = object_type
         self._object_padding_px = object_padding_px
+        self._object_fov_ang = object_fov_ang
         self._positions_mask = positions_mask
         self._verbose = verbose
         self._preprocessed = False
@@ -219,6 +224,7 @@ class MagneticPtychography(
         progress_bar: bool = True,
         object_fov_mask: np.ndarray = True,
         crop_patterns: bool = False,
+        center_positions_in_fov: bool = True,
         store_initial_arrays: bool = True,
         device: str = None,
         clear_fft_cache: bool = None,
@@ -286,6 +292,8 @@ class MagneticPtychography(
             If None, probe_overlap intensity is thresholded
         crop_patterns: bool
             if True, crop patterns to avoid wrap around of patterns when centering
+        center_positions_in_fov: bool
+            If True (default), probe positions are centered in the fov.
         store_initial_arrays: bool
             If True, preprocesed object and probe arrays are stored allowing reset=True in reconstruct.
         device: str, optional
@@ -610,14 +618,17 @@ class MagneticPtychography(
             self._positions_px_all, dtype=xp_storage.float32
         )
 
-        for index in range(self._num_measurements):
-            idx_start = self._cum_probes_per_measurement[index]
-            idx_end = self._cum_probes_per_measurement[index + 1]
+        if center_positions_in_fov:
+            for index in range(self._num_measurements):
+                idx_start = self._cum_probes_per_measurement[index]
+                idx_end = self._cum_probes_per_measurement[index + 1]
 
-            positions_px = self._positions_px_all[idx_start:idx_end]
-            positions_px_com = positions_px.mean(0)
-            positions_px -= positions_px_com - xp_storage.array(self._object_shape) / 2
-            self._positions_px_all[idx_start:idx_end] = positions_px.copy()
+                positions_px = self._positions_px_all[idx_start:idx_end]
+                positions_px_com = positions_px.mean(0)
+                positions_px -= (
+                    positions_px_com - xp_storage.array(self._object_shape) / 2
+                )
+                self._positions_px_all[idx_start:idx_end] = positions_px.copy()
 
         self._positions_px_initial_all = self._positions_px_all.copy()
         self._positions_initial_all = self._positions_px_initial_all.copy()
