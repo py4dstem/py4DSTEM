@@ -179,6 +179,7 @@ class Tomography:
             #     _solve_for_center_of_mass_relative_rotation():
 
             # initialize positions
+
             mask_real_space = self._calculate_scan_positions(
                 datacube_number=a0,
                 mask_real_space=mask_real_space,
@@ -186,8 +187,8 @@ class Tomography:
 
             # align and reshape
             if force_centering_shifts:
-                qx0_fit = force_centering_shifts[datacube_number][0]
-                qy0_fit = force_centering_shifts[datacube_number][1]
+                qx0_fit = force_centering_shifts[a0][0]
+                qy0_fit = force_centering_shifts[a0][1]
             else:
                 (qx0_fit, qy0_fit) = self._solve_for_diffraction_pattern_centering(
                     datacube=datacube,
@@ -726,8 +727,8 @@ class Tomography:
             circular_mask = ((xx) ** 2 + (yy) ** 2) ** 0.5 < q_max_px
 
             self._circular_mask = circular_mask
-            self._circular_masK_ravel = circular_mask.ravel()
-            self._circular_masK_bincount = np.asarray(
+            self._circular_mask_ravel = circular_mask.ravel()
+            self._circular_mask_bincount = np.asarray(
                 np.bincount(
                     self._ind_diffraction_ravel,
                     circular_mask.ravel(),
@@ -737,20 +738,25 @@ class Tomography:
             )
 
         center = (s[-1] / 2, s[-1] / 2)
-
+        print(center)
         diffraction_patterns_reshaped = np.zeros((s[0] * s[1], self._q_length))
 
         for a0 in range(s[0]):
             for a1 in range(s[0]):
-                xF = int(np.floor(qx0_fit[a0, a1]))
-                yF = int(np.floor(qy0_fit[a0, a1]))
 
-                wx = qx0_fit[a0, a1] - xF
-                wy = qy0_fit[a0, a1] - yF
+                qx0 = qx0_fit[a0, a1] - center[0]
+                qy0 = qy0_fit[a0, a1] - center[1]
+
+                xF = int(np.floor(qx0))
+                yF = int(np.floor(qy0))
+
+                wx = qx0 - xF
+                wy = qy0 - yF
 
                 dp = datacube.data[a0, a1]
 
                 index = np.ravel_multi_index((a0, a1), (s[0], s[1]))
+
                 diffraction_patterns_reshaped[index] = (
                     (
                         (
@@ -793,7 +799,7 @@ class Tomography:
                 )
 
         self._diffraction_patterns_projected.append(
-            diffraction_patterns_reshaped[:, self._circular_masK_bincount]
+            diffraction_patterns_reshaped[:, self._circular_mask_bincount]
         )
 
     def _forward_simulation(
