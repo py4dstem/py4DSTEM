@@ -68,6 +68,7 @@ class Tomography:
         resizing_method: str = "bin",
         bin_real_space: int = None,
         crop_reciprocal_space: float = None,
+        q_max_inv_A: int = None,
         force_q_to_r_rotation_deg: float = None,
         force_q_to_r_transpose: bool = None,
         diffraction_space_mask_com=None,
@@ -80,7 +81,6 @@ class Tomography:
         robust: bool = False,
         robust_steps: int = 3,
         robust_thresh: int = 2,
-        overwrite_datacube=True,
     ):
         """
         diffraction_intensites_shape: int
@@ -91,6 +91,8 @@ class Tomography:
             factor for binnning in real space
         crop_reciprocal_space: float
             if not None, crops reciprocal space on all sides by integer
+        q_max_inv_A: int
+            maximum q in inverse angstroms
         force_q_to_r_rotation_deg:float
             force q to r rotation in degrees. If False solves for rotation
             with datacube specified with `datacube_to_solve_rotation` using
@@ -139,7 +141,7 @@ class Tomography:
         # preprocessing of diffraction data
         for a0 in range(self._num_datacubes):
             # load and preprocess datacube
-            (datacube, mask_real_space, diffraction_space_mask_com) = (
+            (datacube, mask_real_space, diffraction_space_mask_com, q_max_inv_A) = (
                 self._prepare_datacube(
                     datacube_number=a0,
                     diffraction_intensities_shape=diffraction_intensities_shape,
@@ -148,6 +150,7 @@ class Tomography:
                     bin_real_space=bin_real_space,
                     masks_real_space=masks_real_space,
                     crop_reciprocal_space=crop_reciprocal_space,
+                    q_max_inv_A=q_max_inv_A,
                 )
             )
 
@@ -204,6 +207,7 @@ class Tomography:
                 mask_real_space=mask_real_space,
                 qx0_fit=qx0_fit,
                 qy0_fit=qy0_fit,
+                q_max_inv_A=q_max_inv_A,
             )
 
         return self
@@ -374,6 +378,7 @@ class Tomography:
         bin_real_space,
         masks_real_space,
         crop_reciprocal_space,
+        q_max_inv_A,
     ):
         """
         datacube_number: int
@@ -390,6 +395,8 @@ class Tomography:
             mask for real space. can be the same for each datacube of individually specified.
         crop_reciprocal_space: float
             if not None, crops reciprocal space on all sides by integer
+        q_max_inv_A: int
+            maximum q in inverse angtroms
         """
         if type(self._datacubes[datacube_number]) is str:
             try:
@@ -430,8 +437,6 @@ class Tomography:
             Q = datacube.shape[-1]
             S = diffraction_intensities_shape
             resampling_factor = S / Q
-            if datacube_number == 0:
-                self._datacube_Q_pixel_size_inv_A /= resampling_factor
 
             if resizing_method == "bin":
                 datacube = datacube.bin_Q(N=int(1 / resampling_factor))
@@ -470,6 +475,18 @@ class Tomography:
                     )
                 )
 
+            if datacube_number == 0:
+                self._datacube_Q_pixel_size_inv_A /= resampling_factor
+                if q_max_inv_A is not None:
+                    q_max_inv_A *= resampling_factor
+                else:
+                    q_max_inv_A = (
+                        self._datacube_Q_pixel_size_inv_A * datacube.Qshape[0] / 2
+                    )
+        else:
+            if datacube_number == 0 and q_max_inv_A is None:
+                q_max_inv_A = self._datacube_Q_pixel_size_inv_A * datacube.Qshape[0] / 2
+
         # bin real space
         if bin_real_space is not None:
             datacube.bin_R(bin_real_space)
@@ -484,7 +501,7 @@ class Tomography:
 
         self._initial_datacube_shape = datacube.data.shape
 
-        return datacube, mask_real_space, diffraction_space_mask_com
+        return datacube, mask_real_space, diffraction_space_mask_com, q_max_inv_A
 
     def _calculate_scan_positions(
         self,
@@ -642,10 +659,16 @@ class Tomography:
         return qx0_fit, qy0_fit
 
     def _reshape_diffraction_patterns(
-        self, datacube_number, datacube, mask_real_space, qx0_fit, qy0_fit
+        self,
+        datacube_number,
+        datacube,
+        mask_real_space,
+        qx0_fit,
+        qy0_fit,
+        q_max_inv_A,
     ):
         """
-        Reshapes diffraction data into a 2x2 array
+        Reshapes diffraction data into a 2 column array
 
         Parameters
         ----------
@@ -659,6 +682,8 @@ class Tomography:
             qx shifts
         qy0_fit: int
             qy shifts
+        q_max_inv_A: int
+            maximum q in inverse angstroms
         """
         xp_storage = self._xp_storage
 
@@ -690,11 +715,30 @@ class Tomography:
 
             self._ind_diffraction = ind_diffraction
             self._ind_diffraction_ravel = ind_diffraction.ravel()
+            self._q_length = np.unique(self._ind_diffraction).shape[0] + 1
+
+            # pixels to remove
+            q_max_px = q_max_inv_A / self._datacube_Q_pixel_size_inv_A
+
+            x = np.arange(s[-1]) - ((s[-1] - 1) / 2)
+            y = np.arange(s[-1]) - ((s[-1] - 1) / 2)
+            xx, yy = np.meshgrid(x, y)
+            circular_mask = ((xx) ** 2 + (yy) ** 2) ** 0.5 < q_max_px
+
+            self._circular_mask = circular_mask
+            self._circular_masK_ravel = circular_mask.ravel()
+            self._circular_masK_bincount = np.asarray(
+                np.bincount(
+                    self._ind_diffraction_ravel,
+                    circular_mask.ravel(),
+                    minlength=self._q_length,
+                ),
+                dtype="bool",
+            )
 
         center = (s[-1] / 2, s[-1] / 2)
 
-        q_length = np.unique(self._ind_diffraction).shape[0] + 1
-        diffraction_patterns_reshaped = np.zeros((s[0] * s[1], q_length))
+        diffraction_patterns_reshaped = np.zeros((s[0] * s[1], self._q_length))
 
         for a0 in range(s[0]):
             for a1 in range(s[0]):
@@ -715,7 +759,7 @@ class Tomography:
                             * np.bincount(
                                 self._ind_diffraction_ravel,
                                 np.roll(dp, (xF, yF), axis=(0, 1)).ravel(),
-                                minlength=q_length,
+                                minlength=self._q_length,
                             )
                         )
                     )
@@ -725,7 +769,7 @@ class Tomography:
                         * np.bincount(
                             self._ind_diffraction_ravel,
                             np.roll(dp, (xF + 1, yF), axis=(0, 1)).ravel(),
-                            minlength=q_length,
+                            minlength=self._q_length,
                         )
                     )
                     + (
@@ -734,7 +778,7 @@ class Tomography:
                         * np.bincount(
                             self._ind_diffraction_ravel,
                             np.roll(dp, (xF, yF + 1), axis=(0, 1)).ravel(),
-                            minlength=q_length,
+                            minlength=self._q_length,
                         )
                     )
                     + (
@@ -743,15 +787,14 @@ class Tomography:
                         * np.bincount(
                             self._ind_diffraction_ravel,
                             np.roll(dp, (xF + 1, yF + 1), axis=(0, 1)).ravel(),
-                            minlength=q_length,
+                            minlength=self._q_length,
                         )
                     )
                 )
-                diffraction_patterns_reshaped /= np.bincount(
-                    self._ind_diffraction_ravel,
-                    np.ones(self._ind_diffraction_ravel.shape),
-                    minlength=q_length,
-                )
+
+        self._diffraction_patterns_projected.append(
+            diffraction_patterns_reshaped[:, self._circular_masK_bincount]
+        )
 
     def _forward_simulation(
         self,
