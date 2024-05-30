@@ -887,48 +887,21 @@ class XRayMagneticPtychography(
             + (normalization_min * xp.max(probe_electrostatic_normalization)) ** 2
         )
 
-        probe_magnetic_abs = xp.abs(shifted_probes * xp.exp(1.0j * object_patches[1]))
-        probe_magnetic_normalization = self._sum_overlapping_patches_bincounts(
-            probe_magnetic_abs**2,
-            positions_px,
-        )
-        probe_magnetic_normalization = 1 / xp.sqrt(
-            1e-16
-            + ((1 - normalization_min) * probe_magnetic_normalization) ** 2
-            + (normalization_min * xp.max(probe_magnetic_normalization)) ** 2
-        )
-
-        if not fix_probe:
-            electrostatic_magnetic_abs = xp.abs(
-                object_patches[0] * xp.exp(1.0j * object_patches[1])
-            )
-            electrostatic_magnetic_normalization = xp.sum(
-                electrostatic_magnetic_abs**2,
-                axis=0,
-            )
-            electrostatic_magnetic_normalization = 1 / xp.sqrt(
-                1e-16
-                + ((1 - normalization_min) * electrostatic_magnetic_normalization) ** 2
-                + (normalization_min * xp.max(electrostatic_magnetic_normalization))
-                ** 2
-            )
-
-            if self._recon_mode > 0:
-                electrostatic_abs = xp.abs(object_patches[0])
-                electrostatic_normalization = xp.sum(
-                    electrostatic_abs**2,
-                    axis=0,
-                )
-                electrostatic_normalization = 1 / xp.sqrt(
-                    1e-16
-                    + ((1 - normalization_min) * electrostatic_normalization) ** 2
-                    + (normalization_min * xp.max(electrostatic_normalization)) ** 2
-                )
-
         match (self._recon_mode, self._active_measurement_index):
             case (0, 0) | (1, 0):  # reverse
 
                 magnetic_exp = xp.exp(1.0j * xp.conj(object_patches[1]))
+
+                probe_magnetic_abs = xp.abs(shifted_probes * magnetic_exp)
+                probe_magnetic_normalization = self._sum_overlapping_patches_bincounts(
+                    probe_magnetic_abs**2,
+                    positions_px,
+                )
+                probe_magnetic_normalization = 1 / xp.sqrt(
+                    1e-16
+                    + ((1 - normalization_min) * probe_magnetic_normalization) ** 2
+                    + (normalization_min * xp.max(probe_magnetic_normalization)) ** 2
+                )
 
                 # P* exp(i M*)
                 electrostatic_update = self._sum_overlapping_patches_bincounts(
@@ -950,6 +923,28 @@ class XRayMagneticPtychography(
                 )
 
                 if not fix_probe:
+
+                    electrostatic_magnetic_abs = xp.abs(
+                        object_patches[0] * magnetic_exp
+                    )
+                    electrostatic_magnetic_normalization = xp.sum(
+                        electrostatic_magnetic_abs**2,
+                        axis=0,
+                    )
+                    electrostatic_magnetic_normalization = 1 / xp.sqrt(
+                        1e-16
+                        + (
+                            (1 - normalization_min)
+                            * electrostatic_magnetic_normalization
+                        )
+                        ** 2
+                        + (
+                            normalization_min
+                            * xp.max(electrostatic_magnetic_normalization)
+                        )
+                        ** 2
+                    )
+
                     # exp(i M*) C*
                     current_probe += step_size * (
                         xp.sum(
@@ -962,6 +957,17 @@ class XRayMagneticPtychography(
             case (0, 1) | (1, 2) | (2, 1):  # forward
 
                 magnetic_exp = xp.exp(-1.0j * xp.conj(object_patches[1]))
+
+                probe_magnetic_abs = xp.abs(shifted_probes * magnetic_exp)
+                probe_magnetic_normalization = self._sum_overlapping_patches_bincounts(
+                    probe_magnetic_abs**2,
+                    positions_px,
+                )
+                probe_magnetic_normalization = 1 / xp.sqrt(
+                    1e-16
+                    + ((1 - normalization_min) * probe_magnetic_normalization) ** 2
+                    + (normalization_min * xp.max(probe_magnetic_normalization)) ** 2
+                )
 
                 # P* exp(-i M*)
                 electrostatic_update = self._sum_overlapping_patches_bincounts(
@@ -983,6 +989,28 @@ class XRayMagneticPtychography(
                 )
 
                 if not fix_probe:
+
+                    electrostatic_magnetic_abs = xp.abs(
+                        object_patches[0] * magnetic_exp
+                    )
+                    electrostatic_magnetic_normalization = xp.sum(
+                        electrostatic_magnetic_abs**2,
+                        axis=0,
+                    )
+                    electrostatic_magnetic_normalization = 1 / xp.sqrt(
+                        1e-16
+                        + (
+                            (1 - normalization_min)
+                            * electrostatic_magnetic_normalization
+                        )
+                        ** 2
+                        + (
+                            normalization_min
+                            * xp.max(electrostatic_magnetic_normalization)
+                        )
+                        ** 2
+                    )
+
                     # exp(-i M*) C*
                     current_probe += step_size * (
                         xp.sum(
@@ -1015,6 +1043,18 @@ class XRayMagneticPtychography(
                 )
 
                 if not fix_probe:
+
+                    electrostatic_abs = xp.abs(object_patches[0])
+                    electrostatic_normalization = xp.sum(
+                        electrostatic_abs**2,
+                        axis=0,
+                    )
+                    electrostatic_normalization = 1 / xp.sqrt(
+                        1e-16
+                        + ((1 - normalization_min) * electrostatic_normalization) ** 2
+                        + (normalization_min * xp.max(electrostatic_normalization)) ** 2
+                    )
+
                     # V*
                     current_probe += step_size * (
                         xp.sum(
