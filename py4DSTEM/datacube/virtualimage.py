@@ -296,11 +296,11 @@ class VirtualImager:
         self,
         mode,
         geometry,
-        overlay_data=None,
+        data=None,
+        shift_center=None,
+        subpixel=True,
         centered=None,
         calibrated=None,
-        shift_center=False,
-        subpixel=True,
         scan_position=None,
         invert=False,
         color="r",
@@ -313,6 +313,15 @@ class VirtualImager:
         and `geometry` parameters will compute a virtual image using this
         detector.
 
+        Functionality for confirming shift-corrections are being correctly
+        applied is provided - and is controlled by the combinations of the
+        `shift_center` and `data` arguments.  The simplest usage is to pass
+        a 2-tuple of ints (rx,ry) to *either* the `data` or the `shift_center`
+        parameter, which will shift the mask accordind to the calibrations
+        for this scan position and overlay the resulting mask on the
+        diffraction pattern at this position.  For other usages, see the
+        entries for `data` and `shift_center` below.
+
         Parameters
         ----------
         mode : str
@@ -320,27 +329,27 @@ class VirtualImager:
         geometry : variable
             see the DataCube.get_virtual_image docstring
         data : None or 2d-array or 2-tuple of ints
-            The diffraction image to overlay the mask on. If `None` (default),
-            looks for a max or mean or median diffraction image in this order
-            and if found, uses it, otherwise, uses the diffraction pattern at
-            scan position (0,0).  If a 2d array is passed, must be diffraction
-            space shaped array.  If a 2-tuple is passed, uses the diffraction
-            pattern at scan position (rx,ry).
+            The diffraction image to overlay the mask on. If None (default)
+            and `shift_center` is None or False, uses the default diffraction
+            pattern stored in .visualization_defaults.  If a 2-tuple of ints
+            is passed, uses the diffraction pattern at this scan position.
+            If a 2d-array is passed, it should be diffraction space shaped
+            and is used directly for the overlay.
+        shift_center : None or bool or 2-tuple of ints
+            If False, no shifts are applied to the mask.  If None and `data` is
+            either None or an array, no shifts are applied.  If None or True
+            and `data` is a 2-tuple, shifts the mask according to the calibrated
+            shifts at this scan position.  If True and data is None or a
+            2d-array, raises an error.  If `shift_center` is a 2-tuple of ints,
+            shifts are applied according to the calibrated shifts at this scan
+            position.  If `shift_center` is a 2-tuple and `data` is None, uses
+            the diffraction pattern at this scan position as data; if `data`
+            is a 2d-array, uses this array for the overlay; if `data` is also a
+            2-tuple, raises an error.
         centered : bool
             see the DataCube.get_virtual_image docstring
         calibrated : bool
             see the DataCube.get_virtual_image docstring
-        shift_center : None or bool or 2-tuple of ints
-            If `None` (default) and `data` is either None or an array, the mask
-            is not shifted.  If `None` and `data` is a 2-tuple, shifts the mask
-            according to the origin at the scan position (rx,ry) specified in
-            `data`.  If False, does not shift the mask.  If True and `data` is
-            a 2-tuple, shifts the mask accordingly, and if True and `data` is
-            any other value, raises an error.  If `shift_center` is a 2-tuple,
-            shifts the mask according to the origin value at this 2-tuple
-            regardless of the value of `data` (enabling e.g. overlaying the
-            mask for a specific scan position on a max or mean diffraction
-            image.)
         subpixel : bool
             if True, applies subpixel shifts to virtual image
         invert : bool
@@ -354,7 +363,6 @@ class VirtualImager:
             Any additional arguments are passed on to the show() function
         """
         # parse inputs
-
         # mode
         assert mode in (
             "point",
@@ -367,30 +375,48 @@ class VirtualImager:
             "rectangular",
             "mask",
         ), "check doc strings for supported modes"
-
-        # get overlay data
-        if overlay_data is None:
-            assert(self.visualization_defaults.dp is not None), "No diffraction pattern for overlay found - pass one with `overlay_data` or set one"
-        else:
-            self.visualization_defaults.dp = overlay_data
-        image = self.visualization_defaults.dp
-
-        # shift center
+        assert(data is None or isinstance(data,np.ndarray) or isinstance(data,tuple)), f"Invalid type for data {type(data)}"
         if shift_center is None:
-            shift_center = False
-        elif shift_center is True:
-            assert isinstance(
-                data, tuple
-            ), "If shift_center is set to True, `data` should be a 2-tuple (rx,ry). \
-                To shift the detector mask while using some other input for `data`, \
-                set `shift_center` to a 2-tuple (rx,ry)"
-        elif isinstance(shift_center, tuple):
-            rx, ry = shift_center[:2]
+            if data is None:
+                shift_center = False
+                assert(self.visualization_defaults.dp is not None), "No default diffraction pattern for overlay found - pass one with `data` or set one"
+                image = self.visualization_defaults.dp
+            elif isinstance(data, np.ndarray):
+                shift_center = False
+                assert(data.shape == self.Qshape), f"If `data` is an array, must be Qspace shaped, not shape {data.shape}"
+                image = data
+            else:
+                shift_center = True
+                rx,ry = data[:2]
+                image = self[rx,ry]
+        elif isinstance(shift_center,tuple):
+            rx,ry = shift_center[:2]
             shift_center = True
+            if data is None:
+                image = self[rx,ry]
+            elif isinstance(data, np.ndarray):
+                assert(data.shape == self.Qshape), f"If `data` is an array, must be Qspace shaped, not shape {data.shape}"
+                image = data
+            else:
+                raise Exception("Can't pass a tuple for both `shift_centers` and `data`!")
+        elif shift_center:
+            shift_center = True
+            if data is None or isinstance(data, np.ndarray):
+                raise Exception(f"Incompatible inputs - if `shift_center` is True, `data` should be a 2-tuple, not type {type(data)}")
+            else:
+                rx,ry = data[:2]
+                image = self[rx,ry]
         else:
             shift_center = False
-
-        # Get the mask
+            if data is None:
+                assert(self.visualization_defaults.dp is not None), "No default diffraction pattern for overlay found - pass one with `data` or set one"
+                image = self.visualization_defaults.dp
+            elif isinstance(data, np.ndarray):
+                assert(data.shape == self.Qshape), f"If `data` is an array, must be Qspace shaped, not shape {data.shape}"
+                image = data
+            else:
+                rx,ry = data[:2]
+                image = self[rx,ry]
 
         # Get geometry
         g = self.get_calibrated_detector_geometry(
@@ -408,12 +434,6 @@ class VirtualImager:
 
         # Shift center
         if shift_center:
-            try:
-                rx, ry
-            except NameError:
-                raise Exception(
-                    "if `shift_center` is True then `data` must be the 3-tuple (DataCube,rx,ry)"
-                )
             # get shifts
             assert (
                 self.calibration.get_origin_shift() is not None
