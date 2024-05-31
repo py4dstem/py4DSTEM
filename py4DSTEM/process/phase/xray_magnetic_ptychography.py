@@ -1658,8 +1658,6 @@ class XRayMagneticPtychography(
             If true, displays a colorbar
         plot_probe: bool, optional
             If true, the reconstructed complex probe is displayed
-        plot_fourier_probe: bool, optional
-            If true, the reconstructed complex Fourier probe is displayed
         remove_initial_probe_aberrations: bool, optional
             If true, when plotting fourier probe, removes initial probe
             to visualize changes
@@ -1667,22 +1665,34 @@ class XRayMagneticPtychography(
 
         asnumpy = self._asnumpy
 
-        figsize = kwargs.pop("figsize", (12, 5))
-        cmap_real = kwargs.pop("cmap_real", "PiYG")
-        cmap_imag = kwargs.pop("cmap_imag", "PuOr")
+        figsize = kwargs.pop("figsize", (12, 8))
+        cmap_e_real = kwargs.pop("cmap_e_real", "cividis")
+        cmap_e_imag = kwargs.pop("cmap_e_imag", "magma")
+        cmap_m_real = kwargs.pop("cmap_m_real", "PuOr")
+        cmap_m_imag = kwargs.pop("cmap_m_imag", "PiYG")
         chroma_boost = kwargs.pop("chroma_boost", 1)
 
         # get scaled arrays
-        probe = self._return_single_probe()
         obj = self.object_cropped
 
-        _, _, _vmax_real = return_scaled_histogram_ordering(obj[1].real)
-        vmin_real = kwargs.pop("vmin_real", -_vmax_real)
-        vmax_real = kwargs.pop("vmax_real", _vmax_real)
+        vmin_e_real = kwargs.pop("vmin_e_real", None)
+        vmax_e_real = kwargs.pop("vmax_e_real", None)
+        vmin_e_imag = kwargs.pop("vmin_e_imag", None)
+        vmax_e_imag = kwargs.pop("vmax_e_imag", None)
+        _, vmin_e_real, vmax_e_real = return_scaled_histogram_ordering(
+            obj[0].real, vmin_e_real, vmax_e_real
+        )
+        _, vmin_e_imag, vmax_e_iamg = return_scaled_histogram_ordering(
+            obj[0].imag, vmin_e_imag, vmax_e_imag
+        )
 
-        _, _, _vmax_imag = return_scaled_histogram_ordering(obj[1].imag)
-        vmin_imag = kwargs.pop("vmin_imag", -_vmax_imag)
-        vmax_imag = kwargs.pop("vmax_imag", _vmax_imag)
+        _, _, _vmax_m_real = return_scaled_histogram_ordering(obj[1].real)
+        vmin_m_real = kwargs.pop("vmin_m_real", -_vmax_m_real)
+        vmax_m_real = kwargs.pop("vmax_m_real", _vmax_m_real)
+
+        _, _, _vmax_m_imag = return_scaled_histogram_ordering(obj[1].imag)
+        vmin_m_imag = kwargs.pop("vmin_m_imag", -_vmax_m_imag)
+        vmax_m_imag = kwargs.pop("vmax_m_imag", _vmax_m_imag)
 
         extent = [
             0,
@@ -1698,7 +1708,6 @@ class XRayMagneticPtychography(
                 self.angular_sampling[0] * self._region_of_interest_shape[0] / 2,
                 -self.angular_sampling[0] * self._region_of_interest_shape[0] / 2,
             ]
-
         elif plot_probe:
             probe_extent = [
                 0,
@@ -1708,11 +1717,11 @@ class XRayMagneticPtychography(
             ]
 
         if plot_convergence:
-            if plot_probe or plot_fourier_probe:
+            if plot_probe:
                 spec = GridSpec(
                     ncols=3,
-                    nrows=2,
-                    height_ratios=[4, 1],
+                    nrows=3,
+                    height_ratios=[4, 4, 1],
                     hspace=0.15,
                     width_ratios=[
                         (extent[1] / extent[2]) / (probe_extent[1] / probe_extent[2]),
@@ -1723,13 +1732,13 @@ class XRayMagneticPtychography(
                 )
 
             else:
-                spec = GridSpec(ncols=2, nrows=2, height_ratios=[4, 1], hspace=0.15)
+                spec = GridSpec(ncols=2, nrows=3, height_ratios=[4, 4, 1], hspace=0.15)
 
         else:
-            if plot_probe or plot_fourier_probe:
+            if plot_probe:
                 spec = GridSpec(
                     ncols=3,
-                    nrows=1,
+                    nrows=2,
                     width_ratios=[
                         (extent[1] / extent[2]) / (probe_extent[1] / probe_extent[2]),
                         (extent[1] / extent[2]) / (probe_extent[1] / probe_extent[2]),
@@ -1739,79 +1748,115 @@ class XRayMagneticPtychography(
                 )
 
             else:
-                spec = GridSpec(ncols=2, nrows=1)
+                spec = GridSpec(ncols=2, nrows=2, wspace=0.35)
 
         if fig is None:
             fig = plt.figure(figsize=figsize)
 
-        if plot_probe or plot_fourier_probe:
-            # Object_real
-            ax = fig.add_subplot(spec[0, 0])
-            im = ax.imshow(
-                obj[1].real,
-                extent=extent,
-                cmap=cmap_real,
-                vmin=vmin_real,
-                vmax=vmax_real,
-                **kwargs,
-            )
-            ax.set_ylabel("x [A]")
-            ax.set_xlabel("y [A]")
-            ax.set_title("Real magnetic refractive index")
+        # Electronic real
+        ax = fig.add_subplot(spec[0, 0])
+        im = ax.imshow(
+            obj[0].real,
+            extent=extent,
+            cmap=cmap_e_real,
+            vmin=vmin_e_real,
+            vmax=vmax_e_real,
+            **kwargs,
+        )
+        ax.set_ylabel("x [A]")
+        ax.set_xlabel("y [A]")
+        ax.set_title("Real elec. optical index")
 
-            if cbar:
-                divider = make_axes_locatable(ax)
-                ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
-                fig.add_axes(ax_cb)
-                fig.colorbar(im, cax=ax_cb)
+        if cbar:
+            divider = make_axes_locatable(ax)
+            ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
+            fig.add_axes(ax_cb)
+            fig.colorbar(im, cax=ax_cb)
 
-            # Object_imag
-            ax = fig.add_subplot(spec[0, 1])
-            im = ax.imshow(
-                obj[1].imag,
-                extent=extent,
-                cmap=cmap_imag,
-                vmin=vmin_imag,
-                vmax=vmax_imag,
-                **kwargs,
-            )
-            ax.set_ylabel("x [A]")
-            ax.set_xlabel("y [A]")
-            ax.set_title("Imaginary magnetic refractive index")
+        # Electronic imag
+        ax = fig.add_subplot(spec[0, 1])
+        im = ax.imshow(
+            obj[0].imag,
+            extent=extent,
+            cmap=cmap_e_imag,
+            vmin=vmin_e_imag,
+            vmax=vmax_e_imag,
+            **kwargs,
+        )
+        ax.set_ylabel("x [A]")
+        ax.set_xlabel("y [A]")
+        ax.set_title("Imag elec. optical index")
 
-            if cbar:
-                divider = make_axes_locatable(ax)
-                ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
-                fig.add_axes(ax_cb)
-                fig.colorbar(im, cax=ax_cb)
+        if cbar:
+            divider = make_axes_locatable(ax)
+            ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
+            fig.add_axes(ax_cb)
+            fig.colorbar(im, cax=ax_cb)
 
-            # Probe
+        # Magnetic real
+        ax = fig.add_subplot(spec[1, 0])
+        im = ax.imshow(
+            obj[1].real,
+            extent=extent,
+            cmap=cmap_m_real,
+            vmin=vmin_m_real,
+            vmax=vmax_m_real,
+            **kwargs,
+        )
+        ax.set_ylabel("x [A]")
+        ax.set_xlabel("y [A]")
+        ax.set_title("Real mag. optical index")
+
+        if cbar:
+            divider = make_axes_locatable(ax)
+            ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
+            fig.add_axes(ax_cb)
+            fig.colorbar(im, cax=ax_cb)
+
+        # Magnetic imag
+        ax = fig.add_subplot(spec[1, 1])
+        im = ax.imshow(
+            obj[1].imag,
+            extent=extent,
+            cmap=cmap_m_imag,
+            vmin=vmin_m_imag,
+            vmax=vmax_m_imag,
+            **kwargs,
+        )
+        ax.set_ylabel("x [A]")
+        ax.set_xlabel("y [A]")
+        ax.set_title("Imag mag. optical index")
+
+        if cbar:
+            divider = make_axes_locatable(ax)
+            ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
+            fig.add_axes(ax_cb)
+            fig.colorbar(im, cax=ax_cb)
+
+        if plot_fourier_probe:
+            # Fourier probe
+            intensities = self._return_probe_intensities(None)
+            titles = [
+                f"{sign}ve Fourier probe: {ratio*100:.1f}%"
+                for sign, ratio in zip(self._magnetic_contribution_sign, intensities)
+            ]
             ax = fig.add_subplot(spec[0, 2])
-            if plot_fourier_probe:
-                probe = asnumpy(
-                    self._return_fourier_probe(
-                        probe,
-                        remove_initial_probe_aberrations=remove_initial_probe_aberrations,
-                    )
-                )
 
-                probe_array = Complex2RGB(
-                    probe,
-                    chroma_boost=chroma_boost,
+            probe_fourier = asnumpy(
+                self._return_fourier_probe(
+                    self._probes_all[0],
+                    remove_initial_probe_aberrations=remove_initial_probe_aberrations,
                 )
+            )
 
-                ax.set_title("Reconstructed Fourier probe")
-                ax.set_ylabel("kx [mrad]")
-                ax.set_xlabel("ky [mrad]")
-            else:
-                probe_array = Complex2RGB(
-                    asnumpy(self._return_centered_probe(probe)),
-                    power=2,
-                    chroma_boost=chroma_boost,
-                )
-                ax.set_title("Reconstructed probe intensity")
-                ax.set_ylabel("x [A]")
-                ax.set_xlabel("y [A]")
+            probe_array = Complex2RGB(
+                probe_fourier,
+                chroma_boost=chroma_boost,
+            )
+
+            ax.set_title(titles[0])
+            ax.set_ylabel("kx [mrad]")
+            ax.set_xlabel("ky [mrad]")
 
             im = ax.imshow(
                 probe_array,
@@ -1823,51 +1868,87 @@ class XRayMagneticPtychography(
                 ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
                 add_colorbar_arg(ax_cb, chroma_boost=chroma_boost)
 
-        else:
-            # Object_real
-            ax = fig.add_subplot(spec[0, 0])
-            im = ax.imshow(
-                obj[1].real,
-                extent=extent,
-                cmap=cmap_real,
-                vmin=vmin_real,
-                vmax=vmax_real,
-                **kwargs,
+            ax = fig.add_subplot(spec[1, 2])
+
+            probe_fourier = asnumpy(
+                self._return_fourier_probe(
+                    self._probes_all[-1],
+                    remove_initial_probe_aberrations=remove_initial_probe_aberrations,
+                )
             )
-            ax.set_ylabel("x [A]")
-            ax.set_xlabel("y [A]")
-            ax.set_title("Real magnetic refractive index")
+
+            probe_array = Complex2RGB(
+                probe_fourier,
+                chroma_boost=chroma_boost,
+            )
+
+            ax.set_title(titles[-1])
+            ax.set_ylabel("kx [mrad]")
+            ax.set_xlabel("ky [mrad]")
+
+            im = ax.imshow(
+                probe_array,
+                extent=probe_extent,
+            )
 
             if cbar:
                 divider = make_axes_locatable(ax)
                 ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
-                fig.add_axes(ax_cb)
-                fig.colorbar(im, cax=ax_cb)
+                add_colorbar_arg(ax_cb, chroma_boost=chroma_boost)
 
-            # Object_imag
-            ax = fig.add_subplot(spec[0, 1])
-            im = ax.imshow(
-                obj[1].imag,
-                extent=extent,
-                cmap=cmap_imag,
-                vmin=vmin_imag,
-                vmax=vmax_imag,
-                **kwargs,
+        elif plot_probe:
+            # Real probe
+            intensities = self._return_probe_intensities(None)
+            titles = [
+                f"{sign}ve probe intensity: {ratio*100:.1f}%"
+                for sign, ratio in zip(self._magnetic_contribution_sign, intensities)
+            ]
+            ax = fig.add_subplot(spec[0, 2])
+
+            probe_array = Complex2RGB(
+                asnumpy(self._return_centered_probe(self._probes_all[0])),
+                power=2,
+                chroma_boost=chroma_boost,
             )
+            ax.set_title(titles[0])
             ax.set_ylabel("x [A]")
             ax.set_xlabel("y [A]")
-            ax.set_title("Imaginary magnetic refractive index")
+
+            im = ax.imshow(
+                probe_array,
+                extent=probe_extent,
+            )
 
             if cbar:
                 divider = make_axes_locatable(ax)
                 ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
-                fig.add_axes(ax_cb)
-                fig.colorbar(im, cax=ax_cb)
+                add_colorbar_arg(ax_cb, chroma_boost=chroma_boost)
+
+            ax = fig.add_subplot(spec[1, 2])
+
+            probe_array = Complex2RGB(
+                asnumpy(self._return_centered_probe(self._probes_all[-1])),
+                power=2,
+                chroma_boost=chroma_boost,
+            )
+            ax.set_title(titles[-1])
+            ax.set_ylabel("x [A]")
+            ax.set_xlabel("y [A]")
+
+            im = ax.imshow(
+                probe_array,
+                extent=probe_extent,
+            )
+
+            if cbar:
+                divider = make_axes_locatable(ax)
+                ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
+                add_colorbar_arg(ax_cb, chroma_boost=chroma_boost)
 
         if plot_convergence and hasattr(self, "error_iterations"):
             errors = np.array(self.error_iterations)
 
-            ax = fig.add_subplot(spec[1, :])
+            ax = fig.add_subplot(spec[2, :])
             ax.semilogy(np.arange(errors.shape[0]), errors, **kwargs)
             ax.set_ylabel("NMSE")
             ax.set_xlabel("Iteration number")
