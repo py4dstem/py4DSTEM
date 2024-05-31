@@ -686,6 +686,7 @@ class PhaseReconstruction(Custom):
 
                 # calculate CoM
                 if dp_mask is not None:
+                    dp_mask = copy_to_device(dp_mask, device)
                     intensities_mask = intensities * dp_mask
                 else:
                     intensities_mask = intensities
