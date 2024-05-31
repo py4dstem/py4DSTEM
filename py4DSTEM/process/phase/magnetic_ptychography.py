@@ -1796,55 +1796,55 @@ class MagneticPtychography(
         if fig is None:
             fig = plt.figure(figsize=figsize)
 
+        # Object_e
+        ax = fig.add_subplot(spec[0, 0])
+        im = ax.imshow(
+            obj[0],
+            extent=extent,
+            cmap=cmap_e,
+            vmin=vmin_e,
+            vmax=vmax_e,
+            **kwargs,
+        )
+        ax.set_ylabel("x [A]")
+        ax.set_xlabel("y [A]")
+
+        if self._object_type == "potential":
+            ax.set_title("Electrostatic potential")
+        elif self._object_type == "complex":
+            ax.set_title("Electrostatic phase")
+
+        if cbar:
+            divider = make_axes_locatable(ax)
+            ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
+            fig.add_axes(ax_cb)
+            fig.colorbar(im, cax=ax_cb)
+
+        # Object_m
+        ax = fig.add_subplot(spec[0, 1])
+        im = ax.imshow(
+            obj[1],
+            extent=extent,
+            cmap=cmap_m,
+            vmin=vmin_m,
+            vmax=vmax_m,
+            **kwargs,
+        )
+        ax.set_ylabel("x [A]")
+        ax.set_xlabel("y [A]")
+
+        if self._object_type == "potential":
+            ax.set_title("Magnetic potential")
+        elif self._object_type == "complex":
+            ax.set_title("Magnetic phase")
+
+        if cbar:
+            divider = make_axes_locatable(ax)
+            ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
+            fig.add_axes(ax_cb)
+            fig.colorbar(im, cax=ax_cb)
+
         if plot_probe or plot_fourier_probe:
-            # Object_e
-            ax = fig.add_subplot(spec[0, 0])
-            im = ax.imshow(
-                obj[0],
-                extent=extent,
-                cmap=cmap_e,
-                vmin=vmin_e,
-                vmax=vmax_e,
-                **kwargs,
-            )
-            ax.set_ylabel("x [A]")
-            ax.set_xlabel("y [A]")
-
-            if self._object_type == "potential":
-                ax.set_title("Electrostatic potential")
-            elif self._object_type == "complex":
-                ax.set_title("Electrostatic phase")
-
-            if cbar:
-                divider = make_axes_locatable(ax)
-                ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
-                fig.add_axes(ax_cb)
-                fig.colorbar(im, cax=ax_cb)
-
-            # Object_m
-            ax = fig.add_subplot(spec[0, 1])
-            im = ax.imshow(
-                obj[1],
-                extent=extent,
-                cmap=cmap_m,
-                vmin=vmin_m,
-                vmax=vmax_m,
-                **kwargs,
-            )
-            ax.set_ylabel("x [A]")
-            ax.set_xlabel("y [A]")
-
-            if self._object_type == "potential":
-                ax.set_title("Magnetic potential")
-            elif self._object_type == "complex":
-                ax.set_title("Magnetic phase")
-
-            if cbar:
-                divider = make_axes_locatable(ax)
-                ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
-                fig.add_axes(ax_cb)
-                fig.colorbar(im, cax=ax_cb)
-
             # Probe
             ax = fig.add_subplot(spec[0, 2])
             if plot_fourier_probe:
@@ -1882,55 +1882,6 @@ class MagneticPtychography(
                 divider = make_axes_locatable(ax)
                 ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
                 add_colorbar_arg(ax_cb, chroma_boost=chroma_boost)
-
-        else:
-            # Object_e
-            ax = fig.add_subplot(spec[0, 0])
-            im = ax.imshow(
-                obj[0],
-                extent=extent,
-                cmap=cmap_e,
-                vmin=vmin_e,
-                vmax=vmax_e,
-                **kwargs,
-            )
-            ax.set_ylabel("x [A]")
-            ax.set_xlabel("y [A]")
-
-            if self._object_type == "potential":
-                ax.set_title("Electrostatic potential")
-            elif self._object_type == "complex":
-                ax.set_title("Electrostatic phase")
-
-            if cbar:
-                divider = make_axes_locatable(ax)
-                ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
-                fig.add_axes(ax_cb)
-                fig.colorbar(im, cax=ax_cb)
-
-            # Object_e
-            ax = fig.add_subplot(spec[0, 1])
-            im = ax.imshow(
-                obj[1],
-                extent=extent,
-                cmap=cmap_m,
-                vmin=vmin_m,
-                vmax=vmax_m,
-                **kwargs,
-            )
-            ax.set_ylabel("x [A]")
-            ax.set_xlabel("y [A]")
-
-            if self._object_type == "potential":
-                ax.set_title("Magnetic potential")
-            elif self._object_type == "complex":
-                ax.set_title("Magnetic phase")
-
-            if cbar:
-                divider = make_axes_locatable(ax)
-                ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
-                fig.add_axes(ax_cb)
-                fig.colorbar(im, cax=ax_cb)
 
         if plot_convergence and hasattr(self, "error_iterations"):
             errors = np.array(self.error_iterations)
