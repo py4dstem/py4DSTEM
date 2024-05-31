@@ -602,7 +602,8 @@ class XRayMagneticPtychography(
         )
 
         if self._object is None:
-            self._object = xp.stack((obj, xp.zeros_like(obj)), 0)
+            # complex zeros instead of ones, since we store pre-exponential terms
+            self._object = xp.zeros((2,) + obj.shape, dtype=obj.dtype)
         else:
             self._object = obj
 
@@ -815,7 +816,7 @@ class XRayMagneticPtychography(
             1, vectorized_patch_indices_row, vectorized_patch_indices_col
         ]
 
-        overlap_base = shifted_probes * object_patches[0]
+        overlap_base = shifted_probes * xp.exp(1.0j * object_patches[0])
 
         match (self._recon_mode, self._active_measurement_index):
             case (0, 0) | (1, 0):  # reverse
@@ -874,9 +875,9 @@ class XRayMagneticPtychography(
         xp = self._xp
 
         probe_conj = xp.conj(shifted_probes)  # P*
-        electrostatic_conj = xp.conj(object_patches[0])  # C*
+        electrostatic_conj = xp.exp(-1.0j * xp.conj(object_patches[0]))  # exp[-i c]
 
-        probe_electrostatic_abs = xp.abs(shifted_probes * object_patches[0])
+        probe_electrostatic_abs = xp.abs(probe_conj * electrostatic_conj)
         probe_electrostatic_normalization = self._sum_overlapping_patches_bincounts(
             probe_electrostatic_abs**2,
             positions_px,
@@ -890,9 +891,9 @@ class XRayMagneticPtychography(
         match (self._recon_mode, self._active_measurement_index):
             case (0, 0) | (1, 0):  # reverse
 
-                magnetic_exp = xp.exp(1.0j * xp.conj(object_patches[1]))
+                magnetic_conj = xp.exp(1.0j * xp.conj(object_patches[1]))
 
-                probe_magnetic_abs = xp.abs(shifted_probes * magnetic_exp)
+                probe_magnetic_abs = xp.abs(shifted_probes * magnetic_conj)
                 probe_magnetic_normalization = self._sum_overlapping_patches_bincounts(
                     probe_magnetic_abs**2,
                     positions_px,
@@ -903,15 +904,19 @@ class XRayMagneticPtychography(
                     + (normalization_min * xp.max(probe_magnetic_normalization)) ** 2
                 )
 
-                # P* exp(i M*)
+                # - i * exp(i m*) * exp(-i c*) * P
                 electrostatic_update = self._sum_overlapping_patches_bincounts(
-                    probe_conj * magnetic_exp * exit_waves,
+                    -1.0j
+                    * magnetic_conj
+                    * electrostatic_conj
+                    * probe_conj
+                    * exit_waves,
                     positions_px,
                 )
 
-                # i exp(i M*) C* P*
+                # i * exp(i m*) * exp(-i c*) * P
                 magnetic_update = self._sum_overlapping_patches_bincounts(
-                    1.0j * magnetic_exp * probe_conj * electrostatic_conj * exit_waves,
+                    1.0j * magnetic_conj * electrostatic_conj * probe_conj * exit_waves,
                     positions_px,
                 )
 
@@ -925,7 +930,7 @@ class XRayMagneticPtychography(
                 if not fix_probe:
 
                     electrostatic_magnetic_abs = xp.abs(
-                        object_patches[0] * magnetic_exp
+                        electrostatic_conj * magnetic_conj
                     )
                     electrostatic_magnetic_normalization = xp.sum(
                         electrostatic_magnetic_abs**2,
@@ -945,10 +950,10 @@ class XRayMagneticPtychography(
                         ** 2
                     )
 
-                    # exp(i M*) C*
+                    # exp(i m*) * exp(-i c*)
                     current_probe += step_size * (
                         xp.sum(
-                            electrostatic_conj * magnetic_exp * exit_waves,
+                            magnetic_conj * electrostatic_conj * exit_waves,
                             axis=0,
                         )
                         * electrostatic_magnetic_normalization
@@ -956,9 +961,9 @@ class XRayMagneticPtychography(
 
             case (0, 1) | (1, 2) | (2, 1):  # forward
 
-                magnetic_exp = xp.exp(-1.0j * xp.conj(object_patches[1]))
+                magnetic_conj = xp.exp(-1.0j * xp.conj(object_patches[1]))
 
-                probe_magnetic_abs = xp.abs(shifted_probes * magnetic_exp)
+                probe_magnetic_abs = xp.abs(shifted_probes * magnetic_conj)
                 probe_magnetic_normalization = self._sum_overlapping_patches_bincounts(
                     probe_magnetic_abs**2,
                     positions_px,
@@ -969,29 +974,25 @@ class XRayMagneticPtychography(
                     + (normalization_min * xp.max(probe_magnetic_normalization)) ** 2
                 )
 
-                # P* exp(-i M*)
-                electrostatic_update = self._sum_overlapping_patches_bincounts(
-                    probe_conj * magnetic_exp * exit_waves,
+                # - i * exp(-i m*) * exp(-i c*) * P
+                update = self._sum_overlapping_patches_bincounts(
+                    -1.0j
+                    * magnetic_conj
+                    * electrostatic_conj
+                    * probe_conj
+                    * exit_waves,
                     positions_px,
                 )
 
-                # -i exp (-i M*) P*
-                magnetic_update = self._sum_overlapping_patches_bincounts(
-                    -1.0j * magnetic_exp * probe_conj * electrostatic_conj * exit_waves,
-                    positions_px,
-                )
-
-                current_object[0] += (
-                    step_size * electrostatic_update * probe_magnetic_normalization
-                )
+                current_object[0] += step_size * update * probe_magnetic_normalization
                 current_object[1] += (
-                    step_size * magnetic_update * probe_electrostatic_normalization
+                    step_size * update * probe_electrostatic_normalization
                 )
 
                 if not fix_probe:
 
                     electrostatic_magnetic_abs = xp.abs(
-                        object_patches[0] * magnetic_exp
+                        electrostatic_conj * magnetic_conj
                     )
                     electrostatic_magnetic_normalization = xp.sum(
                         electrostatic_magnetic_abs**2,
@@ -1011,16 +1012,17 @@ class XRayMagneticPtychography(
                         ** 2
                     )
 
-                    # exp(-i M*) C*
+                    # exp(i m*) * exp(-i c*)
                     current_probe += step_size * (
                         xp.sum(
-                            electrostatic_conj * magnetic_exp * exit_waves,
+                            magnetic_conj * electrostatic_conj * exit_waves,
                             axis=0,
                         )
                         * electrostatic_magnetic_normalization
                     )
 
             case (1, 1) | (2, 0):  # neutral
+
                 probe_abs = xp.abs(shifted_probes)
                 probe_normalization = self._sum_overlapping_patches_bincounts(
                     probe_abs**2,
@@ -1032,9 +1034,9 @@ class XRayMagneticPtychography(
                     + (normalization_min * xp.max(probe_normalization)) ** 2
                 )
 
-                # P*
+                # -i exp(-i c*) * P*
                 electrostatic_update = self._sum_overlapping_patches_bincounts(
-                    probe_conj * exit_waves,
+                    -1.0j * electrostatic_conj * probe_conj * exit_waves,
                     positions_px,
                 )
 
@@ -1044,7 +1046,7 @@ class XRayMagneticPtychography(
 
                 if not fix_probe:
 
-                    electrostatic_abs = xp.abs(object_patches[0])
+                    electrostatic_abs = xp.abs(electrostatic_conj)
                     electrostatic_normalization = xp.sum(
                         electrostatic_abs**2,
                         axis=0,
@@ -1055,7 +1057,7 @@ class XRayMagneticPtychography(
                         + (normalization_min * xp.max(electrostatic_normalization)) ** 2
                     )
 
-                    # V*
+                    # exp(-i c*)
                     current_probe += step_size * (
                         xp.sum(
                             electrostatic_conj * exit_waves,
@@ -1113,11 +1115,6 @@ class XRayMagneticPtychography(
             current_object[0] = self._object_denoise_tv_pylops(
                 current_object[0], tv_denoise_weight, tv_denoise_inner_iter
             )
-
-        # amplitude threshold
-        # current_object[0] = self._object_threshold_constraint(
-        #    current_object[0], False
-        # )
 
         return current_object
 
