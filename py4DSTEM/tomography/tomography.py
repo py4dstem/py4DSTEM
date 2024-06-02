@@ -186,7 +186,7 @@ class Tomography:
             )
 
             # align and reshape
-            if force_centering_shifts:
+            if force_centering_shifts is not None:
                 qx0_fit = force_centering_shifts[a0][0]
                 qy0_fit = force_centering_shifts[a0][1]
             else:
@@ -737,8 +737,9 @@ class Tomography:
                 dtype="bool",
             )
 
-        center = (s[-1] / 2, s[-1] / 2)
-        print(center)
+            # TODO deal with with diffraction patterns cut off by detector?
+
+        center = ((s[-1] - 1) / 2, (s[-1] - 1) / 2)
         diffraction_patterns_reshaped = np.zeros((s[0] * s[1], self._q_length))
 
         for a0 in range(s[0]):
@@ -798,49 +799,51 @@ class Tomography:
                     )
                 )
 
+        del datacube
+
         self._diffraction_patterns_projected.append(
             diffraction_patterns_reshaped[:, self._circular_mask_bincount]
         )
 
-    def _forward_simulation(
-        self,
-        current_object: np.ndarray,
-        tilt_deg: int,
-        x_index: int,
-        num_points: np.ndarray = 60,
-    ):
-        """
-        Forward projection of object for simulation of diffraction data
+    # def _forward_simulation(
+    #     self,
+    #     current_object: np.ndarray,
+    #     tilt_deg: int,
+    #     x_index: int,
+    #     num_points: np.ndarray = 60,
+    # ):
+    #     """
+    #     Forward projection of object for simulation of diffraction data
 
-        Parameters
-        ----------
-        current_object: np.ndarray
-            current object estimate
-        tilt_deg: float
-            tilt of object in degrees
-        x_index: int
-            x slice of object to be sliced
-        num_points: float
-            number of points for bilinear interpolation
+    #     Parameters
+    #     ----------
+    #     current_object: np.ndarray
+    #         current object estimate
+    #     tilt_deg: float
+    #         tilt of object in degrees
+    #     x_index: int
+    #         x slice of object to be sliced
+    #     num_points: float
+    #         number of points for bilinear interpolation
 
-        Returns
-        --------
-        current_object_sliced: np.ndarray
-            projection of current object sliced in diffraciton space
-        """
-        current_object_projected = self.real_space_radon(
-            current_object,
-            tilt_deg,
-            x_index,
-            num_points,
-        )
+    #     Returns
+    #     --------
+    #     current_object_sliced: np.ndarray
+    #         projection of current object sliced in diffraciton space
+    #     """
+    #     current_object_projected = self.real_space_radon(
+    #         current_object,
+    #         tilt_deg,
+    #         x_index,
+    #         num_points,
+    #     )
 
-        current_object_sliced = self.diffraction_space_slice(
-            current_object_projected,
-            tilt_deg,
-        )
+    #     current_object_sliced = self.diffraction_space_slice(
+    #         current_object_projected,
+    #         tilt_deg,
+    #     )
 
-        return current_object_sliced
+    #     return current_object_sliced
 
     def real_space_radon(
         self,
@@ -894,33 +897,41 @@ class Tomography:
         dy = line_y - yF
         dz = line_z - zF
 
-        for basis_index in range(4):
-            match basis_index:
-                case 0:
-                    inds = [yF, zF]
-                    weights = (1 - dy) * (1 - dz)
-                case 1:
-                    inds = [yF + 1, zF]
-                    weights = (dy) * (1 - dz)
-                case 2:
-                    inds = [yF, zF + 1]
-                    weights = (1 - dy) * (dz)
-                case 3:
-                    inds = [yF + 1, zF + 1]
-                    weights = (dy) * (dz)
+        ind0 = np.hstack(
+            (
+                xp.tile(yF, (s[1], 1)) + offset[:, None],
+                xp.tile(yF + 1, (s[1], 1)) + offset[:, None],
+                xp.tile(yF, (s[1], 1)) + offset[:, None],
+                xp.tile(yF + 1, (s[1], 1)) + offset[:, None],
+            )
+        )
 
-            indy = xp.tile(inds[0], (s[1], 1)) + offset[:, None]
-            indz = xp.tile(inds[1], (s[1], 1))
-            current_object_projected += (
-                current_object_reshape[
-                    xp.ravel_multi_index(
-                        (indy, indz), (s[1] + 2 * padding, s[2]), mode="clip"
-                    )
-                ]
-                * xp.tile(weights, (s[1], 1))[:, :, None, None, None]
-            ).sum(1)
+        ind1 = np.hstack(
+            (
+                xp.tile(zF, (s[1], 1)),
+                xp.tile(zF, (s[1], 1)),
+                xp.tile(zF + 1, (s[1], 1)),
+                xp.tile(zF + 1, (s[1], 1)),
+            )
+        )
 
-        current_object_projected
+        weights = np.hstack(
+            (
+                xp.tile(((1 - dy) * (1 - dz)), (s[1], 1)),
+                xp.tile(((dy) * (1 - dz)), (s[1], 1)),
+                xp.tile(((1 - dy) * (dz)), (s[1], 1)),
+                xp.tile(((dy) * (dz)), (s[1], 1)),
+            )
+        )
+
+        current_object_projected += (
+            current_object_reshape[
+                xp.ravel_multi_index(
+                    (ind0, ind1), (s[1] + 2 * padding, s[2]), mode="clip"
+                )
+            ]
+            * weights[:, :, None, None, None]
+        ).sum(1)
 
         return current_object_projected
 
