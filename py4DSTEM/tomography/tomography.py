@@ -213,33 +213,33 @@ class Tomography:
 
         return self
 
-    def reconstruct(
-        self,
-        num_iter: int = 1,
-        step_size: float = 0.5,
-        num_points: int = 60,
-    ):
-        """ """
-        for a0 in range(num_iter):
-            for a1 in range(self._num_datacubes):
-                (
-                    current_object_sliced,
-                    diffraction_patterns_weighted,
-                ) = self._forward(
-                    datacube_number=datacube_number,
-                    tilt_deg=self._tilt_deg[a1],
-                    num_points=num_points,
-                )
+    # def reconstruct(
+    #     self,
+    #     num_iter: int = 1,
+    #     step_size: float = 0.5,
+    #     num_points: int = 60,
+    # ):
+    #     """ """
+    #     for a0 in range(num_iter):
+    #         for a1 in range(self._num_datacubes):
+    #             (
+    #                 current_object_sliced,
+    #                 diffraction_patterns_weighted,
+    #             ) = self._forward(
+    #                 datacube_number=datacube_number,
+    #                 tilt_deg=self._tilt_deg[a1],
+    #                 num_points=num_points,
+    #             )
 
-                self._adjoint(
-                    datacube_number=datacube_number,
-                    current_object_sliced=current_object_sliced,
-                    diffraction_patterns_weighted=diffraction_patterns_weighted,
-                    step_size=step_size,
-                    current_object_projected=current_object_projected,
-                )
+    #             self._adjoint(
+    #                 datacube_number=datacube_number,
+    #                 current_object_sliced=current_object_sliced,
+    #                 diffraction_patterns_weighted=diffraction_patterns_weighted,
+    #                 step_size=step_size,
+    #                 current_object_projected=current_object_projected,
+    #             )
 
-        return self
+    #     return self
 
     def _forward(
         self,
@@ -284,20 +284,10 @@ class Tomography:
                 tilt_deg=tilt_deg,
             )
 
-        diffraction_patterns_reshaped = self._forward_diffraction_intensities_reshape(
-            datacube_number=datacube_number,
-        )
+        current_object_sliced_2D = self._reshape_4D_array_to_2D(current_object_sliced)
 
-        diffraction_patterns_weighted = self._calculate_diffraction_patterns_weighted(
-            datacube_number=datacube_number,
-            current_object_sliced=current_object_sliced,
-            diffraction_patterns_reshaped=diffraction_patterns_reshaped,
-        )
-
-        return (
-            current_object_sliced,
-            diffraction_patterns_weighted,
-        )
+        return current_object_sliced_2D
+        # diffraction_patterns_weighted,
 
     # def _adjoint(
     #     self,
@@ -692,52 +682,93 @@ class Tomography:
 
         # calculate bincount array
         if datacube_number == 0:
-            mask = np.ones((s[-1], s[-1]), dtype="bool")
-            mask[:, int(np.ceil(s[-1] / 2)) :] = 0
-            mask[: int(np.ceil(s[-1] / 2)), int(np.floor(s[-1] / 2))] = 0
-
-            ind_diffraction = np.roll(
-                np.arange(s[-1] * s[-1]).reshape(s[-1], s[-1]),
-                (int(np.floor(s[-1] / 2)), int(np.floor(s[-1] / 2))),
-                axis=(0, 1),
-            )
-
-            ind_diffraction[mask] = 1e10
-
-            a = np.argsort(ind_diffraction.flatten())
-            i = np.empty_like(a)
-            i[a] = np.arange(a.size)
-            i = i.reshape((s[-1], s[-1]))
-
-            ind_diffraction = i
-            ind_diffraction_rot = np.rot90(ind_diffraction, 2)
-
-            ind_diffraction[mask] = ind_diffraction_rot[mask]
-
-            self._ind_diffraction = ind_diffraction
-            self._ind_diffraction_ravel = ind_diffraction.ravel()
-            self._q_length = np.unique(self._ind_diffraction).shape[0] + 1
-
-            # pixels to remove
-            q_max_px = q_max_inv_A / self._datacube_Q_pixel_size_inv_A
-
-            x = np.arange(s[-1]) - ((s[-1] - 1) / 2)
-            y = np.arange(s[-1]) - ((s[-1] - 1) / 2)
-            xx, yy = np.meshgrid(x, y)
-            circular_mask = ((xx) ** 2 + (yy) ** 2) ** 0.5 < q_max_px
-
-            self._circular_mask = circular_mask
-            self._circular_mask_ravel = circular_mask.ravel()
-            self._circular_mask_bincount = np.asarray(
-                np.bincount(
-                    self._ind_diffraction_ravel,
-                    circular_mask.ravel(),
-                    minlength=self._q_length,
-                ),
-                dtype="bool",
-            )
+            self._make_diffraction_masks(q_max_inv_A=q_max_inv_A)
 
             # TODO deal with with diffraction patterns cut off by detector?
+
+        diffraction_patterns_reshaped = self._reshape_4D_array_to_2D(
+            datacube.data, qx0_fit, qy0_fit
+        )
+
+        del datacube
+
+        self._diffraction_patterns_projected.append(
+            diffraction_patterns_reshaped[mask_real_space.ravel()]
+        )
+
+    def _make_diffraction_masks(self, q_max_inv_A):
+        """
+        make masks to convert 2D diffraction patterns to 1D arrays
+
+        Parameters
+        ----------
+        q_max_inv_A: int
+            maximum q in inverse angstroms
+
+        """
+
+        s = self._initial_datacube_shape
+
+        mask = np.ones((s[-1], s[-1]), dtype="bool")
+        mask[:, int(np.ceil(s[-1] / 2)) :] = 0
+        mask[: int(np.ceil(s[-1] / 2)), int(np.floor(s[-1] / 2))] = 0
+
+        ind_diffraction = np.roll(
+            np.arange(s[-1] * s[-1]).reshape(s[-1], s[-1]),
+            (int(np.floor(s[-1] / 2)), int(np.floor(s[-1] / 2))),
+            axis=(0, 1),
+        )
+
+        ind_diffraction[mask] = 1e10
+
+        a = np.argsort(ind_diffraction.flatten())
+        i = np.empty_like(a)
+        i[a] = np.arange(a.size)
+        i = i.reshape((s[-1], s[-1]))
+
+        ind_diffraction = i
+        ind_diffraction_rot = np.rot90(ind_diffraction, 2)
+
+        ind_diffraction[mask] = ind_diffraction_rot[mask]
+
+        self._ind_diffraction = ind_diffraction
+        self._ind_diffraction_ravel = ind_diffraction.ravel()
+        self._q_length = np.unique(self._ind_diffraction).shape[0] + 1
+
+        # pixels to remove
+        q_max_px = q_max_inv_A / self._datacube_Q_pixel_size_inv_A
+
+        x = np.arange(s[-1]) - ((s[-1] - 1) / 2)
+        y = np.arange(s[-1]) - ((s[-1] - 1) / 2)
+        xx, yy = np.meshgrid(x, y)
+        circular_mask = ((xx) ** 2 + (yy) ** 2) ** 0.5 < q_max_px
+
+        self._circular_mask = circular_mask
+        self._circular_mask_ravel = circular_mask.ravel()
+        self._circular_mask_bincount = np.asarray(
+            np.bincount(
+                self._ind_diffraction_ravel,
+                circular_mask.ravel(),
+                minlength=self._q_length,
+            ),
+            dtype="bool",
+        )
+
+    def _reshape_4D_array_to_2D(self, data, qx0_fit=None, qy0_fit=None):
+        """
+        reshape diffraction 4D-data to 2D
+
+        Parameters
+        ----------
+        data: np.ndarrray
+            4D datacube data to be reshapped
+        qx0_fit: np.ndarray
+            qx shifts
+        qy0_fit: int
+            qy shifts
+        """
+
+        s = data.shape
 
         center = ((s[-1] - 1) / 2, (s[-1] - 1) / 2)
         diffraction_patterns_reshaped = np.zeros((s[0] * s[1], self._q_length))
@@ -745,65 +776,71 @@ class Tomography:
         for a0 in range(s[0]):
             for a1 in range(s[0]):
 
-                qx0 = qx0_fit[a0, a1] - center[0]
-                qy0 = qy0_fit[a0, a1] - center[1]
-
-                xF = int(np.floor(qx0))
-                yF = int(np.floor(qy0))
-
-                wx = qx0 - xF
-                wy = qy0 - yF
-
-                dp = datacube.data[a0, a1]
-
+                dp = data[a0, a1]
                 index = np.ravel_multi_index((a0, a1), (s[0], s[1]))
 
-                diffraction_patterns_reshaped[index] = (
-                    (
+                if qx0_fit is not None:
+                    qx0 = qx0_fit[a0, a1] - center[0]
+                    qy0 = qy0_fit[a0, a1] - center[1]
+
+                    xF = int(np.floor(qx0))
+                    yF = int(np.floor(qy0))
+
+                    wx = qx0 - xF
+                    wy = qy0 - yF
+
+                    diffraction_patterns_reshaped[index] = (
                         (
-                            (1 - wx)
+                            (
+                                (1 - wx)
+                                * (1 - wy)
+                                * np.bincount(
+                                    self._ind_diffraction_ravel,
+                                    np.roll(dp, (xF, yF), axis=(0, 1)).ravel(),
+                                    minlength=self._q_length,
+                                )
+                            )
+                        )
+                        + (
+                            (wx)
                             * (1 - wy)
                             * np.bincount(
                                 self._ind_diffraction_ravel,
-                                np.roll(dp, (xF, yF), axis=(0, 1)).ravel(),
+                                np.roll(dp, (xF + 1, yF), axis=(0, 1)).ravel(),
+                                minlength=self._q_length,
+                            )
+                        )
+                        + (
+                            (1 - wx)
+                            * (wy)
+                            * np.bincount(
+                                self._ind_diffraction_ravel,
+                                np.roll(dp, (xF, yF + 1), axis=(0, 1)).ravel(),
+                                minlength=self._q_length,
+                            )
+                        )
+                        + (
+                            (wx)
+                            * (wy)
+                            * np.bincount(
+                                self._ind_diffraction_ravel,
+                                np.roll(dp, (xF + 1, yF + 1), axis=(0, 1)).ravel(),
                                 minlength=self._q_length,
                             )
                         )
                     )
-                    + (
-                        (wx)
-                        * (1 - wy)
-                        * np.bincount(
-                            self._ind_diffraction_ravel,
-                            np.roll(dp, (xF + 1, yF), axis=(0, 1)).ravel(),
-                            minlength=self._q_length,
-                        )
-                    )
-                    + (
-                        (1 - wx)
-                        * (wy)
-                        * np.bincount(
-                            self._ind_diffraction_ravel,
-                            np.roll(dp, (xF, yF + 1), axis=(0, 1)).ravel(),
-                            minlength=self._q_length,
-                        )
-                    )
-                    + (
-                        (wx)
-                        * (wy)
-                        * np.bincount(
-                            self._ind_diffraction_ravel,
-                            np.roll(dp, (xF + 1, yF + 1), axis=(0, 1)).ravel(),
-                            minlength=self._q_length,
-                        )
-                    )
-                )
+                else:
 
-        del datacube
+                    diffraction_patterns_reshaped[index] = np.bincount(
+                        self._ind_diffraction_ravel,
+                        dp.ravel(),
+                        minlength=self._q_length,
+                    )
 
-        self._diffraction_patterns_projected.append(
-            diffraction_patterns_reshaped[:, self._circular_mask_bincount]
-        )
+        diffraction_patterns_reshaped = diffraction_patterns_reshaped[
+            :, self._circular_mask_bincount
+        ]
+        return diffraction_patterns_reshaped
 
     def _forward_simulation(
         self,
@@ -995,103 +1032,6 @@ class Tomography:
         )
 
         return self._asnumpy(current_object_sliced)
-
-    def _forward_diffraction_intensities_reshape(
-        self,
-        datacube_number,
-    ):
-        """
-        Reshape 1D diffraction data to full patterns
-
-        Parameters
-        ----------
-        datacube_number: int
-            index of datacube
-
-        Returns
-        --------
-        diffraction_patterns_reshaped: np.ndarray
-            datacube with diffraction data reshapped in 2D arrays
-        """
-        xp = self._xp
-        s = self._initial_datacube_shape
-
-        diffraction_patterns_flat = xp.asarray(
-            self._diffraction_patterns[datacube_number]
-        )
-        diffraction_patterns_reshaped = xp.zeros(
-            (diffraction_patterns_flat.shape[0], s[-1] * s[-1])
-        )
-
-        diffraction_patterns_reshaped[
-            :, xp.asarray(self._ind_diffraction_space_ravel)
-        ] = diffraction_patterns_flat
-        diffraction_patterns_reshaped = diffraction_patterns_reshaped[
-            :, xp.asarray(self._reorder_patterns)
-        ]
-
-        diffraction_patterns_reshaped = diffraction_patterns_reshaped.reshape(
-            (diffraction_patterns_flat.shape[0], s[-1], s[-1])
-        )
-
-        diffraction_patterns_reshaped += np.rot90(
-            diffraction_patterns_reshaped, 2, axes=(-1, -2)
-        )
-
-        return diffraction_patterns_reshaped
-
-    def _calculate_diffraction_patterns_weighted(
-        self, datacube_number, current_object_sliced, diffraction_patterns_reshaped
-    ):
-        """
-        Calculate diffraction pattern re-weighted for voxels
-
-        Parameters
-        ----------
-        datacube_number: int
-            index of datacube
-        current_object_sliced: np.ndarray
-            projection of current object sliced in diffraciton space
-        diffraction_patterns_reshaped: np.ndarray
-            datacube with diffraction data reshapped in 2D arrays
-
-        Returns
-        --------
-        diffraction_patterns_weighted: np.ndarray
-            diffraction patterns reshaped for update
-
-        """
-        xp = self._xp
-
-        xF = xp.asarray(self._positions_vox_F[datacube_number][0])
-        yF = xp.asarray(self._positions_vox_F[datacube_number][1])
-
-        dx = xp.asarray(self._positions_vox_dF[datacube_number][0])
-        dy = xp.asarray(self._positions_vox_dF[datacube_number][1])
-
-        s = current_object_sliced.shape
-        diffraction_patterns_weighted = xp.zeros((s[0] + 1, s[1] + 1, s[2], s[3]))
-
-        for basis_index in range(4):
-            match basis_index:
-                case 0:
-                    inds = [xF, yF]
-                    weights = (1 - dx) * (1 - dy)
-                case 1:
-                    inds = [xF + 1, yF]
-                    weights = (dx) * (1 - dy)
-                case 2:
-                    inds = [xF, yF + 1]
-                    weights = (1 - dx) * (dy)
-                case 3:
-                    inds = [xF + 1, yF + 1]
-                    weights = (dx) * (dy)
-
-            diffraction_patterns_weighted[inds[0], inds[1]] += (
-                diffraction_patterns_reshaped * weights[:, None, None]
-            )
-
-        return diffraction_patterns_weighted[:-1, :-1]
 
     def _make_test_object(
         self,
