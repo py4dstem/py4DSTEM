@@ -805,45 +805,45 @@ class Tomography:
             diffraction_patterns_reshaped[:, self._circular_mask_bincount]
         )
 
-    # def _forward_simulation(
-    #     self,
-    #     current_object: np.ndarray,
-    #     tilt_deg: int,
-    #     x_index: int,
-    #     num_points: np.ndarray = 60,
-    # ):
-    #     """
-    #     Forward projection of object for simulation of diffraction data
+    def _forward_simulation(
+        self,
+        current_object: np.ndarray,
+        tilt_deg: int,
+        x_index: int,
+        num_points: np.ndarray = 60,
+    ):
+        """
+        Forward projection of object for simulation of diffraction data
 
-    #     Parameters
-    #     ----------
-    #     current_object: np.ndarray
-    #         current object estimate
-    #     tilt_deg: float
-    #         tilt of object in degrees
-    #     x_index: int
-    #         x slice of object to be sliced
-    #     num_points: float
-    #         number of points for bilinear interpolation
+        Parameters
+        ----------
+        current_object: np.ndarray
+            current object estimate
+        tilt_deg: float
+            tilt of object in degrees
+        x_index: int
+            x slice of object to be sliced
+        num_points: float
+            number of points for bilinear interpolation
 
-    #     Returns
-    #     --------
-    #     current_object_sliced: np.ndarray
-    #         projection of current object sliced in diffraciton space
-    #     """
-    #     current_object_projected = self.real_space_radon(
-    #         current_object,
-    #         tilt_deg,
-    #         x_index,
-    #         num_points,
-    #     )
+        Returns
+        --------
+        current_object_sliced: np.ndarray
+            projection of current object sliced in diffraciton space
+        """
+        current_object_projected = self.real_space_radon(
+            current_object,
+            tilt_deg,
+            x_index,
+            num_points,
+        )
 
-    #     current_object_sliced = self.diffraction_space_slice(
-    #         current_object_projected,
-    #         tilt_deg,
-    #     )
+        current_object_sliced = self.diffraction_space_slice(
+            current_object_projected,
+            tilt_deg,
+        )
 
-    #     return current_object_sliced
+        return current_object_sliced
 
     def real_space_radon(
         self,
@@ -983,25 +983,16 @@ class Tomography:
             current_object_projected, ((0, 0), (0, 0), (0, 1), (0, 1))
         )
 
-        for basis_index in range(4):
-            match basis_index:
-                case 0:
-                    inds = [yF_diff, zF_diff]
-                    weights = (1 - dy_diff) * (1 - dz_diff)
-                case 1:
-                    inds = [yF_diff + 1, zF_diff]
-                    weights = (dy_diff) * (1 - dz_diff)
-                case 2:
-                    inds = [yF_diff, zF_diff + 1]
-                    weights = (1 - dy_diff) * (dz_diff)
-                case 3:
-                    inds = [yF_diff + 1, zF_diff + 1]
-                    weights = (dy_diff) * (dz_diff)
-
-            current_object_sliced += (
-                current_object_projected[:, :, inds[0], inds[1]]
-                * weights[None, None, :]
-            )
+        current_object_sliced = (
+            current_object_projected[:, :, yF_diff, zF_diff]
+            * ((1 - dy_diff) * (1 - dz_diff))[None, None, :]
+            + current_object_projected[:, :, yF_diff + 1, zF_diff]
+            * ((dy_diff) * (1 - dz_diff))[None, None, :]
+            + current_object_projected[:, :, yF_diff, zF_diff + 1]
+            * ((dy_diff) * (dz_diff))[None, None, :]
+            + current_object_projected[:, :, yF_diff + 1, zF_diff + 1]
+            * ((1 - dy_diff) * (1 - dz_diff))[None, None, :]
+        )
 
         return self._asnumpy(current_object_sliced)
 
