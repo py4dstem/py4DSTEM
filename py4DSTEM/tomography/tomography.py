@@ -179,7 +179,6 @@ class Tomography:
             #     _solve_for_center_of_mass_relative_rotation():
 
             # initialize positions
-
             mask_real_space = self._calculate_scan_positions(
                 datacube_number=a0,
                 mask_real_space=mask_real_space,
@@ -195,7 +194,6 @@ class Tomography:
                     r=r,
                     rscale=rscale,
                     fast_center=fast_center,
-                    mask_real_space=mask_real_space,
                     fitfunction=fitfunction,
                     robust=robust,
                     robust_steps=robust_steps,
@@ -224,7 +222,6 @@ class Tomography:
     #         for a1 in range(self._num_datacubes):
     #             (
     #                 current_object_sliced,
-    #                 diffraction_patterns_weighted,
     #             ) = self._forward(
     #                 datacube_number=datacube_number,
     #                 tilt_deg=self._tilt_deg[a1],
@@ -287,7 +284,6 @@ class Tomography:
         current_object_sliced_2D = self._reshape_4D_array_to_2D(current_object_sliced)
 
         return current_object_sliced_2D
-        # diffraction_patterns_weighted,
 
     # def _adjoint(
     #     self,
@@ -550,9 +546,9 @@ class Tomography:
         # remove data outside FOV
         if mask_real_space is None:
             mask_real_space = np.ones(x.shape, dtype="bool")
-        mask_real_space[x > self._field_of_view_A[0]] = False
+        mask_real_space[x >= self._field_of_view_A[0]] = False
         mask_real_space[x < 0] = False
-        mask_real_space[y > self._field_of_view_A[1]] = False
+        mask_real_space[y >= self._field_of_view_A[1]] = False
         mask_real_space[y < 0] = False
 
         # calculate positions in voxels
@@ -586,7 +582,6 @@ class Tomography:
         r,
         rscale,
         fast_center,
-        mask_real_space,
         fitfunction,
         robust,
         robust_steps,
@@ -606,9 +601,6 @@ class Tomography:
             when taking its center of mass
         fast_center: (bool)
             skip the center of mass refinement step.
-        mask_real_space: np.ndarray or None
-            if not None, should be an (R_Nx,R_Ny) shaped
-            boolean array. Origin is found only where mask==True, and masked
             arrays are returned for qx0,qy0
         fitfunction: "str"
             fit function for origin ('plane' or 'parabola' or 'bezier_two' or 'constant').
@@ -632,14 +624,12 @@ class Tomography:
             datacube,
             r=r,
             rscale=rscale,
-            mask=mask_real_space,
             fast_center=fast_center,
             verbose=False,
         )
 
         (qx0_fit, qy0_fit, qx0_res, qy0_res) = fit_origin(
             (qx0, qy0),
-            mask=mask_real_space,
             fitfunction=fitfunction,
             returnfitp=False,
             robust=robust,
@@ -647,7 +637,7 @@ class Tomography:
             robust_thresh=robust_thresh,
         )
 
-        return qx0_fit, qy0_fit
+        return qx0_fit.data, qy0_fit.data
 
     def _reshape_diffraction_patterns(
         self,
@@ -687,7 +677,9 @@ class Tomography:
             # TODO deal with with diffraction patterns cut off by detector?
 
         diffraction_patterns_reshaped = self._reshape_4D_array_to_2D(
-            datacube.data, qx0_fit, qy0_fit
+            data=datacube.data,
+            qx0_fit=qx0_fit,
+            qy0_fit=qy0_fit,
         )
 
         del datacube
@@ -775,7 +767,6 @@ class Tomography:
 
         for a0 in range(s[0]):
             for a1 in range(s[0]):
-
                 dp = data[a0, a1]
                 index = np.ravel_multi_index((a0, a1), (s[0], s[1]))
 
@@ -841,46 +832,6 @@ class Tomography:
             :, self._circular_mask_bincount
         ]
         return diffraction_patterns_reshaped
-
-    def _forward_simulation(
-        self,
-        current_object: np.ndarray,
-        tilt_deg: int,
-        x_index: int,
-        num_points: np.ndarray = 60,
-    ):
-        """
-        Forward projection of object for simulation of diffraction data
-
-        Parameters
-        ----------
-        current_object: np.ndarray
-            current object estimate
-        tilt_deg: float
-            tilt of object in degrees
-        x_index: int
-            x slice of object to be sliced
-        num_points: float
-            number of points for bilinear interpolation
-
-        Returns
-        --------
-        current_object_sliced: np.ndarray
-            projection of current object sliced in diffraciton space
-        """
-        current_object_projected = self.real_space_radon(
-            current_object,
-            tilt_deg,
-            x_index,
-            num_points,
-        )
-
-        current_object_sliced = self.diffraction_space_slice(
-            current_object_projected,
-            tilt_deg,
-        )
-
-        return current_object_sliced
 
     def real_space_radon(
         self,
@@ -1033,6 +984,100 @@ class Tomography:
 
         return self._asnumpy(current_object_sliced)
 
+    def _calculate_update(self, object_sliced, datacube_number):
+        """
+        Calculate update for back projection
+
+        Parameters
+        ----------
+        current_object_sliced: np.ndarray
+            projection of current object sliced in diffraciton space
+        datacube_number: int
+            index of datacube
+
+        Returns
+        --------
+        update: np.ndarray
+            difference between current object sliced in diffraciton space and
+            experimental diffraction patterns
+
+        """
+        xp = self._xp
+
+        diffraction_patterns_projected = xp.asarray(
+            self._diffraction_patterns_projected[datacube_number]
+        )
+
+        update = xp.zeros(object_sliced.shape)
+        update[
+            xp.ravel_multi_index(
+                (
+                    self._positions_vox_F[datacube_number][0],
+                    self._positions_vox_F[datacube_number][1],
+                ),
+                self._initial_datacube_shape[0:2],
+                mode="clip",
+            )
+        ] += (
+            diffraction_patterns_projected
+            * (
+                (1 - self._positions_vox_dF[datacube_number][0])
+                * (1 - self._positions_vox_dF[datacube_number][1])
+            )[:, None]
+        )
+
+        update[
+            xp.ravel_multi_index(
+                (
+                    self._positions_vox_F[datacube_number][0] + 1,
+                    self._positions_vox_F[datacube_number][1],
+                ),
+                self._initial_datacube_shape[0:2],
+                mode="clip",
+            )
+        ] += (
+            diffraction_patterns_projected
+            * (
+                (self._positions_vox_dF[datacube_number][0])
+                * (1 - self._positions_vox_dF[datacube_number][1])
+            )[:, None]
+        )
+
+        update[
+            xp.ravel_multi_index(
+                (
+                    self._positions_vox_F[datacube_number][0],
+                    self._positions_vox_F[datacube_number][1] + 1,
+                ),
+                self._initial_datacube_shape[0:2],
+                mode="clip",
+            )
+        ] += (
+            diffraction_patterns_projected
+            * (
+                (1 - self._positions_vox_dF[datacube_number][0])
+                * (self._positions_vox_dF[datacube_number][1])
+            )[:, None]
+        )
+
+        update[
+            xp.ravel_multi_index(
+                (
+                    self._positions_vox_F[datacube_number][0] + 1,
+                    self._positions_vox_F[datacube_number][1] + 1,
+                ),
+                self._initial_datacube_shape[0:2],
+                mode="clip",
+            )
+        ] += (
+            diffraction_patterns_projected
+            * (
+                (self._positions_vox_dF[datacube_number][0])
+                * (self._positions_vox_dF[datacube_number][1])
+            )[:, None]
+        )
+        return update
+
     def _make_test_object(
         self,
         sx: int,
@@ -1087,6 +1132,46 @@ class Tomography:
             test_object[s1 - r : s1 + r, s2 - r : s2 + r, h[0] - r : h[0] + r] = cloud
 
         return test_object
+
+    def _forward_simulation(
+        self,
+        current_object: np.ndarray,
+        tilt_deg: int,
+        x_index: int,
+        num_points: np.ndarray = 60,
+    ):
+        """
+        Forward projection of object for simulation of diffraction data
+
+        Parameters
+        ----------
+        current_object: np.ndarray
+            current object estimate
+        tilt_deg: float
+            tilt of object in degrees
+        x_index: int
+            x slice of object to be sliced
+        num_points: float
+            number of points for bilinear interpolation
+
+        Returns
+        --------
+        current_object_sliced: np.ndarray
+            projection of current object sliced in diffraciton space
+        """
+        current_object_projected = self.real_space_radon(
+            current_object,
+            tilt_deg,
+            x_index,
+            num_points,
+        )
+
+        current_object_sliced = self.diffraction_space_slice(
+            current_object_projected,
+            tilt_deg,
+        )
+
+        return current_object_sliced
 
     def _make_diffraction_cloud(
         self,
