@@ -758,8 +758,6 @@ def plot_radial_peaks(
     if not label_y_axis:
         ax.tick_params(left=False, labelleft=False)
 
-    plt.tight_layout()
-
     if v_lines is not None:
         y_min, y_max = ax.get_ylim()
 
