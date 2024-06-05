@@ -269,14 +269,14 @@ class Tomography:
         current_object_sliced = xp.zeros((s[0], s[1], s[-1], s[-1]))
 
         for a0 in range(s[0]):
-            current_object_projected = self.real_space_radon(
+            current_object_projected = self._real_space_radon(
                 current_object=current_object,
                 tilt_deg=tilt_deg,
                 x_index=a0,
                 num_points=num_points,
             )
 
-            current_object_sliced[a0] = self.diffraction_space_slice(
+            current_object_sliced[a0] = self._diffraction_space_slice(
                 current_object_projected=current_object_projected,
                 tilt_deg=tilt_deg,
             )
@@ -284,77 +284,6 @@ class Tomography:
         current_object_sliced_2D = self._reshape_4D_array_to_2D(current_object_sliced)
 
         return current_object_sliced_2D
-
-    # def _adjoint(
-    #     self,
-    #     datacube_number,
-    #     current_object_sliced,
-    #     diffraction_patterns_weighted,
-    #     step_size,
-    #     tilt_deg,
-    # ):
-    #     """ """
-    #     # update sliced object
-    #     current_object_sliced = step_size * (
-    #         diffraction_patterns_weighted - current_object_sliced
-    #     )
-
-    #     for a0 in range(self._object.shape[0]):
-
-    # def diffraction_space_adjoint(
-    #     self,
-    #     current_object_sliced: np.ndarray,
-    #     tilt_deg: int,
-    # ):
-    #     """
-    #     Slicing of diffraction space for rotated object
-
-    #     Parameters
-    #     ----------
-    #     current_object_rotated: np.ndarray
-    #         current object estimate projected
-    #     tilt_deg: float
-    #         tilt of object in degrees
-
-    #     Returns
-    #     --------
-    #     current_object_sliced: np.ndarray
-    #         projection of current object sliced in diffraciton space
-
-    #     """
-    #     xp = self._xp
-
-    #     # s = current_object_projected.shape
-
-    #     tilt = xp.deg2rad(tilt_deg)
-
-    #     line_y_diff = self._line_y_diff
-    #     line_z_diff = self._line_z_diff
-    #     yF_diff = self._yF_diff
-    #     zF_diff = self._zF_diff
-    #     dy_diff = self._dy_diff
-    #     dz_diff = self._dz_diff
-
-    #     current_object_projected_updated = current_object_projected.copy()
-
-    #     for basis_index in range(4):
-    #         match basis_index:
-    #             case 0:
-    #                 inds = [yF_diff, zF_diff]
-    #                 weights = (1 - dy_diff) * (1 - dz_diff)
-    #             case 1:
-    #                 inds = [yF_diff + 1, zF_diff]
-    #                 weights = (dy_diff) * (1 - dz_diff)
-    #             case 2:
-    #                 inds = [yF_diff, zF_diff + 1]
-    #                 weights = (1 - dy_diff) * (dz_diff)
-    #             case 3:
-    #                 inds = [yF_diff + 1, zF_diff + 1]
-    #                 weights = (dy_diff) * (dz_diff)
-
-    #         # current_object_projected -=
-
-    #     return self._asnumpy(current_object_sliced)
 
     def _prepare_datacube(
         self,
@@ -748,7 +677,7 @@ class Tomography:
 
     def _reshape_4D_array_to_2D(self, data, qx0_fit=None, qy0_fit=None):
         """
-        reshape diffraction 4D-data to 2D
+        reshape diffraction 4D-data to 2D ravelled patterns
 
         Parameters
         ----------
@@ -758,6 +687,12 @@ class Tomography:
             qx shifts
         qy0_fit: int
             qy shifts
+
+
+        Returns
+        --------
+        diffraction_patterns_reshaped: np.ndarray
+            diffraction patterns ravelled
         """
 
         s = data.shape
@@ -833,7 +768,45 @@ class Tomography:
         ]
         return diffraction_patterns_reshaped
 
-    def real_space_radon(
+    def _reshape_2D_array_to_4D(self, data):
+        """
+        reshape ravelled diffraction 2D-data to 4D-data
+
+        Parameters
+        ----------
+        data: np.ndarrray
+            2D datacube data to be reshapped
+
+
+        Returns
+        --------
+        data_reshaped: np.ndarray
+            data reshapped in 4D-array
+
+        """
+        xp = self._xp
+
+        s = (
+            self._object.shape[0],
+            self._object.shape[1],
+            self._object.shape[-1],
+            self._object.shape[-1],
+        )
+        a = xp.argsort(self._ind_diffraction_ravel[self._circular_mask_ravel])
+        i = xp.empty_like(a)
+        i[a] = xp.arange(a.size)
+
+        data_reshaped = xp.zeros((s[0] * s[1], s[2] * s[3]))
+        data_reshaped[:, self._circular_mask_ravel] = xp.repeat(data, 2, axis=1)[:, 1:]
+        data_reshaped[1:] /= 2
+        data_reshaped[:, self._circular_mask_ravel] = data_reshaped[
+            :, self._circular_mask_ravel
+        ][:, i]
+        data_reshaped = data_reshaped.reshape((s[0], s[1], s[2], s[3]))
+
+        return data_reshaped
+
+    def _real_space_radon(
         self,
         current_object: np.ndarray,
         tilt_deg: int,
@@ -923,7 +896,7 @@ class Tomography:
 
         return current_object_projected
 
-    def diffraction_space_slice(
+    def _diffraction_space_slice(
         self,
         current_object_projected: np.ndarray,
         tilt_deg: int,
@@ -1159,14 +1132,14 @@ class Tomography:
         current_object_sliced: np.ndarray
             projection of current object sliced in diffraciton space
         """
-        current_object_projected = self.real_space_radon(
+        current_object_projected = self._real_space_radon(
             current_object,
             tilt_deg,
             x_index,
             num_points,
         )
 
-        current_object_sliced = self.diffraction_space_slice(
+        current_object_sliced = self._diffraction_space_slice(
             current_object_projected,
             tilt_deg,
         )
