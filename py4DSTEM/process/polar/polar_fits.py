@@ -140,6 +140,21 @@ def fit_amorphous_ring(
             np.inf,
             np.inf,
         )
+    else:
+        lb = (0, 0, radial_range[0], radial_range[0], -np.inf, 0, 0, 0, 1, 1, 1)
+        ub = (
+            im.shape[0],
+            im.shape[1],
+            radial_range[1],
+            radial_range[1],
+            np.inf,
+            np.inf,
+            np.inf,
+            np.inf,
+            np.inf,
+            np.inf,
+            np.inf,
+        )
 
     if show_fit_mask:
         # show image preview of fitting mask
