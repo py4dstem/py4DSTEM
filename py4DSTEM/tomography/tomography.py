@@ -313,7 +313,7 @@ class Tomography:
         ###solve for diffraction space coordinates
 
         l = s[-1] * xp.cos(tilt)
-        line_y_diff = xp.arange(-1 * (l) / 2, l / 2, l / s[-1])
+        line_y_diff = np.arange(-(s[-1] - 1) / 2, s[-1] / 2) * l
         line_z_diff = line_y_diff * xp.tan(tilt) + (s[-1] - 1) / 2
         line_y_diff += s[-1] / 2
 
@@ -363,13 +363,12 @@ class Tomography:
             "clip",
         )
 
-        ind_max = self._q_length
         bincount_x = (
             xp.tile(
                 (xp.tile(self._ind_diffraction_ravel, (1, 4))),
                 (1, s[1]),
             )
-            + xp.repeat(xp.arange(s[1]), ind_diff.shape[0]) * ind_max
+            + xp.repeat(xp.arange(s[1]), ind_diff.shape[0]) * self._q_length
         )
         bincount_x = xp.asarray(bincount_x[0], dtype="int")
 
