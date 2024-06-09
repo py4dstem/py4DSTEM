@@ -270,6 +270,7 @@ class Tomography:
         xp = self._xp
         s = self._object_shape_6D
         obj = self._object[slice_number]
+
         tilt = xp.deg2rad(tilt_deg)
 
         ###solve for real space coordinates
@@ -310,9 +311,6 @@ class Tomography:
         )
 
         ###solve for diffraction space coordinates
-        xp = np
-        tilt_deg = 5
-        tilt = xp.deg2rad(tilt_deg)
 
         l = s[-1] * xp.cos(tilt)
         line_y_diff = xp.arange(-1 * (l) / 2, l / 2, l / s[-1])
@@ -330,62 +328,62 @@ class Tomography:
 
         ind0_diff = np.hstack(
             (
-                xp.tile(yF_diff, (s[-1], 1)),
-                xp.tile(yF_diff + 1, (s[-1], 1)),
-                xp.tile(yF_diff, (s[-1], 1)),
-                xp.tile(yF_diff + 1, (s[-1], 1)),
+                xp.repeat(yF_diff, s[-1]),
+                xp.repeat(yF_diff + 1, s[-1]),
+                xp.repeat(yF_diff, s[-1]),
+                xp.repeat(yF_diff + 1, s[-1]),
             )
         )
 
         ind1_diff = np.hstack(
             (
-                xp.tile(zF_diff, (s[-1], 1)),
-                xp.tile(zF_diff, (s[-1], 1)),
-                xp.tile(zF_diff + 1, (s[-1], 1)),
-                xp.tile(zF_diff + 1, (s[-1], 1)),
+                xp.repeat(zF_diff, s[-1]),
+                xp.repeat(zF_diff, s[-1]),
+                xp.repeat(zF_diff + 1, s[-1]),
+                xp.repeat(zF_diff + 1, s[-1]),
             )
         )
 
         weights_diff = np.hstack(
             (
-                xp.tile(((1 - dy_diff) * (1 - dz_diff)), (s[-1], 1)),
-                xp.tile(((dy_diff) * (1 - dz_diff)), (s[-1], 1)),
-                xp.tile(((1 - dy_diff) * (dz_diff)), (s[-1], 1)),
-                xp.tile(((dy_diff) * (dz_diff)), (s[-1], 1)),
+                xp.repeat(((1 - dy_diff) * (1 - dz_diff)), s[-1]),
+                xp.repeat(((dy_diff) * (1 - dz_diff)), s[-1]),
+                xp.repeat(((1 - dy_diff) * (dz_diff)), s[-1]),
+                xp.repeat(((dy_diff) * (dz_diff)), s[-1]),
             )
         )
 
         ind_diff = xp.ravel_multi_index(
             (
-                xp.tile(qxx.ravel(), (1, 4)),
                 ind0_diff.ravel(),
+                xp.tile(qxx, (1, 4)).ravel(),
                 ind1_diff.ravel(),
             ),
             (s[-1], s[-1], s[-1]),
             "clip",
         )
 
-        ind_max = self._ind_diffraction_ravel.max()
-        bincount_x = xp.tile(
-            weights_diff.ravel() * (xp.tile(self._ind_diffraction_ravel, (1, 4))),
-            (1, s[1]),
-        ) + xp.repeat(xp.arange(s[1]), ind_diff.shape[1])
+        ind_max = self._q_length
+        bincount_x = (
+            xp.tile(
+                (xp.tile(self._ind_diffraction_ravel, (1, 4))),
+                (1, s[1]),
+            )
+            + xp.repeat(xp.arange(s[1]), ind_diff.shape[0]) * ind_max
+        )
         bincount_x = xp.asarray(bincount_x[0], dtype="int")
 
-        obj_projected = (
-            xp.bincount(
-                bincount_x,
-                (
-                    obj[xp.ravel_multi_index((ind0, ind1), (s[1], s[2]), mode="clip"),]
-                    * weights_real[:, :, None]
-                )
-                .sum(1)[:, ind_diff]
-                .ravel(),
-                minlength=self._q_length * 4 * s[1],
+        obj_projected = xp.bincount(
+            bincount_x,
+            (
+                obj[xp.ravel_multi_index((ind0, ind1), (s[1], s[2]), mode="clip"),]
+                * weights_real[:, :, None]
             )
-            .reshape(s[1], self._q_length, 4)  ## check this reshape
-            .sum(2)[:, self._circular_mask_bincount]
-        )
+            .sum(1)[:, ind_diff]
+            .ravel()
+            * xp.tile(weights_diff, (1, s[1])).ravel(),
+            minlength=self._q_length * s[1],
+        ).reshape(s[1], self._q_length)[:, self._circular_mask_bincount]
 
         return obj_projected
 
