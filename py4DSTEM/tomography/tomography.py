@@ -215,176 +215,34 @@ class Tomography:
 
         return self
 
-    # def reconstruct(
-    #     self,
-    #     num_iter: int = 1,
-    #     step_size: float = 0.5,
-    #     num_points: int = 60,
-    # ):
-    #     """ """
-    #     for a0 in range(num_iter):
-    #         for a1 in range(self._num_datacubes):
-    #             (
-    #                 current_object_sliced,
-    #             ) = self._forward(
-    #                 datacube_number=datacube_number,
-    #                 tilt_deg=self._tilt_deg[a1],
-    #                 num_points=num_points,
-    #             )
-
-    #             self._adjoint(
-    #                 datacube_number=datacube_number,
-    #                 current_object_sliced=current_object_sliced,
-    #                 diffraction_patterns_weighted=diffraction_patterns_weighted,
-    #                 step_size=step_size,
-    #                 current_object_projected=current_object_projected,
-    #             )
-
-    #     return self
-
-    def _forward(
+    def reconstruct(
         self,
-        slice_number: int,
-        tilt_deg: float,
-        num_points: int,
+        num_iter: int = 1,
+        step_size: float = 0.5,
+        num_points: int = 60,
     ):
-        """
-        Forward projection of object for simulation of diffraction data
-
-        Parameters
-        ----------
-        slice_number: int
-            x slice for forward projection
-        tilt_deg: float
-            tilt of object in degrees
-        num_points: int
-            number of points for bilinear interpolation
-
-        Returns
-        --------
-        current_object_sliced: np.ndarray
-            projection of current object sliced in diffraciton space
-        diffraction_patterns_reshaped: np.ndarray
-            datacube with diffraction data reshapped in 2D arrays
-        """
+        """ """
         xp = self._xp
-        s = self._object_shape_6D
-        obj = self._object[slice_number]
+        for a0 in range(num_iter):
+            for a1 in range(self._num_datacubes):
+                diffraction_patterns_projected = xp.asarray(
+                    self._diffraction_patterns_projected[a1]
+                )
+                for a2 in range(self._object_shape_6D[0]):
+                    (object_sliced,) = self._forward(
+                        slice_number=a2,
+                        tilt_deg=self._tilt_deg[a1],
+                        num_points=num_points,
+                    )
 
-        tilt = xp.deg2rad(tilt_deg)
+                    update = self._calculate_update(
+                        object_sliced=object_sliced,
+                        diffraction_patterns_projected=diffraction_patterns_projected,
+                        slice_number=a2,
+                        datacube_number=a1,
+                    )
 
-        ###solve for real space coordinates
-        line_z = xp.arange(0, 1, 1 / num_points) * (s[2] - 1)
-        line_y = line_z * xp.tan(tilt)
-        offset = xp.arange(s[1], dtype="int")
-
-        yF = xp.floor(line_y).astype("int")
-        zF = xp.floor(line_z).astype("int")
-        dy = line_y - yF
-        dz = line_z - zF
-
-        ind0 = np.hstack(
-            (
-                xp.tile(yF, (s[1], 1)) + offset[:, None],
-                xp.tile(yF + 1, (s[1], 1)) + offset[:, None],
-                xp.tile(yF, (s[1], 1)) + offset[:, None],
-                xp.tile(yF + 1, (s[1], 1)) + offset[:, None],
-            )
-        )
-
-        ind1 = np.hstack(
-            (
-                xp.tile(zF, (s[1], 1)),
-                xp.tile(zF, (s[1], 1)),
-                xp.tile(zF + 1, (s[1], 1)),
-                xp.tile(zF + 1, (s[1], 1)),
-            )
-        )
-
-        weights_real = np.hstack(
-            (
-                xp.tile(((1 - dy) * (1 - dz)), (s[1], 1)),
-                xp.tile(((dy) * (1 - dz)), (s[1], 1)),
-                xp.tile(((1 - dy) * (dz)), (s[1], 1)),
-                xp.tile(((dy) * (dz)), (s[1], 1)),
-            )
-        )
-
-        ###solve for diffraction space coordinates
-
-        l = s[-1] * xp.cos(tilt)
-        line_y_diff = np.arange(-(s[-1] - 1) / 2, s[-1] / 2) * l
-        line_z_diff = line_y_diff * xp.tan(tilt) + (s[-1] - 1) / 2
-        line_y_diff += s[-1] / 2
-
-        yF_diff = xp.floor(line_y_diff).astype("int")
-        zF_diff = xp.floor(line_z_diff).astype("int")
-        dy_diff = line_y_diff - yF_diff
-        dz_diff = line_z_diff - zF_diff
-
-        qx = xp.arange(11)
-        qy = xp.arange(11)
-        qxx, qyy = xp.meshgrid(qx, qy)
-
-        ind0_diff = np.hstack(
-            (
-                xp.repeat(yF_diff, s[-1]),
-                xp.repeat(yF_diff + 1, s[-1]),
-                xp.repeat(yF_diff, s[-1]),
-                xp.repeat(yF_diff + 1, s[-1]),
-            )
-        )
-
-        ind1_diff = np.hstack(
-            (
-                xp.repeat(zF_diff, s[-1]),
-                xp.repeat(zF_diff, s[-1]),
-                xp.repeat(zF_diff + 1, s[-1]),
-                xp.repeat(zF_diff + 1, s[-1]),
-            )
-        )
-
-        weights_diff = np.hstack(
-            (
-                xp.repeat(((1 - dy_diff) * (1 - dz_diff)), s[-1]),
-                xp.repeat(((dy_diff) * (1 - dz_diff)), s[-1]),
-                xp.repeat(((1 - dy_diff) * (dz_diff)), s[-1]),
-                xp.repeat(((dy_diff) * (dz_diff)), s[-1]),
-            )
-        )
-
-        ind_diff = xp.ravel_multi_index(
-            (
-                ind0_diff.ravel(),
-                xp.tile(qxx, (1, 4)).ravel(),
-                ind1_diff.ravel(),
-            ),
-            (s[-1], s[-1], s[-1]),
-            "clip",
-        )
-
-        bincount_x = (
-            xp.tile(
-                (xp.tile(self._ind_diffraction_ravel, (1, 4))),
-                (1, s[1]),
-            )
-            + xp.repeat(xp.arange(s[1]), ind_diff.shape[0]) * self._q_length
-        )
-        bincount_x = xp.asarray(bincount_x[0], dtype="int")
-
-        obj_projected = xp.bincount(
-            bincount_x,
-            (
-                obj[xp.ravel_multi_index((ind0, ind1), (s[1], s[2]), mode="clip"),]
-                * weights_real[:, :, None]
-            )
-            .sum(1)[:, ind_diff]
-            .ravel()
-            * xp.tile(weights_diff, (1, s[1])).ravel(),
-            minlength=self._q_length * s[1],
-        ).reshape(s[1], self._q_length)[:, self._circular_mask_bincount]
-
-        return obj_projected
+        return self
 
     def _prepare_datacube(
         self,
@@ -1058,7 +916,153 @@ class Tomography:
 
         return self._asnumpy(current_object_sliced)
 
-    def _calculate_update(self, object_sliced, datacube_number):
+    def _forward(
+        self,
+        slice_number: int,
+        tilt_deg: float,
+        num_points: int,
+    ):
+        """
+        Forward projection of object for simulation of diffraction data
+
+        Parameters
+        ----------
+        slice_number: int
+            x slice for forward projection
+        tilt_deg: float
+            tilt of object in degrees
+        num_points: int
+            number of points for bilinear interpolation
+
+        Returns
+        --------
+        current_object_sliced: np.ndarray
+            projection of current object sliced in diffraciton space
+        diffraction_patterns_reshaped: np.ndarray
+            datacube with diffraction data reshapped in 2D arrays
+        """
+        xp = self._xp
+        s = self._object_shape_6D
+        obj = self._object[slice_number]
+
+        tilt = xp.deg2rad(tilt_deg)
+
+        ###solve for real space coordinates
+        line_z = xp.arange(0, 1, 1 / num_points) * (s[2] - 1)
+        line_y = line_z * xp.tan(tilt)
+        offset = xp.arange(s[1], dtype="int")
+
+        yF = xp.floor(line_y).astype("int")
+        zF = xp.floor(line_z).astype("int")
+        dy = line_y - yF
+        dz = line_z - zF
+
+        ind0 = np.hstack(
+            (
+                xp.tile(yF, (s[1], 1)) + offset[:, None],
+                xp.tile(yF + 1, (s[1], 1)) + offset[:, None],
+                xp.tile(yF, (s[1], 1)) + offset[:, None],
+                xp.tile(yF + 1, (s[1], 1)) + offset[:, None],
+            )
+        )
+
+        ind1 = np.hstack(
+            (
+                xp.tile(zF, (s[1], 1)),
+                xp.tile(zF, (s[1], 1)),
+                xp.tile(zF + 1, (s[1], 1)),
+                xp.tile(zF + 1, (s[1], 1)),
+            )
+        )
+
+        weights_real = np.hstack(
+            (
+                xp.tile(((1 - dy) * (1 - dz)), (s[1], 1)),
+                xp.tile(((dy) * (1 - dz)), (s[1], 1)),
+                xp.tile(((1 - dy) * (dz)), (s[1], 1)),
+                xp.tile(((dy) * (dz)), (s[1], 1)),
+            )
+        )
+
+        ###solve for diffraction space coordinates
+
+        l = s[-1] * xp.cos(tilt)
+        line_y_diff = np.arange(-(s[-1] - 1) / 2, s[-1] / 2) * l
+        line_z_diff = line_y_diff * xp.tan(tilt) + (s[-1] - 1) / 2
+        line_y_diff += s[-1] / 2
+
+        yF_diff = xp.floor(line_y_diff).astype("int")
+        zF_diff = xp.floor(line_z_diff).astype("int")
+        dy_diff = line_y_diff - yF_diff
+        dz_diff = line_z_diff - zF_diff
+
+        qx = xp.arange(11)
+        qy = xp.arange(11)
+        qxx, qyy = xp.meshgrid(qx, qy)
+
+        ind0_diff = np.hstack(
+            (
+                xp.repeat(yF_diff, s[-1]),
+                xp.repeat(yF_diff + 1, s[-1]),
+                xp.repeat(yF_diff, s[-1]),
+                xp.repeat(yF_diff + 1, s[-1]),
+            )
+        )
+
+        ind1_diff = np.hstack(
+            (
+                xp.repeat(zF_diff, s[-1]),
+                xp.repeat(zF_diff, s[-1]),
+                xp.repeat(zF_diff + 1, s[-1]),
+                xp.repeat(zF_diff + 1, s[-1]),
+            )
+        )
+
+        weights_diff = np.hstack(
+            (
+                xp.repeat(((1 - dy_diff) * (1 - dz_diff)), s[-1]),
+                xp.repeat(((dy_diff) * (1 - dz_diff)), s[-1]),
+                xp.repeat(((1 - dy_diff) * (dz_diff)), s[-1]),
+                xp.repeat(((dy_diff) * (dz_diff)), s[-1]),
+            )
+        )
+
+        ind_diff = xp.ravel_multi_index(
+            (
+                ind0_diff.ravel(),
+                xp.tile(qxx, (1, 4)).ravel(),
+                ind1_diff.ravel(),
+            ),
+            (s[-1], s[-1], s[-1]),
+            "clip",
+        )
+
+        bincount_x = (
+            xp.tile(
+                (xp.tile(self._ind_diffraction_ravel, (1, 4))),
+                (1, s[1]),
+            )
+            + xp.repeat(xp.arange(s[1]), ind_diff.shape[0]) * self._q_length
+        )
+        bincount_x = xp.asarray(bincount_x[0], dtype="int")
+
+        obj_projected = xp.bincount(
+            bincount_x,
+            (
+                obj[xp.ravel_multi_index((ind0, ind1), (s[1], s[2]), mode="clip"),]
+                * weights_real[:, :, None]
+            )
+            .sum(1)[:, ind_diff]
+            .ravel()
+            * xp.tile(weights_diff, (1, s[1])).ravel(),
+            minlength=self._q_length * s[1],
+        ).reshape(s[1], self._q_length)[:, self._circular_mask_bincount]
+
+        return obj_projected
+
+    def _calculate_update(
+        self, object_sliced, diffraction_patterns_projected, x_index, datacube_number
+    ):
         """
         Calculate update for back projection
 
@@ -1066,6 +1070,10 @@ class Tomography:
         ----------
         current_object_sliced: np.ndarray
             projection of current object sliced in diffraciton space
+        diffraction_patterns_projected: np.ndarray
+            projected diffraction patterns for the relevant tilt
+        x_index: int
+            x slice of object to be sliced
         datacube_number: int
             index of datacube
 
@@ -1078,79 +1086,79 @@ class Tomography:
         """
         xp = self._xp
 
-        diffraction_patterns_projected = xp.asarray(
-            self._diffraction_patterns_projected[datacube_number]
-        )
+        ind = self._positions_vox_F[0][0] == x_index
 
-        update = xp.zeros(object_sliced.shape)
+        update = xp.zeros(
+            (self._positions_vox_dF[0][0].shape[0], object_sliced.shape[-1])
+        )
         update[
             xp.ravel_multi_index(
                 (
-                    self._positions_vox_F[datacube_number][0],
-                    self._positions_vox_F[datacube_number][1],
+                    self._positions_vox_F[datacube_number][0][ind],
+                    self._positions_vox_F[datacube_number][1][ind],
                 ),
                 self._initial_datacube_shape[0:2],
                 mode="clip",
             )
         ] += (
-            diffraction_patterns_projected
+            diffraction_patterns_projected[ind]
             * (
-                (1 - self._positions_vox_dF[datacube_number][0])
-                * (1 - self._positions_vox_dF[datacube_number][1])
+                (1 - self._positions_vox_dF[datacube_number][0][ind])
+                * (1 - self._positions_vox_dF[datacube_number][1][ind])
             )[:, None]
         )
 
         update[
             xp.ravel_multi_index(
                 (
-                    self._positions_vox_F[datacube_number][0] + 1,
-                    self._positions_vox_F[datacube_number][1],
+                    self._positions_vox_F[datacube_number][0][ind] + 1,
+                    self._positions_vox_F[datacube_number][1][ind],
                 ),
                 self._initial_datacube_shape[0:2],
                 mode="clip",
             )
         ] += (
-            diffraction_patterns_projected
+            diffraction_patterns_projected[ind]
             * (
-                (self._positions_vox_dF[datacube_number][0])
-                * (1 - self._positions_vox_dF[datacube_number][1])
+                (self._positions_vox_dF[datacube_number][0][ind])
+                * (1 - self._positions_vox_dF[datacube_number][1][ind])
             )[:, None]
         )
 
         update[
             xp.ravel_multi_index(
                 (
-                    self._positions_vox_F[datacube_number][0],
-                    self._positions_vox_F[datacube_number][1] + 1,
+                    self._positions_vox_F[datacube_number][0][ind],
+                    self._positions_vox_F[datacube_number][1][ind] + 1,
                 ),
                 self._initial_datacube_shape[0:2],
                 mode="clip",
             )
         ] += (
-            diffraction_patterns_projected
+            diffraction_patterns_projected[ind]
             * (
-                (1 - self._positions_vox_dF[datacube_number][0])
-                * (self._positions_vox_dF[datacube_number][1])
+                (1 - self._positions_vox_dF[datacube_number][0][ind])
+                * (self._positions_vox_dF[datacube_number][1][ind])
             )[:, None]
         )
 
         update[
             xp.ravel_multi_index(
                 (
-                    self._positions_vox_F[datacube_number][0] + 1,
-                    self._positions_vox_F[datacube_number][1] + 1,
+                    self._positions_vox_F[datacube_number][0][ind] + 1,
+                    self._positions_vox_F[datacube_number][1][ind] + 1,
                 ),
                 self._initial_datacube_shape[0:2],
                 mode="clip",
             )
         ] += (
-            diffraction_patterns_projected
+            diffraction_patterns_projected[ind]
             * (
-                (self._positions_vox_dF[datacube_number][0])
-                * (self._positions_vox_dF[datacube_number][1])
+                (self._positions_vox_dF[datacube_number][0][ind])
+                * (self._positions_vox_dF[datacube_number][1][ind])
             )[:, None]
         )
-        return update
+        return update[ind]
 
     def _make_test_object(
         self,
