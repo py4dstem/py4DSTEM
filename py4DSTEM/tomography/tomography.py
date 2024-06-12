@@ -241,6 +241,12 @@ class Tomography:
                         slice_number=a2,
                         datacube_number=a1,
                     )
+                    update *= step_size
+                    self._back(
+                        num_points=num_points,
+                        slice_number=a2,
+                        update=update,
+                    )
 
         return self
 
@@ -1029,9 +1035,9 @@ class Tomography:
 
         ind_diff = xp.ravel_multi_index(
             (
-                ind0_diff.ravel(),
-                xp.tile(qxx, (1, 4)).ravel(),
                 ind1_diff.ravel(),
+                xp.tile(qxx, (1, 4)).ravel(),
+                ind0_diff.ravel(),
             ),
             (s[-1], s[-1], s[-1]),
             "clip",
@@ -1058,6 +1064,13 @@ class Tomography:
             minlength=self._q_length * s[1],
         ).reshape(s[1], self._q_length)[:, self._circular_mask_bincount]
 
+        self._ind0 = ind0
+        self._ind1 = ind1
+        self._weights_real = weights_real
+        self._bincount_x = bincount_x
+        self._ind_diff = ind_diff
+        self._weights_diff = weights_diff
+
         return obj_projected
 
     def _calculate_update(
@@ -1082,7 +1095,6 @@ class Tomography:
         update: np.ndarray
             difference between current object sliced in diffraciton space and
             experimental diffraction patterns
-
         """
         xp = self._xp
 
@@ -1159,6 +1171,94 @@ class Tomography:
             )[:, None]
         )
         return update[ind]
+
+    def _back(
+        self,
+        num_points: int,
+        slice_number: int,
+        update,
+    ):
+        """
+        back propagate
+
+        Parameters
+        ----------
+        num_points: int
+            number of points for bilinear interpolation
+        slice_number: int
+            x slice for back projection
+        update: np.ndarray
+            difference between current object sliced in diffraciton space and
+            experimental diffraction patterns
+        """
+        xp = self._xp
+        xp_storage = self._xp_storage
+
+        s = self._object_shape_6D
+
+        ind_update = xp.tile(self._circular_mask_ravel, 4)
+
+        a = xp.argsort(self._ind_diffraction_ravel[self._circular_mask_ravel])
+        i = xp.empty_like(a)
+        i[a] = xp.arange(a.size)
+        i = xp.tile(i, 4) + xp.repeat(xp.arange(4), i.shape[0]) * (i.shape[0])
+
+        normalize = xp.ones((xp.repeat(update, 2, axis=1)[:, 1:]).shape) * 2
+        normalize[:, 0] = 1
+
+        update_reshaped = xp.tile(
+            (xp.tile(xp.repeat(update, 2, axis=1)[:, 1:] / normalize, (4)))[:, i]
+            * (self._weights_diff[ind_update]),
+            (4 * num_points, 1),
+        ) / (4 * num_points)
+
+        real_index = xp.ravel_multi_index(
+            (self._ind0.ravel(), self._ind1.ravel()), (s[1], s[2]), mode="clip"
+        )
+        diff_index = self._ind_diff[ind_update]
+
+        diff_bincount = xp.bincount(diff_index)
+        diff_max = diff_bincount.shape[0]
+
+        real_shape = real_index.shape[0]
+        diff_shape = diff_index.shape[0]
+
+        bincount_diff = (
+            xp.tile(diff_index, real_shape)
+            + (xp.repeat(xp.arange(real_shape), diff_shape)) * diff_max
+        )
+
+        update_q_summed = xp.bincount(
+            bincount_diff,
+            update_reshaped.flatten(),
+            minlength=((diff_max) * real_shape),
+        )[xp.tile(diff_bincount > 0, real_shape)].reshape((real_shape, -1))
+
+        diff_shape_bin = update_q_summed.shape[-1]
+
+        real_bincount = xp.bincount(real_index)
+        real_max = real_bincount.shape[0]
+
+        bincount_real = (
+            xp.tile(real_index, diff_shape_bin)
+            + (xp.repeat(xp.arange(diff_shape_bin), real_shape)) * real_max
+        )
+
+        update_r_summed = (
+            xp.bincount(
+                bincount_real,
+                update_q_summed.T.flatten(),
+                minlength=((real_max) * diff_shape_bin),
+            )[xp.tile(real_bincount > 0, diff_shape_bin)]
+            .reshape((diff_shape_bin, -1))
+            .T
+        )
+
+        yy, zz = xp.meshgrid(
+            xp.unique(real_index), np.unique(diff_index), indexing="ij"
+        )
+
+        self._object[slice_number, yy, zz] += xp_storage.asarray(update_r_summed)
 
     def _make_test_object(
         self,
