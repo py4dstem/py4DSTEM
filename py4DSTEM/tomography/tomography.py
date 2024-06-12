@@ -752,10 +752,10 @@ class Tomography:
         xp = self._xp
 
         s = (
-            self._object.shape[0],
-            self._object.shape[1],
-            self._object.shape[-1],
-            self._object.shape[-1],
+            self._object_shape_6D[0],
+            self._object_shape_6D[1],
+            self._object_shape_6D[-1],
+            self._object_shape_6D[-1],
         )
         a = xp.argsort(self._ind_diffraction_ravel[self._circular_mask_ravel])
         i = xp.empty_like(a)
@@ -1179,7 +1179,7 @@ class Tomography:
         update,
     ):
         """
-        back propagate
+        back propagate 
 
         Parameters
         ----------
