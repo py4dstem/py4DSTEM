@@ -993,7 +993,7 @@ class Tomography:
         l = s[-1] * xp.cos(tilt)
         line_y_diff = np.arange(-(s[-1] - 1) / 2, s[-1] / 2) * l / [s[-1]]
         line_z_diff = line_y_diff * xp.tan(tilt) + (s[-1] - 1) / 2
-        line_y_diff += s[-1] / 2
+        line_y_diff += (s[-1] - 1) / 2
 
         yF_diff = xp.floor(line_y_diff).astype("int")
         zF_diff = xp.floor(line_z_diff).astype("int")
@@ -1033,8 +1033,8 @@ class Tomography:
 
         ind_diff = xp.ravel_multi_index(
             (
-                xp.tile(qxx, (1, 4)).ravel(),
                 ind0_diff.ravel(),
+                xp.tile(qxx.ravel(), 4),
                 ind1_diff.ravel(),
             ),
             (s[-1], s[-1], s[-1]),
