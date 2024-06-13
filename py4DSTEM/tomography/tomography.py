@@ -607,7 +607,7 @@ class Tomography:
 
         ind_diffraction[mask] = 1e10
 
-        a = np.argsort(ind_diffraction.flatten())
+        a = np.argsort(ind_diffraction.ravel())
         i = np.empty_like(a)
         i[a] = np.arange(a.size)
         i = i.reshape((s[-1], s[-1]))
@@ -949,12 +949,11 @@ class Tomography:
         """
         xp = self._xp
         s = self._object_shape_6D
-        obj = self._object[slice_number]
 
         tilt = xp.deg2rad(tilt_deg)
 
         ###solve for real space coordinates
-        line_z = xp.arange(0, 1, 1 / num_points) * (s[2] - 1)
+        line_z = np.linspace(0, 1, num_points) * (s[2] - 1)
         line_y = line_z * xp.tan(tilt)
         offset = xp.arange(s[1], dtype="int")
 
@@ -991,9 +990,8 @@ class Tomography:
         )
 
         ###solve for diffraction space coordinates
-
         l = s[-1] * xp.cos(tilt)
-        line_y_diff = np.arange(-(s[-1] - 1) / 2, s[-1] / 2) * l
+        line_y_diff = np.arange(-(s[-1] - 1) / 2, s[-1] / 2) * l / [s[-1]]
         line_z_diff = line_y_diff * xp.tan(tilt) + (s[-1] - 1) / 2
         line_y_diff += s[-1] / 2
 
@@ -1035,9 +1033,9 @@ class Tomography:
 
         ind_diff = xp.ravel_multi_index(
             (
-                ind1_diff.ravel(),
                 xp.tile(qxx, (1, 4)).ravel(),
                 ind0_diff.ravel(),
+                ind1_diff.ravel(),
             ),
             (s[-1], s[-1], s[-1]),
             "clip",
@@ -1055,7 +1053,10 @@ class Tomography:
         obj_projected = xp.bincount(
             bincount_x,
             (
-                obj[xp.ravel_multi_index((ind0, ind1), (s[1], s[2]), mode="clip"),]
+                self._object[
+                    slice_number,
+                    xp.ravel_multi_index((ind0, ind1), (s[1], s[2]), mode="clip"),
+                ]
                 * weights_real[:, :, None]
             )
             .sum(1)[:, ind_diff]
@@ -1179,7 +1180,7 @@ class Tomography:
         update,
     ):
         """
-        back propagate 
+        back propagate
 
         Parameters
         ----------
@@ -1206,10 +1207,13 @@ class Tomography:
         normalize = xp.ones((xp.repeat(update, 2, axis=1)[:, 1:]).shape) * 2
         normalize[:, 0] = 1
 
-        update_reshaped = xp.tile(
-            (xp.tile(xp.repeat(update, 2, axis=1)[:, 1:] / normalize, (4)))[:, i]
-            * (self._weights_diff[ind_update]),
-            (4 * num_points, 1),
+        update_reshaped = xp.repeat(
+            (
+                (xp.tile(xp.repeat(update, 2, axis=1)[:, 1:] / normalize, (4)))[:, i]
+                * (self._weights_diff[ind_update])
+            ),
+            4 * num_points,
+            axis=0,
         ) / (4 * num_points)
 
         real_index = xp.ravel_multi_index(
@@ -1230,7 +1234,7 @@ class Tomography:
 
         update_q_summed = xp.bincount(
             bincount_diff,
-            update_reshaped.flatten(),
+            update_reshaped.ravel(),
             minlength=((diff_max) * real_shape),
         )[xp.tile(diff_bincount > 0, real_shape)].reshape((real_shape, -1))
 
@@ -1240,19 +1244,19 @@ class Tomography:
         real_max = real_bincount.shape[0]
 
         bincount_real = (
-            xp.tile(real_index, diff_shape_bin)
-            + (xp.repeat(xp.arange(diff_shape_bin), real_shape)) * real_max
+            xp.tile(xp.arange(diff_shape_bin), real_shape)
+            + xp.repeat(real_index, diff_shape_bin) * diff_shape_bin
         )
 
         update_r_summed = (
-            xp.bincount(
-                bincount_real,
-                update_q_summed.T.flatten(),
-                minlength=((real_max) * diff_shape_bin),
+            (
+                xp.bincount(
+                    bincount_real,
+                    (update_q_summed * self._weights_real.ravel()[:, None]).ravel(),
+                    minlength=((real_max) * diff_shape_bin),
+                )
             )[xp.tile(real_bincount > 0, diff_shape_bin)]
-            .reshape((diff_shape_bin, -1))
-            .T
-        )
+        ).reshape((-1, diff_shape_bin))
 
         yy, zz = xp.meshgrid(
             xp.unique(real_index), np.unique(diff_index), indexing="ij"
