@@ -229,8 +229,8 @@ class Tomography:
                     self._diffraction_patterns_projected[a1]
                 )
                 for a2 in range(self._object_shape_6D[0]):
-                    (object_sliced,) = self._forward(
-                        slice_number=a2,
+                    object_sliced = self._forward(
+                        x_index=a2,
                         tilt_deg=self._tilt_deg[a1],
                         num_points=num_points,
                     )
@@ -238,13 +238,14 @@ class Tomography:
                     update = self._calculate_update(
                         object_sliced=object_sliced,
                         diffraction_patterns_projected=diffraction_patterns_projected,
-                        slice_number=a2,
+                        x_index=a2,
                         datacube_number=a1,
                     )
+
                     update *= step_size
                     self._back(
                         num_points=num_points,
-                        slice_number=a2,
+                        x_index=a2,
                         update=update,
                     )
 
@@ -924,7 +925,7 @@ class Tomography:
 
     def _forward(
         self,
-        slice_number: int,
+        x_index: int,
         tilt_deg: float,
         num_points: int,
     ):
@@ -933,7 +934,7 @@ class Tomography:
 
         Parameters
         ----------
-        slice_number: int
+        x_index: int
             x slice for forward projection
         tilt_deg: float
             tilt of object in degrees
@@ -1054,7 +1055,7 @@ class Tomography:
             bincount_x,
             (
                 self._object[
-                    slice_number,
+                    x_index,
                     xp.ravel_multi_index((ind0, ind1), (s[1], s[2]), mode="clip"),
                 ]
                 * weights_real[:, :, None]
@@ -1176,7 +1177,7 @@ class Tomography:
     def _back(
         self,
         num_points: int,
-        slice_number: int,
+        x_index: int,
         update,
     ):
         """
@@ -1186,7 +1187,7 @@ class Tomography:
         ----------
         num_points: int
             number of points for bilinear interpolation
-        slice_number: int
+        x_index: int
             x slice for back projection
         update: np.ndarray
             difference between current object sliced in diffraciton space and
@@ -1262,7 +1263,7 @@ class Tomography:
             xp.unique(real_index), np.unique(diff_index), indexing="ij"
         )
 
-        self._object[slice_number, yy, zz] += xp_storage.asarray(update_r_summed)
+        self._object[x_index, yy, zz] += xp_storage.asarray(update_r_summed)
 
     def _make_test_object(
         self,
