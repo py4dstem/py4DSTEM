@@ -1,17 +1,15 @@
+from typing import Sequence, Tuple, Union
+
 import matplotlib.pyplot as plt
 import numpy as np
-
 from py4DSTEM.datacube import DataCube
+from py4DSTEM.preprocess.utils import bin2D
+from py4DSTEM.process.calibration import fit_origin, get_origin
 from py4DSTEM.process.diffraction import Crystal
 from py4DSTEM.process.phase.utils import copy_to_device
-from py4DSTEM.process.calibration import get_origin, fit_origin
-from py4DSTEM.utils import get_shifted_ar
-from py4DSTEM.preprocess.utils import bin2D
-
-from scipy.spatial.transform import Rotation as R
+from py4DSTEM.utils import fourier_resample
 from scipy.ndimage import zoom
-
-from typing import Sequence, Union, Tuple
+from scipy.spatial.transform import Rotation as R
 
 try:
     import cupy as cp
@@ -129,6 +127,7 @@ class Tomography:
             of the predicted values after fitting.
         """
         xp_storage = self._xp_storage
+        storage = self._storage
 
         self._num_datacubes = len(self._datacubes)
 
@@ -157,7 +156,7 @@ class Tomography:
             # initialize object
             if a0 == 0:
                 if self._initial_object_guess:
-                    self._object = xp_storage.asarray(self._initial_object_guess)
+                    self._object = copy_to_device(self._initial_object_guess, storage)
                 else:
                     diffraction_shape = self._initial_datacube_shape[-1]
                     self._object = xp_storage.zeros(
@@ -222,11 +221,11 @@ class Tomography:
         num_points: int = 60,
     ):
         """ """
-        xp = self._xp
+        device = self._device
         for a0 in range(num_iter):
             for a1 in range(self._num_datacubes):
-                diffraction_patterns_projected = xp.asarray(
-                    self._diffraction_patterns_projected[a1]
+                diffraction_patterns_projected = copy_to_device(
+                    self._diffraction_patterns_projected[a1], device
                 )
                 for a2 in range(self._object_shape_6D[0]):
                     object_sliced = self._forward(
@@ -353,7 +352,7 @@ class Tomography:
                 raise ValueError(
                     (
                         "reshaping_method needs to be one of 'bilinear', 'fourier', or 'bin', "
-                        f"not {reshaping_method}."
+                        f"not {resizing_method}."
                     )
                 )
 
@@ -406,7 +405,7 @@ class Tomography:
             mask for real space
 
         """
-        xp_storage = self._xp_storage
+        device = self._device
 
         # calculate shape
         field_of_view_px = self._object.shape[0:2]
@@ -459,13 +458,16 @@ class Tomography:
         dy = y_vox - y_vox_F
 
         # store pixels
-        x = xp_storage.asarray(x)
-        y = xp_storage.asarray(y)
-
         self._positions_ang.append((x, y))
-        self._positions_vox.append((x_vox, y_vox))
-        self._positions_vox_F.append((x_vox_F, y_vox_F))
-        self._positions_vox_dF.append((dx, dy))
+        self._positions_vox.append(
+            (copy_to_device(x_vox, device), copy_to_device(y_vox, device))
+        )
+        self._positions_vox_F.append(
+            (copy_to_device(x_vox_F, device), copy_to_device(y_vox_F, device))
+        )
+        self._positions_vox_dF.append(
+            (copy_to_device(dx, device), copy_to_device(dy, device))
+        )
 
         return mask_real_space
 
@@ -561,10 +563,6 @@ class Tomography:
         q_max_inv_A: int
             maximum q in inverse angstroms
         """
-        xp_storage = self._xp_storage
-
-        s = self._initial_datacube_shape
-
         # calculate bincount array
         if datacube_number == 0:
             self._make_diffraction_masks(q_max_inv_A=q_max_inv_A)
@@ -889,8 +887,8 @@ class Tomography:
 
         tilt = xp.deg2rad(tilt_deg)
 
-        l = s[-1] * xp.cos(tilt)
-        line_y_diff = xp.arange(-1 * (l) / 2, l / 2, l / s[-1])
+        length = s[-1] * xp.cos(tilt)
+        line_y_diff = xp.arange(-1 * (length) / 2, length / 2, length / s[-1])
         line_z_diff = line_y_diff * xp.tan(tilt)
 
         line_y_diff[line_y_diff < 0] = s[-1] + line_y_diff[line_y_diff < 0]
@@ -950,11 +948,13 @@ class Tomography:
         """
         xp = self._xp
         s = self._object_shape_6D
+        device = self._device
+        obj = copy_to_device(self._object[x_index], device)
 
         tilt = xp.deg2rad(tilt_deg)
 
-        ###solve for real space coordinates
-        line_z = np.linspace(0, 1, num_points) * (s[2] - 1)
+        # solve for real space coordinates
+        line_z = xp.linspace(0, 1, num_points) * (s[2] - 1)
         line_y = line_z * xp.tan(tilt)
         offset = xp.arange(s[1], dtype="int")
 
@@ -990,9 +990,9 @@ class Tomography:
             )
         )
 
-        ###solve for diffraction space coordinates
-        l = s[-1] * xp.cos(tilt)
-        line_y_diff = np.arange(-(s[-1] - 1) / 2, s[-1] / 2) * l / [s[-1]]
+        # solve for diffraction space coordinates
+        length = s[-1] * np.cos(tilt)
+        line_y_diff = xp.arange(-(s[-1] - 1) / 2, s[-1] / 2) * length / s[-1]
         line_z_diff = line_y_diff * xp.tan(tilt) + (s[-1] - 1) / 2
         line_y_diff += (s[-1] - 1) / 2
 
@@ -1054,10 +1054,7 @@ class Tomography:
         obj_projected = xp.bincount(
             bincount_x,
             (
-                self._object[
-                    x_index,
-                    xp.ravel_multi_index((ind0, ind1), (s[1], s[2]), mode="clip"),
-                ]
+                obj[xp.ravel_multi_index((ind0, ind1), (s[1], s[2]), mode="clip"),]
                 * weights_real[:, :, None]
             )
             .sum(1)[:, ind_diff]
@@ -1194,7 +1191,7 @@ class Tomography:
             experimental diffraction patterns
         """
         xp = self._xp
-        xp_storage = self._xp_storage
+        storage = self._storage
 
         s = self._object_shape_6D
 
@@ -1260,10 +1257,13 @@ class Tomography:
         ).reshape((-1, diff_shape_bin))
 
         yy, zz = xp.meshgrid(
-            xp.unique(real_index), np.unique(diff_index), indexing="ij"
+            xp.unique(real_index), xp.unique(diff_index), indexing="ij"
         )
 
-        self._object[x_index, yy, zz] += xp_storage.asarray(update_r_summed)
+        yy = copy_to_device(yy, storage)
+        zz = copy_to_device(zz, storage)
+
+        self._object[x_index, yy, zz] += copy_to_device(update_r_summed, storage)
 
     def _make_test_object(
         self,
@@ -1301,6 +1301,7 @@ class Tomography:
             6D test object
         """
         xp_storage = self._xp_storage
+        storage = storage
 
         test_object = xp_storage.zeros((sx, sy, sz, sq, sq, sq))
 
@@ -1314,7 +1315,7 @@ class Tomography:
             h = xp_storage.random.randint(r, sz - r, size=1)
             t = xp_storage.random.randint(0, 360, size=3)
 
-            cloud = xp_storage.asarray(self._make_diffraction_cloud(sq, q_max, t))
+            cloud = copy_to_device(self._make_diffraction_cloud(sq, q_max, t), storage)
 
             test_object[s1 - r : s1 + r, s2 - r : s2 + r, h[0] - r : h[0] + r] = cloud
 
