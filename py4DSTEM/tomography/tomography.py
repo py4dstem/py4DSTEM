@@ -3,7 +3,8 @@ from typing import Sequence, Tuple, Union
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
 
-# from mpl_toolkits.axes_grid1 import ImageGrid, make_axes_locatable
+from emdfile import tqdmnd
+
 from py4DSTEM import show
 import numpy as np
 from py4DSTEM.datacube import DataCube
@@ -160,10 +161,13 @@ class Tomography:
             # initialize object
             if a0 == 0:
                 if self._initial_object_guess:
-                    self._object = copy_to_device(self._initial_object_guess, storage)
+                    self._object_initial = copy_to_device(
+                        self._initial_object_guess, storage
+                    )
+                    del self._initial_object_guess
                 else:
                     diffraction_shape = self._initial_datacube_shape[-1]
-                    self._object = xp_storage.zeros(
+                    self._object_initial = xp_storage.zeros(
                         (
                             self._object_shape_x_y_z[0],
                             self._object_shape_x_y_z[1] * self._object_shape_x_y_z[2],
@@ -221,18 +225,29 @@ class Tomography:
     def reconstruct(
         self,
         num_iter: int = 1,
+        store_iterations: bool = False,
+        reset: bool = True,
         step_size: float = 0.5,
         num_points: int = 60,
-        store_iterations: bool = False,
+        progress_bar: bool = True,
     ):
         """ """
         device = self._device
-        self.error_iterations = []
 
-        if store_iterations:
-            self.object_iterations = []
+        if reset is True:
+            self.error_iterations = []
 
-        for a0 in range(num_iter):
+            if store_iterations:
+                self.object_iterations = []
+
+            self._object = self._object_initial.copy()
+
+        for a0 in tqdmnd(
+            num_iter,
+            desc="Reconstructing object",
+            unit=" iter",
+            disable=not progress_bar,
+        ):
             error_iteration = 0
             for a1 in range(self._num_datacubes):
                 diffraction_patterns_projected = copy_to_device(
@@ -265,7 +280,7 @@ class Tomography:
             self.error_iterations.append(error_iteration)
             self.error = error_iteration
             if store_iterations:
-                self.object_iterations.append(self._object)
+                self.object_iterations.append(self._object.copy())
 
         return self
 
@@ -427,7 +442,7 @@ class Tomography:
         device = self._device
 
         # calculate shape
-        field_of_view_px = self._object.shape[0:2]
+        field_of_view_px = self._object_initial.shape[0:2]
         self._field_of_view_A = (
             self._voxel_size_A * field_of_view_px[0],
             self._voxel_size_A * field_of_view_px[1],
@@ -1191,10 +1206,6 @@ class Tomography:
         diffraction_patterns_resampled = diffraction_patterns_resampled[ind]
         update = diffraction_patterns_resampled - object_sliced
 
-        # error = xp.mean((update.ravel()) ** 2) / xp.mean(
-        #     (diffraction_patterns_projected.ravel()) ** 2
-        # )
-
         error = xp.mean(update.ravel() ** 2) / xp.mean(
             diffraction_patterns_projected.ravel() ** 2
         )
@@ -1575,11 +1586,11 @@ class Tomography:
                 #     (extent[1] / extent[2]) / (probe_extent[1] / probe_extent[2]),
                 #     1,
                 # ],
-                wspace=0.35,
+                wspace=0.15,
             )
 
         else:
-            spec = GridSpec(ncols=2, nrows=1, wspace=0.35)
+            spec = GridSpec(ncols=2, nrows=1)
 
         fig = plt.figure(figsize=figsize)
         ax = fig.add_subplot(spec[0, 0])
@@ -1608,6 +1619,6 @@ class Tomography:
 
     @property
     def object_6D(self):
-        """ 6D object"""
+        """6D object"""
 
         return self._object.reshape(self._object_shape_6D)
