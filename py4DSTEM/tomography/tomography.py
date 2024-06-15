@@ -1276,7 +1276,7 @@ class Tomography:
             bincount_diff,
             update_reshaped.ravel(),
             minlength=((diff_max) * real_shape),
-        )[xp.tile(diff_bincount > 0, real_shape)].reshape((real_shape, -1))
+        ).reshape((real_shape, -1))[:, diff_bincount > 0]
 
         diff_shape_bin = update_q_summed.shape[-1]
 
@@ -1289,14 +1289,12 @@ class Tomography:
         )
 
         update_r_summed = (
-            (
-                xp.bincount(
-                    bincount_real,
-                    (update_q_summed * self._weights_real.ravel()[:, None]).ravel(),
-                    minlength=((real_max) * diff_shape_bin),
-                )
-            )[xp.tile(real_bincount > 0, diff_shape_bin)]
-        ).reshape((-1, diff_shape_bin))
+            xp.bincount(
+                bincount_real,
+                (update_q_summed * self._weights_real.ravel()[:, None]).ravel(),
+                minlength=((real_max) * diff_shape_bin),
+            )
+        ).reshape((-1, diff_shape_bin))[real_bincount > 0]
 
         yy, zz = xp.meshgrid(
             xp.unique(real_index), xp.unique(diff_index), indexing="ij"
@@ -1343,7 +1341,7 @@ class Tomography:
             6D test object
         """
         xp_storage = self._xp_storage
-        storage = storage
+        storage = self._storage
 
         test_object = xp_storage.zeros((sx, sy, sz, sq, sq, sq))
 
