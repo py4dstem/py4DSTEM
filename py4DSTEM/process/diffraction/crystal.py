@@ -1368,7 +1368,7 @@ class Crystal:
         g,
         foil_normal=None,
         precession_angle_degrees=None,
-        precession_steps=180,
+        precession_steps=72,
     ):
         """
         Calculate the excitation errors, assuming k0 = [0, 0, -1/lambda].

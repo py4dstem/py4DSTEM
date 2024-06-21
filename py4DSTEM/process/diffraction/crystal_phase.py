@@ -78,16 +78,19 @@ class Crystal_Phase:
         pointlistarray: PointListArray,
         xy_position = (0,0),
         corr_kernel_size = 0.04,
-        sigma_excitation_error = 0.02,
-        power_experiment = 0.25,
-        power_calculated = 0.25,
-        max_number_patterns = 3,
+        sigma_excitation_error: float = 0.02,
+        precession_angle_degrees = None,
+        power_intensity: float = 0.25, 
+        power_intensity_experiment: float = 0.25,  
+        k_max = None,
+        max_number_patterns = 2,
         single_phase = False,
-        allow_strain = True,
+        allow_strain = False,
         strain_iterations = 3,
         strain_max = 0.02,
         include_false_positives = True,
         weight_false_positives = 1.0,
+        weight_unmatched_peaks = 1.0,
         plot_result = True,
         plot_only_nonzero_phases = True,
         plot_unmatched_peaks = False,
@@ -102,10 +105,32 @@ class Crystal_Phase:
         ):
         """
         Quantify the phase for a single diffraction pattern.
+
+        Parameters
+        ----------
+        
+        corr_kernel_size: (float)     
+            Correlation kernel size length. The size of the overlap kernel between the 
+            measured Bragg peaks and diffraction library Bragg peaks. [1/Angstroms]
+        sigma_excitation_error: (float)
+            The out of plane excitation error tolerance. [1/Angstroms]
+        precession_angle_degrees: (float)
+            Tilt angle of illuminaiton cone in degrees for precession electron diffraction (PED).
+        
+        power_radial: (float)          
+            Power for scaling the correlation intensity as a function of the peak radius
+        power_intensity: (float)       
+            Power for scaling the correlation intensity as a function of simulated peak intensity
+        power_intensity_experiment: (float):      
+            Power for scaling the correlation intensity as a function of experimental peak intensity
+        k_max: (float)
+            Max k values included in fits, for both x and y directions.
+
         """
 
+
         # tolerance
-        tol2 = 4e-4
+        tol2 = 1e-6
 
         # calibrations
         center  = pointlistarray.calstate['center']
@@ -137,7 +162,16 @@ class Crystal_Phase:
             pixel = pixel,
             rotate = rotate)
         # bragg_peaks = pointlistarray.get_pointlist(xy_position[0],xy_position[1]).copy()
-        keep = bragg_peaks.data["qx"]**2 + bragg_peaks.data["qy"]**2 > tol2
+        if k_max is None:
+            keep = bragg_peaks.data["qx"]**2 + bragg_peaks.data["qy"]**2 > tol2
+        else:
+            keep = np.logical_and.reduce((
+            bragg_peaks.data["qx"]**2 + bragg_peaks.data["qy"]**2 > tol2,
+            np.abs(bragg_peaks.data["qx"]) < k_max,
+            np.abs(bragg_peaks.data["qy"]) < k_max,
+        ))
+
+            
         # ind_center_beam = np.argmin(
         #     bragg_peaks.data["qx"]**2 + bragg_peaks.data["qy"]**2)
         # mask = np.ones_like(bragg_peaks.data["qx"], dtype='bool')
@@ -147,12 +181,12 @@ class Crystal_Phase:
         qy = bragg_peaks.data["qy"][keep]
         qx0 = bragg_peaks.data["qx"][np.logical_not(keep)]
         qy0 = bragg_peaks.data["qy"][np.logical_not(keep)]
-        if power_experiment == 0:
+        if power_intensity_experiment == 0:
             intensity = np.ones_like(qx)
             intensity0 = np.ones_like(qx0)
         else:
-            intensity = bragg_peaks.data["intensity"][keep]**power_experiment
-            intensity0 = bragg_peaks.data["intensity"][np.logical_not(keep)]**power_experiment
+            intensity = bragg_peaks.data["intensity"][keep]**power_intensity_experiment
+            intensity0 = bragg_peaks.data["intensity"][np.logical_not(keep)]**power_intensity_experiment
         int_total = np.sum(intensity) 
 
         # init basis array
@@ -190,16 +224,25 @@ class Crystal_Phase:
                 ),
                 ind_orientation = m,
                 sigma_excitation_error = sigma_excitation_error,
+                precession_angle_degrees = precession_angle_degrees,
             )
-            del_peak = bragg_peaks_fit.data["qx"]**2 \
-                +      bragg_peaks_fit.data["qy"]**2 < tol2
+            if k_max is None:
+                del_peak = bragg_peaks_fit.data["qx"]**2 \
+                    +      bragg_peaks_fit.data["qy"]**2 < tol2
+            else:
+                del_peak = np.logical_or.reduce((
+                    bragg_peaks_fit.data["qx"]**2 \
+                    +      bragg_peaks_fit.data["qy"]**2 < tol2,
+                    np.abs(bragg_peaks_fit.data["qx"]) > k_max,
+                    np.abs(bragg_peaks_fit.data["qy"]) > k_max,
+                ))
             bragg_peaks_fit.remove(del_peak)
 
             # peak intensities
-            if power_calculated == 0:
+            if power_intensity == 0:
                 int_fit = np.ones_like(bragg_peaks_fit.data["qx"])
             else:
-                int_fit = bragg_peaks_fit.data['intensity']**power_calculated
+                int_fit = bragg_peaks_fit.data['intensity']**power_intensity
             
             # Pair peaks to experiment
             if plot_result:
@@ -321,20 +364,38 @@ class Crystal_Phase:
 
             if single_phase:
                 # loop through each crystal structure and determine the best fit structure,
-                # which can contain multiple orienations.
+                # which can contain multiple orientations up to max_number_patterns
                 crystal_res = np.zeros(self.num_crystals)
 
                 for a0 in range(self.num_crystals):
-                    sub = self.crystal_identity[:,0] == a0
+                    inds_solve = self.crystal_identity[:,0] == a0
+                    search = True
 
-                    phase_weights_cand, phase_residual_cand = nnls(
-                        basis[:,sub],
-                        obs,
-                    )
-                    phase_weights[sub] = phase_weights_cand
-                    crystal_res[a0] = phase_residual_cand
+                    while search is True:
+
+                        basis_solve = basis[:,inds_solve]
+                        obs_solve = obs.copy()
+
+                        if weight_unmatched_peaks > 1.0:
+                            sub_unmatched = np.sum(basis_solve,axis=1)<1e-8
+                            obs_solve[sub_unmatched] *= weight_unmatched_peaks
+
+                        phase_weights_cand, phase_residual_cand = nnls(
+                            basis_solve,
+                            obs_solve,
+                        )
+
+                        if np.count_nonzero(phase_weights_cand > 0.0) <= max_number_patterns:
+                            phase_weights[inds_solve] = phase_weights_cand
+                            crystal_res[a0] = phase_residual_cand
+                            search = False
+                        else:
+                            inds = np.where(inds_solve)[0]
+                            inds_solve[inds[np.argmin(phase_weights_cand)]] = False
 
                 ind_best_fit = np.argmin(crystal_res)
+                # ind_best_fit = np.argmax(phase_weights)
+
                 phase_residual = crystal_res[ind_best_fit]
                 sub = np.logical_not(
                     self.crystal_identity[:,0] == ind_best_fit
@@ -452,19 +513,22 @@ class Crystal_Phase:
             ax.scatter(
                 qy0,
                 qx0,
-                s = scale_markers_experiment * intensity0,
+                # s = scale_markers_experiment * intensity0,
+                s = scale_markers_experiment * bragg_peaks.data["intensity"][np.logical_not(keep)],
                 marker = "o",
                 facecolor = [0.7, 0.7, 0.7],
                 )
             ax.scatter(
                 qy,
                 qx,
-                s = scale_markers_experiment * intensity,
+                # s = scale_markers_experiment * intensity,
+                s = scale_markers_experiment * bragg_peaks.data["intensity"][keep],
                 marker = "o",
                 facecolor = [0.7, 0.7, 0.7],
                 )
             # legend
-            k_max = np.max(self.k_max)
+            if k_max is None:
+                k_max = np.max(self.k_max)
             dx_leg =  -0.05*k_max
             dy_leg =   0.04*k_max
             text_params = {
@@ -607,7 +671,7 @@ class Crystal_Phase:
 
             # appearance
             ax.set_xlim((-k_max, k_max))
-            ax.set_ylim((-k_max, k_max))
+            ax.set_ylim((k_max, -k_max))
 
             ax_leg.set_xlim((-0.1*k_max, 0.4*k_max))
             ax_leg.set_ylim((-0.5*k_max, 0.5*k_max))
@@ -623,9 +687,14 @@ class Crystal_Phase:
         pointlistarray: PointListArray,
         corr_kernel_size = 0.04,
         sigma_excitation_error = 0.02,
-        power_experiment = 0.25,
-        power_calculated = 0.25,
-        max_number_patterns = 3,
+
+        precession_angle_degrees = None,
+        power_intensity: float = 0.25, 
+        power_intensity_experiment: float = 0.25,  
+        k_max = None,
+        # power_experiment = 0.25,
+        # power_calculated = 0.25,
+        max_number_patterns = 2,
         single_phase = False,
         allow_strain = True,
         strain_iterations = 3,
@@ -670,8 +739,12 @@ class Crystal_Phase:
                 xy_position = (rx,ry),
                 corr_kernel_size = corr_kernel_size,
                 sigma_excitation_error = sigma_excitation_error,
-                power_experiment = power_experiment,
-                power_calculated = power_calculated,
+
+                precession_angle_degrees = precession_angle_degrees,
+                power_intensity = power_intensity, 
+                power_intensity_experiment = power_intensity_experiment,  
+                k_max = k_max,
+
                 max_number_patterns = max_number_patterns,
                 single_phase = single_phase,
                 allow_strain = allow_strain,
@@ -923,10 +996,15 @@ class Crystal_Phase:
 
     def plot_dominant_phase(
         self,
+        use_correlation_scores = False,
         reliability_range = (0.0,1.0),
         sigma = 0.0,
         phase_colors = None,
+        ticks = True,
         figsize = (6,6),
+        legend_add = True,
+        legend_fraction = 0.2,
+        print_fractions = False,
         ):
         """
         Plot a combined figure showing the primary phase at each probe position.
@@ -950,10 +1028,18 @@ class Crystal_Phase:
         phase_corr_2nd = np.zeros(scan_shape)
         phase_sig = np.zeros((self.num_crystals,scan_shape[0],scan_shape[1]))
 
-        # sum up phase weights by crystal type
-        for a0 in range(self.num_fits):
-            ind = self.crystal_identity[a0,0]
-            phase_sig[ind] += self.phase_weights[:,:,a0]
+        if use_correlation_scores:
+            # Calculate scores from highest correlation match
+            for a0 in range(self.num_crystals):
+                phase_sig[a0] = np.maximum(
+                    phase_sig[a0],
+                    np.max(self.crystals[a0].orientation_map.corr,axis=2),
+                )
+        else:
+            # sum up phase weights by crystal type
+            for a0 in range(self.num_fits):
+                ind = self.crystal_identity[a0,0]
+                phase_sig[ind] += self.phase_weights[:,:,a0]
 
         # smoothing of the outputs
         if sigma > 0.0:
@@ -992,31 +1078,80 @@ class Crystal_Phase:
                 0,
                 1)
 
+        # Print the total area of fraction of each phase
+        if print_fractions:
+            phase_mask = phase_scale >= 0.5
+            phase_total = np.sum(phase_mask)
 
-        phase_rgb = np.zeros((scan_shape[0],scan_shape[1],3))
+            print('Phase Fractions')
+            print('---------------')
+            for a0 in range(self.num_crystals):
+                phase_frac = np.sum((phase_map == a0) * phase_mask) / phase_total
+
+                print(self.crystal_names[a0] + ' - ' + f'{phase_frac*100:.4f}' + '%')
+
+
+        self.phase_rgb = np.zeros((scan_shape[0],scan_shape[1],3))
         for a0 in range(self.num_crystals):
             sub = phase_map==a0
             for a1 in range(3):
-                phase_rgb[:,:,a1][sub] = phase_colors[a0,a1] * phase_scale[sub]
+                self.phase_rgb[:,:,a1][sub] = phase_colors[a0,a1] * phase_scale[sub]
         # normalize
-        # phase_rgb = np.clip(
-        #     (phase_rgb - rel_range[0]) / (rel_range[1] - rel_range[0]),
+        # self.phase_rgb = np.clip(
+        #     (self.phase_rgb - rel_range[0]) / (rel_range[1] - rel_range[0]),
         #     0,1)
         
             
         
-        fig,ax = plt.subplots(figsize=figsize)
+        fig = plt.figure(figsize=figsize)
+        if legend_add:
+            width = 1
+
+            ax = fig.add_axes((0,legend_fraction,1,1-legend_fraction))
+            ax_leg = fig.add_axes((0,0,1,legend_fraction))
+
+            for a0 in range(self.num_crystals):
+                ax_leg.scatter(
+                    a0*width,
+                    0,
+                    s = 200,
+                    marker = 's',
+                    edgecolor = (0,0,0,1),
+                    facecolor = phase_colors[a0],
+                )
+                ax_leg.text(
+                    a0*width+0.1,
+                    0,
+                    self.crystal_names[a0],
+                    fontsize = 16,
+                    verticalalignment = 'center',
+                )
+            ax_leg.axis('off')
+            ax_leg.set_xlim((
+                width * -0.5,
+                width * (self.num_crystals+0.5),
+            ))
+
+        else:
+            ax = fig.add_axes((0,0,1,1))
+
         ax.imshow(
-            phase_rgb,
+            self.phase_rgb,
             # vmin = 0,
             # vmax = 5,
-            # phase_rgb,
+            # self.phase_rgb,
             # phase_corr - phase_corr_2nd,
             # cmap = 'turbo',
             # vmin = 0,
             # vmax = 3,
             # cmap = 'gray',
         )
+
+        if ticks is False:
+            ax.set_xticks([])
+            ax.set_yticks([])
+
+
 
         return fig,ax
 
