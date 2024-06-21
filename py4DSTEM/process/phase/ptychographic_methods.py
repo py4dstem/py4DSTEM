@@ -277,6 +277,11 @@ class ObjectNDMethodsMixin:
             else:
                 self.error_iterations = []
                 self._exit_waves = None
+        else:
+            # reset=False first start
+            if not hasattr(self, "error"):
+                self.error_iterations = []
+                self._exit_waves = None
 
     @property
     def object_fft(self):
@@ -1000,17 +1005,6 @@ class ProbeMethodsMixin:
                     vacuum_probe_intensity, dtype=xp.float32
                 )
 
-                sx, sy = vacuum_probe_intensity.shape
-                tx, ty = region_of_interest_shape
-                if sx != tx or sy != ty:
-                    vacuum_probe_intensity = bilinear_resample(
-                        vacuum_probe_intensity,
-                        output_size=(tx, ty),
-                        vectorized=True,
-                        conserve_array_sums=True,
-                        xp=xp,
-                    )
-
                 probe_x0, probe_y0 = get_CoM(
                     vacuum_probe_intensity,
                     device=device,
@@ -1025,7 +1019,18 @@ class ProbeMethodsMixin:
 
                 if crop_patterns:
                     vacuum_probe_intensity = vacuum_probe_intensity[crop_mask].reshape(
-                        region_of_interest_shape
+                        self._diffraction_intensities_shape_crop
+                    )
+
+                sx, sy = vacuum_probe_intensity.shape
+                tx, ty = region_of_interest_shape
+                if sx != tx or sy != ty and self._resample_exit_waves is True:
+                    vacuum_probe_intensity = bilinear_resample(
+                        vacuum_probe_intensity,
+                        output_size=(tx, ty),
+                        vectorized=True,
+                        conserve_array_sums=True,
+                        xp=xp,
                     )
 
             _probe = (
@@ -1573,14 +1578,16 @@ class ObjectNDProbeMethodsMixin:
                 xp=xp,
             )
 
-        fourier_overlap *= fourier_mask
+        if fourier_mask is not None:
+            fourier_overlap *= fourier_mask
+
         farfield_amplitudes = self._return_farfield_amplitudes(fourier_overlap)
         error = xp.sum(xp.abs(amplitudes - farfield_amplitudes) ** 2)
         fourier_modified_overlap = amplitudes * xp.exp(1j * xp.angle(fourier_overlap))
 
-        fourier_modified_overlap = (
-            fourier_modified_overlap - fourier_overlap
-        ) * fourier_mask
+        fourier_modified_overlap = fourier_modified_overlap - fourier_overlap
+        if fourier_mask is not None:
+            fourier_modified_overlap *= fourier_mask
 
         # resample back to region_of_interest_shape, note: this needs to happen in reciprocal-space
         if self._resample_exit_waves:
@@ -2737,7 +2744,8 @@ class ObjectNDProbeMixedMethodsMixin:
                 xp=xp,
             )
 
-        fourier_overlap *= fourier_mask
+        if fourier_mask is not None:
+            fourier_overlap *= fourier_mask
         farfield_amplitudes = self._return_farfield_amplitudes(fourier_overlap)
         error = xp.sum(xp.abs(amplitudes - farfield_amplitudes) ** 2)
 
@@ -2746,9 +2754,9 @@ class ObjectNDProbeMixedMethodsMixin:
 
         fourier_modified_overlap = amplitude_modification[:, None] * fourier_overlap
 
-        fourier_modified_overlap = (
-            fourier_modified_overlap - fourier_overlap
-        ) * fourier_mask
+        fourier_modified_overlap = fourier_modified_overlap - fourier_overlap
+        if fourier_mask is not None:
+            fourier_modified_overlap *= fourier_mask
 
         # resample back to region_of_interest_shape, note: this needs to happen in reciprocal-space
         if self._resample_exit_waves:
@@ -3408,6 +3416,14 @@ class MultipleMeasurementsMethodsMixin:
 
             # first start
             else:
+                self.error_iterations = []
+                if use_projection_scheme:
+                    self._exit_waves = [None] * len(self._probes_all)
+                else:
+                    self._exit_waves = None
+        else:
+            # reset=False first start
+            if not hasattr(self, "error"):
                 self.error_iterations = []
                 if use_projection_scheme:
                     self._exit_waves = [None] * len(self._probes_all)

@@ -234,6 +234,7 @@ class PtychographicTomography(
         object_fov_mask: np.ndarray = True,
         crop_patterns: bool = False,
         main_tilt_axis: str = "vertical",
+        store_initial_arrays: bool = True,
         device: str = None,
         clear_fft_cache: bool = None,
         max_batch_size: int = None,
@@ -294,6 +295,8 @@ class PtychographicTomography(
             The default, 'vertical' (first scan dimension), results in object size (q,p,q),
             'horizontal' (second scan dimension) results in object size (p,p,q),
             any other value (e.g. None) results in object size (max(p,q),p,q).
+        store_initial_arrays: bool
+            If True, preprocesed object and probe arrays are stored allowing reset=True in reconstruct.
         device: str, optional
             if not none, overwrites self._device to set device preprocess will be perfomed on.
         clear_fft_cache: bool, optional
@@ -528,8 +531,10 @@ class PtychographicTomography(
             main_tilt_axis,
         )
 
-        self._object_initial = self._object.copy()
-        self._object_type_initial = self._object_type
+        if store_initial_arrays:
+            self._object_initial = self._object.copy()
+            self._object_type_initial = self._object_type
+
         self._object_shape = self._object.shape[-2:]
         self._num_voxels = self._object.shape[0]
 
@@ -559,9 +564,13 @@ class PtychographicTomography(
 
         # initialize probe
         self._probes_all = []
-        self._probes_all_initial = []
-        self._probes_all_initial_aperture = []
         list_Q = isinstance(self._probe_init, (list, tuple))
+
+        if store_initial_arrays:
+            self._probes_all_initial = []
+            self._probes_all_initial_aperture = []
+        else:
+            self._probes_all_initial_aperture = [None] * self._num_measurements
 
         for index in range(self._num_measurements):
             _probe, self._semiangle_cutoff = self._initialize_probe(
@@ -573,8 +582,9 @@ class PtychographicTomography(
             )
 
             self._probes_all.append(_probe)
-            self._probes_all_initial.append(_probe.copy())
-            self._probes_all_initial_aperture.append(xp.abs(xp.fft.fft2(_probe)))
+            if store_initial_arrays:
+                self._probes_all_initial.append(_probe.copy())
+                self._probes_all_initial_aperture.append(xp.abs(xp.fft.fft2(_probe)))
 
         del self._probe_init
 
@@ -961,9 +971,7 @@ class PtychographicTomography(
         else:
             max_batch_size = self._num_diffraction_patterns
 
-        if detector_fourier_mask is None:
-            detector_fourier_mask = xp.ones(self._amplitudes[0].shape)
-        else:
+        if detector_fourier_mask is not None:
             detector_fourier_mask = xp.asarray(detector_fourier_mask)
 
         # main loop
