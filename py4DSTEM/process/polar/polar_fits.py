@@ -16,6 +16,9 @@ def fit_amorphous_ring(
     show_fit_mask=False,
     fit_all_images=False,
     maxfev=None,
+    robust=False,
+    robust_steps = 3,
+    robust_thresh = 1.0,
     verbose=False,
     plot_result=True,
     plot_log_scale=False,
@@ -50,6 +53,13 @@ def fit_amorphous_ring(
         Fit the elliptic parameters to all images
     maxfev: int
         Max number of fitting evaluations for curve_fit.
+    robust: bool
+        Set to True to use robust fitting.
+    robust_steps: int
+        Number of robust fitting steps.
+    robust_thresh: float
+        Threshold for relative errors for outlier detection. Setting to 1.0 means all points beyond
+        one standard deviation of the median error will be excluded from the next fit.
     verbose: bool
         Print fit results
     plot_result: bool
@@ -206,7 +216,40 @@ def fit_amorphous_ring(
                 maxfev=maxfev,
             )[0]
         coefs[4] = np.mod(coefs[4], 2 * np.pi)
+
+        if robust:
+            for a0 in range(robust_steps):
+                # find outliers
+                int_fit = amorphous_model(basis, *coefs)
+                int_diff = vals / int_mean - int_fit
+                int_diff /= np.median(np.abs(int_diff))
+                sub_fit = int_diff**2 < robust_thresh**2
+
+                # redo fits excluding the outliers
+                if maxfev is None:
+                    coefs = curve_fit(
+                        amorphous_model,
+                        basis[:,sub_fit],
+                        vals[sub_fit] / int_mean,
+                        p0=coefs,
+                        xtol=1e-8,
+                        bounds=(lb, ub),
+                    )[0]
+                else:
+                    coefs = curve_fit(
+                        amorphous_model,
+                        basis[:,sub_fit],
+                        vals[sub_fit] / int_mean,
+                        p0=coefs,
+                        xtol=1e-8,
+                        bounds=(lb, ub),
+                        maxfev=maxfev,
+                    )[0]
+                coefs[4] = np.mod(coefs[4], 2 * np.pi)
+
+        # Scale intensity coefficients
         coefs[5:8] *= int_mean
+
 
         # Perform the fit on each individual diffration pattern
         if fit_all_images:
