@@ -4,6 +4,7 @@ try:
 except (ModuleNotFoundError, ImportError):
     cp = np
 
+from py4DSTEM.utils.make_fourier_coords import make_Fourier_coords2D
 
 
 def get_shifted_ar(ar, xshift, yshift, periodic=True, bilinear=False, device="cpu"):
