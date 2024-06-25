@@ -1,13 +1,15 @@
 # Analysis scripts for amorphous 4D-STEM data using polar transformations.
 
+import sys
+import time
 from typing import Tuple
-import numpy as np
-import matplotlib.pyplot as plt
-from scipy.optimize import curve_fit
-from scipy.ndimage import gaussian_filter
-from sklearn.decomposition import PCA
 
+import matplotlib.pyplot as plt
+import numpy as np
 from emdfile import tqdmnd
+from scipy.ndimage import gaussian_filter
+from scipy.optimize import curve_fit
+from sklearn.decomposition import PCA
 
 
 def calculate_radial_statistics(
@@ -1016,3 +1018,263 @@ def background_pca(
         ax.plot(coef_pca[:, 0], coef_pca[:, 1])
 
     return im_pca, coef_pca
+
+
+def cluster_grains(
+    self,
+    orientation_histogram=None,
+    radial_range=None,
+    threshold_add=0.05,
+    threshold_grow=0.2,
+    angle_tolerance_deg=5,
+    plot_grain_clusters=True,
+    **kwargs
+):
+    """
+    Cluster grains from a specific radial bin
+
+    Parameters
+    --------
+    orientation_histogram: np.ndarray
+        Must be a 3D array of size Rx, Ry, and polar_shape[0]
+        Can be used to bypass step to calculate orientation histogram for
+        grain clustering
+    radial_range: int
+        Size (2,) array for bins
+    threshold_add: float
+        Minimum signal required for a probe position to initialize a cluster.
+    threshold_grow: float
+        Minimum signal required for a probe position to be added to a cluster.
+    angle_tolerance_deg: float
+        Rotation rolerance for clustering grains.
+    plot_grain_clusters: bool
+        If True, plots clusters. **kwargs passed to `plot_grain_clusters`
+
+    """
+
+    if orientation_histogram is None:
+        if hasattr(self, "peaks_refine"):
+            use_refined_peaks = True
+        else:
+            use_refined_peaks = False
+        sig = np.squeeze(
+            self.make_orientation_histogram(
+                [
+                    radial_range,
+                ],
+                use_refined_peaks=use_refined_peaks,
+                upsample_factor=1,
+                progress_bar=False,
+            )
+        )
+    else:
+        sig = np.squeeze(orientation_histogram.copy())
+        assert sig.shape == (
+            self.peaks.shape[0],
+            self.peaks.shape[1],
+            self.polar_shape[0],
+        ), "orientation_histogram must have an `upsample_factor` of 1"
+
+    sig_init = sig.copy()
+    mark = sig >= threshold_grow
+    sig[np.logical_not(mark)] = 0
+
+    phi = np.arange(sig.shape[-1]) / sig.shape[-1] * np.pi
+
+    # init
+    self.cluster_sizes = np.array((), dtype="int")
+    self.cluster_sig = np.array(())
+    self.cluster_inds = []
+    inds_all = np.zeros_like(sig, dtype="int")
+    inds_all.ravel()[:] = np.arange(inds_all.size)
+
+    # Tolerance
+    tol = np.deg2rad(angle_tolerance_deg)
+
+    # Main loop
+    search = True
+    while search is True:
+        inds_grain = np.argmax(sig)
+        val = sig.ravel()[inds_grain]
+
+        if val < threshold_add:
+            search = False
+
+        else:
+            # progressbar
+            comp = 1 - np.mean(np.max(mark, axis=2))
+            update_progress(comp)
+
+            # Start cluster
+            x, y, z = np.unravel_index(inds_grain, sig.shape)
+            mark[x, y, z] = False
+            sig[x, y, z] = 0
+            phi_cluster = phi[z]
+
+            # Neighbors to search
+            xr = np.clip(x + np.arange(-1, 2, dtype="int"), 0, sig.shape[0] - 1)
+            yr = np.clip(y + np.arange(-1, 2, dtype="int"), 0, sig.shape[1] - 1)
+            inds_cand = inds_all[xr[:, None], yr[None], :].ravel()
+            inds_cand = np.delete(inds_cand, mark.ravel()[inds_cand] == False)
+
+            if inds_cand.size == 0:
+                grow = False
+            else:
+                grow = True
+
+            # grow the cluster
+            while grow is True:
+                inds_new = np.array((), dtype="int")
+
+                keep = np.zeros(inds_cand.size, dtype="bool")
+                for a0 in range(inds_cand.size):
+                    xc, yc, zc = np.unravel_index(inds_cand[a0], sig.shape)
+
+                    phi_test = phi[zc]
+                    dphi = (
+                        np.mod(phi_cluster - phi_test + np.pi / 2.0, np.pi)
+                        - np.pi / 2.0
+                    )
+
+                    if np.abs(dphi) < tol:
+                        keep[a0] = True
+
+                        sig[xc, yc, zc] = 0
+                        mark[xc, yc, zc] = False
+
+                        xr = np.clip(
+                            xc + np.arange(-1, 2, dtype="int"), 0, sig.shape[0] - 1
+                        )
+                        yr = np.clip(
+                            yc + np.arange(-1, 2, dtype="int"), 0, sig.shape[1] - 1
+                        )
+                        inds_add = inds_all[xr[:, None], yr[None], :].ravel()
+                        inds_new = np.append(inds_new, inds_add)
+
+                inds_grain = np.append(inds_grain, inds_cand[keep])
+                inds_cand = np.unique(
+                    np.delete(inds_new, mark.ravel()[inds_new] == False)
+                )
+
+                if inds_cand.size == 0:
+                    grow = False
+
+        # convert grain to x,y coordinates, add = list
+        xg, yg, zg = np.unravel_index(inds_grain, sig.shape)
+        xyg = np.unique(np.vstack((xg, yg)), axis=1)
+        sig_mean = np.mean(sig_init.ravel()[inds_grain])
+        self.cluster_sizes = np.append(self.cluster_sizes, xyg.shape[1])
+        self.cluster_sig = np.append(self.cluster_sig, sig_mean)
+        self.cluster_inds.append(xyg)
+
+    # finish progressbar
+    update_progress(1)
+
+    if plot_grain_clusters:
+        self.plot_grain_clusters(**kwargs)
+
+    return
+
+
+def plot_grain_clusters(
+    self,
+    area_min=None,
+    area_max=None,
+    area_step=1,
+    weight_intensity=False,
+    pixel_area=1.0,
+    pixel_area_units="px^2",
+    figsize=(8, 6),
+    returnfig=False,
+):
+    """
+    Plot the cluster sizes
+
+    Parameters
+    --------
+    area_min: int (optional)
+        Min area bin in pixels
+    area_max: int (optional)
+        Max area bin in pixels
+    area_step: int (optional)
+        Step size of the histogram bin
+    weight_intensity: bool
+        Weight histogram by the peak intensity.
+    pixel_area: float
+        Size of pixel area unit square
+    pixel_area_units: string
+        Units of the pixel area
+    figsize: tuple
+        Size of the figure panel
+    returnfig: bool
+        Setting this to true returns the figure and axis handles
+
+    Returns
+    --------
+    fig, ax (optional)
+        Figure and axes handles
+
+    """
+
+    if area_max is None:
+        area_max = np.max(self.cluster_sizes)
+    area = np.arange(0, area_max, area_step)
+    if area_min is None:
+        sub = self.cluster_sizes.astype("int") < area_max
+    else:
+        sub = np.logical_and(
+            self.cluster_sizes.astype("int") >= area_min,
+            self.cluster_sizes.astype("int") < area_max,
+        )
+    if weight_intensity:
+        hist = np.bincount(
+            self.cluster_sizes[sub] // area_step,
+            weights=self.cluster_sig[sub],
+            minlength=area.shape[0],
+        )
+    else:
+        hist = np.bincount(
+            self.cluster_sizes[sub] // area_step,
+            minlength=area.shape[0],
+        )
+
+    # plotting
+    fig, ax = plt.subplots(figsize=figsize)
+    ax.bar(
+        area * pixel_area,
+        hist,
+        width=0.8 * pixel_area * area_step,
+    )
+    ax.set_xlim((0, area_max * pixel_area))
+    ax.set_xlabel("Grain Area [" + pixel_area_units + "]")
+    if weight_intensity:
+        ax.set_ylabel("Total Signal [arb. units]")
+    else:
+        ax.set_ylabel("Number of Grains")
+
+    if returnfig:
+        return fig, ax
+
+
+# Progressbar taken from stackexchange:
+# https://stackoverflow.com/questions/3160699/python-progress-bar
+def update_progress(progress):
+    barLength = 60  # Modify this to change the length of the progress bar
+    status = ""
+    if isinstance(progress, int):
+        progress = float(progress)
+    if not isinstance(progress, float):
+        progress = 0
+        status = "error: progress var must be float\r\n"
+    if progress < 0:
+        progress = 0
+        status = "Halt...\r\n"
+    if progress >= 1:
+        progress = 1
+        status = "Done...\r\n"
+    block = int(round(barLength * progress))
+    text = "\rPercent: [{0}] {1}% {2}".format(
+        "#" * block + "-" * (barLength - block), np.round(progress * 100, 4), status
+    )
+    sys.stdout.write(text)
+    sys.stdout.flush()

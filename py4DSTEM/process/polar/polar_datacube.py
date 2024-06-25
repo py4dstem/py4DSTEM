@@ -105,7 +105,10 @@ class PolarDatacube:
         plot_reduced_pdf,
         plot_pdf,
         background_pca,
+        cluster_grains,
+        plot_grain_clusters,
     )
+
     from py4DSTEM.process.polar.polar_peaks import (
         find_peaks_single_pattern,
         find_peaks,
