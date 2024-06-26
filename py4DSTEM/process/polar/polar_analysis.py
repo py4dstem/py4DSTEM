@@ -1028,6 +1028,7 @@ def cluster_grains(
     threshold_grow=0.2,
     angle_tolerance_deg=5,
     plot_grain_clusters=True,
+    returncalc=False,
     **kwargs
 ):
     """
@@ -1049,7 +1050,8 @@ def cluster_grains(
         Rotation rolerance for clustering grains.
     plot_grain_clusters: bool
         If True, plots clusters. **kwargs passed to `plot_grain_clusters`
-
+    return_calc: bool
+        If True, return cluster_sizes, cluster_sig, and cluster_inds
     """
 
     if orientation_histogram is None:
@@ -1173,7 +1175,8 @@ def cluster_grains(
     if plot_grain_clusters:
         self.plot_grain_clusters(**kwargs)
 
-    return
+    if returncalc:
+        return self.cluster_sizes, self.cluster_sig, self.cluster_inds
 
 
 def plot_grain_clusters(
