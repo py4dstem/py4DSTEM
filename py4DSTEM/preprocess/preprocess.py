@@ -495,8 +495,8 @@ def median_filter_masked_pixels(datacube, mask, kernel_width: int = 3):
         width_min = kernel_width // 2
 
     else:
-        width_max = int(kernel_width / 2 + 0.5)
-        width_min = int(kernel_width / 2 - 0.5)
+        width_max = int(np.ceil(kernel_width / 2))
+        width_min = int(np.floor(kernel_width / 2))
 
     num_bad_pixels_indicies = np.array(np.where(mask))
     for a0 in range(num_bad_pixels_indicies.shape[1]):
@@ -523,6 +523,57 @@ def median_filter_masked_pixels(datacube, mask, kernel_width: int = 3):
             datacube.data[:, :, x_min:x_max, y_min:y_max], axis=(2, 3)
         )
     return datacube
+
+
+def median_filter_masked_pixels_2D(array, mask, kernel_width: int = 3):
+    """
+    Median filters a 2D array
+
+    Parameters
+    ----------
+    array:
+        array to be filtered
+    mask:
+        a boolean mask that specifies the bad pixels in the datacube
+    kernel_width (optional):
+        specifies the width of the median kernel
+
+    Returns
+    ----------
+    filtered datacube
+    """
+    if kernel_width % 2 == 0:
+        width_max = kernel_width // 2
+        width_min = kernel_width // 2
+
+    else:
+        width_max = int(np.ceil(kernel_width / 2))
+        width_min = int(np.floor(kernel_width / 2))
+
+    num_bad_pixels_indicies = np.array(np.where(mask))
+    for a0 in range(num_bad_pixels_indicies.shape[1]):
+        index_x = num_bad_pixels_indicies[0, a0]
+        index_y = num_bad_pixels_indicies[1, a0]
+
+        x_min = index_x - width_min
+        y_min = index_y - width_min
+
+        x_max = index_x + width_max
+        y_max = index_y + width_max
+
+        if x_min < 0:
+            x_min = 0
+        if y_min < 0:
+            y_min = 0
+
+        if x_max > array.shape[0]:
+            x_max = array.shape[0]
+        if y_max > array.shape[1]:
+            y_max = array.shape[1]
+
+        array[index_x, index_y] = np.median(array[x_min:x_max, y_min:y_max])
+
+    return array
 
 
 def datacube_diffraction_shift(
@@ -573,7 +624,11 @@ def datacube_diffraction_shift(
 
 
 def resample_data_diffraction(
-    datacube, resampling_factor=None, output_size=None, method="bilinear"
+    datacube,
+    resampling_factor=None,
+    output_size=None,
+    method="bilinear",
+    conserve_array_sums=False,
 ):
     """
     Performs diffraction space resampling of data by resampling_factor or to match output_size.
@@ -594,7 +649,10 @@ def resample_data_diffraction(
         old_size = datacube.data.shape
 
         datacube.data = fourier_resample(
-            datacube.data, scale=resampling_factor, output_size=output_size
+            datacube.data,
+            scale=resampling_factor,
+            output_size=output_size,
+            conserve_array_sums=conserve_array_sums,
         )
 
         if not resampling_factor:
@@ -617,6 +675,10 @@ def resample_data_diffraction(
             if resampling_factor.shape == ():
                 resampling_factor = np.tile(resampling_factor, 2)
 
+            output_size = np.round(
+                resampling_factor * np.array(datacube.shape[-2:])
+            ).astype("int")
+
         else:
             if output_size is None:
                 raise ValueError(
@@ -630,12 +692,28 @@ def resample_data_diffraction(
 
             resampling_factor = np.array(output_size) / np.array(datacube.shape[-2:])
 
-        resampling_factor = np.concatenate(((1, 1), resampling_factor))
-        datacube.data = zoom(
-            datacube.data, resampling_factor, order=1, mode="grid-wrap", grid_mode=True
-        )
+        output_data = np.zeros(datacube.Rshape + tuple(output_size))
+        for Rx, Ry in tqdmnd(
+            datacube.shape[0],
+            datacube.shape[1],
+            desc="Resampling 4D datacube",
+            unit="DP",
+            unit_scale=True,
+        ):
+            output_data[Rx, Ry] = zoom(
+                datacube.data[Rx, Ry].astype(np.float32),
+                resampling_factor,
+                order=1,
+                mode="nearest",
+                grid_mode=True,
+            )
+
+        if conserve_array_sums:
+            output_data = output_data / resampling_factor.prod()
+
+        datacube.data = output_data
         datacube.calibration.set_Q_pixel_size(
-            datacube.calibration.get_Q_pixel_size() / resampling_factor[2]
+            datacube.calibration.get_Q_pixel_size() / resampling_factor[0]
         )
 
     else:

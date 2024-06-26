@@ -106,6 +106,8 @@ class PtychographicTomography(
     initial_scan_positions: list of np.ndarray, optional
         Probe positions in Å for each diffraction intensity per tilt
         If None, initialized to a grid scan centered along tilt axis
+    positions_offset_ang: list of np.ndarray, optional
+        Offset of positions in A
     verbose: bool, optional
         If True, class methods will inherit this and print additional information
     object_type: str, optional
@@ -149,6 +151,7 @@ class PtychographicTomography(
         initial_object_guess: np.ndarray = None,
         initial_probe_guess: np.ndarray = None,
         initial_scan_positions: Sequence[np.ndarray] = None,
+        positions_offset_ang: Sequence[np.ndarray] = None,
         verbose: bool = True,
         device: str = "cpu",
         storage: str = None,
@@ -193,6 +196,7 @@ class PtychographicTomography(
         # Common Metadata
         self._vacuum_probe_intensity = vacuum_probe_intensity
         self._scan_positions = initial_scan_positions
+        self._positions_offset_ang = positions_offset_ang
         self._energy = energy
         self._semiangle_cutoff = semiangle_cutoff
         self._semiangle_cutoff_pixels = semiangle_cutoff_pixels
@@ -211,7 +215,7 @@ class PtychographicTomography(
     def preprocess(
         self,
         diffraction_intensities_shape: Tuple[int, int] = None,
-        reshaping_method: str = "fourier",
+        reshaping_method: str = "bilinear",
         padded_diffraction_intensities_shape: Tuple[int, int] = None,
         region_of_interest_shape: Tuple[int, int] = None,
         dp_mask: np.ndarray = None,
@@ -221,14 +225,16 @@ class PtychographicTomography(
         diffraction_patterns_rotate_degrees: float = None,
         diffraction_patterns_transpose: bool = None,
         force_com_shifts: Sequence[float] = None,
+        force_com_measured: Sequence[np.ndarray] = None,
         vectorized_com_calculation: bool = True,
         force_scan_sampling: float = None,
         force_angular_sampling: float = None,
         force_reciprocal_sampling: float = None,
         progress_bar: bool = True,
-        object_fov_mask: np.ndarray = None,
+        object_fov_mask: np.ndarray = True,
         crop_patterns: bool = False,
         main_tilt_axis: str = "vertical",
+        store_initial_arrays: bool = True,
         device: str = None,
         clear_fft_cache: bool = None,
         max_batch_size: int = None,
@@ -270,6 +276,8 @@ class PtychographicTomography(
             Amplitudes come from diffraction patterns shifted with
             the CoM in the upper left corner for each probe unless
             shift is overwritten. One tuple per tilt.
+        force_com_measured: tuple of ndarrays (CoMx measured, CoMy measured)
+            Force CoM measured shifts
         vectorized_com_calculation: bool, optional
             If True (default), the memory-intensive CoM calculation is vectorized
         force_scan_sampling: float, optional
@@ -287,6 +295,8 @@ class PtychographicTomography(
             The default, 'vertical' (first scan dimension), results in object size (q,p,q),
             'horizontal' (second scan dimension) results in object size (p,p,q),
             any other value (e.g. None) results in object size (max(p,q),p,q).
+        store_initial_arrays: bool
+            If True, preprocesed object and probe arrays are stored allowing reset=True in reconstruct.
         device: str, optional
             if not none, overwrites self._device to set device preprocess will be perfomed on.
         clear_fft_cache: bool, optional
@@ -365,6 +375,7 @@ class PtychographicTomography(
             (self._num_diffraction_patterns,) + roi_shape
         )
 
+        self._amplitudes_shape = np.array(self._amplitudes.shape[-2:])
         if region_of_interest_shape is not None:
             self._resample_exit_waves = True
             self._region_of_interest_shape = np.array(region_of_interest_shape)
@@ -376,8 +387,19 @@ class PtychographicTomography(
         if force_com_shifts is None:
             force_com_shifts = [None] * self._num_measurements
 
+        if force_com_measured is None:
+            force_com_measured = [None] * self._num_measurements
+
+        if self._positions_offset_ang is None:
+            self._positions_offset_ang = [None] * self._num_measurements
+
         self._rotation_best_rad = np.deg2rad(diffraction_patterns_rotate_degrees)
         self._rotation_best_transpose = diffraction_patterns_transpose
+
+        if progress_bar:
+            # turn off verbosity to play nice with tqdm
+            verbose = self._verbose
+            self._verbose = False
 
         # loop over DPs for preprocessing
         for index in tqdmnd(
@@ -393,6 +415,7 @@ class PtychographicTomography(
                     self._vacuum_probe_intensity,
                     self._dp_mask,
                     force_com_shifts[index],
+                    force_com_measured[index],
                 ) = self._preprocess_datacube_and_vacuum_probe(
                     self._datacube[index],
                     diffraction_intensities_shape=self._diffraction_intensities_shape,
@@ -401,6 +424,7 @@ class PtychographicTomography(
                     vacuum_probe_intensity=self._vacuum_probe_intensity,
                     dp_mask=self._dp_mask,
                     com_shifts=force_com_shifts[index],
+                    com_measured=force_com_measured[index],
                 )
 
             else:
@@ -409,6 +433,7 @@ class PtychographicTomography(
                     _,
                     _,
                     force_com_shifts[index],
+                    force_com_measured[index],
                 ) = self._preprocess_datacube_and_vacuum_probe(
                     self._datacube[index],
                     diffraction_intensities_shape=self._diffraction_intensities_shape,
@@ -417,6 +442,7 @@ class PtychographicTomography(
                     vacuum_probe_intensity=None,
                     dp_mask=None,
                     com_shifts=force_com_shifts[index],
+                    com_measured=force_com_measured[index],
                 )
 
             # calibrations
@@ -442,6 +468,7 @@ class PtychographicTomography(
                 fit_function=fit_function,
                 com_shifts=force_com_shifts[index],
                 vectorized_calculation=vectorized_com_calculation,
+                com_measured=force_com_measured[index],
             )
 
             # corner-center amplitudes
@@ -483,7 +510,12 @@ class PtychographicTomography(
                 self._scan_positions[index],
                 self._positions_mask[index],
                 self._object_padding_px,
+                self._positions_offset_ang[index],
             )
+
+        if progress_bar:
+            # reset verbosity
+            self._verbose = verbose
 
         # handle semiangle specified in pixels
         if self._semiangle_cutoff_pixels:
@@ -499,8 +531,10 @@ class PtychographicTomography(
             main_tilt_axis,
         )
 
-        self._object_initial = self._object.copy()
-        self._object_type_initial = self._object_type
+        if store_initial_arrays:
+            self._object_initial = self._object.copy()
+            self._object_type_initial = self._object_type
+
         self._object_shape = self._object.shape[-2:]
         self._num_voxels = self._object.shape[0]
 
@@ -530,9 +564,13 @@ class PtychographicTomography(
 
         # initialize probe
         self._probes_all = []
-        self._probes_all_initial = []
-        self._probes_all_initial_aperture = []
         list_Q = isinstance(self._probe_init, (list, tuple))
+
+        if store_initial_arrays:
+            self._probes_all_initial = []
+            self._probes_all_initial_aperture = []
+        else:
+            self._probes_all_initial_aperture = [None] * self._num_measurements
 
         for index in range(self._num_measurements):
             _probe, self._semiangle_cutoff = self._initialize_probe(
@@ -544,8 +582,9 @@ class PtychographicTomography(
             )
 
             self._probes_all.append(_probe)
-            self._probes_all_initial.append(_probe.copy())
-            self._probes_all_initial_aperture.append(xp.abs(xp.fft.fft2(_probe)))
+            if store_initial_arrays:
+                self._probes_all_initial.append(_probe.copy())
+                self._probes_all_initial_aperture.append(xp.abs(xp.fft.fft2(_probe)))
 
         del self._probe_init
 
@@ -578,65 +617,16 @@ class PtychographicTomography(
             self._slice_thicknesses,
         )
 
-        # overlaps
-        if max_batch_size is None:
-            max_batch_size = self._num_diffraction_patterns
-
-        if object_fov_mask is None:
-            probe_overlap_3D = xp.zeros_like(self._object)
-            old_rot_matrix = np.eye(3)  # identity
-
-            for index in range(self._num_measurements):
-                idx_start = self._cum_probes_per_measurement[index]
-                idx_end = self._cum_probes_per_measurement[index + 1]
-
-                rot_matrix = self._tilt_orientation_matrices[index]
-
-                probe_overlap_3D = self._rotate_zxy_volume(
-                    probe_overlap_3D,
-                    rot_matrix @ old_rot_matrix.T,
-                )
-
-                probe_overlap = xp.zeros(self._object_shape, dtype=xp.float32)
-
-                num_diffraction_patterns = idx_end - idx_start
-                shuffled_indices = np.arange(idx_start, idx_end)
-
-                for start, end in generate_batches(
-                    num_diffraction_patterns, max_batch=max_batch_size
-                ):
-                    # batch indices
-                    batch_indices = shuffled_indices[start:end]
-                    positions_px = self._positions_px_all[batch_indices]
-                    positions_px_fractional = positions_px - xp_storage.round(
-                        positions_px
-                    )
-
-                    shifted_probes = fft_shift(
-                        self._probes_all[index], positions_px_fractional, xp
-                    )
-                    probe_overlap += self._sum_overlapping_patches_bincounts(
-                        xp.abs(shifted_probes) ** 2, positions_px
-                    )
-
-                del shifted_probes
-
-                probe_overlap_3D += probe_overlap[None]
-                old_rot_matrix = rot_matrix
-
-            probe_overlap_3D = self._rotate_zxy_volume(
-                probe_overlap_3D,
-                old_rot_matrix.T,
-            )
-
-            gaussian_filter = self._scipy.ndimage.gaussian_filter
-            probe_overlap_3D_blurred = gaussian_filter(probe_overlap_3D, 1.0)
-            self._object_fov_mask = asnumpy(
-                probe_overlap_3D_blurred > 0.25 * probe_overlap_3D_blurred.max()
-            )
-
+        if object_fov_mask is not True:
+            raise NotImplementedError()
         else:
-            self._object_fov_mask = np.asarray(object_fov_mask)
+            self._object_fov_mask = np.full(self._object_shape, True)
+        self._object_fov_mask_inverse = np.invert(self._object_fov_mask)
+
+        # plot probe overlaps
+        if plot_probe_overlaps:
+            if max_batch_size is None:
+                max_batch_size = self._num_diffraction_patterns
 
             probe_overlap = xp.zeros(self._object_shape, dtype=xp.float32)
 
@@ -655,13 +645,8 @@ class PtychographicTomography(
                 )
 
             del shifted_probes
+            probe_overlap = asnumpy(probe_overlap)
 
-        self._object_fov_mask_inverse = np.invert(self._object_fov_mask)
-
-        probe_overlap = asnumpy(probe_overlap)
-
-        # plot probe overlaps
-        if plot_probe_overlaps:
             figsize = kwargs.pop("figsize", (13, 4))
             chroma_boost = kwargs.pop("chroma_boost", 1)
             power = kwargs.pop("power", 2)
@@ -797,6 +782,7 @@ class PtychographicTomography(
         object_positivity: bool = True,
         shrinkage_rad: float = 0.0,
         fix_potential_baseline: bool = True,
+        detector_fourier_mask: np.ndarray = None,
         tv_denoise: bool = True,
         tv_denoise_weights: float = None,
         tv_denoise_inner_iter=40,
@@ -905,6 +891,11 @@ class PtychographicTomography(
             if True perform collective measurement updates (i.e. one per tilt)
         shrinkage_rad: float
             Phase shift in radians to be subtracted from the potential at each iteration
+        fix_potential_baseline: bool
+            If true, the potential mean outside the FOV is forced to zero at each iteration
+        detector_fourier_mask: np.ndarray
+            Corner-centered mask to apply at the detector-plane for zeroing-out unreliable gradients.
+            Useful when detector has artifacts such as dead-pixels. Usually binary.
         store_iterations: bool, optional
             If True, reconstructed objects and probes are stored at each iteration
         progress_bar: bool, optional
@@ -958,6 +949,9 @@ class PtychographicTomography(
             step_size,
         )
 
+        # initialization
+        self._reset_reconstruction(store_iterations, reset, use_projection_scheme)
+
         if self._verbose:
             self._report_reconstruction_summary(
                 num_iter,
@@ -977,8 +971,8 @@ class PtychographicTomography(
         else:
             max_batch_size = self._num_diffraction_patterns
 
-        # initialization
-        self._reset_reconstruction(store_iterations, reset, use_projection_scheme)
+        if detector_fourier_mask is not None:
+            detector_fourier_mask = xp.asarray(detector_fourier_mask)
 
         # main loop
         for a0 in tqdmnd(
@@ -1071,6 +1065,7 @@ class PtychographicTomography(
                         positions_px_fractional,
                         amplitudes_device,
                         self._exit_waves,
+                        detector_fourier_mask,
                         use_projection_scheme,
                         projection_a,
                         projection_b,

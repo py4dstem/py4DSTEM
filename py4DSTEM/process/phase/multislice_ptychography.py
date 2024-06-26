@@ -99,6 +99,8 @@ class MultislicePtychography(
     initial_scan_positions: np.ndarray, optional
         Probe positions in Å for each diffraction intensity
         If None, initialized to a grid scan
+    positions_offset_ang: np.ndarray, optional
+        Offset of positions in A
     theta_x: float
         x tilt of propagator in mrad
     theta_y: float
@@ -147,6 +149,7 @@ class MultislicePtychography(
         initial_object_guess: np.ndarray = None,
         initial_probe_guess: np.ndarray = None,
         initial_scan_positions: np.ndarray = None,
+        positions_offset_ang: np.ndarray = None,
         theta_x: float = None,
         theta_y: float = None,
         middle_focus: bool = False,
@@ -209,6 +212,7 @@ class MultislicePtychography(
         # Common Metadata
         self._vacuum_probe_intensity = vacuum_probe_intensity
         self._scan_positions = initial_scan_positions
+        self._positions_offset_ang = positions_offset_ang
         self._energy = energy
         self._semiangle_cutoff = semiangle_cutoff
         self._semiangle_cutoff_pixels = semiangle_cutoff_pixels
@@ -228,7 +232,7 @@ class MultislicePtychography(
     def preprocess(
         self,
         diffraction_intensities_shape: Tuple[int, int] = None,
-        reshaping_method: str = "fourier",
+        reshaping_method: str = "bilinear",
         padded_diffraction_intensities_shape: Tuple[int, int] = None,
         region_of_interest_shape: Tuple[int, int] = None,
         dp_mask: np.ndarray = None,
@@ -240,13 +244,15 @@ class MultislicePtychography(
         plot_probe_overlaps: bool = True,
         force_com_rotation: float = None,
         force_com_transpose: float = None,
-        force_com_shifts: float = None,
+        force_com_shifts: Union[Sequence[np.ndarray], Sequence[float]] = None,
+        force_com_measured: Sequence[np.ndarray] = None,
         vectorized_com_calculation: bool = True,
         force_scan_sampling: float = None,
         force_angular_sampling: float = None,
         force_reciprocal_sampling: float = None,
         object_fov_mask: np.ndarray = None,
         crop_patterns: bool = False,
+        store_initial_arrays: bool = True,
         device: str = None,
         clear_fft_cache: bool = None,
         max_batch_size: int = None,
@@ -301,6 +307,8 @@ class MultislicePtychography(
             Amplitudes come from diffraction patterns shifted with
             the CoM in the upper left corner for each probe unless
             shift is overwritten.
+        force_com_measured: tuple of ndarrays (CoMx measured, CoMy measured)
+            Force CoM measured shifts
         vectorized_com_calculation: bool, optional
             If True (default), the memory-intensive CoM calculation is vectorized
         force_scan_sampling: float, optional
@@ -314,6 +322,8 @@ class MultislicePtychography(
             If None, probe_overlap intensity is thresholded
         crop_patterns: bool
             if True, crop patterns to avoid wrap around of patterns when centering
+        store_initial_arrays: bool
+            If True, preprocesed object and probe arrays are stored allowing reset=True in reconstruct.
         device: str, optional
             If not None, overwrites self._device to set device preprocess will be perfomed on.
         clear_fft_cache: bool, optional
@@ -360,6 +370,7 @@ class MultislicePtychography(
             self._vacuum_probe_intensity,
             self._dp_mask,
             force_com_shifts,
+            force_com_measured,
         ) = self._preprocess_datacube_and_vacuum_probe(
             self._datacube,
             diffraction_intensities_shape=self._diffraction_intensities_shape,
@@ -368,6 +379,7 @@ class MultislicePtychography(
             vacuum_probe_intensity=self._vacuum_probe_intensity,
             dp_mask=self._dp_mask,
             com_shifts=force_com_shifts,
+            com_measured=force_com_measured,
         )
 
         # calibrations
@@ -399,6 +411,7 @@ class MultislicePtychography(
             fit_function=fit_function,
             com_shifts=force_com_shifts,
             vectorized_calculation=vectorized_com_calculation,
+            com_measured=force_com_measured,
         )
 
         # estimate rotation / transpose
@@ -452,6 +465,7 @@ class MultislicePtychography(
         del _intensities
 
         self._num_diffraction_patterns = self._amplitudes.shape[0]
+        self._amplitudes_shape = np.array(self._amplitudes.shape[-2:])
 
         if region_of_interest_shape is not None:
             self._resample_exit_waves = True
@@ -468,6 +482,7 @@ class MultislicePtychography(
             self._scan_positions,
             self._positions_mask,
             self._object_padding_px,
+            self._positions_offset_ang,
         )
 
         # initialize object
@@ -478,8 +493,9 @@ class MultislicePtychography(
             self._object_type,
         )
 
-        self._object_initial = self._object.copy()
-        self._object_type_initial = self._object_type
+        if store_initial_arrays:
+            self._object_initial = self._object.copy()
+            self._object_type_initial = self._object_type
         self._object_shape = self._object.shape[-2:]
 
         # center probe positions
@@ -515,8 +531,11 @@ class MultislicePtychography(
             device=self._device,
         )._evaluate_ctf()
 
-        self._probe_initial = self._probe.copy()
-        self._probe_initial_aperture = xp.abs(xp.fft.fft2(self._probe))
+        if store_initial_arrays:
+            self._probe_initial = self._probe.copy()
+            self._probe_initial_aperture = xp.abs(xp.fft.fft2(self._probe))
+        else:
+            self._probe_initial_aperture = None
 
         # precompute propagator arrays
         self._propagator_arrays = self._precompute_propagator_arrays(
@@ -528,25 +547,26 @@ class MultislicePtychography(
             self._theta_y,
         )
 
-        # overlaps
-        if max_batch_size is None:
-            max_batch_size = self._num_diffraction_patterns
+        if object_fov_mask is None or plot_probe_overlaps:
+            # overlaps
+            if max_batch_size is None:
+                max_batch_size = self._num_diffraction_patterns
 
-        probe_overlap = xp.zeros(self._object_shape, dtype=xp.float32)
+            probe_overlap = xp.zeros(self._object_shape, dtype=xp.float32)
 
-        for start, end in generate_batches(
-            self._num_diffraction_patterns, max_batch=max_batch_size
-        ):
-            # batch indices
-            positions_px = self._positions_px[start:end]
-            positions_px_fractional = positions_px - xp_storage.round(positions_px)
+            for start, end in generate_batches(
+                self._num_diffraction_patterns, max_batch=max_batch_size
+            ):
+                # batch indices
+                positions_px = self._positions_px[start:end]
+                positions_px_fractional = positions_px - xp_storage.round(positions_px)
 
-            shifted_probes = fft_shift(self._probe, positions_px_fractional, xp)
-            probe_overlap += self._sum_overlapping_patches_bincounts(
-                xp.abs(shifted_probes) ** 2, positions_px
-            )
+                shifted_probes = fft_shift(self._probe, positions_px_fractional, xp)
+                probe_overlap += self._sum_overlapping_patches_bincounts(
+                    xp.abs(shifted_probes) ** 2, positions_px
+                )
 
-        del shifted_probes
+            del shifted_probes
 
         if object_fov_mask is None:
             gaussian_filter = self._scipy.ndimage.gaussian_filter
@@ -555,14 +575,15 @@ class MultislicePtychography(
                 probe_overlap_blurred > 0.25 * probe_overlap_blurred.max()
             )
             del probe_overlap_blurred
+        elif object_fov_mask is True:
+            self._object_fov_mask = np.full(self._object_shape, True)
         else:
             self._object_fov_mask = np.asarray(object_fov_mask)
         self._object_fov_mask_inverse = np.invert(self._object_fov_mask)
 
-        probe_overlap = asnumpy(probe_overlap)
-
         # plot probe overlaps
         if plot_probe_overlaps:
+            probe_overlap = asnumpy(probe_overlap)
             figsize = kwargs.pop("figsize", (13, 4))
             chroma_boost = kwargs.pop("chroma_boost", 1)
             power = kwargs.pop("power", 2)
@@ -698,6 +719,7 @@ class MultislicePtychography(
         object_positivity: bool = True,
         shrinkage_rad: float = 0.0,
         fix_potential_baseline: bool = True,
+        detector_fourier_mask: np.ndarray = None,
         pure_phase_object: bool = False,
         tv_denoise_chambolle: bool = True,
         tv_denoise_weight_chambolle=None,
@@ -809,6 +831,9 @@ class MultislicePtychography(
             Phase shift in radians to be subtracted from the potential at each iteration
         fix_potential_baseline: bool
             If true, the potential mean outside the FOV is forced to zero at each iteration
+        detector_fourier_mask: np.ndarray
+            Corner-centered mask to multiply the detector-plane gradients with (a value of zero supresses those pixels).
+            Useful when detector has artifacts such as dead-pixels. Usually binary.
         pure_phase_object: bool, optional
             If True, object amplitude is set to unity
         tv_denoise_chambolle: bool
@@ -857,9 +882,13 @@ class MultislicePtychography(
             ]
             self.copy_attributes_to_device(attrs, device)
 
+        # initialization
+        self._reset_reconstruction(store_iterations, reset)
+
         if object_type is not None:
             self._switch_object_type(object_type)
 
+        xp = self._xp
         xp_storage = self._xp_storage
         device = self._device
         asnumpy = self._asnumpy
@@ -903,8 +932,8 @@ class MultislicePtychography(
         else:
             max_batch_size = self._num_diffraction_patterns
 
-        # initialization
-        self._reset_reconstruction(store_iterations, reset)
+        if detector_fourier_mask is not None:
+            detector_fourier_mask = xp.asarray(detector_fourier_mask)
 
         # main loop
         for a0 in tqdmnd(
@@ -952,6 +981,7 @@ class MultislicePtychography(
                     positions_px_fractional,
                     amplitudes_device,
                     self._exit_waves,
+                    detector_fourier_mask,
                     use_projection_scheme,
                     projection_a,
                     projection_b,

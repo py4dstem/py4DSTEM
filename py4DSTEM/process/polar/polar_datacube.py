@@ -104,6 +104,7 @@ class PolarDatacube:
         plot_sf_estimate,
         plot_reduced_pdf,
         plot_pdf,
+        background_pca,
     )
     from py4DSTEM.process.polar.polar_peaks import (
         find_peaks_single_pattern,

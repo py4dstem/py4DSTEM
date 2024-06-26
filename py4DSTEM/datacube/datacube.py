@@ -405,7 +405,9 @@ class DataCube(
         d = pad_data_diffraction(self, pad_factor=N, output_size=output_size)
         return d
 
-    def resample_Q(self, N=None, output_size=None, method="bilinear"):
+    def resample_Q(
+        self, N=None, output_size=None, method="bilinear", conserve_array_sums=False
+    ):
         """
         Resamples the data in diffraction space by resampling factor N, or to match output_size,
         using either 'fourier' or 'bilinear' interpolation.
@@ -418,7 +420,11 @@ class DataCube(
         from py4DSTEM.preprocess import resample_data_diffraction
 
         d = resample_data_diffraction(
-            self, resampling_factor=N, output_size=output_size, method=method
+            self,
+            resampling_factor=N,
+            output_size=output_size,
+            method=method,
+            conserve_array_sums=conserve_array_sums,
         )
         return d
 
@@ -510,7 +516,7 @@ class DataCube(
         ROI=None,
         align=True,
         mask=None,
-        threshold=0.2,
+        threshold=0.0,
         expansion=12,
         opening=3,
         verbose=False,

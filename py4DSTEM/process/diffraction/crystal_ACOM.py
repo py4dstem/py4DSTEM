@@ -76,6 +76,13 @@ def orientation_plan(
         progress_bar (bool):    If false no progress bar is displayed
     """
 
+    # Check to make sure user has calculated the structure factors if needed
+    if calculate_correlation_array:
+        if not hasattr(self, "g_vec_leng"):
+            raise ValueError(
+                "Run .calculate_structure_factors() before calculating an orientation plan."
+            )
+
     # Store inputs
     self.accel_voltage = np.asarray(accel_voltage)
     self.orientation_kernel_size = np.asarray(corr_kernel_size)
@@ -579,25 +586,6 @@ def orientation_plan(
         0, 2 * np.pi, self.orientation_in_plane_steps, endpoint=False
     )
 
-    # Determine the radii of all spherical shells
-    radii_test = np.round(self.g_vec_leng / tol_distance) * tol_distance
-    radii = np.unique(radii_test)
-    # Remove zero beam
-    keep = np.abs(radii) > tol_distance
-    self.orientation_shell_radii = radii[keep]
-
-    # init
-    self.orientation_shell_index = -1 * np.ones(self.g_vec_all.shape[1], dtype="int")
-    self.orientation_shell_count = np.zeros(self.orientation_shell_radii.size)
-
-    # Assign each structure factor point to a radial shell
-    for a0 in range(self.orientation_shell_radii.size):
-        sub = np.abs(self.orientation_shell_radii[a0] - radii_test) <= tol_distance / 2
-
-        self.orientation_shell_index[sub] = a0
-        self.orientation_shell_count[a0] = np.sum(sub)
-        self.orientation_shell_radii[a0] = np.mean(self.g_vec_leng[sub])
-
     # init storage arrays
     self.orientation_rotation_angles = np.zeros((self.orientation_num_zones, 3))
     self.orientation_rotation_matrices = np.zeros((self.orientation_num_zones, 3, 3))
@@ -685,7 +673,32 @@ def orientation_plan(
     k0 = np.array([0.0, 0.0, -1.0 / self.wavelength])
     n = np.array([0.0, 0.0, -1.0])
 
+    # Remaining calculations are only required if we are computing the correlation array.
     if calculate_correlation_array:
+        # Determine the radii of all spherical shells
+        radii_test = np.round(self.g_vec_leng / tol_distance) * tol_distance
+        radii = np.unique(radii_test)
+        # Remove zero beam
+        keep = np.abs(radii) > tol_distance
+        self.orientation_shell_radii = radii[keep]
+
+        # init
+        self.orientation_shell_index = -1 * np.ones(
+            self.g_vec_all.shape[1], dtype="int"
+        )
+        self.orientation_shell_count = np.zeros(self.orientation_shell_radii.size)
+
+        # Assign each structure factor point to a radial shell
+        for a0 in range(self.orientation_shell_radii.size):
+            sub = (
+                np.abs(self.orientation_shell_radii[a0] - radii_test)
+                <= tol_distance / 2
+            )
+
+            self.orientation_shell_index[sub] = a0
+            self.orientation_shell_count[a0] = np.sum(sub)
+            self.orientation_shell_radii[a0] = np.mean(self.g_vec_leng[sub])
+
         # initialize empty correlation array
         self.orientation_ref = np.zeros(
             (
@@ -2025,6 +2038,9 @@ def calculate_strain(
     tol_intensity: float = 1e-4,
     k_max: Optional[float] = None,
     min_num_peaks=5,
+    intensity_weighting=False,
+    robust=True,
+    robust_thresh=3.0,
     rotation_range=None,
     mask_from_corr=True,
     corr_range=(0, 2),
@@ -2039,24 +2055,46 @@ def calculate_strain(
 
     TODO: add robust fitting?
 
-    Args:
-        bragg_peaks_array (PointListArray):   All Bragg peaks
-        orientation_map (OrientationMap):     Orientation map generated from ACOM
-        corr_kernel_size (float):           Correlation kernel size - if user does
-                                            not specify, uses self.corr_kernel_size.
-        sigma_excitation_error (float):  sigma value for envelope applied to s_g (excitation errors) in units of inverse Angstroms
-        tol_excitation_error_mult (float): tolerance in units of sigma for s_g inclusion
-        tol_intensity (np float):        tolerance in intensity units for inclusion of diffraction spots
-        k_max (float):                   Maximum scattering vector
-        min_num_peaks (int):             Minimum number of peaks required.
-        rotation_range (float):          Maximum rotation range in radians (for symmetry reduction).
-        progress_bar (bool):             Show progress bar
-        mask_from_corr (bool):           Use ACOM correlation signal for mask
-        corr_range (np.ndarray):         Range of correlation signals for mask
-        corr_normalize (bool):           Normalize correlation signal before masking
+    Parameters
+    ----------
+    bragg_peaks_array (PointListArray):
+        All Bragg peaks
+    orientation_map (OrientationMap):
+        Orientation map generated from ACOM
+    corr_kernel_size (float):
+        Correlation kernel size - if user does
+        not specify, uses self.corr_kernel_size.
+    sigma_excitation_error (float):
+        sigma value for envelope applied to s_g (excitation errors) in units of inverse Angstroms
+    tol_excitation_error_mult (float):
+        tolerance in units of sigma for s_g inclusion
+    tol_intensity (np float):
+        tolerance in intensity units for inclusion of diffraction spots
+    k_max (float):
+        Maximum scattering vector
+    min_num_peaks (int):
+        Minimum number of peaks required.
+    intensity_weighting: bool
+        Set to True to weight least squares by experimental peak intensity.
+    robust_fitting: bool
+        Set to True to use robust fitting, which performs outlier rejection.
+    robust_thresh: float
+        Threshold for robust fitting weights.
+    rotation_range (float):
+        Maximum rotation range in radians (for symmetry reduction).
+    progress_bar (bool):
+        Show progress bar
+    mask_from_corr (bool):
+        Use ACOM correlation signal for mask
+    corr_range (np.ndarray):
+        Range of correlation signals for mask
+    corr_normalize (bool):
+        Normalize correlation signal before masking
 
-    Returns:
-        strain_map (RealSlice):  strain tensor
+    Returns
+    --------
+    strain_map (RealSlice):
+        strain tensor
 
     """
 
@@ -2143,16 +2181,44 @@ def calculate_strain(
                 (p_ref.data["qx"][inds_match[keep]], p_ref.data["qy"][inds_match[keep]])
             ).T
 
-            # Apply intensity weighting from experimental measurements
-            qxy *= p.data["intensity"][keep, None]
-            qxy_ref *= p.data["intensity"][keep, None]
-
             # Fit transformation matrix
             # Note - not sure about transpose here
             # (though it might not matter if rotation isn't included)
-            m = lstsq(qxy_ref, qxy, rcond=None)[0].T
+            if intensity_weighting:
+                weights = np.sqrt(p.data["intensity"][keep, None]) * 0 + 1
+                m = lstsq(
+                    qxy_ref * weights,
+                    qxy * weights,
+                    rcond=None,
+                )[0].T
+            else:
+                m = lstsq(
+                    qxy_ref,
+                    qxy,
+                    rcond=None,
+                )[0].T
 
-            # Get the infinitesimal strain matrix
+            # Robust fitting
+            if robust:
+                for a0 in range(5):
+                    # calculate new weights
+                    qxy_fit = qxy_ref @ m
+                    diff2 = np.sum((qxy_fit - qxy) ** 2, axis=1)
+
+                    weights = np.exp(
+                        diff2 / ((-2 * robust_thresh**2) * np.median(diff2))
+                    )[:, None]
+                    if intensity_weighting:
+                        weights *= np.sqrt(p.data["intensity"][keep, None])
+
+                    # calculate new fits
+                    m = lstsq(
+                        qxy_ref * weights,
+                        qxy * weights,
+                        rcond=None,
+                    )[0].T
+
+            # Set values into the infinitesimal strain matrix
             strain_map.get_slice("e_xx").data[rx, ry] = 1 - m[0, 0]
             strain_map.get_slice("e_yy").data[rx, ry] = 1 - m[1, 1]
             strain_map.get_slice("e_xy").data[rx, ry] = -(m[0, 1] + m[1, 0]) / 2.0
@@ -2160,7 +2226,7 @@ def calculate_strain(
 
             # Add finite rotation from ACOM orientation map.
             # I am not sure about the relative signs here.
-            # Also, I need to add in the mirror operator.
+            # Also, maybe I need to add in the mirror operator?
             if orientation_map.mirror[rx, ry, 0]:
                 strain_map.get_slice("theta").data[rx, ry] += (
                     orientation_map.angles[rx, ry, 0, 0]
@@ -2192,6 +2258,7 @@ def save_ang_file(
     pixel_units="px",
     transpose_xy=True,
     flip_x=False,
+    flip_y=False,
 ):
     """
     This function outputs an ascii text file in the .ang format, containing
@@ -2211,8 +2278,10 @@ def save_ang_file(
         nothing
 
     """
-
-    from orix.io.plugins.ang import file_writer
+    try:
+        from orix.io.plugins.ang import file_writer
+    except ImportError:
+        raise Exception("orix failed to import; try pip installing separately")
 
     xmap = self.orientation_map_to_orix_CrystalMap(
         orientation_map,
@@ -2222,6 +2291,7 @@ def save_ang_file(
         return_color_key=False,
         transpose_xy=transpose_xy,
         flip_x=flip_x,
+        flip_y=flip_y,
     )
 
     file_writer(file_name, xmap)
@@ -2235,6 +2305,7 @@ def orientation_map_to_orix_CrystalMap(
     pixel_units="px",
     transpose_xy=True,
     flip_x=False,
+    flip_y=False,
     return_color_key=False,
 ):
     try:
@@ -2260,12 +2331,20 @@ def orientation_map_to_orix_CrystalMap(
 
     import warnings
 
-    # Get orientation matrices
+    # Get orientation matrices and correlation signal (will be used as iq and ci)
     orientation_matrices = orientation_map.matrix[:, :, ind_orientation].copy()
+    corr_values = orientation_map.corr[:, :, ind_orientation].copy()
+
+    # Check for transpose
     if transpose_xy:
         orientation_matrices = np.transpose(orientation_matrices, (1, 0, 2, 3))
+        corr_values = np.transpose(corr_values, (1, 0))
     if flip_x:
         orientation_matrices = np.flip(orientation_matrices, axis=0)
+        corr_values = np.flip(corr_values, axis=0)
+    if flip_y:
+        orientation_matrices = np.flip(orientation_matrices, axis=1)
+        corr_values = np.flip(corr_values, axis=1)
 
     # Convert the orientation matrices into Euler angles
     # suppress Gimbal lock warnings
@@ -2327,8 +2406,8 @@ def orientation_map_to_orix_CrystalMap(
         y=coords["y"],
         phase_list=PhaseList(phase),
         prop={
-            "iq": orientation_map.corr[:, :, ind_orientation].ravel(),
-            "ci": orientation_map.corr[:, :, ind_orientation].ravel(),
+            "iq": corr_values.ravel(),
+            "ci": corr_values.ravel(),
         },
         scan_unit=pixel_units,
     )

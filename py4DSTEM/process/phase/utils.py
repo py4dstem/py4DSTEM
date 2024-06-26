@@ -1874,25 +1874,40 @@ def bilinearly_interpolate_array(
     dx = xa - xF
     dy = ya - yF
 
-    all_inds = [
-        [xF, yF],
-        [xF + 1, yF],
-        [xF, yF + 1],
-        [xF + 1, yF + 1],
-    ]
+    #     all_inds = [
+    #         [xF, yF],
+    #         [xF + 1, yF],
+    #         [xF, yF + 1],
+    #         [xF + 1, yF + 1],
+    #     ]
 
-    all_weights = [
-        (1 - dx) * (1 - dy),
-        (dx) * (1 - dy),
-        (1 - dx) * (dy),
-        (dx) * (dy),
-    ]
+    #     all_weights = [
+    #         (1 - dx) * (1 - dy),
+    #         (dx) * (1 - dy),
+    #         (1 - dx) * (dy),
+    #         (dx) * (dy),
+    #     ]
 
     raveled_image = image.ravel()
     intensities = xp.zeros(xa.shape, dtype=xp.float32)
     # filter_weights = xp.zeros(xa.shape, dtype=xp.float32)
 
-    for inds, weights in zip(all_inds, all_weights):
+    #     for inds, weights in zip(all_inds, all_weights):
+    for basis_index in range(4):
+        match basis_index:
+            case 0:
+                inds = [xF, yF]
+                weights = (1 - dx) * (1 - dy)
+            case 1:
+                inds = [xF + 1, yF]
+                weights = (dx) * (1 - dy)
+            case 2:
+                inds = [xF, yF + 1]
+                weights = (1 - dx) * (dy)
+            case 3:
+                inds = [xF + 1, yF + 1]
+                weights = (dx) * (dy)
+
         intensities += (
             raveled_image[
                 xp.ravel_multi_index(
@@ -1940,33 +1955,28 @@ def lanczos_interpolate_array(
     dx = xa - xF
     dy = ya - yF
 
-    all_inds = []
-    all_weights = []
-
-    for i in range(-alpha + 1, alpha + 1):
-        for j in range(-alpha + 1, alpha + 1):
-            all_inds.append([xF + i, yF + j])
-            all_weights.append(
-                (xp.sinc(i - dx) * xp.sinc((i - dx) / alpha))
-                * (xp.sinc(j - dy) * xp.sinc((i - dy) / alpha))
-            )
-
     raveled_image = image.ravel()
     intensities = xp.zeros(xa.shape, dtype=xp.float32)
     filter_weights = xp.zeros(xa.shape, dtype=xp.float32)
 
-    for inds, weights in zip(all_inds, all_weights):
-        intensities += (
-            raveled_image[
-                xp.ravel_multi_index(
-                    inds,
-                    image.shape,
-                    mode=["wrap", "wrap"],
-                )
-            ]
-            * weights
-        )
-        filter_weights += weights
+    for i in range(-alpha + 1, alpha + 1):
+        for j in range(-alpha + 1, alpha + 1):
+            inds = [xF + i, yF + j]
+            weights = (xp.sinc(i - dx) * xp.sinc((i - dx) / alpha)) * (
+                xp.sinc(j - dy) * xp.sinc((i - dy) / alpha)
+            )
+
+            intensities += (
+                raveled_image[
+                    xp.ravel_multi_index(
+                        inds,
+                        image.shape,
+                        mode=["wrap", "wrap"],
+                    )
+                ]
+                * weights
+            )
+            filter_weights += weights
 
     return intensities / filter_weights
 
@@ -2080,25 +2090,40 @@ def bilinear_kernel_density_estimate(
     dx = xa.ravel() - xF
     dy = ya.ravel() - yF
 
-    all_inds = [
-        [xF, yF],
-        [xF + 1, yF],
-        [xF, yF + 1],
-        [xF + 1, yF + 1],
-    ]
+    #     all_inds = [
+    #         [xF, yF],
+    #         [xF + 1, yF],
+    #         [xF, yF + 1],
+    #         [xF + 1, yF + 1],
+    #     ]
 
-    all_weights = [
-        (1 - dx) * (1 - dy),
-        (dx) * (1 - dy),
-        (1 - dx) * (dy),
-        (dx) * (dy),
-    ]
+    #     all_weights = [
+    #         (1 - dx) * (1 - dy),
+    #         (dx) * (1 - dy),
+    #         (1 - dx) * (dy),
+    #         (dx) * (dy),
+    #     ]
 
     raveled_intensities = intensities.ravel()
     pix_count = xp.zeros(np.prod(output_shape), dtype=xp.float32)
     pix_output = xp.zeros(np.prod(output_shape), dtype=xp.float32)
 
-    for inds, weights in zip(all_inds, all_weights):
+    #     for inds, weights in zip(all_inds, all_weights):
+    for basis_index in range(4):
+        match basis_index:
+            case 0:
+                inds = [xF, yF]
+                weights = (1 - dx) * (1 - dy)
+            case 1:
+                inds = [xF + 1, yF]
+                weights = (dx) * (1 - dy)
+            case 2:
+                inds = [xF, yF + 1]
+                weights = (1 - dx) * (dy)
+            case 3:
+                inds = [xF + 1, yF + 1]
+                weights = (dx) * (dy)
+
         inds_1D = xp.ravel_multi_index(
             inds,
             output_shape,
@@ -2185,38 +2210,33 @@ def lanczos_kernel_density_estimate(
     dx = xa.ravel() - xF
     dy = ya.ravel() - yF
 
-    all_inds = []
-    all_weights = []
-
-    for i in range(-alpha + 1, alpha + 1):
-        for j in range(-alpha + 1, alpha + 1):
-            all_inds.append([xF + i, yF + j])
-            all_weights.append(
-                (xp.sinc(i - dx) * xp.sinc((i - dx) / alpha))
-                * (xp.sinc(j - dy) * xp.sinc((i - dy) / alpha))
-            )
-
     raveled_intensities = intensities.ravel()
     pix_count = xp.zeros(np.prod(output_shape), dtype=xp.float32)
     pix_output = xp.zeros(np.prod(output_shape), dtype=xp.float32)
 
-    for inds, weights in zip(all_inds, all_weights):
-        inds_1D = xp.ravel_multi_index(
-            inds,
-            output_shape,
-            mode=["wrap", "wrap"],
-        )
+    for i in range(-alpha + 1, alpha + 1):
+        for j in range(-alpha + 1, alpha + 1):
+            inds = [xF + i, yF + j]
+            weights = (xp.sinc(i - dx) * xp.sinc((i - dx) / alpha)) * (
+                xp.sinc(j - dy) * xp.sinc((i - dy) / alpha)
+            )
 
-        pix_count += xp.bincount(
-            inds_1D,
-            weights=weights,
-            minlength=np.prod(output_shape),
-        )
-        pix_output += xp.bincount(
-            inds_1D,
-            weights=weights * raveled_intensities,
-            minlength=np.prod(output_shape),
-        )
+            inds_1D = xp.ravel_multi_index(
+                inds,
+                output_shape,
+                mode=["wrap", "wrap"],
+            )
+
+            pix_count += xp.bincount(
+                inds_1D,
+                weights=weights,
+                minlength=np.prod(output_shape),
+            )
+            pix_output += xp.bincount(
+                inds_1D,
+                weights=weights * raveled_intensities,
+                minlength=np.prod(output_shape),
+            )
 
     # reshape 1D arrays to 2D
     pix_count = xp.reshape(
@@ -2244,17 +2264,19 @@ def lanczos_kernel_density_estimate(
     return pix_output
 
 
-def vectorized_bilinear_resample(
+def bilinear_resample(
     array,
     scale=None,
     output_size=None,
     mode="grid-wrap",
     grid_mode=True,
+    vectorized=True,
+    conserve_array_sums=False,
     xp=np,
 ):
     """
     Resize an array along its final two axes.
-    Note, this is vectorized and thus very memory-intensive.
+    Note, this is vectorized by default and thus very memory-intensive.
 
     The scaling of the array can be specified by passing either `scale`, which sets
     the scaling factor along both axes to be scaled; or by passing `output_size`,
@@ -2298,9 +2320,30 @@ def vectorized_bilinear_resample(
     scale_output = (1,) * (array_size.size - input_size.size) + scale_output
 
     if xp is np:
-        array = zoom(array, scale_output, order=1, mode=mode, grid_mode=grid_mode)
+        zoom_xp = zoom
     else:
-        array = zoom_cp(array, scale_output, order=1, mode=mode, grid_mode=grid_mode)
+        zoom_xp = zoom_cp
+
+    if vectorized:
+        array = zoom_xp(array, scale_output, order=1, mode=mode, grid_mode=grid_mode)
+    else:
+        flat_array = array.reshape((-1,) + tuple(input_size))
+        out_array = xp.zeros(
+            (flat_array.shape[0],) + tuple(output_size), flat_array.dtype
+        )
+        for idx in range(flat_array.shape[0]):
+            out_array[idx] = zoom_xp(
+                flat_array[idx],
+                scale_output[-2:],
+                order=1,
+                mode=mode,
+                grid_mode=grid_mode,
+            )
+
+        array = out_array.reshape(tuple(array_size[:-2]) + tuple(output_size))
+
+    if conserve_array_sums:
+        array = array / np.array(scale_output).prod()
 
     return array
 
@@ -2309,6 +2352,7 @@ def vectorized_fourier_resample(
     array,
     scale=None,
     output_size=None,
+    conserve_array_sums=False,
     xp=np,
 ):
     """
@@ -2470,7 +2514,8 @@ def vectorized_fourier_resample(
     array_resize = xp.real(xp.fft.ifft2(array_resize)).astype(xp.float32)
 
     # Normalization
-    array_resize *= scale_output
+    if not conserve_array_sums:
+        array_resize = array_resize * scale_output
 
     return array_resize
 
