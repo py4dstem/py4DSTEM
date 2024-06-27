@@ -2,6 +2,7 @@ import numpy as np
 import os
 from scipy.special import kn
 
+
 class single_atom_scatter(object):
     """
     This class calculates the composition averaged single atom scattering factor for a
@@ -58,18 +59,17 @@ class single_atom_scatter(object):
         qe = 1.60217662e-19
         # Permittivity of vacuum
         eps_0 = 8.85418782e-12
-        # Bohr's constant 
+        # Bohr's constant
         a_0 = 5.29177210903e-11
 
         fe = np.zeros_like(R)
         for i in range(5):
             # fe += ai[i] * (2 + bi[i] * gsq) / (1 + bi[i] * gsq) ** 2
-            pre = 2*np.pi/bi[i]**0.5
-            fe += (ai[i] / bi[i]**1.5) * \
-                (kn(0, pre * R) + R * kn(1, pre * R))
+            pre = 2 * np.pi / bi[i] ** 0.5
+            fe += (ai[i] / bi[i] ** 1.5) * (kn(0, pre * R) + R * kn(1, pre * R))
 
         # kappa = (4*np.pi*eps_0) / (2*np.pi*a_0*me)
-        return fe * 2 * np.pi**2# / kappa
+        return fe * 2 * np.pi**2  # / kappa
         # if units == "VA":
         #     return h**2 / (2 * np.pi * me * qe) * 1e18 * fe
         # elif units == "A":

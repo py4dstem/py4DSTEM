@@ -968,20 +968,17 @@ class Crystal:
         if return_calc is True:
             return radii_unique, intensity_unique
 
-
-
-
     def generate_projected_potential(
         self,
-        im_size = (256,256),
-        pixel_size_angstroms = 0.1,
-        potential_radius_angstroms =  3.0,
-        sigma_image_blur_angstroms = 0.1,
-        thickness_angstroms = 100,
-        max_num_proj = 200,
-        power_scale = 1.0,
-        plot_result = False,
-        figsize = (6,6),
+        im_size=(256, 256),
+        pixel_size_angstroms=0.1,
+        potential_radius_angstroms=3.0,
+        sigma_image_blur_angstroms=0.1,
+        thickness_angstroms=100,
+        max_num_proj=200,
+        power_scale=1.0,
+        plot_result=False,
+        figsize=(6, 6),
         orientation: Optional[Orientation] = None,
         ind_orientation: Optional[int] = 0,
         orientation_matrix: Optional[np.ndarray] = None,
@@ -1005,7 +1002,7 @@ class Crystal:
         sigma_image_blur_angstroms: float
             Image blurring in Angstroms.
         thickness_angstroms: float
-            Thickness of the sample in Angstroms. 
+            Thickness of the sample in Angstroms.
             Set thickness_thickness_angstroms = 0 to skip thickness projection.
         max_num_proj: int
             This value prevents this function from projecting a large number of unit
@@ -1016,26 +1013,26 @@ class Crystal:
             Plot the projected potential image.
         figsize:
             (2,) vector giving the size of the output.
-        
-        orientation: Orientation 
+
+        orientation: Orientation
             An Orientation class object
         ind_orientation: int
             If input is an Orientation class object with multiple orientations,
             this input can be used to select a specific orientation.
-        orientation_matrix: array      
+        orientation_matrix: array
             (3,3) orientation matrix, where columns represent projection directions.
-        zone_axis_lattice: array       
+        zone_axis_lattice: array
             (3,) projection direction in lattice indices
-        proj_x_lattice: array)       
+        proj_x_lattice: array)
             (3,) x-axis direction in lattice indices
-        zone_axis_cartesian: array   
+        zone_axis_cartesian: array
             (3,) cartesian projection direction
-        proj_x_cartesian: array       
+        proj_x_cartesian: array
             (3,) cartesian projection direction
 
         Returns
         --------
-        im_potential: (np.array)   
+        im_potential: (np.array)
             Output image of the projected potential.
 
         """
@@ -1059,82 +1056,82 @@ class Crystal:
         lat_real = self.lat_real.copy() @ orientation_matrix
 
         # Determine unit cell axes to tile over, by selecting 2/3 with smallest out-of-plane component
-        inds_tile = np.argsort(
-            np.abs(lat_real[:,2])
-        )[0:2]
-        m_tile = lat_real[inds_tile,:]
+        inds_tile = np.argsort(np.abs(lat_real[:, 2]))[0:2]
+        m_tile = lat_real[inds_tile, :]
 
         # Vector projected along optic axis
-        m_proj = np.squeeze(np.delete(lat_real,inds_tile,axis=0))
+        m_proj = np.squeeze(np.delete(lat_real, inds_tile, axis=0))
 
         # Determine tiling range
-        p_corners = np.array([
-            [-im_size_Ang[0]*0.5,-im_size_Ang[1]*0.5, 0.0],
-            [ im_size_Ang[0]*0.5,-im_size_Ang[1]*0.5, 0.0],
-            [-im_size_Ang[0]*0.5, im_size_Ang[1]*0.5, 0.0],
-            [ im_size_Ang[0]*0.5, im_size_Ang[1]*0.5, 0.0],
-        ])
-        ab = np.linalg.lstsq(
-            m_tile[:,:2].T,
-            p_corners[:,:2].T, 
-            rcond=None
-        )[0]
+        p_corners = np.array(
+            [
+                [-im_size_Ang[0] * 0.5, -im_size_Ang[1] * 0.5, 0.0],
+                [im_size_Ang[0] * 0.5, -im_size_Ang[1] * 0.5, 0.0],
+                [-im_size_Ang[0] * 0.5, im_size_Ang[1] * 0.5, 0.0],
+                [im_size_Ang[0] * 0.5, im_size_Ang[1] * 0.5, 0.0],
+            ]
+        )
+        ab = np.linalg.lstsq(m_tile[:, :2].T, p_corners[:, :2].T, rcond=None)[0]
         ab = np.floor(ab)
-        a_range = np.array((np.min(ab[0])-1,np.max(ab[0])+2))
-        b_range = np.array((np.min(ab[1])-1,np.max(ab[1])+2))
+        a_range = np.array((np.min(ab[0]) - 1, np.max(ab[0]) + 2))
+        b_range = np.array((np.min(ab[1]) - 1, np.max(ab[1]) + 2))
 
         # Tile unit cell
         a_ind, b_ind, atoms_ind = np.meshgrid(
-            np.arange(a_range[0],a_range[1]),
-            np.arange(b_range[0],b_range[1]),
+            np.arange(a_range[0], a_range[1]),
+            np.arange(b_range[0], b_range[1]),
             np.arange(self.positions.shape[0]),
         )
-        abc_atoms = self.positions[atoms_ind.ravel(),:]
-        abc_atoms[:,inds_tile[0]] += a_ind.ravel()
-        abc_atoms[:,inds_tile[1]] += b_ind.ravel()
+        abc_atoms = self.positions[atoms_ind.ravel(), :]
+        abc_atoms[:, inds_tile[0]] += a_ind.ravel()
+        abc_atoms[:, inds_tile[1]] += b_ind.ravel()
         xyz_atoms_ang = abc_atoms @ lat_real
         atoms_ID_all = self.numbers[atoms_ind.ravel()]
 
         # Center atoms on image plane
-        x = xyz_atoms_ang[:,0] / pixel_size_angstroms + im_size[0]/2.0
-        y = xyz_atoms_ang[:,1] / pixel_size_angstroms + im_size[1]/2.0
-        atoms_del = np.logical_or.reduce((
-            x <= -potential_radius_angstroms/2,
-            y <= -potential_radius_angstroms/2,
-            x >= im_size[0] + potential_radius_angstroms/2,
-            y >= im_size[1] + potential_radius_angstroms/2,
-        ))
+        x = xyz_atoms_ang[:, 0] / pixel_size_angstroms + im_size[0] / 2.0
+        y = xyz_atoms_ang[:, 1] / pixel_size_angstroms + im_size[1] / 2.0
+        atoms_del = np.logical_or.reduce(
+            (
+                x <= -potential_radius_angstroms / 2,
+                y <= -potential_radius_angstroms / 2,
+                x >= im_size[0] + potential_radius_angstroms / 2,
+                y >= im_size[1] + potential_radius_angstroms / 2,
+            )
+        )
         x = np.delete(x, atoms_del)
         y = np.delete(y, atoms_del)
         atoms_ID_all = np.delete(atoms_ID_all, atoms_del)
 
         # Coordinate system for atomic projected potentials
         potential_radius = np.ceil(potential_radius_angstroms / pixel_size_angstroms)
-        R = np.arange(0.5-potential_radius,potential_radius+0.5)
-        R_ind = R.astype('int')
-        R_2D = np.sqrt(R[:,None]**2 + R[None,:]**2)
+        R = np.arange(0.5 - potential_radius, potential_radius + 0.5)
+        R_ind = R.astype("int")
+        R_2D = np.sqrt(R[:, None] ** 2 + R[None, :] ** 2)
 
         # Lookup table for atomic projected potentials
         atoms_ID = np.unique(self.numbers)
-        atoms_lookup = np.zeros((
-            atoms_ID.shape[0],
-            R_2D.shape[0],
-            R_2D.shape[1],
-            ))
+        atoms_lookup = np.zeros(
+            (
+                atoms_ID.shape[0],
+                R_2D.shape[0],
+                R_2D.shape[1],
+            )
+        )
         for a0 in range(atoms_ID.shape[0]):
             atom_sf = single_atom_scatter([atoms_ID[a0]])
-            atoms_lookup[a0,:,:] = atom_sf.projected_potential(atoms_ID[a0], R_2D)
+            atoms_lookup[a0, :, :] = atom_sf.projected_potential(atoms_ID[a0], R_2D)
         atoms_lookup **= power_scale
 
-        # Thickness 
+        # Thickness
         if thickness_angstroms > 0:
             thickness_proj = thickness_angstroms / m_proj[2]
             vec_proj = thickness_proj / pixel_size_angstroms * m_proj[:2]
-            num_proj = (np.ceil(np.linalg.norm(vec_proj))+1).astype('int')
+            num_proj = (np.ceil(np.linalg.norm(vec_proj)) + 1).astype("int")
             num_proj = np.minimum(num_proj, max_num_proj)
 
-            x_proj = np.linspace(-0.5,0.5,num_proj)*vec_proj[0]
-            y_proj = np.linspace(-0.5,0.5,num_proj)*vec_proj[1]
+            x_proj = np.linspace(-0.5, 0.5, num_proj) * vec_proj[0]
+            y_proj = np.linspace(-0.5, 0.5, num_proj) * vec_proj[1]
 
         # initialize potential
         im_potential = np.zeros(im_size)
@@ -1145,8 +1142,8 @@ class Crystal:
 
             if thickness_angstroms > 0:
                 for a1 in range(num_proj):
-                    x_ind = np.round(x[a0]+x_proj[a1]).astype('int') + R_ind
-                    y_ind = np.round(y[a0]+y_proj[a1]).astype('int') + R_ind
+                    x_ind = np.round(x[a0] + x_proj[a1]).astype("int") + R_ind
+                    y_ind = np.round(y[a0] + y_proj[a1]).astype("int") + R_ind
                     x_sub = np.logical_and(
                         x_ind >= 0,
                         x_ind < im_size[0],
@@ -1156,11 +1153,13 @@ class Crystal:
                         y_ind < im_size[1],
                     )
 
-                    im_potential[x_ind[x_sub][:,None],y_ind[y_sub][None,:]] += atoms_lookup[ind][x_sub,:][:,y_sub]
-            
+                    im_potential[
+                        x_ind[x_sub][:, None], y_ind[y_sub][None, :]
+                    ] += atoms_lookup[ind][x_sub, :][:, y_sub]
+
             else:
-                x_ind = np.round(x[a0]).astype('int') + R_ind
-                y_ind = np.round(y[a0]).astype('int') + R_ind
+                x_ind = np.round(x[a0]).astype("int") + R_ind
+                y_ind = np.round(y[a0]).astype("int") + R_ind
                 x_sub = np.logical_and(
                     x_ind >= 0,
                     x_ind < im_size[0],
@@ -1170,7 +1169,9 @@ class Crystal:
                     y_ind < im_size[1],
                 )
 
-                im_potential[x_ind[x_sub][:,None],y_ind[y_sub][None,:]] += atoms_lookup[ind][x_sub,:][:,y_sub]
+                im_potential[
+                    x_ind[x_sub][:, None], y_ind[y_sub][None, :]
+                ] += atoms_lookup[ind][x_sub, :][:, y_sub]
 
         if thickness_angstroms > 0:
             im_potential /= num_proj
@@ -1181,26 +1182,28 @@ class Crystal:
             im_potential = gaussian_filter(
                 im_potential,
                 sigma_image_blur,
-                mode = 'nearest',
-                )
+                mode="nearest",
+            )
 
         if plot_result:
             # quick plotting of the result
             int_vals = np.sort(im_potential.ravel())
-            int_range = np.array((
-                int_vals[np.round(0.02*int_vals.size).astype('int')],
-                int_vals[np.round(0.98*int_vals.size).astype('int')],
-            ))
+            int_range = np.array(
+                (
+                    int_vals[np.round(0.02 * int_vals.size).astype("int")],
+                    int_vals[np.round(0.98 * int_vals.size).astype("int")],
+                )
+            )
 
-            fig,ax = plt.subplots(figsize = figsize)
+            fig, ax = plt.subplots(figsize=figsize)
             ax.imshow(
                 im_potential,
-                cmap = 'turbo',
-                vmin = int_range[0],
-                vmax = int_range[1],
-                )
+                cmap="turbo",
+                vmin=int_range[0],
+                vmax=int_range[1],
+            )
             ax.set_axis_off()
-            ax.set_aspect('equal')
+            ax.set_aspect("equal")
 
         return im_potential
 
