@@ -978,6 +978,7 @@ class Crystal:
         potential_radius_angstroms =  3.0,
         sigma_image_blur_angstroms = 0.1,
         thickness_angstroms = 100,
+        max_num_proj = 200,
         power_scale = 1.0,
         plot_result = False,
         figsize = (6,6),
@@ -1006,6 +1007,9 @@ class Crystal:
         thickness_angstroms: float
             Thickness of the sample in Angstroms. 
             Set thickness_thickness_angstroms = 0 to skip thickness projection.
+        max_num_proj: int
+            This value prevents this function from projecting a large number of unit
+            cells along the beam direction, which could be potentially quite slow.
         power_scale: float
             Power law scaling of potentials.  Set to 2.0 to approximate Z^2 images.
         plot_result: bool
@@ -1055,10 +1059,17 @@ class Crystal:
         lat_real = self.lat_real.copy() @ orientation_matrix
 
         # Determine unit cell axes to tile over, by selecting 2/3 with largest in-plane component
+        # inds_tile = np.argsort(
+        #     np.linalg.norm(lat_real[:,0:2],axis=1)
+        # )[1:3]
+        # m_tile = lat_real[inds_tile,:]
+
+        # Determine unit cell axes to tile over, by selecting 2/3 with smallest out-of-plane component
         inds_tile = np.argsort(
-            np.linalg.norm(lat_real[:,0:2],axis=1)
-        )[1:3]
+            np.abs(lat_real[:,2])
+        )[0:2]
         m_tile = lat_real[inds_tile,:]
+
         # Vector projected along optic axis
         m_proj = np.squeeze(np.delete(lat_real,inds_tile,axis=0))
 
@@ -1126,6 +1137,9 @@ class Crystal:
             thickness_proj = thickness_angstroms / m_proj[2]
             vec_proj = thickness_proj / pixel_size_angstroms * m_proj[:2]
             num_proj = (np.ceil(np.linalg.norm(vec_proj))+1).astype('int')
+
+            num_proj = np.minimum(num_proj, max_num_proj)
+
             x_proj = np.linspace(-0.5,0.5,num_proj)*vec_proj[0]
             y_proj = np.linspace(-0.5,0.5,num_proj)*vec_proj[1]
 
