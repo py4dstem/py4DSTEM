@@ -28,10 +28,10 @@ def orientation_plan(
     accel_voltage: float = 300e3,
     corr_kernel_size: float = 0.08,
     sigma_excitation_error: float = 0.02,
-    precession_angle_degrees = None,
+    precession_angle_degrees=None,
     power_radial: float = 1.0,
-    power_intensity: float = 0.25, 
-    power_intensity_experiment: float = 0.25,  
+    power_intensity: float = 0.25,
+    power_intensity_experiment: float = 0.25,
     calculate_correlation_array=True,
     tol_peak_delete=None,
     tol_distance: float = 0.01,
@@ -56,53 +56,53 @@ def orientation_plan(
         Setting to 'fiber' as a string will make a spherical cap around a given vector.
         Setting to 'auto' will use pymatgen to determine the point group symmetry
         of the structure and choose an appropriate zone_axis_range
-    angle_step_zone_axis (float): 
+    angle_step_zone_axis (float):
         Approximate angular step size for zone axis search [degrees]
-    angle_coarse_zone_axis (float): 
+    angle_coarse_zone_axis (float):
         Coarse step size for zone axis search [degrees]. Setting to
         None uses the same value as angle_step_zone_axis.
-    angle_refine_range (float):   
+    angle_refine_range (float):
         Range of angles to use for zone axis refinement. Setting to
         None uses same value as angle_coarse_zone_axis.
 
-    angle_step_in_plane (float):  
+    angle_step_in_plane (float):
         Approximate angular step size for in-plane rotation [degrees]
-    accel_voltage (float):        
+    accel_voltage (float):
         Accelerating voltage for electrons [Volts]
-    corr_kernel_size (float):      
-        Correlation kernel size length. The size of the overlap kernel between the 
+    corr_kernel_size (float):
+        Correlation kernel size length. The size of the overlap kernel between the
         measured Bragg peaks and diffraction library Bragg peaks. [1/Angstroms]
     sigma_excitation_error (float):
         The out of plane excitation error tolerance. [1/Angstroms]
     precession_angle_degrees (float)
         Tilt angle of illuminaiton cone in degrees for precession electron diffraction (PED).
-    
-    power_radial (float):          
+
+    power_radial (float):
         Power for scaling the correlation intensity as a function of the peak radius
-    power_intensity (float):       
+    power_intensity (float):
         Power for scaling the correlation intensity as a function of simulated peak intensity
-    power_intensity_experiment (float):       
+    power_intensity_experiment (float):
         Power for scaling the correlation intensity as a function of experimental peak intensity
-    calculate_correlation_array (bool):     
+    calculate_correlation_array (bool):
         Set to false to skip calculating the correlation array.
         This is useful when we only want the angular range / rotation matrices.
-    tol_peak_delete (float):      
+    tol_peak_delete (float):
         Distance to delete peaks for multiple matches.
         Default is kernel_size * 0.5
-    tol_distance (float):         
+    tol_distance (float):
         Distance tolerance for radial shell assignment [1/Angstroms]
-    fiber_axis (float):           
+    fiber_axis (float):
         (3,) vector specifying the fiber axis
-    fiber_angles (float):         
+    fiber_angles (float):
         (2,) vector specifying angle range from fiber axis, and in-plane angular range [degrees]
-    cartesian_directions (bool): 
+    cartesian_directions (bool):
         When set to true, all zone axes and projection directions
         are specified in Cartesian directions.
-    figsize (float):            
+    figsize (float):
         (2,) vector giving the figure size
-    CUDA (bool):             
+    CUDA (bool):
         Use CUDA for the Fourier operations.
-    progress_bar (bool):    
+    progress_bar (bool):
         If false no progress bar is displayed,
     """
 
@@ -120,8 +120,10 @@ def orientation_plan(
     if precession_angle_degrees is None:
         self.orientation_precession_angle_degrees = None
     else:
-        self.orientation_precession_angle_degrees = np.asarray(precession_angle_degrees) 
-        self.orientation_precession_angle = np.deg2rad(np.asarray(precession_angle_degrees))
+        self.orientation_precession_angle_degrees = np.asarray(precession_angle_degrees)
+        self.orientation_precession_angle = np.deg2rad(
+            np.asarray(precession_angle_degrees)
+        )
     if tol_peak_delete is None:
         self.orientation_tol_peak_delete = self.orientation_kernel_size * 0.5
     else:
@@ -775,36 +777,45 @@ def orientation_plan(
 
             # calculate intensity of spots
             if precession_angle_degrees is None:
-                Ig = np.exp(sg[keep]**2/(-2*sigma_excitation_error**2))
+                Ig = np.exp(sg[keep] ** 2 / (-2 * sigma_excitation_error**2))
             else:
                 # precession extension
-                prec = np.cos(np.linspace(0,2*np.pi,90,endpoint=False))
-                dsg = np.tan(self.orientation_precession_angle) * np.sum(g[:2,keep]**2,axis=0)
-                Ig = np.mean(np.exp((sg[keep,None] + dsg[:,None]*prec[None,:])**2 \
-                    / (-2*sigma_excitation_error**2)), axis = 1)
+                prec = np.cos(np.linspace(0, 2 * np.pi, 90, endpoint=False))
+                dsg = np.tan(self.orientation_precession_angle) * np.sum(
+                    g[:2, keep] ** 2, axis=0
+                )
+                Ig = np.mean(
+                    np.exp(
+                        (sg[keep, None] + dsg[:, None] * prec[None, :]) ** 2
+                        / (-2 * sigma_excitation_error**2)
+                    ),
+                    axis=1,
+                )
 
             # in-plane rotation angle
             phi = np.arctan2(g[1, keep], g[0, keep])
             phi_ind = phi / self.orientation_gamma[1]  # step size of annular bins
-            phi_floor = np.floor(phi_ind).astype('int')
+            phi_floor = np.floor(phi_ind).astype("int")
             dphi = phi_ind - phi_floor
 
             # write intensities into orientation plan slice
             radial_inds = self.orientation_shell_index[keep]
-            self.orientation_ref[a0, radial_inds, phi_floor] += \
-                (1-dphi) * \
-                np.power(self.struct_factors_int[keep] * Ig, power_intensity) * \
-                np.power(self.orientation_shell_radii[radial_inds], power_radial)
-            self.orientation_ref[a0, radial_inds, np.mod(phi_floor+1,self.orientation_in_plane_steps)] += \
-                dphi * \
-                np.power(self.struct_factors_int[keep] * Ig, power_intensity) * \
-                np.power(self.orientation_shell_radii[radial_inds], power_radial)
-
+            self.orientation_ref[a0, radial_inds, phi_floor] += (
+                (1 - dphi)
+                * np.power(self.struct_factors_int[keep] * Ig, power_intensity)
+                * np.power(self.orientation_shell_radii[radial_inds], power_radial)
+            )
+            self.orientation_ref[
+                a0, radial_inds, np.mod(phi_floor + 1, self.orientation_in_plane_steps)
+            ] += (
+                dphi
+                * np.power(self.struct_factors_int[keep] * Ig, power_intensity)
+                * np.power(self.orientation_shell_radii[radial_inds], power_radial)
+            )
 
             # # Loop over all peaks
             # for a1 in np.arange(self.g_vec_all.shape[1]):
             #     if keep[a1]:
-
 
             # for a1 in np.arange(self.g_vec_all.shape[1]):
             #     ind_radial = self.orientation_shell_index[a1]
@@ -1048,21 +1059,23 @@ def match_single_pattern(
                         self.orientation_power_intensity_experiment,
                     )
                     * np.exp(
-                        (dqr[sub, None] ** 2
-                        + (
-                            (
-                                np.mod(
-                                    self.orientation_gamma[None, :]
-                                    - qphi[sub, None]
-                                    + np.pi,
-                                    2 * np.pi,
+                        (
+                            dqr[sub, None] ** 2
+                            + (
+                                (
+                                    np.mod(
+                                        self.orientation_gamma[None, :]
+                                        - qphi[sub, None]
+                                        + np.pi,
+                                        2 * np.pi,
+                                    )
+                                    - np.pi
                                 )
-                                - np.pi
+                                * radius
                             )
-                            * radius
+                            ** 2
                         )
-                        ** 2)
-                        / (-2*self.orientation_kernel_size**2)
+                        / (-2 * self.orientation_kernel_size**2)
                     ),
                     axis=0,
                 )
@@ -1096,7 +1109,6 @@ def match_single_pattern(
                 #     axis=0,
                 # )
 
-
                 # im_polar[ind_radial, :] = np.sum(
                 #     np.power(radius, self.orientation_power_radial)
                 #     * np.power(
@@ -1126,7 +1138,6 @@ def match_single_pattern(
                 #     ),
                 #     axis=0,
                 # )
-
 
             # normalization
             # im_polar -= np.mean(im_polar)
@@ -1628,8 +1639,8 @@ def match_single_pattern(
             bragg_peaks_fit = self.generate_diffraction_pattern(
                 orientation,
                 ind_orientation=match_ind,
-                sigma_excitation_error = self.orientation_sigma_excitation_error,
-                precession_angle_degrees = self.orientation_precession_angle_degrees,
+                sigma_excitation_error=self.orientation_sigma_excitation_error,
+                precession_angle_degrees=self.orientation_precession_angle_degrees,
             )
 
             remove = np.zeros_like(qx, dtype="bool")

@@ -17,8 +17,8 @@ def fit_amorphous_ring(
     fit_all_images=False,
     maxfev=None,
     robust=False,
-    robust_steps = 3,
-    robust_thresh = 1.0,
+    robust_steps=3,
+    robust_thresh=1.0,
     verbose=False,
     plot_result=True,
     plot_log_scale=False,
@@ -229,7 +229,7 @@ def fit_amorphous_ring(
                 if maxfev is None:
                     coefs = curve_fit(
                         amorphous_model,
-                        basis[:,sub_fit],
+                        basis[:, sub_fit],
                         vals[sub_fit] / int_mean,
                         p0=coefs,
                         xtol=1e-8,
@@ -238,7 +238,7 @@ def fit_amorphous_ring(
                 else:
                     coefs = curve_fit(
                         amorphous_model,
-                        basis[:,sub_fit],
+                        basis[:, sub_fit],
                         vals[sub_fit] / int_mean,
                         p0=coefs,
                         xtol=1e-8,
@@ -249,7 +249,6 @@ def fit_amorphous_ring(
 
         # Scale intensity coefficients
         coefs[5:8] *= int_mean
-
 
         # Perform the fit on each individual diffration pattern
         if fit_all_images:

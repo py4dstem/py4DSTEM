@@ -714,7 +714,7 @@ class Crystal:
         tol_excitation_error_mult: float = 3,
         tol_intensity: float = 1e-5,
         k_max: Optional[float] = None,
-        precession_angle_degrees = None,
+        precession_angle_degrees=None,
         keep_qz=False,
         return_orientation_matrix=False,
     ):
@@ -730,49 +730,49 @@ class Crystal:
 
             orientation (Orientation)
                 an Orientation class object
-            ind_orientation                  
+            ind_orientation
                 If input is an Orientation class object with multiple orientations,
                 this input can be used to select a specific orientation.
 
-            orientation_matrix (3,3) numpy.array 
+            orientation_matrix (3,3) numpy.array
                 orientation matrix, where columns represent projection directions.
-            zone_axis_lattice (3,) numpy.array 
+            zone_axis_lattice (3,) numpy.array
                 projection direction in lattice indices
-            proj_x_lattice (3,) numpy.array 
+            proj_x_lattice (3,) numpy.array
                 x-axis direction in lattice indices
-            zone_axis_cartesian (3,) numpy.array 
+            zone_axis_cartesian (3,) numpy.array
                 cartesian projection direction
-            proj_x_cartesian (3,) numpy.array 
+            proj_x_cartesian (3,) numpy.array
                 cartesian projection direction
-            foil_normal                  
+            foil_normal
                 3 element foil normal - set to None to use zone_axis
-            proj_x_axis (3,) numpy.array 
+            proj_x_axis (3,) numpy.array
                 3 element vector defining image x axis (vertical)
-            accel_voltage (float)           
+            accel_voltage (float)
                 Accelerating voltage in Volts. If not specified,
                 we check to see if crystal already has voltage specified.
             sigma_excitation_error (float)
                 sigma value for envelope applied to s_g (excitation errors) in units of inverse Angstroms
             tol_excitation_error_mult (float)
                 tolerance in units of sigma for s_g inclusion
-            tol_intensity (numpy float)     
+            tol_intensity (numpy float)
                 tolerance in intensity units for inclusion of diffraction spots
-            k_max (float)                 
+            k_max (float)
                 Maximum scattering vector
             precession_angle_degrees (float)
                 Precession angle for library calculation.  Set to None for no precession.
-            keep_qz (bool)        
+            keep_qz (bool)
                 Flag to return out-of-plane diffraction vectors
             return_orientation_matrix (bool)
                 Return the orientation matrix
 
         Returns
         ----------
-        bragg_peaks (PointList)     
+        bragg_peaks (PointList)
             list of all Bragg peaks with fields [qx, qy, intensity, h, k, l]
-        orientation_matrix (array, optional)      
-            3x3 orientation matrix 
-        
+        orientation_matrix (array, optional)
+            3x3 orientation matrix
+
         """
 
         if not (hasattr(self, "wavelength") and hasattr(self, "accel_voltage")):
@@ -809,7 +809,7 @@ class Crystal:
         if foil_normal is None:
             sg = self.excitation_errors(
                 g,
-                precession_angle_degrees = precession_angle_degrees,
+                precession_angle_degrees=precession_angle_degrees,
             )
         else:
             foil_normal = (
@@ -818,8 +818,8 @@ class Crystal:
             ).ravel()
             sg = self.excitation_errors(
                 g,
-                foil_normal = foil_normal,
-                precession_angle_degrees = precession_angle_degrees,
+                foil_normal=foil_normal,
+                precession_angle_degrees=precession_angle_degrees,
             )
 
         # Threshold for inclusion in diffraction pattern
@@ -827,7 +827,7 @@ class Crystal:
         if precession_angle_degrees is None:
             keep = np.abs(sg) <= sg_max
         else:
-            keep = np.min(np.abs(sg),axis=1) <= sg_max
+            keep = np.min(np.abs(sg), axis=1) <= sg_max
 
         # Maximum scattering angle cutoff
         if k_max is not None:
@@ -843,10 +843,8 @@ class Crystal:
             )
         else:
             g_int = self.struct_factors_int[keep] * np.mean(
-                np.exp(
-                    (sg[keep] ** 2) / (-2 * sigma_excitation_error**2)
-                ),
-                axis = 1,
+                np.exp((sg[keep] ** 2) / (-2 * sigma_excitation_error**2)),
+                axis=1,
             )
         hkl = self.hkl[:, keep]
 
@@ -1394,28 +1392,30 @@ class Crystal:
             t = np.deg2rad(precession_angle_degrees)
             p = np.linspace(
                 0,
-                2.0*np.pi,
+                2.0 * np.pi,
                 precession_steps,
-                endpoint = False,
+                endpoint=False,
             )
             if foil_normal is None:
-                foil_normal = np.array((0.0,0.0,-1.0))
+                foil_normal = np.array((0.0, 0.0, -1.0))
 
             k = np.reshape(
-                (-1/self.wavelength) * np.vstack((
-                    np.sin(t)*np.cos(p),
-                    np.sin(t)*np.sin(p),
-                    np.cos(t)*np.ones(p.size),
-                )),
-                (3,1,p.size),
+                (-1 / self.wavelength)
+                * np.vstack(
+                    (
+                        np.sin(t) * np.cos(p),
+                        np.sin(t) * np.sin(p),
+                        np.cos(t) * np.ones(p.size),
+                    )
+                ),
+                (3, 1, p.size),
             )
 
-            term1 = np.sum( (g[:,:,None] + k) * foil_normal[:,None,None], axis=0)
-            term2 = np.sum( (g[:,:,None] + 2*k) * g[:,:,None], axis=0)
+            term1 = np.sum((g[:, :, None] + k) * foil_normal[:, None, None], axis=0)
+            term2 = np.sum((g[:, :, None] + 2 * k) * g[:, :, None], axis=0)
             sg = np.sqrt(term1**2 - term2) - term1
 
             return sg
-
 
     def calculate_bragg_peak_histogram(
         self,
