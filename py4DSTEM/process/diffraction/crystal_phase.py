@@ -747,13 +747,10 @@ class Crystal_Phase:
         pointlistarray: PointListArray,
         corr_kernel_size = 0.04,
         sigma_excitation_error = 0.02,
-
         precession_angle_degrees = None,
         power_intensity: float = 0.25, 
         power_intensity_experiment: float = 0.25,  
         k_max = None,
-        # power_experiment = 0.25,
-        # power_calculated = 0.25,
         max_number_patterns = 2,
         single_phase = False,
         allow_strain = True,
@@ -765,6 +762,44 @@ class Crystal_Phase:
         ):
         """
         Quantify phase of all diffraction patterns.
+
+        Parameters
+        ----------
+        pointlistarray: (PointListArray)
+            Full array of all calibrated experimental bragg peaks, with shape = (num_x,num_y)
+        corr_kernel_size: (float)     
+            Correlation kernel size length. The size of the overlap kernel between the 
+            measured Bragg peaks and diffraction library Bragg peaks. [1/Angstroms]
+        sigma_excitation_error: (float)
+            The out of plane excitation error tolerance. [1/Angstroms]
+        precession_angle_degrees: (float)
+            Tilt angle of illuminaiton cone in degrees for precession electron diffraction (PED).
+        power_intensity: (float)       
+            Power for scaling the correlation intensity as a function of simulated peak intensity.
+        power_intensity_experiment: (float):      
+            Power for scaling the correlation intensity as a function of experimental peak intensity.
+        k_max: (float)
+            Max k values included in fits, for both x and y directions.
+        max_number_patterns: int
+            Max number of orientations which can be included in a match.
+        single_phase: bool
+            Set to true to force result to output only the best-fit phase (minimum intensity residual).
+        allow_strain: bool,
+            Allow the simulated diffraction patterns to be distorted to improve the matches.
+        strain_iterations: int
+            Number of pattern position refinement iterations.
+        strain_max: float
+            Maximum strain fraction allowed - this value should be low, typically a few percent (~0.02).
+        include_false_positives: bool
+            Penalize patterns which generate false positive peaks.
+        weight_false_positives: float
+            Weight strength of false positive peaks.
+        progressbar: bool
+            Display progress.
+
+        Returns
+        -----------
+
         """
 
         # init results arrays
@@ -836,6 +871,33 @@ class Crystal_Phase:
         ):
         """
         Plot the individual phase weight maps and residuals.
+
+        Parameters
+        ----------
+        weight_range: (float, float)
+            Plotting weight range.
+        weight_normalize: bool
+            Normalize weights before plotting.
+        total_intensity_normalize: bool
+            Normalize the total intensity.
+        cmap: matplotlib.cm.cmap
+            Colormap to use for plots.
+        show_ticks: bool
+            Show ticks on plots.
+        show_axes: bool
+            Show axes.
+        layout: int
+            Layout type for figures.
+        figsize: (float,float)
+            Size of figure panel.
+        returnfig: bool
+            Return the figure and axes handles.
+
+        Returns
+        ----------
+        fig,ax: (optional)
+            Figure and axes handles.
+
         """
 
         # Normalization if required to total DF peak intensity
@@ -931,6 +993,45 @@ class Crystal_Phase:
         ):
         """
         Plot the individual phase weight maps and residuals.
+
+        Parameters
+        ----------
+        weight_threshold: float
+            Threshold for showing each phase.
+        weight_normalize: bool
+            Normalize weights before plotting.
+        total_intensity_normalize: bool
+            Normalize the total intensity.
+        plot_combine: bool
+            Combine all figures into a single plot.
+        crystal_inds_plot: (tuple of ints)
+            Which crystals to plot phase maps for.
+        phase_colors: np.array
+            (Nx3) shaped array giving the colors for each phase
+        show_ticks: bool
+            Show ticks on plots.
+        show_axes: bool
+            Show axes.
+        layout: int
+            Layout type for figures.
+        figsize: (float,float)
+            Size of figure panel.
+        return_phase_estimate: bool
+            Return the phase estimate array.
+        return_rgb_images: bool
+            Return the rgb images.
+        returnfig: bool
+            Return the figure and axes handles.
+
+        Returns
+        ----------
+        im_all: (np.array, optional)
+            images showing phase maps.
+        im_rgb, im_rgb_all: (np.array, optional)
+            rgb colored output images, possibly combined
+        fig,ax: (optional)
+            Figure and axes handles.
+
         """
 
         if phase_colors is None:
@@ -1065,10 +1166,40 @@ class Crystal_Phase:
         legend_add = True,
         legend_fraction = 0.2,
         print_fractions = False,
+        returnfig = True,
         ):
         """
         Plot a combined figure showing the primary phase at each probe position.
         Mask by the reliability index (best match minus 2nd best match).
+
+        Parameters
+        ----------
+        use_correlation_scores: bool
+            Set to True to use correlation scores instead of reliabiltiy from intensity residuals.
+        reliability_range: (float, float)
+            Plotting intensity range
+        sigma: float
+            Smoothing in units of probe position.
+        phase_colors: np.array
+            (N,3) shaped array giving colors of all phases
+        ticks: bool
+            Show ticks on plots.
+        figsize: (float,float)
+            Size of output figure
+        legend_add: bool
+            Add legend to plot
+        legend_fraction: float
+            Fractional size of legend in plot.
+        print_fractions: bool
+            Print the estimated fraction of all phases.
+        returnfig: bool
+            Return the figure and axes handles.
+
+        Returns
+        ----------
+        fig,ax: (optional)
+            Figure and axes handles.
+
         """
         
         if phase_colors is None:
@@ -1212,8 +1343,8 @@ class Crystal_Phase:
             ax.set_yticks([])
 
 
-
-        return fig,ax
+        if returnfig:
+            return fig,ax
 
 
     # def plot_all_phase_maps(self, map_scale_values=None, index=0):
