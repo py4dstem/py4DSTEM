@@ -57,8 +57,6 @@ class single_atom_scatter(object):
         me = 9.10938356e-31
         # Electron charge in Coulomb
         qe = 1.60217662e-19
-        # Electron charge in V-Angstroms
-        # qe = 14.4
         # Permittivity of vacuum
         eps_0 = 8.85418782e-12
         # Bohr's constant
@@ -66,21 +64,16 @@ class single_atom_scatter(object):
 
         fe = np.zeros_like(R)
         for i in range(5):
+            # fe += ai[i] * (2 + bi[i] * gsq) / (1 + bi[i] * gsq) ** 2
             pre = 2 * np.pi / bi[i] ** 0.5
             fe += (ai[i] / bi[i] ** 1.5) * (kn(0, pre * R) + R * kn(1, pre * R))
 
-        # Scale output units
-        # kappa = (4*np.pi*eps_0) / (2*np.pi*a_0*qe)
-        # fe *= 2*np.pi**2 / kappa
-        # # # kappa = (4*np.pi*eps_0) / (2*np.pi*a_0*me)
-
-        # # kappa = (4*np.pi*eps_0) / (2*np.pi*a_0*me)
-        # # return fe * 2 * np.pi**2  # / kappa
-        # # if units == "VA":
-        # return h**2 / (2 * np.pi * me * qe) * 1e18 * fe
-        # # elif units == "A":
-        # # return fe * 2 * np.pi**2 / kappa
-        return fe
+        # kappa = (4*np.pi*eps_0) / (2*np.pi*a_0*me)
+        return fe * 2 * np.pi**2  # / kappa
+        # if units == "VA":
+        #     return h**2 / (2 * np.pi * me * qe) * 1e18 * fe
+        # elif units == "A":
+        #     return fe * 2 * np.pi**2 / kappa
 
     def get_scattering_factor(
         self, elements=None, composition=None, q_coords=None, units=None
