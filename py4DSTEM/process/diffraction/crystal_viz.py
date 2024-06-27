@@ -393,7 +393,7 @@ def plot_scattering_intensity(
     k_step=0.001,
     k_broadening=0.0,
     k_power_scale=0.0,
-    int_power_scale=0.5,
+    int_power_scale=1.0,
     int_scale=1.0,
     remove_origin=True,
     bragg_peaks=None,
@@ -848,6 +848,7 @@ def plot_orientation_plan(
     bragg_peaks = self.generate_diffraction_pattern(
         orientation_matrix=self.orientation_rotation_matrices[index_plot, :],
         sigma_excitation_error=self.orientation_kernel_size / 3,
+        precession_angle_degrees=self.orientation_precession_angle_degrees,
     )
 
     plot_diffraction_pattern(
@@ -947,12 +948,24 @@ def plot_diffraction_pattern(
     scale_markers: float = 500,
     scale_markers_compare: Optional[float] = None,
     power_markers: float = 1,
+    power_markers_compare: float = 1,
+    color=(0.0, 0.0, 0.0),
+    color_compare=None,
+    facecolor=None,
+    facecolor_compare=(0.0, 0.7, 1.0),
+    edgecolor=None,
+    edgecolor_compare=None,
+    linewidth=1,
+    linewidth_compare=1,
+    marker="+",
+    marker_compare="o",
     plot_range_kx_ky: Optional[Union[list, tuple, np.ndarray]] = None,
     add_labels: bool = True,
     shift_labels: float = 0.08,
     shift_marker: float = 0.005,
     min_marker_size: float = 1e-6,
     max_marker_size: float = 1000,
+    show_axes: bool = True,
     figsize: Union[list, tuple, np.ndarray] = (12, 6),
     returnfig: bool = False,
     input_fig_handle=None,
@@ -988,9 +1001,7 @@ def plot_diffraction_pattern(
     if power_markers == 2:
         marker_size = scale_markers * bragg_peaks.data["intensity"]
     else:
-        marker_size = scale_markers * (
-            bragg_peaks.data["intensity"] ** (power_markers / 2)
-        )
+        marker_size = scale_markers * (bragg_peaks.data["intensity"] ** power_markers)
 
     # Apply marker size limits to primary plot
     marker_size = np.clip(marker_size, min_marker_size, max_marker_size)
@@ -1012,7 +1023,7 @@ def plot_diffraction_pattern(
         else:
             marker_size_compare = np.clip(
                 scale_markers_compare
-                * (bragg_peaks_compare.data["intensity"] ** (power_markers / 2)),
+                * (bragg_peaks_compare.data["intensity"] ** power_markers),
                 min_marker_size,
                 max_marker_size,
             )
@@ -1021,19 +1032,29 @@ def plot_diffraction_pattern(
             bragg_peaks_compare.data["qy"],
             bragg_peaks_compare.data["qx"],
             s=marker_size_compare,
-            marker="o",
-            facecolor=[0.0, 0.7, 1.0],
+            marker=marker_compare,
+            facecolor=facecolor_compare,
+            edgecolor=edgecolor_compare,
+            color=color_compare,
+            linewidth=linewidth_compare,
         )
         ax.scatter(
             bragg_peaks.data["qy"],
             bragg_peaks.data["qx"],
             s=marker_size,
-            marker="+",
-            facecolor="k",
+            marker=marker,
+            facecolor=facecolor,
+            edgecolor=edgecolor,
+            color=color,
+            linewidth=linewidth,
         )
 
-    ax.set_xlabel("$q_y$ [Å$^{-1}$]")
-    ax.set_ylabel("$q_x$ [Å$^{-1}$]")
+    if show_axes:
+        ax.set_xlabel("$q_y$ [Å$^{-1}$]")
+        ax.set_ylabel("$q_x$ [Å$^{-1}$]")
+    else:
+        ax.get_xaxis().set_visible(False)
+        ax.get_yaxis().set_visible(False)
 
     if plot_range_kx_ky is not None:
         plot_range_kx_ky = np.array(plot_range_kx_ky)
