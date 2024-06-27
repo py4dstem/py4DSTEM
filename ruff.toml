@@ -1,0 +1,12 @@
+[lint]
+# select = []
+
+ignore = [
+    "E501", # line-too-long
+]
+
+exclude = ["test/**/*.py"] # ignore test files
+
+[lint.per-file-ignores]
+"**/__init__.py" = ["F401", "E402"] # unused import, import not at top of file
+# "./test/**/*.py" = ["E501", "F401", "E402"] # line-too-long, unused import, import not at top of file
