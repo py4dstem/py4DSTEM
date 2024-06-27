@@ -1058,12 +1058,6 @@ class Crystal:
         # Rotate unit cell into projection direction
         lat_real = self.lat_real.copy() @ orientation_matrix
 
-        # Determine unit cell axes to tile over, by selecting 2/3 with largest in-plane component
-        # inds_tile = np.argsort(
-        #     np.linalg.norm(lat_real[:,0:2],axis=1)
-        # )[1:3]
-        # m_tile = lat_real[inds_tile,:]
-
         # Determine unit cell axes to tile over, by selecting 2/3 with smallest out-of-plane component
         inds_tile = np.argsort(
             np.abs(lat_real[:,2])
@@ -1137,7 +1131,6 @@ class Crystal:
             thickness_proj = thickness_angstroms / m_proj[2]
             vec_proj = thickness_proj / pixel_size_angstroms * m_proj[:2]
             num_proj = (np.ceil(np.linalg.norm(vec_proj))+1).astype('int')
-
             num_proj = np.minimum(num_proj, max_num_proj)
 
             x_proj = np.linspace(-0.5,0.5,num_proj)*vec_proj[0]
