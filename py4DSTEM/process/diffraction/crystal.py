@@ -719,7 +719,11 @@ class Crystal:
         return_orientation_matrix=False,
     ):
         """
-        Generate a single diffraction pattern, return all peaks as a pointlist.
+        Generate a single diffraction pattern, return all peaks as a pointlist. This function performs a
+        kinematical calculation, with optional precession of the beam.
+
+        TODO - switch from numerical precession to analytic (requires geometry projection).
+        TODO - verify projection geometry for 2D material diffraction.
 
         Parameters
         ----------
@@ -740,7 +744,6 @@ class Crystal:
                 cartesian projection direction
             proj_x_cartesian (3,) numpy.array 
                 cartesian projection direction
-
             foil_normal                  
                 3 element foil normal - set to None to use zone_axis
             proj_x_axis (3,) numpy.array 
@@ -748,7 +751,6 @@ class Crystal:
             accel_voltage (float)           
                 Accelerating voltage in Volts. If not specified,
                 we check to see if crystal already has voltage specified.
-            
             sigma_excitation_error (float)
                 sigma value for envelope applied to s_g (excitation errors) in units of inverse Angstroms
             tol_excitation_error_mult (float)
@@ -768,8 +770,8 @@ class Crystal:
         ----------
         bragg_peaks (PointList)     
             list of all Bragg peaks with fields [qx, qy, intensity, h, k, l]
-        orientation_matrix (array)      
-            3x3 orientation matrix (optional)
+        orientation_matrix (array, optional)      
+            3x3 orientation matrix 
         
         """
 

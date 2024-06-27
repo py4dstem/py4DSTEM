@@ -106,9 +106,15 @@ class Crystal_Phase:
         """
         Quantify the phase for a single diffraction pattern.
 
+        TODO - determine the difference between false positive peaks and unmatched peaks (if any).
+
         Parameters
         ----------
         
+        pointlistarray: (PointListArray)
+            Full array of all calibrated experimental bragg peaks, with shape = (num_x,num_y)
+        xy_position: (int,int)
+            The (x,y) or (row,column) position to be quantified.
         corr_kernel_size: (float)     
             Correlation kernel size length. The size of the overlap kernel between the 
             measured Bragg peaks and diffraction library Bragg peaks. [1/Angstroms]
@@ -116,18 +122,72 @@ class Crystal_Phase:
             The out of plane excitation error tolerance. [1/Angstroms]
         precession_angle_degrees: (float)
             Tilt angle of illuminaiton cone in degrees for precession electron diffraction (PED).
-        
-        power_radial: (float)          
-            Power for scaling the correlation intensity as a function of the peak radius
         power_intensity: (float)       
-            Power for scaling the correlation intensity as a function of simulated peak intensity
+            Power for scaling the correlation intensity as a function of simulated peak intensity.
         power_intensity_experiment: (float):      
-            Power for scaling the correlation intensity as a function of experimental peak intensity
+            Power for scaling the correlation intensity as a function of experimental peak intensity.
         k_max: (float)
             Max k values included in fits, for both x and y directions.
+        max_number_patterns: int
+            Max number of orientations which can be included in a match.
+        single_phase: bool
+            Set to true to force result to output only the best-fit phase (minimum intensity residual).
+        allow_strain: bool,
+            Allow the simulated diffraction patterns to be distorted to improve the matches.
+        strain_iterations: int
+            Number of pattern position refinement iterations.
+        strain_max: float
+            Maximum strain fraction allowed - this value should be low, typically a few percent (~0.02).
+        include_false_positives: bool
+            Penalize patterns which generate false positive peaks.
+        weight_false_positives: float
+            Weight strength of false positive peaks.
+        weight_unmatched_peaks: float
+            Penalize unmatched peaks.
+        plot_result: bool
+            Plot the resulting fit.
+        plot_only_nonzero_phases: bool
+            Only plot phases with phase weights > 0.
+        plot_unmatched_peaks: bool
+            Plot the false postive peaks.
+        plot_correlation_radius: bool
+            In the visualization, draw the correlation radius.
+        scale_markers_experiment: float
+            Size of experimental diffraction peak markers.
+        scale_markers_calculated: float
+            Size of the calculate diffraction peak markers.
+        crystal_inds_plot: tuple of ints
+            Which crystal index / indices to plot.
+        phase_colors: np.array
+            Color of each phase, should have shape = (num_phases, 3)
+        figsize: (float,float)
+            Size of the output figure.
+        verbose: bool
+            Print the resulting fit weights to console.
+        returnfig: bool
+            Return the figure and axis handles for the plot.
+
+
+        Returns
+        -------
+        phase_weights: (np.array)
+            Estimated relative fraction of each phase for all probe positions. 
+            shape = (num_x, num_y, num_orientations)
+            where num_orientations is the total number of all orientations for all phases.
+        phase_residual: (np.array)
+            Residual intensity not represented by the best fit phase weighting for all probe positions.
+            shape = (num_x, num_y)
+        phase_reliability: (np.array)
+            Estimated reliability of match(es) for all probe positions.
+            Typically calculated as the best fit score minus the second best fit.
+            shape = (num_x, num_y)
+        int_total: (np.array)
+            Sum of experimental peak intensities for all probe positions.
+            shape = (num_x, num_y)
+        fig,ax: (optional)
+            matplotlib figure and axis handles
 
         """
-
 
         # tolerance
         tol2 = 1e-6
