@@ -1,3 +1,5 @@
+required-version = ">=0.5.0"
+target-version = "py39"
 [lint]
 # select = [
 #     # "F402", # module level import not at top of file
@@ -30,6 +32,7 @@ ignore = [
     "E402", # module level import not at top of file
     "E713", # test for membership should be 'not in'
     "E743", # ambiguous function name
+    "E712", # true-false-comparison
 
 ]
 
