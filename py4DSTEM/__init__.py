@@ -91,6 +91,3 @@ from py4DSTEM.utils.configuration_checker import check_config
 from os.path import dirname, join
 
 _TESTPATH = join(dirname(__file__), "../test/unit_test_data")
-
-# adding a dumb error to test the CI
-x = y + 10
