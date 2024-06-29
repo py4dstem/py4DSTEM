@@ -6,8 +6,6 @@ repos:
       - id: black
         language_version: python3.9
   - repo: https://github.com/astral-sh/ruff-pre-commit
-  # Ruff version.
-  rev: v0.5.0
-  hooks:
-    # Run the linter.
-    - id: ruff
+    rev: v0.5.0
+    hooks:
+      - id: ruff
