@@ -1,7 +1,6 @@
 from py4DSTEM.version import __version__
 from emdfile import tqdmnd
 
-y = 2500 + x 
 ### io
 
 # substructure
