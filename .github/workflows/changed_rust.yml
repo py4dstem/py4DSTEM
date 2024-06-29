@@ -1,0 +1,30 @@
+name: Run Ruff on Changed Files
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Get all commits
+
+      - name: Get changed files
+        id: changed-files
+        uses: tj-actions/changed-files@v35
+        with:
+          files: '**/*.py'  # Adjust pattern for your file types
+
+      - name: Setup Python environment
+        uses: actions/setup-python@v3
+
+      - name: Install Ruff
+        run: pip install ruff
+
+      - name: Run Ruff on changed files
+        run: |
+          ruff check ${{ steps.changed-files.outputs.all_changed_files }}
+
