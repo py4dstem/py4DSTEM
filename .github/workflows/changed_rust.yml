@@ -25,6 +25,11 @@ jobs:
         run: pip install ruff
 
       - name: Run Ruff on changed files
+        env:
+            ALL_CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
         run: |
-          ruff check ${{ steps.changed-files.outputs.all_changed_files }}
+            for file in ${ALL_CHANGED_FILES}; do
+            echo "$file was changed"
+            done
+            ruff check ${ALL_CHANGED_FILES}
 
