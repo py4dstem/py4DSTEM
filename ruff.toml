@@ -17,22 +17,22 @@ target-version = "py39"
 ignore = [
     "E501", # line-too-long
     "F401", # unspecified import
-    "E721", # do not compare types, use 'isinstance()'
-    "F841", # local variable is assigned to but never used
-    "E741", # ambiguous variable name
-    "F541", # f-string is missing placeholders
-    "E731", # do not assign a lambda expression, use a def
-    "E714", # test for object identity should be 'is not'
-    "F811", # redefinition of unused name
-    "E722", # do not use bare except
-    "F405", # name may be undefined, or defined from star imports
-    "F523", # string-dot-format-extra-positional-argument
-    "F403", # unable to detect undefined names
-    "F524", # string-dot-format-missing-arguments
-    "E402", # module level import not at top of file
-    "E713", # test for membership should be 'not in'
-    "E743", # ambiguous function name
-    "E712", # true-false-comparison
+    # "E721", # do not compare types, use 'isinstance()'
+    # "F841", # local variable is assigned to but never used
+    # "E741", # ambiguous variable name
+    # "F541", # f-string is missing placeholders
+    # "E731", # do not assign a lambda expression, use a def
+    # "E714", # test for object identity should be 'is not'
+    # "F811", # redefinition of unused name
+    # "E722", # do not use bare except
+    # "F405", # name may be undefined, or defined from star imports
+    # "F523", # string-dot-format-extra-positional-argument
+    # "F403", # unable to detect undefined names
+    # "F524", # string-dot-format-missing-arguments
+    # "E402", # module level import not at top of file
+    # "E713", # test for membership should be 'not in'
+    # "E743", # ambiguous function name
+    # "E712", # true-false-comparison
 
 ]
 
