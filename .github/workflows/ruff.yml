@@ -1,4 +1,4 @@
-name: Run Ruff on Changed Files
+name: Ruff Check
 
 on:
   push:
