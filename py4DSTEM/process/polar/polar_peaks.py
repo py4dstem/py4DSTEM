@@ -35,11 +35,14 @@ def find_peaks_single_pattern(
     remove_masked_peaks=False,
     scale_sigma_annular=0.5,
     scale_sigma_radial=0.25,
+    refine_subpixel = True,
     return_background=False,
     plot_result=True,
+    plot_smoothed_image=False,
     plot_power_scale=1.0,
     plot_scale_size=10.0,
     figsize=(12, 6),
+    figax = None,
     returnfig=False,
     **kwargs
 ):
@@ -82,16 +85,22 @@ def find_peaks_single_pattern(
         Scaling of the estimated annular standard deviation.
     scale_sigma_radial: float
         Scaling of the estimated radial standard deviation.
+    refine_subpixel: bool
+        Use parabolic fit to find subpixel positions.
     return_background: bool
         Return the background signal.
-    plot_result:
-        Plot the detector peaks
+    plot_result: bool
+        Plot the detected peaks.
+    plot_smoothed_image: bool
+        Plot the image after smoothing is applied.
     plot_power_scale: float
         Image intensity power law scaling.
     plot_scale_size: float
         Marker scaling in the plot.
     figsize: 2-tuple
         Size of the result plotting figure.
+    fig,ax: 2-tuple
+        Matplotlib figure and axes handles to plot result in.
     returnfig: bool
         Return the figure and axes handles.
 
@@ -160,6 +169,8 @@ def find_peaks_single_pattern(
     im_polar_sm[sub] /= im_mask[sub]
 
     # Find local maxima
+    # with warnings.catch_warnings():
+    #     warnings.simplefilter("ignore")
     peaks = peak_local_max(
         im_polar_sm,
         num_peaks=num_peaks_max,
@@ -246,6 +257,20 @@ def find_peaks_single_pattern(
             axis=0,
         )
 
+    # If needed, refine peaks using parabolic fit
+    peaks = peaks.astype('float')
+    if refine_subpixel:
+        for a0 in range(peaks.shape[0]):
+            if peaks[a0,1] > 0 and peaks[a0,1] < im_polar.shape[1]-1:
+                im_crop = im_polar_sm[
+                    (peaks[a0,0] + np.arange(-1,2)).astype('int')[:,None] % im_polar.shape[0],
+                    (peaks[a0,1] + np.arange(-1,2)).astype('int'),
+                ]
+                dx = (im_crop[2,1] - im_crop[0,1]) / (4*im_crop[1,1] - 2*im_crop[2,1] - 2*im_crop[0,1])
+                dy = (im_crop[1,2] - im_crop[1,0]) / (4*im_crop[1,1] - 2*im_crop[1,2] - 2*im_crop[1,0])
+                peaks[a0,0] += dx
+                peaks[a0,1] += dy
+
     # combine peaks into one array
     peaks_all = np.column_stack((peaks, peaks_int, peaks_prom))
 
@@ -302,19 +327,34 @@ def find_peaks_single_pattern(
 
     if plot_result:
         # init
-        im_plot = im_polar.copy()
+        if plot_smoothed_image:
+            im_plot = im_polar_sm.copy()
+        else:
+            im_plot = im_polar.copy()
         im_plot = np.maximum(im_plot, 0) ** plot_power_scale
 
         t = np.linspace(0, 2 * np.pi, 180 + 1)
         ct = np.cos(t)
         st = np.sin(t)
 
-        fig, ax = plt.subplots(figsize=figsize)
+        if figax is None:
+            fig, ax = plt.subplots(figsize=figsize)
+        else:
+            fig = figax[0]
+            ax = figax[1]
 
         cmap = kwargs.pop("cmap", "gray")
         vmax = kwargs.pop("vmax", 1)
         vmin = kwargs.pop("vmin", 0)
-        show(im_plot, figax=(fig, ax), cmap=cmap, vmax=vmax, vmin=vmin, **kwargs)
+        show(
+            im_plot, 
+            figax=(fig, ax), 
+            cmap=cmap, 
+            vmax=vmax, 
+            vmin=vmin, 
+            **kwargs,
+        )
+        ax.set_aspect('auto')
 
         # peaks
         ax.scatter(
@@ -723,6 +763,10 @@ def plot_radial_peaks(
         color="r",
         linewidth=2,
     )
+    ax.yaxis.get_ticklocs(minor=True)
+    ax.minorticks_on()
+    ax.yaxis.set_tick_params(which='minor',left=False)
+    ax.xaxis.grid(True)
     ax.set_xlim((q_bins[0], q_bins[-1]))
     if q_pixel_units:
         ax.set_xlabel(
@@ -740,6 +784,11 @@ def plot_radial_peaks(
     )
     if not label_y_axis:
         ax.tick_params(left=False, labelleft=False)
+    # ax.tick_params(
+    #     axis='y',
+    #     which='minor',
+    #     bottom=True,
+    # )
 
     if returnfig:
         return fig, ax
