@@ -107,6 +107,7 @@ class PolarDatacube:
         background_pca,
         cluster_grains,
         plot_grain_clusters,
+        plot_grain_clusters_diameter,
     )
 
     from py4DSTEM.process.polar.polar_peaks import (

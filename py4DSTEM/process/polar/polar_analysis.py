@@ -1185,6 +1185,7 @@ def plot_grain_clusters(
     area_max=None,
     area_step=1,
     weight_intensity=False,
+    weight_area=True,
     pixel_area=1.0,
     pixel_area_units="px^2",
     figsize=(8, 6),
@@ -1203,6 +1204,8 @@ def plot_grain_clusters(
         Step size of the histogram bin
     weight_intensity: bool
         Weight histogram by the peak intensity.
+    weight_area: bool
+        Weight histogram by the area of each bin.
     pixel_area: float
         Size of pixel area unit square
     pixel_area_units: string
@@ -1243,15 +1246,119 @@ def plot_grain_clusters(
 
     # plotting
     fig, ax = plt.subplots(figsize=figsize)
-    ax.bar(
-        area * pixel_area,
-        hist,
-        width=0.8 * pixel_area * area_step,
-    )
+    if weight_area:
+        ax.bar(
+            area * pixel_area,
+            hist * area,
+            width=0.8 * pixel_area * area_step,
+        )
+    else:
+         ax.bar(
+            area * pixel_area,
+            hist,
+            width=0.8 * pixel_area * area_step,
+        )       
     ax.set_xlim((0, area_max * pixel_area))
-    ax.set_xlabel("Grain Area [" + pixel_area_units + "]")
+    ax.set_xlabel("Grain Area (" + pixel_area_units + ")")
     if weight_intensity:
-        ax.set_ylabel("Total Signal [arb. units]")
+        ax.set_ylabel("Total Signal (arb. units)")
+    elif weight_area:
+        ax.set_ylabel("Area-Weighted Signal (arb. units)")
+    else:
+        ax.set_ylabel("Number of Grains")
+
+    if returnfig:
+        return fig, ax
+
+
+def plot_grain_clusters_diameter(
+    self,
+    diameter_min=None,
+    diameter_max=None,
+    diameter_step=1,
+    weight_intensity=False,
+    weight_diameter=True,
+    pixel_area=1.0,
+    pixel_area_units="px",
+    figsize=(8, 6),
+    returnfig=False,
+):
+    """
+    Plot the cluster sizes
+
+    Parameters
+    --------
+    diameter_min: int (optional)
+        Min area bin in pixels
+    diameter_max: int (optional)
+        Max area bin in pixels
+    diameter_step: int (optional)
+        Step size of the histogram bin
+    weight_intensity: bool
+        Weight histogram by the peak intensity.
+    weight_diameter: bool
+        Weight histogram by the area of each bin.
+    pixel_area: float
+        Size of pixel area unit square
+    pixel_area_units: string
+        Units of the pixel area
+    figsize: tuple
+        Size of the figure panel
+    returnfig: bool
+        Setting this to true returns the figure and axis handles
+
+    Returns
+    --------
+    fig, ax (optional)
+        Figure and axes handles
+
+    """
+
+    cluster_diam = 0.5 * np.sqrt(self.cluster_sizes.astype('float') / np.pi)
+
+
+    if diameter_max is None:
+        diameter_max = np.max(cluster_diam)
+    diameter = np.arange(0, diameter_max, diameter_step)
+    if diameter_min is None:
+        sub = cluster_diam < diameter_max
+    else:
+        sub = np.logical_and(
+            cluster_diam >= diameter_min,
+            cluster_diam < diameter_max,
+        )
+    if weight_intensity:
+        hist = np.bincount(
+            np.round(cluster_diam[sub] / diameter_step).astype('int'),
+            weights=self.cluster_sig[sub],
+            minlength=diameter.shape[0],
+        )
+    else:
+        hist = np.bincount(
+            np.round(cluster_diam[sub] / diameter_step).astype('int'),
+            minlength=diameter.shape[0],
+        )
+
+    # plotting
+    fig, ax = plt.subplots(figsize=figsize)
+    if weight_diameter:
+        ax.bar(
+            diameter * pixel_area,
+            hist * diameter,
+            width=0.8 * pixel_area * diameter_step,
+        )
+    else:
+         ax.bar(
+            diameter * pixel_area,
+            hist,
+            width=0.8 * pixel_area * diameter_step,
+        )       
+    ax.set_xlim((0, diameter_max * pixel_area))
+    ax.set_xlabel("Domain Size (" + pixel_area_units + ")")
+    if weight_intensity:
+        ax.set_ylabel("Total Signal (arb. units)")
+    # elif weight_area:
+    #     ax.set_ylabel("Area-Weighted Signal (arb. units)")
     else:
         ax.set_ylabel("Number of Grains")
 
