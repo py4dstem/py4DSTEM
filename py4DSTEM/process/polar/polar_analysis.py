@@ -1253,8 +1253,8 @@ def plot_clusters(
     )
 
     # make plotting image
-    for a0, ry in tqdmnd(
-        self.cluster_sizes.shape[0].
+    for a0 in tqdmnd(
+        self.cluster_sizes.shape[0],
         desc="Generating grain image",
         unit=" grains",
         disable=not progress_bar,
@@ -1322,7 +1322,13 @@ def plot_clusters(
     )
 
     if returncalc:
-        return im_plot
+        if returnfig:
+            return im_plot, fig, ax
+        else:
+            return im_plot
+    else:
+        if returnfig:
+            return fig, ax
 
 
 def plot_grain_clusters_area(
