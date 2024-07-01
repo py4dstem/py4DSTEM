@@ -7,7 +7,8 @@ from typing import Tuple
 import matplotlib.pyplot as plt
 import numpy as np
 from emdfile import tqdmnd
-from scipy.ndimage import gaussian_filter
+from scipy.ndimage import gaussian_filter, distance_transform_edt
+from skimage.morphology import dilation, erosion
 from scipy.optimize import curve_fit
 from sklearn.decomposition import PCA
 
@@ -1035,7 +1036,7 @@ def cluster_grains(
     Cluster grains from a specific radial bin
 
     Parameters
-    --------
+    ----------
     orientation_histogram: np.ndarray
         Must be a 3D array of size Rx, Ry, and polar_shape[0]
         Can be used to bypass step to calculate orientation histogram for
@@ -1052,6 +1053,18 @@ def cluster_grains(
         If True, plots clusters. **kwargs passed to `plot_grain_clusters`
     return_calc: bool
         If True, return cluster_sizes, cluster_sig, and cluster_inds
+
+
+    Returns
+    ----------
+    cluster_sizes: np.array
+        (N,) shape vector giving the size of N grains as the # of probe positions 
+    cluster_sig: np.array
+        (N,) shape vector giving the mean signal of each of N grains.
+    cluster_inds: list of np.array
+        Length N list of probe positions for each grain, stored as arrays with 
+        shape (2,M) for M probe positions where rows correspond to the (x,y) indices.
+
     """
 
     if orientation_histogram is None:
@@ -1179,7 +1192,140 @@ def cluster_grains(
         return self.cluster_sizes, self.cluster_sig, self.cluster_inds
 
 
-def plot_grain_clusters(
+def plot_clusters(
+    self,
+    area_min=2,
+    outline_grains=True,
+    outline_thickness=1,
+    fill_grains=0.25,
+    smooth_grains=1.0,
+    cmap="viridis",
+    figsize=(8, 8),
+    progress_bar=True,
+    returncalc=True,
+    returnfig=False,
+):
+    """
+    Plot the clusters as an image.
+
+    Parameters
+    --------
+    area_min: int (optional)
+        Min cluster size to include, in units of probe positions.
+    outline_grains: bool (optional)
+        Set to True to draw grains with outlines
+    outline_thickness: int (optional)
+        Thickenss of the grain outline
+    fill_grains: float (optional)
+        Outlined grains are filled with this value in pixels.
+    smooth_grains: float (optional)
+        Grain boundaries are smoothed by this value in pixels.
+    figsize: tuple
+        Size of the figure panel
+    returncalc: bool
+        Return the grain image.
+    returnfig: bool, optional
+        Setting this to true returns the figure and axis handles
+
+    Returns
+    --------
+    im_plot: np.array
+        The plotting image
+    fig, ax (optional)
+        Figure and axes handles
+
+    """
+
+
+    # init
+    im_plot = np.zeros(
+        (
+            self.data_raw.shape[0],
+            self.data_raw.shape[1],
+        )
+    )
+    im_grain = np.zeros(
+        (
+            self.data_raw.shape[0],
+            self.data_raw.shape[1],
+        ),
+        dtype="bool",
+    )
+
+    # make plotting image
+    for a0, ry in tqdmnd(
+        self.cluster_sizes.shape[0].
+        desc="Generating grain image",
+        unit=" grains",
+        disable=not progress_bar,
+    ):
+        if self.cluster_sizes[a0] >= area_min:
+            if outline_grains:
+                im_grain[:] = False
+                im_grain[
+                    self.cluster_inds[a0][0, :],
+                    self.cluster_inds[a0][1, :],
+                ] = True
+
+                im_dist = distance_transform_edt(
+                    erosion(
+                        np.invert(im_grain), footprint=np.ones((3, 3), dtype="bool")
+                    )
+                ) - distance_transform_edt(im_grain)
+                im_dist = gaussian_filter(im_dist, sigma=smooth_grains, mode="nearest")
+                im_add = np.exp(im_dist**2 / (-0.5 * outline_thickness**2))
+
+                if fill_grains > 0:
+                    im_dist = distance_transform_edt(
+                        erosion(
+                            np.invert(im_grain), footprint=np.ones((3, 3), dtype="bool")
+                        )
+                    )
+                    im_dist = gaussian_filter(
+                        im_dist, sigma=smooth_grains, mode="nearest"
+                    )
+                    im_add += fill_grains * np.exp(
+                        im_dist**2 / (-0.5 * outline_thickness**2)
+                    )
+
+                # im_add = 1 - np.exp(
+                #     distance_transform_edt(im_grain)**2 \
+                #     / (-2*outline_thickness**2))
+                im_plot += im_add
+                # im_plot = np.minimum(im_plot, im_add)
+            else:
+                # xg,yg = np.unravel_index(self.cluster_inds[a0], im_plot.shape)
+                im_grain[:] = False
+                im_grain[
+                    self.cluster_inds[a0][0, :],
+                    self.cluster_inds[a0][1, :],
+                ] = True
+                im_plot += gaussian_filter(
+                    im_grain.astype("float"), sigma=smooth_grains, mode="nearest"
+                )
+
+                # im_plot[
+                #     self.cluster_inds[a0][0,:],
+                #     self.cluster_inds[a0][1,:],
+                # ] += 1
+
+    if outline_grains:
+        im_plot = np.clip(im_plot, 0, 2)
+
+    # plotting
+    fig, ax = plt.subplots(figsize=figsize)
+    ax.imshow(
+        im_plot,
+        # vmin = -3,
+        # vmax = 3,
+        cmap=cmap,
+    )
+
+    if returncalc:
+        return im_plot
+
+
+def plot_grain_clusters_area(
     self,
     area_min=None,
     area_max=None,

@@ -106,7 +106,8 @@ class PolarDatacube:
         plot_pdf,
         background_pca,
         cluster_grains,
-        plot_grain_clusters,
+        plot_clusters,
+        plot_grain_clusters_area,
         plot_grain_clusters_diameter,
     )
 
