@@ -802,6 +802,7 @@ def model_radial_background(
     refine_model=True,
     plot_result=True,
     figsize=(8, 4),
+    returnfig = True,
 ):
     """
     User provided radial background model, of the form:
@@ -905,11 +906,16 @@ def model_radial_background(
 
     # plotting
     if plot_result:
-        self.plot_radial_background(
+        fig, ax = self.plot_radial_background(
             q_pixel_units=False,
             plot_background_model=True,
             figsize=figsize,
+            returnfig=returnfig,
         )
+
+    if returnfig:
+        return fig,ax
+
 
 
 def refine_peaks(
