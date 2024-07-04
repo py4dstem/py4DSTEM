@@ -6,8 +6,7 @@ import re
 from importlib.util import find_spec
 
 # need a mapping of pypi/conda names to import names
-import_mapping_dict = {
-}
+import_mapping_dict = {}
 
 
 # programatically get all possible requirements in the import name style
@@ -523,8 +522,7 @@ def print_no_extra_checks(m: str):
 
 
 # dict of extra check functions
-funcs_dict = {
-}
+funcs_dict = {}
 
 
 #### main function used to check the configuration of the installation

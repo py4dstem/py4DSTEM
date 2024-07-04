@@ -202,7 +202,9 @@ class ComplexProbe:
         self, alpha: Union[float, np.ndarray]
     ) -> Union[float, np.ndarray]:
         xp = self._xp
-        return xp.exp(-0.5 * self._gaussian_spread**2 * alpha**2 / self._wavelength**2)
+        return xp.exp(
+            -0.5 * self._gaussian_spread**2 * alpha**2 / self._wavelength**2
+        )
 
     def evaluate_spatial_envelope(
         self, alpha: Union[float, np.ndarray], phi: Union[float, np.ndarray]
@@ -1755,6 +1757,7 @@ def unwrap_phase_2d(array, weights=None, gauge=None, corner_centered=True, xp=np
 
 def unwrap_phase_2d_skimage(array, corner_centered=True, xp=np):
     from skimage.restoration import unwrap_phase
+
     if xp is np:
         array = array.astype(np.float64)
         unwrapped_array = unwrap_phase(array, wrap_around=corner_centered).astype(

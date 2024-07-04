@@ -90,6 +90,7 @@ def import_file(
         data = load_mib(filepath, mem=mem, binfactor=binfactor, **kwargs)
     elif filetype == "arina":
         from py4DSTEM.io.filereaders import read_arina
+
         data = read_arina(filepath, mem=mem, binfactor=binfactor, **kwargs)
     elif filetype == "abTEM":
         data = read_abTEM(filepath, mem=mem, binfactor=binfactor, **kwargs)

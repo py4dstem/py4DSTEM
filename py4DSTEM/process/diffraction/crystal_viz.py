@@ -453,7 +453,8 @@ def plot_scattering_intensity(
     int_sf_plot = calc_1D_profile(
         k,
         self.g_vec_leng,
-        (self.struct_factors_int**int_power_scale) * (self.g_vec_leng**k_power_scale),
+        (self.struct_factors_int**int_power_scale)
+        * (self.g_vec_leng**k_power_scale),
         remove_origin=True,
         k_broadening=k_broadening,
         int_scale=int_scale,
@@ -1883,7 +1884,6 @@ def plot_clusters(
 
     for a0 in range(self.cluster_sizes.shape[0]):
         if self.cluster_sizes[a0] >= area_min:
-
             if outline_grains:
                 from skimage.morphology import erosion
 
