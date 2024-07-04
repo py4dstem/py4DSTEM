@@ -202,9 +202,7 @@ class ComplexProbe:
         self, alpha: Union[float, np.ndarray]
     ) -> Union[float, np.ndarray]:
         xp = self._xp
-        return xp.exp(
-            -0.5 * self._gaussian_spread**2 * alpha**2 / self._wavelength**2
-        )
+        return xp.exp(-0.5 * self._gaussian_spread**2 * alpha**2 / self._wavelength**2)
 
     def evaluate_spatial_envelope(
         self, alpha: Union[float, np.ndarray], phi: Union[float, np.ndarray]
