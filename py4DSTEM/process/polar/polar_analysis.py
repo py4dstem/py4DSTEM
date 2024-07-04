@@ -5,7 +5,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
 from scipy.ndimage import gaussian_filter
-from sklearn.decomposition import PCA
 
 from emdfile import tqdmnd
 
@@ -979,6 +978,8 @@ def background_pca(
     coef_pca: np.array
         radial PCA component selected
     """
+
+    from sklearn.decomposition import PCA
 
     # PCA decomposition
     shape = self.radial_all.shape

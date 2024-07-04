@@ -3,7 +3,6 @@ import matplotlib.pyplot as plt
 
 from scipy.ndimage import gaussian_filter, gaussian_filter1d
 from scipy.signal import peak_prominences
-from skimage.feature import peak_local_max
 from scipy.optimize import curve_fit, leastsq
 import warnings
 
@@ -104,6 +103,8 @@ def find_peaks_single_pattern(
         Figure and axes handles
 
     """
+
+    from skimage.feature import peak_local_max
 
     # if needed, generate mask from Bragg peaks
     if bragg_peaks is not None:

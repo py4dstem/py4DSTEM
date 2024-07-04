@@ -10,7 +10,10 @@ from py4DSTEM.data import QPoints
 from py4DSTEM.datacube import DataCube
 from py4DSTEM.preprocess.utils import get_maxima_2D
 from py4DSTEM.process.utils.cross_correlate import get_cross_correlation_FT
-from py4DSTEM.braggvectors.diskdetection_aiml import find_Bragg_disks_aiml
+try:
+    from py4DSTEM.braggvectors.diskdetection_aiml import find_Bragg_disks_aiml
+except (ImportError, ModuleNotFoundError):
+    pass
 
 
 def find_Bragg_disks(

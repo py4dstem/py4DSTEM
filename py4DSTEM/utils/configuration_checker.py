@@ -7,10 +7,6 @@ from importlib.util import find_spec
 
 # need a mapping of pypi/conda names to import names
 import_mapping_dict = {
-    "scikit-image": "skimage",
-    "scikit-learn": "sklearn",
-    "scikit-optimize": "skopt",
-    "mp-api": "mp_api",
 }
 
 
@@ -88,7 +84,8 @@ def get_modules_dict():
 
 
 # module_depenencies = get_modules_dict()
-modules = get_modules_list()
+# modules = get_modules_list()
+modules = []
 
 
 #### Class and Functions to Create Coloured Strings ####
@@ -527,7 +524,6 @@ def print_no_extra_checks(m: str):
 
 # dict of extra check functions
 funcs_dict = {
-    "cupy": check_cupy_gpu,
 }
 
 

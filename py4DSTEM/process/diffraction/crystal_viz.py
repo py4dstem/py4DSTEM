@@ -8,7 +8,6 @@ from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from scipy.signal import medfilt
 from scipy.ndimage import gaussian_filter
 from scipy.ndimage import distance_transform_edt
-from skimage.morphology import dilation, erosion
 
 import warnings
 import numpy as np
@@ -1884,7 +1883,10 @@ def plot_clusters(
 
     for a0 in range(self.cluster_sizes.shape[0]):
         if self.cluster_sizes[a0] >= area_min:
+
             if outline_grains:
+                from skimage.morphology import erosion
+
                 im_grain[:] = False
                 im_grain[
                     self.cluster_inds[a0][0, :],

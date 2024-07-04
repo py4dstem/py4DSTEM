@@ -52,7 +52,10 @@ from py4DSTEM.braggvectors import (
     BraggVectorMap,
 )
 
-from py4DSTEM.process import classification
+try:
+    from py4DSTEM.process import classification
+except (ImportError, ModuleNotFoundError):
+    pass
 
 
 # diffraction
@@ -70,7 +73,10 @@ from py4DSTEM.process.polar import PolarDatacube
 # strain
 from py4DSTEM.process.strain.strain import StrainMap
 
-from py4DSTEM.process import wholepatternfit
+try:
+    from py4DSTEM.process import wholepatternfit
+except (ImportError, ModuleNotFoundError):
+    pass
 
 
 ### more submodules

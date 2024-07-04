@@ -4,6 +4,12 @@ from py4DSTEM.process.strain.strain import StrainMap
 from py4DSTEM.process import phase
 from py4DSTEM.process import calibration
 from py4DSTEM.process import utils
-from py4DSTEM.process import classification
+try:
+    from py4DSTEM.process import classification
+except (ImportError, ModuleNotFoundError):
+    pass
 from py4DSTEM.process import diffraction
-from py4DSTEM.process import wholepatternfit
+try:
+    from py4DSTEM.process import wholepatternfit
+except (ImportError, ModuleNotFoundError):
+    pass
