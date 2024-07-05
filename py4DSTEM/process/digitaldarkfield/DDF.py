@@ -123,23 +123,30 @@ def pointlist_to_array(bplist, idim, jdim):
                     ps = np.vstack((ps,nps))
                     bar()
     return ps #as a numpy array
+    #ps will be an 2D numpy array of n points x 5 columns:
+        #qx
+        #qy
+        #I
+        #Rx
+        #Ry
 
-def pointlist_differences(lattice_point, aperturearray):
-    #calculates differences between a specific point on a lattice
+def pointlist_differences(apertureposition, pointsarray):
+    #calculates differences between a specific aperture position 
     #and a whole list of detected points for a dataset
     #returns the Euclidean distances as a 1D array
     subtractor = np.array([
-        [lattice_point[0], lattice_point[1]]*aperturearray.shape[0]
-    ]).reshape((aperturearray.shape[0],2))
-    diff = ((aperturearray[:,:2]-subtractor)**2).sum(axis=1)**.5
+        [apertureposition[0], apertureposition[1]]*pointsarray.shape[0]
+    ]).reshape((pointsarray.shape[0],2))
+    diff = ((pointsarray[:,:2]-subtractor)**2).sum(axis=1)**.5
     return diff #as a numpy array
 
 def DDFimage(dataset, points, aperturearray, tol=1):
-    #dataset is a 4DSTEM dataset
+    #dataset is a 4DSTEM dataset as a numpy array, only used to get the size of image
     #points is an array of points as calculated by pointlist_to_array above
-    #centerarray is a list of tuples of centers, as defined by aperture_array_generator above
+    #centerarray is a list of tuples of aperture centers, 
+    #as defined by aperture_array_generator above
     #tol is the tolerance for a displacement between points and centers (in pixels)
-    #this does rely on the differences function
+    #this does rely on the pointslist_differences function
     image = np.zeros_like(dataset[:,:,0,0])
     with alive_bar(len(aperturearray), force_tty=True) as bar:
         for apertureposition in aperturearray:
