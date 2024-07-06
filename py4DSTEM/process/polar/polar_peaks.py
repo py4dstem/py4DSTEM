@@ -1263,25 +1263,43 @@ def make_orientation_histogram(
     NOTE - currently assumes two fold rotation symmetry
     TODO - add support for non two fold symmetry polardatacube
 
-    Args:
-        radial_ranges (np array):           Size (N x 2) array for N radial bins, or (2,) for a single bin.
-        orientation_flip_sign (bool):       Flip the direction of theta
-        orientation_offset_degrees (float): Offset for orientation angles
-        orientation_separate_bins (bool):   whether to place multiple angles into multiple radial bins.
-        upsample_factor (float):            Upsample factor
-        use_refined_peaks (float):          Use refined peak positions
-        use_peak_sigma (float):             Spread signal along annular direction using measured std.
-        theta_step_deg (float):             Step size along annular direction in degrees
-        sigma_x (float):                    Smoothing in x direction before upsample
-        sigma_y (float):                    Smoothing in x direction before upsample
-        sigma_theta (float):                Smoothing in annular direction (units of bins, periodic)
-        normalize_intensity_image (bool):   Normalize to max peak intensity = 1, per image
-        normalize_intensity_stack (bool):   Normalize to max peak intensity = 1, all images
-        progress_bar (bool):                Enable progress bar
+    Parameters
+    ----------
+    radial_ranges (np array)          
+        Size (N x 2) array for N radial bins, or (2,) for a single bin.
+    orientation_flip_sign (bool)      
+        Flip the direction of theta
+    orientation_offset_degrees (float)
+        Offset for orientation angles.
+        This value is a rotation of Q space with respect to R space.
+    orientation_separate_bins (bool)
+        whether to place multiple angles into multiple radial bins.
+    upsample_factor (float)            
+        Upsample factor
+    use_refined_peaks (float)         
+        Use refined peak positions
+    use_peak_sigma (float)         
+        Spread signal along annular direction using measured std.
+    theta_step_deg (float)            
+        Step size along annular direction in degrees
+    sigma_x (float)                 
+        Smoothing in x direction before upsample
+    sigma_y (float)                   
+        Smoothing in x direction before upsample
+    sigma_theta (float)                
+        Smoothing in annular direction (units of bins, periodic)
+    normalize_intensity_image (bool)  
+        Normalize to max peak intensity = 1, per image
+    normalize_intensity_stack (bool)
+        Normalize to max peak intensity = 1, all images
+    progress_bar (bool)              
+        Enable progress bar
 
-    Returns:
-        orient_hist (array):                4D array containing Bragg peak intensity histogram
-                                            [radial_bin x_probe y_probe theta]
+    Returns
+    ----------
+    orient_hist (array)         
+        4D array containing Bragg peak intensity histogram
+        [radial_bin x_probe y_probe theta]
     """
 
     # coordinates
