@@ -800,7 +800,7 @@ def make_flowline_rainbow_image(
 def make_flowline_rainbow_legend(
     im_size=np.array([256, 256]),
     sym_rotation_order=2,
-    theta_offset=0.0,
+    theta_offset_degrees=0.0,
     white_background=False,
     return_image=False,
     radial_range=np.array([0.45, 0.9]),
@@ -810,26 +810,39 @@ def make_flowline_rainbow_legend(
     """
     This function generates a legend for a the rainbow colored flowline maps, and returns it as an RGB image.
 
-    Args:
-        im_size (np.array):         Size of legend image in pixels.
-        sym_rotation_order (int):   rotational symmety for colouring
-        theta_offset (float):       Offset the anglular coloring by this value in radians.
-        white_background (bool):    For either color or greyscale output, switch to white background (from black).
-        return_image (bool):        Return the image array.
-        radial_range (np.array):    Inner and outer radius for the legend ring.
-        plot_legend (bool):         Plot the generated legend.
-        figsize (tuple or list):    Size of the plotted legend.
+    Parameters
+    ----------
+    im_size (np.array):         
+        Size of legend image in pixels.
+    sym_rotation_order (int):   
+        rotational symmety for colouring
+    theta_offset_degrees (float):       
+        Offset the anglular coloring by this value in degrees.
+        Rotation is Q with respect to R, in the positive (counter clockwise) direction.
+    white_background (bool):    
+        For either color or greyscale output, switch to white background (from black).
+    return_image (bool):        
+        Return the image array.
+    radial_range (np.array):    
+        Inner and outer radius for the legend ring.
+    plot_legend (bool):         
+        Plot the generated legend.
+    figsize (tuple or list):    
+        Size of the plotted legend.
 
-    Returns:
-        im_legend (array):          Image array for the legend.
+    Returns
+    ----------
+
+    im_legend (array):          
+        Image array for the legend.
     """
 
     # Coordinates
     x = np.linspace(-1, 1, im_size[0])
     y = np.linspace(-1, 1, im_size[1])
-    ya, xa = np.meshgrid(-y, x)
+    ya, xa = np.meshgrid(y, x)
     ra = np.sqrt(xa**2 + ya**2)
-    ta = np.arctan2(ya, xa) + theta_offset
+    ta = np.arctan2(ya, xa) + np.deg2rad(theta_offset_degrees)
     ta_sym = ta * sym_rotation_order
 
     # mask
@@ -837,12 +850,12 @@ def make_flowline_rainbow_legend(
 
     # rgb image
     z = mask * np.exp(1j * ta_sym)
-    hue_start = -90
+    # hue_offset = 0
     amp = np.abs(z)
     vmin = np.min(amp)
     vmax = np.max(amp)
-    ph = np.angle(z, deg=1) + hue_start
-    h = (ph % 360) / 360
+    ph = np.angle(z)# + hue_offset
+    h = np.mod(ph/(2*np.pi), 1)
     s = 0.85 * np.ones_like(h)
     v = (amp - vmin) / (vmax - vmin)
     im_legend = hsv_to_rgb(np.dstack((h, s, v)))

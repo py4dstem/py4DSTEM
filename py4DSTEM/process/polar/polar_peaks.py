@@ -1307,10 +1307,11 @@ def make_orientation_histogram(
         # Get angles from polardatacube
         theta = self.tt
     else:
-        theta = np.arange(0, 180, theta_step_deg) * np.pi / 180.0
-    dtheta = theta[1] - theta[0]
-    dtheta_deg = dtheta * 180 / np.pi
+        theta = np.deg2rad(np.arange(0, 180, theta_step_deg))
     num_theta_bins = np.size(theta)
+    dtheta = theta[1] - theta[0]
+    dtheta_deg = np.rad2deg(dtheta)
+    orientation_offset = np.deg2rad(orientation_offset_degrees)
 
     # Input bins
     radial_ranges = np.array(radial_ranges)
@@ -1373,7 +1374,7 @@ def make_orientation_histogram(
                     theta = self.peaks[rx, ry]["qt"][sub] * self._annular_step
                 if orientation_flip_sign:
                     theta *= -1
-                theta += orientation_offset_degrees
+                theta += orientation_offset
 
                 t = theta / dtheta
 
