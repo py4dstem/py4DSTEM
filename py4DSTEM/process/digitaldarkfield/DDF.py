@@ -3,6 +3,7 @@ A general note on all these functions is that they are designed for use with rot
 However, they have to date only been used with the Qx and Qy in pixels and not calibrated into reciprocal units.  
 There is no reason why this should not work, but the default tolerance would need adjustment.
 """
+import numpy as np
 from alive_progress import alive_bar
 
 def aperture_array_generator(
