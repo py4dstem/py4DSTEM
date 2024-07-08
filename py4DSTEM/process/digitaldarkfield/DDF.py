@@ -5,7 +5,7 @@ There is no reason why this should not work, but the default tolerance would nee
 """
 
 import numpy as np
-from alive_progress import alive_bar
+from emdfile import tqdmnd
 
 
 def aperture_array_generator(
@@ -108,32 +108,28 @@ def aperture_array_generator(
 def pointlist_to_array(bplist, idim, jdim):
     # This function turns the py4dstem pointslist object to a simple array that is more
     # convenient for rapid array processing in numpy
-    with alive_bar(idim * jdim, force_tty=True) as bar:
-        for i in range(idim):
-            for j in range(jdim):
-                if i == j == 0:
-                    ps = np.array(
-                        [
-                            bplist.cal[i, j].qx,
-                            bplist.cal[i, j].qy,
-                            bplist.cal[i, j].I,
-                            bplist.cal[i, j].qx.shape[0] * [i],
-                            bplist.cal[i, j].qx.shape[0] * [j],
-                        ]
-                    ).T
-                    bar()
-                else:
-                    nps = np.array(
-                        [
-                            bplist.cal[i, j].qx,
-                            bplist.cal[i, j].qy,
-                            bplist.cal[i, j].I,
-                            bplist.cal[i, j].qx.shape[0] * [i],
-                            bplist.cal[i, j].qx.shape[0] * [j],
-                        ]
-                    ).T
-                    ps = np.vstack((ps, nps))
-                    bar()
+    for i, j in tqdmnd(idim, jdim):
+        if i == j == 0:
+            ps = np.array(
+                [
+                    bplist.cal[i, j].qx,
+                    bplist.cal[i, j].qy,
+                    bplist.cal[i, j].I,
+                    bplist.cal[i, j].qx.shape[0] * [i],
+                    bplist.cal[i, j].qx.shape[0] * [j],
+                ]
+            ).T
+        else:
+            nps = np.array(
+                [
+                    bplist.cal[i, j].qx,
+                    bplist.cal[i, j].qy,
+                    bplist.cal[i, j].I,
+                    bplist.cal[i, j].qx.shape[0] * [i],
+                    bplist.cal[i, j].qx.shape[0] * [j],
+                ]
+            ).T
+            ps = np.vstack((ps, nps))
     return ps  # as a numpy array
     # ps will be an 2D numpy array of n points x 5 columns:
     # qx
@@ -162,17 +158,14 @@ def DDFimage(dataset, points, aperturearray, tol=1):
     # tol is the tolerance for a displacement between points and centers (in pixels)
     # this does rely on the pointslist_differences function
     image = np.zeros_like(dataset[:, :, 0, 0])
-    with alive_bar(len(aperturearray), force_tty=True) as bar:
-        for apertureposition in aperturearray:
-            intensities = np.vstack(
-                (points[:, 2:].T, pointlist_differences(apertureposition, points))
-            ).T
-            intensities2 = np.delete(
-                intensities, np.where(intensities[:, 3] > tol), axis=0
-            )
-            for row in range(intensities2[:, 0].shape[0]):
-                image[
-                    intensities2[row, 1].astype(int), intensities2[row, 2].astype(int)
-                ] += intensities2[row, 0]
-            bar()
+    for aperture_index in tqdmnd(len(aperturearray)):
+        apertureposition = aperturearray[aperture_index]
+        intensities = np.vstack(
+            (points[:, 2:].T, pointlist_differences(apertureposition, points))
+        ).T
+        intensities2 = np.delete(intensities, np.where(intensities[:, 3] > tol), axis=0)
+        for row in range(intensities2[:, 0].shape[0]):
+            image[
+                intensities2[row, 1].astype(int), intensities2[row, 2].astype(int)
+            ] += intensities2[row, 0]
     return image  # as a 2D numpy array
