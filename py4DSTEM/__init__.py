@@ -1,6 +1,9 @@
 from py4DSTEM.version import __version__
 from emdfile import tqdmnd
 
+from importlib.metadata import metadata
+
+is_package_lite = "lite" in metadata("py4DSTEM")["Keywords"].lower().split(",")
 
 ### io
 
@@ -54,9 +57,9 @@ from py4DSTEM.braggvectors import (
 
 try:
     from py4DSTEM.process import classification
-except (ImportError, ModuleNotFoundError):
-    pass
-
+except (ImportError, ModuleNotFoundError) as exc:
+    if not is_package_lite:
+        raise exc
 
 # diffraction
 from py4DSTEM.process.diffraction import Crystal, Orientation
@@ -75,8 +78,9 @@ from py4DSTEM.process.strain.strain import StrainMap
 
 try:
     from py4DSTEM.process import wholepatternfit
-except (ImportError, ModuleNotFoundError):
-    pass
+except (ImportError, ModuleNotFoundError) as exc:
+    if not is_package_lite:
+        raise exc
 
 
 ### more submodules
