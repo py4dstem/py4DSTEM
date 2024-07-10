@@ -3,7 +3,7 @@ from emdfile import tqdmnd
 
 from importlib.metadata import metadata
 
-is_package_lite = "lite" in metadata("py4DSTEM")["Keywords"].lower().split(",")
+is_package_lite = "lite" in metadata(__package__)["Keywords"].lower().split(",")
 
 ### io
 
