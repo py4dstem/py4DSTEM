@@ -585,7 +585,7 @@ class DataCube(
         # parse region to use
         if ROI is None:
             ROI = np.ones(self.Rshape, dtype=bool)
-        elif isinstance(ROI, tuple):
+        elif isinstance(ROI, (tuple,list)):
             assert len(ROI) == 4, "if ROI is a tuple must be length 4"
             _ROI = np.ones(self.Rshape, dtype=bool)
             ROI = _ROI[ROI[0] : ROI[1], ROI[2] : ROI[3]]
