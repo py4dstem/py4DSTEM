@@ -3,6 +3,9 @@ from emdfile import tqdmnd
 
 from importlib.metadata import metadata
 
+package_spec = __spec__
+package_package = __package__
+package_name = __name__
 is_package_lite = "lite" in metadata(__package__)["Keywords"].lower().split(",")
 
 ### io
