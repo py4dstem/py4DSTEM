@@ -126,20 +126,20 @@ def fit_amorphous_ring(
         sigma2 = (radial_range[1] - radial_range[0]) / 4
 
         coefs = (x0, y0, a, b, t, int0, int12, k_bg, sigma0, sigma1, sigma2)
-        lb = (0, 0, radial_range[0], radial_range[0], -np.inf, 0, 0, 0, 1, 1, 1)
-        ub = (
-            im.shape[0],
-            im.shape[1],
-            radial_range[1],
-            radial_range[1],
-            np.inf,
-            np.inf,
-            np.inf,
-            np.inf,
-            np.inf,
-            np.inf,
-            np.inf,
-        )
+    lb = (0, 0, radial_range[0], radial_range[0], -np.inf, 0, 0, 0, 1, 1, 1)
+    ub = (
+        im.shape[0],
+        im.shape[1],
+        radial_range[1],
+        radial_range[1],
+        np.inf,
+        np.inf,
+        np.inf,
+        np.inf,
+        np.inf,
+        np.inf,
+        np.inf,
+    )
 
     if show_fit_mask:
         # show image preview of fitting mask
