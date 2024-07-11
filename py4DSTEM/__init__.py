@@ -1,9 +1,9 @@
 from py4DSTEM.version import __version__
 from emdfile import tqdmnd
 
-from importlib.metadata import metadata
+from importlib.metadata import packages_distributions
 
-is_package_lite = "lite" in metadata(__package__)["Keywords"].lower().split(",")
+is_package_lite = "py4DSTEM-lite" in packages_distributions()["py4DSTEM"]
 
 ### io
 
