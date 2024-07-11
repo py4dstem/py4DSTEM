@@ -5,8 +5,19 @@ from importlib.metadata import requires
 import re
 from importlib.util import find_spec
 
+from py4DSTEM import is_package_lite
+
 # need a mapping of pypi/conda names to import names
-import_mapping_dict = {}
+import_mapping_dict = (
+    {}
+    if is_package_lite
+    else {
+        "scikit-image": "skimage",
+        "scikit-learn": "sklearn",
+        "scikit-optimize": "skopt",
+        "mp-api": "mp_api",
+    }
+)
 
 
 # programatically get all possible requirements in the import name style
@@ -84,7 +95,7 @@ def get_modules_dict():
 
 # module_depenencies = get_modules_dict()
 # modules = get_modules_list()
-modules = []
+modules = [] if is_package_lite else get_modules_list()
 
 
 #### Class and Functions to Create Coloured Strings ####
@@ -522,7 +533,13 @@ def print_no_extra_checks(m: str):
 
 
 # dict of extra check functions
-funcs_dict = {}
+funcs_dict = (
+    {}
+    if is_package_lite
+    else {
+        "cupy": check_cupy_gpu,
+    }
+)
 
 
 #### main function used to check the configuration of the installation

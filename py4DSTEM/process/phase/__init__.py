@@ -2,6 +2,7 @@
 
 _emd_hook = True
 
+from py4DSTEM import is_package_lite
 from py4DSTEM.process.phase.dpc import DPC
 from py4DSTEM.process.phase.magnetic_ptychographic_tomography import MagneticPtychographicTomography
 from py4DSTEM.process.phase.magnetic_ptychography import MagneticPtychography
@@ -13,7 +14,8 @@ from py4DSTEM.process.phase.ptychographic_tomography import PtychographicTomogra
 from py4DSTEM.process.phase.singleslice_ptychography import SingleslicePtychography
 try:
     from py4DSTEM.process.phase.parameter_optimize import OptimizationParameter, PtychographyOptimizer
-except (ImportError, ModuleNotFoundError):
-    pass
+except (ImportError, ModuleNotFoundError) as exc:
+    if not is_package_lite:
+        raise exc
 
 # fmt: on
