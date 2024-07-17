@@ -951,6 +951,11 @@ def fit_crystal_amorphous_fraction(
     ))
 
     # init
+    self.signal_background = np.zeros((
+        2,
+        self._datacube.shape[0],
+        self._datacube.shape[1],
+    ))
     self.signal_amorphous_peaks = np.zeros((
         num_rings,
         self._datacube.shape[0],
@@ -1011,6 +1016,7 @@ def fit_crystal_amorphous_fraction(
         im_polar_sub = im_polar - (basis @ coefs)
 
         # Output signals
+        self.signal_background[:,rx,ry] = coefs[:2]
         self.signal_amorphous_peaks[:,rx,ry] = coefs[2:]
         for a0 in range(num_rings):
             self.signal_crystal[a0,rx,ry] = np.sum(
@@ -1098,12 +1104,13 @@ def plot_crystal_amorphous_fraction(
         ax.set_yticks([])
 
     if legend is True:
-        fig.colorbar(
+        cbar = fig.colorbar(
             h_im, 
             ax=ax, 
             # orientation='horizontal', 
             # fraction=0.1,
         )
+        cbar.ax.set_ylabel('More Amorphous  <---->  More Crystalline')
 
 
 
