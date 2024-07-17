@@ -916,6 +916,196 @@ def model_radial_background(
     if returnfig:
         return fig,ax
 
+def fit_crystal_amorphous_fraction(
+    self,
+    fitting_range_sigma = 2.0,
+    plot_result = True,
+    figsize = (4,4),
+    progress_bar = True,
+    ):
+    """
+    Fit an amorphous halo and the crystalline peak signals from each 
+    polar transformed image, in order to estimate the fraction of
+    crystalline and amorphous signal.
+
+    Parameters
+    ----------
+
+    plot_result: bool
+
+    progress_bar: bool
+
+
+    Returns
+    ----------
+    
+
+    """ 
+
+    # Basis for amorphous fitting function
+    num_rings = np.round((self.background_coefs.shape[0] - 3) / 3).astype("int")
+    num_bins = self.polar_shape[1]
+    basis = np.ones((
+        num_bins,
+        num_rings + 2,
+    ))
+
+    # init
+    self.signal_amorphous_peaks = np.zeros((
+        num_rings,
+        self._datacube.shape[0],
+        self._datacube.shape[1],
+    ))
+    self.signal_crystal = np.zeros((
+        num_rings,
+        self._datacube.shape[0],
+        self._datacube.shape[1],
+    ))
+    crystal_fitting_mask = np.zeros((
+        num_rings,
+        num_bins,
+    ), dtype = 'bool')
+
+    # background model
+    sigma_0 = self.background_coefs[2]
+    basis[:,1] = np.exp(self.qq**2/(-2.0*sigma_0**2))
+
+    # amorphous halos / rings
+    for a0 in range(num_rings):
+        ring_sigma = self.background_coefs[3 * a0 + 4]
+        ring_position = self.background_coefs[3 * a0 + 5]
+        basis[:,2+a0] = np.exp(
+            (self.qq - ring_position)**2 \
+            /(-2.0*ring_sigma**2)
+        )
+
+        sub = np.logical_and(
+            self.qq > ring_position - ring_sigma*fitting_range_sigma,
+            self.qq <= ring_position + ring_sigma*fitting_range_sigma,
+        )
+        crystal_fitting_mask[a0,sub] = True
+
+    # main loop over probe positions
+    for rx, ry in tqdmnd(
+        # np.arange(60,100),
+        # np.arange(290,351),
+        self._datacube.shape[0],
+        self._datacube.shape[1],
+        desc="Refining peaks ",
+        unit=" probe positions",
+        disable=not progress_bar,
+    ): 
+        # polar signal
+        im_polar = self.data[rx,ry]
+        im_polar_med = np.ma.median(im_polar, axis = 0)
+
+        # fit amorphous background coefficients
+        coefs = np.linalg.lstsq(
+            basis,
+            im_polar_med,
+            rcond=None,
+        )[0]
+
+        # background estimate
+        # im_polar_bg = basis @ coefs
+        im_polar_sub = im_polar - (basis @ coefs)
+
+        # Output signals
+        self.signal_amorphous_peaks[:,rx,ry] = coefs[2:]
+        for a0 in range(num_rings):
+            self.signal_crystal[a0,rx,ry] = np.sum(
+                im_polar_sub[:,crystal_fitting_mask[a0]],
+            )
+
+    self.signal_amorphous_peaks = np.maximum(self.signal_amorphous_peaks,0.0)
+    self.signal_crystal = np.maximum(self.signal_crystal,0.0)
+
+    # convert amorphous signal from peaks to integrated intensity
+    self.signal_amorphous = self.signal_amorphous_peaks.copy()
+    for a0 in range(num_rings):
+        ring_sigma = self.background_coefs[3 * a0 + 4]
+        self.signal_amorphous[a0] *= ring_sigma * 2.5069
+
+    # fractional crystal signal
+    sig_sum = self.signal_crystal + self.signal_amorphous
+    sub = sig_sum > 0.0
+    self.signal_fractional_crystal = self.signal_crystal.copy()
+    self.signal_fractional_crystal[sub] /= sig_sum[sub]
+
+    # plotting
+    if plot_result:
+        fig,ax = plt.subplots(figsize=figsize)
+        ax.imshow(
+            self.signal_fractional_crystal[0],
+            vmin = 0,
+            vmax = 1,
+            cmap = 'turbo',
+        )
+
+def plot_crystal_amorphous_fraction(
+    self,
+    index_ring_plot = 0,
+    plot_range = (0.0,1.0),
+    sigma = 0.0,
+    cmap = 'PiYG',
+    legend = True,
+    ticks = False,
+    figsize = (5,4),
+    ):
+    """
+    Plotting function for the crystal / amorphous fraction image.
+
+    """
+
+
+    sig_crys = self.signal_crystal[index_ring_plot].copy()
+    sig_amor = self.signal_amorphous[index_ring_plot].copy()
+
+    if sigma > 0.0:
+        sig_crys = gaussian_filter(
+            sig_crys,
+            sigma,
+            mode = 'nearest',
+        )
+        sig_amor = gaussian_filter(
+            sig_amor,
+            sigma,
+            mode = 'nearest',
+        )
+    sig_sum = sig_crys + sig_amor
+    sub = sig_sum > 0.0
+    signal_fractional_crystal = sig_crys.copy()
+    signal_fractional_crystal[sub] /= sig_sum[sub]
+
+
+    # im_plot = self.signal_fractional_crystal[index_ring_plot].copy()
+    # if sigma > 0.0:
+    #     im_plot = gaussian_filter(
+    #         im_plot,
+    #         sigma,
+    #         mode = 'nearest',
+    #     )
+
+    fig,ax = plt.subplots(figsize=figsize)
+    h_im = ax.imshow(
+        signal_fractional_crystal,
+        vmin = plot_range[0],
+        vmax = plot_range[1],
+        cmap = cmap,
+    )
+    if ticks is False:
+        ax.set_xticks([])
+        ax.set_yticks([])
+
+    if legend is True:
+        fig.colorbar(
+            h_im, 
+            ax=ax, 
+            # orientation='horizontal', 
+            # fraction=0.1,
+        )
+
+
 
 
 def refine_peaks(

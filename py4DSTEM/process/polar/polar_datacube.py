@@ -120,6 +120,8 @@ class PolarDatacube:
         plot_radial_peaks,
         plot_radial_background,
         model_radial_background,
+        fit_crystal_amorphous_fraction,
+        plot_crystal_amorphous_fraction,
         make_orientation_histogram,
     )
 
