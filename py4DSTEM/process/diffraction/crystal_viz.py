@@ -1601,6 +1601,8 @@ def plot_orientation_maps(
             )
 
         plt.show()
+    else:
+        ax_l.set_axis_off()
 
     images_orientation = np.zeros((orientation_map.num_x, orientation_map.num_y, 3, 2))
     if self.pymatgen_available:
