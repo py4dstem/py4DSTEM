@@ -10,7 +10,7 @@ from py4DSTEM.visualize import show, show_image_grid
 from py4DSTEM.process.diffraction.crystal_viz import plot_diffraction_pattern
 
 
-class Crystal_Phase:
+class CrystalPhase:
     """
     A class storing multiple crystal structures, and associated diffraction data.
     Must be initialized after matching orientations to a pointlistarray???
@@ -194,8 +194,8 @@ class Crystal_Phase:
 
         """
 
-        # tolerance
-        tol2 = 1e-6
+        # tolerance for separating the origin peak.
+        tolerance_origin_2 = 1e-6
 
         # calibrations
         center = pointlistarray.calstate["center"]
@@ -231,11 +231,15 @@ class Crystal_Phase:
         )
         # bragg_peaks = pointlistarray.get_pointlist(xy_position[0],xy_position[1]).copy()
         if k_max is None:
-            keep = bragg_peaks.data["qx"] ** 2 + bragg_peaks.data["qy"] ** 2 > tol2
+            keep = (
+                bragg_peaks.data["qx"] ** 2 + bragg_peaks.data["qy"] ** 2
+                > tolerance_origin_2
+            )
         else:
             keep = np.logical_and.reduce(
                 (
-                    bragg_peaks.data["qx"] ** 2 + bragg_peaks.data["qy"] ** 2 > tol2,
+                    bragg_peaks.data["qx"] ** 2 + bragg_peaks.data["qy"] ** 2
+                    > tolerance_origin_2,
                     np.abs(bragg_peaks.data["qx"]) < k_max,
                     np.abs(bragg_peaks.data["qy"]) < k_max,
                 )
@@ -303,14 +307,14 @@ class Crystal_Phase:
             if k_max is None:
                 del_peak = (
                     bragg_peaks_fit.data["qx"] ** 2 + bragg_peaks_fit.data["qy"] ** 2
-                    < tol2
+                    < tolerance_origin_2
                 )
             else:
                 del_peak = np.logical_or.reduce(
                     (
                         bragg_peaks_fit.data["qx"] ** 2
                         + bragg_peaks_fit.data["qy"] ** 2
-                        < tol2,
+                        < tolerance_origin_2,
                         np.abs(bragg_peaks_fit.data["qx"]) > k_max,
                         np.abs(bragg_peaks_fit.data["qy"]) > k_max,
                     )
@@ -473,7 +477,6 @@ class Crystal_Phase:
                     search = True
 
                     while search is True:
-
                         basis_solve = basis[:, inds_solve]
                         obs_solve = obs.copy()
 
@@ -685,7 +688,6 @@ class Crystal_Phase:
                     crystal_inds_plot == None
                     or np.min(np.abs(c - crystal_inds_plot)) == 0
                 ):
-
                     qx_fit = library_peaks[a0].data["qx"]
                     qy_fit = library_peaks[a0].data["qy"]
 
@@ -701,7 +703,6 @@ class Crystal_Phase:
                     matches_fit = library_matches[a0]
 
                     if plot_only_nonzero_phases is False or phase_weights[a0] > 0:
-
                         # if np.mod(m,2) == 0:
                         ax.scatter(
                             qy_fit[matches_fit],
@@ -877,27 +878,30 @@ class Crystal_Phase:
             disable=not progress_bar,
         ):
             # calculate phase weights
-            phase_weights, phase_residual, phase_reliability, int_peaks = (
-                self.quantify_single_pattern(
-                    pointlistarray=pointlistarray,
-                    xy_position=(rx, ry),
-                    corr_kernel_size=corr_kernel_size,
-                    sigma_excitation_error=sigma_excitation_error,
-                    precession_angle_degrees=precession_angle_degrees,
-                    power_intensity=power_intensity,
-                    power_intensity_experiment=power_intensity_experiment,
-                    k_max=k_max,
-                    max_number_patterns=max_number_patterns,
-                    single_phase=single_phase,
-                    allow_strain=allow_strain,
-                    strain_iterations=strain_iterations,
-                    strain_max=strain_max,
-                    include_false_positives=include_false_positives,
-                    weight_false_positives=weight_false_positives,
-                    plot_result=False,
-                    verbose=False,
-                    returnfig=False,
-                )
+            (
+                phase_weights,
+                phase_residual,
+                phase_reliability,
+                int_peaks,
+            ) = self.quantify_single_pattern(
+                pointlistarray=pointlistarray,
+                xy_position=(rx, ry),
+                corr_kernel_size=corr_kernel_size,
+                sigma_excitation_error=sigma_excitation_error,
+                precession_angle_degrees=precession_angle_degrees,
+                power_intensity=power_intensity,
+                power_intensity_experiment=power_intensity_experiment,
+                k_max=k_max,
+                max_number_patterns=max_number_patterns,
+                single_phase=single_phase,
+                allow_strain=allow_strain,
+                strain_iterations=strain_iterations,
+                strain_max=strain_max,
+                include_false_positives=include_false_positives,
+                weight_false_positives=weight_false_positives,
+                plot_result=False,
+                verbose=False,
+                returnfig=False,
             )
             self.phase_weights[rx, ry] = phase_weights
             self.phase_residuals[rx, ry] = phase_residual
@@ -1178,7 +1182,6 @@ class Crystal_Phase:
                 )
 
             for a0 in range(self.num_crystals):
-
                 ax[a0].imshow(
                     im_rgb_all[a0],
                 )
@@ -1315,7 +1318,6 @@ class Crystal_Phase:
             )
 
         else:
-
             # find the second correlation score for each crystal and match index
             for a0 in range(self.num_crystals):
                 corr = phase_sig[a0].copy()

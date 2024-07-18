@@ -221,7 +221,9 @@ def RI1(BI, BJ, G):
     ri1[sub] = np.pi * (BI * np.log((BI + BJ) / BI) + BJ * np.log((BI + BJ) / BJ))
 
     sub = np.logical_and(eps <= 0.1, G > 0.0)
-    temp = 0.5 * BI**2 * np.log(BI / (BI + BJ)) + 0.5 * BJ**2 * np.log(BJ / (BI + BJ))
+    temp = 0.5 * BI**2 * np.log(BI / (BI + BJ)) + 0.5 * BJ**2 * np.log(
+        BJ / (BI + BJ)
+    )
     temp += 0.75 * (BI**2 + BJ**2) - 0.25 * (BI + BJ) ** 2
     temp -= 0.5 * (BI - BJ) ** 2
     ri1[sub] += np.pi * G[sub] ** 2 * temp

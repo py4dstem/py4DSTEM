@@ -1052,7 +1052,6 @@ def match_single_pattern(
             sub = dqr < self.orientation_kernel_size
 
             if np.any(sub):
-
                 im_polar[ind_radial, :] = np.sum(
                     np.power(
                         np.maximum(intensity[sub, None], 0.0),

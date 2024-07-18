@@ -356,7 +356,9 @@ class Object2p5DMethodsMixin:
             propagators[i] = xp.exp(
                 1.0j * (-(kx**2)[:, None] * np.pi * wavelength * dz)
             )
-            propagators[i] *= xp.exp(1.0j * (-(ky**2)[None] * np.pi * wavelength * dz))
+            propagators[i] *= xp.exp(
+                1.0j * (-(ky**2)[None] * np.pi * wavelength * dz)
+            )
 
             if theta_x is not None:
                 propagators[i] *= xp.exp(

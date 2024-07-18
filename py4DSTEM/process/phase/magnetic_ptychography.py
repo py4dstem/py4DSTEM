@@ -1497,20 +1497,20 @@ class MagneticPtychography(
 
                     # position correction
                     if not fix_positions and a0 > 0:
-                        self._positions_px_all[batch_indices] = (
-                            self._position_correction(
-                                self._object,
-                                vectorized_patch_indices_row,
-                                vectorized_patch_indices_col,
-                                shifted_probes,
-                                overlap,
-                                amplitudes_device,
-                                positions_px,
-                                positions_px_initial,
-                                positions_step_size,
-                                max_position_update_distance,
-                                max_position_total_distance,
-                            )
+                        self._positions_px_all[
+                            batch_indices
+                        ] = self._position_correction(
+                            self._object,
+                            vectorized_patch_indices_row,
+                            vectorized_patch_indices_col,
+                            shifted_probes,
+                            overlap,
+                            amplitudes_device,
+                            positions_px,
+                            positions_px_initial,
+                            positions_step_size,
+                            max_position_update_distance,
+                            max_position_total_distance,
                         )
 
                     measurement_error += batch_error
