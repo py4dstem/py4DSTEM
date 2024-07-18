@@ -4,8 +4,8 @@ However, they have to date only been used with the Qx and Qy in pixels and not c
 There is no reason why this should not work, but the default tolerance would need adjustment.
 """
 
-import numpy as np
-from emdfile import tqdmnd
+# import numpy as np
+# from emdfile import tqdmnd
 
 
 def aperture_array_generator(
