@@ -1416,8 +1416,8 @@ def plot_orientation_maps(
     # Triangulate faces
     p = self.orientation_vecs[:, (1, 0, 2)]
     tri = mtri.Triangulation(
-        self.orientation_inds[:, 1].astype('float') - self.orientation_inds[:, 0].astype('float') * 1e-3,
-        self.orientation_inds[:, 0].astype('float') - self.orientation_inds[:, 1].astype('float') * 1e-3,
+        self.orientation_inds[:, 1] - self.orientation_inds[:, 0] * 1e-3,
+        self.orientation_inds[:, 0] - self.orientation_inds[:, 1] * 1e-3,
     )
     # convert rgb values of pixels to faces
     rgb_faces = (
