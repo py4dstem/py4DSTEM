@@ -1,0 +1,51 @@
+required-version = ">=0.5.0"
+target-version = "py311"
+[lint]
+# From Flake8 config
+# select = [
+#     # "F402", # module level import not at top of file
+#     # "F404", # future import not at top of file
+#     # # "F812", # list comprehension redefines name from outer scope
+#     # "F823", # local variable name referenced before assignment
+#     # # "F831", # duplicate argument name in function definition
+#     # "F821", # undefined name
+#     # "F822", # undefined name in __all__
+#     # "E112", # expected an indented block
+#     # "E902", # IOError
+#     # # "E999", # SyntaxError deprecated since
+# ]
+
+ignore = [
+    "E501", # line-too-long
+    "F401", # unused import
+    
+    # exisiting errors in code base
+    # "E721", # do not compare types, use 'isinstance()'
+    # "F841", # local variable is assigned to but never used
+    # "E741", # ambiguous variable name
+    # "F541", # f-string is missing placeholders
+    # "E731", # do not assign a lambda expression, use a def
+    # "E714", # test for object identity should be 'is not'
+    # "F811", # redefinition of unused name
+    # "E722", # do not use bare except
+    # "F405", # name may be undefined, or defined from star imports
+    # "F523", # string-dot-format-extra-positional-argument
+    # "F403", # unable to detect undefined names
+    # "F524", # string-dot-format-missing-arguments
+    # "E402", # module level import not at top of file
+    # "E713", # test for membership should be 'not in'
+    # "E743", # ambiguous function name
+    # "E712", # true-false-comparison
+
+]
+
+exclude = ["test/**/*.py"] # ignore test files
+
+[lint.per-file-ignores]
+# Ignore specific lint errors for __init__.py files
+"**/__init__.py" = [
+    "F401", # Unspecified import
+    "F403", # Unable to detect undefined names
+    "E402"  # Module level import not at top of file
+]
+# "./test/**/*.py" = ["E501", "F401", "E402"] # line-too-long, unused import, import not at top of file
