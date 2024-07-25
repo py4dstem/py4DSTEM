@@ -686,6 +686,7 @@ class PhaseReconstruction(Custom):
 
                 # calculate CoM
                 if dp_mask is not None:
+                    dp_mask = copy_to_device(dp_mask, device)
                     intensities_mask = intensities * dp_mask
                 else:
                     intensities_mask = intensities
@@ -1864,42 +1865,34 @@ class PtychographicReconstruction(PhaseReconstruction):
             else:
                 raise ValueError()
 
-            if transpose:
-                x = (x - np.ptp(x) / 2) / sampling[1]
-                y = (y - np.ptp(y) / 2) / sampling[0]
-            else:
-                x = (x - np.ptp(x) / 2) / sampling[0]
-                y = (y - np.ptp(y) / 2) / sampling[1]
             x, y = np.meshgrid(x, y, indexing="ij")
 
             if positions_offset_ang is not None:
-                if transpose:
-                    x += positions_offset_ang[0] / sampling[1]
-                    y += positions_offset_ang[1] / sampling[0]
-                else:
-                    x += positions_offset_ang[0] / sampling[0]
-                    y += positions_offset_ang[1] / sampling[1]
+                x += positions_offset_ang[0]
+                y += positions_offset_ang[1]
 
             if positions_mask is not None:
                 x = x[positions_mask]
                 y = y[positions_mask]
-        else:
-            positions -= np.mean(positions, axis=0)
-            x = positions[:, 0] / sampling[1]
-            y = positions[:, 1] / sampling[0]
+
+            positions = np.stack((x.ravel(), y.ravel()), axis=-1)
 
         if rotation_angle is not None:
-            x, y = x * np.cos(rotation_angle) + y * np.sin(rotation_angle), -x * np.sin(
-                rotation_angle
-            ) + y * np.cos(rotation_angle)
+            tf = AffineTransform(angle=rotation_angle)
+            positions = tf(positions, positions.mean(0))
 
         if transpose:
-            positions = np.array([y.ravel(), x.ravel()]).T
-        else:
-            positions = np.array([x.ravel(), y.ravel()]).T
+            positions = np.flip(positions, 1)
+            sampling = sampling[::-1]
 
-        positions -= np.min(positions, axis=0)
+        # ensure positive
+        positions -= np.min(positions, axis=0).clip(-np.inf, 0)
 
+        # finally, switch to pixels
+        positions[:, 0] /= sampling[0]
+        positions[:, 1] /= sampling[1]
+
+        # top-left padding
         if object_padding_px is None:
             float_padding = region_of_interest_shape / 2
             object_padding_px = (float_padding, float_padding)
