@@ -743,6 +743,7 @@ class Parallax(PhaseReconstruction):
         min_alignment_bin: int = 1,
         num_iter_at_min_bin: int = 2,
         alignment_bin_values: list = None,
+        centered_alignment_bins: bool = True,
         cross_correlation_upsample_factor: int = 8,
         regularizer_matrix_size: Tuple[int, int] = (1, 1),
         regularize_shifts: bool = False,
@@ -879,6 +880,8 @@ class Parallax(PhaseReconstruction):
                     (bin_vals, np.repeat(bin_vals[-1], num_iter_at_min_bin - 1))
                 )
 
+        bin_shift = 0 if centered_alignment_bins else 0.5
+
         if plot_aligned_bf:
             num_plots = bin_vals.shape[0]
             nrows = int(np.sqrt(num_plots))
@@ -913,7 +916,7 @@ class Parallax(PhaseReconstruction):
             G_ref = xp.fft.fft2(self._recon_BF)
 
             # Segment the virtual images with current binning values
-            xy_inds = xp.round(xy_center / bin_vals[a0] + 0.5).astype("int")
+            xy_inds = xp.round(xy_center / bin_vals[a0] + bin_shift).astype("int")
             xy_vals = np.unique(
                 asnumpy(xy_inds), axis=0
             )  # axis is not yet supported in cupy

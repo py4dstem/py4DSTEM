@@ -107,6 +107,9 @@ class MixedstateMultislicePtychography(
     initial_scan_positions: np.ndarray, optional
         Probe positions in Å for each diffraction intensity
         If None, initialized to a grid scan
+    object_fov_ang: Tuple[int,int], optional
+        Fixed object field of view in Å. If None, the fov is initialized using the
+        probe positions and object_padding_px
     positions_offset_ang: np.ndarray, optional
         Offset of positions in A
     theta_x: float
@@ -159,6 +162,7 @@ class MixedstateMultislicePtychography(
         initial_object_guess: np.ndarray = None,
         initial_probe_guess: np.ndarray = None,
         initial_scan_positions: np.ndarray = None,
+        object_fov_ang: Tuple[float, float] = None,
         positions_offset_ang: np.ndarray = None,
         theta_x: float = 0,
         theta_y: float = 0,
@@ -245,6 +249,7 @@ class MixedstateMultislicePtychography(
         self._object_type = object_type
         self._positions_mask = positions_mask
         self._object_padding_px = object_padding_px
+        self._object_fov_ang = object_fov_ang
         self._verbose = verbose
         self._preprocessed = False
 
@@ -278,6 +283,7 @@ class MixedstateMultislicePtychography(
         force_reciprocal_sampling: float = None,
         object_fov_mask: np.ndarray = None,
         crop_patterns: bool = False,
+        center_positions_in_fov: bool = True,
         store_initial_arrays: bool = True,
         device: str = None,
         clear_fft_cache: bool = None,
@@ -348,6 +354,8 @@ class MixedstateMultislicePtychography(
             If None, probe_overlap intensity is thresholded
         crop_patterns: bool
             if True, crop patterns to avoid wrap around of patterns when centering
+        center_positions_in_fov: bool
+            If True (default), probe positions are centered in the fov.
         store_initial_arrays: bool
             If True, preprocesed object and probe arrays are stored allowing reset=True in reconstruct.
         device: str, optional
@@ -524,15 +532,18 @@ class MixedstateMultislicePtychography(
             self._object_type_initial = self._object_type
         self._object_shape = self._object.shape[-2:]
 
-        # center probe positions
         self._positions_px = xp_storage.asarray(
             self._positions_px, dtype=xp_storage.float32
         )
         self._positions_px_initial_com = self._positions_px.mean(0)
-        self._positions_px -= (
-            self._positions_px_initial_com - xp_storage.array(self._object_shape) / 2
-        )
-        self._positions_px_initial_com = self._positions_px.mean(0)
+
+        # center probe positions
+        if center_positions_in_fov:
+            self._positions_px -= (
+                self._positions_px_initial_com
+                - xp_storage.array(self._object_shape) / 2
+            )
+            self._positions_px_initial_com = self._positions_px.mean(0)
 
         self._positions_px_initial = self._positions_px.copy()
         self._positions_initial = self._positions_px_initial.copy()
