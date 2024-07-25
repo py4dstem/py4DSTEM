@@ -1,6 +1,6 @@
 """
 Module for reconstructing phase objects from 4DSTEM datasets using iterative methods,
-namely magnetic ptychography.
+namely x-ray magnetic ptychography.
 """
 
 import warnings
@@ -46,7 +46,7 @@ from py4DSTEM.process.phase.utils import (
 )
 
 
-class MagneticPtychography(
+class XRayMagneticPtychography(
     VisualizationsMixin,
     PositionsConstraintsMixin,
     ProbeConstraintsMixin,
@@ -58,7 +58,7 @@ class MagneticPtychography(
     PtychographicReconstruction,
 ):
     """
-    Iterative Magnetic Ptychographic Reconstruction Class.
+    Iterative X-Ray Magnetic Ptychographic Reconstruction Class.
 
     Diffraction intensities dimensions         : (Rx,Ry,Qx,Qy) (for each measurement)
     Reconstructed probe dimensions             : (Sx,Sy)
@@ -148,7 +148,7 @@ class MagneticPtychography(
         device: str = "cpu",
         storage: str = None,
         clear_fft_cache: bool = True,
-        name: str = "magnetic_ptychographic_reconstruction",
+        name: str = "xray_magnetic_ptychographic_reconstruction",
         **kwargs,
     ):
         Custom.__init__(self, name=name)
@@ -171,10 +171,8 @@ class MagneticPtychography(
         polar_parameters.update(kwargs)
         self._set_polar_parameters(polar_parameters)
 
-        if object_type != "potential" and object_type != "complex":
-            raise ValueError(
-                f"object_type must be either 'potential' or 'complex', not {object_type}"
-            )
+        if object_type != "complex":
+            raise NotImplementedError()
 
         self.set_save_defaults()
 
@@ -337,25 +335,25 @@ class MagneticPtychography(
             self._recon_mode = 0
             self._num_measurements = 2
             magnetic_contribution_msg = (
-                "Magnetic vector potential sign in first meaurement assumed to be negative.\n"
-                "Magnetic vector potential sign in second meaurement assumed to be positive."
+                "Magnetic contribution sign in first meaurement assumed to be negative.\n"
+                "Magnetic contribution sign in second meaurement assumed to be positive."
             )
 
         elif self._magnetic_contribution_sign == "-0+":
             self._recon_mode = 1
             self._num_measurements = 3
             magnetic_contribution_msg = (
-                "Magnetic vector potential sign in first meaurement assumed to be negative.\n"
-                "Magnetic vector potential assumed to be zero in second meaurement.\n"
-                "Magnetic vector potential sign in third meaurement assumed to be positive."
+                "Magnetic contribution sign in first meaurement assumed to be negative.\n"
+                "Magnetic contribution assumed to be zero in second meaurement.\n"
+                "Magnetic contribution sign in third meaurement assumed to be positive."
             )
 
         elif self._magnetic_contribution_sign == "0+":
             self._recon_mode = 2
             self._num_measurements = 2
             magnetic_contribution_msg = (
-                "Magnetic vector potential assumed to be zero in first meaurement.\n"
-                "Magnetic vector potential sign in second meaurement assumed to be positive."
+                "Magnetic contribution assumed to be zero in first meaurement.\n"
+                "Magnetic contribution sign in second meaurement assumed to be positive."
             )
         else:
             raise ValueError(
@@ -604,7 +602,8 @@ class MagneticPtychography(
         )
 
         if self._object is None:
-            self._object = xp.full((2,) + obj.shape, obj)
+            # complex zeros instead of ones, since we store pre-exponential terms
+            self._object = xp.zeros((2,) + obj.shape, dtype=obj.dtype)
         else:
             self._object = obj
 
@@ -817,16 +816,13 @@ class MagneticPtychography(
             1, vectorized_patch_indices_row, vectorized_patch_indices_col
         ]
 
-        if self._object_type == "potential":
-            object_patches = xp.exp(1j * object_patches)
-
-        overlap_base = shifted_probes * object_patches[0]
+        overlap_base = shifted_probes * xp.exp(1.0j * object_patches[0])
 
         match (self._recon_mode, self._active_measurement_index):
             case (0, 0) | (1, 0):  # reverse
-                overlap = overlap_base * xp.conj(object_patches[1])
+                overlap = overlap_base * xp.exp(-1.0j * object_patches[1])
             case (0, 1) | (1, 2) | (2, 1):  # forward
-                overlap = overlap_base * object_patches[1]
+                overlap = overlap_base * xp.exp(1.0j * object_patches[1])
             case (1, 1) | (2, 0):  # neutral
                 overlap = overlap_base
             case _:
@@ -879,9 +875,9 @@ class MagneticPtychography(
         xp = self._xp
 
         probe_conj = xp.conj(shifted_probes)  # P*
-        electrostatic_conj = xp.conj(object_patches[0])  # V* = exp(-i v)
+        electrostatic_conj = xp.exp(-1.0j * xp.conj(object_patches[0]))  # exp[-i c]
 
-        probe_electrostatic_abs = xp.abs(shifted_probes * object_patches[0])
+        probe_electrostatic_abs = xp.abs(probe_conj * electrostatic_conj)
         probe_electrostatic_normalization = self._sum_overlapping_patches_bincounts(
             probe_electrostatic_abs**2,
             positions_px,
@@ -892,74 +888,37 @@ class MagneticPtychography(
             + (normalization_min * xp.max(probe_electrostatic_normalization)) ** 2
         )
 
-        probe_magnetic_abs = xp.abs(shifted_probes * object_patches[1])
-        probe_magnetic_normalization = self._sum_overlapping_patches_bincounts(
-            probe_magnetic_abs**2,
-            positions_px,
-        )
-        probe_magnetic_normalization = 1 / xp.sqrt(
-            1e-16
-            + ((1 - normalization_min) * probe_magnetic_normalization) ** 2
-            + (normalization_min * xp.max(probe_magnetic_normalization)) ** 2
-        )
-
-        if not fix_probe:
-            electrostatic_magnetic_abs = xp.abs(object_patches[0] * object_patches[1])
-            electrostatic_magnetic_normalization = xp.sum(
-                electrostatic_magnetic_abs**2,
-                axis=0,
-            )
-            electrostatic_magnetic_normalization = 1 / xp.sqrt(
-                1e-16
-                + ((1 - normalization_min) * electrostatic_magnetic_normalization) ** 2
-                + (normalization_min * xp.max(electrostatic_magnetic_normalization))
-                ** 2
-            )
-
-            if self._recon_mode > 0:
-                electrostatic_abs = xp.abs(object_patches[0])
-                electrostatic_normalization = xp.sum(
-                    electrostatic_abs**2,
-                    axis=0,
-                )
-                electrostatic_normalization = 1 / xp.sqrt(
-                    1e-16
-                    + ((1 - normalization_min) * electrostatic_normalization) ** 2
-                    + (normalization_min * xp.max(electrostatic_normalization)) ** 2
-                )
-
         match (self._recon_mode, self._active_measurement_index):
             case (0, 0) | (1, 0):  # reverse
-                if self._object_type == "potential":
-                    # -i exp(-i v) exp(i m) P*
-                    electrostatic_update = self._sum_overlapping_patches_bincounts(
-                        xp.real(
-                            -1j
-                            * object_patches[1]
-                            * electrostatic_conj
-                            * probe_conj
-                            * exit_waves
-                        ),
-                        positions_px,
-                    )
 
-                    # i exp(-i v) exp(i m) P*
-                    magnetic_update = -electrostatic_update
+                magnetic_conj = xp.exp(1.0j * xp.conj(object_patches[1]))
 
-                else:
-                    # M P*
-                    electrostatic_update = self._sum_overlapping_patches_bincounts(
-                        probe_conj * object_patches[1] * exit_waves,
-                        positions_px,
-                    )
+                probe_magnetic_abs = xp.abs(shifted_probes * magnetic_conj)
+                probe_magnetic_normalization = self._sum_overlapping_patches_bincounts(
+                    probe_magnetic_abs**2,
+                    positions_px,
+                )
+                probe_magnetic_normalization = 1 / xp.sqrt(
+                    1e-16
+                    + ((1 - normalization_min) * probe_magnetic_normalization) ** 2
+                    + (normalization_min * xp.max(probe_magnetic_normalization)) ** 2
+                )
 
-                    # V* P*
-                    magnetic_update = xp.conj(
-                        self._sum_overlapping_patches_bincounts(
-                            probe_conj * electrostatic_conj * exit_waves,
-                            positions_px,
-                        )
-                    )
+                # - i * exp(i m*) * exp(-i c*) * P
+                electrostatic_update = self._sum_overlapping_patches_bincounts(
+                    -1.0j
+                    * magnetic_conj
+                    * electrostatic_conj
+                    * probe_conj
+                    * exit_waves,
+                    positions_px,
+                )
+
+                # i * exp(i m*) * exp(-i c*) * P
+                magnetic_update = self._sum_overlapping_patches_bincounts(
+                    1.0j * magnetic_conj * electrostatic_conj * probe_conj * exit_waves,
+                    positions_px,
+                )
 
                 current_object[0] += (
                     step_size * electrostatic_update * probe_magnetic_normalization
@@ -969,65 +928,101 @@ class MagneticPtychography(
                 )
 
                 if not fix_probe:
-                    # M V*
+
+                    electrostatic_magnetic_abs = xp.abs(
+                        electrostatic_conj * magnetic_conj
+                    )
+                    electrostatic_magnetic_normalization = xp.sum(
+                        electrostatic_magnetic_abs**2,
+                        axis=0,
+                    )
+                    electrostatic_magnetic_normalization = 1 / xp.sqrt(
+                        1e-16
+                        + (
+                            (1 - normalization_min)
+                            * electrostatic_magnetic_normalization
+                        )
+                        ** 2
+                        + (
+                            normalization_min
+                            * xp.max(electrostatic_magnetic_normalization)
+                        )
+                        ** 2
+                    )
+
+                    # exp(i m*) * exp(-i c*)
                     current_probe += step_size * (
                         xp.sum(
-                            electrostatic_conj * object_patches[1] * exit_waves,
+                            magnetic_conj * electrostatic_conj * exit_waves,
                             axis=0,
                         )
                         * electrostatic_magnetic_normalization
                     )
 
             case (0, 1) | (1, 2) | (2, 1):  # forward
-                magnetic_conj = xp.conj(object_patches[1])  # M* = exp(-i m)
 
-                if self._object_type == "potential":
-                    # -i exp(-i v) exp(-i m) P*
-                    electrostatic_update = self._sum_overlapping_patches_bincounts(
-                        xp.real(
-                            -1j
-                            * magnetic_conj
-                            * electrostatic_conj
-                            * probe_conj
-                            * exit_waves
-                        ),
-                        positions_px,
-                    )
+                magnetic_conj = xp.exp(-1.0j * xp.conj(object_patches[1]))
 
-                    # -i exp(-i v) exp(-i m) P*
-                    magnetic_update = electrostatic_update
-
-                else:
-                    # M* P*
-                    electrostatic_update = self._sum_overlapping_patches_bincounts(
-                        probe_conj * magnetic_conj * exit_waves,
-                        positions_px,
-                    )
-
-                    # V* P*
-                    magnetic_update = self._sum_overlapping_patches_bincounts(
-                        probe_conj * electrostatic_conj * exit_waves,
-                        positions_px,
-                    )
-
-                current_object[0] += (
-                    step_size * electrostatic_update * probe_magnetic_normalization
+                probe_magnetic_abs = xp.abs(shifted_probes * magnetic_conj)
+                probe_magnetic_normalization = self._sum_overlapping_patches_bincounts(
+                    probe_magnetic_abs**2,
+                    positions_px,
                 )
+                probe_magnetic_normalization = 1 / xp.sqrt(
+                    1e-16
+                    + ((1 - normalization_min) * probe_magnetic_normalization) ** 2
+                    + (normalization_min * xp.max(probe_magnetic_normalization)) ** 2
+                )
+
+                # - i * exp(-i m*) * exp(-i c*) * P
+                update = self._sum_overlapping_patches_bincounts(
+                    -1.0j
+                    * magnetic_conj
+                    * electrostatic_conj
+                    * probe_conj
+                    * exit_waves,
+                    positions_px,
+                )
+
+                current_object[0] += step_size * update * probe_magnetic_normalization
                 current_object[1] += (
-                    step_size * magnetic_update * probe_electrostatic_normalization
+                    step_size * update * probe_electrostatic_normalization
                 )
 
                 if not fix_probe:
-                    # M* V*
+
+                    electrostatic_magnetic_abs = xp.abs(
+                        electrostatic_conj * magnetic_conj
+                    )
+                    electrostatic_magnetic_normalization = xp.sum(
+                        electrostatic_magnetic_abs**2,
+                        axis=0,
+                    )
+                    electrostatic_magnetic_normalization = 1 / xp.sqrt(
+                        1e-16
+                        + (
+                            (1 - normalization_min)
+                            * electrostatic_magnetic_normalization
+                        )
+                        ** 2
+                        + (
+                            normalization_min
+                            * xp.max(electrostatic_magnetic_normalization)
+                        )
+                        ** 2
+                    )
+
+                    # exp(i m*) * exp(-i c*)
                     current_probe += step_size * (
                         xp.sum(
-                            electrostatic_conj * magnetic_conj * exit_waves,
+                            magnetic_conj * electrostatic_conj * exit_waves,
                             axis=0,
                         )
                         * electrostatic_magnetic_normalization
                     )
 
             case (1, 1) | (2, 0):  # neutral
+
                 probe_abs = xp.abs(shifted_probes)
                 probe_normalization = self._sum_overlapping_patches_bincounts(
                     probe_abs**2,
@@ -1039,26 +1034,30 @@ class MagneticPtychography(
                     + (normalization_min * xp.max(probe_normalization)) ** 2
                 )
 
-                if self._object_type == "potential":
-                    # -i exp(-i v) P*
-                    electrostatic_update = self._sum_overlapping_patches_bincounts(
-                        xp.real(-1j * electrostatic_conj * probe_conj * exit_waves),
-                        positions_px,
-                    )
-
-                else:
-                    # P*
-                    electrostatic_update = self._sum_overlapping_patches_bincounts(
-                        probe_conj * exit_waves,
-                        positions_px,
-                    )
+                # -i exp(-i c*) * P*
+                electrostatic_update = self._sum_overlapping_patches_bincounts(
+                    -1.0j * electrostatic_conj * probe_conj * exit_waves,
+                    positions_px,
+                )
 
                 current_object[0] += (
                     step_size * electrostatic_update * probe_normalization
                 )
 
                 if not fix_probe:
-                    # V*
+
+                    electrostatic_abs = xp.abs(electrostatic_conj)
+                    electrostatic_normalization = xp.sum(
+                        electrostatic_abs**2,
+                        axis=0,
+                    )
+                    electrostatic_normalization = 1 / xp.sqrt(
+                        1e-16
+                        + ((1 - normalization_min) * electrostatic_normalization) ** 2
+                        + (normalization_min * xp.max(electrostatic_normalization)) ** 2
+                    )
+
+                    # exp(-i c*)
                     current_probe += step_size * (
                         xp.sum(
                             electrostatic_conj * exit_waves,
@@ -1075,7 +1074,6 @@ class MagneticPtychography(
     def _object_constraints(
         self,
         current_object,
-        pure_phase_object,
         gaussian_filter,
         gaussian_filter_sigma_e,
         gaussian_filter_sigma_m,
@@ -1088,9 +1086,6 @@ class MagneticPtychography(
         tv_denoise,
         tv_denoise_weight,
         tv_denoise_inner_iter,
-        object_positivity,
-        shrinkage_rad,
-        object_mask,
         **kwargs,
     ):
         """MagneticObjectNDConstraints wrapper function"""
@@ -1098,10 +1093,10 @@ class MagneticPtychography(
         # smoothness
         if gaussian_filter:
             current_object[0] = self._object_gaussian_constraint(
-                current_object[0], gaussian_filter_sigma_e, pure_phase_object
+                current_object[0], gaussian_filter_sigma_e, False
             )
             current_object[1] = self._object_gaussian_constraint(
-                current_object[1], gaussian_filter_sigma_m, True
+                current_object[1], gaussian_filter_sigma_m, False
             )
         if butterworth_filter:
             current_object[0] = self._object_butterworth_constraint(
@@ -1121,25 +1116,6 @@ class MagneticPtychography(
                 current_object[0], tv_denoise_weight, tv_denoise_inner_iter
             )
 
-        # L1-norm pushing vacuum to zero
-        if shrinkage_rad > 0.0 or object_mask is not None:
-            current_object[0] = self._object_shrinkage_constraint(
-                current_object[0],
-                shrinkage_rad,
-                object_mask,
-            )
-
-        # amplitude threshold (complex) or positivity (potential)
-        if self._object_type == "complex":
-            current_object[0] = self._object_threshold_constraint(
-                current_object[0], pure_phase_object
-            )
-            current_object[1] = self._object_threshold_constraint(
-                current_object[1], True
-            )
-        elif object_positivity:
-            current_object[0] = self._object_positivity_constraint(current_object[0])
-
         return current_object
 
     def reconstruct(
@@ -1155,7 +1131,6 @@ class MagneticPtychography(
         step_size: float = 0.5,
         normalization_min: float = 1,
         positions_step_size: float = 0.9,
-        pure_phase_object: bool = False,
         fix_probe_com: bool = True,
         fix_probe: bool = False,
         fix_probe_aperture: bool = False,
@@ -1187,9 +1162,6 @@ class MagneticPtychography(
         tv_denoise: bool = True,
         tv_denoise_weight: float = None,
         tv_denoise_inner_iter: float = 40,
-        object_positivity: bool = True,
-        shrinkage_rad: float = 0.0,
-        fix_potential_baseline: bool = True,
         detector_fourier_mask: np.ndarray = None,
         store_iterations: bool = False,
         collective_measurement_updates: bool = True,
@@ -1614,16 +1586,6 @@ class MagneticPtychography(
                         tv_denoise=tv_denoise and tv_denoise_weight is not None,
                         tv_denoise_weight=tv_denoise_weight,
                         tv_denoise_inner_iter=tv_denoise_inner_iter,
-                        object_positivity=object_positivity,
-                        shrinkage_rad=shrinkage_rad,
-                        object_mask=(
-                            self._object_fov_mask_inverse
-                            if fix_potential_baseline
-                            and self._object_fov_mask_inverse.sum() > 0
-                            else None
-                        ),
-                        pure_phase_object=pure_phase_object
-                        and self._object_type == "complex",
                     )
 
             # Normalize Error Over Tilts
@@ -1649,16 +1611,6 @@ class MagneticPtychography(
                     tv_denoise=tv_denoise and tv_denoise_weight is not None,
                     tv_denoise_weight=tv_denoise_weight,
                     tv_denoise_inner_iter=tv_denoise_inner_iter,
-                    object_positivity=object_positivity,
-                    shrinkage_rad=shrinkage_rad,
-                    object_mask=(
-                        self._object_fov_mask_inverse
-                        if fix_potential_baseline
-                        and self._object_fov_mask_inverse.sum() > 0
-                        else None
-                    ),
-                    pure_phase_object=pure_phase_object
-                    and self._object_type == "complex",
                 )
 
             self.error_iterations.append(error.item())
@@ -1706,8 +1658,6 @@ class MagneticPtychography(
             If true, displays a colorbar
         plot_probe: bool, optional
             If true, the reconstructed complex probe is displayed
-        plot_fourier_probe: bool, optional
-            If true, the reconstructed complex Fourier probe is displayed
         remove_initial_probe_aberrations: bool, optional
             If true, when plotting fourier probe, removes initial probe
             to visualize changes
@@ -1715,26 +1665,34 @@ class MagneticPtychography(
 
         asnumpy = self._asnumpy
 
-        figsize = kwargs.pop("figsize", (12, 5))
-        cmap_e = kwargs.pop("cmap_e", "magma")
-        cmap_m = kwargs.pop("cmap_m", "PuOr")
+        figsize = kwargs.pop("figsize", (12, 8))
+        cmap_e_real = kwargs.pop("cmap_e_real", "cividis")
+        cmap_e_imag = kwargs.pop("cmap_e_imag", "magma")
+        cmap_m_real = kwargs.pop("cmap_m_real", "PuOr")
+        cmap_m_imag = kwargs.pop("cmap_m_imag", "PiYG")
         chroma_boost = kwargs.pop("chroma_boost", 1)
 
         # get scaled arrays
-        probe = self._return_single_probe()
         obj = self.object_cropped
-        if self._object_type == "complex":
-            obj = np.angle(obj)
 
-        vmin_e = kwargs.pop("vmin_e", None)
-        vmax_e = kwargs.pop("vmax_e", None)
-        obj[0], vmin_e, vmax_e = return_scaled_histogram_ordering(
-            obj[0], vmin_e, vmax_e
+        vmin_e_real = kwargs.pop("vmin_e_real", None)
+        vmax_e_real = kwargs.pop("vmax_e_real", None)
+        vmin_e_imag = kwargs.pop("vmin_e_imag", None)
+        vmax_e_imag = kwargs.pop("vmax_e_imag", None)
+        _, vmin_e_real, vmax_e_real = return_scaled_histogram_ordering(
+            obj[0].real, vmin_e_real, vmax_e_real
+        )
+        _, vmin_e_imag, vmax_e_iamg = return_scaled_histogram_ordering(
+            obj[0].imag, vmin_e_imag, vmax_e_imag
         )
 
-        _, _, _vmax_m = return_scaled_histogram_ordering(np.abs(obj[1]))
-        vmin_m = kwargs.pop("vmin_m", -_vmax_m)
-        vmax_m = kwargs.pop("vmax_m", _vmax_m)
+        _, _, _vmax_m_real = return_scaled_histogram_ordering(obj[1].real)
+        vmin_m_real = kwargs.pop("vmin_m_real", -_vmax_m_real)
+        vmax_m_real = kwargs.pop("vmax_m_real", _vmax_m_real)
+
+        _, _, _vmax_m_imag = return_scaled_histogram_ordering(obj[1].imag)
+        vmin_m_imag = kwargs.pop("vmin_m_imag", -_vmax_m_imag)
+        vmax_m_imag = kwargs.pop("vmax_m_imag", _vmax_m_imag)
 
         extent = [
             0,
@@ -1750,7 +1708,6 @@ class MagneticPtychography(
                 self.angular_sampling[0] * self._region_of_interest_shape[0] / 2,
                 -self.angular_sampling[0] * self._region_of_interest_shape[0] / 2,
             ]
-
         elif plot_probe:
             probe_extent = [
                 0,
@@ -1760,11 +1717,11 @@ class MagneticPtychography(
             ]
 
         if plot_convergence:
-            if plot_probe or plot_fourier_probe:
+            if plot_probe:
                 spec = GridSpec(
                     ncols=3,
-                    nrows=2,
-                    height_ratios=[4, 1],
+                    nrows=3,
+                    height_ratios=[4, 4, 1],
                     hspace=0.15,
                     width_ratios=[
                         (extent[1] / extent[2]) / (probe_extent[1] / probe_extent[2]),
@@ -1775,13 +1732,13 @@ class MagneticPtychography(
                 )
 
             else:
-                spec = GridSpec(ncols=2, nrows=2, height_ratios=[4, 1], hspace=0.15)
+                spec = GridSpec(ncols=2, nrows=3, height_ratios=[4, 4, 1], hspace=0.15)
 
         else:
-            if plot_probe or plot_fourier_probe:
+            if plot_probe:
                 spec = GridSpec(
                     ncols=3,
-                    nrows=1,
+                    nrows=2,
                     width_ratios=[
                         (extent[1] / extent[2]) / (probe_extent[1] / probe_extent[2]),
                         (extent[1] / extent[2]) / (probe_extent[1] / probe_extent[2]),
@@ -1791,28 +1748,24 @@ class MagneticPtychography(
                 )
 
             else:
-                spec = GridSpec(ncols=2, nrows=1)
+                spec = GridSpec(ncols=2, nrows=2, wspace=0.35)
 
         if fig is None:
             fig = plt.figure(figsize=figsize)
 
-        # Object_e
+        # Electronic real
         ax = fig.add_subplot(spec[0, 0])
         im = ax.imshow(
-            obj[0],
+            obj[0].real,
             extent=extent,
-            cmap=cmap_e,
-            vmin=vmin_e,
-            vmax=vmax_e,
+            cmap=cmap_e_real,
+            vmin=vmin_e_real,
+            vmax=vmax_e_real,
             **kwargs,
         )
         ax.set_ylabel("x [A]")
         ax.set_xlabel("y [A]")
-
-        if self._object_type == "potential":
-            ax.set_title("Electrostatic potential")
-        elif self._object_type == "complex":
-            ax.set_title("Electrostatic phase")
+        ax.set_title("Real elec. optical index")
 
         if cbar:
             divider = make_axes_locatable(ax)
@@ -1820,23 +1773,19 @@ class MagneticPtychography(
             fig.add_axes(ax_cb)
             fig.colorbar(im, cax=ax_cb)
 
-        # Object_m
+        # Electronic imag
         ax = fig.add_subplot(spec[0, 1])
         im = ax.imshow(
-            obj[1],
+            obj[0].imag,
             extent=extent,
-            cmap=cmap_m,
-            vmin=vmin_m,
-            vmax=vmax_m,
+            cmap=cmap_e_imag,
+            vmin=vmin_e_imag,
+            vmax=vmax_e_imag,
             **kwargs,
         )
         ax.set_ylabel("x [A]")
         ax.set_xlabel("y [A]")
-
-        if self._object_type == "potential":
-            ax.set_title("Magnetic potential")
-        elif self._object_type == "complex":
-            ax.set_title("Magnetic phase")
+        ax.set_title("Imag elec. optical index")
 
         if cbar:
             divider = make_axes_locatable(ax)
@@ -1844,34 +1793,147 @@ class MagneticPtychography(
             fig.add_axes(ax_cb)
             fig.colorbar(im, cax=ax_cb)
 
-        if plot_probe or plot_fourier_probe:
-            # Probe
+        # Magnetic real
+        ax = fig.add_subplot(spec[1, 0])
+        im = ax.imshow(
+            obj[1].real,
+            extent=extent,
+            cmap=cmap_m_real,
+            vmin=vmin_m_real,
+            vmax=vmax_m_real,
+            **kwargs,
+        )
+        ax.set_ylabel("x [A]")
+        ax.set_xlabel("y [A]")
+        ax.set_title("Real mag. optical index")
+
+        if cbar:
+            divider = make_axes_locatable(ax)
+            ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
+            fig.add_axes(ax_cb)
+            fig.colorbar(im, cax=ax_cb)
+
+        # Magnetic imag
+        ax = fig.add_subplot(spec[1, 1])
+        im = ax.imshow(
+            obj[1].imag,
+            extent=extent,
+            cmap=cmap_m_imag,
+            vmin=vmin_m_imag,
+            vmax=vmax_m_imag,
+            **kwargs,
+        )
+        ax.set_ylabel("x [A]")
+        ax.set_xlabel("y [A]")
+        ax.set_title("Imag mag. optical index")
+
+        if cbar:
+            divider = make_axes_locatable(ax)
+            ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
+            fig.add_axes(ax_cb)
+            fig.colorbar(im, cax=ax_cb)
+
+        if plot_fourier_probe:
+            # Fourier probe
+            intensities = self._return_probe_intensities(None)
+            titles = [
+                f"{sign}ve Fourier probe: {ratio*100:.1f}%"
+                for sign, ratio in zip(self._magnetic_contribution_sign, intensities)
+            ]
             ax = fig.add_subplot(spec[0, 2])
-            if plot_fourier_probe:
-                probe = asnumpy(
-                    self._return_fourier_probe(
-                        probe,
-                        remove_initial_probe_aberrations=remove_initial_probe_aberrations,
-                    )
-                )
 
-                probe_array = Complex2RGB(
-                    probe,
-                    chroma_boost=chroma_boost,
+            probe_fourier = asnumpy(
+                self._return_fourier_probe(
+                    self._probes_all[0],
+                    remove_initial_probe_aberrations=remove_initial_probe_aberrations,
                 )
+            )
 
-                ax.set_title("Reconstructed Fourier probe")
-                ax.set_ylabel("kx [mrad]")
-                ax.set_xlabel("ky [mrad]")
-            else:
-                probe_array = Complex2RGB(
-                    asnumpy(self._return_centered_probe(probe)),
-                    power=2,
-                    chroma_boost=chroma_boost,
+            probe_array = Complex2RGB(
+                probe_fourier,
+                chroma_boost=chroma_boost,
+            )
+
+            ax.set_title(titles[0])
+            ax.set_ylabel("kx [mrad]")
+            ax.set_xlabel("ky [mrad]")
+
+            im = ax.imshow(
+                probe_array,
+                extent=probe_extent,
+            )
+
+            if cbar:
+                divider = make_axes_locatable(ax)
+                ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
+                add_colorbar_arg(ax_cb, chroma_boost=chroma_boost)
+
+            ax = fig.add_subplot(spec[1, 2])
+
+            probe_fourier = asnumpy(
+                self._return_fourier_probe(
+                    self._probes_all[-1],
+                    remove_initial_probe_aberrations=remove_initial_probe_aberrations,
                 )
-                ax.set_title("Reconstructed probe intensity")
-                ax.set_ylabel("x [A]")
-                ax.set_xlabel("y [A]")
+            )
+
+            probe_array = Complex2RGB(
+                probe_fourier,
+                chroma_boost=chroma_boost,
+            )
+
+            ax.set_title(titles[-1])
+            ax.set_ylabel("kx [mrad]")
+            ax.set_xlabel("ky [mrad]")
+
+            im = ax.imshow(
+                probe_array,
+                extent=probe_extent,
+            )
+
+            if cbar:
+                divider = make_axes_locatable(ax)
+                ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
+                add_colorbar_arg(ax_cb, chroma_boost=chroma_boost)
+
+        elif plot_probe:
+            # Real probe
+            intensities = self._return_probe_intensities(None)
+            titles = [
+                f"{sign}ve probe intensity: {ratio*100:.1f}%"
+                for sign, ratio in zip(self._magnetic_contribution_sign, intensities)
+            ]
+            ax = fig.add_subplot(spec[0, 2])
+
+            probe_array = Complex2RGB(
+                asnumpy(self._return_centered_probe(self._probes_all[0])),
+                power=2,
+                chroma_boost=chroma_boost,
+            )
+            ax.set_title(titles[0])
+            ax.set_ylabel("x [A]")
+            ax.set_xlabel("y [A]")
+
+            im = ax.imshow(
+                probe_array,
+                extent=probe_extent,
+            )
+
+            if cbar:
+                divider = make_axes_locatable(ax)
+                ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
+                add_colorbar_arg(ax_cb, chroma_boost=chroma_boost)
+
+            ax = fig.add_subplot(spec[1, 2])
+
+            probe_array = Complex2RGB(
+                asnumpy(self._return_centered_probe(self._probes_all[-1])),
+                power=2,
+                chroma_boost=chroma_boost,
+            )
+            ax.set_title(titles[-1])
+            ax.set_ylabel("x [A]")
+            ax.set_xlabel("y [A]")
 
             im = ax.imshow(
                 probe_array,
@@ -1886,7 +1948,7 @@ class MagneticPtychography(
         if plot_convergence and hasattr(self, "error_iterations"):
             errors = np.array(self.error_iterations)
 
-            ax = fig.add_subplot(spec[1, :])
+            ax = fig.add_subplot(spec[2, :])
             ax.semilogy(np.arange(errors.shape[0]), errors, **kwargs)
             ax.set_ylabel("NMSE")
             ax.set_xlabel("Iteration number")

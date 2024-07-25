@@ -458,13 +458,15 @@ class PtychographyOptimizer:
         return static_args, optimization_args
 
     def _get_scan_positions(self, affine_transform, dataset):
-        R_pixel_size = dataset.calibration.get_R_pixel_size()
-        x, y = (
-            np.arange(dataset.R_Nx) * R_pixel_size,
-            np.arange(dataset.R_Ny) * R_pixel_size,
-        )
-        x, y = np.meshgrid(x, y, indexing="ij")
-        scan_positions = np.stack((x.ravel(), y.ravel()), axis=1)
+        scan_positions = self._init_static_args.pop("initial_scan_positions", None)
+        if scan_positions is None:
+            R_pixel_size = dataset.calibration.get_R_pixel_size()
+            x, y = (
+                np.arange(dataset.R_Nx) * R_pixel_size,
+                np.arange(dataset.R_Ny) * R_pixel_size,
+            )
+            x, y = np.meshgrid(x, y, indexing="ij")
+            scan_positions = np.stack((x.ravel(), y.ravel()), axis=1)
         scan_positions = scan_positions @ affine_transform.asarray()
         return scan_positions
 
