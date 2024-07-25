@@ -660,11 +660,28 @@ def plot_radial_peaks(
     qstep=None,
     label_y_axis=False,
     figsize=(8, 4),
+    v_lines=None,
     returnfig=False,
 ):
     """
     Calculate and plot the total peak signal as a function of the radial coordinate.
 
+    q_pixel_units
+        If True, plot in reciprocal units instead of pixels.
+    qmin
+        The minimum q for plotting.
+    qmax
+        The maximum q for plotting.
+    qstep
+        The bin width.
+    label_y_axis
+        If True, label y axis.
+    figsize
+        Plot size.
+    v_lines: tuple
+        x coordinates for plotting vertical lines.
+    returnfig
+        If True, returns figure.
     """
 
     # Get all peak data
@@ -740,6 +757,15 @@ def plot_radial_peaks(
     )
     if not label_y_axis:
         ax.tick_params(left=False, labelleft=False)
+
+    if v_lines is not None:
+        y_min, y_max = ax.get_ylim()
+
+        if np.isscalar(v_lines):
+            ax.vlines(v_lines, y_min, y_max, color="g")
+        else:
+            for a0 in range(len(v_lines)):
+                ax.vlines(v_lines[a0], y_min, y_max, color="g")
 
     if returnfig:
         return fig, ax
