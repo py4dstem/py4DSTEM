@@ -225,6 +225,7 @@ class MagneticPtychographicTomography(
         padded_diffraction_intensities_shape: Tuple[int, int] = None,
         region_of_interest_shape: Tuple[int, int] = None,
         dp_mask: np.ndarray = None,
+        in_place_datacube_modification: bool = False,
         fit_function: str = "plane",
         plot_probe_overlaps: bool = True,
         rotation_real_space_degrees: float = None,
@@ -266,6 +267,9 @@ class MagneticPtychographicTomography(
             at the diffraction plane to allow comparison with experimental data
         dp_mask: ndarray, optional
             Mask for datacube intensities (Qx,Qy)
+        in_place_datacube_modification: bool, optional
+            If True, the datacube will be preprocessed in-place. Note this is not possible
+            when either crop_patterns or positions_mask are used.
         fit_function: str, optional
             2D fitting function for CoM fitting. One of 'plane','parabola','bezier_two'
         plot_probe_overlaps: bool, optional
@@ -479,12 +483,14 @@ class MagneticPtychographicTomography(
                 amplitudes,
                 mean_diffraction_intensity_temp,
                 self._crop_mask,
+                self._crop_mask_shape,
             ) = self._normalize_diffraction_intensities(
                 intensities,
                 com_fitted_x,
                 com_fitted_y,
                 self._positions_mask[index],
                 crop_patterns,
+                in_place_datacube_modification,
             )
 
             self._mean_diffraction_intensity.append(mean_diffraction_intensity_temp)

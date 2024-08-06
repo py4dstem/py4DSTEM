@@ -1022,6 +1022,7 @@ class ProbeMethodsMixin:
         device = self._device
 
         crop_mask = self._crop_mask
+        crop_mask_shape = self._crop_mask_shape
         region_of_interest_shape = self._region_of_interest_shape
         sampling = self.sampling
         energy = self._energy
@@ -1049,7 +1050,7 @@ class ProbeMethodsMixin:
 
                 if crop_patterns:
                     vacuum_probe_intensity = vacuum_probe_intensity[crop_mask].reshape(
-                        self._diffraction_intensities_shape_crop
+                        crop_mask_shape
                     )
 
                 sx, sy = vacuum_probe_intensity.shape
