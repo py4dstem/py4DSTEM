@@ -1551,6 +1551,7 @@ class PtychographicReconstruction(PhaseReconstruction):
             "semiangle_cutoff": self._semiangle_cutoff,
             "rolloff": self._rolloff,
             "object_padding_px": self._object_padding_px,
+            "object_fov_ang": self._object_fov_ang,
             "object_type": self._object_type,
             "verbose": self._verbose,
             "device": self._device,
