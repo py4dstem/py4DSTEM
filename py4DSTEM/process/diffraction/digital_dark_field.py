@@ -1,4 +1,3 @@
-
 """
 A general note on all these functions is that they are designed for use with rotation calibration into the pointslist.
 However, they have to date only been used with the Qx and Qy in pixels and not calibrated into reciprocal units.  
@@ -10,6 +9,7 @@ import matplotlib.pyplot as plt
 from matplotlib.collections import EllipseCollection
 from emdfile import tqdmnd
 from py4DSTEM import show
+
 
 def aperture_array_generator(
     shape,
@@ -25,12 +25,12 @@ def aperture_array_generator(
     n1lims=(-5, 5),
     n2lims=(-5, 5),
     returns="both",
-    plot_result = False,
-    plot_image = None,
-    plot_marker_size = 100,
-    plot_marker_radius_pixels = None,
-    figsize = (6,6),
-    returnfig = False,
+    plot_result=False,
+    plot_image=None,
+    plot_marker_size=100,
+    plot_marker_radius_pixels=None,
+    figsize=(6, 6),
+    returnfig=False,
     **kwargs,
 ):
     """
@@ -65,10 +65,60 @@ def aperture_array_generator(
     returns sets whether the function returns:
 
         'both' = a centered array and an array in raw pixel numbers (uncentered)
-
         'centered' = just the version centered on [0,0]
-
         in all cases, the return is a list of (Qx,Qy) tuples
+
+    Parameters
+    ----------
+    shape: tuple, list, np.array
+        2-element vector of the diffraction space shape.
+    center: tuple, list, np.array
+        2-element vector of the center coordinate.
+    pad: float
+        Spacing around the boundaries where no apertures are generated.
+    mode: string
+        'single', '2-beam' or 'array' depending on desired aperture configuration.
+    g1: tuple, list, np.array
+        2-element vector for first g vector.
+    g2: tuple, list, np.array
+        2-element vector for second g vector.
+    s1: int
+        Multiples of g1 to position aperture.
+    s2: int
+        Multiples of g2 to position aperture.
+    r1: float
+        inner radius
+    r2: float
+        outer radius
+    n1lims: (int,int)
+        Limits for the g1 vector.
+    n2lims=(int,int)
+        Limits for the g2 vector.
+    returns:
+        What function returns.
+    plot_result: bool
+        Plot the aperture array
+    plot_image: bool
+        Image to show in background of the aperture array
+    plot_marker_size: float
+        Marker size in points (standard matplotlib)
+    plot_marker_radius_pixels: float
+        Marker radius in pixels.
+    figsize: (float, float)
+        Figure size.
+    returnfig: bool
+        Set to true to return the figure handles.
+
+    Returns
+    ----------
+    aperture_positions:
+        (N,2) array containing the aperture positions in the image coordinate system.
+    centered_aperture_positions:
+        (N,2) array containing the aperture positions in a centered coordinate system.
+    fig, ax:
+        Figure and axes handles for plot.
+
+
     """
 
     V, H = shape[0], shape[1]
@@ -121,26 +171,26 @@ def aperture_array_generator(
         if plot_image is None:
             plot_image = np.zeros(shape)
 
-        fig,ax = show(
+        fig, ax = show(
             plot_image,
-            ticks = False,
-            returnfig = True,
+            ticks=False,
+            returnfig=True,
             **kwargs,
         )
         if plot_marker_size is None or plot_marker_radius_pixels is not None:
             offsets = list(
                 zip(
-                    aperture_positions[:,1], 
-                    aperture_positions[:,0],
+                    aperture_positions[:, 1],
+                    aperture_positions[:, 0],
                 ),
             )
             ax.add_collection(
                 EllipseCollection(
-                    widths=2.0*plot_marker_radius_pixels, 
-                    heights=2.0*plot_marker_radius_pixels, 
-                    angles=0, 
-                    units='xy',
-                    facecolors=(0.0,1.0,0.0,0.3),
+                    widths=2.0 * plot_marker_radius_pixels,
+                    heights=2.0 * plot_marker_radius_pixels,
+                    angles=0,
+                    units="xy",
+                    facecolors=(0.0, 1.0, 0.0, 0.3),
                     # facecolors=plt.cm.hsv(color),
                     offsets=offsets,
                     transOffset=ax.transData,
@@ -148,12 +198,12 @@ def aperture_array_generator(
             )
         else:
             ax.scatter(
-                aperture_positions[:,1],
-                aperture_positions[:,0],
-                color = (0.0,1.0,0.0,0.3),
-                s = plot_marker_size,
+                aperture_positions[:, 1],
+                aperture_positions[:, 0],
+                color=(0.0, 1.0, 0.0, 0.3),
+                s=plot_marker_size,
             )
- 
+
     if returns == "both":
         if returnfig:
             return aperture_positions, centered_aperture_positions, fig, ax
@@ -161,7 +211,7 @@ def aperture_array_generator(
             return aperture_positions, centered_aperture_positions
     elif returns == "centered":
         if returnfig:
-            return centered_aperture_positions, fig, ax            
+            return centered_aperture_positions, fig, ax
         else:
             return centered_aperture_positions
     else:
@@ -171,27 +221,27 @@ def aperture_array_generator(
 def aperture_array_subtract(
     aperture_positions,
     aperture_positions_delete,
-    tol = 1.0,
-    plot_result = False,
-    plot_image = None,
-    plot_marker_size = 100,
-    figsize = (6,6),
-    returnfig = False,
+    tol=1.0,
+    plot_result=False,
+    plot_image=None,
+    plot_marker_size=100,
+    figsize=(6, 6),
+    returnfig=False,
     **kwargs,
-    ):
+):
     """
     This function takes in a set of aperture positions, and removes apertures within
     the user-specified tolerance from aperture_array_delete.
     """
 
-    # Determine which apertures to keep 
-    keep = np.zeros(aperture_positions.shape[0],dtype='bool')
+    # Determine which apertures to keep
+    keep = np.zeros(aperture_positions.shape[0], dtype="bool")
     tol2 = tol**2
     for a0 in range(aperture_positions.shape[0]):
         dist2_min = np.min(
             np.sum(
-                (aperture_positions[a0] - aperture_positions_delete)**2,
-                axis = 1,
+                (aperture_positions[a0] - aperture_positions_delete) ** 2,
+                axis=1,
             ),
         )
         if dist2_min > tol2:
@@ -203,38 +253,36 @@ def aperture_array_subtract(
     if plot_result:
         aperture_positions_del = aperture_positions[np.logical_not(keep)]
 
-
         if plot_image is None:
             plot_image = np.zeros(shape)
 
-        fig,ax = show(
+        fig, ax = show(
             plot_image,
-            ticks = False,
-            returnfig = True,
+            ticks=False,
+            returnfig=True,
             **kwargs,
         )
         ax.scatter(
-            aperture_positions_del[:,1],
-            aperture_positions_del[:,0],
-            color = (1.0,0.0,0.0,0.3),
-            s = plot_marker_size,
+            aperture_positions_del[:, 1],
+            aperture_positions_del[:, 0],
+            color=(1.0, 0.0, 0.0, 0.3),
+            s=plot_marker_size,
         )
         ax.scatter(
-            aperture_positions_new[:,1],
-            aperture_positions_new[:,0],
-            color = (0.0,1.0,0.0,0.3),
-            s = plot_marker_size,
+            aperture_positions_new[:, 1],
+            aperture_positions_new[:, 0],
+            color=(0.0, 1.0, 0.0, 0.3),
+            s=plot_marker_size,
         )
 
     return aperture_positions_new
 
 
-
 def pointlist_to_array(
-    bplist, 
-    # idim, 
+    bplist,
+    # idim,
     # jdim
-    ):
+):
     """
     This function turns the py4dstem pointslist object to a simple numpy array that is more
     convenient for rapid array processing in numpy
@@ -288,12 +336,7 @@ def pointlist_differences(aperture_position, points_array):
     return diff
 
 
-def DDFimage(
-    points_array, 
-    aperture_positions, 
-    Rshape = None,
-    tol=1
-):
+def DDFimage(points_array, aperture_positions, Rshape=None, tol=1):
     """
     points_array is an array of points as calculated by pointlist_to_array
 
@@ -312,15 +355,18 @@ def DDFimage(
 
     if Rshape is None:
         Rshape = (
-            np.max(np.max(points_array[:,3])).astype('int')+1,
-            np.max(np.max(points_array[:,4])).astype('int')+1,
+            np.max(np.max(points_array[:, 3])).astype("int") + 1,
+            np.max(np.max(points_array[:, 4])).astype("int") + 1,
         )
 
     image = np.zeros(Rshape)
     for aperture_index in tqdmnd(len(aperture_positions)):
         aperture_position = aperture_positions[aperture_index]
         intensities = np.vstack(
-            (points_array[:, 2:].T, pointlist_differences(aperture_position, points_array))
+            (
+                points_array[:, 2:].T,
+                pointlist_differences(aperture_position, points_array),
+            )
         ).T
         intensities2 = np.delete(intensities, np.where(intensities[:, 3] > tol), axis=0)
         for row in range(intensities2[:, 0].shape[0]):
