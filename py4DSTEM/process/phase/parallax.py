@@ -19,6 +19,7 @@ from py4DSTEM.process.phase.utils import (
     AffineTransform,
     bilinear_kernel_density_estimate,
     bilinearly_interpolate_array,
+    generate_batches,
     lanczos_interpolate_array,
     lanczos_kernel_density_estimate,
     pixel_rolling_kernel_density_estimate,
@@ -260,12 +261,14 @@ class Parallax(PhaseReconstruction):
         descan_correction_fit_function: str = None,
         defocus_guess: float = None,
         rotation_guess: float = None,
+        aligned_bf_image_guess: np.ndarray = None,
         plot_average_bf: bool = True,
         realspace_mask: np.ndarray = None,
         apply_realspace_mask_to_stack: bool = True,
         vectorized_com_calculation: bool = True,
         device: str = None,
         clear_fft_cache: bool = None,
+        max_batch_size: int = None,
         store_initial_arrays: bool = True,
         **kwargs,
     ):
@@ -308,6 +311,8 @@ class Parallax(PhaseReconstruction):
             if not none, overwrites self._device to set device preprocess will be perfomed on.
         clear_fft_cache: bool, optional
             If True, and device = 'gpu', clears the cached fft plan at the end of function calls
+        max_batch_size: int, optional
+            Max number of virtual BF images to use at once in computing cross-correlation
         store_initial_arrays: bool, optional
             If True, stores a copy of the arrays necessary to reinitialize in reconstruct
 
@@ -474,7 +479,6 @@ class Parallax(PhaseReconstruction):
             self._stack_BF_unshifted = xp.ones(stack_shape, xp.float32)
 
             if normalize_order == 0:
-                # all_bfs /= xp.mean(all_bfs, axis=(1, 2))[:, None, None]
                 weights = xp.average(
                     all_bfs.reshape((self._num_bf_images, -1)),
                     weights=self._window_edge.ravel(),
@@ -517,7 +521,6 @@ class Parallax(PhaseReconstruction):
                 weights = np.sqrt(self._window_edge).ravel()
 
                 for a0 in range(all_bfs.shape[0]):
-                    # coefs = np.linalg.lstsq(basis, all_bfs[a0].ravel(), rcond=None)
                     # weighted least squares
                     coefs = np.linalg.lstsq(
                         weights[:, None] * basis,
@@ -574,7 +577,6 @@ class Parallax(PhaseReconstruction):
                 weights = np.sqrt(self._window_edge).ravel()
 
                 for a0 in range(all_bfs.shape[0]):
-                    # coefs = np.linalg.lstsq(basis, all_bfs[a0].ravel(), rcond=None)
                     # weighted least squares
                     coefs = np.linalg.lstsq(
                         weights[:, None] * basis,
@@ -645,49 +647,84 @@ class Parallax(PhaseReconstruction):
 
         # Initialization utilities
         self._stack_mask = xp.tile(self._window_pad[None], (self._num_bf_images, 1, 1))
+
+        if max_batch_size is None:
+            max_batch_size = self._num_bf_images
+
+        self._xy_shifts = xp.zeros((self._num_bf_images, 2), dtype=xp.float32)
+
         if defocus_guess is not None:
-            Gs = xp.fft.fft2(self._stack_BF_shifted)
+            for start, end in generate_batches(
+                self._num_bf_images, max_batch=max_batch_size
+            ):
+                shifted_BFs = self._stack_BF_shifted[start:end]
+                probe_angles = self._probe_angles[start:end]
+                stack_mask = self._stack_mask[start:end]
 
-            self._xy_shifts = (
-                -self._probe_angles
-                * defocus_guess
-                / xp.array(self._scan_sampling, dtype=xp.float32)
-            )
+                Gs = xp.fft.fft2(shifted_BFs)
 
-            if rotation_guess:
-                angle = xp.deg2rad(rotation_guess)
-                rotation_matrix = xp.array(
-                    [[np.cos(angle), np.sin(angle)], [-np.sin(angle), np.cos(angle)]],
-                    dtype=xp.float32,
+                xy_shifts = (
+                    -probe_angles
+                    * defocus_guess
+                    / xp.array(self._scan_sampling, dtype=xp.float32)
                 )
-                self._xy_shifts = xp.dot(self._xy_shifts, rotation_matrix)
 
-            dx = self._xy_shifts[:, 0]
-            dy = self._xy_shifts[:, 1]
+                if rotation_guess is not None:
+                    angle = xp.deg2rad(rotation_guess)
+                    rotation_matrix = xp.array(
+                        [
+                            [np.cos(angle), np.sin(angle)],
+                            [-np.sin(angle), np.cos(angle)],
+                        ],
+                        dtype=xp.float32,
+                    )
+                    xy_shifts = xp.dot(xy_shifts, rotation_matrix)
 
-            shift_op = xp.exp(
-                self._qx_shift[None] * dx[:, None, None]
-                + self._qy_shift[None] * dy[:, None, None]
-            )
-            self._stack_BF_shifted = xp.real(xp.fft.ifft2(Gs * shift_op))
-            self._stack_mask = xp.real(
-                xp.fft.ifft2(xp.fft.fft2(self._stack_mask) * shift_op)
-            )
+                dx = xy_shifts[:, 0]
+                dy = xy_shifts[:, 1]
 
-            del Gs
-        else:
-            self._xy_shifts = xp.zeros((self._num_bf_images, 2), dtype=xp.float32)
+                shift_op = xp.exp(
+                    self._qx_shift[None] * dx[:, None, None]
+                    + self._qy_shift[None] * dy[:, None, None]
+                )
+                stack_BF_shifted = xp.real(xp.fft.ifft2(Gs * shift_op))
+                stack_mask = xp.real(xp.fft.ifft2(xp.fft.fft2(stack_mask) * shift_op))
+
+                self._xy_shifts[start:end] = xy_shifts
+                self._stack_BF_shifted[start:end] = stack_BF_shifted
+                self._stack_mask[start:end] = stack_mask
+
+                del Gs
 
         self._stack_mean = xp.mean(self._stack_BF_shifted)
         self._mask_sum = xp.sum(self._window_edge) * self._num_bf_images
-        self._recon_mask = xp.sum(self._stack_mask, axis=0)
+        self._recon_mask = xp.mean(self._stack_mask, axis=0)
 
         mask_inv = 1 - xp.clip(self._recon_mask, 0, 1)
 
-        self._recon_BF = (
-            self._stack_mean * mask_inv
-            + xp.sum(self._stack_BF_shifted * self._stack_mask, axis=0)
-        ) / (self._recon_mask + mask_inv)
+        if aligned_bf_image_guess is not None:
+            aligned_bf_image_guess = xp.asarray(aligned_bf_image_guess)
+            if normalize_images:
+                self._recon_BF = xp.ones(stack_shape[-2:], dtype=xp.float32)
+                aligned_bf_image_guess /= aligned_bf_image_guess.mean()
+            else:
+                self._recon_BF = xp.full(stack_shape[-2:], self._stack_mean)
+
+            self._recon_BF[
+                self._object_padding_px[0] // 2 : self._grid_scan_shape[0]
+                + self._object_padding_px[0] // 2,
+                self._object_padding_px[1] // 2 : self._grid_scan_shape[1]
+                + self._object_padding_px[1] // 2,
+            ] = (
+                self._window_inv * self._stack_mean
+                + self._window_edge * aligned_bf_image_guess
+            )
+
+        else:
+            self._recon_BF = (
+                self._stack_mean * mask_inv
+                + xp.mean(self._stack_BF_shifted * self._stack_mask, axis=0)
+            ) / (self._recon_mask + mask_inv)
 
         self._recon_error = (
             xp.atleast_1d(
@@ -697,6 +734,7 @@ class Parallax(PhaseReconstruction):
                 )
             )
             / self._mask_sum
+            / self._stack_mean
         )
 
         if store_initial_arrays:
@@ -754,6 +792,7 @@ class Parallax(PhaseReconstruction):
         reset: bool = None,
         device: str = None,
         clear_fft_cache: bool = None,
+        max_batch_size: int = None,
         **kwargs,
     ):
         """
@@ -788,6 +827,8 @@ class Parallax(PhaseReconstruction):
             If True, the reconstruction is reset
         device: str, optional
             if not none, overwrites self._device to set device preprocess will be perfomed on.
+        max_batch_size: int, optional
+            Max number of virtual BF images to use at once in computing cross-correlation
         clear_fft_cache: bool, optional
             if true, and device = 'gpu', clears the cached fft plan at the end of function calls
 
@@ -911,6 +952,9 @@ class Parallax(PhaseReconstruction):
 
         xy_center = (self._xy_inds - xp.median(self._xy_inds, axis=0)).astype("float")
 
+        if max_batch_size is None:
+            max_batch_size = self._num_bf_images
+
         # Loop over all binning values
         for a0 in range(bin_vals.shape[0]):
             G_ref = xp.fft.fft2(self._recon_BF)
@@ -981,31 +1025,33 @@ class Parallax(PhaseReconstruction):
             shifts_update = xy_shifts_fit - self._xy_shifts
 
             # apply shifts
-            Gs = xp.fft.fft2(self._stack_BF_shifted)
+            for start, end in generate_batches(
+                self._num_bf_images, max_batch=max_batch_size
+            ):
+                shifted_BFs = self._stack_BF_shifted[start:end]
+                stack_mask = self._stack_mask[start:end]
 
-            dx = shifts_update[:, 0]
-            dy = shifts_update[:, 1]
-            self._xy_shifts[:, 0] += dx
-            self._xy_shifts[:, 1] += dy
+                Gs = xp.fft.fft2(shifted_BFs)
 
-            shift_op = xp.exp(
-                self._qx_shift[None] * dx[:, None, None]
-                + self._qy_shift[None] * dy[:, None, None]
-            )
+                dx = shifts_update[start:end, 0]
+                dy = shifts_update[start:end, 1]
 
-            self._stack_BF_shifted = xp.real(xp.fft.ifft2(Gs * shift_op))
-            self._stack_mask = xp.real(
-                xp.fft.ifft2(xp.fft.fft2(self._stack_mask) * shift_op)
-            )
+                shift_op = xp.exp(
+                    self._qx_shift[None] * dx[:, None, None]
+                    + self._qy_shift[None] * dy[:, None, None]
+                )
 
-            self._stack_BF_shifted = xp.asarray(
-                self._stack_BF_shifted, dtype=xp.float32
-            )  # numpy fft upcasts?
-            self._stack_mask = xp.asarray(
-                self._stack_mask, dtype=xp.float32
-            )  # numpy fft upcasts?
+                stack_BF_shifted = xp.real(xp.fft.ifft2(Gs * shift_op))
+                stack_mask = xp.real(xp.fft.ifft2(xp.fft.fft2(stack_mask) * shift_op))
 
-            del Gs
+                self._stack_BF_shifted[start:end] = xp.asarray(
+                    stack_BF_shifted, dtype=xp.float32
+                )
+                self._stack_mask[start:end] = xp.asarray(stack_mask, dtype=xp.float32)
+                self._xy_shifts[start:end, 0] += dx
+                self._xy_shifts[start:end, 1] += dy
+
+                del Gs
 
             # Center the shifts
             xy_shifts_median = xp.round(xp.median(self._xy_shifts, axis=0)).astype(int)
@@ -1016,12 +1062,12 @@ class Parallax(PhaseReconstruction):
             self._stack_mask = xp.roll(self._stack_mask, -xy_shifts_median, axis=(1, 2))
 
             # Generate new estimate
-            self._recon_mask = xp.sum(self._stack_mask, axis=0)
+            self._recon_mask = xp.mean(self._stack_mask, axis=0)
 
             mask_inv = 1 - np.clip(self._recon_mask, 0, 1)
             self._recon_BF = (
                 self._stack_mean * mask_inv
-                + xp.sum(self._stack_BF_shifted * self._stack_mask, axis=0)
+                + xp.mean(self._stack_BF_shifted * self._stack_mask, axis=0)
             ) / (self._recon_mask + mask_inv)
 
             self._recon_error = (
@@ -1032,6 +1078,7 @@ class Parallax(PhaseReconstruction):
                     )
                 )
                 / self._mask_sum
+                / self._stack_mean
             )
 
             self.error_iterations.append(float(self._recon_error))
