@@ -7,6 +7,7 @@ There is no reason why this should not work, but the default tolerance would nee
 
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.collections import EllipseCollection
 from emdfile import tqdmnd
 from py4DSTEM import show
 
@@ -27,6 +28,7 @@ def aperture_array_generator(
     plot_result = False,
     plot_image = None,
     plot_marker_size = 100,
+    plot_marker_radius_pixels = None,
     figsize = (6,6),
     returnfig = False,
     **kwargs,
@@ -72,10 +74,10 @@ def aperture_array_generator(
     V, H = shape[0], shape[1]
 
     if mode == "single":
-        aperture_position = [
+        aperture_positions = [
             (center[0] + s1 * g1[0] + s2 * g2[0], center[1] + s1 * g1[1] + s2 * g2[1])
         ]
-        centered_aperture_position = [
+        centered_aperture_positions = [
             (s1 * g1[0] + s2 * g2[0], s1 * g1[1] + s2 * g2[1])
         ]
 
@@ -125,12 +127,32 @@ def aperture_array_generator(
             returnfig = True,
             **kwargs,
         )
-        ax.scatter(
-            aperture_positions[:,1],
-            aperture_positions[:,0],
-            color = (0.0,1.0,0.0,0.3),
-            s = plot_marker_size,
-        )
+        if plot_marker_size is None or plot_marker_radius_pixels is not None:
+            offsets = list(
+                zip(
+                    aperture_positions[:,1], 
+                    aperture_positions[:,0],
+                ),
+            )
+            ax.add_collection(
+                EllipseCollection(
+                    widths=2.0*plot_marker_radius_pixels, 
+                    heights=2.0*plot_marker_radius_pixels, 
+                    angles=0, 
+                    units='xy',
+                    facecolors=(0.0,1.0,0.0,0.3),
+                    # facecolors=plt.cm.hsv(color),
+                    offsets=offsets,
+                    transOffset=ax.transData,
+                ),
+            )
+        else:
+            ax.scatter(
+                aperture_positions[:,1],
+                aperture_positions[:,0],
+                color = (0.0,1.0,0.0,0.3),
+                s = plot_marker_size,
+            )
  
     if returns == "both":
         if returnfig:
