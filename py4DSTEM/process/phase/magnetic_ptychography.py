@@ -377,10 +377,6 @@ class MagneticPtychography(
                 f"datacube must be the same length as magnetic_contribution_sign, not length {len(self._datacube)}."
             )
 
-        dc_shapes = [dc.shape for dc in self._datacube]
-        if dc_shapes.count(dc_shapes[0]) != self._num_measurements:
-            raise ValueError("datacube intensities must be the same size.")
-
         if self._positions_mask is not None:
             self._positions_mask = np.asarray(self._positions_mask, dtype="bool")
 
