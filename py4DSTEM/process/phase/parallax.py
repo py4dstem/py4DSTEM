@@ -2249,19 +2249,6 @@ class Parallax(PhaseReconstruction):
 
             # Plot the measured/fitted shifts comparison
             if plot_BF_shifts_comparison:
-                measured_shifts_sx = xp.zeros(
-                    self._region_of_interest_shape, dtype=xp.float32
-                )
-                measured_shifts_sx[self._xy_inds[:, 0], self._xy_inds[:, 1]] = (
-                    self._xy_shifts_Ang[:, 0]
-                )
-
-                measured_shifts_sy = xp.zeros(
-                    self._region_of_interest_shape, dtype=xp.float32
-                )
-                measured_shifts_sy[self._xy_inds[:, 0], self._xy_inds[:, 1]] = (
-                    self._xy_shifts_Ang[:, 1]
-                )
 
                 fitted_shifts = (
                     xp.tensordot(gradients, xp.array(self._aberrations_coefs), axes=1)
@@ -2269,53 +2256,28 @@ class Parallax(PhaseReconstruction):
                     .T
                 )
 
-                fitted_shifts_sx = xp.zeros(
-                    self._region_of_interest_shape, dtype=xp.float32
-                )
-                fitted_shifts_sx[self._xy_inds[:, 0], self._xy_inds[:, 1]] = (
-                    fitted_shifts[:, 0]
+                scale_arrows = kwargs.pop("scale_arrows", 1)
+                plot_arrow_freq = kwargs.pop("plot_arrow_freq", 1)
+                figsize = kwargs.pop("figsize", (4, 4))
+
+                fig, ax = plt.subplots(figsize=figsize)
+
+                self.show_shifts(
+                    shifts_ang=self._xy_shifts_Ang,
+                    plot_rotated_shifts=False,
+                    plot_arrow_freq=plot_arrow_freq,
+                    scale_arrows=scale_arrows,
+                    color=(1, 0, 0, 0.5),
+                    figax=(fig, ax),
                 )
 
-                fitted_shifts_sy = xp.zeros(
-                    self._region_of_interest_shape, dtype=xp.float32
-                )
-                fitted_shifts_sy[self._xy_inds[:, 0], self._xy_inds[:, 1]] = (
-                    fitted_shifts[:, 1]
-                )
-
-                max_shift = xp.max(
-                    xp.array(
-                        [
-                            xp.abs(measured_shifts_sx).max(),
-                            xp.abs(measured_shifts_sy).max(),
-                            xp.abs(fitted_shifts_sx).max(),
-                            xp.abs(fitted_shifts_sy).max(),
-                        ]
-                    )
-                )
-
-                axsize = kwargs.pop("axsize", (4, 4))
-                cmap = kwargs.pop("cmap", "PiYG")
-                vmin = kwargs.pop("vmin", -max_shift)
-                vmax = kwargs.pop("vmax", max_shift)
-
-                show(
-                    [
-                        [asnumpy(measured_shifts_sx), asnumpy(fitted_shifts_sx)],
-                        [asnumpy(measured_shifts_sy), asnumpy(fitted_shifts_sy)],
-                    ],
-                    cmap=cmap,
-                    vmin=vmin,
-                    vmax=vmax,
-                    intensity_range="absolute",
-                    axsize=axsize,
-                    ticks=False,
-                    title=[
-                        "Measured Vertical Shifts",
-                        "Fitted Vertical Shifts",
-                        "Measured Horizontal Shifts",
-                        "Fitted Horizontal Shifts",
-                    ],
+                self.show_shifts(
+                    shifts_ang=fitted_shifts,
+                    plot_rotated_shifts=False,
+                    plot_arrow_freq=plot_arrow_freq,
+                    scale_arrows=scale_arrows,
+                    color=(0, 0, 1, 0.5),
+                    figax=(fig, ax),
                 )
 
         # Plot the CTF comparison between experiment and fit
@@ -2873,9 +2835,11 @@ class Parallax(PhaseReconstruction):
 
     def show_shifts(
         self,
+        shifts_ang=None,
         scale_arrows=1,
         plot_arrow_freq=1,
         plot_rotated_shifts=True,
+        figax=None,
         **kwargs,
     ):
         """
@@ -2883,31 +2847,58 @@ class Parallax(PhaseReconstruction):
 
         Parameters
         ----------
+        shifts_ang: np.ndarray, optional
+            If None, self._xy_shifts is used
         scale_arrows: float, optional
             Scale to multiply shifts by
         plot_arrow_freq: int, optional
             Frequency of shifts to plot in quiver plot
+        plot_rotated_shifts: bool, optional
+            If True, shifts are plotted with the relative rotation decomposed
+        figax: optional
+            Tuple of figure, axes to plot against
         """
 
         xp = self._xp
         asnumpy = self._asnumpy
 
         color = kwargs.pop("color", (1, 0, 0, 1))
+
+        if shifts_ang is None:
+            shifts_px = self._xy_shifts
+        else:
+            shifts_px = shifts_ang / xp.array(self._scan_sampling)
+
+        shifts = shifts_px * scale_arrows * xp.array(self._reciprocal_sampling)
+
         if plot_rotated_shifts and hasattr(self, "rotation_Q_to_R_rads"):
-            figsize = kwargs.pop("figsize", (8, 4))
-            fig, ax = plt.subplots(1, 2, figsize=figsize)
-            scaling_factor = (
-                xp.array(self._reciprocal_sampling)
-                / xp.array(self._scan_sampling)
-                * scale_arrows
+
+            if figax is None:
+                figsize = kwargs.pop("figsize", (8, 4))
+                fig, ax = plt.subplots(1, 2, figsize=figsize)
+            else:
+                fig, ax = figax
+
+            rotated_color = kwargs.pop("rotated_color", (0, 0, 0, 1))
+
+            if shifts_ang is None:
+                rotated_shifts_px = self._xy_shifts.copy()
+            else:
+                rotated_shifts_px = shifts_ang / xp.array(self._scan_sampling)
+
+            if self.transpose:
+                rotated_shifts_px = xp.flip(rotated_shifts_px, axis=1)
+
+            rotated_shifts = (
+                rotated_shifts_px * scale_arrows * xp.array(self._reciprocal_sampling)
             )
-            rotated_shifts = self._xy_shifts_Ang * scaling_factor
 
         else:
-            figsize = kwargs.pop("figsize", (4, 4))
-            fig, ax = plt.subplots(figsize=figsize)
-
-        shifts = self._xy_shifts * scale_arrows * self._reciprocal_sampling[0]
+            if figax is None:
+                figsize = kwargs.pop("figsize", (4, 4))
+                fig, ax = plt.subplots(figsize=figsize)
+            else:
+                fig, ax = figax
 
         dp_mask_ind = xp.nonzero(self._dp_mask)
         yy, xx = xp.meshgrid(
@@ -2950,6 +2941,7 @@ class Parallax(PhaseReconstruction):
                 angles="xy",
                 scale_units="xy",
                 scale=1,
+                color=rotated_color,
                 **kwargs,
             )
 
