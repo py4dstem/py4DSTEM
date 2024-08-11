@@ -291,12 +291,15 @@ class Parallax(PhaseReconstruction):
         defocus_guess: float, optional
             Initial guess of defocus value (defocus dF) in A
             If None, first iteration is assumed to be in-focus
+        aligned_bf_image_guess: np.ndarray, optional
+            Guess for the reference BF image to cross-correlate against during the first iteration
+            If None, the incoherent BF image is used instead.
+        rotation_guess: float, optional
+            Initial guess of rotation value in degrees
+            If None, first iteration assumed to be 0
         descan_correction_fit_function: str, optional
             If not None, descan correction will be performed using fit function.
             One of "constant", "plane", "parabola", or "bezier_two".
-        rotation_guess: float, optional
-            Initial guess of defocus value in degrees
-            If None, first iteration assumed to be 0
         plot_average_bf: bool, optional
             If True, plots the average bright field image, using defocus_guess
         realspace_mask: np.array, optional
@@ -794,7 +797,44 @@ class Parallax(PhaseReconstruction):
         scale_arrows=1,
         **kwargs,
     ):
-        """ """
+        """
+        Generates analytical BF shifts and uses them to align the virtual BF stack,
+        based on the experimental geometry (rotation, transpose), and common aberrations.
+
+        Parameters
+        ----------
+        rotation_angle_deg: float, optional
+            Relative rotation between the scan and the diffraction space coordinate systems
+        transpose: bool, optional
+            Whether the diffraction intensities are transposed
+        kde_upsample_factor: int, optional
+            Real-space upsampling factor
+        kde_sigma_px: float, optional
+            KDE gaussian kernel bandwidth in non-upsampled pixels
+        kde_lowpass_filter: bool, optional
+            If True, the resulting KDE upsampled image is lowpass-filtered using a sinc-function
+        lanczos_interpolation_order: int, optional
+            If not None, Lanczos interpolation with the specified order is used instead of bilinear
+        defocus: float, optional
+            Defocus value to use in computing analytical BF shifts
+        astigmatism: float, optional
+            Astigmatism value to use in computing analytical BF shifts
+        astigmatism_angle_deg: float, optional
+            Astigmatism angle to use in computing analytical BF shifts
+        coma: float, optional
+            Coma value to use in computing analytical BF shifts
+        coma_angle_deg: float, optional
+            Coma angle to use in computing analytical BF shifts
+        spherical_aberration: float, optional
+            Spherical aberration value to use in computing analytical BF shifts
+        max_batch_size: int, optional
+            Max number of virtual BF images to use at once in computing cross-correlation
+        plot_arrow_freq: int, optional
+            Frequency of shifts to plot in quiver plot
+        scale_arrows: float, optional
+            Scale to multiply shifts by
+
+        """
         xp = self._xp
         asnumpy = self._asnumpy
 
