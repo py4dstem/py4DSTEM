@@ -19,6 +19,7 @@ from py4DSTEM.process.phase.utils import (
     AffineTransform,
     bilinear_kernel_density_estimate,
     bilinearly_interpolate_array,
+    calculate_aberration_gradient_basis,
     generate_batches,
     lanczos_interpolate_array,
     lanczos_kernel_density_estimate,
@@ -26,7 +27,7 @@ from py4DSTEM.process.phase.utils import (
 )
 from py4DSTEM.process.utils.cross_correlate import align_images_fourier
 from py4DSTEM.process.utils.utils import electron_wavelength_angstrom
-from py4DSTEM.visualize import return_scaled_histogram_ordering, show
+from py4DSTEM.visualize import return_scaled_histogram_ordering
 from scipy.linalg import polar
 from scipy.ndimage import distance_transform_edt
 from scipy.optimize import minimize
@@ -287,7 +288,6 @@ class Parallax(PhaseReconstruction):
             If True, bright images normalized to have a mean of 1
         normalize_order: integer, optional
             Polynomial order for normalization. 0 means constant, 1 means linear, etc.
-            Higher orders not yet implemented.
         defocus_guess: float, optional
             Initial guess of defocus value (defocus dF) in A
             If None, first iteration is assumed to be in-focus
@@ -774,6 +774,142 @@ class Parallax(PhaseReconstruction):
         self.clear_device_mem(self._device, self._clear_fft_cache)
 
         return self
+
+    def guess_common_aberrations_and_rotation(
+        self,
+        rotation_angle_deg=0,
+        defocus=0,
+        astigmatism=0,
+        astigmatism_angle_deg=0,
+        coma=0,
+        coma_angle_deg=0,
+        spherical_aberration=0,
+        max_batch_size=None,
+        plot_arrow_freq=1,
+        scale_arrows=1,
+        **kwargs,
+    ):
+        """ """
+        xp = self._xp
+        asnumpy = self._asnumpy
+
+        if not hasattr(self, "_recon_BF"):
+            raise ValueError(
+                (
+                    "Aberration guessing is meant to be ran after preprocessing. "
+                    "Please run the `preprocess()` function first."
+                )
+            )
+
+        # aberrations_coefs
+        aberrations_mn = [
+            [1, 0, 0],
+            [1, 2, 0],
+            [1, 2, 1],
+            [2, 1, 0],
+            [2, 1, 1],
+            [3, 0, 0],
+        ]
+        astigmatism_x = astigmatism * np.cos(np.deg2rad(astigmatism_angle_deg) * 2)
+        astigmatism_y = astigmatism * np.sin(np.deg2rad(astigmatism_angle_deg) * 2)
+        coma_x = coma * np.cos(np.deg2rad(coma_angle_deg) * 1)
+        coma_y = coma * np.sin(np.deg2rad(coma_angle_deg) * 1)
+        aberrations_coefs = xp.array(
+            [
+                -defocus,
+                astigmatism_x,
+                astigmatism_y,
+                coma_x,
+                coma_y,
+                spherical_aberration,
+            ]
+        )
+
+        # aberrations_basis
+        sampling = 1 / (
+            np.array(self._reciprocal_sampling) * self._region_of_interest_shape
+        )
+        aberrations_basis, aberrations_basis_du, aberrations_basis_dv = (
+            calculate_aberration_gradient_basis(
+                aberrations_mn,
+                sampling,
+                self._region_of_interest_shape,
+                self._wavelength,
+                rotation_angle=np.deg2rad(rotation_angle_deg),
+                xp=xp,
+            )
+        )
+
+        # shifts
+        corner_indices = self._xy_inds - xp.array(self._region_of_interest_shape // 2)
+        raveled_indices = xp.ravel_multi_index(
+            corner_indices.T, self._region_of_interest_shape, mode="wrap"
+        )
+        gradients = xp.array(
+            (
+                aberrations_basis_du[raveled_indices, :],
+                aberrations_basis_dv[raveled_indices, :],
+            )
+        )
+        shifts_ang = xp.tensordot(gradients, aberrations_coefs, axes=1).T
+        shifts_px = shifts_ang / xp.array(self._scan_sampling)
+
+        # shifted stack
+        aligned_stack = xp.zeros_like(self._stack_BF_shifted_initial[0])
+        if max_batch_size is None:
+            max_batch_size = self._num_bf_images
+
+        for start, end in generate_batches(
+            self._num_bf_images, max_batch=max_batch_size
+        ):
+            shifted_BFs = self._stack_BF_shifted_initial[start:end]
+
+            Gs = xp.fft.fft2(shifted_BFs)
+
+            dx = shifts_px[start:end, 0]
+            dy = shifts_px[start:end, 1]
+
+            shift_op = xp.exp(
+                self._qx_shift[None] * dx[:, None, None]
+                + self._qy_shift[None] * dy[:, None, None]
+            )
+            stack_BF_shifted = xp.real(xp.fft.ifft2(Gs * shift_op))
+            aligned_stack += stack_BF_shifted.sum(0)
+
+        cropped_stack = asnumpy(
+            self._crop_padded_object(aligned_stack, upsampled=False)
+        )
+
+        figsize = kwargs.pop("figsize", (8, 4))
+        color = kwargs.pop("color", (1, 0, 0, 1))
+        cmap = kwargs.pop("cmap", "magma")
+
+        fig, axs = plt.subplots(1, 2, figsize=figsize)
+
+        self.show_shifts(
+            shifts_ang=shifts_ang,
+            plot_arrow_freq=plot_arrow_freq,
+            scale_arrows=scale_arrows,
+            plot_rotated_shifts=False,
+            color=color,
+            figax=(fig, axs[0]),
+        )
+
+        axs[0].set_title("Predicted BF Shifts")
+
+        extent = [
+            0,
+            self._scan_sampling[1] * cropped_stack.shape[1],
+            self._scan_sampling[0] * cropped_stack.shape[0],
+            0,
+        ]
+
+        axs[1].imshow(cropped_stack, cmap=cmap, extent=extent, **kwargs)
+        axs[1].set_ylabel("x [A]")
+        axs[1].set_xlabel("y [A]")
+        axs[1].set_title("Predicted Aligned BF Image")
+
+        fig.tight_layout()
 
     def reconstruct(
         self,
@@ -2092,75 +2228,21 @@ class Parallax(PhaseReconstruction):
 
         # Direct Shifts Fitting
         if fit_BF_shifts:
-            # FFT coordinates
-            sx = 1 / (self._reciprocal_sampling[0] * self._region_of_interest_shape[0])
-            sy = 1 / (self._reciprocal_sampling[1] * self._region_of_interest_shape[1])
-            qx = xp.fft.fftfreq(self._region_of_interest_shape[0], sx)
-            qy = xp.fft.fftfreq(self._region_of_interest_shape[1], sy)
-            qx, qy = np.meshgrid(qx, qy, indexing="ij")
-
-            # passive rotation basis by -theta
-            rotation_angle = -self.rotation_Q_to_R_rads
-            qx, qy = qx * np.cos(rotation_angle) + qy * np.sin(
-                rotation_angle
-            ), -qx * np.sin(rotation_angle) + qy * np.cos(rotation_angle)
-
-            qr2 = qx**2 + qy**2
-            u = qx * self._wavelength
-            v = qy * self._wavelength
-            alpha = xp.sqrt(qr2) * self._wavelength
-            theta = xp.arctan2(qy, qx)
-
-            # Aberration basis
-            self._aberrations_basis = xp.zeros((alpha.size, self._aberrations_num))
-            self._aberrations_basis_du = xp.zeros((alpha.size, self._aberrations_num))
-            self._aberrations_basis_dv = xp.zeros((alpha.size, self._aberrations_num))
-            for a0 in range(self._aberrations_num):
-                m, n, a = self._aberrations_mn[a0]
-
-                if n == 0:
-                    # Radially symmetric basis
-                    self._aberrations_basis[:, a0] = (
-                        alpha ** (m + 1) / (m + 1)
-                    ).ravel()
-                    self._aberrations_basis_du[:, a0] = (u * alpha ** (m - 1)).ravel()
-                    self._aberrations_basis_dv[:, a0] = (v * alpha ** (m - 1)).ravel()
-
-                elif a == 0:
-                    # cos coef
-                    self._aberrations_basis[:, a0] = (
-                        alpha ** (m + 1) * xp.cos(n * theta) / (m + 1)
-                    ).ravel()
-                    self._aberrations_basis_du[:, a0] = (
-                        alpha ** (m - 1)
-                        * ((m + 1) * u * xp.cos(n * theta) + n * v * xp.sin(n * theta))
-                        / (m + 1)
-                    ).ravel()
-                    self._aberrations_basis_dv[:, a0] = (
-                        alpha ** (m - 1)
-                        * ((m + 1) * v * xp.cos(n * theta) - n * u * xp.sin(n * theta))
-                        / (m + 1)
-                    ).ravel()
-
-                else:
-                    # sin coef
-                    self._aberrations_basis[:, a0] = (
-                        alpha ** (m + 1) * xp.sin(n * theta) / (m + 1)
-                    ).ravel()
-                    self._aberrations_basis_du[:, a0] = (
-                        alpha ** (m - 1)
-                        * ((m + 1) * u * xp.sin(n * theta) - n * v * xp.cos(n * theta))
-                        / (m + 1)
-                    ).ravel()
-                    self._aberrations_basis_dv[:, a0] = (
-                        alpha ** (m - 1)
-                        * ((m + 1) * v * xp.sin(n * theta) + n * u * xp.cos(n * theta))
-                        / (m + 1)
-                    ).ravel()
-
-            # global scaling
-            self._aberrations_basis *= 2 * np.pi / self._wavelength
-            self._aberrations_surface_shape = alpha.shape
+            sampling = 1 / (
+                np.array(self._reciprocal_sampling) * self._region_of_interest_shape
+            )
+            (
+                self._aberrations_babis,
+                self._aberrations_basis_du,
+                self._aberrations_basis_dv,
+            ) = calculate_aberration_gradient_basis(
+                self._aberrations_mn,
+                sampling,
+                self._region_of_interest_shape,
+                self._wavelength,
+                rotation_angle=self.rotation_Q_to_R_rads,
+                xp=xp,
+            )
 
             # CTF function
             def calculate_CTF(alpha_shape, *coefs):
