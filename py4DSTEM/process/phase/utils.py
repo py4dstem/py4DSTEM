@@ -1504,6 +1504,85 @@ def regularize_probe_amplitude(
     return probe_corr, polar_int, polar_int_corr, coefs_all
 
 
+def calculate_aberration_gradient_basis(
+    aberrations_mn,
+    sampling,
+    gpts,
+    wavelength,
+    rotation_angle=0,
+    xp=np,
+):
+    """ """
+    sx, sy = sampling
+    nx, ny = gpts
+    qx = xp.fft.fftfreq(nx, sx)
+    qy = xp.fft.fftfreq(ny, sy)
+    qx, qy = xp.meshgrid(qx, qy, indexing="ij")
+
+    # passive rotation
+    qx, qy = qx * xp.cos(-rotation_angle) + qy * xp.sin(-rotation_angle), -qx * xp.sin(
+        -rotation_angle
+    ) + qy * xp.cos(-rotation_angle)
+
+    # coordinate system
+    qr2 = qx**2 + qy**2
+    u = qx * wavelength
+    v = qy * wavelength
+    alpha = xp.sqrt(qr2) * wavelength
+    theta = xp.arctan2(qy, qx)
+
+    _aberrations_n = len(aberrations_mn)
+    _aberrations_basis = xp.zeros((alpha.size, _aberrations_n))
+    _aberrations_basis_du = xp.zeros((alpha.size, _aberrations_n))
+    _aberrations_basis_dv = xp.zeros((alpha.size, _aberrations_n))
+
+    for a0 in range(_aberrations_n):
+        m, n, a = aberrations_mn[a0]
+
+        if n == 0:
+            # Radially symmetric basis
+            _aberrations_basis[:, a0] = (alpha ** (m + 1) / (m + 1)).ravel()
+            _aberrations_basis_du[:, a0] = (u * alpha ** (m - 1)).ravel()
+            _aberrations_basis_dv[:, a0] = (v * alpha ** (m - 1)).ravel()
+
+        elif a == 0:
+            # cos coef
+            _aberrations_basis[:, a0] = (
+                alpha ** (m + 1) * xp.cos(n * theta) / (m + 1)
+            ).ravel()
+            _aberrations_basis_du[:, a0] = (
+                alpha ** (m - 1)
+                * ((m + 1) * u * xp.cos(n * theta) + n * v * xp.sin(n * theta))
+                / (m + 1)
+            ).ravel()
+            _aberrations_basis_dv[:, a0] = (
+                alpha ** (m - 1)
+                * ((m + 1) * v * xp.cos(n * theta) - n * u * xp.sin(n * theta))
+                / (m + 1)
+            ).ravel()
+
+        else:
+            # sin coef
+            _aberrations_basis[:, a0] = (
+                alpha ** (m + 1) * xp.sin(n * theta) / (m + 1)
+            ).ravel()
+            _aberrations_basis_du[:, a0] = (
+                alpha ** (m - 1)
+                * ((m + 1) * u * xp.sin(n * theta) - n * v * xp.cos(n * theta))
+                / (m + 1)
+            ).ravel()
+            _aberrations_basis_dv[:, a0] = (
+                alpha ** (m - 1)
+                * ((m + 1) * v * xp.sin(n * theta) + n * u * xp.cos(n * theta))
+                / (m + 1)
+            ).ravel()
+
+    # global scaling
+    _aberrations_basis *= 2 * np.pi / wavelength
+
+    return _aberrations_basis, _aberrations_basis_du, _aberrations_basis_dv
+
+
 def aberrations_basis_function(
     probe_size,
     probe_sampling,

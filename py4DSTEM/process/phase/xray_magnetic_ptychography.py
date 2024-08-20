@@ -206,6 +206,7 @@ class XRayMagneticPtychography(
         padded_diffraction_intensities_shape: Tuple[int, int] = None,
         region_of_interest_shape: Tuple[int, int] = None,
         dp_mask: np.ndarray = None,
+        in_place_datacube_modification: bool = False,
         fit_function: str = "plane",
         plot_rotation: bool = True,
         maximize_divergence: bool = False,
@@ -257,6 +258,9 @@ class XRayMagneticPtychography(
             at the diffraction plane to allow comparison with experimental data
         dp_mask: ndarray, optional
             Mask for datacube intensities (Qx,Qy)
+        in_place_datacube_modification: bool, optional
+            If True, the datacube will be preprocessed in-place. Note this is not possible
+            when either crop_patterns or positions_mask are used.
         fit_function: str, optional
             2D fitting function for CoM fitting. One of 'plane','parabola','bezier_two'
         plot_rotation: bool, optional
@@ -370,10 +374,6 @@ class XRayMagneticPtychography(
             raise ValueError(
                 f"datacube must be the same length as magnetic_contribution_sign, not length {len(self._datacube)}."
             )
-
-        dc_shapes = [dc.shape for dc in self._datacube]
-        if dc_shapes.count(dc_shapes[0]) != self._num_measurements:
-            raise ValueError("datacube intensities must be the same size.")
 
         if self._positions_mask is not None:
             self._positions_mask = np.asarray(self._positions_mask, dtype="bool")
@@ -549,12 +549,14 @@ class XRayMagneticPtychography(
                 amplitudes,
                 mean_diffraction_intensity_temp,
                 self._crop_mask,
+                self._crop_mask_shape,
             ) = self._normalize_diffraction_intensities(
                 intensities,
                 com_fitted_x,
                 com_fitted_y,
                 self._positions_mask[index],
                 crop_patterns,
+                in_place_datacube_modification,
             )
 
             self._mean_diffraction_intensity.append(mean_diffraction_intensity_temp)

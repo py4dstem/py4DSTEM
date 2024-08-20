@@ -241,6 +241,7 @@ class MultislicePtychography(
         padded_diffraction_intensities_shape: Tuple[int, int] = None,
         region_of_interest_shape: Tuple[int, int] = None,
         dp_mask: np.ndarray = None,
+        in_place_datacube_modification: bool = False,
         fit_function: str = "plane",
         plot_center_of_mass: str = "default",
         plot_rotation: bool = True,
@@ -292,6 +293,9 @@ class MultislicePtychography(
             at the diffraction plane to allow comparison with experimental data
         dp_mask: ndarray, optional
             Mask for datacube intensities (Qx,Qy)
+        in_place_datacube_modification: bool, optional
+            If True, the datacube will be preprocessed in-place. Note this is not possible
+            when either crop_patterns or positions_mask are used.
         fit_function: str, optional
             2D fitting function for CoM fitting. One of 'plane','parabola','bezier_two'
         plot_center_of_mass: str, optional
@@ -460,17 +464,21 @@ class MultislicePtychography(
             self._amplitudes,
             self._mean_diffraction_intensity,
             self._crop_mask,
+            self._crop_mask_shape,
         ) = self._normalize_diffraction_intensities(
             _intensities,
             self._com_fitted_x,
             self._com_fitted_y,
             self._positions_mask,
             crop_patterns,
+            in_place_datacube_modification,
         )
 
         # explicitly transfer arrays to storage
+        if not in_place_datacube_modification:
+            del _intensities
+
         self._amplitudes = copy_to_device(self._amplitudes, storage)
-        del _intensities
 
         self._num_diffraction_patterns = self._amplitudes.shape[0]
         self._amplitudes_shape = np.array(self._amplitudes.shape[-2:])
