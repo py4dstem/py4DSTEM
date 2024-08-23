@@ -35,14 +35,14 @@ def find_peaks_single_pattern(
     remove_masked_peaks=False,
     scale_sigma_annular=0.5,
     scale_sigma_radial=0.25,
-    refine_subpixel = True,
+    refine_subpixel=True,
     return_background=False,
     plot_result=True,
     plot_smoothed_image=False,
     plot_power_scale=1.0,
     plot_scale_size=10.0,
     figsize=(12, 6),
-    figax = None,
+    figax=None,
     returnfig=False,
     **kwargs
 ):
@@ -258,18 +258,23 @@ def find_peaks_single_pattern(
         )
 
     # If needed, refine peaks using parabolic fit
-    peaks = peaks.astype('float')
+    peaks = peaks.astype("float")
     if refine_subpixel:
         for a0 in range(peaks.shape[0]):
-            if peaks[a0,1] > 0 and peaks[a0,1] < im_polar.shape[1]-1:
+            if peaks[a0, 1] > 0 and peaks[a0, 1] < im_polar.shape[1] - 1:
                 im_crop = im_polar_sm[
-                    (peaks[a0,0] + np.arange(-1,2)).astype('int')[:,None] % im_polar.shape[0],
-                    (peaks[a0,1] + np.arange(-1,2)).astype('int'),
+                    (peaks[a0, 0] + np.arange(-1, 2)).astype("int")[:, None]
+                    % im_polar.shape[0],
+                    (peaks[a0, 1] + np.arange(-1, 2)).astype("int"),
                 ]
-                dx = (im_crop[2,1] - im_crop[0,1]) / (4*im_crop[1,1] - 2*im_crop[2,1] - 2*im_crop[0,1])
-                dy = (im_crop[1,2] - im_crop[1,0]) / (4*im_crop[1,1] - 2*im_crop[1,2] - 2*im_crop[1,0])
-                peaks[a0,0] += dx
-                peaks[a0,1] += dy
+                dx = (im_crop[2, 1] - im_crop[0, 1]) / (
+                    4 * im_crop[1, 1] - 2 * im_crop[2, 1] - 2 * im_crop[0, 1]
+                )
+                dy = (im_crop[1, 2] - im_crop[1, 0]) / (
+                    4 * im_crop[1, 1] - 2 * im_crop[1, 2] - 2 * im_crop[1, 0]
+                )
+                peaks[a0, 0] += dx
+                peaks[a0, 1] += dy
 
     # combine peaks into one array
     peaks_all = np.column_stack((peaks, peaks_int, peaks_prom))
@@ -347,14 +352,14 @@ def find_peaks_single_pattern(
         vmax = kwargs.pop("vmax", 1)
         vmin = kwargs.pop("vmin", 0)
         show(
-            im_plot, 
-            figax=(fig, ax), 
-            cmap=cmap, 
-            vmax=vmax, 
-            vmin=vmin, 
+            im_plot,
+            figax=(fig, ax),
+            cmap=cmap,
+            vmax=vmax,
+            vmin=vmin,
             **kwargs,
         )
-        ax.set_aspect('auto')
+        ax.set_aspect("auto")
 
         # peaks
         ax.scatter(
@@ -765,7 +770,7 @@ def plot_radial_peaks(
     )
     ax.yaxis.get_ticklocs(minor=True)
     ax.minorticks_on()
-    ax.yaxis.set_tick_params(which='minor',left=False)
+    ax.yaxis.set_tick_params(which="minor", left=False)
     ax.xaxis.grid(True)
     ax.set_xlim((q_bins[0], q_bins[-1]))
     if q_pixel_units:
@@ -802,7 +807,7 @@ def model_radial_background(
     refine_model=True,
     plot_result=True,
     figsize=(8, 4),
-    returnfig = True,
+    returnfig=True,
 ):
     """
     User provided radial background model, of the form:
@@ -914,17 +919,18 @@ def model_radial_background(
         )
 
     if returnfig:
-        return fig,ax
+        return fig, ax
+
 
 def fit_crystal_amorphous_fraction(
     self,
-    fitting_range_sigma = 2.0,
-    plot_result = True,
-    figsize = (4,4),
-    progress_bar = True,
-    ):
+    fitting_range_sigma=2.0,
+    plot_result=True,
+    figsize=(4, 4),
+    progress_bar=True,
+):
     """
-    Fit an amorphous halo and the crystalline peak signals from each 
+    Fit an amorphous halo and the crystalline peak signals from each
     polar transformed image, in order to estimate the fraction of
     crystalline and amorphous signal.
 
@@ -938,57 +944,67 @@ def fit_crystal_amorphous_fraction(
 
     Returns
     ----------
-    
 
-    """ 
+
+    """
 
     # Basis for amorphous fitting function
     num_rings = np.round((self.background_coefs.shape[0] - 3) / 3).astype("int")
     num_bins = self.polar_shape[1]
-    basis = np.ones((
-        num_bins,
-        num_rings + 2,
-    ))
+    basis = np.ones(
+        (
+            num_bins,
+            num_rings + 2,
+        )
+    )
 
     # init
-    self.signal_background = np.zeros((
-        2,
-        self._datacube.shape[0],
-        self._datacube.shape[1],
-    ))
-    self.signal_amorphous_peaks = np.zeros((
-        num_rings,
-        self._datacube.shape[0],
-        self._datacube.shape[1],
-    ))
-    self.signal_crystal = np.zeros((
-        num_rings,
-        self._datacube.shape[0],
-        self._datacube.shape[1],
-    ))
-    crystal_fitting_mask = np.zeros((
-        num_rings,
-        num_bins,
-    ), dtype = 'bool')
+    self.signal_background = np.zeros(
+        (
+            2,
+            self._datacube.shape[0],
+            self._datacube.shape[1],
+        )
+    )
+    self.signal_amorphous_peaks = np.zeros(
+        (
+            num_rings,
+            self._datacube.shape[0],
+            self._datacube.shape[1],
+        )
+    )
+    self.signal_crystal = np.zeros(
+        (
+            num_rings,
+            self._datacube.shape[0],
+            self._datacube.shape[1],
+        )
+    )
+    crystal_fitting_mask = np.zeros(
+        (
+            num_rings,
+            num_bins,
+        ),
+        dtype="bool",
+    )
 
     # background model
     sigma_0 = self.background_coefs[2]
-    basis[:,1] = np.exp(self.qq**2/(-2.0*sigma_0**2))
+    basis[:, 1] = np.exp(self.qq**2 / (-2.0 * sigma_0**2))
 
     # amorphous halos / rings
     for a0 in range(num_rings):
         ring_sigma = self.background_coefs[3 * a0 + 4]
         ring_position = self.background_coefs[3 * a0 + 5]
-        basis[:,2+a0] = np.exp(
-            (self.qq - ring_position)**2 \
-            /(-2.0*ring_sigma**2)
+        basis[:, 2 + a0] = np.exp(
+            (self.qq - ring_position) ** 2 / (-2.0 * ring_sigma**2)
         )
 
         sub = np.logical_and(
-            self.qq > ring_position - ring_sigma*fitting_range_sigma,
-            self.qq <= ring_position + ring_sigma*fitting_range_sigma,
+            self.qq > ring_position - ring_sigma * fitting_range_sigma,
+            self.qq <= ring_position + ring_sigma * fitting_range_sigma,
         )
-        crystal_fitting_mask[a0,sub] = True
+        crystal_fitting_mask[a0, sub] = True
 
     # main loop over probe positions
     for rx, ry in tqdmnd(
@@ -999,10 +1015,10 @@ def fit_crystal_amorphous_fraction(
         desc="Refining peaks ",
         unit=" probe positions",
         disable=not progress_bar,
-    ): 
+    ):
         # polar signal
-        im_polar = self.data[rx,ry]
-        im_polar_med = np.ma.median(im_polar, axis = 0)
+        im_polar = self.data[rx, ry]
+        im_polar_med = np.ma.median(im_polar, axis=0)
 
         # fit amorphous background coefficients
         coefs = np.linalg.lstsq(
@@ -1016,15 +1032,15 @@ def fit_crystal_amorphous_fraction(
         im_polar_sub = im_polar - (basis @ coefs)
 
         # Output signals
-        self.signal_background[:,rx,ry] = coefs[:2]
-        self.signal_amorphous_peaks[:,rx,ry] = coefs[2:]
+        self.signal_background[:, rx, ry] = coefs[:2]
+        self.signal_amorphous_peaks[:, rx, ry] = coefs[2:]
         for a0 in range(num_rings):
-            self.signal_crystal[a0,rx,ry] = np.sum(
-                im_polar_sub[:,crystal_fitting_mask[a0]],
+            self.signal_crystal[a0, rx, ry] = np.sum(
+                im_polar_sub[:, crystal_fitting_mask[a0]],
             )
 
-    self.signal_amorphous_peaks = np.maximum(self.signal_amorphous_peaks,0.0)
-    self.signal_crystal = np.maximum(self.signal_crystal,0.0)
+    self.signal_amorphous_peaks = np.maximum(self.signal_amorphous_peaks, 0.0)
+    self.signal_crystal = np.maximum(self.signal_crystal, 0.0)
 
     # convert amorphous signal from peaks to integrated intensity
     self.signal_amorphous = self.signal_amorphous_peaks.copy()
@@ -1040,29 +1056,29 @@ def fit_crystal_amorphous_fraction(
 
     # plotting
     if plot_result:
-        fig,ax = plt.subplots(figsize=figsize)
+        fig, ax = plt.subplots(figsize=figsize)
         ax.imshow(
             self.signal_fractional_crystal[0],
-            vmin = 0,
-            vmax = 1,
-            cmap = 'turbo',
+            vmin=0,
+            vmax=1,
+            cmap="turbo",
         )
+
 
 def plot_crystal_amorphous_fraction(
     self,
-    index_ring_plot = 0,
-    plot_range = (0.0,1.0),
-    sigma = 0.0,
-    cmap = 'PiYG',
-    legend = True,
-    ticks = False,
-    figsize = (5,4),
-    ):
+    index_ring_plot=0,
+    plot_range=(0.0, 1.0),
+    sigma=0.0,
+    cmap="PiYG",
+    legend=True,
+    ticks=False,
+    figsize=(5, 4),
+):
     """
     Plotting function for the crystal / amorphous fraction image.
 
     """
-
 
     sig_crys = self.signal_crystal[index_ring_plot].copy()
     sig_amor = self.signal_amorphous[index_ring_plot].copy()
@@ -1071,18 +1087,17 @@ def plot_crystal_amorphous_fraction(
         sig_crys = gaussian_filter(
             sig_crys,
             sigma,
-            mode = 'nearest',
+            mode="nearest",
         )
         sig_amor = gaussian_filter(
             sig_amor,
             sigma,
-            mode = 'nearest',
+            mode="nearest",
         )
     sig_sum = sig_crys + sig_amor
     sub = sig_sum > 0.0
     signal_fractional_crystal = sig_crys.copy()
     signal_fractional_crystal[sub] /= sig_sum[sub]
-
 
     # im_plot = self.signal_fractional_crystal[index_ring_plot].copy()
     # if sigma > 0.0:
@@ -1092,12 +1107,12 @@ def plot_crystal_amorphous_fraction(
     #         mode = 'nearest',
     #     )
 
-    fig,ax = plt.subplots(figsize=figsize)
+    fig, ax = plt.subplots(figsize=figsize)
     h_im = ax.imshow(
         signal_fractional_crystal,
-        vmin = plot_range[0],
-        vmax = plot_range[1],
-        cmap = cmap,
+        vmin=plot_range[0],
+        vmax=plot_range[1],
+        cmap=cmap,
     )
     if ticks is False:
         ax.set_xticks([])
@@ -1105,14 +1120,12 @@ def plot_crystal_amorphous_fraction(
 
     if legend is True:
         cbar = fig.colorbar(
-            h_im, 
-            ax=ax, 
-            # orientation='horizontal', 
+            h_im,
+            ax=ax,
+            # orientation='horizontal',
             # fraction=0.1,
         )
-        cbar.ax.set_ylabel('More Amorphous  <---->  More Crystalline')
-
-
+        cbar.ax.set_ylabel("More Amorphous  <---->  More Crystalline")
 
 
 def refine_peaks(
@@ -1462,39 +1475,39 @@ def make_orientation_histogram(
 
     Parameters
     ----------
-    radial_ranges (np array)          
+    radial_ranges (np array)
         Size (N x 2) array for N radial bins, or (2,) for a single bin.
-    orientation_flip_sign (bool)      
+    orientation_flip_sign (bool)
         Flip the direction of theta
     orientation_offset_degrees (float)
         Offset for orientation angles.
         This value is a rotation of Q space with respect to R space.
     orientation_separate_bins (bool)
         whether to place multiple angles into multiple radial bins.
-    upsample_factor (float)            
+    upsample_factor (float)
         Upsample factor
-    use_refined_peaks (float)         
+    use_refined_peaks (float)
         Use refined peak positions
-    use_peak_sigma (float)         
+    use_peak_sigma (float)
         Spread signal along annular direction using measured std.
-    theta_step_deg (float)            
+    theta_step_deg (float)
         Step size along annular direction in degrees
-    sigma_x (float)                 
+    sigma_x (float)
         Smoothing in x direction before upsample
-    sigma_y (float)                   
+    sigma_y (float)
         Smoothing in x direction before upsample
-    sigma_theta (float)                
+    sigma_theta (float)
         Smoothing in annular direction (units of bins, periodic)
-    normalize_intensity_image (bool)  
+    normalize_intensity_image (bool)
         Normalize to max peak intensity = 1, per image
     normalize_intensity_stack (bool)
         Normalize to max peak intensity = 1, all images
-    progress_bar (bool)              
+    progress_bar (bool)
         Enable progress bar
 
     Returns
     ----------
-    orient_hist (array)         
+    orient_hist (array)
         4D array containing Bragg peak intensity histogram
         [radial_bin x_probe y_probe theta]
     """

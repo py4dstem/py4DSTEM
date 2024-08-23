@@ -812,28 +812,28 @@ def make_flowline_rainbow_legend(
 
     Parameters
     ----------
-    im_size (np.array):         
+    im_size (np.array):
         Size of legend image in pixels.
-    sym_rotation_order (int):   
+    sym_rotation_order (int):
         rotational symmety for colouring
-    theta_offset_degrees (float):       
+    theta_offset_degrees (float):
         Offset the anglular coloring by this value in degrees.
         Rotation is Q with respect to R, in the positive (counter clockwise) direction.
-    white_background (bool):    
+    white_background (bool):
         For either color or greyscale output, switch to white background (from black).
-    return_image (bool):        
+    return_image (bool):
         Return the image array.
-    radial_range (np.array):    
+    radial_range (np.array):
         Inner and outer radius for the legend ring.
-    plot_legend (bool):         
+    plot_legend (bool):
         Plot the generated legend.
-    figsize (tuple or list):    
+    figsize (tuple or list):
         Size of the plotted legend.
 
     Returns
     ----------
 
-    im_legend (array):          
+    im_legend (array):
         Image array for the legend.
     """
 
@@ -854,8 +854,8 @@ def make_flowline_rainbow_legend(
     amp = np.abs(z)
     vmin = np.min(amp)
     vmax = np.max(amp)
-    ph = np.angle(z)# + hue_offset
-    h = np.mod(ph/(2*np.pi), 1)
+    ph = np.angle(z)  # + hue_offset
+    h = np.mod(ph / (2 * np.pi), 1)
     s = 0.85 * np.ones_like(h)
     v = (amp - vmin) / (vmax - vmin)
     im_legend = hsv_to_rgb(np.dstack((h, s, v)))

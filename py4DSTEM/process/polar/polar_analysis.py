@@ -1028,7 +1028,7 @@ def cluster_grains(
     threshold_add=0.05,
     threshold_grow=0.2,
     angle_tolerance_deg=5,
-    distance_tolerance_px = 1,
+    distance_tolerance_px=1,
     plot_grain_clusters=True,
     returncalc=False,
     **kwargs
@@ -1061,11 +1061,11 @@ def cluster_grains(
     Returns
     ----------
     cluster_sizes: np.array
-        (N,) shape vector giving the size of N grains as the # of probe positions 
+        (N,) shape vector giving the size of N grains as the # of probe positions
     cluster_sig: np.array
         (N,) shape vector giving the mean signal of each of N grains.
     cluster_inds: list of np.array
-        Length N list of probe positions for each grain, stored as arrays with 
+        Length N list of probe positions for each grain, stored as arrays with
         shape (2,M) for M probe positions where rows correspond to the (x,y) indices.
 
     """
@@ -1110,7 +1110,9 @@ def cluster_grains(
     tol = np.deg2rad(angle_tolerance_deg)
 
     # Main loop
-    vec_search = np.arange(-distance_tolerance_px, distance_tolerance_px+1, dtype="int")
+    vec_search = np.arange(
+        -distance_tolerance_px, distance_tolerance_px + 1, dtype="int"
+    )
     search = True
     while search is True:
         inds_grain = np.argmax(sig)
@@ -1243,7 +1245,6 @@ def plot_clusters(
 
     """
 
-
     # init
     im_plot = np.zeros(
         (
@@ -1260,7 +1261,10 @@ def plot_clusters(
     )
 
     if weight_by_area:
-        weights = self.cluster_sizes / np.max(self.cluster_sizes) * (1-fill_grains) + fill_grains
+        weights = (
+            self.cluster_sizes / np.max(self.cluster_sizes) * (1 - fill_grains)
+            + fill_grains
+        )
     else:
         weights = np.ones_like(self.cluster_sizes)
 
@@ -1312,9 +1316,12 @@ def plot_clusters(
                     self.cluster_inds[a0][0, :],
                     self.cluster_inds[a0][1, :],
                 ] = True
-                im_plot += gaussian_filter(
-                    im_grain.astype("float"), sigma=smooth_grains, mode="nearest"
-                ) * weights[a0]
+                im_plot += (
+                    gaussian_filter(
+                        im_grain.astype("float"), sigma=smooth_grains, mode="nearest"
+                    )
+                    * weights[a0]
+                )
 
                 # im_plot[
                 #     self.cluster_inds[a0][0,:],
@@ -1417,11 +1424,11 @@ def plot_clusters_area(
             width=0.8 * pixel_area * area_step,
         )
     else:
-         ax.bar(
+        ax.bar(
             area * pixel_area,
             hist,
             width=0.8 * pixel_area * area_step,
-        )       
+        )
     ax.set_xlim((0, area_max * pixel_area))
     ax.set_xlabel("Grain Area (" + pixel_area_units + ")")
     if weight_intensity:
@@ -1485,7 +1492,7 @@ def plot_clusters_diameter(
     """
 
     if cluster_sizes is None:
-        cluster_sizes = self.cluster_sizes.copy().astype('float')
+        cluster_sizes = self.cluster_sizes.copy().astype("float")
     cluster_diam = 0.5 * np.sqrt(cluster_sizes / np.pi)
 
     # units
@@ -1506,25 +1513,25 @@ def plot_clusters_diameter(
     # histogram
     if weight_intensity:
         hist = np.bincount(
-            np.round(cluster_diam[sub] / diameter_step).astype('int'),
+            np.round(cluster_diam[sub] / diameter_step).astype("int"),
             weights=self.cluster_sig[sub],
             minlength=diameter.shape[0],
         )
     elif weight_area:
         hist = np.bincount(
-            np.round(cluster_diam[sub] / diameter_step).astype('int'),
+            np.round(cluster_diam[sub] / diameter_step).astype("int"),
             weights=cluster_sizes[sub],
             minlength=diameter.shape[0],
         )
     elif weight_diameter:
         hist = np.bincount(
-            np.round(cluster_diam[sub] / diameter_step).astype('int'),
+            np.round(cluster_diam[sub] / diameter_step).astype("int"),
             weights=cluster_diam[sub],
             minlength=diameter.shape[0],
         )
     else:
         hist = np.bincount(
-            np.round(cluster_diam[sub] / diameter_step).astype('int'),
+            np.round(cluster_diam[sub] / diameter_step).astype("int"),
             minlength=diameter.shape[0],
         )
 
@@ -1537,18 +1544,18 @@ def plot_clusters_diameter(
             width=0.8 * diameter_step,
         )
     else:
-         ax.bar(
+        ax.bar(
             diameter,
             hist,
             width=0.8 * diameter_step,
-        )       
+        )
     ax.set_xlim((0, diameter_max))
     ax.set_xlabel("Domain Size (" + pixel_area_units + ")")
 
     if weight_intensity:
         ax.set_ylabel("Intensity-Weighted Domain Size")
     elif weight_area:
-        ax.set_ylabel("Total Domain Area")        
+        ax.set_ylabel("Total Domain Area")
     elif weight_diameter:
         ax.set_ylabel("Total Domain Diameter")
     else:
@@ -1559,7 +1566,6 @@ def plot_clusters_diameter(
 
     if returnfig:
         return fig, ax
-
 
 
 def plot_clusters_max_length(
@@ -1612,13 +1618,13 @@ def plot_clusters_max_length(
     """
 
     if cluster_inds is None:
-        cluster_inds = self.cluster_inds.copy().astype('float')
+        cluster_inds = self.cluster_inds.copy().astype("float")
 
     # init
     num_clusters = len(cluster_inds)
     cluster_sizes = np.zeros(num_clusters)
     cluster_length = np.zeros(num_clusters)
-    t_all = np.linspace(0,np.pi,45,endpoint=False)
+    t_all = np.linspace(0, np.pi, 45, endpoint=False)
     ct = np.cos(t_all)
     st = np.sin(t_all)
 
@@ -1631,13 +1637,12 @@ def plot_clusters_max_length(
 
         length_current_max = 0
         for a1 in range(t_all.size):
-            p = x0*ct[a1] + y0*st[a1]
+            p = x0 * ct[a1] + y0 * st[a1]
             length_current_max = np.maximum(
                 length_current_max,
                 np.max(p) - np.min(p) + 1,
             )
         cluster_length[a0] = length_current_max
-
 
     # units
     cluster_length *= pixel_size
@@ -1657,25 +1662,25 @@ def plot_clusters_max_length(
     # histogram
     if weight_intensity:
         hist = np.bincount(
-            np.round(cluster_length[sub] / length_step).astype('int'),
+            np.round(cluster_length[sub] / length_step).astype("int"),
             weights=self.cluster_sig[sub],
             minlength=length.shape[0],
         )
     elif weight_area:
         hist = np.bincount(
-            np.round(cluster_length[sub] / length_step).astype('int'),
+            np.round(cluster_length[sub] / length_step).astype("int"),
             weights=cluster_sizes[sub],
             minlength=length.shape[0],
         )
     elif weight_diameter:
         hist = np.bincount(
-            np.round(cluster_length[sub] / length_step).astype('int'),
+            np.round(cluster_length[sub] / length_step).astype("int"),
             weights=cluster_diam[sub],
             minlength=length.shape[0],
         )
     else:
         hist = np.bincount(
-            np.round(cluster_length[sub] / length_step).astype('int'),
+            np.round(cluster_length[sub] / length_step).astype("int"),
             minlength=length.shape[0],
         )
 
@@ -1688,18 +1693,18 @@ def plot_clusters_max_length(
             width=0.8 * length_step,
         )
     else:
-         ax.bar(
+        ax.bar(
             length,
             hist,
             width=0.8 * length_step,
-        )       
+        )
     ax.set_xlim((0, length_max))
     ax.set_xlabel("Maximum Domain Length (" + pixel_area_units + ")")
 
     if weight_intensity:
         ax.set_ylabel("Intensity-Weighted Domain Lengths")
     elif weight_area:
-        ax.set_ylabel("Total Domain Area")        
+        ax.set_ylabel("Total Domain Area")
     elif weight_diameter:
         ax.set_ylabel("Total Domain Diameter")
     else:
