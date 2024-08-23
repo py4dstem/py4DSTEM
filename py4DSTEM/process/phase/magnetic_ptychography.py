@@ -101,6 +101,9 @@ class MagneticPtychography(
     initial_scan_positions: np.ndarray, optional
         Probe positions in Å for each diffraction intensity
         If None, initialized to a grid scan
+    object_fov_ang: Tuple[int,int], optional
+        Fixed object field of view in Å. If None, the fov is initialized using the
+        probe positions and object_padding_px
     positions_offset_ang: np.ndarray, optional
         Offset of positions in A
     verbose: bool, optional
@@ -138,6 +141,7 @@ class MagneticPtychography(
         initial_object_guess: np.ndarray = None,
         initial_probe_guess: np.ndarray = None,
         initial_scan_positions: np.ndarray = None,
+        object_fov_ang: Tuple[float, float] = None,
         positions_offset_ang: np.ndarray = None,
         object_type: str = "complex",
         verbose: bool = True,
@@ -189,6 +193,7 @@ class MagneticPtychography(
         self._rolloff = rolloff
         self._object_type = object_type
         self._object_padding_px = object_padding_px
+        self._object_fov_ang = object_fov_ang
         self._positions_mask = positions_mask
         self._verbose = verbose
         self._preprocessed = False
@@ -203,6 +208,7 @@ class MagneticPtychography(
         padded_diffraction_intensities_shape: Tuple[int, int] = None,
         region_of_interest_shape: Tuple[int, int] = None,
         dp_mask: np.ndarray = None,
+        in_place_datacube_modification: bool = False,
         fit_function: str = "plane",
         plot_rotation: bool = True,
         maximize_divergence: bool = False,
@@ -219,6 +225,7 @@ class MagneticPtychography(
         progress_bar: bool = True,
         object_fov_mask: np.ndarray = True,
         crop_patterns: bool = False,
+        center_positions_in_fov: bool = True,
         store_initial_arrays: bool = True,
         device: str = None,
         clear_fft_cache: bool = None,
@@ -253,6 +260,9 @@ class MagneticPtychography(
             at the diffraction plane to allow comparison with experimental data
         dp_mask: ndarray, optional
             Mask for datacube intensities (Qx,Qy)
+        in_place_datacube_modification: bool, optional
+            If True, the datacube will be preprocessed in-place. Note this is not possible
+            when either crop_patterns or positions_mask are used.
         fit_function: str, optional
             2D fitting function for CoM fitting. One of 'plane','parabola','bezier_two'
         plot_rotation: bool, optional
@@ -286,6 +296,8 @@ class MagneticPtychography(
             If None, probe_overlap intensity is thresholded
         crop_patterns: bool
             if True, crop patterns to avoid wrap around of patterns when centering
+        center_positions_in_fov: bool
+            If True (default), probe positions are centered in the fov.
         store_initial_arrays: bool
             If True, preprocesed object and probe arrays are stored allowing reset=True in reconstruct.
         device: str, optional
@@ -364,10 +376,6 @@ class MagneticPtychography(
             raise ValueError(
                 f"datacube must be the same length as magnetic_contribution_sign, not length {len(self._datacube)}."
             )
-
-        dc_shapes = [dc.shape for dc in self._datacube]
-        if dc_shapes.count(dc_shapes[0]) != self._num_measurements:
-            raise ValueError("datacube intensities must be the same size.")
 
         if self._positions_mask is not None:
             self._positions_mask = np.asarray(self._positions_mask, dtype="bool")
@@ -543,12 +551,14 @@ class MagneticPtychography(
                 amplitudes,
                 mean_diffraction_intensity_temp,
                 self._crop_mask,
+                self._crop_mask_shape,
             ) = self._normalize_diffraction_intensities(
                 intensities,
                 com_fitted_x,
                 com_fitted_y,
                 self._positions_mask[index],
                 crop_patterns,
+                in_place_datacube_modification,
             )
 
             self._mean_diffraction_intensity.append(mean_diffraction_intensity_temp)
@@ -610,14 +620,17 @@ class MagneticPtychography(
             self._positions_px_all, dtype=xp_storage.float32
         )
 
-        for index in range(self._num_measurements):
-            idx_start = self._cum_probes_per_measurement[index]
-            idx_end = self._cum_probes_per_measurement[index + 1]
+        if center_positions_in_fov:
+            for index in range(self._num_measurements):
+                idx_start = self._cum_probes_per_measurement[index]
+                idx_end = self._cum_probes_per_measurement[index + 1]
 
-            positions_px = self._positions_px_all[idx_start:idx_end]
-            positions_px_com = positions_px.mean(0)
-            positions_px -= positions_px_com - xp_storage.array(self._object_shape) / 2
-            self._positions_px_all[idx_start:idx_end] = positions_px.copy()
+                positions_px = self._positions_px_all[idx_start:idx_end]
+                positions_px_com = positions_px.mean(0)
+                positions_px -= (
+                    positions_px_com - xp_storage.array(self._object_shape) / 2
+                )
+                self._positions_px_all[idx_start:idx_end] = positions_px.copy()
 
         self._positions_px_initial_all = self._positions_px_all.copy()
         self._positions_initial_all = self._positions_px_initial_all.copy()
@@ -1785,55 +1798,55 @@ class MagneticPtychography(
         if fig is None:
             fig = plt.figure(figsize=figsize)
 
+        # Object_e
+        ax = fig.add_subplot(spec[0, 0])
+        im = ax.imshow(
+            obj[0],
+            extent=extent,
+            cmap=cmap_e,
+            vmin=vmin_e,
+            vmax=vmax_e,
+            **kwargs,
+        )
+        ax.set_ylabel("x [A]")
+        ax.set_xlabel("y [A]")
+
+        if self._object_type == "potential":
+            ax.set_title("Electrostatic potential")
+        elif self._object_type == "complex":
+            ax.set_title("Electrostatic phase")
+
+        if cbar:
+            divider = make_axes_locatable(ax)
+            ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
+            fig.add_axes(ax_cb)
+            fig.colorbar(im, cax=ax_cb)
+
+        # Object_m
+        ax = fig.add_subplot(spec[0, 1])
+        im = ax.imshow(
+            obj[1],
+            extent=extent,
+            cmap=cmap_m,
+            vmin=vmin_m,
+            vmax=vmax_m,
+            **kwargs,
+        )
+        ax.set_ylabel("x [A]")
+        ax.set_xlabel("y [A]")
+
+        if self._object_type == "potential":
+            ax.set_title("Magnetic potential")
+        elif self._object_type == "complex":
+            ax.set_title("Magnetic phase")
+
+        if cbar:
+            divider = make_axes_locatable(ax)
+            ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
+            fig.add_axes(ax_cb)
+            fig.colorbar(im, cax=ax_cb)
+
         if plot_probe or plot_fourier_probe:
-            # Object_e
-            ax = fig.add_subplot(spec[0, 0])
-            im = ax.imshow(
-                obj[0],
-                extent=extent,
-                cmap=cmap_e,
-                vmin=vmin_e,
-                vmax=vmax_e,
-                **kwargs,
-            )
-            ax.set_ylabel("x [A]")
-            ax.set_xlabel("y [A]")
-
-            if self._object_type == "potential":
-                ax.set_title("Electrostatic potential")
-            elif self._object_type == "complex":
-                ax.set_title("Electrostatic phase")
-
-            if cbar:
-                divider = make_axes_locatable(ax)
-                ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
-                fig.add_axes(ax_cb)
-                fig.colorbar(im, cax=ax_cb)
-
-            # Object_m
-            ax = fig.add_subplot(spec[0, 1])
-            im = ax.imshow(
-                obj[1],
-                extent=extent,
-                cmap=cmap_m,
-                vmin=vmin_m,
-                vmax=vmax_m,
-                **kwargs,
-            )
-            ax.set_ylabel("x [A]")
-            ax.set_xlabel("y [A]")
-
-            if self._object_type == "potential":
-                ax.set_title("Magnetic potential")
-            elif self._object_type == "complex":
-                ax.set_title("Magnetic phase")
-
-            if cbar:
-                divider = make_axes_locatable(ax)
-                ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
-                fig.add_axes(ax_cb)
-                fig.colorbar(im, cax=ax_cb)
-
             # Probe
             ax = fig.add_subplot(spec[0, 2])
             if plot_fourier_probe:
@@ -1871,55 +1884,6 @@ class MagneticPtychography(
                 divider = make_axes_locatable(ax)
                 ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
                 add_colorbar_arg(ax_cb, chroma_boost=chroma_boost)
-
-        else:
-            # Object_e
-            ax = fig.add_subplot(spec[0, 0])
-            im = ax.imshow(
-                obj[0],
-                extent=extent,
-                cmap=cmap_e,
-                vmin=vmin_e,
-                vmax=vmax_e,
-                **kwargs,
-            )
-            ax.set_ylabel("x [A]")
-            ax.set_xlabel("y [A]")
-
-            if self._object_type == "potential":
-                ax.set_title("Electrostatic potential")
-            elif self._object_type == "complex":
-                ax.set_title("Electrostatic phase")
-
-            if cbar:
-                divider = make_axes_locatable(ax)
-                ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
-                fig.add_axes(ax_cb)
-                fig.colorbar(im, cax=ax_cb)
-
-            # Object_e
-            ax = fig.add_subplot(spec[0, 1])
-            im = ax.imshow(
-                obj[1],
-                extent=extent,
-                cmap=cmap_m,
-                vmin=vmin_m,
-                vmax=vmax_m,
-                **kwargs,
-            )
-            ax.set_ylabel("x [A]")
-            ax.set_xlabel("y [A]")
-
-            if self._object_type == "potential":
-                ax.set_title("Magnetic potential")
-            elif self._object_type == "complex":
-                ax.set_title("Magnetic phase")
-
-            if cbar:
-                divider = make_axes_locatable(ax)
-                ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
-                fig.add_axes(ax_cb)
-                fig.colorbar(im, cax=ax_cb)
 
         if plot_convergence and hasattr(self, "error_iterations"):
             errors = np.array(self.error_iterations)

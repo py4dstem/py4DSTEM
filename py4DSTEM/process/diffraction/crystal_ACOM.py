@@ -27,8 +27,11 @@ def orientation_plan(
     angle_step_in_plane: float = 2.0,
     accel_voltage: float = 300e3,
     corr_kernel_size: float = 0.08,
-    radial_power: float = 1.0,
-    intensity_power: float = 0.25,  # New default intensity power scaling
+    sigma_excitation_error: float = 0.02,
+    precession_angle_degrees=None,
+    power_radial: float = 1.0,
+    power_intensity: float = 0.25,
+    power_intensity_experiment: float = 0.25,
     calculate_correlation_array=True,
     tol_peak_delete=None,
     tol_distance: float = 0.01,
@@ -41,39 +44,66 @@ def orientation_plan(
     """
     Calculate the rotation basis arrays for an SO(3) rotation correlogram.
 
-    Args:
-        zone_axis_range (float): Row vectors give the range for zone axis orientations.
-                                 If user specifies 2 vectors (2x3 array), we start at [0,0,1]
-                                    to make z-x-z rotation work.
-                                 If user specifies 3 vectors (3x3 array), plan will span these vectors.
-                                 Setting to 'full' as a string will use a hemispherical range.
-                                 Setting to 'half' as a string will use a quarter sphere range.
-                                 Setting to 'fiber' as a string will make a spherical cap around a given vector.
-                                 Setting to 'auto' will use pymatgen to determine the point group symmetry
-                                    of the structure and choose an appropriate zone_axis_range
-        angle_step_zone_axis (float): Approximate angular step size for zone axis search [degrees]
-        angle_coarse_zone_axis (float): Coarse step size for zone axis search [degrees]. Setting to
-                                        None uses the same value as angle_step_zone_axis.
-        angle_refine_range (float):   Range of angles to use for zone axis refinement. Setting to
-                                      None uses same value as angle_coarse_zone_axis.
+    Parameters
+    ----------
+    zone_axis_range (float):
+        Row vectors give the range for zone axis orientations.
+        If user specifies 2 vectors (2x3 array), we start at [0,0,1]
+        to make z-x-z rotation work.
+        If user specifies 3 vectors (3x3 array), plan will span these vectors.
+        Setting to 'full' as a string will use a hemispherical range.
+        Setting to 'half' as a string will use a quarter sphere range.
+        Setting to 'fiber' as a string will make a spherical cap around a given vector.
+        Setting to 'auto' will use pymatgen to determine the point group symmetry
+        of the structure and choose an appropriate zone_axis_range
+    angle_step_zone_axis (float):
+        Approximate angular step size for zone axis search [degrees]
+    angle_coarse_zone_axis (float):
+        Coarse step size for zone axis search [degrees]. Setting to
+        None uses the same value as angle_step_zone_axis.
+    angle_refine_range (float):
+        Range of angles to use for zone axis refinement. Setting to
+        None uses same value as angle_coarse_zone_axis.
 
-        angle_step_in_plane (float):  Approximate angular step size for in-plane rotation [degrees]
-        accel_voltage (float):        Accelerating voltage for electrons [Volts]
-        corr_kernel_size (float):      Correlation kernel size length. The size of the overlap kernel between the measured Bragg peaks and diffraction library Bragg peaks. [1/Angstroms]
-        radial_power (float):          Power for scaling the correlation intensity as a function of the peak radius
-        intensity_power (float):       Power for scaling the correlation intensity as a function of the peak intensity
-        calculate_correlation_array (bool):     Set to false to skip calculating the correlation array.
-                                                This is useful when we only want the angular range / rotation matrices.
-        tol_peak_delete (float):      Distance to delete peaks for multiple matches.
-                                      Default is kernel_size * 0.5
-        tol_distance (float):         Distance tolerance for radial shell assignment [1/Angstroms]
-        fiber_axis (float):           (3,) vector specifying the fiber axis
-        fiber_angles (float):         (2,) vector specifying angle range from fiber axis, and in-plane angular range [degrees]
-        cartesian_directions (bool): When set to true, all zone axes and projection directions
-                                     are specified in Cartesian directions.
-        figsize (float):            (2,) vector giving the figure size
-        CUDA (bool):             Use CUDA for the Fourier operations.
-        progress_bar (bool):    If false no progress bar is displayed
+    angle_step_in_plane (float):
+        Approximate angular step size for in-plane rotation [degrees]
+    accel_voltage (float):
+        Accelerating voltage for electrons [Volts]
+    corr_kernel_size (float):
+        Correlation kernel size length. The size of the overlap kernel between the
+        measured Bragg peaks and diffraction library Bragg peaks. [1/Angstroms]
+    sigma_excitation_error (float):
+        The out of plane excitation error tolerance. [1/Angstroms]
+    precession_angle_degrees (float)
+        Tilt angle of illuminaiton cone in degrees for precession electron diffraction (PED).
+
+    power_radial (float):
+        Power for scaling the correlation intensity as a function of the peak radius
+    power_intensity (float):
+        Power for scaling the correlation intensity as a function of simulated peak intensity
+    power_intensity_experiment (float):
+        Power for scaling the correlation intensity as a function of experimental peak intensity
+    calculate_correlation_array (bool):
+        Set to false to skip calculating the correlation array.
+        This is useful when we only want the angular range / rotation matrices.
+    tol_peak_delete (float):
+        Distance to delete peaks for multiple matches.
+        Default is kernel_size * 0.5
+    tol_distance (float):
+        Distance tolerance for radial shell assignment [1/Angstroms]
+    fiber_axis (float):
+        (3,) vector specifying the fiber axis
+    fiber_angles (float):
+        (2,) vector specifying angle range from fiber axis, and in-plane angular range [degrees]
+    cartesian_directions (bool):
+        When set to true, all zone axes and projection directions
+        are specified in Cartesian directions.
+    figsize (float):
+        (2,) vector giving the figure size
+    CUDA (bool):
+        Use CUDA for the Fourier operations.
+    progress_bar (bool):
+        If false no progress bar is displayed,
     """
 
     # Check to make sure user has calculated the structure factors if needed
@@ -86,6 +116,14 @@ def orientation_plan(
     # Store inputs
     self.accel_voltage = np.asarray(accel_voltage)
     self.orientation_kernel_size = np.asarray(corr_kernel_size)
+    self.orientation_sigma_excitation_error = sigma_excitation_error
+    if precession_angle_degrees is None:
+        self.orientation_precession_angle_degrees = None
+    else:
+        self.orientation_precession_angle_degrees = np.asarray(precession_angle_degrees)
+        self.orientation_precession_angle = np.deg2rad(
+            np.asarray(precession_angle_degrees)
+        )
     if tol_peak_delete is None:
         self.orientation_tol_peak_delete = self.orientation_kernel_size * 0.5
     else:
@@ -104,8 +142,9 @@ def orientation_plan(
     self.wavelength = electron_wavelength_angstrom(self.accel_voltage)
 
     # store the radial and intensity scaling to use later for generating test patterns
-    self.orientation_radial_power = radial_power
-    self.orientation_intensity_power = intensity_power
+    self.orientation_power_radial = power_radial
+    self.orientation_power_intensity = power_intensity
+    self.orientation_power_intensity_experiment = power_intensity_experiment
 
     # Calculate the ratio between coarse and fine refinement
     if angle_coarse_zone_axis is not None:
@@ -717,45 +756,100 @@ def orientation_plan(
         ):
             # reciprocal lattice spots and excitation errors
             g = self.orientation_rotation_matrices[a0, :, :].T @ self.g_vec_all
+            # if precession_angle_degrees is None:
             sg = self.excitation_errors(g)
+            # else:
+            #     sg = np.min(
+            #         np.abs(
+            #             self.excitation_errors(
+            #                 g,
+            #                 precession_angle_degrees = precession_angle_degrees,
+            #             ),
+            #         ),
+            #         axis = 1,
+            #     )
 
             # Keep only points that will contribute to this orientation plan slice
-            keep = np.abs(sg) < self.orientation_kernel_size
+            keep = np.logical_and(
+                np.abs(sg) < self.orientation_kernel_size,
+                self.orientation_shell_index >= 0,
+            )
+
+            # calculate intensity of spots
+            if precession_angle_degrees is None:
+                Ig = np.exp(sg[keep] ** 2 / (-2 * sigma_excitation_error**2))
+            else:
+                # precession extension
+                prec = np.cos(np.linspace(0, 2 * np.pi, 90, endpoint=False))
+                dsg = np.tan(self.orientation_precession_angle) * np.sum(
+                    g[:2, keep] ** 2, axis=0
+                )
+                Ig = np.mean(
+                    np.exp(
+                        (sg[keep, None] + dsg[:, None] * prec[None, :]) ** 2
+                        / (-2 * sigma_excitation_error**2)
+                    ),
+                    axis=1,
+                )
 
             # in-plane rotation angle
-            phi = np.arctan2(g[1, :], g[0, :])
+            phi = np.arctan2(g[1, keep], g[0, keep])
+            phi_ind = phi / self.orientation_gamma[1]  # step size of annular bins
+            phi_floor = np.floor(phi_ind).astype("int")
+            dphi = phi_ind - phi_floor
 
-            # Loop over all peaks
-            for a1 in np.arange(self.g_vec_all.shape[1]):
-                ind_radial = self.orientation_shell_index[a1]
+            # write intensities into orientation plan slice
+            radial_inds = self.orientation_shell_index[keep]
+            self.orientation_ref[a0, radial_inds, phi_floor] += (
+                (1 - dphi)
+                * np.power(self.struct_factors_int[keep] * Ig, power_intensity)
+                * np.power(self.orientation_shell_radii[radial_inds], power_radial)
+            )
+            self.orientation_ref[
+                a0, radial_inds, np.mod(phi_floor + 1, self.orientation_in_plane_steps)
+            ] += (
+                dphi
+                * np.power(self.struct_factors_int[keep] * Ig, power_intensity)
+                * np.power(self.orientation_shell_radii[radial_inds], power_radial)
+            )
 
-                if keep[a1] and ind_radial >= 0:
-                    # 2D orientation plan
-                    self.orientation_ref[a0, ind_radial, :] += (
-                        np.power(self.orientation_shell_radii[ind_radial], radial_power)
-                        * np.power(self.struct_factors_int[a1], intensity_power)
-                        * np.maximum(
-                            1
-                            - np.sqrt(
-                                sg[a1] ** 2
-                                + (
-                                    (
-                                        np.mod(
-                                            self.orientation_gamma - phi[a1] + np.pi,
-                                            2 * np.pi,
-                                        )
-                                        - np.pi
-                                    )
-                                    * self.orientation_shell_radii[ind_radial]
-                                )
-                                ** 2
-                            )
-                            / self.orientation_kernel_size,
-                            0,
-                        )
-                    )
+            # # Loop over all peaks
+            # for a1 in np.arange(self.g_vec_all.shape[1]):
+            #     if keep[a1]:
 
+            # for a1 in np.arange(self.g_vec_all.shape[1]):
+            #     ind_radial = self.orientation_shell_index[a1]
+
+            #     if keep[a1] and ind_radial >= 0:
+            #         # 2D orientation plan
+            #         self.orientation_ref[a0, ind_radial, :] += (
+            #             np.power(self.orientation_shell_radii[ind_radial], power_radial)
+            #             * np.power(self.struct_factors_int[a1], power_intensity)
+            #             * np.maximum(
+            #                 1
+            #                 - np.sqrt(
+            #                     sg[a1] ** 2
+            #                     + (
+            #                         (
+            #                             np.mod(
+            #                                 self.orientation_gamma - phi[a1] + np.pi,
+            #                                 2 * np.pi,
+            #                             )
+            #                             - np.pi
+            #                         )
+            #                         * self.orientation_shell_radii[ind_radial]
+            #                     )
+            #                     ** 2
+            #                 )
+            #                 / self.orientation_kernel_size,
+            #                 0,
+            #             )
+            #         )
+
+            # normalization
+            # self.orientation_ref[a0, :, :] -= np.mean(self.orientation_ref[a0, :, :])
             orientation_ref_norm = np.sqrt(np.sum(self.orientation_ref[a0, :, :] ** 2))
+            # orientation_ref_norm = np.sum(self.orientation_ref[a0, :, :])
             if orientation_ref_norm > 0:
                 self.orientation_ref[a0, :, :] /= orientation_ref_norm
 
@@ -959,14 +1053,12 @@ def match_single_pattern(
 
             if np.any(sub):
                 im_polar[ind_radial, :] = np.sum(
-                    np.power(radius, self.orientation_radial_power)
-                    * np.power(
+                    np.power(
                         np.maximum(intensity[sub, None], 0.0),
-                        self.orientation_intensity_power,
+                        self.orientation_power_intensity_experiment,
                     )
-                    * np.maximum(
-                        1
-                        - np.sqrt(
+                    * np.exp(
+                        (
                             dqr[sub, None] ** 2
                             + (
                                 (
@@ -982,11 +1074,72 @@ def match_single_pattern(
                             )
                             ** 2
                         )
-                        / self.orientation_kernel_size,
-                        0,
+                        / (-2 * self.orientation_kernel_size**2)
                     ),
                     axis=0,
                 )
+
+                # im_polar[ind_radial, :] = np.sum(
+                #     np.power(
+                #         np.maximum(intensity[sub, None], 0.0),
+                #         self.orientation_power_intensity_experiment,
+                #     )
+                #     * np.maximum(
+                #         1
+                #         - np.sqrt(
+                #             dqr[sub, None] ** 2
+                #             + (
+                #                 (
+                #                     np.mod(
+                #                         self.orientation_gamma[None, :]
+                #                         - qphi[sub, None]
+                #                         + np.pi,
+                #                         2 * np.pi,
+                #                     )
+                #                     - np.pi
+                #                 )
+                #                 * radius
+                #             )
+                #             ** 2
+                #         )
+                #         / self.orientation_kernel_size,
+                #         0,
+                #     ),
+                #     axis=0,
+                # )
+
+                # im_polar[ind_radial, :] = np.sum(
+                #     np.power(radius, self.orientation_power_radial)
+                #     * np.power(
+                #         np.maximum(intensity[sub, None], 0.0),
+                #         self.orientation_power_intensity,
+                #     )
+                #     * np.maximum(
+                #         1
+                #         - np.sqrt(
+                #             dqr[sub, None] ** 2
+                #             + (
+                #                 (
+                #                     np.mod(
+                #                         self.orientation_gamma[None, :]
+                #                         - qphi[sub, None]
+                #                         + np.pi,
+                #                         2 * np.pi,
+                #                     )
+                #                     - np.pi
+                #                 )
+                #                 * radius
+                #             )
+                #             ** 2
+                #         )
+                #         / self.orientation_kernel_size,
+                #         0,
+                #     ),
+                #     axis=0,
+                # )
+
+            # normalization
+            # im_polar -= np.mean(im_polar)
 
         # Determine the RMS signal from im_polar for the first match.
         # Note that we use scaling slightly below RMS so that following matches
@@ -1186,6 +1339,7 @@ def match_single_pattern(
                             np.clip(
                                 np.sum(
                                     self.orientation_vecs
+                                    # self.orientation_vecs * np.array([1,-1,-1])[None,:]
                                     * self.orientation_vecs[inds_previous[a0], :],
                                     axis=1,
                                 ),
@@ -1484,7 +1638,8 @@ def match_single_pattern(
             bragg_peaks_fit = self.generate_diffraction_pattern(
                 orientation,
                 ind_orientation=match_ind,
-                sigma_excitation_error=self.orientation_kernel_size,
+                sigma_excitation_error=self.orientation_sigma_excitation_error,
+                precession_angle_degrees=self.orientation_precession_angle_degrees,
             )
 
             remove = np.zeros_like(qx, dtype="bool")

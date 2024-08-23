@@ -983,6 +983,8 @@ def background_pca(
         radial PCA component selected
     """
 
+    from sklearn.decomposition import PCA
+
     # PCA decomposition
     shape = self.radial_all.shape
     A = np.reshape(self.radial_all, (shape[0] * shape[1], shape[2]))

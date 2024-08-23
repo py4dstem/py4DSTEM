@@ -135,7 +135,7 @@ class PtychographyOptimizer:
 
         Parameters
         ----------
-        n_initial_points: int
+        n_points: int
             Number of uniformly spaced trial points to run on a grid
         error_metric: Callable or str
             Function used to compute the reconstruction error.
@@ -233,7 +233,7 @@ class PtychographyOptimizer:
                 ax.imshow(res[0], cmap=cmap)
 
                 title_substrings = [
-                    f"{param.name}: {val}"
+                    f"{param.name}: {val:.3e}"
                     for param, val in zip(self._parameter_list, params)
                 ]
                 title_substrings.append(f"error: {res[1]:.3e}")
@@ -458,13 +458,15 @@ class PtychographyOptimizer:
         return static_args, optimization_args
 
     def _get_scan_positions(self, affine_transform, dataset):
-        R_pixel_size = dataset.calibration.get_R_pixel_size()
-        x, y = (
-            np.arange(dataset.R_Nx) * R_pixel_size,
-            np.arange(dataset.R_Ny) * R_pixel_size,
-        )
-        x, y = np.meshgrid(x, y, indexing="ij")
-        scan_positions = np.stack((x.ravel(), y.ravel()), axis=1)
+        scan_positions = self._init_static_args.get("initial_scan_positions", None)
+        if scan_positions is None:
+            R_pixel_size = dataset.calibration.get_R_pixel_size()
+            x, y = (
+                np.arange(dataset.R_Nx) * R_pixel_size,
+                np.arange(dataset.R_Ny) * R_pixel_size,
+            )
+            x, y = np.meshgrid(x, y, indexing="ij")
+            scan_positions = np.stack((x.ravel(), y.ravel()), axis=1)
         scan_positions = scan_positions @ affine_transform.asarray()
         return scan_positions
 
@@ -483,8 +485,10 @@ class PtychographyOptimizer:
             "log-converged",
             "linear-converged",
             "TV",
+            "TV-phase",
             "std",
             "std-phase",
+            "entropy",
             "entropy-phase",
         ), f"Error metric {error_metric} not recognized."
 
@@ -517,10 +521,20 @@ class PtychographyOptimizer:
         elif error_metric == "TV":
 
             def f(ptycho):
-                gx, gy = np.gradient(ptycho.object_cropped, axis=(-2, -1))
-                obj_mag = np.sum(np.abs(ptycho.object_cropped))
+                array = np.abs(ptycho.object_cropped)
+                gx = array[..., 1:, :] - array[..., -1:, :]
+                gy = array[..., :, 1:] - array[..., :, -1:]
                 tv = np.sum(np.abs(gx)) + np.sum(np.abs(gy))
-                return tv / obj_mag
+                return tv / array.size
+
+        elif error_metric == "TV-phase":
+
+            def f(ptycho):
+                array = np.angle(ptycho.object_cropped)
+                gx = array[..., 1:, :] - array[..., -1:, :]
+                gy = array[..., :, 1:] - array[..., :, -1:]
+                tv = np.sum(np.abs(gx)) + np.sum(np.abs(gy))
+                return tv / array.size
 
         elif error_metric == "std":
 
@@ -532,16 +546,30 @@ class PtychographyOptimizer:
             def f(ptycho):
                 return -np.std(np.angle(ptycho.object_cropped))
 
+        elif error_metric == "entropy":
+
+            def f(ptycho):
+                array = np.abs(ptycho.object_cropped)
+                normalized_array = (array - np.min(array)) / np.ptp(array)
+                # gx = normalized_array[..., 1:, :] - normalized_array[..., -1:, :]
+                # gy = normalized_array[..., :, 1:] - normalized_array[..., :, -1:]
+                gx, gy = np.gradient(normalized_array, axis=(-2, -1))
+                ghist, _, _ = np.histogram2d(gx.ravel(), gy.ravel(), bins=array.shape)
+                ghist = ghist[ghist > 0] / array.size
+                S = np.sum(ghist * np.log2(ghist))
+                return S
+
         elif error_metric == "entropy-phase":
 
             def f(ptycho):
-                obj = np.angle(ptycho.object_cropped)
-                gx, gy = np.gradient(obj)
-                ghist, _, _ = np.histogram2d(
-                    gx.ravel(), gy.ravel(), bins=obj.shape, density=True
-                )
-                nz = ghist > 0
-                S = np.sum(ghist[nz] * np.log2(ghist[nz]))
+                array = np.angle(ptycho.object_cropped)
+                normalized_array = (array - np.min(array)) / np.ptp(array)
+                # gx = normalized_array[..., 1:, :] - normalized_array[..., -1:, :]
+                # gy = normalized_array[..., :, 1:] - normalized_array[..., :, -1:]
+                gx, gy = np.gradient(normalized_array, axis=(-2, -1))
+                ghist, _, _ = np.histogram2d(gx.ravel(), gy.ravel(), bins=array.shape)
+                ghist = ghist[ghist > 0] / array.size
+                S = np.sum(ghist * np.log2(ghist))
                 return S
 
         else:
