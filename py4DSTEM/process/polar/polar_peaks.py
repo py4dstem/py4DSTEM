@@ -832,6 +832,7 @@ def model_radial_background(
     ring_sigma=None,
     ring_int=None,
     refine_model=True,
+    maxfev = None,
     plot_result=True,
     figsize=(8, 4),
     returnfig=True,
@@ -861,6 +862,7 @@ def model_radial_background(
         self.background_mask
     ]
     self.background_radial_mean[np.logical_not(self.background_mask)] = 0
+    self.background_radial_mean = np.maximum(self.background_radial_mean, 0.0)
 
     # init
     if ring_position is not None:
@@ -932,8 +934,9 @@ def model_radial_background(
             self.qq[self.background_mask],
             self.background_radial_mean[self.background_mask],
             p0=self.background_coefs,
-            xtol=1e-12,
+            xtol=1e-8,
             bounds=(lb, ub),
+            maxfev = maxfev,
         )[0]
 
     # plotting
