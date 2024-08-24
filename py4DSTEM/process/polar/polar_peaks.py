@@ -1104,6 +1104,7 @@ def plot_crystal_amorphous_fraction(
     legend=True,
     ticks=False,
     figsize=(5, 4),
+    returnfig=False,
 ):
     """
     Plotting function for the crystal / amorphous fraction image.
@@ -1157,6 +1158,8 @@ def plot_crystal_amorphous_fraction(
         )
         cbar.ax.set_ylabel("More Amorphous  <---->  More Crystalline")
 
+    if returnfig:
+        return fig,ax
 
 def refine_peaks(
     self,
