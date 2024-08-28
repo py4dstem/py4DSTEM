@@ -20,7 +20,7 @@ setup(
     author="Benjamin H. Savitzky",
     author_email="ben.savitzky@gmail.com",
     license="GNU GPLv3",
-    keywords="STEM 4DSTEM",
+    keywords="STEM,4DSTEM",
     python_requires=">=3.10",
     install_requires=[
         "numpy >= 1.19",

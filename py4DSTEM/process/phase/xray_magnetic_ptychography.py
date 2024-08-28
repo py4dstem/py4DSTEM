@@ -1,6 +1,6 @@
 """
 Module for reconstructing phase objects from 4DSTEM datasets using iterative methods,
-namely joint ptychographic tomography.
+namely x-ray magnetic ptychography.
 """
 
 import warnings
@@ -8,29 +8,29 @@ from typing import Mapping, Sequence, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.gridspec import GridSpec
 from mpl_toolkits.axes_grid1 import make_axes_locatable
-from py4DSTEM.visualize.vis_special import Complex2RGB, add_colorbar_arg
+from py4DSTEM.visualize.vis_special import (
+    Complex2RGB,
+    add_colorbar_arg,
+    return_scaled_histogram_ordering,
+)
 
 try:
     import cupy as cp
-except (ModuleNotFoundError, ImportError):
+except (ImportError, ModuleNotFoundError):
     cp = np
 
 from emdfile import Custom, tqdmnd
 from py4DSTEM import DataCube
 from py4DSTEM.process.phase.phase_base_class import PtychographicReconstruction
 from py4DSTEM.process.phase.ptychographic_constraints import (
-    Object2p5DConstraintsMixin,
-    Object3DConstraintsMixin,
     ObjectNDConstraintsMixin,
     PositionsConstraintsMixin,
     ProbeConstraintsMixin,
 )
 from py4DSTEM.process.phase.ptychographic_methods import (
     MultipleMeasurementsMethodsMixin,
-    Object2p5DMethodsMixin,
-    Object2p5DProbeMethodsMixin,
-    Object3DMethodsMixin,
     ObjectNDMethodsMixin,
     ObjectNDProbeMethodsMixin,
     ProbeMethodsMixin,
@@ -46,43 +46,36 @@ from py4DSTEM.process.phase.utils import (
 )
 
 
-class PtychographicTomography(
+class XRayMagneticPtychography(
     VisualizationsMixin,
     PositionsConstraintsMixin,
     ProbeConstraintsMixin,
-    Object3DConstraintsMixin,
-    Object2p5DConstraintsMixin,
     ObjectNDConstraintsMixin,
     MultipleMeasurementsMethodsMixin,
-    Object2p5DProbeMethodsMixin,
     ObjectNDProbeMethodsMixin,
     ProbeMethodsMixin,
-    Object3DMethodsMixin,
-    Object2p5DMethodsMixin,
     ObjectNDMethodsMixin,
     PtychographicReconstruction,
 ):
     """
-    Ptychographic Tomography Reconstruction Class.
+    Iterative X-Ray Magnetic Ptychographic Reconstruction Class.
 
-    List of diffraction intensities dimensions  : (Rx,Ry,Qx,Qy)
-    Reconstructed probe dimensions              : (Sx,Sy)
-    Reconstructed object dimensions             : (Px,Py,Py)
+    Diffraction intensities dimensions         : (Rx,Ry,Qx,Qy) (for each measurement)
+    Reconstructed probe dimensions             : (Sx,Sy)
+    Reconstructed electrostatic dimensions     : (Px,Py)
+    Reconstructed magnetic dimensions          : (Px,Py)
 
     such that (Sx,Sy) is the region-of-interest (ROI) size of our probe
-    and (Px,Py,Py) is the padded-object electrostatic potential volume,
-    where x-axis is the tilt.
+    and (Px,Py) is the padded-object size we position our ROI around in.
 
     Parameters
     ----------
-    datacube: List of DataCubes
-        Input list of 4D diffraction pattern intensities
+    datacube: Sequence[DataCube]
+        Tuple of input 4D diffraction pattern intensities
     energy: float
         The electron energy of the wave functions in eV
-    num_slices: int
-        Number of super-slices to use in the forward model
-    tilt_orientation_matrices: Sequence[np.ndarray]
-        List of orientation matrices for each tilt
+    magnetic_contribution_sign: str, optional
+        One of '-+', '-0+', '0+'
     semiangle_cutoff: float, optional
         Semiangle cutoff for the initial probe guess in mrad
     semiangle_cutoff_pixels: float, optional
@@ -95,32 +88,35 @@ class PtychographicTomography(
         Mapping from aberration symbols to their corresponding values. All aberration
         magnitudes should be given in Å and angles should be given in radians.
     object_padding_px: Tuple[int,int], optional
-        Pixel dimensions to pad object with
+        Pixel dimensions to pad objects with
         If None, the padding is set to half the probe ROI dimensions
+    positions_mask: np.ndarray, optional
+        Boolean real space mask to select positions in datacube to skip for reconstruction
     initial_object_guess: np.ndarray, optional
-        Initial guess for complex-valued object of dimensions (Px,Py,Py)
-        If None, initialized to 1.0
+        Initial guess for complex-valued object of dimensions (2,Px,Py)
+        If None, initialized to 1.0j for complex objects and 0.0 for potential objects
     initial_probe_guess: np.ndarray, optional
         Initial guess for complex-valued probe of dimensions (Sx,Sy). If None,
         initialized to ComplexProbe with semiangle_cutoff, energy, and aberrations
-    initial_scan_positions: list of np.ndarray, optional
-        Probe positions in Å for each diffraction intensity per tilt
-        If None, initialized to a grid scan centered along tilt axis
-    positions_offset_ang: list of np.ndarray, optional
+    initial_scan_positions: np.ndarray, optional
+        Probe positions in Å for each diffraction intensity
+        If None, initialized to a grid scan
+    object_fov_ang: Tuple[int,int], optional
+        Fixed object field of view in Å. If None, the fov is initialized using the
+        probe positions and object_padding_px
+    positions_offset_ang: np.ndarray, optional
         Offset of positions in A
     verbose: bool, optional
         If True, class methods will inherit this and print additional information
-    object_type: str, optional
-        The object can be reconstructed as a real potential ('potential') or a complex
-        object ('complex')
-    positions_mask: np.ndarray, optional
-        Boolean real space mask to select positions to ignore in reconstruction
     device: str, optional
         Calculation device will be perfomed on. Must be 'cpu' or 'gpu'
     storage: str, optional
         Device non-frequent arrays will be stored on. Must be 'cpu' or 'gpu'
     clear_fft_cache: bool, optional
         If True, and device = 'gpu', clears the cached fft plan at the end of function calls
+    object_type: str, optional
+        The object can be reconstructed as a real potential ('potential') or a complex
+        object ('complex')
     name: str, optional
         Class name
     kwargs:
@@ -128,35 +124,31 @@ class PtychographicTomography(
     """
 
     # Class-specific Metadata
-    _class_specific_metadata = (
-        "_num_slices",
-        "_tilt_orientation_matrices",
-        "_num_measurements",
-    )
+    _class_specific_metadata = ("_magnetic_contribution_sign",)
 
     def __init__(
         self,
         energy: float,
-        num_slices: int,
-        tilt_orientation_matrices: Sequence[np.ndarray],
         datacube: Sequence[DataCube] = None,
+        magnetic_contribution_sign: str = "-+",
         semiangle_cutoff: float = None,
         semiangle_cutoff_pixels: float = None,
         rolloff: float = 2.0,
         vacuum_probe_intensity: np.ndarray = None,
         polar_parameters: Mapping[str, float] = None,
         object_padding_px: Tuple[int, int] = None,
-        object_type: str = "potential",
         positions_mask: np.ndarray = None,
         initial_object_guess: np.ndarray = None,
         initial_probe_guess: np.ndarray = None,
-        initial_scan_positions: Sequence[np.ndarray] = None,
-        positions_offset_ang: Sequence[np.ndarray] = None,
+        initial_scan_positions: np.ndarray = None,
+        object_fov_ang: Tuple[float, float] = None,
+        positions_offset_ang: np.ndarray = None,
+        object_type: str = "complex",
         verbose: bool = True,
         device: str = "cpu",
         storage: str = None,
         clear_fft_cache: bool = True,
-        name: str = "ptychographic-tomography_reconstruction",
+        name: str = "xray_magnetic_ptychographic_reconstruction",
         **kwargs,
     ):
         Custom.__init__(self, name=name)
@@ -179,11 +171,7 @@ class PtychographicTomography(
         polar_parameters.update(kwargs)
         self._set_polar_parameters(polar_parameters)
 
-        num_tilts = len(tilt_orientation_matrices)
-        if initial_scan_positions is None:
-            initial_scan_positions = [None] * num_tilts
-
-        if object_type != "potential":
+        if object_type != "complex":
             raise NotImplementedError()
 
         self.set_save_defaults()
@@ -203,14 +191,13 @@ class PtychographicTomography(
         self._rolloff = rolloff
         self._object_type = object_type
         self._object_padding_px = object_padding_px
+        self._object_fov_ang = object_fov_ang
         self._positions_mask = positions_mask
         self._verbose = verbose
         self._preprocessed = False
 
         # Class-specific Metadata
-        self._num_slices = num_slices
-        self._tilt_orientation_matrices = tuple(tilt_orientation_matrices)
-        self._num_measurements = num_tilts
+        self._magnetic_contribution_sign = magnetic_contribution_sign
 
     def preprocess(
         self,
@@ -221,11 +208,13 @@ class PtychographicTomography(
         dp_mask: np.ndarray = None,
         in_place_datacube_modification: bool = False,
         fit_function: str = "plane",
+        plot_rotation: bool = True,
+        maximize_divergence: bool = False,
+        rotation_angles_deg: np.ndarray = None,
         plot_probe_overlaps: bool = True,
-        rotation_real_space_degrees: float = None,
-        diffraction_patterns_rotate_degrees: float = None,
-        diffraction_patterns_transpose: bool = None,
-        force_com_shifts: Sequence[float] = None,
+        force_com_rotation: float = None,
+        force_com_transpose: float = None,
+        force_com_shifts: Sequence[np.ndarray] = None,
         force_com_measured: Sequence[np.ndarray] = None,
         vectorized_com_calculation: bool = True,
         force_scan_sampling: float = None,
@@ -234,7 +223,7 @@ class PtychographicTomography(
         progress_bar: bool = True,
         object_fov_mask: np.ndarray = True,
         crop_patterns: bool = False,
-        main_tilt_axis: str = "vertical",
+        center_positions_in_fov: bool = True,
         store_initial_arrays: bool = True,
         device: str = None,
         clear_fft_cache: bool = None,
@@ -243,8 +232,15 @@ class PtychographicTomography(
     ):
         """
         Ptychographic preprocessing step.
+        Calls the base class methods:
 
-        Additionally, it initializes an (Px,Py, Py) array of 1.0
+        _extract_intensities_and_calibrations_from_datacube,
+        _compute_center_of_mass(),
+        _solve_CoM_rotation(),
+        _normalize_diffraction_intensities()
+        _calculate_scan_positions_in_px()
+
+        Additionally, it initializes an (Px,Py) array of 1.0j
         and a complex probe using the specified polar parameters.
 
         Parameters
@@ -267,19 +263,22 @@ class PtychographicTomography(
             when either crop_patterns or positions_mask are used.
         fit_function: str, optional
             2D fitting function for CoM fitting. One of 'plane','parabola','bezier_two'
+        plot_rotation: bool, optional
+            If True, the CoM curl minimization search result will be displayed
+        maximize_divergence: bool, optional
+            If True, the divergence of the CoM gradient vector field is maximized
+        rotation_angles_deg: np.darray, optional
+            Array of angles in degrees to perform curl minimization over
         plot_probe_overlaps: bool, optional
             If True, initial probe overlaps scanned over the object will be displayed
-        rotation_real_space_degrees: float (degrees), optional
-            In plane rotation around z axis between x axis and tilt axis in
-            real space (forced to be in xy plane)
-        diffraction_patterns_rotate_degrees: float, optional
-            Relative rotation angle between real and reciprocal space
-        diffraction_patterns_transpose: bool, optional
-            Whether diffraction intensities need to be transposed.
-        force_com_shifts: list of tuple of ndarrays (CoMx, CoMy)
+        force_com_rotation: float (degrees), optional
+            Force relative rotation angle between real and reciprocal space
+        force_com_transpose: bool, optional
+            Force whether diffraction intensities need to be transposed.
+        force_com_shifts: sequence of tuples of ndarrays (CoMx, CoMy)
             Amplitudes come from diffraction patterns shifted with
             the CoM in the upper left corner for each probe unless
-            shift is overwritten. One tuple per tilt.
+            shift is overwritten.
         force_com_measured: tuple of ndarrays (CoMx measured, CoMy measured)
             Force CoM measured shifts
         vectorized_com_calculation: bool, optional
@@ -294,11 +293,9 @@ class PtychographicTomography(
             Boolean mask of FOV. Used to calculate additional shrinkage of object
             If None, probe_overlap intensity is thresholded
         crop_patterns: bool
-            If True, crop patterns to avoid wrap around of patterns when centering
-        main_tilt_axis: str
-            The default, 'vertical' (first scan dimension), results in object size (q,p,q),
-            'horizontal' (second scan dimension) results in object size (p,p,q),
-            any other value (e.g. None) results in object size (max(p,q),p,q).
+            if True, crop patterns to avoid wrap around of patterns when centering
+        center_positions_in_fov: bool
+            If True (default), probe positions are centered in the fov.
         store_initial_arrays: bool
             If True, preprocesed object and probe arrays are stored allowing reset=True in reconstruct.
         device: str, optional
@@ -310,7 +307,7 @@ class PtychographicTomography(
 
         Returns
         --------
-        self: OverlapTomographicReconstruction
+        self: PtychographicReconstruction
             Self to accommodate chaining
         """
         # handle device/storage
@@ -336,6 +333,46 @@ class PtychographicTomography(
                     "The preprocess() method requires a DataCube. "
                     "Please run ptycho.attach_datacube(DataCube) first."
                 )
+            )
+
+        if self._magnetic_contribution_sign == "-+":
+            self._recon_mode = 0
+            self._num_measurements = 2
+            magnetic_contribution_msg = (
+                "Magnetic contribution sign in first meaurement assumed to be negative.\n"
+                "Magnetic contribution sign in second meaurement assumed to be positive."
+            )
+
+        elif self._magnetic_contribution_sign == "-0+":
+            self._recon_mode = 1
+            self._num_measurements = 3
+            magnetic_contribution_msg = (
+                "Magnetic contribution sign in first meaurement assumed to be negative.\n"
+                "Magnetic contribution assumed to be zero in second meaurement.\n"
+                "Magnetic contribution sign in third meaurement assumed to be positive."
+            )
+
+        elif self._magnetic_contribution_sign == "0+":
+            self._recon_mode = 2
+            self._num_measurements = 2
+            magnetic_contribution_msg = (
+                "Magnetic contribution assumed to be zero in first meaurement.\n"
+                "Magnetic contribution sign in second meaurement assumed to be positive."
+            )
+        else:
+            raise ValueError(
+                f"magnetic_contribution_sign must be either '-+', '-0+', or '0+', not {self._magnetic_contribution_sign}"
+            )
+
+        if self._verbose:
+            warnings.warn(
+                magnetic_contribution_msg,
+                UserWarning,
+            )
+
+        if len(self._datacube) != self._num_measurements:
+            raise ValueError(
+                f"datacube must be the same length as magnetic_contribution_sign, not length {len(self._datacube)}."
             )
 
         if self._positions_mask is not None:
@@ -394,11 +431,14 @@ class PtychographicTomography(
         if force_com_measured is None:
             force_com_measured = [None] * self._num_measurements
 
+        if self._scan_positions is None:
+            self._scan_positions = [None] * self._num_measurements
+
         if self._positions_offset_ang is None:
             self._positions_offset_ang = [None] * self._num_measurements
 
-        self._rotation_best_rad = np.deg2rad(diffraction_patterns_rotate_degrees)
-        self._rotation_best_transpose = diffraction_patterns_transpose
+        # Ensure plot_center_of_mass is not in kwargs
+        kwargs.pop("plot_center_of_mass", None)
 
         if progress_bar:
             # turn off verbosity to play nice with tqdm
@@ -409,10 +449,10 @@ class PtychographicTomography(
         for index in tqdmnd(
             self._num_measurements,
             desc="Preprocessing data",
-            unit="tilt",
+            unit="measurement",
             disable=not progress_bar,
         ):
-            # preprocess datacube, vacuum and masks only for first tilt
+            # preprocess datacube, vacuum and masks only for first measurement
             if index == 0:
                 (
                     self._datacube[index],
@@ -475,9 +515,36 @@ class PtychographicTomography(
                 com_measured=force_com_measured[index],
             )
 
+            # estimate rotation / transpose using first measurement
+            if index == 0:
+                # silence warnings to play nice with progress bar
+                verbose = self._verbose
+                self._verbose = False
+
+                (
+                    self._rotation_best_rad,
+                    self._rotation_best_transpose,
+                    _com_x,
+                    _com_y,
+                ) = self._solve_for_center_of_mass_relative_rotation(
+                    com_measured_x,
+                    com_measured_y,
+                    com_normalized_x,
+                    com_normalized_y,
+                    rotation_angles_deg=rotation_angles_deg,
+                    plot_rotation=plot_rotation,
+                    plot_center_of_mass=False,
+                    maximize_divergence=maximize_divergence,
+                    force_com_rotation=force_com_rotation,
+                    force_com_transpose=force_com_transpose,
+                    **kwargs,
+                )
+                self._verbose = verbose
+
             # corner-center amplitudes
             idx_start = self._cum_probes_per_measurement[index]
             idx_end = self._cum_probes_per_measurement[index + 1]
+
             (
                 amplitudes,
                 mean_diffraction_intensity_temp,
@@ -489,6 +556,7 @@ class PtychographicTomography(
                 com_fitted_y,
                 self._positions_mask[index],
                 crop_patterns,
+                in_place_datacube_modification,
             )
 
             self._mean_diffraction_intensity.append(mean_diffraction_intensity_temp)
@@ -528,34 +596,40 @@ class PtychographicTomography(
                 self._semiangle_cutoff_pixels * self._angular_sampling[0]
             )
 
-        # initialize object
-        self._object = self._initialize_object(
+        # Object Initialization
+        obj = self._initialize_object(
             self._object,
             self._positions_px_all,
             self._object_type,
-            main_tilt_axis,
         )
+
+        if self._object is None:
+            # complex zeros instead of ones, since we store pre-exponential terms
+            self._object = xp.zeros((2,) + obj.shape, dtype=obj.dtype)
+        else:
+            self._object = obj
 
         if store_initial_arrays:
             self._object_initial = self._object.copy()
             self._object_type_initial = self._object_type
-
         self._object_shape = self._object.shape[-2:]
-        self._num_voxels = self._object.shape[0]
 
         # center probe positions
         self._positions_px_all = xp_storage.asarray(
             self._positions_px_all, dtype=xp_storage.float32
         )
 
-        for index in range(self._num_measurements):
-            idx_start = self._cum_probes_per_measurement[index]
-            idx_end = self._cum_probes_per_measurement[index + 1]
+        if center_positions_in_fov:
+            for index in range(self._num_measurements):
+                idx_start = self._cum_probes_per_measurement[index]
+                idx_end = self._cum_probes_per_measurement[index + 1]
 
-            positions_px = self._positions_px_all[idx_start:idx_end]
-            positions_px_com = positions_px.mean(0)
-            positions_px -= positions_px_com - xp_storage.array(self._object_shape) / 2
-            self._positions_px_all[idx_start:idx_end] = positions_px.copy()
+                positions_px = self._positions_px_all[idx_start:idx_end]
+                positions_px_com = positions_px.mean(0)
+                positions_px -= (
+                    positions_px_com - xp_storage.array(self._object_shape) / 2
+                )
+                self._positions_px_all[idx_start:idx_end] = positions_px.copy()
 
         self._positions_px_initial_all = self._positions_px_all.copy()
         self._positions_initial_all = self._positions_px_initial_all.copy()
@@ -602,34 +676,8 @@ class PtychographicTomography(
             device=self._device,
         )._evaluate_ctf()
 
-        # Precomputed propagator arrays
-        if main_tilt_axis == "vertical":
-            thickness = self._object_shape[1] * self.sampling[1]
-        elif main_tilt_axis == "horizontal":
-            thickness = self._object_shape[0] * self.sampling[0]
-        else:
-            thickness_h = self._object_shape[1] * self.sampling[1]
-            thickness_v = self._object_shape[0] * self.sampling[0]
-            thickness = max(thickness_h, thickness_v)
-
-        self._slice_thicknesses = np.tile(
-            thickness / self._num_slices, self._num_slices - 1
-        )
-        self._propagator_arrays = self._precompute_propagator_arrays(
-            self._region_of_interest_shape,
-            self.sampling,
-            self._energy,
-            self._slice_thicknesses,
-        )
-
-        if object_fov_mask is not True:
-            raise NotImplementedError()
-        else:
-            self._object_fov_mask = np.full(self._object_shape, True)
-        self._object_fov_mask_inverse = np.invert(self._object_fov_mask)
-
-        # plot probe overlaps
-        if plot_probe_overlaps:
+        if object_fov_mask is None or plot_probe_overlaps:
+            # overlaps
             if max_batch_size is None:
                 max_batch_size = self._num_diffraction_patterns
 
@@ -650,28 +698,31 @@ class PtychographicTomography(
                 )
 
             del shifted_probes
-            probe_overlap = asnumpy(probe_overlap)
 
-            figsize = kwargs.pop("figsize", (13, 4))
+        # initialize object_fov_mask
+        if object_fov_mask is None:
+            gaussian_filter = self._scipy.ndimage.gaussian_filter
+            probe_overlap_blurred = gaussian_filter(probe_overlap, 1.0)
+            self._object_fov_mask = asnumpy(
+                probe_overlap_blurred > 0.25 * probe_overlap_blurred.max()
+            )
+            del probe_overlap_blurred
+        elif object_fov_mask is True:
+            self._object_fov_mask = np.full(self._object_shape, True)
+        else:
+            self._object_fov_mask = np.asarray(object_fov_mask)
+        self._object_fov_mask_inverse = np.invert(self._object_fov_mask)
+
+        # plot probe overlaps
+        if plot_probe_overlaps:
+            probe_overlap = asnumpy(probe_overlap)
+            figsize = kwargs.pop("figsize", (9, 4))
             chroma_boost = kwargs.pop("chroma_boost", 1)
             power = kwargs.pop("power", 2)
 
             # initial probe
             complex_probe_rgb = Complex2RGB(
                 self.probe_centered[0],
-                power=power,
-                chroma_boost=chroma_boost,
-            )
-
-            # propagated
-            propagated_probe = self._probes_all[0].copy()
-
-            for s in range(self._num_slices - 1):
-                propagated_probe = self._propagate_array(
-                    propagated_probe, self._propagator_arrays[s]
-                )
-            complex_propagated_rgb = Complex2RGB(
-                asnumpy(self._return_centered_probe(propagated_probe)),
                 power=power,
                 chroma_boost=chroma_boost,
             )
@@ -690,7 +741,7 @@ class PtychographicTomography(
                 0,
             ]
 
-            fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=figsize)
+            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=figsize)
 
             ax1.imshow(
                 complex_probe_rgb,
@@ -699,45 +750,27 @@ class PtychographicTomography(
 
             divider = make_axes_locatable(ax1)
             cax1 = divider.append_axes("right", size="5%", pad="2.5%")
-            add_colorbar_arg(
-                cax1,
-                chroma_boost=chroma_boost,
-            )
+            add_colorbar_arg(cax1, chroma_boost=chroma_boost)
             ax1.set_ylabel("x [A]")
             ax1.set_xlabel("y [A]")
             ax1.set_title("Initial probe intensity")
 
             ax2.imshow(
-                complex_propagated_rgb,
-                extent=probe_extent,
-            )
-
-            divider = make_axes_locatable(ax2)
-            cax2 = divider.append_axes("right", size="5%", pad="2.5%")
-            add_colorbar_arg(
-                cax2,
-                chroma_boost=chroma_boost,
-            )
-            ax2.set_ylabel("x [A]")
-            ax2.set_xlabel("y [A]")
-            ax2.set_title("Propagated probe intensity")
-
-            ax3.imshow(
                 probe_overlap,
                 extent=extent,
-                cmap="Greys_r",
+                cmap="gray",
             )
-            ax3.scatter(
+            ax2.scatter(
                 self.positions[0, :, 1],
                 self.positions[0, :, 0],
                 s=2.5,
                 color=(1, 0, 0, 1),
             )
-            ax3.set_ylabel("x [A]")
-            ax3.set_xlabel("y [A]")
-            ax3.set_xlim((extent[0], extent[1]))
-            ax3.set_ylim((extent[2], extent[3]))
-            ax3.set_title("Object field of view")
+            ax2.set_ylabel("x [A]")
+            ax2.set_xlabel("y [A]")
+            ax2.set_xlim((extent[0], extent[1]))
+            ax2.set_ylim((extent[2], extent[3]))
+            ax2.set_title("Object field of view")
 
             fig.tight_layout()
 
@@ -745,6 +778,347 @@ class PtychographicTomography(
         self.clear_device_mem(self._device, self._clear_fft_cache)
 
         return self
+
+    def _overlap_projection(
+        self,
+        current_object,
+        vectorized_patch_indices_row,
+        vectorized_patch_indices_col,
+        shifted_probes,
+    ):
+        """
+        Ptychographic overlap projection method.
+
+        Parameters
+        --------
+        current_object: np.ndarray
+            Current object estimate
+        current_probe: np.ndarray
+            Current probe estimate
+
+        Returns
+        --------
+        shifted_probes:np.ndarray
+            fractionally-shifted probes
+        object_patches: np.ndarray
+            Patched object view
+        overlap: np.ndarray
+            shifted_probes * object_patches
+        """
+
+        xp = self._xp
+
+        object_patches = xp.empty(
+            (self._num_measurements,) + shifted_probes.shape, dtype=current_object.dtype
+        )
+        object_patches[0] = current_object[
+            0, vectorized_patch_indices_row, vectorized_patch_indices_col
+        ]
+        object_patches[1] = current_object[
+            1, vectorized_patch_indices_row, vectorized_patch_indices_col
+        ]
+
+        overlap_base = shifted_probes * xp.exp(1.0j * object_patches[0])
+
+        match (self._recon_mode, self._active_measurement_index):
+            case (0, 0) | (1, 0):  # reverse
+                overlap = overlap_base * xp.exp(-1.0j * object_patches[1])
+            case (0, 1) | (1, 2) | (2, 1):  # forward
+                overlap = overlap_base * xp.exp(1.0j * object_patches[1])
+            case (1, 1) | (2, 0):  # neutral
+                overlap = overlap_base
+            case _:
+                raise ValueError()
+
+        return shifted_probes, object_patches, overlap
+
+    def _gradient_descent_adjoint(
+        self,
+        current_object,
+        current_probe,
+        object_patches,
+        shifted_probes,
+        positions_px,
+        exit_waves,
+        step_size,
+        normalization_min,
+        fix_probe,
+    ):
+        """
+        Ptychographic adjoint operator for GD method.
+        Computes object and probe update steps.
+
+        Parameters
+        --------
+        current_object: np.ndarray
+            Current object estimate
+        current_probe: np.ndarray
+            Current probe estimate
+        object_patches: np.ndarray
+            Patched object view
+        shifted_probes:np.ndarray
+            fractionally-shifted probes
+        exit_waves:np.ndarray
+            Updated exit_waves
+        step_size: float, optional
+            Update step size
+        normalization_min: float, optional
+            Probe normalization minimum as a fraction of the maximum overlap intensity
+        fix_probe: bool, optional
+            If True, probe will not be updated
+
+        Returns
+        --------
+        updated_object: np.ndarray
+            Updated object estimate
+        updated_probe: np.ndarray
+            Updated probe estimate
+        """
+        xp = self._xp
+
+        probe_conj = xp.conj(shifted_probes)  # P*
+        electrostatic_conj = xp.exp(-1.0j * xp.conj(object_patches[0]))  # exp[-i c]
+
+        probe_electrostatic_abs = xp.abs(probe_conj * electrostatic_conj)
+        probe_electrostatic_normalization = self._sum_overlapping_patches_bincounts(
+            probe_electrostatic_abs**2,
+            positions_px,
+        )
+        probe_electrostatic_normalization = 1 / xp.sqrt(
+            1e-16
+            + ((1 - normalization_min) * probe_electrostatic_normalization) ** 2
+            + (normalization_min * xp.max(probe_electrostatic_normalization)) ** 2
+        )
+
+        match (self._recon_mode, self._active_measurement_index):
+            case (0, 0) | (1, 0):  # reverse
+
+                magnetic_conj = xp.exp(1.0j * xp.conj(object_patches[1]))
+
+                probe_magnetic_abs = xp.abs(shifted_probes * magnetic_conj)
+                probe_magnetic_normalization = self._sum_overlapping_patches_bincounts(
+                    probe_magnetic_abs**2,
+                    positions_px,
+                )
+                probe_magnetic_normalization = 1 / xp.sqrt(
+                    1e-16
+                    + ((1 - normalization_min) * probe_magnetic_normalization) ** 2
+                    + (normalization_min * xp.max(probe_magnetic_normalization)) ** 2
+                )
+
+                # - i * exp(i m*) * exp(-i c*) * P
+                electrostatic_update = self._sum_overlapping_patches_bincounts(
+                    -1.0j
+                    * magnetic_conj
+                    * electrostatic_conj
+                    * probe_conj
+                    * exit_waves,
+                    positions_px,
+                )
+
+                # i * exp(i m*) * exp(-i c*) * P
+                magnetic_update = self._sum_overlapping_patches_bincounts(
+                    1.0j * magnetic_conj * electrostatic_conj * probe_conj * exit_waves,
+                    positions_px,
+                )
+
+                current_object[0] += (
+                    step_size * electrostatic_update * probe_magnetic_normalization
+                )
+                current_object[1] += (
+                    step_size * magnetic_update * probe_electrostatic_normalization
+                )
+
+                if not fix_probe:
+
+                    electrostatic_magnetic_abs = xp.abs(
+                        electrostatic_conj * magnetic_conj
+                    )
+                    electrostatic_magnetic_normalization = xp.sum(
+                        electrostatic_magnetic_abs**2,
+                        axis=0,
+                    )
+                    electrostatic_magnetic_normalization = 1 / xp.sqrt(
+                        1e-16
+                        + (
+                            (1 - normalization_min)
+                            * electrostatic_magnetic_normalization
+                        )
+                        ** 2
+                        + (
+                            normalization_min
+                            * xp.max(electrostatic_magnetic_normalization)
+                        )
+                        ** 2
+                    )
+
+                    # exp(i m*) * exp(-i c*)
+                    current_probe += step_size * (
+                        xp.sum(
+                            magnetic_conj * electrostatic_conj * exit_waves,
+                            axis=0,
+                        )
+                        * electrostatic_magnetic_normalization
+                    )
+
+            case (0, 1) | (1, 2) | (2, 1):  # forward
+
+                magnetic_conj = xp.exp(-1.0j * xp.conj(object_patches[1]))
+
+                probe_magnetic_abs = xp.abs(shifted_probes * magnetic_conj)
+                probe_magnetic_normalization = self._sum_overlapping_patches_bincounts(
+                    probe_magnetic_abs**2,
+                    positions_px,
+                )
+                probe_magnetic_normalization = 1 / xp.sqrt(
+                    1e-16
+                    + ((1 - normalization_min) * probe_magnetic_normalization) ** 2
+                    + (normalization_min * xp.max(probe_magnetic_normalization)) ** 2
+                )
+
+                # - i * exp(-i m*) * exp(-i c*) * P
+                update = self._sum_overlapping_patches_bincounts(
+                    -1.0j
+                    * magnetic_conj
+                    * electrostatic_conj
+                    * probe_conj
+                    * exit_waves,
+                    positions_px,
+                )
+
+                current_object[0] += step_size * update * probe_magnetic_normalization
+                current_object[1] += (
+                    step_size * update * probe_electrostatic_normalization
+                )
+
+                if not fix_probe:
+
+                    electrostatic_magnetic_abs = xp.abs(
+                        electrostatic_conj * magnetic_conj
+                    )
+                    electrostatic_magnetic_normalization = xp.sum(
+                        electrostatic_magnetic_abs**2,
+                        axis=0,
+                    )
+                    electrostatic_magnetic_normalization = 1 / xp.sqrt(
+                        1e-16
+                        + (
+                            (1 - normalization_min)
+                            * electrostatic_magnetic_normalization
+                        )
+                        ** 2
+                        + (
+                            normalization_min
+                            * xp.max(electrostatic_magnetic_normalization)
+                        )
+                        ** 2
+                    )
+
+                    # exp(i m*) * exp(-i c*)
+                    current_probe += step_size * (
+                        xp.sum(
+                            magnetic_conj * electrostatic_conj * exit_waves,
+                            axis=0,
+                        )
+                        * electrostatic_magnetic_normalization
+                    )
+
+            case (1, 1) | (2, 0):  # neutral
+
+                probe_abs = xp.abs(shifted_probes)
+                probe_normalization = self._sum_overlapping_patches_bincounts(
+                    probe_abs**2,
+                    positions_px,
+                )
+                probe_normalization = 1 / xp.sqrt(
+                    1e-16
+                    + ((1 - normalization_min) * probe_normalization) ** 2
+                    + (normalization_min * xp.max(probe_normalization)) ** 2
+                )
+
+                # -i exp(-i c*) * P*
+                electrostatic_update = self._sum_overlapping_patches_bincounts(
+                    -1.0j * electrostatic_conj * probe_conj * exit_waves,
+                    positions_px,
+                )
+
+                current_object[0] += (
+                    step_size * electrostatic_update * probe_normalization
+                )
+
+                if not fix_probe:
+
+                    electrostatic_abs = xp.abs(electrostatic_conj)
+                    electrostatic_normalization = xp.sum(
+                        electrostatic_abs**2,
+                        axis=0,
+                    )
+                    electrostatic_normalization = 1 / xp.sqrt(
+                        1e-16
+                        + ((1 - normalization_min) * electrostatic_normalization) ** 2
+                        + (normalization_min * xp.max(electrostatic_normalization)) ** 2
+                    )
+
+                    # exp(-i c*)
+                    current_probe += step_size * (
+                        xp.sum(
+                            electrostatic_conj * exit_waves,
+                            axis=0,
+                        )
+                        * electrostatic_normalization
+                    )
+
+            case _:
+                raise ValueError()
+
+        return current_object, current_probe
+
+    def _object_constraints(
+        self,
+        current_object,
+        gaussian_filter,
+        gaussian_filter_sigma_e,
+        gaussian_filter_sigma_m,
+        butterworth_filter,
+        butterworth_order,
+        q_lowpass_e,
+        q_lowpass_m,
+        q_highpass_e,
+        q_highpass_m,
+        tv_denoise,
+        tv_denoise_weight,
+        tv_denoise_inner_iter,
+        **kwargs,
+    ):
+        """MagneticObjectNDConstraints wrapper function"""
+
+        # smoothness
+        if gaussian_filter:
+            current_object[0] = self._object_gaussian_constraint(
+                current_object[0], gaussian_filter_sigma_e, False
+            )
+            current_object[1] = self._object_gaussian_constraint(
+                current_object[1], gaussian_filter_sigma_m, False
+            )
+        if butterworth_filter:
+            current_object[0] = self._object_butterworth_constraint(
+                current_object[0],
+                q_lowpass_e,
+                q_highpass_e,
+                butterworth_order,
+            )
+            current_object[1] = self._object_butterworth_constraint(
+                current_object[1],
+                q_lowpass_m,
+                q_highpass_m,
+                butterworth_order,
+            )
+        if tv_denoise:
+            current_object[0] = self._object_denoise_tv_pylops(
+                current_object[0], tv_denoise_weight, tv_denoise_inner_iter
+            )
+
+        return current_object
 
     def reconstruct(
         self,
@@ -773,7 +1147,8 @@ class PtychographicTomography(
         max_position_update_distance: float = None,
         max_position_total_distance: float = None,
         global_affine_transformation: bool = False,
-        gaussian_filter_sigma: float = None,
+        gaussian_filter_sigma_e: float = None,
+        gaussian_filter_sigma_m: float = None,
         gaussian_filter: bool = True,
         fit_probe_aberrations: bool = False,
         fit_probe_aberrations_max_angular_order: int = 4,
@@ -781,22 +1156,22 @@ class PtychographicTomography(
         fit_probe_aberrations_remove_initial: bool = False,
         fit_probe_aberrations_using_scikit_image: bool = True,
         butterworth_filter: bool = True,
-        q_lowpass: float = None,
-        q_highpass: float = None,
+        q_lowpass_e: float = None,
+        q_lowpass_m: float = None,
+        q_highpass_e: float = None,
+        q_highpass_m: float = None,
         butterworth_order: float = 2,
-        object_positivity: bool = True,
-        shrinkage_rad: float = 0.0,
-        fix_potential_baseline: bool = True,
-        detector_fourier_mask: np.ndarray = None,
         tv_denoise: bool = True,
-        tv_denoise_weights: float = None,
-        tv_denoise_inner_iter=40,
-        collective_measurement_updates: bool = True,
+        tv_denoise_weight: float = None,
+        tv_denoise_inner_iter: float = 40,
+        detector_fourier_mask: np.ndarray = None,
         store_iterations: bool = False,
+        collective_measurement_updates: bool = True,
         progress_bar: bool = True,
         reset: bool = None,
         device: str = None,
         clear_fft_cache: bool = None,
+        object_type: str = None,
     ):
         """
         Ptychographic reconstruction main method.
@@ -831,6 +1206,8 @@ class PtychographicTomography(
             Probe normalization minimum as a fraction of the maximum overlap intensity
         positions_step_size: float, optional
             Positions update step size
+        pure_phase_object: bool, optional
+            If True, object amplitude is set to unity
         fix_probe_com: bool, optional
             If True, fixes center of mass of probe
         fix_probe: bool, optional
@@ -859,8 +1236,10 @@ class PtychographicTomography(
             Maximum allowed distance from initial positions
         global_affine_transformation: bool, optional
             If True, positions are assumed to be a global affine transform from initial scan
-        gaussian_filter_sigma: float, optional
-            Standard deviation of gaussian kernel in A
+        gaussian_filter_sigma_e: float
+            Standard deviation of gaussian kernel for electrostatic object in A
+        gaussian_filter_sigma_m: float
+            Standard deviation of gaussian kernel for magnetic object in A
         gaussian_filter: bool, optional
             If True and gaussian_filter_sigma is not None, object is smoothed using gaussian filtering
         fit_probe_aberrations: bool, optional
@@ -877,32 +1256,35 @@ class PtychographicTomography(
             If false, a poisson-based solver is used for phase unwrapping. This won't hang, but tends to underestimate aberrations.
         butterworth_filter: bool, optional
             If True and q_lowpass or q_highpass is not None, object is smoothed using butterworth filtering
-        q_lowpass: float
-            Cut-off frequency in A^-1 for low-pass butterworth filter
-        q_highpass: float
-            Cut-off frequency in A^-1 for high-pass butterworth filter
+        q_lowpass_e: float
+            Cut-off frequency in A^-1 for low-pass filtering electrostatic object
+        q_lowpass_m: float
+            Cut-off frequency in A^-1 for low-pass filtering magnetic object
+        q_highpass_e: float
+            Cut-off frequency in A^-1 for high-pass filtering electrostatic object
+        q_highpass_m: float
+            Cut-off frequency in A^-1 for high-pass filtering magnetic object
         butterworth_order: float
             Butterworth filter order. Smaller gives a smoother filter
-        object_positivity: bool, optional
-            If True, forces object to be positive
         tv_denoise: bool, optional
             If True and tv_denoise_weight is not None, object is smoothed using TV denoising
-        tv_denoise_weights: [float,float]
-            Denoising weights[z weight, r weight]. The greater `weight`,
-            the more denoising.
+        tv_denoise_weight: float
+            Denoising weight. The greater `weight`, the more denoising.
         tv_denoise_inner_iter: float
             Number of iterations to run in inner loop of TV denoising
-        collective_measurement_updates: bool
-            if True perform collective measurement updates (i.e. one per tilt)
+        object_positivity: bool, optional
+            If True, forces object to be positive
         shrinkage_rad: float
             Phase shift in radians to be subtracted from the potential at each iteration
         fix_potential_baseline: bool
             If true, the potential mean outside the FOV is forced to zero at each iteration
         detector_fourier_mask: np.ndarray
-            Corner-centered mask to apply at the detector-plane for zeroing-out unreliable gradients.
+            Corner-centered mask to multiply the detector-plane gradients with (a value of zero supresses those pixels).
             Useful when detector has artifacts such as dead-pixels. Usually binary.
         store_iterations: bool, optional
             If True, reconstructed objects and probes are stored at each iteration
+        collective_measurement_updates: bool
+            if True perform collective updates for all measurements
         progress_bar: bool, optional
             If True, reconstruction progress is displayed
         reset: bool, optional
@@ -911,10 +1293,12 @@ class PtychographicTomography(
             if not none, overwrites self._device to set device preprocess will be perfomed on.
         clear_fft_cache: bool, optional
             if true, and device = 'gpu', clears the cached fft plan at the end of function calls
+        object_type: str, optional
+            Overwrites self._object_type
 
         Returns
         --------
-        self: OverlapTomographicReconstruction
+        self: PtychographicReconstruction
             Self to accommodate chaining
         """
         # handle device/storage
@@ -928,7 +1312,6 @@ class PtychographicTomography(
                 "_probes_all",
                 "_probes_all_initial",
                 "_probes_all_initial_aperture",
-                "_propagator_arrays",
             ]
             self.copy_attributes_to_device(attrs, device)
 
@@ -936,6 +1319,12 @@ class PtychographicTomography(
         xp_storage = self._xp_storage
         device = self._device
         asnumpy = self._asnumpy
+
+        if not collective_measurement_updates and self._verbose:
+            warnings.warn(
+                "Magnetic ptychography is much more robust with `collective_measurement_updates=True`.",
+                UserWarning,
+            )
 
         # set and report reconstruction method
         (
@@ -954,8 +1343,16 @@ class PtychographicTomography(
             step_size,
         )
 
+        if use_projection_scheme:
+            raise NotImplementedError(
+                "Magnetic ptychography is currently only implemented for gradient descent."
+            )
+
         # initialization
         self._reset_reconstruction(store_iterations, reset, use_projection_scheme)
+
+        if object_type is not None:
+            self._switch_object_type(object_type)
 
         if self._verbose:
             self._report_reconstruction_summary(
@@ -967,8 +1364,8 @@ class PtychographicTomography(
                 projection_b,
                 projection_c,
                 normalization_min,
-                max_batch_size,
                 step_size,
+                max_batch_size,
             )
 
         if max_batch_size is not None:
@@ -978,6 +1375,12 @@ class PtychographicTomography(
 
         if detector_fourier_mask is not None:
             detector_fourier_mask = xp.asarray(detector_fourier_mask)
+
+        if gaussian_filter_sigma_m is None:
+            gaussian_filter_sigma_m = gaussian_filter_sigma_e
+
+        if q_lowpass_m is None:
+            q_lowpass_m = q_lowpass_e
 
         # main loop
         for a0 in tqdmnd(
@@ -991,35 +1394,19 @@ class PtychographicTomography(
             if collective_measurement_updates:
                 collective_object = xp.zeros_like(self._object)
 
-            indices = np.arange(self._num_measurements)
-            np.random.shuffle(indices)
+            # randomize
+            measurement_indices = np.arange(self._num_measurements)
+            np.random.shuffle(measurement_indices)
 
-            old_rot_matrix = np.eye(3)  # identity
-
-            for index in indices:
-                self._active_measurement_index = index
+            for measurement_index in measurement_indices:
+                self._active_measurement_index = measurement_index
 
                 measurement_error = 0.0
-
-                rot_matrix = self._tilt_orientation_matrices[
-                    self._active_measurement_index
-                ]
-                self._object = self._rotate_zxy_volume(
-                    self._object,
-                    rot_matrix @ old_rot_matrix.T,
-                )
-
-                object_sliced = self._project_sliced_object(
-                    self._object, self._num_slices
-                )
 
                 _probe = self._probes_all[self._active_measurement_index]
                 _probe_initial_aperture = self._probes_all_initial_aperture[
                     self._active_measurement_index
                 ]
-
-                if not use_projection_scheme:
-                    object_sliced_old = object_sliced.copy()
 
                 start_idx = self._cum_probes_per_measurement[
                     self._active_measurement_index
@@ -1063,7 +1450,7 @@ class PtychographicTomography(
                         self._exit_waves,
                         batch_error,
                     ) = self._forward(
-                        object_sliced,
+                        self._object,
                         vectorized_patch_indices_row,
                         vectorized_patch_indices_col,
                         _probe,
@@ -1071,15 +1458,15 @@ class PtychographicTomography(
                         amplitudes_device,
                         self._exit_waves,
                         detector_fourier_mask,
-                        use_projection_scheme,
-                        projection_a,
-                        projection_b,
-                        projection_c,
+                        use_projection_scheme=use_projection_scheme,
+                        projection_a=projection_a,
+                        projection_b=projection_b,
+                        projection_c=projection_c,
                     )
 
                     # adjoint operator
-                    object_sliced, _probe = self._adjoint(
-                        object_sliced,
+                    object_update, _probe = self._adjoint(
+                        self._object.copy(),
                         _probe,
                         object_patches,
                         shifted_probes,
@@ -1091,11 +1478,13 @@ class PtychographicTomography(
                         fix_probe=fix_probe,
                     )
 
+                    object_update -= self._object
+
                     # position correction
-                    if not fix_positions:
+                    if not fix_positions and a0 > 0:
                         self._positions_px_all[batch_indices] = (
                             self._position_correction(
-                                object_sliced,
+                                self._object,
                                 vectorized_patch_indices_row,
                                 vectorized_patch_indices_col,
                                 shifted_probes,
@@ -1111,21 +1500,10 @@ class PtychographicTomography(
 
                     measurement_error += batch_error
 
-                if not use_projection_scheme:
-                    object_sliced -= object_sliced_old
-
-                object_update = self._expand_sliced_object(
-                    object_sliced, self._num_voxels
-                )
-
                 if collective_measurement_updates:
-                    collective_object += self._rotate_zxy_volume(
-                        object_update, rot_matrix.T
-                    )
+                    collective_object += object_update
                 else:
                     self._object += object_update
-
-                old_rot_matrix = rot_matrix
 
                 # Normalize Error
                 measurement_error /= (
@@ -1197,27 +1575,20 @@ class PtychographicTomography(
                         fix_positions_com=fix_positions_com and not fix_positions,
                         global_affine_transformation=global_affine_transformation,
                         gaussian_filter=gaussian_filter
-                        and gaussian_filter_sigma is not None,
-                        gaussian_filter_sigma=gaussian_filter_sigma,
+                        and gaussian_filter_sigma_m is not None,
+                        gaussian_filter_sigma_e=gaussian_filter_sigma_e,
+                        gaussian_filter_sigma_m=gaussian_filter_sigma_m,
                         butterworth_filter=butterworth_filter
-                        and (q_lowpass is not None or q_highpass is not None),
-                        q_lowpass=q_lowpass,
-                        q_highpass=q_highpass,
+                        and (q_lowpass_m is not None or q_highpass_m is not None),
+                        q_lowpass_e=q_lowpass_e,
+                        q_lowpass_m=q_lowpass_m,
+                        q_highpass_e=q_highpass_e,
+                        q_highpass_m=q_highpass_m,
                         butterworth_order=butterworth_order,
-                        object_positivity=object_positivity,
-                        shrinkage_rad=shrinkage_rad,
-                        object_mask=(
-                            self._object_fov_mask_inverse
-                            if fix_potential_baseline
-                            and self._object_fov_mask_inverse.sum() > 0
-                            else None
-                        ),
-                        tv_denoise=tv_denoise and tv_denoise_weights is not None,
-                        tv_denoise_weights=tv_denoise_weights,
+                        tv_denoise=tv_denoise and tv_denoise_weight is not None,
+                        tv_denoise_weight=tv_denoise_weight,
                         tv_denoise_inner_iter=tv_denoise_inner_iter,
                     )
-
-            self._object = self._rotate_zxy_volume(self._object, old_rot_matrix.T)
 
             # Normalize Error Over Tilts
             error /= self._num_measurements
@@ -1229,23 +1600,18 @@ class PtychographicTomography(
                 self._object = self._object_constraints(
                     self._object,
                     gaussian_filter=gaussian_filter
-                    and gaussian_filter_sigma is not None,
-                    gaussian_filter_sigma=gaussian_filter_sigma,
+                    and gaussian_filter_sigma_m is not None,
+                    gaussian_filter_sigma_e=gaussian_filter_sigma_e,
+                    gaussian_filter_sigma_m=gaussian_filter_sigma_m,
                     butterworth_filter=butterworth_filter
-                    and (q_lowpass is not None or q_highpass is not None),
-                    q_lowpass=q_lowpass,
-                    q_highpass=q_highpass,
+                    and (q_lowpass_m is not None or q_highpass_m is not None),
+                    q_lowpass_e=q_lowpass_e,
+                    q_lowpass_m=q_lowpass_m,
+                    q_highpass_e=q_highpass_e,
+                    q_highpass_m=q_highpass_m,
                     butterworth_order=butterworth_order,
-                    object_positivity=object_positivity,
-                    shrinkage_rad=shrinkage_rad,
-                    object_mask=(
-                        self._object_fov_mask_inverse
-                        if fix_potential_baseline
-                        and self._object_fov_mask_inverse.sum() > 0
-                        else None
-                    ),
-                    tv_denoise=tv_denoise and tv_denoise_weights is not None,
-                    tv_denoise_weights=tv_denoise_weights,
+                    tv_denoise=tv_denoise and tv_denoise_weight is not None,
+                    tv_denoise_weight=tv_denoise_weight,
                     tv_denoise_inner_iter=tv_denoise_inner_iter,
                 )
 
@@ -1267,3 +1633,337 @@ class PtychographicTomography(
         self.clear_device_mem(self._device, self._clear_fft_cache)
 
         return self
+
+    def _visualize_all_iterations(self, **kwargs):
+        raise NotImplementedError()
+
+    def _visualize_last_iteration(
+        self,
+        fig,
+        cbar: bool,
+        plot_convergence: bool,
+        plot_probe: bool,
+        plot_fourier_probe: bool,
+        remove_initial_probe_aberrations: bool,
+        **kwargs,
+    ):
+        """
+        Displays last reconstructed object and probe iterations.
+
+        Parameters
+        --------
+        fig: Figure
+            Matplotlib figure to place Gridspec in
+        plot_convergence: bool, optional
+            If true, the normalized mean squared error (NMSE) plot is displayed
+        cbar: bool, optional
+            If true, displays a colorbar
+        plot_probe: bool, optional
+            If true, the reconstructed complex probe is displayed
+        remove_initial_probe_aberrations: bool, optional
+            If true, when plotting fourier probe, removes initial probe
+            to visualize changes
+        """
+
+        asnumpy = self._asnumpy
+
+        figsize = kwargs.pop("figsize", (12, 8))
+        cmap_e_real = kwargs.pop("cmap_e_real", "cividis")
+        cmap_e_imag = kwargs.pop("cmap_e_imag", "magma")
+        cmap_m_real = kwargs.pop("cmap_m_real", "PuOr")
+        cmap_m_imag = kwargs.pop("cmap_m_imag", "PiYG")
+        chroma_boost = kwargs.pop("chroma_boost", 1)
+
+        # get scaled arrays
+        obj = self.object_cropped
+
+        vmin_e_real = kwargs.pop("vmin_e_real", None)
+        vmax_e_real = kwargs.pop("vmax_e_real", None)
+        vmin_e_imag = kwargs.pop("vmin_e_imag", None)
+        vmax_e_imag = kwargs.pop("vmax_e_imag", None)
+        _, vmin_e_real, vmax_e_real = return_scaled_histogram_ordering(
+            obj[0].real, vmin_e_real, vmax_e_real
+        )
+        _, vmin_e_imag, vmax_e_iamg = return_scaled_histogram_ordering(
+            obj[0].imag, vmin_e_imag, vmax_e_imag
+        )
+
+        _, _, _vmax_m_real = return_scaled_histogram_ordering(obj[1].real)
+        vmin_m_real = kwargs.pop("vmin_m_real", -_vmax_m_real)
+        vmax_m_real = kwargs.pop("vmax_m_real", _vmax_m_real)
+
+        _, _, _vmax_m_imag = return_scaled_histogram_ordering(obj[1].imag)
+        vmin_m_imag = kwargs.pop("vmin_m_imag", -_vmax_m_imag)
+        vmax_m_imag = kwargs.pop("vmax_m_imag", _vmax_m_imag)
+
+        extent = [
+            0,
+            self.sampling[1] * obj.shape[2],
+            self.sampling[0] * obj.shape[1],
+            0,
+        ]
+
+        if plot_fourier_probe:
+            probe_extent = [
+                -self.angular_sampling[1] * self._region_of_interest_shape[1] / 2,
+                self.angular_sampling[1] * self._region_of_interest_shape[1] / 2,
+                self.angular_sampling[0] * self._region_of_interest_shape[0] / 2,
+                -self.angular_sampling[0] * self._region_of_interest_shape[0] / 2,
+            ]
+        elif plot_probe:
+            probe_extent = [
+                0,
+                self.sampling[1] * self._region_of_interest_shape[1],
+                self.sampling[0] * self._region_of_interest_shape[0],
+                0,
+            ]
+
+        if plot_convergence:
+            if plot_probe:
+                spec = GridSpec(
+                    ncols=3,
+                    nrows=3,
+                    height_ratios=[4, 4, 1],
+                    hspace=0.15,
+                    width_ratios=[
+                        (extent[1] / extent[2]) / (probe_extent[1] / probe_extent[2]),
+                        (extent[1] / extent[2]) / (probe_extent[1] / probe_extent[2]),
+                        1,
+                    ],
+                    wspace=0.35,
+                )
+
+            else:
+                spec = GridSpec(ncols=2, nrows=3, height_ratios=[4, 4, 1], hspace=0.15)
+
+        else:
+            if plot_probe:
+                spec = GridSpec(
+                    ncols=3,
+                    nrows=2,
+                    width_ratios=[
+                        (extent[1] / extent[2]) / (probe_extent[1] / probe_extent[2]),
+                        (extent[1] / extent[2]) / (probe_extent[1] / probe_extent[2]),
+                        1,
+                    ],
+                    wspace=0.35,
+                )
+
+            else:
+                spec = GridSpec(ncols=2, nrows=2, wspace=0.35)
+
+        if fig is None:
+            fig = plt.figure(figsize=figsize)
+
+        # Electronic real
+        ax = fig.add_subplot(spec[0, 0])
+        im = ax.imshow(
+            obj[0].real,
+            extent=extent,
+            cmap=cmap_e_real,
+            vmin=vmin_e_real,
+            vmax=vmax_e_real,
+            **kwargs,
+        )
+        ax.set_ylabel("x [A]")
+        ax.set_xlabel("y [A]")
+        ax.set_title("Real elec. optical index")
+
+        if cbar:
+            divider = make_axes_locatable(ax)
+            ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
+            fig.add_axes(ax_cb)
+            fig.colorbar(im, cax=ax_cb)
+
+        # Electronic imag
+        ax = fig.add_subplot(spec[0, 1])
+        im = ax.imshow(
+            obj[0].imag,
+            extent=extent,
+            cmap=cmap_e_imag,
+            vmin=vmin_e_imag,
+            vmax=vmax_e_imag,
+            **kwargs,
+        )
+        ax.set_ylabel("x [A]")
+        ax.set_xlabel("y [A]")
+        ax.set_title("Imag elec. optical index")
+
+        if cbar:
+            divider = make_axes_locatable(ax)
+            ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
+            fig.add_axes(ax_cb)
+            fig.colorbar(im, cax=ax_cb)
+
+        # Magnetic real
+        ax = fig.add_subplot(spec[1, 0])
+        im = ax.imshow(
+            obj[1].real,
+            extent=extent,
+            cmap=cmap_m_real,
+            vmin=vmin_m_real,
+            vmax=vmax_m_real,
+            **kwargs,
+        )
+        ax.set_ylabel("x [A]")
+        ax.set_xlabel("y [A]")
+        ax.set_title("Real mag. optical index")
+
+        if cbar:
+            divider = make_axes_locatable(ax)
+            ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
+            fig.add_axes(ax_cb)
+            fig.colorbar(im, cax=ax_cb)
+
+        # Magnetic imag
+        ax = fig.add_subplot(spec[1, 1])
+        im = ax.imshow(
+            obj[1].imag,
+            extent=extent,
+            cmap=cmap_m_imag,
+            vmin=vmin_m_imag,
+            vmax=vmax_m_imag,
+            **kwargs,
+        )
+        ax.set_ylabel("x [A]")
+        ax.set_xlabel("y [A]")
+        ax.set_title("Imag mag. optical index")
+
+        if cbar:
+            divider = make_axes_locatable(ax)
+            ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
+            fig.add_axes(ax_cb)
+            fig.colorbar(im, cax=ax_cb)
+
+        if plot_fourier_probe:
+            # Fourier probe
+            intensities = self._return_probe_intensities(None)
+            titles = [
+                f"{sign}ve Fourier probe: {ratio*100:.1f}%"
+                for sign, ratio in zip(self._magnetic_contribution_sign, intensities)
+            ]
+            ax = fig.add_subplot(spec[0, 2])
+
+            probe_fourier = asnumpy(
+                self._return_fourier_probe(
+                    self._probes_all[0],
+                    remove_initial_probe_aberrations=remove_initial_probe_aberrations,
+                )
+            )
+
+            probe_array = Complex2RGB(
+                probe_fourier,
+                chroma_boost=chroma_boost,
+            )
+
+            ax.set_title(titles[0])
+            ax.set_ylabel("kx [mrad]")
+            ax.set_xlabel("ky [mrad]")
+
+            im = ax.imshow(
+                probe_array,
+                extent=probe_extent,
+            )
+
+            if cbar:
+                divider = make_axes_locatable(ax)
+                ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
+                add_colorbar_arg(ax_cb, chroma_boost=chroma_boost)
+
+            ax = fig.add_subplot(spec[1, 2])
+
+            probe_fourier = asnumpy(
+                self._return_fourier_probe(
+                    self._probes_all[-1],
+                    remove_initial_probe_aberrations=remove_initial_probe_aberrations,
+                )
+            )
+
+            probe_array = Complex2RGB(
+                probe_fourier,
+                chroma_boost=chroma_boost,
+            )
+
+            ax.set_title(titles[-1])
+            ax.set_ylabel("kx [mrad]")
+            ax.set_xlabel("ky [mrad]")
+
+            im = ax.imshow(
+                probe_array,
+                extent=probe_extent,
+            )
+
+            if cbar:
+                divider = make_axes_locatable(ax)
+                ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
+                add_colorbar_arg(ax_cb, chroma_boost=chroma_boost)
+
+        elif plot_probe:
+            # Real probe
+            intensities = self._return_probe_intensities(None)
+            titles = [
+                f"{sign}ve probe intensity: {ratio*100:.1f}%"
+                for sign, ratio in zip(self._magnetic_contribution_sign, intensities)
+            ]
+            ax = fig.add_subplot(spec[0, 2])
+
+            probe_array = Complex2RGB(
+                asnumpy(self._return_centered_probe(self._probes_all[0])),
+                power=2,
+                chroma_boost=chroma_boost,
+            )
+            ax.set_title(titles[0])
+            ax.set_ylabel("x [A]")
+            ax.set_xlabel("y [A]")
+
+            im = ax.imshow(
+                probe_array,
+                extent=probe_extent,
+            )
+
+            if cbar:
+                divider = make_axes_locatable(ax)
+                ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
+                add_colorbar_arg(ax_cb, chroma_boost=chroma_boost)
+
+            ax = fig.add_subplot(spec[1, 2])
+
+            probe_array = Complex2RGB(
+                asnumpy(self._return_centered_probe(self._probes_all[-1])),
+                power=2,
+                chroma_boost=chroma_boost,
+            )
+            ax.set_title(titles[-1])
+            ax.set_ylabel("x [A]")
+            ax.set_xlabel("y [A]")
+
+            im = ax.imshow(
+                probe_array,
+                extent=probe_extent,
+            )
+
+            if cbar:
+                divider = make_axes_locatable(ax)
+                ax_cb = divider.append_axes("right", size="5%", pad="2.5%")
+                add_colorbar_arg(ax_cb, chroma_boost=chroma_boost)
+
+        if plot_convergence and hasattr(self, "error_iterations"):
+            errors = np.array(self.error_iterations)
+
+            ax = fig.add_subplot(spec[2, :])
+            ax.semilogy(np.arange(errors.shape[0]), errors, **kwargs)
+            ax.set_ylabel("NMSE")
+            ax.set_xlabel("Iteration number")
+            ax.yaxis.tick_right()
+
+        fig.suptitle(f"Normalized mean squared error: {self.error:.3e}")
+        spec.tight_layout(fig)
+
+    @property
+    def object_cropped(self):
+        """Cropped and rotated object"""
+        avg_pos = self._return_average_positions()
+        cropped_e = self._crop_rotate_object_fov(self._object[0], positions_px=avg_pos)
+        cropped_m = self._crop_rotate_object_fov(self._object[1], positions_px=avg_pos)
+
+        return np.array([cropped_e, cropped_m])
