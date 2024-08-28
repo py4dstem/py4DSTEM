@@ -7,6 +7,7 @@ import numpy as np
 import dask.array as da
 from typing import Optional
 import inspect
+import matplotlib.pyplot as plt
 
 from emdfile import tqdmnd, Metadata
 from py4DSTEM.data import Calibration, RealSlice, Data, DiffractionSlice
@@ -305,6 +306,7 @@ class VirtualImager:
         invert=False,
         color="r",
         alpha=0.7,
+        returnfig=False,
         **kwargs,
     ):
         """
@@ -359,6 +361,8 @@ class VirtualImager:
             the mask color
         alpha : number
             the mask transparency
+        returnfig : bool
+            toggles returning the figure
         kwargs : dict
             Any additional arguments are passed on to the show() function
         """
@@ -449,8 +453,11 @@ class VirtualImager:
                 mask = np.roll(mask, (qx_shift, qy_shift), axis=(0, 1))
 
         # Show
-        show(image, mask=mask, mask_color=color, mask_alpha=alpha, **kwargs)
-        return
+        fig,ax = show(image, mask=mask, mask_color=color, mask_alpha=alpha, returnfig=True, **kwargs)
+        if returnfig:
+            return fig,ax
+        else:
+            plt.show()
 
     @staticmethod
     def get_calibrated_detector_geometry(
