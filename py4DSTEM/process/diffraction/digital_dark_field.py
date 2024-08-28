@@ -5,7 +5,6 @@ There is no reason why this should not work, but the default tolerance would nee
 """
 
 import numpy as np
-import matplotlib.pyplot as plt
 from matplotlib.collections import EllipseCollection
 from emdfile import tqdmnd
 from py4DSTEM import show
@@ -220,6 +219,7 @@ def aperture_array_generator(
 def aperture_array_subtract(
     aperture_positions,
     aperture_positions_delete,
+    shape,
     tol=1.0,
     plot_result=False,
     plot_image=None,
@@ -238,6 +238,8 @@ def aperture_array_subtract(
         2-element vector(s) of the diffraction space shape of positions of apertures
     aperture_positions: tuple, list, np.array
         2-element vector(s) of the diffraction space shape of positions of apertures to remove from the list
+    shape: tuple, list, np.array
+        2-element vector of the diffraction space shape
     tol: float
         a single number giving the tolerance for a maximum distance between aperture positions in the two lists to still be considered a match
     plot_result: bool
