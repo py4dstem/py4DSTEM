@@ -117,6 +117,7 @@ def aperture_array_generator(
         (N,2) array containing the aperture positions in a centered coordinate system.
     fig, ax:
         Figure and axes handles for plot.
+
     """
 
     V, H = shape[0], shape[1]
@@ -230,7 +231,7 @@ def aperture_array_subtract(
     """
     This function takes in a set of aperture positions, and removes apertures within
     the user-specified tolerance from aperture_array_delete.
-    
+
     Parameters
     ----------
     aperture_positions: tuple, list, np.array
@@ -253,7 +254,7 @@ def aperture_array_subtract(
     Returns
     ----------
     aperture_positions:
-        (N,2) array containing the aperture positions in the image coordinate system.    
+        (N,2) array containing the aperture positions in the image coordinate system.
     fig, ax:
         Figure and axes handles for plot.
     """
@@ -303,20 +304,28 @@ def aperture_array_subtract(
 
 
 def pointlist_to_array(
-    bplist,
-    # idim,
-    # jdim
+    bragg_peaks,
+    center=None,
+    ellipse=None,
+    pixel=None,
+    rotate=None,
 ):
     """
-    This function turns the py4dstem pointslist object to a simple numpy array that is more
+    This function turns the py4DSTEM BraggVectors to a simple numpy array that is more
     convenient for rapid array processing in numpy
 
-    idim and jdim are the dimensions in the Rx and Ry directions and are determined from the input
-   
     Parameters
     ----------
-    bplist: pointslist
-        py4dstem pointslist
+    bragg_peaks: BraggVectors
+        py4DSTEM BraggVectors
+    center: bool
+        If True, applies center calibration to bragg_peaks
+    ellipse: bool
+        if True, applies elliptical calibration to bragg_peaks
+    pixel: bool
+        if True, applies pixel calibration to bragg_peaks
+    rotate: bool
+        if True, applies rotational calibration to bragg_peaks
 
     Returns
     ----------
@@ -327,29 +336,51 @@ def pointlist_to_array(
             I
             Rx
             Ry
-   """
-    for i, j in tqdmnd(bplist.Rshape[0], bplist.Rshape[1]):
+    """
+    if center is None:
+        center = bragg_peaks.calstate["center"]
+
+    if ellipse is None:
+        ellipse = bragg_peaks.calstate["ellipse"]
+
+    if pixel is None:
+        pixel = bragg_peaks.calstate["pixel"]
+
+    if rotate is None:
+        rotate = bragg_peaks.calstate["rotate"]
+
+    for i, j in tqdmnd(bragg_peaks.Rshape[0], bragg_peaks.Rshape[1]):
+        vectors = bragg_peaks.get_vectors(
+            scan_x=i,
+            scan_y=j,
+            center=center,
+            ellipse=ellipse,
+            pixel=pixel,
+            rotate=rotate,
+        )
+
         if i == j == 0:
             points_array = np.array(
                 [
-                    bplist.cal[i, j].qx,
-                    bplist.cal[i, j].qy,
-                    bplist.cal[i, j].I,
-                    bplist.cal[i, j].qx.shape[0] * [i],
-                    bplist.cal[i, j].qx.shape[0] * [j],
+                    vectors.qx,
+                    vectors.qy,
+                    vectors.I,
+                    vectors.qx.shape[0] * [i],
+                    vectors.qx.shape[0] * [j],
                 ]
             ).T
         else:
             nps = np.array(
                 [
-                    bplist.cal[i, j].qx,
-                    bplist.cal[i, j].qy,
-                    bplist.cal[i, j].I,
-                    bplist.cal[i, j].qx.shape[0] * [i],
-                    bplist.cal[i, j].qx.shape[0] * [j],
+                    vectors.qx,
+                    vectors.qy,
+                    vectors.I,
+                    vectors.qx.shape[0] * [i],
+                    vectors.qx.shape[0] * [j],
                 ]
             ).T
             points_array = np.vstack((points_array, nps))
+
     return points_array
 
 
@@ -380,7 +411,7 @@ def pointlist_differences(aperture_position, points_array):
 def DDFimage(points_array, aperture_positions, Rshape=None, tol=1):
     """
     Calculates a Digital Dark Field image from a list of detected diffraction peak positions in a points_array and a list of aperture_positions, within a defined matching tolerance
-    
+
     This does rely on the pointslist_differences function for the calculation
 
     Parameters
@@ -398,7 +429,7 @@ def DDFimage(points_array, aperture_positions, Rshape=None, tol=1):
     ----------
     image: numpy array
         2D numpy array with dimensions determined by Rshape
-    
+
     """
 
     if Rshape is None:
