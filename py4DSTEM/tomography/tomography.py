@@ -922,11 +922,11 @@ class Tomography:
         tilt = xp.deg2rad(tilt_deg)
 
         length = s[-1] * xp.cos(tilt)
-        line_y_diff = xp.arange(-1 * (length) / 2, length / 2, length / s[-1])
+        line_y_diff = xp.arange(-1 * (length-1) / 2, (length+1) / 2, length / s[-1])
         line_z_diff = line_y_diff * xp.tan(tilt)
 
         line_y_diff[line_y_diff < 0] = s[-1] + line_y_diff[line_y_diff < 0]
-        line_z_diff[line_y_diff < 0] = s[-1] + line_z_diff[line_y_diff < 0]
+        line_z_diff[line_z_diff < 0] = s[-1] + line_z_diff[line_z_diff < 0]
 
         order = xp.argsort(line_y_diff)
         line_y_diff = line_y_diff[order]
@@ -948,9 +948,9 @@ class Tomography:
             + current_object_projected[:, :, yF_diff + 1, zF_diff]
             * ((dy_diff) * (1 - dz_diff))[None, None, :]
             + current_object_projected[:, :, yF_diff, zF_diff + 1]
-            * ((dy_diff) * (dz_diff))[None, None, :]
+            * ((1-dy_diff) * (dz_diff))[None, None, :]
             + current_object_projected[:, :, yF_diff + 1, zF_diff + 1]
-            * ((1 - dy_diff) * (1 - dz_diff))[None, None, :]
+            * ((dy_diff) * (dz_diff))[None, None, :]
         )
 
         return self._asnumpy(current_object_sliced)
