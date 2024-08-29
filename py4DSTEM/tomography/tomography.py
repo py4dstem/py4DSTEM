@@ -932,10 +932,8 @@ class Tomography:
         # line_y_diff = line_y_diff[order]
         # line_z_diff = line_z_diff[order]
 
-        
-        line_y_diff = np.fft.fftfreq(s[-1], 1/s[-1]) * xp.cos(tilt)
-        line_z_diff = np.fft.fftfreq(s[-1], 1/s[-1]) * xp.sin(tilt)
-
+        line_y_diff = np.fft.fftfreq(s[-1], 1 / s[-1]) * xp.cos(tilt)
+        line_z_diff = np.fft.fftfreq(s[-1], 1 / s[-1]) * xp.sin(tilt)
 
         yF_diff = xp.floor(line_y_diff).astype("int")
         zF_diff = xp.floor(line_z_diff).astype("int")
@@ -953,7 +951,7 @@ class Tomography:
             + current_object_projected[:, :, yF_diff + 1, zF_diff]
             * ((dy_diff) * (1 - dz_diff))[None, None, :]
             + current_object_projected[:, :, yF_diff, zF_diff + 1]
-            * ((1-dy_diff) * (dz_diff))[None, None, :]
+            * ((1 - dy_diff) * (dz_diff))[None, None, :]
             + current_object_projected[:, :, yF_diff + 1, zF_diff + 1]
             * ((dy_diff) * (dz_diff))[None, None, :]
         )
