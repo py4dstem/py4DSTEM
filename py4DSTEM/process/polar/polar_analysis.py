@@ -335,9 +335,9 @@ def calculate_pair_dist_function(
         Ik = self.radial_mean
     elif RxRy != None and hxwy == None:
         Ik = self.radial_all[RxRy[0], RxRy[1]]
-    elif RxRy != None and hxhy != None:
+    elif RxRy != None and hxwy != None:
         Ik = self.radial_all[
-            RxRy[0] : RxRy[0] + hxhy[0], RxRy[1] : RxRy[1] + hxwy[1]
+            RxRy[0] : RxRy[0] + hxwy[0], RxRy[1] : RxRy[1] + hxwy[1]
         ].mean(axis=(0, 1))
     int_mean = np.mean(Ik)
     sub_fit = k >= k_min
