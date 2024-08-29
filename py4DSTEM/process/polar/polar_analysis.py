@@ -526,8 +526,8 @@ def plot_background_fits(
     ax.set_ylabel("I(k) and Background Fit Estimates")
     ax.set_ylim(
         (
-            np.min(self.radial_mean[self.radial_mean > 0]) * 0.8,
-            np.max(self.radial_mean * self.Sk_mask) * 1.25,
+            np.min(Ik[Ik > 0]) * 0.8,
+            np.max(Ik * self.Sk_mask) * 1.25,
         )
     )
     ax.set_yscale("log")
