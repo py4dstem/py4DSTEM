@@ -225,6 +225,8 @@ def plot_radial_var_norm(
 
 def calculate_pair_dist_function(
     self,
+    RxRy=None,
+    hxwy=None,
     k_min=0.05,
     k_max=None,
     k_width=0.25,
@@ -275,6 +277,13 @@ def calculate_pair_dist_function(
 
     Parameters
     ----------
+    RxRy : None or 2-tuple
+        None calculates on the whole radial average for dataset
+        A 2-tuple calculates on the radial profile for one scan pixel defined by Rx and Ry
+        or gives the top left corner of a box to average with widths defined by hxwy
+    hxwy : None or 2-tuple
+        A 2-tuple gives the height and width of a box to average anchored at Rx, Ry
+        hx and wy need to be larger than 1
     k_min : number
         Minimum scattering vector to include in the calculation
     k_max : number or None
@@ -322,7 +331,14 @@ def calculate_pair_dist_function(
     k = self.qq
     dk = k[1] - k[0]
     k2 = k**2
-    Ik = self.radial_mean
+    if RxRy == None:
+        Ik = self.radial_mean
+    elif RxRy != None and hxwy == None:
+        Ik = self.radial_all[RxRy[0], RxRy[1]]
+    elif RxRy != None and hxhy != None:
+        Ik = self.radial_all[
+            RxRy[0] : RxRy[0] + hxhy[0], RxRy[1] : RxRy[1] + hxwy[1]
+        ].mean(axis=(0, 1))
     int_mean = np.mean(Ik)
     sub_fit = k >= k_min
 
@@ -453,7 +469,7 @@ def calculate_pair_dist_function(
 
     # Plots
     if plot_background_fits:
-        fig, ax = self.plot_background_fits(figsize=figsize, returnfig=True)
+        fig, ax = self.plot_background_fits(Ik=Ik, figsize=figsize, returnfig=True)
         if returnfig:
             ans.append((fig, ax))
 
@@ -478,16 +494,24 @@ def calculate_pair_dist_function(
 
 def plot_background_fits(
     self,
+    Ik=None,
     figsize=(8, 4),
     returnfig=False,
 ):
     """
     TODO
+    Ik : numpy array
+        Ik calculated in calculate_pair_dist_function. Defaults to self.radial_mean for a pdf calculated
+        over whole dataset, but correctly calculated for sub areas, if defined
     """
+    if isinstance(Ik, np.ndarray):
+        pass
+    else:
+        Ik = self.radial_mean
     fig, ax = plt.subplots(figsize=figsize)
     ax.plot(
         self.qq,
-        self.radial_mean,
+        Ik,
         color="k",
     )
     ax.plot(
