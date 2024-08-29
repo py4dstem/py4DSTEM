@@ -921,16 +921,21 @@ class Tomography:
 
         tilt = xp.deg2rad(tilt_deg)
 
-        length = s[-1] * xp.cos(tilt)
-        line_y_diff = xp.arange(-1 * (length-1) / 2, (length+1) / 2, length / s[-1])
-        line_z_diff = line_y_diff * xp.tan(tilt)
+        # length = s[-1] * xp.cos(tilt)
+        # line_y_diff = xp.arange(-1 * (length-1) / 2, (length+1) / 2, length / s[-1])
+        # line_z_diff = line_y_diff * xp.tan(tilt)
 
-        line_y_diff[line_y_diff < 0] = s[-1] + line_y_diff[line_y_diff < 0]
-        line_z_diff[line_z_diff < 0] = s[-1] + line_z_diff[line_z_diff < 0]
+        # line_y_diff[line_y_diff < 0] = s[-1] + line_y_diff[line_y_diff < 0]
+        # line_z_diff[line_z_diff < 0] = s[-1] + line_z_diff[line_z_diff < 0]
 
-        order = xp.argsort(line_y_diff)
-        line_y_diff = line_y_diff[order]
-        line_z_diff = line_z_diff[order]
+        # order = xp.argsort(line_y_diff)
+        # line_y_diff = line_y_diff[order]
+        # line_z_diff = line_z_diff[order]
+
+        
+        line_y_diff = np.fft.fftfreq(s[-1], 1/s[-1]) * xp.cos(tilt)
+        line_z_diff = np.fft.fftfreq(s[-1], 1/s[-1]) * xp.sin(tilt)
+
 
         yF_diff = xp.floor(line_y_diff).astype("int")
         zF_diff = xp.floor(line_z_diff).astype("int")
