@@ -793,6 +793,8 @@ class Parallax(PhaseReconstruction):
         coma_angle_deg=0,
         spherical_aberration=0,
         max_batch_size=None,
+        plot_shifts_and_aligned_bf=True,
+        return_shifts_and_aligned_bf=False,
         plot_arrow_freq=1,
         scale_arrows=1,
         **kwargs,
@@ -829,6 +831,10 @@ class Parallax(PhaseReconstruction):
             Spherical aberration value to use in computing analytical BF shifts
         max_batch_size: int, optional
             Max number of virtual BF images to use at once in computing cross-correlation
+        plot_shifts_and_aligned_bf: bool, optional
+            If True, the analytical shifts and the aligned virtual VF image are plotted
+        return_shifts_and_aligned_bf: bool, optional
+            If True, the analytical shifts and the aligned virtual VF image are returned
         plot_arrow_freq: int, optional
             Frequency of shifts to plot in quiver plot
         scale_arrows: float, optional
@@ -971,36 +977,40 @@ class Parallax(PhaseReconstruction):
                 self._crop_padded_object(aligned_stack, upsampled=False)
             )
 
-        figsize = kwargs.pop("figsize", (8, 4))
-        color = kwargs.pop("color", (1, 0, 0, 1))
-        cmap = kwargs.pop("cmap", "magma")
+        if plot_shifts_and_aligned_bf:
+            figsize = kwargs.pop("figsize", (8, 4))
+            color = kwargs.pop("color", (1, 0, 0, 1))
+            cmap = kwargs.pop("cmap", "magma")
 
-        fig, axs = plt.subplots(1, 2, figsize=figsize)
+            fig, axs = plt.subplots(1, 2, figsize=figsize)
 
-        self.show_shifts(
-            shifts_ang=shifts_ang,
-            plot_arrow_freq=plot_arrow_freq,
-            scale_arrows=scale_arrows,
-            plot_rotated_shifts=False,
-            color=color,
-            figax=(fig, axs[0]),
-        )
+            self.show_shifts(
+                shifts_ang=shifts_ang,
+                plot_arrow_freq=plot_arrow_freq,
+                scale_arrows=scale_arrows,
+                plot_rotated_shifts=False,
+                color=color,
+                figax=(fig, axs[0]),
+            )
 
-        axs[0].set_title("Predicted BF Shifts")
+            axs[0].set_title("Predicted BF Shifts")
 
-        extent = [
-            0,
-            self._scan_sampling[1] * cropped_image.shape[1] / kde_upsample_factor,
-            self._scan_sampling[0] * cropped_image.shape[0] / kde_upsample_factor,
-            0,
-        ]
+            extent = [
+                0,
+                self._scan_sampling[1] * cropped_image.shape[1] / kde_upsample_factor,
+                self._scan_sampling[0] * cropped_image.shape[0] / kde_upsample_factor,
+                0,
+            ]
 
-        axs[1].imshow(cropped_image, cmap=cmap, extent=extent, **kwargs)
-        axs[1].set_ylabel("x [A]")
-        axs[1].set_xlabel("y [A]")
-        axs[1].set_title("Predicted Aligned BF Image")
+            axs[1].imshow(cropped_image, cmap=cmap, extent=extent, **kwargs)
+            axs[1].set_ylabel("x [A]")
+            axs[1].set_xlabel("y [A]")
+            axs[1].set_title("Predicted Aligned BF Image")
 
-        fig.tight_layout()
+            fig.tight_layout()
+
+        if return_shifts_and_aligned_bf:
+            return shifts_ang, cropped_image
 
     def reconstruct(
         self,
