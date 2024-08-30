@@ -921,17 +921,6 @@ class Tomography:
 
         tilt = xp.deg2rad(tilt_deg)
 
-        # length = s[-1] * xp.cos(tilt)
-        # line_y_diff = xp.arange(-1 * (length-1) / 2, (length+1) / 2, length / s[-1])
-        # line_z_diff = line_y_diff * xp.tan(tilt)
-
-        # line_y_diff[line_y_diff < 0] = s[-1] + line_y_diff[line_y_diff < 0]
-        # line_z_diff[line_z_diff < 0] = s[-1] + line_z_diff[line_z_diff < 0]
-
-        # order = xp.argsort(line_y_diff)
-        # line_y_diff = line_y_diff[order]
-        # line_z_diff = line_z_diff[order]
-
         line_y_diff = np.fft.fftfreq(s[-1], 1 / s[-1]) * xp.cos(tilt)
         line_z_diff = np.fft.fftfreq(s[-1], 1 / s[-1]) * xp.sin(tilt)
 
@@ -941,9 +930,6 @@ class Tomography:
         dz_diff = line_z_diff - zF_diff
 
         current_object_sliced = xp.zeros((s[0], s[-1], s[-1]))
-        current_object_projected = xp.pad(
-            current_object_projected, ((0, 0), (0, 0), (0, 1), (0, 1))
-        )
 
         current_object_sliced = (
             current_object_projected[:, :, yF_diff, zF_diff]
