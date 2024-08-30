@@ -1024,8 +1024,8 @@ class Tomography:
         dy_diff = line_y_diff - yF_diff
         dz_diff = line_z_diff - zF_diff
 
-        qx = xp.arange(11)
-        qy = xp.arange(11)
+        qx = xp.arange(s[-1])
+        qy = xp.arange(s[-1])
         qxx, qyy = xp.meshgrid(qx, qy)
 
         ind0_diff = np.hstack(
