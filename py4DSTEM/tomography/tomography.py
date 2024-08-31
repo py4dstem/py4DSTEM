@@ -652,14 +652,14 @@ class Tomography:
 
         self._ind_diffraction = ind_diffraction
         self._ind_diffraction_ravel = ind_diffraction.ravel()
-        self._q_length = np.unique(self._ind_diffraction).shape[0] + 1
+        self._q_length = np.unique(self._ind_diffraction).shape[0]
 
         # pixels to remove
         q_max_px = q_max_inv_A / self._datacube_Q_pixel_size_inv_A
 
         x = np.arange(s[-1]) - ((s[-1] - 1) / 2)
         y = np.arange(s[-1]) - ((s[-1] - 1) / 2)
-        xx, yy = np.meshgrid(x, y)
+        xx, yy = np.meshgrid(x, y, indexing = "ij")
         circular_mask = ((xx) ** 2 + (yy) ** 2) ** 0.5 < q_max_px
 
         self._circular_mask = circular_mask
@@ -986,8 +986,8 @@ class Tomography:
         tilt = xp.deg2rad(tilt_deg)
 
         # solve for real space coordinates
-        line_z = xp.linspace(0, 1, num_points) * (s[2] - 1)
-        line_y = line_z * xp.tan(tilt)
+        line_y = xp.linspace(0, 1, num_points) * (s[2] - 1)
+        line_z = line_y * xp.tan(tilt)
         offset = xp.arange(s[1], dtype="int")
 
         yF = xp.floor(line_y).astype("int")
@@ -997,19 +997,19 @@ class Tomography:
 
         ind0 = np.hstack(
             (
-                xp.tile(yF, (s[1], 1)) + offset[:, None],
-                xp.tile(yF + 1, (s[1], 1)) + offset[:, None],
-                xp.tile(yF, (s[1], 1)) + offset[:, None],
-                xp.tile(yF + 1, (s[1], 1)) + offset[:, None],
+                xp.tile(yF, (s[1], 1)), 
+                xp.tile(yF + 1, (s[1], 1)) ,
+                xp.tile(yF, (s[1], 1)),
+                xp.tile(yF + 1, (s[1], 1)),
             )
         )
 
         ind1 = np.hstack(
             (
-                xp.tile(zF, (s[1], 1)),
-                xp.tile(zF, (s[1], 1)),
-                xp.tile(zF + 1, (s[1], 1)),
-                xp.tile(zF + 1, (s[1], 1)),
+                xp.tile(zF, (s[1], 1)) + offset[:, None],
+                xp.tile(zF, (s[1], 1)) + offset[:, None],
+                xp.tile(zF + 1, (s[1], 1)) + offset[:, None],
+                xp.tile(zF + 1, (s[1], 1)) + offset[:, None],
             )
         )
 
@@ -1037,23 +1037,23 @@ class Tomography:
 
         qx = xp.arange(s[-1])
         qy = xp.arange(s[-1])
-        qxx, qyy = xp.meshgrid(qx, qy)
+        qxx, qyy = xp.meshgrid(qx, qy, indexing="ij")
 
         ind0_diff = np.hstack(
             (
-                xp.repeat(yF_diff, s[-1]),
-                xp.repeat(yF_diff + 1, s[-1]),
-                xp.repeat(yF_diff, s[-1]),
-                xp.repeat(yF_diff + 1, s[-1]),
+                xp.tile(yF_diff, s[-1]),
+                xp.tile(yF_diff + 1, s[-1]),
+                xp.tile(yF_diff, s[-1]),
+                xp.tile(yF_diff + 1, s[-1]),
             )
         )
 
         ind1_diff = np.hstack(
             (
-                xp.repeat(zF_diff, s[-1]),
-                xp.repeat(zF_diff, s[-1]),
-                xp.repeat(zF_diff + 1, s[-1]),
-                xp.repeat(zF_diff + 1, s[-1]),
+                xp.tile(zF_diff, s[-1]),
+                xp.tile(zF_diff, s[-1]),
+                xp.tile(zF_diff + 1, s[-1]),
+                xp.tile(zF_diff + 1, s[-1]),
             )
         )
 
@@ -1068,8 +1068,8 @@ class Tomography:
 
         ind_diff = xp.ravel_multi_index(
             (
-                ind0_diff.ravel(),
                 xp.tile(qxx.ravel(), 4),
+                ind0_diff.ravel(),
                 ind1_diff.ravel(),
             ),
             (s[-1], s[-1], s[-1]),
@@ -1096,6 +1096,9 @@ class Tomography:
             * xp.tile(weights_diff, (1, s[1])).ravel(),
             minlength=self._q_length * s[1],
         ).reshape(s[1], self._q_length)[:, self._circular_mask_bincount]
+
+        # from pdb import set_trace
+        # set_trace()
 
         self._ind0 = ind0
         self._ind1 = ind1
@@ -1204,7 +1207,8 @@ class Tomography:
             )[:, None]
         )
         diffraction_patterns_resampled = diffraction_patterns_resampled[ind]
-        update = diffraction_patterns_resampled - object_sliced
+        update = diffraction_patterns_resampled 
+        # - object_sliced
 
         error = xp.mean(update.ravel() ** 2) / xp.mean(
             diffraction_patterns_projected.ravel() ** 2
