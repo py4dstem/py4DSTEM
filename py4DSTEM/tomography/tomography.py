@@ -766,7 +766,7 @@ class Tomography:
         ]
         return diffraction_patterns_reshaped
 
-    def _reshape_2D_array_to_4D(self, data):
+    def _reshape_2D_array_to_4D(self, data, xy_shape = None):
         """
         reshape ravelled diffraction 2D-data to 4D-data
 
@@ -774,8 +774,9 @@ class Tomography:
         ----------
         data: np.ndarrray
             2D datacube data to be reshapped
-
-
+        xy_shape: 2-tuple
+            if None, takes 6D object shape
+    
         Returns
         --------
         data_reshaped: np.ndarray
@@ -784,12 +785,20 @@ class Tomography:
         """
         xp = self._xp
 
-        s = (
-            self._object_shape_6D[0],
-            self._object_shape_6D[1],
-            self._object_shape_6D[-1],
-            self._object_shape_6D[-1],
-        )
+        if xy_shape is None:
+            s = (
+                self._object_shape_6D[0],
+                self._object_shape_6D[1],
+                self._object_shape_6D[-1],
+                self._object_shape_6D[-1],
+            )
+        else: 
+            s = (
+                xy_shape[0],
+                xy_shape[1],
+                self._object_shape_6D[-1],
+                self._object_shape_6D[-1],
+            )
         a = xp.argsort(self._ind_diffraction_ravel[self._circular_mask_ravel])
         i = xp.empty_like(a)
         i[a] = xp.arange(a.size)
@@ -1018,6 +1027,8 @@ class Tomography:
         line_y_diff = xp.arange(-(s[-1] - 1) / 2, s[-1] / 2) * length / s[-1]
         line_z_diff = line_y_diff * xp.tan(tilt) + (s[-1] - 1) / 2
         line_y_diff += (s[-1] - 1) / 2
+        # line_y_diff = np.fft.fftfreq(s[-1], 1 / s[-1]) * xp.cos(tilt) + (s[-1]-1)/2
+        # line_z_diff = np.fft.fftfreq(s[-1], 1 / s[-1]) * xp.sin(tilt) + (s[-1]-1)/2
 
         yF_diff = xp.floor(line_y_diff).astype("int")
         zF_diff = xp.floor(line_z_diff).astype("int")
@@ -1243,7 +1254,7 @@ class Tomography:
             ),
             4 * num_points,
             axis=0,
-        ) / (4 * num_points)
+        ) / (num_points)
 
         real_index = xp.ravel_multi_index(
             (self._ind0.ravel(), self._ind1.ravel()), (s[1], s[2]), mode="clip"
@@ -1589,8 +1600,9 @@ class Tomography:
         )
 
         ax = fig.add_subplot(spec[0, 1])
+        ind_diff = self._object_shape_6D[-1]//2
         show(
-            self.object_6D.mean((0, 1, 2, 5)),
+            self.object_6D.mean((0, 1, 2))[:,:,ind_diff],
             figax=(fig, ax),
             cmap="magma",
             title="diffraction space object",
