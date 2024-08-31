@@ -568,7 +568,7 @@ class Tomography:
             robust_thresh=robust_thresh,
         )
 
-        return qx0_fit.data, qy0_fit.data
+        return qx0_fit, qy0_fit
 
     def _reshape_diffraction_patterns(
         self,
