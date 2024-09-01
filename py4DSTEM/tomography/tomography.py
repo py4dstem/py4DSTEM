@@ -1216,8 +1216,7 @@ class Tomography:
             )[:, None]
         )
         diffraction_patterns_resampled = diffraction_patterns_resampled[ind]
-        update = diffraction_patterns_resampled
-        # - object_sliced
+        update = diffraction_patterns_resampled - object_sliced
 
         error = xp.mean(update.ravel() ** 2) / xp.mean(
             diffraction_patterns_projected.ravel() ** 2
