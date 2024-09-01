@@ -230,6 +230,7 @@ class Tomography:
         step_size: float = 0.5,
         num_points: int = 60,
         progress_bar: bool = True,
+        zero_edges: bool = True,
     ):
         """ """
         device = self._device
@@ -276,6 +277,10 @@ class Tomography:
                         x_index=a2,
                         update=update,
                     )
+
+            self._constraints(
+                zero_edges=zero_edges,
+            )
 
             self.error_iterations.append(error_iteration)
             self.error = error_iteration
@@ -659,7 +664,7 @@ class Tomography:
 
         x = np.arange(s[-1]) - ((s[-1] - 1) / 2)
         y = np.arange(s[-1]) - ((s[-1] - 1) / 2)
-        xx, yy = np.meshgrid(x, y, indexing = "ij")
+        xx, yy = np.meshgrid(x, y, indexing="ij")
         circular_mask = ((xx) ** 2 + (yy) ** 2) ** 0.5 < q_max_px
 
         self._circular_mask = circular_mask
@@ -766,7 +771,7 @@ class Tomography:
         ]
         return diffraction_patterns_reshaped
 
-    def _reshape_2D_array_to_4D(self, data, xy_shape = None):
+    def _reshape_2D_array_to_4D(self, data, xy_shape=None):
         """
         reshape ravelled diffraction 2D-data to 4D-data
 
@@ -776,7 +781,7 @@ class Tomography:
             2D datacube data to be reshapped
         xy_shape: 2-tuple
             if None, takes 6D object shape
-    
+
         Returns
         --------
         data_reshaped: np.ndarray
@@ -792,7 +797,7 @@ class Tomography:
                 self._object_shape_6D[-1],
                 self._object_shape_6D[-1],
             )
-        else: 
+        else:
             s = (
                 xy_shape[0],
                 xy_shape[1],
@@ -986,8 +991,8 @@ class Tomography:
         tilt = xp.deg2rad(tilt_deg)
 
         # solve for real space coordinates
-        line_y = xp.linspace(0, 1, num_points) * (s[2] - 1)
-        line_z = line_y * xp.tan(tilt)
+        line_z = xp.linspace(0, 1, num_points) * (s[2] - 1)
+        line_y = line_z * xp.tan(tilt)
         offset = xp.arange(s[1], dtype="int")
 
         yF = xp.floor(line_y).astype("int")
@@ -997,19 +1002,19 @@ class Tomography:
 
         ind0 = np.hstack(
             (
-                xp.tile(yF, (s[1], 1)), 
-                xp.tile(yF + 1, (s[1], 1)) ,
-                xp.tile(yF, (s[1], 1)),
-                xp.tile(yF + 1, (s[1], 1)),
+                xp.tile(yF, (s[1], 1)) + offset[:, None],
+                xp.tile(yF + 1, (s[1], 1)) + offset[:, None],
+                xp.tile(yF, (s[1], 1)) + offset[:, None],
+                xp.tile(yF + 1, (s[1], 1)) + offset[:, None],
             )
         )
 
         ind1 = np.hstack(
             (
-                xp.tile(zF, (s[1], 1)) + offset[:, None],
-                xp.tile(zF, (s[1], 1)) + offset[:, None],
-                xp.tile(zF + 1, (s[1], 1)) + offset[:, None],
-                xp.tile(zF + 1, (s[1], 1)) + offset[:, None],
+                xp.tile(zF, (s[1], 1)),
+                xp.tile(zF, (s[1], 1)),
+                xp.tile(zF + 1, (s[1], 1)),
+                xp.tile(zF + 1, (s[1], 1)),
             )
         )
 
@@ -1207,7 +1212,7 @@ class Tomography:
             )[:, None]
         )
         diffraction_patterns_resampled = diffraction_patterns_resampled[ind]
-        update = diffraction_patterns_resampled 
+        update = diffraction_patterns_resampled
         # - object_sliced
 
         error = xp.mean(update.ravel() ** 2) / xp.mean(
@@ -1308,6 +1313,25 @@ class Tomography:
         zz = copy_to_device(zz, storage)
 
         self._object[x_index, yy, zz] += copy_to_device(update_r_summed, storage)
+
+    def _constraints(
+        self,
+        zero_edges: bool,
+    ):
+        """ """
+
+        if zero_edges:
+            s = self._object_shape_6D
+            y = np.arange(s[1])
+            z = np.arange(s[2])
+            yy, zz = np.meshgrid(y, z, indexing="ij")
+            ind_zero = np.where(
+                (yy.ravel() == 0)
+                | (zz.ravel() == 0)
+                | (yy.ravel() == y.max())
+                | (zz.ravel() == z.max())
+            )[0]
+            self._object[:, ind_zero] = 0
 
     def _make_test_object(
         self,
@@ -1604,9 +1628,9 @@ class Tomography:
         )
 
         ax = fig.add_subplot(spec[0, 1])
-        ind_diff = self._object_shape_6D[-1]//2
+        ind_diff = self._object_shape_6D[-1] // 2
         show(
-            self.object_6D.mean((0, 1, 2))[:,:,ind_diff],
+            self.object_6D.mean((0, 1, 2))[:, :, ind_diff],
             figax=(fig, ax),
             cmap="magma",
             title="diffraction space object",
