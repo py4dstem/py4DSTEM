@@ -250,7 +250,8 @@ class Tomography:
             disable=not progress_bar,
         ):
             error_iteration = 0
-            random_tilt_order = np.random.shuffle(np.arange(self._num_datacubes))
+            random_tilt_order = np.arange(self._num_datacubes)
+            np.random.shuffle(random_tilt_order)
 
             for a1 in range(self._num_datacubes):
                 a1_shuffle = random_tilt_order[a1]
