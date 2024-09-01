@@ -48,7 +48,10 @@ class Tomography:
         clear_fft_cache: bool = True,
         name: str = "tomography",
     ):
-        """ """
+        """ 
+        Nanobeam  tomography! 
+
+        """
 
         self._datacubes = datacubes
         self._import_kwargs = import_kwargs
@@ -232,7 +235,26 @@ class Tomography:
         progress_bar: bool = True,
         zero_edges: bool = True,
     ):
-        """ """
+        """ 
+        Main loop for reconstruct
+
+        Parameters
+        ----------
+        num_iter: int
+            Number of iterations 
+        store_iterations: bool
+            if True, stores number of iterations 
+        reset: bool 
+            if True, resets object
+        step_size: float 
+            from 0 to 1, step size for update 
+        num_points: int
+            number of points for bilinear interpolation in real space
+        progres_bar: bool 
+            if True, shows progress bar
+        zero_edges: bool
+            If True, zero edges along y and z 
+        """
         device = self._device
 
         if reset is True:
@@ -1321,7 +1343,15 @@ class Tomography:
         self,
         zero_edges: bool,
     ):
-        """ """
+        """ 
+        Constrains for object
+        TODO: add constrains and break into multiple functions possibly 
+        
+        Parameters
+        ----------
+        zero_edges: bool
+            If True, zero edges along y and z 
+        """
 
         if zero_edges:
             s = self._object_shape_6D
