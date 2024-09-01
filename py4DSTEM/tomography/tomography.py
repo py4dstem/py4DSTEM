@@ -250,15 +250,18 @@ class Tomography:
             disable=not progress_bar,
         ):
             error_iteration = 0
+            random_tilt_order = np.random.shuffle(np.arange(self._num_datacubes))
+
             for a1 in range(self._num_datacubes):
+                a1_shuffle = random_tilt_order[a1]
                 diffraction_patterns_projected = copy_to_device(
-                    self._diffraction_patterns_projected[a1], device
+                    self._diffraction_patterns_projected[a1_shuffle], device
                 )
 
                 for a2 in range(self._object_shape_6D[0]):
                     object_sliced = self._forward(
                         x_index=a2,
-                        tilt_deg=self._tilt_deg[a1],
+                        tilt_deg=self._tilt_deg[a1_shuffle],
                         num_points=num_points,
                     )
 
@@ -266,7 +269,7 @@ class Tomography:
                         object_sliced=object_sliced,
                         diffraction_patterns_projected=diffraction_patterns_projected,
                         x_index=a2,
-                        datacube_number=a1,
+                        datacube_number=a1_shuffle,
                     )
 
                     error_iteration += error
