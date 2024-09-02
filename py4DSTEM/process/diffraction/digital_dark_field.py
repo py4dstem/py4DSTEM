@@ -28,6 +28,7 @@ def aperture_array_generator(
     plot_image=None,
     plot_marker_size=100,
     plot_marker_radius_pixels=None,
+    plot_marker_color="g",
     figsize=(6, 6),
     returnfig=False,
     **kwargs,
@@ -102,7 +103,9 @@ def aperture_array_generator(
     plot_marker_size: float
         Marker size in points (standard matplotlib)
     plot_marker_radius_pixels: float
-        Marker radius in pixels.
+        Marker radius in pixels
+    plot_marker_color: 3-tuple or string
+        Any sensible python color definition
     figsize: (float, float)
         Figure size.
     returnfig: bool
@@ -188,8 +191,8 @@ def aperture_array_generator(
                     heights=2.0 * plot_marker_radius_pixels,
                     angles=0,
                     units="xy",
-                    facecolors=(0.0, 1.0, 0.0, 0.3),
-                    # facecolors=plt.cm.hsv(color),
+                    facecolors=plot_marker_color,
+                    alpha=0.3,
                     offsets=offsets,
                     transOffset=ax.transData,
                 ),
