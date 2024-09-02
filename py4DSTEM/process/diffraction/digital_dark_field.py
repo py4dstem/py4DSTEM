@@ -103,9 +103,9 @@ def aperture_array_generator(
     plot_marker_size: float
         Marker size in points (standard matplotlib)
     plot_marker_radius_pixels: float
-        Marker radius in pixels    
-	plot_marker_color: 3-tuple or string
-		Any sensible python color definition
+        Marker radius in pixels
+    plot_marker_color: 3-tuple or string
+	Any sensible python color definition
     figsize: (float, float)
         Figure size.
     returnfig: bool
