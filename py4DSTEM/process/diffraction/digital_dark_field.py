@@ -28,7 +28,7 @@ def aperture_array_generator(
     plot_image=None,
     plot_marker_size=100,
     plot_marker_radius_pixels=None,
-    plot_marker_color='g',
+    plot_marker_color="g",
     figsize=(6, 6),
     returnfig=False,
     **kwargs,
@@ -103,8 +103,8 @@ def aperture_array_generator(
     plot_marker_size: float
         Marker size in points (standard matplotlib)
     plot_marker_radius_pixels: float
-        Marker radius in pixels
-	plot_marker_color: 3-tuple or string 
+        Marker radius in pixels    
+	plot_marker_color: 3-tuple or string
 		Any sensible python color definition
     figsize: (float, float)
         Figure size.
