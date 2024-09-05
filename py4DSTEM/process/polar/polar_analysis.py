@@ -343,8 +343,8 @@ def calculate_pair_dist_function(
     sub_fit = k >= k_min
 
     # initial guesses for background coefs
-    const_bg = np.min(self.radial_mean) / int_mean
-    int0 = np.median(self.radial_mean) / int_mean - const_bg
+    const_bg = np.min(Ik) / int_mean
+    int0 = np.median(Ik) / int_mean - const_bg
     sigma0 = np.mean(k)
     coefs = [const_bg, int0, sigma0, int0, sigma0]
     lb = [0, 0, 0, 0, 0]
