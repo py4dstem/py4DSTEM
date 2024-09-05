@@ -201,7 +201,7 @@ def aperture_array_generator(
             ax.scatter(
                 aperture_positions[:, 1],
                 aperture_positions[:, 0],
-                color=(0.0, 1.0, 0.0, 0.3),
+                color=plot_marker_color,
                 s=plot_marker_size,
             )
 
