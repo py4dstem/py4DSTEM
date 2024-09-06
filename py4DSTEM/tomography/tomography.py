@@ -1058,6 +1058,7 @@ class Tomography:
         line_y_diff = xp.arange(-(s[-1] - 1) / 2, s[-1] / 2) * length / s[-1]
         line_z_diff = line_y_diff * xp.tan(tilt) + (s[-1] - 1) / 2
         line_y_diff += (s[-1] - 1) / 2
+
         # line_y_diff = np.fft.fftfreq(s[-1], 1 / s[-1]) * xp.cos(tilt) + (s[-1]-1)/2
         # line_z_diff = np.fft.fftfreq(s[-1], 1 / s[-1]) * xp.sin(tilt) + (s[-1]-1)/2
 
@@ -1107,6 +1108,7 @@ class Tomography:
             "clip",
         )
 
+
         bincount_x = (
             xp.tile(
                 (xp.tile(self._ind_diffraction_ravel, (1, 4))),
@@ -1122,14 +1124,12 @@ class Tomography:
                 obj[xp.ravel_multi_index((ind0, ind1), (s[1], s[2]), mode="clip"),]
                 * weights_real[:, :, None]
             )
-            .sum(1)[:, ind_diff]
+            .mean(1)[:, ind_diff]
             .ravel()
-            * xp.tile(weights_diff, (1, s[1])).ravel(),
+            * xp.tile(weights_diff, s[1]).ravel(),
             minlength=self._q_length * s[1],
-        ).reshape(s[1], self._q_length)[:, self._circular_mask_bincount]
+        ).reshape(s[1], self._q_length)[:, self._circular_mask_bincount] * s[2]
 
-        # from pdb import set_trace
-        # set_trace()
 
         self._ind0 = ind0
         self._ind1 = ind1
