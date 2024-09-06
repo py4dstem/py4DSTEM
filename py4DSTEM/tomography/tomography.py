@@ -872,6 +872,9 @@ class Tomography:
 
         """
         xp = self._xp
+        device = self._device
+
+        current_object = copy_to_device(current_object, device)
 
         s = current_object.shape
 
@@ -961,8 +964,8 @@ class Tomography:
 
         tilt = xp.deg2rad(tilt_deg)
 
-        line_y_diff = np.fft.fftfreq(s[-1], 1 / s[-1]) * xp.cos(tilt)
-        line_z_diff = np.fft.fftfreq(s[-1], 1 / s[-1]) * xp.sin(tilt)
+        line_y_diff = xp.fft.fftfreq(s[-1], 1 / s[-1]) * xp.cos(tilt)
+        line_z_diff = xp.fft.fftfreq(s[-1], 1 / s[-1]) * xp.sin(tilt)
 
         yF_diff = xp.floor(line_y_diff).astype("int")
         zF_diff = xp.floor(line_z_diff).astype("int")
@@ -1167,81 +1170,6 @@ class Tomography:
             experimental diffraction patterns
         """
         xp = self._xp
-
-        # ind = self._positions_vox_F[0][0] == x_index
-
-        # diffraction_patterns_resampled = xp.zeros(
-        #     (self._positions_vox_dF[0][0].shape[0], object_sliced.shape[-1])
-        # )
-        # diffraction_patterns_resampled[
-        #     xp.ravel_multi_index(
-        #         (
-        #             self._positions_vox_F[datacube_number][0][ind],
-        #             self._positions_vox_F[datacube_number][1][ind],
-        #         ),
-        #         self._initial_datacube_shape[0:2],
-        #         mode="clip",
-        #     )
-        # ] += (
-        #     diffraction_patterns_projected[ind]
-        #     * (
-        #         (1 - self._positions_vox_dF[datacube_number][0][ind])
-        #         * (1 - self._positions_vox_dF[datacube_number][1][ind])
-        #     )[:, None]
-        # )
-
-        # diffraction_patterns_resampled[
-        #     xp.ravel_multi_index(
-        #         (
-        #             self._positions_vox_F[datacube_number][0][ind] + 1,
-        #             self._positions_vox_F[datacube_number][1][ind],
-        #         ),
-        #         self._initial_datacube_shape[0:2],
-        #         mode="clip",
-        #     )
-        # ] += (
-        #     diffraction_patterns_projected[ind]
-        #     * (
-        #         (self._positions_vox_dF[datacube_number][0][ind])
-        #         * (1 - self._positions_vox_dF[datacube_number][1][ind])
-        #     )[:, None]
-        # )
-
-        # diffraction_patterns_resampled[
-        #     xp.ravel_multi_index(
-        #         (
-        #             self._positions_vox_F[datacube_number][0][ind],
-        #             self._positions_vox_F[datacube_number][1][ind] + 1,
-        #         ),
-        #         self._initial_datacube_shape[0:2],
-        #         mode="clip",
-        #     )
-        # ] += (
-        #     diffraction_patterns_projected[ind]
-        #     * (
-        #         (1 - self._positions_vox_dF[datacube_number][0][ind])
-        #         * (self._positions_vox_dF[datacube_number][1][ind])
-        #     )[:, None]
-        # )
-
-        # diffraction_patterns_resampled[
-        #     xp.ravel_multi_index(
-        #         (
-        #             self._positions_vox_F[datacube_number][0][ind] + 1,
-        #             self._positions_vox_F[datacube_number][1][ind] + 1,
-        #         ),
-        #         self._initial_datacube_shape[0:2],
-        #         mode="clip",
-        #     )
-        # ] += (
-        #     diffraction_patterns_projected[ind]
-        #     * (
-        #         (self._positions_vox_dF[datacube_number][0][ind])
-        #         * (self._positions_vox_dF[datacube_number][1][ind])
-        #     )[:, None]
-        # )
-        # diffraction_patterns_resampled = diffraction_patterns_resampled[ind]
-        # update = diffraction_patterns_resampled - object_sliced
 
         s = self._object_shape_6D
 
@@ -1477,7 +1405,7 @@ class Tomography:
 
         diffraction_cloud = self._make_diffraction_cloud(sq, q_max, [0, 0, 0])
 
-        test_object[:, :, :, 0, 0, 0] = diffraction_cloud.sum()
+        test_object[:, :, :, 0, 0, 0] = copy_to_device(diffraction_cloud.sum(), storage)
 
         for a0 in range(num):
             s1 = xp_storage.random.randint(r, sx - r)
