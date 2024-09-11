@@ -178,6 +178,7 @@ class Tomography:
                             self._object_shape_x_y_z[1] * self._object_shape_x_y_z[2],
                             diffraction_shape * diffraction_shape * diffraction_shape,
                         ),
+                        dtype="float32",
                     )
                 self._object_shape_6D = self._object_shape_x_y_z + (
                     diffraction_shape,
@@ -737,8 +738,8 @@ class Tomography:
                 index = np.ravel_multi_index((a0, a1), (s[0], s[1]))
 
                 if qx0_fit is not None:
-                    qx0 = qx0_fit[a0, a1] - center[0]
-                    qy0 = qy0_fit[a0, a1] - center[1]
+                    qx0 = center[0] - qx0_fit[a0, a1]
+                    qy0 = center[1] - qy0_fit[a0, a1]
 
                     xF = int(np.floor(qx0))
                     yF = int(np.floor(qy0))
@@ -837,8 +838,13 @@ class Tomography:
         i[a] = xp.arange(a.size)
 
         data_reshaped = xp.zeros((s[0] * s[1], s[2] * s[3]))
-        data_reshaped[:, self._circular_mask_ravel] = xp.repeat(data, 2, axis=1)[:, 1:]
-        data_reshaped[1:] /= 2
+        if s[3] % 2 > 0:
+            data_reshaped[:, self._circular_mask_ravel] = xp.repeat(data, 2, axis=1)[
+                :, 1:
+            ]
+            data_reshaped[1:] /= 2
+        else:
+            data_reshaped[:, self._circular_mask_ravel] = xp.repeat(data, 2, axis=1) / 2
         data_reshaped[:, self._circular_mask_ravel] = data_reshaped[
             :, self._circular_mask_ravel
         ][:, i]
