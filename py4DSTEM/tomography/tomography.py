@@ -40,7 +40,8 @@ class Tomography:
         datacube_Q_pixel_size_inv_A: float = None,  # do we even need this?
         tilt_deg: Sequence[np.ndarray] = None,
         translation_px: Sequence[np.ndarray] = None,
-        scanning_to_tilt_rotation: float = None,
+        tilt_rotation_axis_angle: float = None,
+        tilt_rotation_axis_shift: float = None,
         initial_object_guess: np.ndarray = None,
         verbose: bool = True,
         device: str = "cpu",
@@ -61,7 +62,8 @@ class Tomography:
         self._datacube_Q_pixel_size_inv_A = datacube_Q_pixel_size_inv_A
         self._tilt_deg = tilt_deg
         self._translation_px = translation_px
-        self._scanning_to_tilt_rotation = scanning_to_tilt_rotation
+        self._tilt_rotation_axis_angle = tilt_rotation_axis_angle
+        self._tilt_rotation_axis_shift = tilt_rotation_axis_shift
         self._verbose = verbose
         self._initial_object_guess = initial_object_guess
 
@@ -496,8 +498,8 @@ class Tomography:
 
         x, y = np.meshgrid(x, y, indexing="ij")
 
-        if self._scanning_to_tilt_rotation is not None:
-            rotation_angle = np.deg2rad(self._scanning_to_tilt_rotation)
+        if self._tilt_rotation_axis_angle is not None:
+            rotation_angle = np.deg2rad(self._tilt_rotation_axis_angle)
             x, y = x * np.cos(rotation_angle) + y * np.sin(rotation_angle), -x * np.sin(
                 rotation_angle
             ) + y * np.cos(rotation_angle)
