@@ -388,10 +388,10 @@ class Tomography:
 
             if resizing_method == "bin":
                 datacube = datacube.bin_Q(N=int(1 / resampling_factor))
-            if diffraction_space_mask_com is not None:
-                diffraction_space_mask_com = bin2D(
-                    diffraction_space_mask_com, int(1 / resampling_factor)
-                )
+                if diffraction_space_mask_com is not None:
+                    diffraction_space_mask_com = bin2D(
+                        diffraction_space_mask_com, int(1 / resampling_factor)
+                    )
 
             elif resizing_method == "fourier":
                 datacube = datacube.resample_Q(
