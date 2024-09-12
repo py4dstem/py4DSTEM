@@ -389,8 +389,7 @@ class Tomography:
                         crop_reciprocal_space[0],
                         -crop_reciprocal_space[1],
                         crop_reciprocal_space[2],
-                        -crop_reciprocal_space,
-                        [3],
+                        -crop_reciprocal_space[3],
                     )
                 )
 
