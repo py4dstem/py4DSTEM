@@ -98,7 +98,8 @@ class Tomography:
         bin_real_space: int
             factor for binnning in real space
         crop_reciprocal_space: float
-            if not None, crops reciprocal space on all sides by integer
+            if not None, crops reciprocal space on all sides by integer.
+            Can pass an single integer of a 4-tuple
         q_max_inv_A: int
             maximum q in inverse angstroms
         force_q_to_r_rotation_deg:float
@@ -343,7 +344,8 @@ class Tomography:
         masks_real_space: list of np.ndarray or np.ndarray
             mask for real space. can be the same for each datacube of individually specified.
         crop_reciprocal_space: float
-            if not None, crops reciprocal space on all sides by integer
+            if not None, crops reciprocal space on all sides by integer.
+            Can pass an single integer of a 4-tuple
         q_max_inv_A: int
             maximum q in inverse angtroms
         """
@@ -372,14 +374,25 @@ class Tomography:
             mask_real_space = None
 
         if crop_reciprocal_space is not None:
-            datacube.crop_Q(
-                (
-                    crop_reciprocal_space,
-                    -crop_reciprocal_space,
-                    crop_reciprocal_space,
-                    -crop_reciprocal_space,
+            if np.isscalar(crop_reciprocal_space):
+                datacube.crop_Q(
+                    (
+                        crop_reciprocal_space,
+                        -crop_reciprocal_space,
+                        crop_reciprocal_space,
+                        -crop_reciprocal_space,
+                    )
                 )
-            )
+            else:
+                datacube.crop_Q(
+                    (
+                        crop_reciprocal_space[0],
+                        -crop_reciprocal_space[1],
+                        crop_reciprocal_space[2],
+                        -crop_reciprocal_space,
+                        [3],
+                    )
+                )
 
         # resize diffraction space
         if diffraction_intensities_shape is not None:
@@ -1283,17 +1296,31 @@ class Tomography:
         i[a] = xp.arange(a.size)
         i = xp.tile(i, 4) + xp.repeat(xp.arange(4), i.shape[0]) * (i.shape[0])
 
-        normalize = xp.ones((xp.repeat(update, 2, axis=1)[:, 1:]).shape) * 2
-        normalize[:, 0] = 1
+        if s[-1] % 2 > 0:
+            normalize = xp.ones((xp.repeat(update, 2, axis=1)[:, 1:]).shape) * 2
+            normalize[:, 0] = 1
 
-        update_reshaped = xp.repeat(
-            (
-                (xp.tile(xp.repeat(update, 2, axis=1)[:, 1:] / normalize, (4)))[:, i]
-                * (self._weights_diff[ind_update])
-            ),
-            4 * num_points,
-            axis=0,
-        ) / (num_points)
+            update_reshaped = xp.repeat(
+                (
+                    (xp.tile(xp.repeat(update, 2, axis=1)[:, 1:] / normalize, (4)))[
+                        :, i
+                    ]
+                    * (self._weights_diff[ind_update])
+                ),
+                4 * num_points,
+                axis=0,
+            ) / (num_points)
+        else:
+            normalize = xp.ones((xp.repeat(update, 2, axis=1)).shape) * 2
+
+            update_reshaped = xp.repeat(
+                (
+                    (xp.tile(xp.repeat(update, 2, axis=1) / normalize, (4)))[:, i]
+                    * (self._weights_diff[ind_update])
+                ),
+                4 * num_points,
+                axis=0,
+            ) / (num_points)
 
         real_index = xp.ravel_multi_index(
             (self._ind0.ravel(), self._ind1.ravel()), (s[1], s[2]), mode="clip"
