@@ -23,11 +23,11 @@ setup(
     keywords="STEM,4DSTEM",
     python_requires=">=3.10",
     install_requires=[
-        "numpy >= 1.19",
+        "numpy >= 1.19, < 2.0",
         "scipy >= 1.5.2",
         "h5py >= 3.2.0",
         "hdf5plugin >= 4.1.3",
-        "ncempy >= 1.8.1",
+        "ncempy >= 1.8.1, <= 1.11.2",
         "matplotlib >= 3.2.2",
         "scikit-image >= 0.17.2",
         "scikit-learn >= 0.23.2, < 1.5",
@@ -46,7 +46,7 @@ setup(
     extras_require={
         "ipyparallel": ["ipyparallel >= 6.2.4", "dill >= 0.3.3"],
         "cuda": ["cupy >= 10.0.0"],
-        "acom": ["pymatgen >= 2022", "mp-api == 0.24.1"],
+        "acom": ["pymatgen >= 2022, < 2024.8.9", "mp-api == 0.24.1"],
         "aiml": [
             "tensorflow <= 2.10.0",
             "tensorflow-addons <= 0.16.1",
