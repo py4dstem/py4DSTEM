@@ -1573,7 +1573,9 @@ class ObjectNDProbeMethodsMixin:
 
         return self
 
-    def _gradient_descent_fourier_projection(self, amplitudes, overlap, fourier_mask):
+    def _gradient_descent_fourier_projection(
+        self, amplitudes, overlap, fourier_mask, virtual_detector_masks
+    ):
         """
         Ptychographic fourier projection method for GD method.
 
@@ -1586,6 +1588,7 @@ class ObjectNDProbeMethodsMixin:
         fourier_mask: np.ndarray
             Mask to apply at the detector-plane for zeroing-out unreliable gradients
             Useful when detector has artifacts such as dead-pixels
+        virtual_detector_masks:
 
         Returns
         --------
@@ -1608,6 +1611,15 @@ class ObjectNDProbeMethodsMixin:
                 conserve_array_sums=True,
                 xp=xp,
             )
+
+        if virtual_detector_masks is not None:
+            masked_values = xp.sum(
+                fourier_overlap[:, None, :, :] * virtual_detector_masks[None, :, :, :],
+                axis=(-1, -2),
+            ).transpose()
+            fourier_overlap = xp.zeros_like(fourier_overlap)
+            for mask, value in zip(virtual_detector_masks, masked_values):
+                fourier_overlap[:, mask] = value[:, None] / xp.sum(mask)
 
         if fourier_mask is not None:
             fourier_overlap *= fourier_mask
@@ -1743,6 +1755,7 @@ class ObjectNDProbeMethodsMixin:
         amplitudes,
         exit_waves,
         fourier_mask,
+        virtual_detector_masks,
         use_projection_scheme,
         projection_a,
         projection_b,
@@ -1765,6 +1778,7 @@ class ObjectNDProbeMethodsMixin:
         fourier_mask: np.ndarray
             Mask to apply at the detector-plane for zeroing-out unreliable gradients
             Useful when detector has artifacts such as dead-pixels
+        virtual_detector_masks: add docstring
         use_projection_scheme: bool,
             If True, use generalized projection update
         projection_a: float
@@ -1811,6 +1825,7 @@ class ObjectNDProbeMethodsMixin:
                 amplitudes,
                 overlap,
                 fourier_mask,
+                virtual_detector_masks,
             )
 
         return shifted_probes, object_patches, overlap, exit_waves, error
