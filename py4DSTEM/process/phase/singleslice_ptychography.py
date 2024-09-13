@@ -759,9 +759,9 @@ class SingleslicePtychography(
         detector_fourier_mask: np.ndarray
             Corner-centered mask to multiply the detector-plane gradients with (a value of zero supresses those pixels).
             Useful when detector has artifacts such as dead-pixels. Usually binary.
-        virtual_detector_masks: ndarray, optional
-            List of corner-centered boolean masks to bin during forward model,
-            to allow comparison with arbitrary segmented detector datasets.
+        virtual_detector_masks: np.ndarray
+            List of corner-centered boolean masks for binning forward model exit waves,
+            to allow comparison with arbitrary geometry detector datasets.
         store_iterations: bool, optional
             If True, reconstructed objects and probes are stored at each iteration
         progress_bar: bool, optional

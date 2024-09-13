@@ -1588,7 +1588,9 @@ class ObjectNDProbeMethodsMixin:
         fourier_mask: np.ndarray
             Mask to apply at the detector-plane for zeroing-out unreliable gradients
             Useful when detector has artifacts such as dead-pixels
-        virtual_detector_masks:
+        virtual_detector_masks: np.ndarray
+            List of corner-centered boolean masks for binning forward model exit waves,
+            to allow comparison with arbitrary geometry detector datasets.
 
         Returns
         --------
@@ -1778,7 +1780,9 @@ class ObjectNDProbeMethodsMixin:
         fourier_mask: np.ndarray
             Mask to apply at the detector-plane for zeroing-out unreliable gradients
             Useful when detector has artifacts such as dead-pixels
-        virtual_detector_masks: add docstring
+        virtual_detector_masks: np.ndarray
+            List of corner-centered boolean masks for binning forward model exit waves,
+            to allow comparison with arbitrary geometry detector datasets.
         use_projection_scheme: bool,
             If True, use generalized projection update
         projection_a: float
