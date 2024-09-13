@@ -1654,6 +1654,7 @@ class ObjectNDProbeMethodsMixin:
         overlap,
         exit_waves,
         fourier_mask,
+        virtual_detector_masks,
         projection_a,
         projection_b,
         projection_c,
@@ -1685,6 +1686,9 @@ class ObjectNDProbeMethodsMixin:
             Mask to apply at the detector-plane for zeroing-out unreliable gradients
             Useful when detector has artifacts such as dead-pixels
             Currently not implemented for projection-sets
+        virtual_detector_masks: np.ndarray
+            List of corner-centered boolean masks for binning forward model exit waves,
+            to allow comparison with arbitrary geometry detector datasets.
         projection_a: float
         projection_b: float
         projection_c: float
@@ -1698,6 +1702,9 @@ class ObjectNDProbeMethodsMixin:
         """
 
         if fourier_mask is not None:
+            raise NotImplementedError()
+
+        if virtual_detector_masks is not None:
             raise NotImplementedError()
 
         xp = self._xp
@@ -1819,6 +1826,7 @@ class ObjectNDProbeMethodsMixin:
                 overlap,
                 exit_waves,
                 fourier_mask,
+                virtual_detector_masks,
                 projection_a,
                 projection_b,
                 projection_c,
