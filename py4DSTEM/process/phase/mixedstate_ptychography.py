@@ -676,6 +676,7 @@ class MixedstatePtychography(
         shrinkage_rad: float = 0.0,
         fix_potential_baseline: bool = True,
         detector_fourier_mask: np.ndarray = None,
+        virtual_detector_masks: Sequence[np.ndarray] = None,
         store_iterations: bool = False,
         progress_bar: bool = True,
         reset: bool = None,
@@ -787,6 +788,9 @@ class MixedstatePtychography(
         detector_fourier_mask: np.ndarray
             Corner-centered mask to multiply the detector-plane gradients with (a value of zero supresses those pixels).
             Useful when detector has artifacts such as dead-pixels. Usually binary.
+        virtual_detector_masks: np.ndarray
+            List of corner-centered boolean masks for binning forward model exit waves,
+            to allow comparison with arbitrary geometry detector datasets.
         store_iterations: bool, optional
             If True, reconstructed objects and probes are stored at each iteration
         progress_bar: bool, optional
@@ -872,6 +876,9 @@ class MixedstatePtychography(
         if detector_fourier_mask is not None:
             detector_fourier_mask = xp.asarray(detector_fourier_mask)
 
+        if virtual_detector_masks is not None:
+            virtual_detector_masks = xp.asarray(virtual_detector_masks)
+
         # main loop
         for a0 in tqdmnd(
             num_iter,
@@ -919,6 +926,7 @@ class MixedstatePtychography(
                     amplitudes_device,
                     self._exit_waves,
                     detector_fourier_mask,
+                    virtual_detector_masks,
                     use_projection_scheme,
                     projection_a,
                     projection_b,

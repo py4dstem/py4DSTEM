@@ -739,6 +739,7 @@ class MultislicePtychography(
         shrinkage_rad: float = 0.0,
         fix_potential_baseline: bool = True,
         detector_fourier_mask: np.ndarray = None,
+        virtual_detector_masks: Sequence[np.ndarray] = None,
         pure_phase_object: bool = False,
         tv_denoise_chambolle: bool = True,
         tv_denoise_weight_chambolle=None,
@@ -853,6 +854,9 @@ class MultislicePtychography(
         detector_fourier_mask: np.ndarray
             Corner-centered mask to multiply the detector-plane gradients with (a value of zero supresses those pixels).
             Useful when detector has artifacts such as dead-pixels. Usually binary.
+        virtual_detector_masks: np.ndarray
+            List of corner-centered boolean masks for binning forward model exit waves,
+            to allow comparison with arbitrary geometry detector datasets.
         pure_phase_object: bool, optional
             If True, object amplitude is set to unity
         tv_denoise_chambolle: bool
@@ -954,6 +958,9 @@ class MultislicePtychography(
         if detector_fourier_mask is not None:
             detector_fourier_mask = xp.asarray(detector_fourier_mask)
 
+        if virtual_detector_masks is not None:
+            virtual_detector_masks = xp.asarray(virtual_detector_masks)
+
         # main loop
         for a0 in tqdmnd(
             num_iter,
@@ -1001,6 +1008,7 @@ class MultislicePtychography(
                     amplitudes_device,
                     self._exit_waves,
                     detector_fourier_mask,
+                    virtual_detector_masks,
                     use_projection_scheme,
                     projection_a,
                     projection_b,
