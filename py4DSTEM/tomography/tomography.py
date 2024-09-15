@@ -39,9 +39,9 @@ class Tomography:
         datacube_R_pixel_size_A: float = None,
         datacube_Q_pixel_size_inv_A: float = None,  # do we even need this?
         tilt_deg: Sequence[np.ndarray] = None,
-        translation_px: Sequence[np.ndarray] = None,
+        shift_px: Sequence[np.ndarray] = None,
         tilt_rotation_axis_angle: float = None,
-        tilt_rotation_axis_shift: float = None,
+        tilt_rotation_axis_shift_px: float = None,
         initial_object_guess: np.ndarray = None,
         verbose: bool = True,
         device: str = "cpu",
@@ -61,9 +61,9 @@ class Tomography:
         self._datacube_R_pixel_size_A = datacube_R_pixel_size_A
         self._datacube_Q_pixel_size_inv_A = datacube_Q_pixel_size_inv_A
         self._tilt_deg = tilt_deg
-        self._translation_px = translation_px
+        self._shift_px = shift_px
         self._tilt_rotation_axis_angle = tilt_rotation_axis_angle
-        self._tilt_rotation_axis_shift = tilt_rotation_axis_shift
+        self._tilt_rotation_axis_shift_px = tilt_rotation_axis_shift_px
         self._verbose = verbose
         self._initial_object_guess = initial_object_guess
 
@@ -499,12 +499,12 @@ class Tomography:
 
         step_size = self._datacube_R_pixel_size_A
 
-        x = np.arange(s[0])
-        y = np.arange(s[1])
+        x = np.arange(s[0], dtype="float")
+        y = np.arange(s[1], dtype="float")
 
-        if self._translation_px is not None:
-            x += self._translation_px[datacube_number][0]
-            y += self._translation_px[datacube_number][1]
+        if self._shift_px is not None:
+            x += self._shift_px[datacube_number][0]
+            y += self._shift_px[datacube_number][1]
 
         x *= step_size
         y *= step_size
