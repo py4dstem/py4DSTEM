@@ -1,16 +1,18 @@
-# Read the mib file captured using the Merlin detector
+# Read the mib file captured using the Merlin detector 
 # Author: Tara Mishra, tara.matsci@gmail.
+# Edited: Amir ZangiAbadi aazangiabadi@gmail.com 2024-09-16
 # Based on the PyXEM load_mib module https://github.com/pyxem/pyxem/blob/563a3bb5f3233f46cd3e57f3cd6f9ddf7af55ad0/pyxem/utils/io_utils.py
 
 import numpy as np
 from py4DSTEM.datacube import DataCube
+from py4DSTEM.preprocess import bin_data_diffraction
 import os
 
 
 def load_mib(
     file_path,
     mem="MEMMAP",
-    binfactor=1,
+    binfactor=2,
     reshape=True,
     flip=True,
     scan=(256, 256),
@@ -21,15 +23,19 @@ def load_mib(
 
     The scan size is not encoded in the MIB metadata - by default it is
     set to (256,256), and can be modified by passing the keyword `scan`.
+
+    binfactor n, reduces the data size by n^2 times.
     """
 
-    assert binfactor == 1, "MIB does not support bin-on-load... yet?"
+    #assert binfactor == 1, "MIB does not support bin-on-load... yet?"
 
     # Get scan info from kwargs
     header = parse_hdr(file_path)
-    width = header["width"]
-    height = header["height"]
+    width = header["Detector width"]
+    height = header["Detector height"]
     width_height = width * height
+
+    scan = scan_size(file_path)
 
     data = get_mib_memmap(file_path)
     depth = get_mib_depth(header, file_path)
@@ -61,8 +67,11 @@ def load_mib(
         data = np.array(data)  # Load entire dataset into RAM
 
     py4dstem_data = DataCube(data=data)
-    return py4dstem_data
 
+    if binfactor > 1:
+        py4dstem_data = bin_data_diffraction(py4dstem_data, binfactor, dtype=None)
+
+    return py4dstem_data
 
 def manageHeader(fname):
     """Get necessary information from the header of the .mib file.
@@ -100,6 +109,8 @@ def manageHeader(fname):
     sensorLayout = elements_in_header[7].strip()
     Timestamp = elements_in_header[9]
     shuttertime = float(elements_in_header[10])
+    ScanX = scan_size(fname)[0] # It needs a .hdr file next to the .mib files, otherwise comment these two lines.
+    ScanY = scan_size(fname)[1] # It needs a .hdr file next to the .mib files
 
     if PixelDepthInFile == "R64":
         bitdepth = int(elements_in_header[18])  # RAW
@@ -118,9 +129,29 @@ def manageHeader(fname):
         Timestamp,
         shuttertime,
         bitdepth,
+        ScanX,
+        ScanY,
     )
 
     return hdr
+
+
+def scan_size(path):
+    header_path = path[:-3] + "hdr"
+    result = {}
+    if os.path.exists(header_path):
+
+        with open(header_path, encoding='UTF-8') as f:
+            for line in f:
+                k, v = line.split("\t", 1)
+                k = k.rstrip(':')
+                v = v.rstrip("\n")
+                result[k] = v
+                if 'ScanX' in result and 'ScanY' in result:
+                        return (int(result['ScanY']), int(result['ScanX']))
+    else:
+        print('Header file (.hdr) does not exist in this folder. The scan size will be assumed to be 256 by 256 pix')
+
 
 
 def parse_hdr(fp):
@@ -163,6 +194,7 @@ def parse_hdr(fp):
         'data offset': int
             number of characters at the header.
     """
+    
     hdr_info = {}
 
     read_hdr = manageHeader(fp)
@@ -170,13 +202,22 @@ def parse_hdr(fp):
     # Set the array size of the chip
 
     if read_hdr[3] == "1x1":
-        hdr_info["width"] = 256
-        hdr_info["height"] = 256
+        hdr_info["Detector width"] = 256
+        hdr_info["Detector height"] = 256
     elif read_hdr[3] == "2x2":
-        hdr_info["width"] = 512
-        hdr_info["height"] = 512
+        hdr_info["Detector width"] = 512
+        hdr_info["Detector height"] = 512
+    elif read_hdr[3] == "2x2G": #since the 512 pix chip is actually made of four 256 chips, there is a gap with a width of 2 pix between each chip.
+        hdr_info["Detector width"] = 514
+        hdr_info["Detector height"] = 514
+    
 
+    hdr_info["scan size X"] = read_hdr[7] # Make sure .hdr file exit otherwise comment this line.
+    hdr_info["scan size Y"] = read_hdr[8] # Make sure .hdr file exit otherwise comment this line.
+    
     hdr_info["Assembly Size"] = read_hdr[3]
+
+
 
     # Set mib offset
     hdr_info["offset"] = read_hdr[0]
@@ -280,19 +321,25 @@ def get_mib_depth(hdr_info, fp):
     # Define standard frame sizes for quad and single medipix chips
     if hdr_info["Assembly Size"] == "2x2":
         mib_file_size_dict = {
-            "1": 33536,
-            "6": 262912,
-            "12": 525056,
-            "24": 1049344,
+            "1": 33536, # 512*512/8 + header_size(or 768 bytes)
+            "6": 262912, # 512*512 + header_size(or 768 bytes)
+            "12": 525056, #512*512*2 + header_size(or 768 bytes)
+            "24": 1049344, #512*512*4 + header_size(or 768 bytes)
         }
     if hdr_info["Assembly Size"] == "1x1":
         mib_file_size_dict = {
-            "1": 8576,
-            "6": 65920,
-            "12": 131456,
-            "24": 262528,
+            "1": 8576, # 256*256/8 + header_size(or 384 bytes)
+            "6": 65920, # 256*256 + header_size(or 384 bytes)
+            "12": 131456, # 256*256*2 + header_size(or 384 bytes)
+            "24": 262528, # 256*256*4 + header_size(or 384 bytes)
         }
-
+    if hdr_info["Assembly Size"] == "2x2G": # Quad chips and two pix spacing between chips
+        mib_file_size_dict = {
+            "1": 33536, # 514*514/8 + header_size(or 768 bytes)
+            "6": 264964, # 514*514 + header_size(or 768 bytes)
+            "12": 529160, # 514*514*2 + header_size(or 768 bytes)
+            "24": 1057552, # 514*514*4 + header_size(or 768 bytes)
+        }
     file_size = os.path.getsize(fp[:-3] + "mib")
     if hdr_info["raw"] == "R64":
         single_frame = mib_file_size_dict.get(str(hdr_info["Counter Depth (number)"]))
@@ -351,5 +398,4 @@ def get_hdr_bits(hdr_info):
         hdr_multiplier = (int(data_length) / 8) ** -1
 
     hdr_bits = int(hdr_info["data offset"] * hdr_multiplier)
-
     return hdr_bits
