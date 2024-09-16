@@ -1,7 +1,30 @@
-# Read the mib file captured using the Merlin detector 
+# Read the mib file captured using the Merlin detector (Quantum Detectors)
 # Author: Tara Mishra, tara.matsci@gmail.
 # Edited: Amir ZangiAbadi aazangiabadi@gmail.com 2024-09-16
 # Based on the PyXEM load_mib module https://github.com/pyxem/pyxem/blob/563a3bb5f3233f46cd3e57f3cd6f9ddf7af55ad0/pyxem/utils/io_utils.py
+
+"""
+Example:
+
+file_path = '/Users/yourfilelocation/default.mib'
+
+# read the hdr (header) file, without loading the data. 
+print(py4DSTEM.io.filereaders.read_mib.parse_hdr(file_path)) 
+
+# Read/load the mib file. Binning while loading will take a bit longer, but saves time later.
+file_data = py4DSTEM.io.filereaders.read_mib.load_mib(file_path, mem='MEMMAP', binfactor=4, reshape=True, flip=True)
+
+
+# Save your file in .h5 format and load it as .h5 to continue processing it.
+ py4DSTEM.save(
+     file_path[:-3] + "h5",
+     file_data
+ )
+
+file_data = py4DSTEM.read(
+    file_path[:-3] + "h5"
+)
+"""
 
 import numpy as np
 from py4DSTEM.datacube import DataCube
