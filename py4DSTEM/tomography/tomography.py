@@ -42,6 +42,7 @@ class Tomography:
         shift_px: Sequence[np.ndarray] = None,
         tilt_rotation_axis_angle: float = None,
         tilt_rotation_axis_shift_px: float = None,
+        transpose_xy: bool = False,
         initial_object_guess: np.ndarray = None,
         verbose: bool = True,
         device: str = "cpu",
@@ -64,6 +65,7 @@ class Tomography:
         self._shift_px = shift_px
         self._tilt_rotation_axis_angle = tilt_rotation_axis_angle
         self._tilt_rotation_axis_shift_px = tilt_rotation_axis_shift_px
+        self._transpose_xy = transpose_xy
         self._verbose = verbose
         self._initial_object_guess = initial_object_guess
 
@@ -488,7 +490,7 @@ class Tomography:
         device = self._device
 
         # calculate shape
-        field_of_view_px = self._object_initial.shape[0:2]
+        field_of_view_px = self._object_shape_6D[0:2]
         self._field_of_view_A = (
             self._voxel_size_A * field_of_view_px[0],
             self._voxel_size_A * field_of_view_px[1],
@@ -503,8 +505,12 @@ class Tomography:
         y = np.arange(s[1], dtype="float")
 
         if self._shift_px is not None:
-            x += self._shift_px[datacube_number][0]
-            y += self._shift_px[datacube_number][1]
+            if self._transpose_xy:
+                x += self._shift_px[datacube_number][1]
+                y += self._shift_px[datacube_number][0]
+            else:
+                x += self._shift_px[datacube_number][0]
+                y += self._shift_px[datacube_number][1]
 
         x *= step_size
         y *= step_size
@@ -520,14 +526,27 @@ class Tomography:
         # remove data outside FOV
         if mask_real_space is None:
             mask_real_space = np.ones(x.shape, dtype="bool")
-        mask_real_space[x >= self._field_of_view_A[0]] = False
-        mask_real_space[x < 0] = False
-        mask_real_space[y >= self._field_of_view_A[1]] = False
-        mask_real_space[y < 0] = False
+
+        if self._transpose_xy:
+            mask_real_space[x >= self._field_of_view_A[1]] = False
+            mask_real_space[x < 0] = False
+            mask_real_space[y >= self._field_of_view_A[0]] = False
+            mask_real_space[y < 0] = False
+        else:
+            mask_real_space[x >= self._field_of_view_A[0]] = False
+            mask_real_space[x < 0] = False
+            mask_real_space[y >= self._field_of_view_A[1]] = False
+            mask_real_space[y < 0] = False
 
         # calculate positions in voxels
         x = x[mask_real_space].ravel()
         y = y[mask_real_space].ravel()
+
+        if self._transpose_xy:
+            x_temp = x.copy()
+            y_temp = y.copy()
+            x = y_temp.copy()
+            y = x_temp.copy()
 
         x_vox = x / self._voxel_size_A
         y_vox = y / self._voxel_size_A
@@ -812,7 +831,7 @@ class Tomography:
         ]
         return diffraction_patterns_reshaped
 
-    def _reshape_2D_array_to_4D(self, data, xy_shape=None):
+    def _reshape_2D_array_to_4D(self, data, xy_shape=None, positions=None):
         """
         reshape ravelled diffraction 2D-data to 4D-data
 
@@ -822,6 +841,10 @@ class Tomography:
             2D datacube data to be reshapped
         xy_shape: 2-tuple
             if None, takes 6D object shape
+        real_space_mask: np.ndarray
+            Must be xy_shape. Fills 4D datacube with zeros wherever is masked
+        positions: np.ndarray
+            2-tuple of np.ndarrays specifyign positions
 
         Returns
         --------
@@ -850,6 +873,19 @@ class Tomography:
         i[a] = xp.arange(a.size)
 
         data_reshaped = xp.zeros((s[0] * s[1], s[2] * s[3]))
+
+        if positions is not None:
+            data_masked = data.copy()
+            data = xp.zeros((s[0] * s[1], data_masked.shape[1]))
+            indicies = np.ravel_multi_index(
+                (
+                    positions[0],
+                    positions[1],
+                ),
+                (s[0], s[1]),
+            )
+            data[indicies] = data_masked
+
         if s[3] % 2 > 0:
             data_reshaped[:, self._circular_mask_ravel] = xp.repeat(data, 2, axis=1)[
                 :, 1:
