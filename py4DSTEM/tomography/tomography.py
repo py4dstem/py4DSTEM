@@ -38,8 +38,8 @@ class Tomography:
         voxel_size_A: float = None,
         datacube_R_pixel_size_A: float = None,
         datacube_Q_pixel_size_inv_A: float = None,  # do we even need this?
-        tilt_deg: Sequence[np.ndarray] = None,
-        shift_px: Sequence[np.ndarray] = None,
+        tilt_deg: Union[Sequence, np.ndarray] = None,
+        shift_px: Union[Sequence, np.ndarray] = None,
         tilt_rotation_axis_angle: float = None,
         tilt_rotation_axis_shift_px: float = None,
         transpose_xy: bool = False,
@@ -53,8 +53,46 @@ class Tomography:
         """
         Nanobeam  tomography!
 
-        """
+        Parameters
+        ----------
+        datacubes:List of `DataCube`s of list of strings
+            List of py4DSTEM `DataCube`s or strings for where to load the data from
+        import_kwargs: dict
+            Arguments to pass to `read` or `import_file` if passes a string for datacubes
+        object_shape_x_y_z: 3-tuple
+            Shape (in voxels) of the 3D object to be reconstructed
+        voxel_size_A: float
+            Size of each voxel in object. Voxel size is uniform in x, y, and z
+        datacube_R_pixel_size_A: float
+            Step size (in A) for datacube
+        datacube_Q_pixel_size_inv_A: float
+            Step size (in A^-1) for datacube
+        tilt_deg: np.ndarray or list
+            List of tilt angles for datacubes
+        shift_px:
+            List of x, y shifts for each scan. If transpose_xy is True, these are also transposed
+        tilt_rotation_axis_angle: float
+            Rotation angle of scan direction to tilt axis
+        tilt_rotation_axis_shift_px: float
+            Shift of rotation axis relative to center of field of view
+            (in number of datacube pixels)
+        transpose_xy: bool
+            If True, swaps x and y
+        initial_object_guess: np.ndarray
+            Initial guess for object
+        verbose: bool
+            if False, supresses output messages
+        device: str, optional
+            Device calculation will be perfomed on. Must be 'cpu' or 'gpu'
+        storage: str, optional
+            Device non-frequent arrays will be stored on. Must be 'cpu' or 'gpu'
+        clear_fft_cache: bool, optional (TODO, not yet implemented)
+            If True, and device = 'gpu', clears the cached fft plan at the end of function calls
 
+        Other notes for users:
+            - the tilt axis is along y
+            - for a thin foil geometry, pass a smaller value for z
+        """
         self._datacubes = datacubes
         self._import_kwargs = import_kwargs
         self._object_shape_x_y_z = object_shape_x_y_z
@@ -79,8 +117,6 @@ class Tomography:
         bin_real_space: int = None,
         crop_reciprocal_space: float = None,
         q_max_inv_A: int = None,
-        force_q_to_r_rotation_deg: float = None,
-        force_q_to_r_transpose: bool = None,
         diffraction_space_mask_com=None,
         force_centering_shifts: Sequence[Tuple] = None,
         masks_real_space: Union[np.ndarray, Sequence[np.ndarray]] = None,
@@ -93,6 +129,10 @@ class Tomography:
         robust_thresh: int = 2,
     ):
         """
+        Preprocessing for nanobeam tomography
+
+        Parameters
+        ----------
         diffraction_intensites_shape: int
             shape of diffraction patterns to reshape data into
         resizing_method: float
@@ -104,14 +144,6 @@ class Tomography:
             Can pass an single integer of a 4-tuple
         q_max_inv_A: int
             maximum q in inverse angstroms
-        force_q_to_r_rotation_deg:float
-            force q to r rotation in degrees. If False solves for rotation
-            with datacube specified with `datacube_to_solve_rotation` using
-            center of mass method.
-        force_q_to_r_transpose: bool
-            force q to r transpose. If False, solves for transpose
-            with datacube specified with `datacube_to_solve_rotation` using
-            center of mass method.
         diffraction_space_mask_com: np.ndarray
             applies mask to datacube while solving for CoM rotation
         force_centering_shifts: list of 2-tuples of np.ndarrays of Rshape
