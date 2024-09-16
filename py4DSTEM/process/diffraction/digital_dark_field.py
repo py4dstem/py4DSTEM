@@ -332,9 +332,9 @@ def pointlist_to_array(
         if True, applies pixel calibration to bragg_peaks
     rotate: bool
         if True, applies rotational calibration to bragg_peaks
-        rphi: bool
-                if True, generates two extra columns of Qr and Qphi for addressing in polar
-                coordinates
+    rphi: bool
+        if True, generates two extra columns of Qr and Qphi for addressing in polar
+        coordinates, Qphi is the angle anticlockwise from horizontal to the right
 
     Returns
     ----------
@@ -380,7 +380,7 @@ def pointlist_to_array(
                         vectors.qx.shape[0] * [i],
                         vectors.qx.shape[0] * [j],
                         (vectors.qx**2 + vectors.qy**2) ** 0.5,
-                        np.degrees(np.arctan2(vectors.qx, vectors.qy)),
+                        np.degrees(np.arctan2(-vectors.qx, vectors.qy)),
                     ]
                 ).T
             else:
@@ -392,7 +392,7 @@ def pointlist_to_array(
                         vectors.qx.shape[0] * [i],
                         vectors.qx.shape[0] * [j],
                         (vectors.qx**2 + vectors.qy**2) ** 0.5,
-                        np.degrees(np.arctan2(vectors.qx, vectors.qy)),
+                        np.degrees(np.arctan2(-vectors.qx, vectors.qy)),
                     ]
                 ).T
                 points_array = np.vstack((points_array, nps))
