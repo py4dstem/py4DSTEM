@@ -40,7 +40,7 @@ class Tomography:
         datacube_Q_pixel_size_inv_A: float = None,  # do we even need this?
         tilt_deg: Union[Sequence, np.ndarray] = None,
         shift_px: Union[Sequence, np.ndarray] = None,
-        tilt_rotation_axis_angle: float = None,
+        tilt_rotation_axis_angle_deg: float = None,
         tilt_rotation_axis_shift_px: float = None,
         transpose_xy: bool = False,
         initial_object_guess: np.ndarray = None,
@@ -71,7 +71,7 @@ class Tomography:
             List of tilt angles for datacubes
         shift_px:
             List of x, y shifts for each scan. If transpose_xy is True, these are also transposed
-        tilt_rotation_axis_angle: float
+        tilt_rotation_axis_angle_deg: float
             Rotation angle of scan direction to tilt axis
         tilt_rotation_axis_shift_px: float
             Shift of centering of datacubes so that the axis is centered in the object
@@ -101,7 +101,7 @@ class Tomography:
         self._datacube_Q_pixel_size_inv_A = datacube_Q_pixel_size_inv_A
         self._tilt_deg = tilt_deg
         self._shift_px = shift_px
-        self._tilt_rotation_axis_angle = tilt_rotation_axis_angle
+        self._tilt_rotation_axis_angle_deg = tilt_rotation_axis_angle_deg
         self._tilt_rotation_axis_shift_px = tilt_rotation_axis_shift_px
         self._transpose_xy = transpose_xy
         self._verbose = verbose
@@ -127,6 +127,8 @@ class Tomography:
         robust: bool = False,
         robust_steps: int = 3,
         robust_thresh: int = 2,
+        force_q_to_r_rotation_deg = 0, 
+        force_q_to_r_transpose = False,
     ):
         """
         Preprocessing for nanobeam tomography
@@ -160,6 +162,11 @@ class Tomography:
         fast_center: (bool)
             skip the center of mass refinement step.
             arrays are returned for qx0,qy0
+        force_q_to_r_rotation_deg:float
+            force q to r rotation in degrees
+            If `tilt_rotation_axis_angle_deg` is not None, this angle is added
+        force_q_to_r_transpose: bool
+            force q to r transpose
         fitfunction: "str"
             fit function for origin ('plane' or 'parabola' or 'bezier_two' or 'constant').
         robust: bool
@@ -181,6 +188,9 @@ class Tomography:
         self._positions_vox = []
         self._positions_vox_F = []
         self._positions_vox_dF = []
+
+        self._force_q_to_r_transpose = force_q_to_r_transpose
+        self._force_q_to_r_rotation_deg = force_q_to_r_rotation_deg
 
         # preprocessing of diffraction data
         for a0 in range(self._num_datacubes):
@@ -549,8 +559,8 @@ class Tomography:
 
         x, y = np.meshgrid(x, y, indexing="ij")
 
-        if self._tilt_rotation_axis_angle is not None:
-            rotation_angle = np.deg2rad(self._tilt_rotation_axis_angle)
+        if self._tilt_rotation_axis_angle_deg is not None:
+            rotation_angle = np.deg2rad(self._tilt_rotation_axis_angle_deg)
             x, y = x * np.cos(rotation_angle) + y * np.sin(rotation_angle), -x * np.sin(
                 rotation_angle
             ) + y * np.cos(rotation_angle)
@@ -561,6 +571,7 @@ class Tomography:
             x = y_temp.copy()
             y = x_temp.copy()
 
+        ## TODO: check sign
         if self._tilt_rotation_axis_shift_px:
             y  += self._tilt_rotation_axis_shift_px
 
