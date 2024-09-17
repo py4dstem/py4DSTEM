@@ -768,6 +768,7 @@ class MixedstateMultislicePtychography(
         fix_potential_baseline: bool = True,
         vacuum_mask: np.ndarray = None,
         detector_fourier_mask: np.ndarray = None,
+        probe_real_space_support_mask: np.ndarray = None,
         pure_phase_object: bool = False,
         tv_denoise_chambolle: bool = True,
         tv_denoise_weight_chambolle=None,
@@ -884,6 +885,8 @@ class MixedstateMultislicePtychography(
         detector_fourier_mask: np.ndarray
             Corner-centered mask to multiply the detector-plane gradients with (a value of zero supresses those pixels).
             Useful when detector has artifacts such as dead-pixels. Usually binary.
+        probe_real_space_support_mask: np.ndarray
+            Corner-centered boolean mask, outside of which the probe amplitude will be set to zero.
         pure_phase_object: bool, optional
             If True, object amplitude is set to unity
         tv_denoise_chambolle: bool
@@ -1091,6 +1094,7 @@ class MixedstateMultislicePtychography(
                 num_probes_fit_aberrations=num_probes_fit_aberrations,
                 fix_probe_aperture=fix_probe_aperture and not fix_probe,
                 initial_probe_aperture=self._probe_initial_aperture,
+                probe_real_space_support_mask=probe_real_space_support_mask,
                 fix_positions=fix_positions,
                 fix_positions_com=fix_positions_com and not fix_positions,
                 global_affine_transformation=global_affine_transformation,

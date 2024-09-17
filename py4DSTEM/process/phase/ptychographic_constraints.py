@@ -937,6 +937,13 @@ class ProbeConstraintsMixin:
 
         return shifted_probe
 
+    def _probe_real_space_support_constraint(
+        self, current_probe, probe_real_space_support_mask
+    ):
+        """ """
+        current_probe[..., ~probe_real_space_support_mask] = 0.0
+        return current_probe
+
     def _probe_amplitude_constraint(
         self, current_probe, relative_radius, relative_width
     ):
@@ -1125,6 +1132,7 @@ class ProbeConstraintsMixin:
         constrain_probe_amplitude,
         constrain_probe_amplitude_relative_radius,
         constrain_probe_amplitude_relative_width,
+        probe_real_space_support_mask,
         **kwargs,
     ):
         """ProbeConstraints wrapper function"""
@@ -1162,6 +1170,12 @@ class ProbeConstraintsMixin:
                 current_probe,
                 constrain_probe_amplitude_relative_radius,
                 constrain_probe_amplitude_relative_width,
+            )
+
+        # Explicit real-space support mask
+        if probe_real_space_support_mask is not None:
+            current_probe = self._probe_real_space_support_constraint(
+                current_probe, probe_real_space_support_mask
             )
 
         return current_probe
@@ -1254,6 +1268,7 @@ class ProbeMixedConstraintsMixin:
         constrain_probe_amplitude_relative_radius,
         constrain_probe_amplitude_relative_width,
         orthogonalize_probe,
+        probe_real_space_support_mask,
         **kwargs,
     ):
         """ProbeMixedConstraints wrapper function"""
@@ -1296,6 +1311,12 @@ class ProbeMixedConstraintsMixin:
                     constrain_probe_amplitude_relative_radius,
                     constrain_probe_amplitude_relative_width,
                 )
+
+        # Explicit real-space support mask
+        if probe_real_space_support_mask is not None:
+            current_probe = self._probe_real_space_support_constraint(
+                current_probe, probe_real_space_support_mask
+            )
 
         # Probe orthogonalization
         if orthogonalize_probe:
