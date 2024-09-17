@@ -648,6 +648,7 @@ class SingleslicePtychography(
         object_positivity: bool = True,
         shrinkage_rad: float = 0.0,
         fix_potential_baseline: bool = True,
+        vacuum_mask: np.ndarray = None,
         detector_fourier_mask: np.ndarray = None,
         store_iterations: bool = False,
         progress_bar: bool = True,
@@ -755,6 +756,8 @@ class SingleslicePtychography(
             Phase shift in radians to be subtracted from the potential at each iteration
         fix_potential_baseline: bool
             If true, the potential mean outside the FOV is forced to zero at each iteration
+        vacuum_mask: np.ndarray
+            Boolean mask of the projected potential, to be set to unit transmission at each iteration
         detector_fourier_mask: np.ndarray
             Corner-centered mask to multiply the detector-plane gradients with (a value of zero supresses those pixels).
             Useful when detector has artifacts such as dead-pixels. Usually binary.
@@ -973,6 +976,7 @@ class SingleslicePtychography(
                     and self._object_fov_mask_inverse.sum() > 0
                     else None
                 ),
+                vacuum_mask=vacuum_mask,
                 pure_phase_object=pure_phase_object and self._object_type == "complex",
             )
 

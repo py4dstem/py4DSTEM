@@ -2409,8 +2409,9 @@ class Object2p5DProbeMethodsMixin:
         probe_array,
         object_array,
         positions_px,
-        angular_sampling,
-        store_initial_arrays=False,
+        reciprocal_sampling=None,
+        angular_sampling=None,
+        store_initial_arrays=True,
     ):
         """
         Alternative function for ptychographic preprocessing.
@@ -2439,15 +2440,17 @@ class Object2p5DProbeMethodsMixin:
             Self to accommodate chaining
         """
 
-        ObjectNDProbeMethodsMixin.slim_preprocess(
+        self = ObjectNDProbeMethodsMixin.slim_preprocess(
             self,
             amplitudes,
             probe_array,
             object_array,
             positions_px,
-            angular_sampling,
+            reciprocal_sampling=reciprocal_sampling,
+            angular_sampling=angular_sampling,
             store_initial_arrays=store_initial_arrays,
         )
+
         self._propagator_arrays = self._precompute_propagator_arrays(
             self._region_of_interest_shape,
             self.sampling,
@@ -2456,6 +2459,7 @@ class Object2p5DProbeMethodsMixin:
             self._theta_x,
             self._theta_y,
         )
+
         return self
 
     def _overlap_projection(
@@ -3575,7 +3579,7 @@ class MultipleMeasurementsMethodsMixin:
         positions_px,
         reciprocal_sampling=None,
         angular_sampling=None,
-        store_initial_arrays=False,
+        store_initial_arrays=True,
     ):
         """
         Alternative function for ptychographic preprocessing.
