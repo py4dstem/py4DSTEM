@@ -796,6 +796,7 @@ class PtychographicTomography(
         shrinkage_rad: float = 0.0,
         fix_potential_baseline: bool = True,
         detector_fourier_mask: np.ndarray = None,
+        virtual_detector_masks: Sequence[np.ndarray] = None,
         probe_real_space_support_mask: np.ndarray = None,
         tv_denoise: bool = True,
         tv_denoise_weights: float = None,
@@ -910,6 +911,9 @@ class PtychographicTomography(
         detector_fourier_mask: np.ndarray
             Corner-centered mask to apply at the detector-plane for zeroing-out unreliable gradients.
             Useful when detector has artifacts such as dead-pixels. Usually binary.
+        virtual_detector_masks: np.ndarray
+            List of corner-centered boolean masks for binning forward model exit waves,
+            to allow comparison with arbitrary geometry detector datasets.
         probe_real_space_support_mask: np.ndarray
             Corner-centered boolean mask, outside of which the probe amplitude will be set to zero.
         store_iterations: bool, optional
@@ -989,6 +993,9 @@ class PtychographicTomography(
 
         if detector_fourier_mask is not None:
             detector_fourier_mask = xp.asarray(detector_fourier_mask)
+
+        if virtual_detector_masks is not None:
+            virtual_detector_masks = xp.asarray(virtual_detector_masks)
 
         # main loop
         for a0 in tqdmnd(
@@ -1082,6 +1089,7 @@ class PtychographicTomography(
                         amplitudes_device,
                         self._exit_waves,
                         detector_fourier_mask,
+                        virtual_detector_masks,
                         use_projection_scheme,
                         projection_a,
                         projection_b,
