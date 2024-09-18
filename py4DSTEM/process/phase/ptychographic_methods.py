@@ -1479,6 +1479,112 @@ class ObjectNDProbeMethodsMixin:
     Mixin class for methods applicable to 2D, 2.5D, and 3D objects using a single probe.
     """
 
+    def slim_preprocess(
+        self,
+        amplitudes,
+        probe_array,
+        object_array,
+        positions_px,
+        reciprocal_sampling=None,
+        angular_sampling=None,
+        store_initial_arrays=True,
+    ):
+        """
+        Alternative function for ptychographic preprocessing.
+        This accepts the necessary arrays, and simply sets the appropriate attributes.
+
+        Parameters
+        ----------
+        amplitudes: np.ndarray
+            Corner-centered diffraction amplitudes with dimension (N,Qx,Qy)
+        probe_array: np.ndarray
+            Corner-centered initial guess for complex-valued probe of dimensions (...,Qx,Qy)
+        object_array: np.ndarray
+            Initial guess for object of dimensions (...,Px,Py)
+        positions_px: np.ndarray
+            Initial guess for probe positions in pixels of dimensions (N,2)
+        reciprocal_sampling: (float,float), optional
+            (dk_x, dk_y) reciprocal space sampling in inverse Angstroms
+        angular_sampling: (float,float), optional
+            (dalpha_x, dalpha_y) angluar sampling in mrad
+        store_initial_arrays: bool
+            If True, preprocesed object and probe arrays are stored allowing reset=True in reconstruct.
+
+        Returns
+        --------
+        self: PtychographicReconstruction
+            Self to accommodate chaining
+        """
+
+        xp = self._xp
+        xp_storage = self._xp_storage
+
+        # attach arrays
+        self._amplitudes = xp_storage.asarray(amplitudes, dtype=xp_storage.float32)
+        self._probe = xp.asarray(probe_array, dtype=xp.complex64)
+        self._object = xp.asarray(
+            object_array,
+            dtype=xp.complex64 if self._object_type == "complex" else xp.float32,
+        )
+        self._positions_px = xp_storage.asarray(positions_px, dtype=xp_storage.float32)
+
+        # specify sampling
+        if angular_sampling is None and reciprocal_sampling is None:
+            raise ValueError(
+                "One of angular or reciprocal calibration has to be specified."
+            )
+
+        wavelength = electron_wavelength_angstrom(self._energy)
+        if angular_sampling is not None:
+            if reciprocal_sampling is not None:
+                raise ValueError(
+                    "Only one of angular or reciprocal calibration can be specified."
+                )
+            self._angular_sampling = tuple(angular_sampling)
+            self._reciprocal_sampling = tuple(
+                d_alpha / wavelength / 1e3 for d_alpha in self._angular_sampling
+            )
+        else:
+            self._reciprocal_sampling = tuple(reciprocal_sampling)
+            self._reciprocal_sampling = tuple(
+                d_k * wavelength * 1e3 for d_k in self._reciprocal_sampling
+            )
+
+        # necessary amplitude attributes
+        self._num_diffraction_patterns = self._amplitudes.shape[0]
+        self._amplitudes_shape = self._amplitudes.shape[-2:]
+        self._mean_diffraction_intensity = (self._amplitudes**2).sum((-1, -2)).mean(0)
+
+        # necessary probe attributes
+        self._region_of_interest_shape = self._probe.shape[-2:]
+        self._probe_initial_aperture = None
+
+        # necessary object attributes
+        self._object_shape = self._object.shape[-2:]
+        self._object_fov_mask_inverse = np.full(self._object_shape, False)
+
+        # necessary positions attributes
+        self._positions_px_initial = self._positions_px.copy()
+        self._positions_px_initial_com = self._positions_px.mean(0)
+
+        # necessary general attributes
+        self._resample_exit_waves = False
+        self._rotation_best_transpose = False
+        self._rotation_best_rad = 0
+        self._preprocessed = True
+
+        # necessary restarting attributes
+        if store_initial_arrays:
+            self._probe_initial = self._probe.copy()
+            self._probe_initial_aperture = xp.abs(xp.fft.fft2(self._probe))
+
+            self._object_initial = self._object.copy()
+            self._object_initial_type = self._object_type
+
+            self._positions_initial = self.positions
+
+        return self
+
     def _return_shifted_probes(self, current_probe, positions_px_fractional):
         """Simple utility to de-duplicate _overlap_projection"""
 
@@ -2323,6 +2429,65 @@ class Object2p5DProbeMethodsMixin:
     Mixin class for methods unique to 2.5D objects using a single probe.
     Overwrites ObjectNDProbeMethodsMixin.
     """
+
+    def slim_preprocess(
+        self,
+        amplitudes,
+        probe_array,
+        object_array,
+        positions_px,
+        reciprocal_sampling=None,
+        angular_sampling=None,
+        store_initial_arrays=True,
+    ):
+        """
+        Alternative function for ptychographic preprocessing.
+        This accepts the necessary arrays, and simply sets the appropriate attributes.
+
+        Parameters
+        ----------
+        amplitudes: np.ndarray
+            Corner-centered diffraction amplitudes with dimension (N,Qx,Qy)
+        probe_array: np.ndarray
+            Corner-centered initial guess for complex-valued probe of dimensions (...,Qx,Qy)
+        object_array: np.ndarray
+            Initial guess for object of dimensions (...,Px,Py)
+        positions_px: np.ndarray
+            Initial guess for probe positions in pixels of dimensions (N,2)
+        reciprocal_sampling: (float,float), optional
+            (dk_x, dk_y) reciprocal space sampling in inverse Angstroms
+        angular_sampling: (float,float), optional
+            (dalpha_x, dalpha_y) angluar sampling in mrad
+        store_initial_arrays: bool
+            If True, preprocesed object and probe arrays are stored allowing reset=True in reconstruct.
+
+        Returns
+        --------
+        self: PtychographicReconstruction
+            Self to accommodate chaining
+        """
+
+        self = ObjectNDProbeMethodsMixin.slim_preprocess(
+            self,
+            amplitudes,
+            probe_array,
+            object_array,
+            positions_px,
+            reciprocal_sampling=reciprocal_sampling,
+            angular_sampling=angular_sampling,
+            store_initial_arrays=store_initial_arrays,
+        )
+
+        self._propagator_arrays = self._precompute_propagator_arrays(
+            self._region_of_interest_shape,
+            self.sampling,
+            self._energy,
+            self._slice_thicknesses,
+            self._theta_x,
+            self._theta_y,
+        )
+
+        return self
 
     def _overlap_projection(
         self,
@@ -3456,6 +3621,44 @@ class MultipleMeasurementsMethodsMixin:
     Mixin class for methods unique to classes with multiple measurements.
     Overwrites various Mixins.
     """
+
+    def slim_preprocess(
+        self,
+        amplitudes,
+        probe_array,
+        object_array,
+        positions_px,
+        reciprocal_sampling=None,
+        angular_sampling=None,
+        store_initial_arrays=True,
+    ):
+        """
+        Alternative function for ptychographic preprocessing.
+        This accepts the necessary arrays, and simply sets the appropriate attributes.
+
+        Parameters
+        ----------
+        amplitudes: np.ndarray
+            Corner-centered diffraction amplitudes with dimension (N,Qx,Qy)
+        probe_array: np.ndarray
+            Corner-centered initial guess for complex-valued probe of dimensions (...,Qx,Qy)
+        object_array: np.ndarray
+            Initial guess for object of dimensions (...,Px,Py)
+        positions_px: np.ndarray
+            Initial guess for probe positions in pixels of dimensions (N,2)
+        reciprocal_sampling: (float,float), optional
+            (dk_x, dk_y) reciprocal space sampling in inverse Angstroms
+        angular_sampling: (float,float), optional
+            (dalpha_x, dalpha_y) angluar sampling in mrad
+        store_initial_arrays: bool
+            If True, preprocesed object and probe arrays are stored allowing reset=True in reconstruct.
+
+        Returns
+        --------
+        self: PtychographicReconstruction
+            Self to accommodate chaining
+        """
+        raise NotImplementedError()
 
     def _reset_reconstruction(
         self,

@@ -106,6 +106,9 @@ class PtychographicTomography(
     initial_scan_positions: list of np.ndarray, optional
         Probe positions in Å for each diffraction intensity per tilt
         If None, initialized to a grid scan centered along tilt axis
+    object_fov_ang: Tuple[int,int], optional
+        Fixed object field of view in Å. If None, the fov is initialized using the
+        probe positions and object_padding_px
     positions_offset_ang: list of np.ndarray, optional
         Offset of positions in A
     verbose: bool, optional
@@ -151,6 +154,7 @@ class PtychographicTomography(
         initial_object_guess: np.ndarray = None,
         initial_probe_guess: np.ndarray = None,
         initial_scan_positions: Sequence[np.ndarray] = None,
+        object_fov_ang: Tuple[float, float] = None,
         positions_offset_ang: Sequence[np.ndarray] = None,
         verbose: bool = True,
         device: str = "cpu",
@@ -203,6 +207,7 @@ class PtychographicTomography(
         self._rolloff = rolloff
         self._object_type = object_type
         self._object_padding_px = object_padding_px
+        self._object_fov_ang = object_fov_ang
         self._positions_mask = positions_mask
         self._verbose = verbose
         self._preprocessed = False
@@ -489,6 +494,7 @@ class PtychographicTomography(
                 com_fitted_y,
                 self._positions_mask[index],
                 crop_patterns,
+                in_place_datacube_modification,
             )
 
             self._mean_diffraction_intensity.append(mean_diffraction_intensity_temp)
@@ -497,7 +503,6 @@ class PtychographicTomography(
             self._amplitudes[idx_start:idx_end] = copy_to_device(amplitudes, storage)
 
             del (
-                intensities,
                 amplitudes,
                 com_measured_x,
                 com_measured_y,
@@ -506,6 +511,9 @@ class PtychographicTomography(
                 com_normalized_x,
                 com_normalized_y,
             )
+
+            if not in_place_datacube_modification:
+                del intensities
 
             # initialize probe positions
             (
@@ -789,6 +797,7 @@ class PtychographicTomography(
         fix_potential_baseline: bool = True,
         detector_fourier_mask: np.ndarray = None,
         virtual_detector_masks: Sequence[np.ndarray] = None,
+        probe_real_space_support_mask: np.ndarray = None,
         tv_denoise: bool = True,
         tv_denoise_weights: float = None,
         tv_denoise_inner_iter=40,
@@ -905,6 +914,8 @@ class PtychographicTomography(
         virtual_detector_masks: np.ndarray
             List of corner-centered boolean masks for binning forward model exit waves,
             to allow comparison with arbitrary geometry detector datasets.
+        probe_real_space_support_mask: np.ndarray
+            Corner-centered boolean mask, outside of which the probe amplitude will be set to zero.
         store_iterations: bool, optional
             If True, reconstructed objects and probes are stored at each iteration
         progress_bar: bool, optional
@@ -1164,6 +1175,7 @@ class PtychographicTomography(
                         fit_probe_aberrations_using_scikit_image=fit_probe_aberrations_using_scikit_image,
                         fix_probe_aperture=fix_probe_aperture and not fix_probe,
                         initial_probe_aperture=_probe_initial_aperture,
+                        probe_real_space_support_mask=probe_real_space_support_mask,
                     )
 
                     self._positions_px_all[batch_indices] = self._positions_constraints(
@@ -1201,6 +1213,7 @@ class PtychographicTomography(
                         fit_probe_aberrations_using_scikit_image=fit_probe_aberrations_using_scikit_image,
                         fix_probe_aperture=fix_probe_aperture and not fix_probe,
                         initial_probe_aperture=_probe_initial_aperture,
+                        probe_real_space_support_mask=probe_real_space_support_mask,
                         fix_positions=fix_positions,
                         fix_positions_com=fix_positions_com and not fix_positions,
                         global_affine_transformation=global_affine_transformation,

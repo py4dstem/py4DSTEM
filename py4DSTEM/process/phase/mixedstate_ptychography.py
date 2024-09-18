@@ -675,8 +675,10 @@ class MixedstatePtychography(
         object_positivity: bool = True,
         shrinkage_rad: float = 0.0,
         fix_potential_baseline: bool = True,
+        vacuum_mask: np.ndarray = None,
         detector_fourier_mask: np.ndarray = None,
         virtual_detector_masks: Sequence[np.ndarray] = None,
+        probe_real_space_support_mask: np.ndarray = None,
         store_iterations: bool = False,
         progress_bar: bool = True,
         reset: bool = None,
@@ -785,12 +787,16 @@ class MixedstatePtychography(
             Phase shift in radians to be subtracted from the potential at each iteration
         fix_potential_baseline: bool
             If true, the potential mean outside the FOV is forced to zero at each iteration
+        vacuum_mask: np.ndarray
+            Boolean mask of the projected potential, to be set to unit transmission at each iteration
         detector_fourier_mask: np.ndarray
             Corner-centered mask to multiply the detector-plane gradients with (a value of zero supresses those pixels).
             Useful when detector has artifacts such as dead-pixels. Usually binary.
         virtual_detector_masks: np.ndarray
             List of corner-centered boolean masks for binning forward model exit waves,
             to allow comparison with arbitrary geometry detector datasets.
+        probe_real_space_support_mask: np.ndarray
+            Corner-centered boolean mask, outside of which the probe amplitude will be set to zero.
         store_iterations: bool, optional
             If True, reconstructed objects and probes are stored at each iteration
         progress_bar: bool, optional
@@ -990,6 +996,7 @@ class MixedstatePtychography(
                 num_probes_fit_aberrations=num_probes_fit_aberrations,
                 fix_probe_aperture=fix_probe_aperture and not fix_probe,
                 initial_probe_aperture=self._probe_initial_aperture,
+                probe_real_space_support_mask=probe_real_space_support_mask,
                 fix_positions=fix_positions,
                 fix_positions_com=fix_positions_com and not fix_positions,
                 global_affine_transformation=global_affine_transformation,
@@ -1012,6 +1019,7 @@ class MixedstatePtychography(
                     and self._object_fov_mask_inverse.sum() > 0
                     else None
                 ),
+                vacuum_mask=vacuum_mask,
                 pure_phase_object=pure_phase_object and self._object_type == "complex",
             )
 

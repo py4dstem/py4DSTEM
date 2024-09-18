@@ -96,6 +96,12 @@ class ObjectNDConstraintsMixin:
 
         return current_object
 
+    def _object_vacuum_transmission_constraint(self, current_object, vacuum_mask):
+        """ """
+        val = 1.0 if self._object_type == "complex" else 0.0
+        current_object[..., vacuum_mask] = val
+        return current_object
+
     def _object_positivity_constraint(self, current_object):
         """
         Ptychographic positivity constraint.
@@ -424,6 +430,7 @@ class ObjectNDConstraintsMixin:
         object_positivity,
         shrinkage_rad,
         object_mask,
+        vacuum_mask,
         **kwargs,
     ):
         """ObjectNDConstraints wrapper function"""
@@ -460,6 +467,12 @@ class ObjectNDConstraintsMixin:
             )
         elif object_positivity:
             current_object = self._object_positivity_constraint(current_object)
+
+        # explicitly sets vacuum to zero
+        if vacuum_mask is not None:
+            current_object = self._object_vacuum_transmission_constraint(
+                current_object, vacuum_mask
+            )
 
         return current_object
 
@@ -668,6 +681,7 @@ class Object2p5DConstraintsMixin:
         object_positivity,
         shrinkage_rad,
         object_mask,
+        vacuum_mask,
         **kwargs,
     ):
         """Object2p5DConstraints wrapper function"""
@@ -722,6 +736,12 @@ class Object2p5DConstraintsMixin:
             )
         elif object_positivity:
             current_object = self._object_positivity_constraint(current_object)
+
+        # explicitly sets vacuum to zero
+        if vacuum_mask is not None:
+            current_object = self._object_vacuum_transmission_constraint(
+                current_object, vacuum_mask
+            )
 
         return current_object
 
@@ -917,6 +937,13 @@ class ProbeConstraintsMixin:
 
         return shifted_probe
 
+    def _probe_real_space_support_constraint(
+        self, current_probe, probe_real_space_support_mask
+    ):
+        """ """
+        current_probe[..., ~probe_real_space_support_mask] = 0.0
+        return current_probe
+
     def _probe_amplitude_constraint(
         self, current_probe, relative_radius, relative_width
     ):
@@ -1105,6 +1132,7 @@ class ProbeConstraintsMixin:
         constrain_probe_amplitude,
         constrain_probe_amplitude_relative_radius,
         constrain_probe_amplitude_relative_width,
+        probe_real_space_support_mask,
         **kwargs,
     ):
         """ProbeConstraints wrapper function"""
@@ -1142,6 +1170,12 @@ class ProbeConstraintsMixin:
                 current_probe,
                 constrain_probe_amplitude_relative_radius,
                 constrain_probe_amplitude_relative_width,
+            )
+
+        # Explicit real-space support mask
+        if probe_real_space_support_mask is not None:
+            current_probe = self._probe_real_space_support_constraint(
+                current_probe, probe_real_space_support_mask
             )
 
         return current_probe
@@ -1234,6 +1268,7 @@ class ProbeMixedConstraintsMixin:
         constrain_probe_amplitude_relative_radius,
         constrain_probe_amplitude_relative_width,
         orthogonalize_probe,
+        probe_real_space_support_mask,
         **kwargs,
     ):
         """ProbeMixedConstraints wrapper function"""
@@ -1276,6 +1311,12 @@ class ProbeMixedConstraintsMixin:
                     constrain_probe_amplitude_relative_radius,
                     constrain_probe_amplitude_relative_width,
                 )
+
+        # Explicit real-space support mask
+        if probe_real_space_support_mask is not None:
+            current_probe = self._probe_real_space_support_constraint(
+                current_probe, probe_real_space_support_mask
+            )
 
         # Probe orthogonalization
         if orthogonalize_probe:

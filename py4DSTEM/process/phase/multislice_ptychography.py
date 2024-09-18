@@ -738,8 +738,10 @@ class MultislicePtychography(
         object_positivity: bool = True,
         shrinkage_rad: float = 0.0,
         fix_potential_baseline: bool = True,
+        vacuum_mask: np.ndarray = None,
         detector_fourier_mask: np.ndarray = None,
         virtual_detector_masks: Sequence[np.ndarray] = None,
+        probe_real_space_support_mask: np.ndarray = None,
         pure_phase_object: bool = False,
         tv_denoise_chambolle: bool = True,
         tv_denoise_weight_chambolle=None,
@@ -851,12 +853,16 @@ class MultislicePtychography(
             Phase shift in radians to be subtracted from the potential at each iteration
         fix_potential_baseline: bool
             If true, the potential mean outside the FOV is forced to zero at each iteration
+        vacuum_mask: np.ndarray
+            Boolean mask of the projected potential, to be set to unit transmission at each iteration
         detector_fourier_mask: np.ndarray
             Corner-centered mask to multiply the detector-plane gradients with (a value of zero supresses those pixels).
             Useful when detector has artifacts such as dead-pixels. Usually binary.
         virtual_detector_masks: np.ndarray
             List of corner-centered boolean masks for binning forward model exit waves,
             to allow comparison with arbitrary geometry detector datasets.
+        probe_real_space_support_mask: np.ndarray
+            Corner-centered boolean mask, outside of which the probe amplitude will be set to zero.
         pure_phase_object: bool, optional
             If True, object amplitude is set to unity
         tv_denoise_chambolle: bool
@@ -1071,6 +1077,7 @@ class MultislicePtychography(
                 fit_probe_aberrations_using_scikit_image=fit_probe_aberrations_using_scikit_image,
                 fix_probe_aperture=fix_probe_aperture and not fix_probe,
                 initial_probe_aperture=self._probe_initial_aperture,
+                probe_real_space_support_mask=probe_real_space_support_mask,
                 fix_positions=fix_positions,
                 fix_positions_com=fix_positions_com and not fix_positions,
                 global_affine_transformation=global_affine_transformation,
@@ -1093,6 +1100,7 @@ class MultislicePtychography(
                     and self._object_fov_mask_inverse.sum() > 0
                     else None
                 ),
+                vacuum_mask=vacuum_mask,
                 pure_phase_object=pure_phase_object and self._object_type == "complex",
                 tv_denoise_chambolle=tv_denoise_chambolle
                 and tv_denoise_weight_chambolle is not None,
