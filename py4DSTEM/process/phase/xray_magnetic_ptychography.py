@@ -1165,6 +1165,7 @@ class XRayMagneticPtychography(
         tv_denoise_weight: float = None,
         tv_denoise_inner_iter: float = 40,
         detector_fourier_mask: np.ndarray = None,
+        probe_real_space_support_mask: np.ndarray = None,
         store_iterations: bool = False,
         collective_measurement_updates: bool = True,
         progress_bar: bool = True,
@@ -1281,6 +1282,8 @@ class XRayMagneticPtychography(
         detector_fourier_mask: np.ndarray
             Corner-centered mask to multiply the detector-plane gradients with (a value of zero supresses those pixels).
             Useful when detector has artifacts such as dead-pixels. Usually binary.
+        probe_real_space_support_mask: np.ndarray
+            Corner-centered boolean mask, outside of which the probe amplitude will be set to zero.
         store_iterations: bool, optional
             If True, reconstructed objects and probes are stored at each iteration
         collective_measurement_updates: bool
@@ -1534,6 +1537,7 @@ class XRayMagneticPtychography(
                         fit_probe_aberrations_using_scikit_image=fit_probe_aberrations_using_scikit_image,
                         fix_probe_aperture=fix_probe_aperture and not fix_probe,
                         initial_probe_aperture=_probe_initial_aperture,
+                        probe_real_space_support_mask=probe_real_space_support_mask,
                     )
 
                     self._positions_px_all[batch_indices] = self._positions_constraints(
@@ -1571,6 +1575,7 @@ class XRayMagneticPtychography(
                         fit_probe_aberrations_using_scikit_image=fit_probe_aberrations_using_scikit_image,
                         fix_probe_aperture=fix_probe_aperture and not fix_probe,
                         initial_probe_aperture=_probe_initial_aperture,
+                        probe_real_space_support_mask=probe_real_space_support_mask,
                         fix_positions=fix_positions,
                         fix_positions_com=fix_positions_com and not fix_positions,
                         global_affine_transformation=global_affine_transformation,
