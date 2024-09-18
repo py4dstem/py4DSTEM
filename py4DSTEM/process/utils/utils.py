@@ -11,16 +11,6 @@ from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
 import matplotlib.font_manager as fm
 
 from emdfile import tqdmnd
-from py4DSTEM.process.utils.multicorr import upsampled_correlation
-from py4DSTEM.preprocess.utils import make_Fourier_coords2D
-
-try:
-    from IPython.display import clear_output
-except ImportError:
-
-    def clear_output(wait=True):
-        pass
-
 
 try:
     import cupy as cp
@@ -171,25 +161,6 @@ def get_qx_qy_1d(M, dx=[1, 1], fft_shifted=False):
         qxa = fftshift(qxa)
         qya = fftshift(qya)
     return qxa, qya
-
-
-def make_Fourier_coords2D(Nx, Ny, pixelSize=1):
-    """
-    Generates Fourier coordinates for a (Nx,Ny)-shaped 2D array.
-        Specifying the pixelSize argument sets a unit size.
-    """
-    if hasattr(pixelSize, "__len__"):
-        assert len(pixelSize) == 2, "pixelSize must either be a scalar or have length 2"
-        pixelSize_x = pixelSize[0]
-        pixelSize_y = pixelSize[1]
-    else:
-        pixelSize_x = pixelSize
-        pixelSize_y = pixelSize
-
-    qx = np.fft.fftfreq(Nx, pixelSize_x)
-    qy = np.fft.fftfreq(Ny, pixelSize_y)
-    qy, qx = np.meshgrid(qy, qx)
-    return qx, qy
 
 
 def get_CoM(ar, device="cpu", corner_centered=False):
@@ -446,6 +417,7 @@ def fourier_resample(
     bandlimit_nyquist=None,
     bandlimit_power=2,
     dtype=np.float32,
+    conserve_array_sums=False,
 ):
     """
     Resize a 2D array along any dimension, using Fourier interpolation / extrapolation.
@@ -464,6 +436,7 @@ def fourier_resample(
         bandlimit_nyquist (float): Gaussian filter information limit in Nyquist units (0.5 max in both directions)
         bandlimit_power (float): Gaussian filter power law scaling (higher is sharper)
         dtype (numpy dtype): datatype for binned array. default is single precision float
+        conserve_arrray_sums (bool): If True, the sums of the array are conserved
 
     Returns:
         the resized array (2D/4D numpy array)
@@ -661,7 +634,8 @@ def fourier_resample(
         array_resize = np.maximum(array_resize, 0)
 
     # Normalization
-    array_resize = array_resize * scale_output
+    if not conserve_array_sums:
+        array_resize = array_resize * scale_output
 
     return array_resize
 

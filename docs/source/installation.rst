@@ -44,7 +44,7 @@ Windows
     :linenos:
     :caption: Windows base install
 
-    conda create -n py4dstem python=3.9
+    conda create -n py4dstem python=3.11
     conda activate py4dstem
     conda install -c conda-forge py4dstem
     conda install -c conda-forge pywin32
@@ -59,7 +59,7 @@ Linux
     :caption: Linux base install
 
     
-    conda create -n py4dstem python=3.9
+    conda create -n py4dstem python=3.11
     conda activate py4dstem
     conda install -c conda-forge py4dstem
     # optional but recomended 
@@ -72,7 +72,7 @@ Mac (Intel)
     :caption: Intel Mac base install
 
     
-    conda create -n py4dstem python=3.9
+    conda create -n py4dstem python=3.11
     conda activate py4dstem
     conda install -c conda-forge py4dstem
     # optional but recomended 
@@ -86,9 +86,9 @@ Mac (Apple Silicon M1/M2)
     :caption: Apple Silicon Mac base install
 
 
-    conda create -n py4dstem python=3.9
+    conda create -n py4dstem python=3.11
     conda activate py4dstem
-    conda install pyqt hdf5
+    conda install -c conda-forge pyqt hdf5
     conda install -c conda-forge py4dstem
     # optional but recomended 
     conda install jupyterlab pymatgen
@@ -112,7 +112,7 @@ Windows
     :linenos:
     :caption: Windows Anaconda install ACOM
 
-    conda create -n py4dstem python=3.9
+    conda create -n py4dstem python=3.11
     conda activate py4dstem
     conda install -c conda-forge py4dstem pymatgen
     conda install -c conda-forge pywin32
@@ -123,7 +123,7 @@ Running py4DSTEM code with GPU acceleration requires an NVIDIA GPU (AMD has beta
     :linenos:
     :caption: Windows Anaconda install GPU 
 
-    conda create -n py4dstem python=3.9
+    conda create -n py4dstem python=3.11
     conda activate py4dstem
     conda install -c conda-forge py4dstem cupy cudatoolkit
     conda install -c conda-forge pywin32
@@ -135,7 +135,7 @@ If you are looking to run the ML-AI features you are required to install tensorf
     :linenos:
     :caption: Windows Anaconda install ML-AI CPU 
 
-    conda create -n py4dstem python=3.9
+    conda create -n py4dstem python=3.11
     conda activate py4dstem
     conda install -c conda-forge py4dstem 
     pip install tensorflow==2.4.1 tensorflow-addons<=0.14 crystal4D
@@ -145,7 +145,7 @@ If you are looking to run the ML-AI features you are required to install tensorf
     :linenos:
     :caption: Windows Anaconda install ML-AI GPU 
 
-    conda create -n py4dstem python=3.9
+    conda create -n py4dstem python=3.11
     conda activate py4dstem
     conda install -c conda-forge py4dstem 
     conda install -c conda-forge cupy cudatoolkit=11.0
@@ -161,7 +161,7 @@ Linux
     :linenos:
     :caption: Linux Anaconda install ACOM
 
-    conda create -n py4dstem python=3.9
+    conda create -n py4dstem python=3.11
     conda activate py4dstem
     conda install -c conda-forge py4dstem pymatgen
 
@@ -171,7 +171,7 @@ Running py4DSTEM code with GPU acceleration requires an NVIDIA GPU (AMD has beta
     :linenos:
     :caption: Linux Anaconda install GPU 
 
-    conda create -n py4dstem python=3.9
+    conda create -n py4dstem python=3.11
     conda activate py4dstem
     conda install -c conda-forge py4dstem cupy cudatoolkit
 
@@ -182,7 +182,7 @@ If you are looking to run the ML-AI features you are required to install tensorf
     :linenos:
     :caption: Linux Anaconda install ML-AI CPU 
 
-    conda create -n py4dstem python=3.9
+    conda create -n py4dstem python=3.11
     conda activate py4dstem
     conda install -c conda-forge py4dstem 
     pip install tensorflow==2.4.1 tensorflow-addons<=0.14 crystal4D
@@ -191,7 +191,7 @@ If you are looking to run the ML-AI features you are required to install tensorf
     :linenos:
     :caption: Linux Anaconda install ML-AI GPU 
 
-    conda create -n py4dstem python=3.9
+    conda create -n py4dstem python=3.11
     conda activate py4dstem
     conda install -c conda-forge py4dstem 
     conda install -c conda-forge cupy cudatoolkit=11.0
@@ -205,7 +205,7 @@ Mac (Intel)
     :linenos:
     :caption: Intel Mac Anaconda install ACOM
 
-    conda create -n py4dstem python=3.9
+    conda create -n py4dstem python=3.11
     conda activate py4dstem
     conda install -c conda-forge py4dstem pymatgen
 
@@ -216,7 +216,7 @@ Tensorflow does not support AMD GPUs so while ML-AI features can be run on an In
     :linenos:
     :caption: Intel Mac Anaconda install ML-AI CPU 
 
-    conda create -n py4dstem python=3.9
+    conda create -n py4dstem python=3.11
     conda activate py4dstem
     conda install -c conda-forge py4dstem 
     pip install tensorflow==2.4.1 tensorflow-addons<=0.14 crystal4D
@@ -227,7 +227,7 @@ Mac (Apple Silicon M1/M2)
     :linenos:
     :caption: Apple Silicon Mac Anaconda install ACOM
 
-    conda create -n py4dstem python=3.9
+    conda create -n py4dstem python=3.11
     conda activate py4dstem
     conda install -c conda-forge py4dstem pymatgen
 
@@ -239,7 +239,7 @@ Tensorflow's support of Apple silicon GPUs is limited, and while there are steps
     :linenos:
     :caption: Apple Silicon Mac Anaconda install ML-AI CPU 
 
-    conda create -n py4dstem python=3.9
+    conda create -n py4dstem python=3.11
     conda activate py4dstem
     conda install -c conda-forge py4dstem 
     pip install tensorflow==2.4.1 tensorflow-addons<=0.14 crystal4D
@@ -254,7 +254,7 @@ Tensorflow's support of Apple silicon GPUs is limited, and while there are steps
     :caption: Apple Silicon Mac Anaconda install ML-AI GPU
 
     
-    conda create -n py4dstem python=3.9
+    conda create -n py4dstem python=3.11
     conda activate py4dstem
     conda install -c apple tensorflow-deps
     pip install tensorflow-macos==2.5.0 tensorflow-addons<=0.14 crystal4D tensorflow-metal
@@ -272,7 +272,7 @@ Windows
     :linenos:
     :caption: Windows pip install ACOM
 
-    conda create -n py4dstem python=3.9
+    conda create -n py4dstem python=3.11
     conda activate py4dstem
     pip install py4dstem[acom] 
     conda install -c conda-forge pywin32
@@ -283,7 +283,7 @@ Running py4DSTEM code with GPU acceleration requires an NVIDIA GPU (AMD has beta
     :linenos:
     :caption: Windows pip install GPU 
 
-    conda create -n py4dstem python=3.9
+    conda create -n py4dstem python=3.11
     conda activate py4dstem
     pip install py4dstem[cuda]
     conda install -c conda-forge pywin32
@@ -295,7 +295,7 @@ If you are looking to run the ML-AI features you are required to install tensorf
     :linenos:
     :caption: Windows pip install ML-AI CPU 
 
-    conda create -n py4dstem python=3.9
+    conda create -n py4dstem python=3.11
     conda activate py4dstem
     pip install py4dstem[aiml]
     conda install -c conda-forge pywin32
@@ -304,7 +304,7 @@ If you are looking to run the ML-AI features you are required to install tensorf
     :linenos:
     :caption: Windows pip install ML-AI GPU 
 
-    conda create -n py4dstem python=3.9
+    conda create -n py4dstem python=3.11
     conda activate py4dstem
     conda install -c conda-forge cudatoolkit=11.0
     pip install py4dstem[aiml-cuda]
@@ -317,7 +317,7 @@ Linux
     :linenos:
     :caption: Linux pip install ACOM
 
-    conda create -n py4dstem python=3.9
+    conda create -n py4dstem python=3.11
     conda activate py4dstem
     pip install py4dstem[acom] 
 
@@ -327,7 +327,7 @@ Running py4DSTEM code with GPU acceleration requires an NVIDIA GPU (AMD has beta
     :linenos:
     :caption: Linux pip install GPU 
 
-    conda create -n py4dstem python=3.9
+    conda create -n py4dstem python=3.11
     conda activate py4dstem
     pip install py4dstem[cuda]
 
@@ -338,7 +338,7 @@ If you are looking to run the ML-AI features you are required to install tensorf
     :linenos:
     :caption: Linux pip install ML-AI CPU 
 
-    conda create -n py4dstem python=3.9
+    conda create -n py4dstem python=3.11
     conda activate py4dstem
     pip install py4dstem[aiml]
 
@@ -346,7 +346,7 @@ If you are looking to run the ML-AI features you are required to install tensorf
     :linenos:
     :caption: Linux pip install ML-AI GPU 
 
-    conda create -n py4dstem python=3.9
+    conda create -n py4dstem python=3.11
     conda activate py4dstem
     conda install -c conda-forge cudatoolkit=11.0
     pip install py4dstem[aiml-cuda]
@@ -357,7 +357,7 @@ Mac (Intel)
     :linenos:
     :caption: Intel Mac pip install ACOM
 
-    conda create -n py4dstem python=3.9
+    conda create -n py4dstem python=3.11
     conda activate py4dstem
     pip install py4dstem[acom]
 
@@ -368,7 +368,7 @@ Tensorflow does not support AMD GPUs so while ML-AI features can be run on an In
     :linenos:
     :caption: Intel Mac pip install ML-AI CPU 
 
-    conda create -n py4dstem python=3.9
+    conda create -n py4dstem python=3.11
     conda activate py4dstem
     pip install py4dstem[aiml]
 
@@ -378,7 +378,7 @@ Mac (Apple Silicon M1/M2)
     :linenos:
     :caption: Apple Silicon Mac pip install ACOM
 
-    conda create -n py4dstem python=3.9
+    conda create -n py4dstem python=3.11
     conda activate py4dstem
     pip install py4dstem[acom]
     conda install -c conda-forge py4dstem pymatgen
@@ -391,7 +391,7 @@ Tensorflow's support of Apple silicon GPUs is limited, and while there are steps
     :linenos:
     :caption: Apple Silicon Mac Anaconda install ML-AI CPU 
 
-    conda create -n py4dstem python=3.9
+    conda create -n py4dstem python=3.11
     conda activate py4dstem
     pip install py4dstem[aiml]
 
@@ -405,7 +405,7 @@ Tensorflow's support of Apple silicon GPUs is limited, and while there are steps
     :caption: Apple Silicon Mac Anaconda install ML-AI GPU
 
     
-    conda create -n py4dstem python=3.9
+    conda create -n py4dstem python=3.11
     conda activate py4dstem
     conda install -c apple tensorflow-deps
     pip install tensorflow-macos==2.5.0 tensorflow-addons<=0.14 crystal4D tensorflow-metal py4dstem 
@@ -477,7 +477,7 @@ Virtual Environments
 
     A Python virtual environment is its own siloed version of Python, with its own set of packages and modules, kept separate from any other Python installations on your system.
     In the instructions above, we created a virtual environment to make sure packages that have different dependencies don't conflict with one another.
-    For instance, as of this writing, some of the scientific Python packages don't work well with Python 3.9 - but you might have some other applications on your computer that *need* Python 3.9.
+    For instance, as of this writing, some of the scientific Python packages don't work well with Python 3.11 - but you might have some other applications on your computer that *need* Python 3.11.
     Using virtual environments solves this problem.
     In this example, we're creating and navigating virtual environments using Anaconda.
 

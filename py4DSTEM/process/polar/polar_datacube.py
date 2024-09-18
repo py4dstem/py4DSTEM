@@ -96,12 +96,15 @@ class PolarDatacube:
         calculate_radial_statistics,
         calculate_pair_dist_function,
         calculate_FEM_local,
+        calculate_annular_symmetry,
         plot_radial_mean,
         plot_radial_var_norm,
+        plot_annular_symmetry,
         plot_background_fits,
         plot_sf_estimate,
         plot_reduced_pdf,
         plot_pdf,
+        background_pca,
     )
     from py4DSTEM.process.polar.polar_peaks import (
         find_peaks_single_pattern,

@@ -78,6 +78,7 @@ def show(
     show_fft=False,
     apply_hanning_window=True,
     show_cbar=False,
+    interpolation=None,
     **kwargs,
 ):
     """
@@ -185,7 +186,7 @@ def show(
         and
 
             >>> show(dp, calibration=calibration, scalebar={'length':0.5,'width':2,
-                                                       'position':'ul','label':True'})
+                                                       'position':'ul','label':True})
 
         will display a more customized scalebar.
 
@@ -315,7 +316,7 @@ def show(
         if returnfig==False (default), the figure is plotted and nothing is returned.
         if returnfig==True, return the figure and the axis.
     """
-    if scalebar is True:
+    if scalebar is True or scalebar is None:
         scalebar = {}
 
     # Alias dep
@@ -427,7 +428,7 @@ def show(
             er = ".calibration attribute must be a Calibration instance"
             assert isinstance(cal, Calibration), er
             if isinstance(ar, DiffractionSlice):
-                scalebar = {
+                defaultscalebar = {
                     "Nx": ar.data.shape[0],
                     "Ny": ar.data.shape[1],
                     "pixelsize": cal.get_Q_pixel_size(),
@@ -435,10 +436,13 @@ def show(
                     "space": "Q",
                     "position": "br",
                 }
+                for key, value in defaultscalebar.items():
+                    if key not in scalebar.keys():
+                        scalebar[key] = value
                 pixelsize = cal.get_Q_pixel_size()
                 pixelunits = cal.get_Q_pixel_units()
             elif isinstance(ar, RealSlice):
-                scalebar = {
+                defaultscalebar = {
                     "Nx": ar.data.shape[0],
                     "Ny": ar.data.shape[1],
                     "pixelsize": cal.get_R_pixel_size(),
@@ -446,6 +450,9 @@ def show(
                     "space": "Q",
                     "position": "br",
                 }
+                for key, value in defaultscalebar.items():
+                    if key not in scalebar.keys():
+                        scalebar[key] = value
                 pixelsize = cal.get_R_pixel_size()
                 pixelunits = cal.get_R_pixel_units()
         # get the data
@@ -615,7 +622,14 @@ def show(
 
         # Plot the image
         if not hist:
-            cax = ax.matshow(_ar, vmin=vmin, vmax=vmax, cmap=cm, **kwargs)
+            cax = ax.matshow(
+                _ar,
+                vmin=vmin,
+                vmax=vmax,
+                cmap=cm,
+                interpolation=interpolation,
+                **kwargs,
+            )
             if np.any(_ar.mask):
                 mask_display = np.ma.array(data=_ar.data, mask=~_ar.mask)
                 ax.matshow(
@@ -623,7 +637,7 @@ def show(
                 )
             if show_cbar:
                 ax_divider = make_axes_locatable(ax)
-                c_axis = ax_divider.append_axes("right", size="7%")
+                c_axis = ax_divider.append_axes("right", size="5%", pad="2.5%")
                 fig.colorbar(cax, cax=c_axis)
         # ...or, plot its histogram
         else:
@@ -806,6 +820,7 @@ def show(
             ax.set_yticks([])
 
     # Show or return
+
     returnval = []
     if returnfig:
         returnval.append((fig, ax))
@@ -822,6 +837,7 @@ def show(
         returnval.append(cax)
     if len(returnval) == 0:
         if figax is None:
+            plt.tight_layout()
             plt.show()
         return
     elif (len(returnval)) == 1:

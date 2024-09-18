@@ -281,7 +281,11 @@ def show_image_grid(
                     )
                 else:
                     _, _ = show(
-                        ar, figax=(fig, ax), returnfig=True, title=print_title, **kwargs
+                        ar,
+                        figax=(fig, ax),
+                        returnfig=True,
+                        title=print_title,
+                        **kwargs,
                     )
             except IndexError:
                 ax.axis("off")

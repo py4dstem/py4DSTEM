@@ -229,6 +229,7 @@ class PhaseReconstruction(Custom):
         vacuum_probe_intensity=None,
         dp_mask=None,
         com_shifts=None,
+        com_measured=None,
     ):
         """
         Datacube preprocessing step, to set the reciprocal- and real-space sampling.
@@ -279,6 +280,13 @@ class PhaseReconstruction(Custom):
                     np.ones(datacube.Rshape) * com_shifts[1],
                 )
 
+        if com_measured is not None:
+            if np.isscalar(com_measured[0]):
+                com_measured = (
+                    np.ones(datacube.Rshape) * com_measured[0],
+                    np.ones(datacube.Rshape) * com_measured[1],
+                )
+
         if diffraction_intensities_shape is not None:
             Qx, Qy = datacube.shape[-2:]
             Sx, Sy = diffraction_intensities_shape
@@ -295,6 +303,12 @@ class PhaseReconstruction(Custom):
                 com_shifts = (
                     com_shifts[0] * resampling_factor_x,
                     com_shifts[1] * resampling_factor_x,
+                )
+
+            if com_measured is not None:
+                com_measured = (
+                    com_measured[0] * resampling_factor_x,
+                    com_measured[1] * resampling_factor_x,
                 )
 
             if reshaping_method == "bin":
@@ -332,34 +346,49 @@ class PhaseReconstruction(Custom):
 
             elif reshaping_method == "fourier":
                 datacube = datacube.resample_Q(
-                    N=resampling_factor_x, method=reshaping_method
+                    N=resampling_factor_x,
+                    method=reshaping_method,
+                    conserve_array_sums=True,
                 )
                 if vacuum_probe_intensity is not None:
                     vacuum_probe_intensity = fourier_resample(
                         vacuum_probe_intensity,
                         output_size=diffraction_intensities_shape,
                         force_nonnegative=True,
+                        conserve_array_sums=True,
                     )
                 if dp_mask is not None:
                     dp_mask = fourier_resample(
                         dp_mask,
                         output_size=diffraction_intensities_shape,
                         force_nonnegative=True,
+                        conserve_array_sums=False,
                     )
 
             elif reshaping_method == "bilinear":
                 datacube = datacube.resample_Q(
-                    N=resampling_factor_x, method=reshaping_method
+                    N=resampling_factor_x,
+                    method=reshaping_method,
+                    conserve_array_sums=True,
                 )
                 if vacuum_probe_intensity is not None:
                     vacuum_probe_intensity = zoom(
                         vacuum_probe_intensity,
                         (resampling_factor_x, resampling_factor_x),
                         order=1,
+                        mode="grid-wrap",
+                        grid_mode=True,
+                    )
+                    vacuum_probe_intensity = (
+                        vacuum_probe_intensity / resampling_factor_x**2
                     )
                 if dp_mask is not None:
                     dp_mask = zoom(
-                        dp_mask, (resampling_factor_x, resampling_factor_x), order=1
+                        dp_mask,
+                        (resampling_factor_x, resampling_factor_x),
+                        order=1,
+                        mode="grid-wrap",
+                        grid_mode=True,
                     )
 
             else:
@@ -390,7 +419,7 @@ class PhaseReconstruction(Custom):
             if dp_mask is not None:
                 dp_mask = np.pad(dp_mask, pad_width=(pad_kx, pad_ky), mode="constant")
 
-        return datacube, vacuum_probe_intensity, dp_mask, com_shifts
+        return datacube, vacuum_probe_intensity, dp_mask, com_shifts, com_measured
 
     def _extract_intensities_and_calibrations_from_datacube(
         self,
@@ -632,7 +661,8 @@ class PhaseReconstruction(Custom):
         reciprocal_sampling = self._reciprocal_sampling
 
         if com_measured:
-            com_measured_x, com_measured_y = com_measured
+            com_measured_x = xp.asarray(com_measured[0], dtype=xp.float32)
+            com_measured_y = xp.asarray(com_measured[1], dtype=xp.float32)
 
         else:
             if dp_mask is not None:
@@ -656,6 +686,7 @@ class PhaseReconstruction(Custom):
 
                 # calculate CoM
                 if dp_mask is not None:
+                    dp_mask = copy_to_device(dp_mask, device)
                     intensities_mask = intensities * dp_mask
                 else:
                     intensities_mask = intensities
@@ -680,7 +711,7 @@ class PhaseReconstruction(Custom):
                 for rx, ry in tqdmnd(
                     sx,
                     sy,
-                    desc="Fitting center of mass",
+                    desc="Calculating center of mass",
                     unit="probe position",
                     disable=not self._verbose,
                 ):
@@ -696,19 +727,27 @@ class PhaseReconstruction(Custom):
                     )
 
         if com_shifts is None:
-            com_measured_x_np = asnumpy(com_measured_x)
-            com_measured_y_np = asnumpy(com_measured_y)
-            finite_mask = np.isfinite(com_measured_x_np)
+            if fit_function is not None:
+                com_measured_x_np = asnumpy(com_measured_x)
+                com_measured_y_np = asnumpy(com_measured_y)
+                finite_mask = np.isfinite(com_measured_x_np)
 
-            com_shifts = fit_origin(
-                (com_measured_x_np, com_measured_y_np),
-                fitfunction=fit_function,
-                mask=finite_mask,
-            )
+                com_shifts = fit_origin(
+                    (com_measured_x_np, com_measured_y_np),
+                    fitfunction=fit_function,
+                    mask=finite_mask,
+                )
+
+                com_fitted_x = xp.asarray(com_shifts[0], dtype=xp.float32)
+                com_fitted_y = xp.asarray(com_shifts[1], dtype=xp.float32)
+            else:
+                com_fitted_x = xp.asarray(com_measured_x, dtype=xp.float32)
+                com_fitted_y = xp.asarray(com_measured_y, dtype=xp.float32)
+        else:
+            com_fitted_x = xp.asarray(com_shifts[0], dtype=xp.float32)
+            com_fitted_y = xp.asarray(com_shifts[1], dtype=xp.float32)
 
         # Fit function to center of mass
-        com_fitted_x = xp.asarray(com_shifts[0], dtype=xp.float32)
-        com_fitted_y = xp.asarray(com_shifts[1], dtype=xp.float32)
 
         # fix CoM units
         com_normalized_x = (
@@ -1312,6 +1351,7 @@ class PhaseReconstruction(Custom):
         com_fitted_y,
         positions_mask,
         crop_patterns,
+        in_place_datacube_modification,
     ):
         """
         Fix diffraction intensities CoM, shift to origin, and take square root
@@ -1324,99 +1364,100 @@ class PhaseReconstruction(Custom):
             Best fit horizontal center of mass gradient
         com_fitted_y: (Rx,Ry) xp.ndarray
             Best fit vertical center of mass gradient
-        positions_mask: np.ndarray, optional
+        positions_mask: np.ndarray
             Boolean real space mask to select positions in datacube to skip for reconstruction
         crop_patterns: bool
-            if True, crop patterns to avoid wrap around of patterns
-            when centering
+            If True, patterns are cropped to avoid wrap around of patterns
+        in_place_datacube_modification: bool
+            If True, the diffraction intensities are modified in-place
 
         Returns
         -------
-        amplitudes: (Rx * Ry, Sx, Sy) np.ndarray
+        diffraction_intensities: (Rx * Ry, Sx, Sy) np.ndarray
             Flat array of normalized diffraction amplitudes
         mean_intensity: float
             Mean intensity value
+        crop_mask
+            Mask to crop diffraction patterns with
         """
 
         # explicit read-only self attributes up-front
         asnumpy = self._asnumpy
 
         mean_intensity = 0
-
-        diffraction_intensities = asnumpy(diffraction_intensities)
         com_fitted_x = asnumpy(com_fitted_x)
         com_fitted_y = asnumpy(com_fitted_y)
 
-        if positions_mask is not None:
-            number_of_patterns = np.count_nonzero(positions_mask.ravel())
+        if in_place_datacube_modification:
+            diff_intensities = diffraction_intensities
         else:
-            number_of_patterns = np.prod(diffraction_intensities.shape[:2])
+            diff_intensities = diffraction_intensities.copy()
 
         # Aggressive cropping for when off-centered high scattering angle data was recorded
         if crop_patterns:
             crop_x = int(
                 np.minimum(
-                    diffraction_intensities.shape[2] - com_fitted_x.max(),
+                    diff_intensities.shape[2] - com_fitted_x.max(),
                     com_fitted_x.min(),
                 )
             )
             crop_y = int(
                 np.minimum(
-                    diffraction_intensities.shape[3] - com_fitted_y.max(),
+                    diff_intensities.shape[3] - com_fitted_y.max(),
                     com_fitted_y.min(),
                 )
             )
 
             crop_w = np.minimum(crop_y, crop_x)
-            region_of_interest_shape = (crop_w * 2, crop_w * 2)
-            amplitudes = np.zeros(
-                (
-                    number_of_patterns,
-                    crop_w * 2,
-                    crop_w * 2,
-                ),
-                dtype=np.float32,
-            )
 
-            crop_mask = np.zeros(diffraction_intensities.shape[-2:], dtype=np.bool_)
+            crop_mask = np.zeros(diff_intensities.shape[-2:], dtype="bool")
             crop_mask[:crop_w, :crop_w] = True
             crop_mask[-crop_w:, :crop_w] = True
             crop_mask[:crop_w:, -crop_w:] = True
             crop_mask[-crop_w:, -crop_w:] = True
 
+            crop_mask_shape = (crop_w * 2, crop_w * 2)
+
         else:
             crop_mask = None
-            region_of_interest_shape = diffraction_intensities.shape[-2:]
-            amplitudes = np.zeros(
-                (number_of_patterns,) + region_of_interest_shape, dtype=np.float32
+            crop_mask_shape = diff_intensities.shape[-2:]
+
+        for rx, ry in tqdmnd(
+            diff_intensities.shape[0],
+            diff_intensities.shape[1],
+            desc="Normalizing amplitudes",
+            unit="probe position",
+            disable=not self._verbose,
+        ):
+            if positions_mask is not None:
+                if not positions_mask[rx, ry]:
+                    continue
+
+            intensities = get_shifted_ar(
+                diff_intensities[rx, ry],
+                -com_fitted_x[rx, ry],
+                -com_fitted_y[rx, ry],
+                bilinear=True,
+                device="cpu",
             )
 
-        counter = 0
-        for rx in range(diffraction_intensities.shape[0]):
-            for ry in range(diffraction_intensities.shape[1]):
-                if positions_mask is not None:
-                    if not positions_mask[rx, ry]:
-                        continue
-                intensities = get_shifted_ar(
-                    diffraction_intensities[rx, ry],
-                    -com_fitted_x[rx, ry],
-                    -com_fitted_y[rx, ry],
-                    bilinear=True,
-                    device="cpu",
-                )
+            mean_intensity += np.sum(intensities)
+            diff_intensities[rx, ry] = np.sqrt(np.maximum(intensities, 0))
 
-                if crop_patterns:
-                    intensities = intensities[crop_mask].reshape(
-                        region_of_interest_shape
-                    )
+        if positions_mask is not None:
+            diff_intensities = diff_intensities[positions_mask]
+        else:
+            qx, qy = diff_intensities.shape[-2:]
+            diff_intensities = diff_intensities.reshape((-1, qx, qy))
 
-                mean_intensity += np.sum(intensities)
-                amplitudes[counter] = np.sqrt(np.maximum(intensities, 0))
-                counter += 1
+        if crop_patterns:
+            diff_intensities = diff_intensities[:, crop_mask].reshape(
+                (-1,) + crop_mask_shape
+            )
 
-        mean_intensity /= amplitudes.shape[0]
+        mean_intensity /= diff_intensities.shape[0]
 
-        return amplitudes, mean_intensity, crop_mask
+        return diff_intensities, mean_intensity, crop_mask, crop_mask_shape
 
     def show_complex_CoM(
         self,
@@ -1510,6 +1551,7 @@ class PtychographicReconstruction(PhaseReconstruction):
             "semiangle_cutoff": self._semiangle_cutoff,
             "rolloff": self._rolloff,
             "object_padding_px": self._object_padding_px,
+            "object_fov_ang": self._object_fov_ang,
             "object_type": self._object_type,
             "verbose": self._verbose,
             "device": self._device,
@@ -1548,6 +1590,7 @@ class PtychographicReconstruction(PhaseReconstruction):
                 "data_transpose": self._rotation_best_transpose,
                 "positions_px": asnumpy(self._positions_px),
                 "region_of_interest_shape": self._region_of_interest_shape,
+                "amplitudes_shape": self._amplitudes_shape,
                 "num_diffraction_patterns": self._num_diffraction_patterns,
                 "sampling": self.sampling,
                 "angular_sampling": self.angular_sampling,
@@ -1689,6 +1732,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         self._positions_px = xp.asarray(preprocess_md["positions_px"])
         self._angular_sampling = preprocess_md["angular_sampling"]
         self._region_of_interest_shape = preprocess_md["region_of_interest_shape"]
+        self._amplitudes_shape = preprocess_md["amplitudes_shape"]
         self._num_diffraction_patterns = preprocess_md["num_diffraction_patterns"]
         self._positions_mask = preprocess_md["positions_mask"]
 
@@ -1769,6 +1813,7 @@ class PtychographicReconstruction(PhaseReconstruction):
         positions: np.ndarray,
         positions_mask,
         object_padding_px,
+        positions_offset_ang,
     ):
         """
         Method to compute the initial guess of scan positions in pixels.
@@ -1783,6 +1828,8 @@ class PtychographicReconstruction(PhaseReconstruction):
         object_padding_px: Tuple[int,int], optional
             Pixel dimensions to pad object with
             If None, the padding is set to half the probe ROI dimensions
+        positions_offset_ang, np.ndarray, optional
+            Offset of positions in A
 
         Returns
         -------
@@ -1813,34 +1860,34 @@ class PtychographicReconstruction(PhaseReconstruction):
             else:
                 raise ValueError()
 
-            if transpose:
-                x = (x - np.ptp(x) / 2) / sampling[1]
-                y = (y - np.ptp(y) / 2) / sampling[0]
-            else:
-                x = (x - np.ptp(x) / 2) / sampling[0]
-                y = (y - np.ptp(y) / 2) / sampling[1]
             x, y = np.meshgrid(x, y, indexing="ij")
+
+            if positions_offset_ang is not None:
+                x += positions_offset_ang[0]
+                y += positions_offset_ang[1]
 
             if positions_mask is not None:
                 x = x[positions_mask]
                 y = y[positions_mask]
-        else:
-            positions -= np.mean(positions, axis=0)
-            x = positions[:, 0] / sampling[1]
-            y = positions[:, 1] / sampling[0]
+
+            positions = np.stack((x.ravel(), y.ravel()), axis=-1)
 
         if rotation_angle is not None:
-            x, y = x * np.cos(rotation_angle) + y * np.sin(rotation_angle), -x * np.sin(
-                rotation_angle
-            ) + y * np.cos(rotation_angle)
+            tf = AffineTransform(angle=rotation_angle)
+            positions = tf(positions, positions.mean(0))
 
         if transpose:
-            positions = np.array([y.ravel(), x.ravel()]).T
-        else:
-            positions = np.array([x.ravel(), y.ravel()]).T
+            positions = np.flip(positions, 1)
+            sampling = sampling[::-1]
 
-        positions -= np.min(positions, axis=0)
+        # ensure positive
+        positions -= np.min(positions, axis=0).clip(-np.inf, 0)
 
+        # finally, switch to pixels
+        positions[:, 0] /= sampling[0]
+        positions[:, 1] /= sampling[1]
+
+        # top-left padding
         if object_padding_px is None:
             float_padding = region_of_interest_shape / 2
             object_padding_px = (float_padding, float_padding)
@@ -2161,7 +2208,7 @@ class PtychographicReconstruction(PhaseReconstruction):
 
         return tuple(
             electron_wavelength_angstrom(self._energy) * 1e3 / dk / n
-            for dk, n in zip(self.angular_sampling, self._region_of_interest_shape)
+            for dk, n in zip(self.angular_sampling, self._amplitudes_shape)
         )
 
     @property

@@ -7,7 +7,6 @@ from typing import Optional, Union
 from py4DSTEM.io.filereaders import (
     load_mib,
     read_abTEM,
-    read_arina,
     read_dm,
     read_empad,
     read_gatan_K2_bin,
@@ -90,6 +89,8 @@ def import_file(
     elif filetype == "mib":
         data = load_mib(filepath, mem=mem, binfactor=binfactor, **kwargs)
     elif filetype == "arina":
+        from py4DSTEM.io.filereaders import read_arina
+
         data = read_arina(filepath, mem=mem, binfactor=binfactor, **kwargs)
     elif filetype == "abTEM":
         data = read_abTEM(filepath, mem=mem, binfactor=binfactor, **kwargs)

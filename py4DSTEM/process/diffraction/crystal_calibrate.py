@@ -21,7 +21,7 @@ def calibrate_pixel_size(
     k_max=None,
     k_step=0.002,
     k_broadening=0.002,
-    fit_all_intensities=True,
+    fit_all_intensities=False,
     set_calibration_in_place=False,
     verbose=True,
     plot_result=False,
@@ -50,7 +50,7 @@ def calibrate_pixel_size(
         k_broadening (float): Initial guess for Gaussian broadening of simulated
             pattern (Å^-1)
         fit_all_intensities (bool): Set to true to allow all peak intensities to
-            change independently False forces a single intensity scaling.
+            change independently. False forces a single intensity scaling for all peaks.
         set_calibration (bool): if True, set the fit pixel size to the calibration
             metadata, and calibrate bragg_peaks
         verbose (bool): Output the calibrated pixel size.
@@ -138,7 +138,7 @@ def calibrate_pixel_size(
 
         if returnfig:
             fig, ax = self.plot_scattering_intensity(
-                bragg_peaks=bragg_peaks,
+                bragg_peaks=bragg_peaks_cali,
                 figsize=figsize,
                 k_broadening=k_broadening,
                 int_power_scale=1.0,
@@ -151,7 +151,7 @@ def calibrate_pixel_size(
             )
         else:
             self.plot_scattering_intensity(
-                bragg_peaks=bragg_peaks,
+                bragg_peaks=bragg_peaks_cali,
                 figsize=figsize,
                 k_broadening=k_broadening,
                 int_power_scale=1.0,

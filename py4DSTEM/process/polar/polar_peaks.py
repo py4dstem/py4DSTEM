@@ -3,7 +3,6 @@ import matplotlib.pyplot as plt
 
 from scipy.ndimage import gaussian_filter, gaussian_filter1d
 from scipy.signal import peak_prominences
-from skimage.feature import peak_local_max
 from scipy.optimize import curve_fit, leastsq
 import warnings
 
@@ -13,6 +12,7 @@ from py4DSTEM.process.fit import (
     polar_twofold_gaussian_2D,
     polar_twofold_gaussian_2D_background,
 )
+from py4DSTEM.visualize import show
 
 
 def find_peaks_single_pattern(
@@ -40,6 +40,7 @@ def find_peaks_single_pattern(
     plot_scale_size=10.0,
     figsize=(12, 6),
     returnfig=False,
+    **kwargs
 ):
     """
     Peak detection function for polar transformations.
@@ -103,6 +104,8 @@ def find_peaks_single_pattern(
 
     """
 
+    from skimage.feature import peak_local_max
+
     # if needed, generate mask from Bragg peaks
     if bragg_peaks is not None:
         mask_bragg = self._datacube.get_braggmask(
@@ -125,6 +128,7 @@ def find_peaks_single_pattern(
         self._datacube.data[x, y],
         mask=mask,
         returnval="all_zeros",
+        origin=(self.calibration.qx0[x, y], self.calibration.qy0[x, y]),
     )
     # Change sign convention of mask
     mask_bool = np.logical_not(mask_bool)
@@ -161,6 +165,7 @@ def find_peaks_single_pattern(
         im_polar_sm,
         num_peaks=num_peaks_max,
         threshold_abs=threshold_abs,
+        exclude_border=False,
     )
 
     # check if peaks should be removed from the polar transformation mask
@@ -307,10 +312,10 @@ def find_peaks_single_pattern(
 
         fig, ax = plt.subplots(figsize=figsize)
 
-        ax.imshow(
-            im_plot,
-            cmap="gray",
-        )
+        cmap = kwargs.pop("cmap", "gray")
+        vmax = kwargs.pop("vmax", 1)
+        vmin = kwargs.pop("vmin", 0)
+        show(im_plot, figax=(fig, ax), cmap=cmap, vmax=vmax, vmin=vmin, **kwargs)
 
         # peaks
         ax.scatter(
@@ -656,11 +661,28 @@ def plot_radial_peaks(
     qstep=None,
     label_y_axis=False,
     figsize=(8, 4),
+    v_lines=None,
     returnfig=False,
 ):
     """
     Calculate and plot the total peak signal as a function of the radial coordinate.
 
+    q_pixel_units
+        If True, plot in reciprocal units instead of pixels.
+    qmin
+        The minimum q for plotting.
+    qmax
+        The maximum q for plotting.
+    qstep
+        The bin width.
+    label_y_axis
+        If True, label y axis.
+    figsize
+        Plot size.
+    v_lines: tuple
+        x coordinates for plotting vertical lines.
+    returnfig
+        If True, returns figure.
     """
 
     # Get all peak data
@@ -707,6 +729,10 @@ def plot_radial_peaks(
         minlength=q_num,
     )
 
+    # storing arrays for further plotting
+    self.q_bins = q_bins
+    self.int_peaks = int_peaks
+
     # plotting
     fig, ax = plt.subplots(figsize=figsize)
     ax.plot(
@@ -732,6 +758,15 @@ def plot_radial_peaks(
     )
     if not label_y_axis:
         ax.tick_params(left=False, labelleft=False)
+
+    if v_lines is not None:
+        y_min, y_max = ax.get_ylim()
+
+        if np.isscalar(v_lines):
+            ax.vlines(v_lines, y_min, y_max, color="g")
+        else:
+            for a0 in range(len(v_lines)):
+                ax.vlines(v_lines[a0], y_min, y_max, color="g")
 
     if returnfig:
         return fig, ax

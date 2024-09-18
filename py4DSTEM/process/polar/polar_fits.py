@@ -3,22 +3,29 @@ import matplotlib.pyplot as plt
 
 # from scipy.optimize import leastsq
 from scipy.optimize import curve_fit
+from emdfile import tqdmnd
 
 
 def fit_amorphous_ring(
-    im,
+    im=None,
+    datacube=None,
     center=None,
     radial_range=None,
     coefs=None,
     mask_dp=None,
     show_fit_mask=False,
+    fit_all_images=False,
     maxfev=None,
+    robust=False,
+    robust_steps=3,
+    robust_thresh=1.0,
     verbose=False,
     plot_result=True,
     plot_log_scale=False,
     plot_int_scale=(-3, 3),
     figsize=(8, 8),
     return_all_coefs=True,
+    progress_bar=None,
 ):
     """
     Fit an amorphous halo with a two-sided Gaussian model, plus a background
@@ -28,6 +35,8 @@ def fit_amorphous_ring(
     --------
     im: np.array
         2D image array to perform fitting on
+    datacube: py4DSTEM.DataCube
+        datacube to perform the fitting on
     center: np.array
         (x,y) center coordinates for fitting mask. If not specified
         by the user, we will assume the center coordinate is (im.shape-1)/2.
@@ -40,8 +49,17 @@ def fit_amorphous_ring(
         Dark field mask for fitting, in addition to the radial range specified above.
     show_fit_mask: bool
         Set to true to preview the fitting mask and initial guess for the ellipse params
+    fit_all_images: bool
+        Fit the elliptic parameters to all images
     maxfev: int
         Max number of fitting evaluations for curve_fit.
+    robust: bool
+        Set to True to use robust fitting.
+    robust_steps: int
+        Number of robust fitting steps.
+    robust_thresh: float
+        Threshold for relative errors for outlier detection. Setting to 1.0 means all points beyond
+        one standard deviation of the median error will be excluded from the next fit.
     verbose: bool
         Print fit results
     plot_result: bool
@@ -62,6 +80,12 @@ def fit_amorphous_ring(
     params_ellipse_fit: np.array (optional)
         11 parameter elliptic fit coefficients
     """
+
+    # If passing in a DataCube, use mean diffraction pattern for initial guess
+    if im is None:
+        im = datacube.get_dp_mean()
+        if progress_bar is None:
+            progress_bar = True
 
     # Default values
     if center is None:
@@ -112,20 +136,20 @@ def fit_amorphous_ring(
         sigma2 = (radial_range[1] - radial_range[0]) / 4
 
         coefs = (x0, y0, a, b, t, int0, int12, k_bg, sigma0, sigma1, sigma2)
-        lb = (0, 0, radial_range[0], radial_range[0], -np.inf, 0, 0, 0, 1, 1, 1)
-        ub = (
-            im.shape[0],
-            im.shape[1],
-            radial_range[1],
-            radial_range[1],
-            np.inf,
-            np.inf,
-            np.inf,
-            np.inf,
-            np.inf,
-            np.inf,
-            np.inf,
-        )
+    lb = (0, 0, radial_range[0], radial_range[0], -np.inf, 0, 0, 0, 1, 1, 1)
+    ub = (
+        im.shape[0],
+        im.shape[1],
+        radial_range[1],
+        radial_range[1],
+        np.inf,
+        np.inf,
+        np.inf,
+        np.inf,
+        np.inf,
+        np.inf,
+        np.inf,
+    )
 
     if show_fit_mask:
         # show image preview of fitting mask
@@ -192,8 +216,77 @@ def fit_amorphous_ring(
                 maxfev=maxfev,
             )[0]
         coefs[4] = np.mod(coefs[4], 2 * np.pi)
+
+        if robust:
+            for a0 in range(robust_steps):
+                # find outliers
+                int_fit = amorphous_model(basis, *coefs)
+                int_diff = vals / int_mean - int_fit
+                int_diff /= np.median(np.abs(int_diff))
+                sub_fit = int_diff**2 < robust_thresh**2
+
+                # redo fits excluding the outliers
+                if maxfev is None:
+                    coefs = curve_fit(
+                        amorphous_model,
+                        basis[:, sub_fit],
+                        vals[sub_fit] / int_mean,
+                        p0=coefs,
+                        xtol=1e-8,
+                        bounds=(lb, ub),
+                    )[0]
+                else:
+                    coefs = curve_fit(
+                        amorphous_model,
+                        basis[:, sub_fit],
+                        vals[sub_fit] / int_mean,
+                        p0=coefs,
+                        xtol=1e-8,
+                        bounds=(lb, ub),
+                        maxfev=maxfev,
+                    )[0]
+                coefs[4] = np.mod(coefs[4], 2 * np.pi)
+
+        # Scale intensity coefficients
         coefs[5:8] *= int_mean
-        # bounds=bounds
+
+        # Perform the fit on each individual diffration pattern
+        if fit_all_images:
+            coefs_all = np.zeros((datacube.shape[0], datacube.shape[1], coefs.size))
+
+            for rx, ry in tqdmnd(
+                datacube.shape[0],
+                datacube.shape[1],
+                desc="Radial statistics",
+                unit=" probe positions",
+                disable=not progress_bar,
+            ):
+                vals = datacube.data[rx, ry][mask]
+                int_mean = np.mean(vals)
+
+                if maxfev is None:
+                    coefs_single = curve_fit(
+                        amorphous_model,
+                        basis,
+                        vals / int_mean,
+                        p0=coefs,
+                        xtol=1e-8,
+                        bounds=(lb, ub),
+                    )[0]
+                else:
+                    coefs_single = curve_fit(
+                        amorphous_model,
+                        basis,
+                        vals / int_mean,
+                        p0=coefs,
+                        xtol=1e-8,
+                        bounds=(lb, ub),
+                        maxfev=maxfev,
+                    )[0]
+                coefs_single[4] = np.mod(coefs_single[4], 2 * np.pi)
+                coefs_single[5:8] *= int_mean
+
+                coefs_all[rx, ry] = coefs_single
 
     if verbose:
         print("x0 = " + str(np.round(coefs[0], 3)) + " px")
@@ -214,9 +307,15 @@ def fit_amorphous_ring(
 
     # Return fit parameters
     if return_all_coefs:
-        return coefs
+        if fit_all_images:
+            return coefs_all
+        else:
+            return coefs
     else:
-        return coefs[:5]
+        if fit_all_images:
+            return coefs_all[:, :, :5]
+        else:
+            return coefs[:5]
 
 
 def plot_amorphous_ring(

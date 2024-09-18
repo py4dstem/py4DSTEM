@@ -19,13 +19,15 @@ from py4DSTEM.process.phase.utils import (
     AffineTransform,
     bilinear_kernel_density_estimate,
     bilinearly_interpolate_array,
+    calculate_aberration_gradient_basis,
+    generate_batches,
     lanczos_interpolate_array,
     lanczos_kernel_density_estimate,
     pixel_rolling_kernel_density_estimate,
 )
 from py4DSTEM.process.utils.cross_correlate import align_images_fourier
 from py4DSTEM.process.utils.utils import electron_wavelength_angstrom
-from py4DSTEM.visualize import return_scaled_histogram_ordering, show
+from py4DSTEM.visualize import return_scaled_histogram_ordering
 from scipy.linalg import polar
 from scipy.ndimage import distance_transform_edt
 from scipy.optimize import minimize
@@ -155,11 +157,8 @@ class Parallax(PhaseReconstruction):
 
         if hasattr(self, "aberration_dict_cartesian"):
             self.metadata = Metadata(
-                name="aberrations_metadata",
-                data={
-                    v["aberration name"]: v["value [Ang]"]
-                    for k, v in self.aberration_dict_cartesian.items()
-                },
+                name="aberrations_polar_metadata",
+                data=self.aberration_dict_polar,
             )
 
         self.metadata = Metadata(
@@ -212,6 +211,8 @@ class Parallax(PhaseReconstruction):
             "name": instance_md["name"],
             "verbose": True,  # for compatibility
             "device": "cpu",  # for compatibility
+            "storage": "cpu",  # for compatibility
+            "clear_fft_cache": True,  # for compatibility
         }
 
         return kwargs
@@ -261,12 +262,15 @@ class Parallax(PhaseReconstruction):
         descan_correction_fit_function: str = None,
         defocus_guess: float = None,
         rotation_guess: float = None,
+        aligned_bf_image_guess: np.ndarray = None,
         plot_average_bf: bool = True,
         realspace_mask: np.ndarray = None,
         apply_realspace_mask_to_stack: bool = True,
         vectorized_com_calculation: bool = True,
         device: str = None,
         clear_fft_cache: bool = None,
+        max_batch_size: int = None,
+        store_initial_arrays: bool = True,
         **kwargs,
     ):
         """
@@ -284,16 +288,18 @@ class Parallax(PhaseReconstruction):
             If True, bright images normalized to have a mean of 1
         normalize_order: integer, optional
             Polynomial order for normalization. 0 means constant, 1 means linear, etc.
-            Higher orders not yet implemented.
         defocus_guess: float, optional
             Initial guess of defocus value (defocus dF) in A
             If None, first iteration is assumed to be in-focus
+        aligned_bf_image_guess: np.ndarray, optional
+            Guess for the reference BF image to cross-correlate against during the first iteration
+            If None, the incoherent BF image is used instead.
+        rotation_guess: float, optional
+            Initial guess of rotation value in degrees
+            If None, first iteration assumed to be 0
         descan_correction_fit_function: str, optional
             If not None, descan correction will be performed using fit function.
             One of "constant", "plane", "parabola", or "bezier_two".
-        rotation_guess: float, optional
-            Initial guess of defocus value in degrees
-            If None, first iteration assumed to be 0
         plot_average_bf: bool, optional
             If True, plots the average bright field image, using defocus_guess
         realspace_mask: np.array, optional
@@ -307,7 +313,11 @@ class Parallax(PhaseReconstruction):
         device: str, optional
             if not none, overwrites self._device to set device preprocess will be perfomed on.
         clear_fft_cache: bool, optional
-            if true, and device = 'gpu', clears the cached fft plan at the end of function calls
+            If True, and device = 'gpu', clears the cached fft plan at the end of function calls
+        max_batch_size: int, optional
+            Max number of virtual BF images to use at once in computing cross-correlation
+        store_initial_arrays: bool, optional
+            If True, stores a copy of the arrays necessary to reinitialize in reconstruct
 
         Returns
         --------
@@ -331,15 +341,15 @@ class Parallax(PhaseReconstruction):
             )
 
         # extract calibrations
-        self._intensities = self._extract_intensities_and_calibrations_from_datacube(
+        intensities = self._extract_intensities_and_calibrations_from_datacube(
             self._datacube,
             require_calibrations=True,
         )
 
-        self._intensities = xp.asarray(self._intensities)
+        intensities = xp.asarray(intensities)
 
-        self._region_of_interest_shape = np.array(self._intensities.shape[-2:])
-        self._scan_shape = np.array(self._intensities.shape[:2])
+        self._region_of_interest_shape = np.array(intensities.shape[-2:])
+        self._scan_shape = np.array(intensities.shape[:2])
 
         # descan correction
         if descan_correction_fit_function is not None:
@@ -351,7 +361,7 @@ class Parallax(PhaseReconstruction):
                 _,
                 _,
             ) = self._calculate_intensities_center_of_mass(
-                self._intensities,
+                intensities,
                 dp_mask=None,
                 fit_function=descan_correction_fit_function,
                 com_shifts=None,
@@ -361,8 +371,8 @@ class Parallax(PhaseReconstruction):
 
             com_fitted_x = asnumpy(com_fitted_x)
             com_fitted_y = asnumpy(com_fitted_y)
-            intensities = asnumpy(self._intensities)
-            intensities_shifted = np.zeros_like(intensities)
+            intensities_np = asnumpy(intensities)
+            intensities_shifted = np.zeros_like(intensities_np)
 
             center_x = com_fitted_x.mean()
             center_y = com_fitted_y.mean()
@@ -370,7 +380,7 @@ class Parallax(PhaseReconstruction):
             for rx in range(intensities_shifted.shape[0]):
                 for ry in range(intensities_shifted.shape[1]):
                     intensity_shifted = get_shifted_ar(
-                        intensities[rx, ry],
+                        intensities_np[rx, ry],
                         -com_fitted_x[rx, ry] + center_x,
                         -com_fitted_y[rx, ry] + center_y,
                         bilinear=True,
@@ -379,12 +389,12 @@ class Parallax(PhaseReconstruction):
 
                     intensities_shifted[rx, ry] = intensity_shifted
 
-            self._intensities = xp.asarray(intensities_shifted, xp.float32)
+            intensities = xp.asarray(intensities_shifted, xp.float32)
 
         if dp_mask is not None:
             self._dp_mask = xp.asarray(dp_mask)
         else:
-            dp_mean = self._intensities.mean((0, 1))
+            dp_mean = intensities.mean((0, 1))
             self._dp_mask = dp_mean >= (xp.max(dp_mean) * threshold_intensity)
 
         # select virtual detector pixels
@@ -455,7 +465,7 @@ class Parallax(PhaseReconstruction):
 
         # Collect BF images
         all_bfs = xp.moveaxis(
-            self._intensities[:, :, self._xy_inds[:, 0], self._xy_inds[:, 1]],
+            intensities[:, :, self._xy_inds[:, 0], self._xy_inds[:, 1]],
             (0, 1, 2),
             (1, 2, 0),
         )
@@ -472,7 +482,6 @@ class Parallax(PhaseReconstruction):
             self._stack_BF_unshifted = xp.ones(stack_shape, xp.float32)
 
             if normalize_order == 0:
-                # all_bfs /= xp.mean(all_bfs, axis=(1, 2))[:, None, None]
                 weights = xp.average(
                     all_bfs.reshape((self._num_bf_images, -1)),
                     weights=self._window_edge.ravel(),
@@ -515,7 +524,6 @@ class Parallax(PhaseReconstruction):
                 weights = np.sqrt(self._window_edge).ravel()
 
                 for a0 in range(all_bfs.shape[0]):
-                    # coefs = np.linalg.lstsq(basis, all_bfs[a0].ravel(), rcond=None)
                     # weighted least squares
                     coefs = np.linalg.lstsq(
                         weights[:, None] * basis,
@@ -572,7 +580,6 @@ class Parallax(PhaseReconstruction):
                 weights = np.sqrt(self._window_edge).ravel()
 
                 for a0 in range(all_bfs.shape[0]):
-                    # coefs = np.linalg.lstsq(basis, all_bfs[a0].ravel(), rcond=None)
                     # weighted least squares
                     coefs = np.linalg.lstsq(
                         weights[:, None] * basis,
@@ -643,46 +650,84 @@ class Parallax(PhaseReconstruction):
 
         # Initialization utilities
         self._stack_mask = xp.tile(self._window_pad[None], (self._num_bf_images, 1, 1))
+
+        if max_batch_size is None:
+            max_batch_size = self._num_bf_images
+
+        self._xy_shifts = xp.zeros((self._num_bf_images, 2), dtype=xp.float32)
+
         if defocus_guess is not None:
-            Gs = xp.fft.fft2(self._stack_BF_shifted)
+            for start, end in generate_batches(
+                self._num_bf_images, max_batch=max_batch_size
+            ):
+                shifted_BFs = self._stack_BF_shifted[start:end]
+                probe_angles = self._probe_angles[start:end]
+                stack_mask = self._stack_mask[start:end]
 
-            self._xy_shifts = (
-                -self._probe_angles * defocus_guess / xp.array(self._scan_sampling)
-            )
+                Gs = xp.fft.fft2(shifted_BFs)
 
-            if rotation_guess:
-                angle = xp.deg2rad(rotation_guess)
-                rotation_matrix = xp.array(
-                    [[np.cos(angle), np.sin(angle)], [-np.sin(angle), np.cos(angle)]]
+                xy_shifts = (
+                    -probe_angles
+                    * defocus_guess
+                    / xp.array(self._scan_sampling, dtype=xp.float32)
                 )
-                self._xy_shifts = xp.dot(self._xy_shifts, rotation_matrix)
 
-            dx = self._xy_shifts[:, 0]
-            dy = self._xy_shifts[:, 1]
+                if rotation_guess is not None:
+                    angle = xp.deg2rad(rotation_guess)
+                    rotation_matrix = xp.array(
+                        [
+                            [np.cos(angle), np.sin(angle)],
+                            [-np.sin(angle), np.cos(angle)],
+                        ],
+                        dtype=xp.float32,
+                    )
+                    xy_shifts = xp.dot(xy_shifts, rotation_matrix)
 
-            shift_op = xp.exp(
-                self._qx_shift[None] * dx[:, None, None]
-                + self._qy_shift[None] * dy[:, None, None]
-            )
-            self._stack_BF_shifted = xp.real(xp.fft.ifft2(Gs * shift_op))
-            self._stack_mask = xp.real(
-                xp.fft.ifft2(xp.fft.fft2(self._stack_mask) * shift_op)
-            )
+                dx = xy_shifts[:, 0]
+                dy = xy_shifts[:, 1]
 
-            del Gs
-        else:
-            self._xy_shifts = xp.zeros((self._num_bf_images, 2), dtype=xp.float32)
+                shift_op = xp.exp(
+                    self._qx_shift[None] * dx[:, None, None]
+                    + self._qy_shift[None] * dy[:, None, None]
+                )
+                stack_BF_shifted = xp.real(xp.fft.ifft2(Gs * shift_op))
+                stack_mask = xp.real(xp.fft.ifft2(xp.fft.fft2(stack_mask) * shift_op))
+
+                self._xy_shifts[start:end] = xy_shifts
+                self._stack_BF_shifted[start:end] = stack_BF_shifted
+                self._stack_mask[start:end] = stack_mask
+
+                del Gs
 
         self._stack_mean = xp.mean(self._stack_BF_shifted)
         self._mask_sum = xp.sum(self._window_edge) * self._num_bf_images
-        self._recon_mask = xp.sum(self._stack_mask, axis=0)
+        self._recon_mask = xp.mean(self._stack_mask, axis=0)
 
         mask_inv = 1 - xp.clip(self._recon_mask, 0, 1)
 
-        self._recon_BF = (
-            self._stack_mean * mask_inv
-            + xp.sum(self._stack_BF_shifted * self._stack_mask, axis=0)
-        ) / (self._recon_mask + mask_inv)
+        if aligned_bf_image_guess is not None:
+            aligned_bf_image_guess = xp.asarray(aligned_bf_image_guess)
+            if normalize_images:
+                self._recon_BF = xp.ones(stack_shape[-2:], dtype=xp.float32)
+                aligned_bf_image_guess /= aligned_bf_image_guess.mean()
+            else:
+                self._recon_BF = xp.full(stack_shape[-2:], self._stack_mean)
+
+            self._recon_BF[
+                self._object_padding_px[0] // 2 : self._grid_scan_shape[0]
+                + self._object_padding_px[0] // 2,
+                self._object_padding_px[1] // 2 : self._grid_scan_shape[1]
+                + self._object_padding_px[1] // 2,
+            ] = (
+                self._window_inv * self._stack_mean
+                + self._window_edge * aligned_bf_image_guess
+            )
+
+        else:
+            self._recon_BF = (
+                self._stack_mean * mask_inv
+                + xp.mean(self._stack_BF_shifted * self._stack_mask, axis=0)
+            ) / (self._recon_mask + mask_inv)
 
         self._recon_error = (
             xp.atleast_1d(
@@ -692,13 +737,15 @@ class Parallax(PhaseReconstruction):
                 )
             )
             / self._mask_sum
+            / self._stack_mean
         )
 
-        self._recon_BF_initial = self._recon_BF.copy()
-        self._stack_BF_shifted_initial = self._stack_BF_shifted.copy()
-        self._stack_mask_initial = self._stack_mask.copy()
-        self._recon_mask_initial = self._recon_mask.copy()
-        self._xy_shifts_initial = self._xy_shifts.copy()
+        if store_initial_arrays:
+            self._recon_BF_initial = self._recon_BF.copy()
+            self._stack_BF_shifted_initial = self._stack_BF_shifted.copy()
+            self._stack_mask_initial = self._stack_mask.copy()
+            self._recon_mask_initial = self._recon_mask.copy()
+            self._xy_shifts_initial = self._xy_shifts.copy()
 
         self.recon_BF = asnumpy(self._recon_BF)
 
@@ -731,15 +778,250 @@ class Parallax(PhaseReconstruction):
 
         return self
 
+    def guess_common_aberrations(
+        self,
+        rotation_angle_deg=0,
+        transpose=False,
+        kde_upsample_factor=None,
+        kde_sigma_px=0.125,
+        kde_lowpass_filter=False,
+        lanczos_interpolation_order=None,
+        defocus=0,
+        astigmatism=0,
+        astigmatism_angle_deg=0,
+        coma=0,
+        coma_angle_deg=0,
+        spherical_aberration=0,
+        max_batch_size=None,
+        plot_shifts_and_aligned_bf=True,
+        return_shifts_and_aligned_bf=False,
+        plot_arrow_freq=1,
+        scale_arrows=1,
+        **kwargs,
+    ):
+        """
+        Generates analytical BF shifts and uses them to align the virtual BF stack,
+        based on the experimental geometry (rotation, transpose), and common aberrations.
+
+        Parameters
+        ----------
+        rotation_angle_deg: float, optional
+            Relative rotation between the scan and the diffraction space coordinate systems
+        transpose: bool, optional
+            Whether the diffraction intensities are transposed
+        kde_upsample_factor: int, optional
+            Real-space upsampling factor
+        kde_sigma_px: float, optional
+            KDE gaussian kernel bandwidth in non-upsampled pixels
+        kde_lowpass_filter: bool, optional
+            If True, the resulting KDE upsampled image is lowpass-filtered using a sinc-function
+        lanczos_interpolation_order: int, optional
+            If not None, Lanczos interpolation with the specified order is used instead of bilinear
+        defocus: float, optional
+            Defocus value to use in computing analytical BF shifts
+        astigmatism: float, optional
+            Astigmatism value to use in computing analytical BF shifts
+        astigmatism_angle_deg: float, optional
+            Astigmatism angle to use in computing analytical BF shifts
+        coma: float, optional
+            Coma value to use in computing analytical BF shifts
+        coma_angle_deg: float, optional
+            Coma angle to use in computing analytical BF shifts
+        spherical_aberration: float, optional
+            Spherical aberration value to use in computing analytical BF shifts
+        max_batch_size: int, optional
+            Max number of virtual BF images to use at once in computing cross-correlation
+        plot_shifts_and_aligned_bf: bool, optional
+            If True, the analytical shifts and the aligned virtual VF image are plotted
+        return_shifts_and_aligned_bf: bool, optional
+            If True, the analytical shifts and the aligned virtual VF image are returned
+        plot_arrow_freq: int, optional
+            Frequency of shifts to plot in quiver plot
+        scale_arrows: float, optional
+            Scale to multiply shifts by
+
+        """
+        xp = self._xp
+        asnumpy = self._asnumpy
+
+        if not hasattr(self, "_recon_BF"):
+            raise ValueError(
+                (
+                    "Aberration guessing is meant to be ran after preprocessing. "
+                    "Please run the `preprocess()` function first."
+                )
+            )
+
+        # aberrations_coefs
+        aberrations_mn = [
+            [1, 0, 0],
+            [1, 2, 0],
+            [1, 2, 1],
+            [2, 1, 0],
+            [2, 1, 1],
+            [3, 0, 0],
+        ]
+        astigmatism_x = astigmatism * np.cos(np.deg2rad(astigmatism_angle_deg) * 2)
+        astigmatism_y = astigmatism * np.sin(np.deg2rad(astigmatism_angle_deg) * 2)
+        coma_x = coma * np.cos(np.deg2rad(coma_angle_deg) * 1)
+        coma_y = coma * np.sin(np.deg2rad(coma_angle_deg) * 1)
+        aberrations_coefs = xp.array(
+            [
+                -defocus,
+                astigmatism_x,
+                astigmatism_y,
+                coma_x,
+                coma_y,
+                spherical_aberration,
+            ]
+        )
+
+        # transpose rotation matrix
+        if transpose:
+            rotation_angle_deg *= -1
+
+        # aberrations_basis
+        sampling = 1 / (
+            np.array(self._reciprocal_sampling) * self._region_of_interest_shape
+        )
+        aberrations_basis, aberrations_basis_du, aberrations_basis_dv = (
+            calculate_aberration_gradient_basis(
+                aberrations_mn,
+                sampling,
+                self._region_of_interest_shape,
+                self._wavelength,
+                rotation_angle=np.deg2rad(rotation_angle_deg),
+                xp=xp,
+            )
+        )
+
+        # shifts
+        corner_indices = self._xy_inds - xp.array(self._region_of_interest_shape // 2)
+        raveled_indices = xp.ravel_multi_index(
+            corner_indices.T, self._region_of_interest_shape, mode="wrap"
+        )
+        gradients = xp.array(
+            (
+                aberrations_basis_du[raveled_indices, :],
+                aberrations_basis_dv[raveled_indices, :],
+            )
+        )
+        shifts_ang = xp.tensordot(gradients, aberrations_coefs, axes=1).T
+
+        # transpose predicted shifts
+        if transpose:
+            shifts_ang = xp.flip(shifts_ang, axis=1)
+
+        shifts_px = shifts_ang / xp.array(self._scan_sampling)
+
+        # upsampled stack
+        if kde_upsample_factor is not None:
+            BF_size = np.array(self._stack_BF_unshifted.shape[-2:])
+            pixel_output_shape = np.round(BF_size * kde_upsample_factor).astype("int")
+
+            x = xp.arange(BF_size[0], dtype=xp.float32)
+            y = xp.arange(BF_size[1], dtype=xp.float32)
+            xa_init, ya_init = xp.meshgrid(x, y, indexing="ij")
+
+            # kernel density output the upsampled BF image
+            xa = (xa_init + shifts_px[:, 0, None, None]) * kde_upsample_factor
+            ya = (ya_init + shifts_px[:, 1, None, None]) * kde_upsample_factor
+
+            pix_output = self._kernel_density_estimate(
+                xa,
+                ya,
+                self._stack_BF_unshifted,
+                pixel_output_shape,
+                kde_sigma_px * kde_upsample_factor,
+                lanczos_alpha=lanczos_interpolation_order,
+                lowpass_filter=kde_lowpass_filter,
+            )
+
+            # hack since cropping requires "_kde_upsample_factor"
+            old_upsample_factor = getattr(self, "_kde_upsample_factor", None)
+            self._kde_upsample_factor = kde_upsample_factor
+            cropped_image = asnumpy(
+                self._crop_padded_object(pix_output, upsampled=True)
+            )
+            if old_upsample_factor is not None:
+                self._kde_upsample_factor = old_upsample_factor
+            else:
+                del self._kde_upsample_factor
+
+        # shifted stack
+        else:
+            kde_upsample_factor = 1
+            aligned_stack = xp.zeros_like(self._stack_BF_shifted_initial[0])
+
+            if max_batch_size is None:
+                max_batch_size = self._num_bf_images
+
+            for start, end in generate_batches(
+                self._num_bf_images, max_batch=max_batch_size
+            ):
+                shifted_BFs = self._stack_BF_shifted_initial[start:end]
+
+                Gs = xp.fft.fft2(shifted_BFs)
+
+                dx = shifts_px[start:end, 0]
+                dy = shifts_px[start:end, 1]
+
+                shift_op = xp.exp(
+                    self._qx_shift[None] * dx[:, None, None]
+                    + self._qy_shift[None] * dy[:, None, None]
+                )
+                stack_BF_shifted = xp.real(xp.fft.ifft2(Gs * shift_op))
+                aligned_stack += stack_BF_shifted.sum(0)
+
+            cropped_image = asnumpy(
+                self._crop_padded_object(aligned_stack, upsampled=False)
+            )
+
+        if plot_shifts_and_aligned_bf:
+            figsize = kwargs.pop("figsize", (8, 4))
+            color = kwargs.pop("color", (1, 0, 0, 1))
+            cmap = kwargs.pop("cmap", "magma")
+
+            fig, axs = plt.subplots(1, 2, figsize=figsize)
+
+            self.show_shifts(
+                shifts_ang=shifts_ang,
+                plot_arrow_freq=plot_arrow_freq,
+                scale_arrows=scale_arrows,
+                plot_rotated_shifts=False,
+                color=color,
+                figax=(fig, axs[0]),
+            )
+
+            axs[0].set_title("Predicted BF Shifts")
+
+            extent = [
+                0,
+                self._scan_sampling[1] * cropped_image.shape[1] / kde_upsample_factor,
+                self._scan_sampling[0] * cropped_image.shape[0] / kde_upsample_factor,
+                0,
+            ]
+
+            axs[1].imshow(cropped_image, cmap=cmap, extent=extent, **kwargs)
+            axs[1].set_ylabel("x [A]")
+            axs[1].set_xlabel("y [A]")
+            axs[1].set_title("Predicted Aligned BF Image")
+
+            fig.tight_layout()
+
+        if return_shifts_and_aligned_bf:
+            return shifts_ang, cropped_image
+
     def reconstruct(
         self,
         max_alignment_bin: int = None,
         min_alignment_bin: int = 1,
         num_iter_at_min_bin: int = 2,
         alignment_bin_values: list = None,
+        centered_alignment_bins: bool = True,
         cross_correlation_upsample_factor: int = 8,
         regularizer_matrix_size: Tuple[int, int] = (1, 1),
-        regularize_shifts: bool = True,
+        regularize_shifts: bool = False,
         running_average: bool = True,
         progress_bar: bool = True,
         plot_aligned_bf: bool = True,
@@ -747,6 +1029,7 @@ class Parallax(PhaseReconstruction):
         reset: bool = None,
         device: str = None,
         clear_fft_cache: bool = None,
+        max_batch_size: int = None,
         **kwargs,
     ):
         """
@@ -781,6 +1064,8 @@ class Parallax(PhaseReconstruction):
             If True, the reconstruction is reset
         device: str, optional
             if not none, overwrites self._device to set device preprocess will be perfomed on.
+        max_batch_size: int, optional
+            Max number of virtual BF images to use at once in computing cross-correlation
         clear_fft_cache: bool, optional
             if true, and device = 'gpu', clears the cached fft plan at the end of function calls
 
@@ -873,6 +1158,8 @@ class Parallax(PhaseReconstruction):
                     (bin_vals, np.repeat(bin_vals[-1], num_iter_at_min_bin - 1))
                 )
 
+        bin_shift = 0 if centered_alignment_bins else 0.5
+
         if plot_aligned_bf:
             num_plots = bin_vals.shape[0]
             nrows = int(np.sqrt(num_plots))
@@ -902,12 +1189,15 @@ class Parallax(PhaseReconstruction):
 
         xy_center = (self._xy_inds - xp.median(self._xy_inds, axis=0)).astype("float")
 
+        if max_batch_size is None:
+            max_batch_size = self._num_bf_images
+
         # Loop over all binning values
         for a0 in range(bin_vals.shape[0]):
             G_ref = xp.fft.fft2(self._recon_BF)
 
             # Segment the virtual images with current binning values
-            xy_inds = xp.round(xy_center / bin_vals[a0] + 0.5).astype("int")
+            xy_inds = xp.round(xy_center / bin_vals[a0] + bin_shift).astype("int")
             xy_vals = np.unique(
                 asnumpy(xy_inds), axis=0
             )  # axis is not yet supported in cupy
@@ -972,31 +1262,33 @@ class Parallax(PhaseReconstruction):
             shifts_update = xy_shifts_fit - self._xy_shifts
 
             # apply shifts
-            Gs = xp.fft.fft2(self._stack_BF_shifted)
+            for start, end in generate_batches(
+                self._num_bf_images, max_batch=max_batch_size
+            ):
+                shifted_BFs = self._stack_BF_shifted[start:end]
+                stack_mask = self._stack_mask[start:end]
 
-            dx = shifts_update[:, 0]
-            dy = shifts_update[:, 1]
-            self._xy_shifts[:, 0] += dx
-            self._xy_shifts[:, 1] += dy
+                Gs = xp.fft.fft2(shifted_BFs)
 
-            shift_op = xp.exp(
-                self._qx_shift[None] * dx[:, None, None]
-                + self._qy_shift[None] * dy[:, None, None]
-            )
+                dx = shifts_update[start:end, 0]
+                dy = shifts_update[start:end, 1]
 
-            self._stack_BF_shifted = xp.real(xp.fft.ifft2(Gs * shift_op))
-            self._stack_mask = xp.real(
-                xp.fft.ifft2(xp.fft.fft2(self._stack_mask) * shift_op)
-            )
+                shift_op = xp.exp(
+                    self._qx_shift[None] * dx[:, None, None]
+                    + self._qy_shift[None] * dy[:, None, None]
+                )
 
-            self._stack_BF_shifted = xp.asarray(
-                self._stack_BF_shifted, dtype=xp.float32
-            )  # numpy fft upcasts?
-            self._stack_mask = xp.asarray(
-                self._stack_mask, dtype=xp.float32
-            )  # numpy fft upcasts?
+                stack_BF_shifted = xp.real(xp.fft.ifft2(Gs * shift_op))
+                stack_mask = xp.real(xp.fft.ifft2(xp.fft.fft2(stack_mask) * shift_op))
 
-            del Gs
+                self._stack_BF_shifted[start:end] = xp.asarray(
+                    stack_BF_shifted, dtype=xp.float32
+                )
+                self._stack_mask[start:end] = xp.asarray(stack_mask, dtype=xp.float32)
+                self._xy_shifts[start:end, 0] += dx
+                self._xy_shifts[start:end, 1] += dy
+
+                del Gs
 
             # Center the shifts
             xy_shifts_median = xp.round(xp.median(self._xy_shifts, axis=0)).astype(int)
@@ -1007,12 +1299,12 @@ class Parallax(PhaseReconstruction):
             self._stack_mask = xp.roll(self._stack_mask, -xy_shifts_median, axis=(1, 2))
 
             # Generate new estimate
-            self._recon_mask = xp.sum(self._stack_mask, axis=0)
+            self._recon_mask = xp.mean(self._stack_mask, axis=0)
 
             mask_inv = 1 - np.clip(self._recon_mask, 0, 1)
             self._recon_BF = (
                 self._stack_mean * mask_inv
-                + xp.sum(self._stack_BF_shifted * self._stack_mask, axis=0)
+                + xp.mean(self._stack_BF_shifted * self._stack_mask, axis=0)
             ) / (self._recon_mask + mask_inv)
 
             self._recon_error = (
@@ -1023,6 +1315,7 @@ class Parallax(PhaseReconstruction):
                     )
                 )
                 / self._mask_sum
+                / self._stack_mean
             )
 
             self.error_iterations.append(float(self._recon_error))
@@ -1756,6 +2049,8 @@ class Parallax(PhaseReconstruction):
 
         self.clear_device_mem(self._device, self._clear_fft_cache)
 
+        return self
+
     def _interpolate_array(
         self,
         image,
@@ -2034,75 +2329,21 @@ class Parallax(PhaseReconstruction):
 
         # Direct Shifts Fitting
         if fit_BF_shifts:
-            # FFT coordinates
-            sx = 1 / (self._reciprocal_sampling[0] * self._region_of_interest_shape[0])
-            sy = 1 / (self._reciprocal_sampling[1] * self._region_of_interest_shape[1])
-            qx = xp.fft.fftfreq(self._region_of_interest_shape[0], sx)
-            qy = xp.fft.fftfreq(self._region_of_interest_shape[1], sy)
-            qx, qy = np.meshgrid(qx, qy, indexing="ij")
-
-            # passive rotation basis by -theta
-            rotation_angle = -self.rotation_Q_to_R_rads
-            qx, qy = qx * np.cos(rotation_angle) + qy * np.sin(
-                rotation_angle
-            ), -qx * np.sin(rotation_angle) + qy * np.cos(rotation_angle)
-
-            qr2 = qx**2 + qy**2
-            u = qx * self._wavelength
-            v = qy * self._wavelength
-            alpha = xp.sqrt(qr2) * self._wavelength
-            theta = xp.arctan2(qy, qx)
-
-            # Aberration basis
-            self._aberrations_basis = xp.zeros((alpha.size, self._aberrations_num))
-            self._aberrations_basis_du = xp.zeros((alpha.size, self._aberrations_num))
-            self._aberrations_basis_dv = xp.zeros((alpha.size, self._aberrations_num))
-            for a0 in range(self._aberrations_num):
-                m, n, a = self._aberrations_mn[a0]
-
-                if n == 0:
-                    # Radially symmetric basis
-                    self._aberrations_basis[:, a0] = (
-                        alpha ** (m + 1) / (m + 1)
-                    ).ravel()
-                    self._aberrations_basis_du[:, a0] = (u * alpha ** (m - 1)).ravel()
-                    self._aberrations_basis_dv[:, a0] = (v * alpha ** (m - 1)).ravel()
-
-                elif a == 0:
-                    # cos coef
-                    self._aberrations_basis[:, a0] = (
-                        alpha ** (m + 1) * xp.cos(n * theta) / (m + 1)
-                    ).ravel()
-                    self._aberrations_basis_du[:, a0] = (
-                        alpha ** (m - 1)
-                        * ((m + 1) * u * xp.cos(n * theta) + n * v * xp.sin(n * theta))
-                        / (m + 1)
-                    ).ravel()
-                    self._aberrations_basis_dv[:, a0] = (
-                        alpha ** (m - 1)
-                        * ((m + 1) * v * xp.cos(n * theta) - n * u * xp.sin(n * theta))
-                        / (m + 1)
-                    ).ravel()
-
-                else:
-                    # sin coef
-                    self._aberrations_basis[:, a0] = (
-                        alpha ** (m + 1) * xp.sin(n * theta) / (m + 1)
-                    ).ravel()
-                    self._aberrations_basis_du[:, a0] = (
-                        alpha ** (m - 1)
-                        * ((m + 1) * u * xp.sin(n * theta) - n * v * xp.cos(n * theta))
-                        / (m + 1)
-                    ).ravel()
-                    self._aberrations_basis_dv[:, a0] = (
-                        alpha ** (m - 1)
-                        * ((m + 1) * v * xp.sin(n * theta) + n * u * xp.cos(n * theta))
-                        / (m + 1)
-                    ).ravel()
-
-            # global scaling
-            self._aberrations_basis *= 2 * np.pi / self._wavelength
-            self._aberrations_surface_shape = alpha.shape
+            sampling = 1 / (
+                np.array(self._reciprocal_sampling) * self._region_of_interest_shape
+            )
+            (
+                self._aberrations_babis,
+                self._aberrations_basis_du,
+                self._aberrations_basis_dv,
+            ) = calculate_aberration_gradient_basis(
+                self._aberrations_mn,
+                sampling,
+                self._region_of_interest_shape,
+                self._wavelength,
+                rotation_angle=self.rotation_Q_to_R_rads,
+                xp=xp,
+            )
 
             # CTF function
             def calculate_CTF(alpha_shape, *coefs):
@@ -2191,19 +2432,6 @@ class Parallax(PhaseReconstruction):
 
             # Plot the measured/fitted shifts comparison
             if plot_BF_shifts_comparison:
-                measured_shifts_sx = xp.zeros(
-                    self._region_of_interest_shape, dtype=xp.float32
-                )
-                measured_shifts_sx[self._xy_inds[:, 0], self._xy_inds[:, 1]] = (
-                    self._xy_shifts_Ang[:, 0]
-                )
-
-                measured_shifts_sy = xp.zeros(
-                    self._region_of_interest_shape, dtype=xp.float32
-                )
-                measured_shifts_sy[self._xy_inds[:, 0], self._xy_inds[:, 1]] = (
-                    self._xy_shifts_Ang[:, 1]
-                )
 
                 fitted_shifts = (
                     xp.tensordot(gradients, xp.array(self._aberrations_coefs), axes=1)
@@ -2211,53 +2439,28 @@ class Parallax(PhaseReconstruction):
                     .T
                 )
 
-                fitted_shifts_sx = xp.zeros(
-                    self._region_of_interest_shape, dtype=xp.float32
-                )
-                fitted_shifts_sx[self._xy_inds[:, 0], self._xy_inds[:, 1]] = (
-                    fitted_shifts[:, 0]
+                scale_arrows = kwargs.pop("scale_arrows", 1)
+                plot_arrow_freq = kwargs.pop("plot_arrow_freq", 1)
+                figsize = kwargs.pop("figsize", (4, 4))
+
+                fig, ax = plt.subplots(figsize=figsize)
+
+                self.show_shifts(
+                    shifts_ang=self._xy_shifts_Ang,
+                    plot_rotated_shifts=False,
+                    plot_arrow_freq=plot_arrow_freq,
+                    scale_arrows=scale_arrows,
+                    color=(1, 0, 0, 0.5),
+                    figax=(fig, ax),
                 )
 
-                fitted_shifts_sy = xp.zeros(
-                    self._region_of_interest_shape, dtype=xp.float32
-                )
-                fitted_shifts_sy[self._xy_inds[:, 0], self._xy_inds[:, 1]] = (
-                    fitted_shifts[:, 1]
-                )
-
-                max_shift = xp.max(
-                    xp.array(
-                        [
-                            xp.abs(measured_shifts_sx).max(),
-                            xp.abs(measured_shifts_sy).max(),
-                            xp.abs(fitted_shifts_sx).max(),
-                            xp.abs(fitted_shifts_sy).max(),
-                        ]
-                    )
-                )
-
-                axsize = kwargs.pop("axsize", (4, 4))
-                cmap = kwargs.pop("cmap", "PiYG")
-                vmin = kwargs.pop("vmin", -max_shift)
-                vmax = kwargs.pop("vmax", max_shift)
-
-                show(
-                    [
-                        [asnumpy(measured_shifts_sx), asnumpy(fitted_shifts_sx)],
-                        [asnumpy(measured_shifts_sy), asnumpy(fitted_shifts_sy)],
-                    ],
-                    cmap=cmap,
-                    vmin=vmin,
-                    vmax=vmax,
-                    intensity_range="absolute",
-                    axsize=axsize,
-                    ticks=False,
-                    title=[
-                        "Measured Vertical Shifts",
-                        "Fitted Vertical Shifts",
-                        "Measured Horizontal Shifts",
-                        "Fitted Horizontal Shifts",
-                    ],
+                self.show_shifts(
+                    shifts_ang=fitted_shifts,
+                    plot_rotated_shifts=False,
+                    plot_arrow_freq=plot_arrow_freq,
+                    scale_arrows=scale_arrows,
+                    color=(0, 0, 1, 0.5),
+                    figax=(fig, ax),
                 )
 
         # Plot the CTF comparison between experiment and fit
@@ -2391,6 +2594,8 @@ class Parallax(PhaseReconstruction):
 
         self.clear_device_mem(self._device, self._clear_fft_cache)
 
+        return self
+
     def _calculate_CTF(self, alpha_shape, sampling, *coefs):
         xp = self._xp
 
@@ -2438,9 +2643,6 @@ class Parallax(PhaseReconstruction):
         plot_corrected_phase: bool = True,
         k_info_limit: float = None,
         k_info_power: float = 1.0,
-        Wiener_filter=False,
-        Wiener_signal_noise_ratio: float = 1.0,
-        Wiener_filter_low_only: bool = False,
         upsampled: bool = True,
         **kwargs,
     ):
@@ -2458,12 +2660,6 @@ class Parallax(PhaseReconstruction):
             maximum allowed frequency in butterworth filter
         k_info_power: float, optional
             power of butterworth filter
-        Wiener_filter: bool, optional
-            Use Wiener filtering instead of CTF sign correction.
-        Wiener_signal_noise_ratio: float, optional
-            Signal to noise radio at k = 0 for Wiener filter
-        Wiener_filter_low_only: bool, optional
-            Apply Wiener filtering only to the CTF portions before the 1st CTF maxima.
         """
 
         xp = self._xp
@@ -2497,58 +2693,35 @@ class Parallax(PhaseReconstruction):
                 use_CTF_fit = True
 
         if use_CTF_fit:
-            sin_chi = np.sin(
-                self._calculate_CTF(im.shape, (sx, sy), *self._aberrations_coefs)
-            )
+            even_radial_orders = (self._aberrations_mn[:, 0] % 2) == 1
+            odd_radial_orders = (self._aberrations_mn[:, 0] % 2) == 0
 
-            CTF_corr = xp.sign(sin_chi)
-            CTF_corr[0, 0] = 0
+            odd_coefs = self._aberrations_coefs.copy()
+            odd_coefs[even_radial_orders] = 0
+            chi_odd = self._calculate_CTF(im.shape, (sx, sy), *odd_coefs)
 
-            # apply correction to mean reconstructed BF image
-            im_fft_corr = xp.fft.fft2(im) * CTF_corr
+            even_coefs = self._aberrations_coefs.copy()
+            even_coefs[odd_radial_orders] = 0
+            chi_even = self._calculate_CTF(im.shape, (sx, sy), *even_coefs)
 
-            # if needed, add low pass filter output image
-            if k_info_limit is not None:
-                im_fft_corr /= 1 + (kra2**k_info_power) / (
-                    (k_info_limit) ** (2 * k_info_power)
-                )
+            if not chi_even.any():  # check if all zeros
+                chi_even = xp.ones_like(chi_even)
+
         else:
-            # CTF
-            sin_chi = xp.sin((xp.pi * self._wavelength * self.aberration_C1) * kra2)
+            chi_even = (xp.pi * self._wavelength * self.aberration_C1) * kra2
+            chi_odd = xp.zeros_like(chi_even)
 
-            if Wiener_filter:
-                SNR_inv = (
-                    xp.sqrt(
-                        1
-                        + (kra2**k_info_power) / ((k_info_limit) ** (2 * k_info_power))
-                    )
-                    / Wiener_signal_noise_ratio
-                )
-                CTF_corr = xp.sign(sin_chi) / (sin_chi**2 + SNR_inv)
-                if Wiener_filter_low_only:
-                    # limit Wiener filter to only the part of the CTF before 1st maxima
-                    k_thresh = 1 / xp.sqrt(
-                        2.0 * self._wavelength * xp.abs(self.aberration_C1)
-                    )
-                    k_mask = kra2 >= k_thresh**2
-                    CTF_corr[k_mask] = xp.sign(sin_chi[k_mask])
+        CTF_corr = xp.sign(xp.sin(chi_even)) * xp.exp(-1j * chi_odd)
+        CTF_corr[0, 0] = 0
 
-                # apply correction to mean reconstructed BF image
-                im_fft_corr = xp.fft.fft2(im) * CTF_corr
+        # apply correction to mean reconstructed BF image
+        im_fft_corr = xp.fft.fft2(im) * CTF_corr
 
-            else:
-                # CTF without tilt correction (beyond the parallax operator)
-                CTF_corr = xp.sign(sin_chi)
-                CTF_corr[0, 0] = 0
-
-                # apply correction to mean reconstructed BF image
-                im_fft_corr = xp.fft.fft2(im) * CTF_corr
-
-                # if needed, add low pass filter output image
-                if k_info_limit is not None:
-                    im_fft_corr /= 1 + (kra2**k_info_power) / (
-                        (k_info_limit) ** (2 * k_info_power)
-                    )
+        # if needed, add low pass filter output image
+        if k_info_limit is not None:
+            im_fft_corr /= 1 + (kra2**k_info_power) / (
+                (k_info_limit) ** (2 * k_info_power)
+            )
 
         # Output phase image
         self._recon_phase_corrected = xp.real(xp.fft.ifft2(im_fft_corr))
@@ -2584,10 +2757,12 @@ class Parallax(PhaseReconstruction):
             ax.set_title("Parallax-Corrected Phase Image")
 
         self.clear_device_mem(self._device, self._clear_fft_cache)
+        return self
 
     def depth_section(
         self,
-        depth_angstroms=np.arange(-250, 260, 100),
+        depth_angstroms=None,
+        use_CTF_fit=True,
         plot_depth_sections=True,
         k_info_limit: float = None,
         k_info_power: float = 1.0,
@@ -2616,7 +2791,6 @@ class Parallax(PhaseReconstruction):
 
         xp = self._xp
         asnumpy = self._asnumpy
-        depth_angstroms = xp.atleast_1d(depth_angstroms)
 
         if not hasattr(self, "aberration_C1"):
             raise ValueError(
@@ -2626,16 +2800,26 @@ class Parallax(PhaseReconstruction):
                 )
             )
 
+        if depth_angstroms is None:
+            depth_angstroms = np.linspace(-256, 256, 33)
+        depth_angstroms = xp.atleast_1d(depth_angstroms)
+
         # Fourier coordinates
-        kx = xp.fft.fftfreq(self._recon_BF.shape[0], self._scan_sampling[0])
-        ky = xp.fft.fftfreq(self._recon_BF.shape[1], self._scan_sampling[1])
+        sx, sy = self._scan_sampling
+        nx, ny = self._recon_BF.shape
+        kx = xp.fft.fftfreq(nx, sx)
+        ky = xp.fft.fftfreq(ny, sy)
         kra2 = (kx[:, None]) ** 2 + (ky[None, :]) ** 2
 
-        # information limit
-        if k_info_limit is not None:
-            k_filt = 1 / (
-                1 + (kra2**k_info_power) / ((k_info_limit) ** (2 * k_info_power))
+        if use_CTF_fit:
+            sin_chi = xp.sin(
+                self._calculate_CTF((nx, ny), (sx, sy), *self._aberrations_coefs)
             )
+        else:
+            sin_chi = xp.sin((xp.pi * self._wavelength * self.aberration_C1) * kra2)
+
+        CTF_corr = xp.sign(sin_chi)
+        CTF_corr[0, 0] = 0
 
         # init
         stack_depth = xp.zeros(
@@ -2670,28 +2854,21 @@ class Parallax(PhaseReconstruction):
             dz = depth_angstroms[a0]
 
             # Parallax
-            im_depth = xp.zeros_like(self._recon_BF, dtype="complex")
-            for a1 in range(self._stack_BF_shifted.shape[0]):
-                dx = self._probe_angles[a1, 0] * dz
-                dy = self._probe_angles[a1, 1] * dz
-                im_depth += xp.fft.fft2(self._stack_BF_shifted[a1]) * xp.exp(
-                    self._qx_shift * dx + self._qy_shift * dy
+            im_depth = xp.zeros_like(self._recon_BF, dtype=xp.complex64)
+            dx = -self._probe_angles[:, 0] * dz / self._scan_sampling[0]
+            dy = -self._probe_angles[:, 1] * dz / self._scan_sampling[1]
+            shift_op = xp.exp(
+                self._qx_shift[None] * dx[:, None, None]
+                + self._qy_shift[None] * dy[:, None, None]
+            )
+            im_depth = xp.fft.fft2(self._stack_BF_shifted) * shift_op * CTF_corr
+
+            if k_info_limit is not None:
+                im_depth /= 1 + (kra2**k_info_power) / (
+                    (k_info_limit) ** (2 * k_info_power)
                 )
 
-            # CTF correction
-            sin_chi = xp.sin(
-                (xp.pi * self._wavelength * (self.aberration_C1 + dz)) * kra2
-            )
-            CTF_corr = xp.sign(sin_chi)
-            CTF_corr[0, 0] = 0
-            if k_info_limit is not None:
-                CTF_corr *= k_filt
-
-            # apply correction to mean reconstructed BF image
-            stack_depth[a0] = (
-                xp.real(xp.fft.ifft2(im_depth * CTF_corr))
-                / self._stack_BF_shifted.shape[0]
-            )
+            stack_depth[a0] = xp.real(xp.fft.ifft2(im_depth)).mean(0)
 
             if plot_depth_sections:
                 row_index, col_index = np.unravel_index(a0, (nrows, ncols))
@@ -2715,13 +2892,9 @@ class Parallax(PhaseReconstruction):
 
                 ax.set_xticks([])
                 ax.set_yticks([])
-                ax.set_title(f"Depth section: {dz}A")
+                ax.set_title(f"Depth section: {dz} A")
 
-        if self._device == "gpu":
-            xp = self._xp
-            xp._default_memory_pool.free_all_blocks()
-            xp.clear_memo()
-
+        self.clear_device_mem(self._device, self._clear_fft_cache)
         return stack_depth
 
     def _crop_padded_object(
@@ -2751,19 +2924,40 @@ class Parallax(PhaseReconstruction):
 
         if upsampled:
             pad_x = np.round(
+                self._object_padding_px[0] * self._kde_upsample_factor
+            ).astype("int")
+            pad_x_left = np.round(
                 self._object_padding_px[0] / 2 * self._kde_upsample_factor
             ).astype("int")
+            pad_x_right = pad_x_left - pad_x
+
             pad_y = np.round(
+                self._object_padding_px[1] * self._kde_upsample_factor
+            ).astype("int")
+            pad_y_left = np.round(
                 self._object_padding_px[1] / 2 * self._kde_upsample_factor
             ).astype("int")
+            pad_y_right = pad_y_left - pad_y
+
         else:
-            pad_x = self._object_padding_px[0] // 2
-            pad_y = self._object_padding_px[1] // 2
+            pad_x_left = self._object_padding_px[0] // 2
+            pad_x_right = pad_x_left - self._object_padding_px[0]
+            pad_y_left = self._object_padding_px[1] // 2
+            pad_y_right = pad_y_left - self._object_padding_px[1]
 
-        pad_x -= remaining_padding
-        pad_y -= remaining_padding
+        pad_x_left -= remaining_padding
+        pad_x_right += remaining_padding
+        pad_y_left -= remaining_padding
+        pad_y_right += remaining_padding
 
-        return asnumpy(padded_object[pad_x:-pad_x, pad_y:-pad_y])
+        sx = slice(
+            pad_x_left if pad_x_left else None, pad_x_right if pad_x_right else None
+        )
+        sy = slice(
+            pad_y_left if pad_y_left else None, pad_y_right if pad_y_right else None
+        )
+
+        return asnumpy(padded_object[sx, sy])
 
     def _visualize_figax(
         self,
@@ -2824,9 +3018,11 @@ class Parallax(PhaseReconstruction):
 
     def show_shifts(
         self,
+        shifts_ang=None,
         scale_arrows=1,
         plot_arrow_freq=1,
         plot_rotated_shifts=True,
+        figax=None,
         **kwargs,
     ):
         """
@@ -2834,31 +3030,58 @@ class Parallax(PhaseReconstruction):
 
         Parameters
         ----------
+        shifts_ang: np.ndarray, optional
+            If None, self._xy_shifts is used
         scale_arrows: float, optional
             Scale to multiply shifts by
         plot_arrow_freq: int, optional
             Frequency of shifts to plot in quiver plot
+        plot_rotated_shifts: bool, optional
+            If True, shifts are plotted with the relative rotation decomposed
+        figax: optional
+            Tuple of figure, axes to plot against
         """
 
         xp = self._xp
         asnumpy = self._asnumpy
 
         color = kwargs.pop("color", (1, 0, 0, 1))
+
+        if shifts_ang is None:
+            shifts_px = self._xy_shifts
+        else:
+            shifts_px = shifts_ang / xp.array(self._scan_sampling)
+
+        shifts = shifts_px * scale_arrows * xp.array(self._reciprocal_sampling)
+
         if plot_rotated_shifts and hasattr(self, "rotation_Q_to_R_rads"):
-            figsize = kwargs.pop("figsize", (8, 4))
-            fig, ax = plt.subplots(1, 2, figsize=figsize)
-            scaling_factor = (
-                xp.array(self._reciprocal_sampling)
-                / xp.array(self._scan_sampling)
-                * scale_arrows
+
+            if figax is None:
+                figsize = kwargs.pop("figsize", (8, 4))
+                fig, ax = plt.subplots(1, 2, figsize=figsize)
+            else:
+                fig, ax = figax
+
+            rotated_color = kwargs.pop("rotated_color", (0, 0, 0, 1))
+
+            if shifts_ang is None:
+                rotated_shifts_px = self._xy_shifts.copy()
+            else:
+                rotated_shifts_px = shifts_ang / xp.array(self._scan_sampling)
+
+            if self.transpose:
+                rotated_shifts_px = xp.flip(rotated_shifts_px, axis=1)
+
+            rotated_shifts = (
+                rotated_shifts_px * scale_arrows * xp.array(self._reciprocal_sampling)
             )
-            rotated_shifts = self._xy_shifts_Ang * scaling_factor
 
         else:
-            figsize = kwargs.pop("figsize", (4, 4))
-            fig, ax = plt.subplots(figsize=figsize)
-
-        shifts = self._xy_shifts * scale_arrows * self._reciprocal_sampling[0]
+            if figax is None:
+                figsize = kwargs.pop("figsize", (4, 4))
+                fig, ax = plt.subplots(figsize=figsize)
+            else:
+                fig, ax = figax
 
         dp_mask_ind = xp.nonzero(self._dp_mask)
         yy, xx = xp.meshgrid(
@@ -2901,6 +3124,7 @@ class Parallax(PhaseReconstruction):
                 angles="xy",
                 scale_units="xy",
                 scale=1,
+                color=rotated_color,
                 **kwargs,
             )
 

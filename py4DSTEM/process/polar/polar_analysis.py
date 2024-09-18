@@ -1,5 +1,6 @@
 # Analysis scripts for amorphous 4D-STEM data using polar transformations.
 
+from typing import Tuple
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
@@ -10,6 +11,7 @@ from emdfile import tqdmnd
 
 def calculate_radial_statistics(
     self,
+    mask_realspace=None,
     plot_results_mean=False,
     plot_results_var=False,
     figsize=(8, 4),
@@ -91,16 +93,30 @@ def calculate_radial_statistics(
         unit=" probe positions",
         disable=not progress_bar,
     ):
-        self.radial_all[rx, ry] = np.mean(self.data[rx, ry], axis=0)
-        self.radial_all_std[rx, ry] = np.sqrt(
-            np.mean((self.data[rx, ry] - self.radial_all[rx, ry][None]) ** 2, axis=0)
+        if mask_realspace is None or mask_realspace[rx, ry]:
+            self.radial_all[rx, ry] = np.mean(self.data[rx, ry], axis=0)
+            self.radial_all_std[rx, ry] = np.sqrt(
+                np.mean(
+                    (self.data[rx, ry] - self.radial_all[rx, ry][None]) ** 2, axis=0
+                )
+            )
+
+    if mask_realspace is None:
+        self.radial_mean = np.mean(self.radial_all, axis=(0, 1))
+        self.radial_var = np.mean(
+            (self.radial_all - self.radial_mean[None, None]) ** 2, axis=(0, 1)
         )
 
-    self.radial_mean = np.mean(self.radial_all, axis=(0, 1))
-    self.radial_var = np.mean(
-        (self.radial_all - self.radial_mean[None, None]) ** 2, axis=(0, 1)
-    )
+    else:
+        self.radial_mean = np.sum(self.radial_all, axis=(0, 1)) / np.sum(mask_realspace)
+        self.radial_var = np.zeros_like(self.radial_mean)
+        for rx in range(self._datacube.shape[0]):
+            for ry in range(self._datacube.shape[1]):
+                if mask_realspace[rx, ry]:
+                    self.radial_var += (self.radial_all[rx, ry] - self.radial_mean) ** 2
+        self.radial_var /= np.sum(mask_realspace)
 
+    # Compute normalized variance
     self.radial_var_norm = np.copy(self.radial_var)
     sub = self.radial_mean > 0.0
     self.radial_var_norm[sub] /= self.radial_mean[sub] ** 2
@@ -209,6 +225,8 @@ def plot_radial_var_norm(
 
 def calculate_pair_dist_function(
     self,
+    RxRy=None,
+    hxwy=None,
     k_min=0.05,
     k_max=None,
     k_width=0.25,
@@ -259,6 +277,13 @@ def calculate_pair_dist_function(
 
     Parameters
     ----------
+    RxRy : None or 2-tuple
+        None calculates on the whole radial average for dataset
+        A 2-tuple calculates on the radial profile for one scan pixel defined by Rx and Ry
+        or gives the top left corner of a box to average with widths defined by hxwy
+    hxwy : None or 2-tuple
+        A 2-tuple gives the height and width of a box to average anchored at Rx, Ry
+        hx and wy need to be larger than 1
     k_min : number
         Minimum scattering vector to include in the calculation
     k_max : number or None
@@ -306,13 +331,20 @@ def calculate_pair_dist_function(
     k = self.qq
     dk = k[1] - k[0]
     k2 = k**2
-    Ik = self.radial_mean
+    if RxRy == None:
+        Ik = self.radial_mean
+    elif RxRy != None and hxwy == None:
+        Ik = self.radial_all[RxRy[0], RxRy[1]]
+    elif RxRy != None and hxwy != None:
+        Ik = self.radial_all[
+            RxRy[0] : RxRy[0] + hxwy[0], RxRy[1] : RxRy[1] + hxwy[1]
+        ].mean(axis=(0, 1))
     int_mean = np.mean(Ik)
     sub_fit = k >= k_min
 
     # initial guesses for background coefs
-    const_bg = np.min(self.radial_mean) / int_mean
-    int0 = np.median(self.radial_mean) / int_mean - const_bg
+    const_bg = np.min(Ik) / int_mean
+    int0 = np.median(Ik) / int_mean - const_bg
     sigma0 = np.mean(k)
     coefs = [const_bg, int0, sigma0, int0, sigma0]
     lb = [0, 0, 0, 0, 0]
@@ -437,7 +469,7 @@ def calculate_pair_dist_function(
 
     # Plots
     if plot_background_fits:
-        fig, ax = self.plot_background_fits(figsize=figsize, returnfig=True)
+        fig, ax = self.plot_background_fits(Ik=Ik, figsize=figsize, returnfig=True)
         if returnfig:
             ans.append((fig, ax))
 
@@ -462,16 +494,24 @@ def calculate_pair_dist_function(
 
 def plot_background_fits(
     self,
+    Ik=None,
     figsize=(8, 4),
     returnfig=False,
 ):
     """
     TODO
+    Ik : numpy array
+        Ik calculated in calculate_pair_dist_function. Defaults to self.radial_mean for a pdf calculated
+        over whole dataset, but correctly calculated for sub areas, if defined
     """
+    if isinstance(Ik, np.ndarray):
+        pass
+    else:
+        Ik = self.radial_mean
     fig, ax = plt.subplots(figsize=figsize)
     ax.plot(
         self.qq,
-        self.radial_mean,
+        Ik,
         color="k",
     )
     ax.plot(
@@ -486,8 +526,8 @@ def plot_background_fits(
     ax.set_ylabel("I(k) and Background Fit Estimates")
     ax.set_ylim(
         (
-            np.min(self.radial_mean[self.radial_mean > 0]) * 0.8,
-            np.max(self.radial_mean * self.Sk_mask) * 1.25,
+            np.min(Ik[Ik > 0]) * 0.8,
+            np.max(Ik * self.Sk_mask) * 1.25,
         )
     )
     ax.set_yscale("log")
@@ -584,8 +624,12 @@ def plot_pdf(
 
 def calculate_FEM_local(
     self,
-    figsize=(8, 6),
+    use_median=False,
+    plot_normalized_variance=True,
+    figsize=(8, 4),
+    return_values=False,
     returnfig=False,
+    progress_bar=True,
 ):
     """
     Calculate fluctuation electron microscopy (FEM) statistics, including radial mean,
@@ -596,18 +640,293 @@ def calculate_FEM_local(
     --------
     self: PolarDatacube
         Polar datacube used for measuring FEM properties.
+    use_median: Bool
+        Use median instead of mean for statistics.
 
     Returns
     --------
-    radial_avg: np.array
-        Average radial intensity
-    radial_var: np.array
-        Variance in the radial dimension
-
+    local_radial_mean: np.array
+        Average radial intensity of each probe position
+    local_radial_var: np.array
+        Variance in the radial dimension of each probe position
 
     """
 
-    pass
+    # init radial data arrays
+    self.local_radial_mean = np.zeros(
+        (
+            self._datacube.shape[0],
+            self._datacube.shape[1],
+            self.polar_shape[1],
+        )
+    )
+    self.local_radial_var = np.zeros(
+        (
+            self._datacube.shape[0],
+            self._datacube.shape[1],
+            self.polar_shape[1],
+        )
+    )
+
+    # Compute the radial mean and standard deviation for each probe position
+    for rx, ry in tqdmnd(
+        self._datacube.shape[0],
+        self._datacube.shape[1],
+        desc="Radial statistics",
+        unit=" probe positions",
+        disable=not progress_bar,
+    ):
+        im = self.data[rx, ry]
+
+        if use_median:
+            im_mean = np.ma.median(im, axis=0)
+            im_var = np.ma.median((im - im_mean) ** 2, axis=0)
+        else:
+            im_mean = np.ma.mean(im, axis=0)
+            im_var = np.ma.mean((im - im_mean) ** 2, axis=0)
+
+        self.local_radial_mean[rx, ry] = im_mean
+        self.local_radial_var[rx, ry] = im_var
+
+    if plot_normalized_variance:
+        fig, ax = plt.subplots(figsize=figsize)
+
+        sig = self.local_radial_var / self.local_radial_mean**2
+        if use_median:
+            sig_plot = np.median(sig, axis=(0, 1))
+        else:
+            sig_plot = np.mean(sig, axis=(0, 1))
+
+        ax.plot(
+            self.qq,
+            sig_plot,
+        )
+        ax.set_xlabel(
+            "Scattering Vector (" + self.calibration.get_Q_pixel_units() + ")"
+        )
+        ax.set_ylabel("Normalized Variance")
+        ax.set_xlim((self.qq[0], self.qq[-1]))
+
+    if return_values:
+        if returnfig:
+            return self.local_radial_mean, self.local_radial_var, fig, ax
+        else:
+            return self.local_radial_mean, self.local_radial_var
+    else:
+        if returnfig:
+            return fig, ax
+
+
+def calculate_annular_symmetry(
+    self,
+    max_symmetry=12,
+    mask_realspace=None,
+    plot_result=False,
+    figsize=(8, 4),
+    return_symmetry_map=False,
+    progress_bar=True,
+):
+    """
+    This function calculates radial symmetry of diffraction patterns, typically applied
+    to amorphous scattering, but it can also be used for crystalline Bragg diffraction.
+
+    Parameters
+    --------
+    self: PolarDatacube
+        Polar transformed datacube
+    max_symmetry: int
+        Symmetry orders will be computed from 1 to max_symmetry for n-fold symmetry orders.
+    mask_realspace: np.array
+        Boolean mask, symmetries will only be computed at probe positions where mask is True.
+    plot_result: bool
+        Plot the resulting array
+    figsize: (float, float)
+        Size of the plot.
+    return_symmetry_map: bool
+        Set to true to return the symmetry array.
+    progress_bar: bool
+        Show progress bar during calculation.
+
+    Returns
+    --------
+    annular_symmetry: np.array
+        Array with annular symmetry magnitudes, with shape [max_symmetry, num_radial_bins]
+
+    """
+
+    # Initialize outputs
+    self.annular_symmetry_max = max_symmetry
+    self.annular_symmetry = np.zeros(
+        (
+            self.data_raw.shape[0],
+            self.data_raw.shape[1],
+            max_symmetry,
+            self.polar_shape[1],
+        )
+    )
+
+    # Loop over all probe positions
+    for rx, ry in tqdmnd(
+        self._datacube.shape[0],
+        self._datacube.shape[1],
+        desc="Annular symmetry",
+        unit=" probe positions",
+        disable=not progress_bar,
+    ):
+        # Get polar transformed image
+        im = self.transform(
+            self.data_raw.data[rx, ry],
+        )
+        polar_im = np.ma.getdata(im)
+        polar_mask = np.ma.getmask(im)
+        polar_im[polar_mask] = 0
+        polar_mask = np.logical_not(polar_mask)
+
+        # Calculate normalized correlation of polar image along angular direction (axis = 0)
+        polar_corr = np.real(
+            np.fft.ifft(
+                np.abs(
+                    np.fft.fft(
+                        polar_im,
+                        axis=0,
+                    )
+                )
+                ** 2,
+                axis=0,
+            ),
+        )
+        polar_corr_norm = (
+            np.sum(
+                polar_im,
+                axis=0,
+            )
+            ** 2
+        )
+        sub = polar_corr_norm > 0
+        polar_corr[:, sub] /= polar_corr_norm[
+            sub
+        ]  # gets rid of divide by 0 (False near center)
+        polar_corr[:, sub] -= 1
+
+        # Calculate normalized correlation of polar mask along angular direction (axis = 0)
+        mask_corr = np.real(
+            np.fft.ifft(
+                np.abs(
+                    np.fft.fft(
+                        polar_mask.astype("float"),
+                        axis=0,
+                    )
+                )
+                ** 2,
+                axis=0,
+            ),
+        )
+        mask_corr_norm = (
+            np.sum(
+                polar_mask.astype("float"),
+                axis=0,
+            )
+            ** 2
+        )
+        sub = mask_corr_norm > 0
+        mask_corr[:, sub] /= mask_corr_norm[
+            sub
+        ]  # gets rid of divide by 0 (False near center)
+        mask_corr[:, sub] -= 1
+
+        # Normalize polar correlation by mask correlation (beam stop removal)
+        sub = np.abs(mask_corr) > 0
+        polar_corr[sub] -= mask_corr[sub]
+
+        # Measure symmetry
+        self.annular_symmetry[rx, ry, :, :] = np.abs(np.fft.fft(polar_corr, axis=0))[
+            1 : max_symmetry + 1
+        ]
+
+    if plot_result:
+        fig, ax = plt.subplots(figsize=figsize)
+        ax.imshow(
+            np.mean(self.annular_symmetry, axis=(0, 1)),
+            aspect="auto",
+            extent=[
+                self.qq[0],
+                self.qq[-1],
+                max_symmetry,
+                0,
+            ],
+        )
+        ax.set_yticks(
+            np.arange(max_symmetry) + 0.5,
+            range(1, max_symmetry + 1),
+        )
+        ax.set_xlabel("Scattering angle (1/Å)")
+        ax.set_ylabel("Symmetry Order")
+
+    if return_symmetry_map:
+        return self.annular_symmetry
+
+
+def plot_annular_symmetry(
+    self,
+    symmetry_orders=None,
+    plot_std=False,
+    normalize_by_mean=False,
+    cmap="turbo",
+    vmin=0.01,
+    vmax=0.99,
+    figsize=(8, 4),
+):
+    """
+    Plot the symmetry orders
+    """
+
+    if symmetry_orders is None:
+        symmetry_orders = np.arange(1, self.annular_symmetry_max + 1)
+    else:
+        symmetry_orders = np.array(symmetry_orders)
+
+    # plotting image
+    if plot_std:
+        im_plot = np.std(
+            self.annular_symmetry,
+            axis=(0, 1),
+        )[symmetry_orders - 1, :]
+    else:
+        im_plot = np.mean(
+            self.annular_symmetry,
+            axis=(0, 1),
+        )[symmetry_orders - 1, :]
+    if normalize_by_mean:
+        im_plot /= self.radial_mean[None, :]
+
+    # plotting range
+    int_vals = np.sort(im_plot.ravel())
+    ind0 = np.clip(np.round(im_plot.size * vmin).astype("int"), 0, im_plot.size - 1)
+    ind1 = np.clip(np.round(im_plot.size * vmax).astype("int"), 0, im_plot.size - 1)
+    vmin = int_vals[ind0]
+    vmax = int_vals[ind1]
+
+    # plot image
+    fig, ax = plt.subplots(figsize=figsize)
+    ax.imshow(
+        im_plot,
+        aspect="auto",
+        extent=[
+            self.qq[0],
+            self.qq[-1],
+            np.max(symmetry_orders),
+            np.min(symmetry_orders) - 1,
+        ],
+        cmap=cmap,
+        vmin=vmin,
+        vmax=vmax,
+    )
+    ax.set_yticks(
+        symmetry_orders - 0.5,
+        symmetry_orders,
+    )
+    ax.set_xlabel("Scattering angle (1/A)")
+    ax.set_ylabel("Symmetry Order")
 
 
 def scattering_model(k2, *coefs):
@@ -645,3 +964,80 @@ def scattering_model(k2, *coefs):
     # int1*np.exp(k2/(-2*sigma1**2))
 
     return int_model
+
+
+def background_pca(
+    self,
+    pca_index: int = 0,
+    n_components: int = None,
+    intensity_range: Tuple[float, float] = (0, 1),
+    normalize_mean: bool = True,
+    normalize_std: bool = True,
+    plot_result: bool = True,
+    plot_coef: bool = False,
+):
+    """
+    Generate PCA decompositions of the background signal.
+    This function must be run after `calculate_radial_statistics`.
+
+    Parameters
+    --------
+    pca_index: int
+        index of PCA component and loadings to return
+    intensity_range: tuple (float, float)
+        intensity range for plotting
+    normalize_mean: bool
+        if True, normalize mean of radial data before PCA
+    normalize_std: bool
+        if True, normalize standard deviation of radial data before PCA
+    plot_results: bool
+        if True, plot results
+    plot_coef: bool
+        if True, plot radial PCA component selected
+
+    Returns
+    --------
+    im_pca: np,array
+        rgb image array
+    coef_pca: np.array
+        radial PCA component selected
+    """
+
+    from sklearn.decomposition import PCA
+
+    # PCA decomposition
+    shape = self.radial_all.shape
+    A = np.reshape(self.radial_all, (shape[0] * shape[1], shape[2]))
+    if normalize_mean:
+        A -= np.mean(A, axis=0)
+    if normalize_std:
+        A /= np.std(A, axis=0)
+
+    pca = PCA(n_components=np.maximum(pca_index + 1, 2))
+    pca.fit(A)
+
+    components = pca.components_
+    loadings = pca.transform(A)
+
+    # output image data
+    sig_pca = np.reshape(loadings[:, pca_index], shape[0:2])
+    sig_pca -= intensity_range[0]
+    sig_pca /= intensity_range[1] - intensity_range[0]
+    sig_pca = np.clip(sig_pca, 0, 1)
+    im_pca = np.tile(sig_pca[:, :, None], (1, 1, 3))
+
+    # output PCA coefficient
+    coef_pca = np.vstack((self.radial_bins, components[pca_index, :])).T
+
+    if plot_result:
+        fig, ax = plt.subplots(figsize=(8, 8))
+        ax.imshow(
+            im_pca,
+            vmin=0,
+            vmax=5,
+        )
+    if plot_coef:
+        fig, ax = plt.subplots(figsize=(8, 4))
+        ax.plot(coef_pca[:, 0], coef_pca[:, 1])
+
+    return im_pca, coef_pca
