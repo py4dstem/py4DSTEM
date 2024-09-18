@@ -1546,7 +1546,7 @@ class ObjectNDProbeMethodsMixin:
             )
         else:
             self._reciprocal_sampling = tuple(reciprocal_sampling)
-            self._reciprocal_sampling = tuple(
+            self._angular_sampling = tuple(
                 d_k * wavelength * 1e3 for d_k in self._reciprocal_sampling
             )
 
