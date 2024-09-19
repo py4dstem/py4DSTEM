@@ -552,8 +552,8 @@ def DDF_radial_image(points_array_w_rphi, radius, Rshape, tol=1):
 
     if Rshape is None:
         Rshape = (
-            np.max(np.max(points_array[:, 3])).astype("int") + 1,
-            np.max(np.max(points_array[:, 4])).astype("int") + 1,
+            np.max(np.max(points_array_w_rphi[:, 3])).astype("int") + 1,
+            np.max(np.max(points_array_w_rphi[:, 4])).astype("int") + 1,
         )
 
     radial_filtered_points_array = radial_filtered_array(
@@ -603,8 +603,8 @@ def DDFradialazimuthimage(points_array_w_rphi, radius, phi0, phi1, Rshape, tol=1
     """
     if Rshape is None:
         Rshape = (
-            np.max(np.max(points_array[:, 3])).astype("int") + 1,
-            np.max(np.max(points_array[:, 4])).astype("int") + 1,
+            np.max(np.max(points_array_w_rphi[:, 3])).astype("int") + 1,
+            np.max(np.max(points_array_w_rphi[:, 4])).astype("int") + 1,
         )
 
     radial_filtered_points_array = radial_filtered_array(
@@ -623,8 +623,8 @@ def DDFradialazimuthimage(points_array_w_rphi, radius, phi0, phi1, Rshape, tol=1
     )
     radiusazimuthimage = np.zeros(shape=Rshape)
 
-    for i in range(h):
-        for j in range(w):
+    for i in range(Rshape[0]):
+        for j in range(Rshape[1]):
             radiusazimuthimage[i, j] = np.where(
                 np.logical_and(
                     rphi_filtered_points_array[:, 3] == i,
