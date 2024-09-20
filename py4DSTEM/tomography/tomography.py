@@ -770,6 +770,7 @@ class Tomography:
                     ind_diffraction_rotate_transpose,
                     self._force_q_to_r_rotation_deg,
                     reshape=False,
+                    order = 0,
                 ),
                 0,
                 np.max(ind_diffraction),
