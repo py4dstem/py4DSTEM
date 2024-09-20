@@ -995,7 +995,7 @@ class PtychographicTomography(
             detector_fourier_mask = xp.asarray(detector_fourier_mask)
 
         if virtual_detector_masks is not None:
-            virtual_detector_masks = xp.asarray(virtual_detector_masks)
+            virtual_detector_masks = xp.asarray(virtual_detector_masks).astype(xp.bool_)
 
         # main loop
         for a0 in tqdmnd(

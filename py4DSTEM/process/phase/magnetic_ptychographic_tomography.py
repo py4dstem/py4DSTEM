@@ -1086,7 +1086,7 @@ class MagneticPtychographicTomography(
             detector_fourier_mask = xp.asarray(detector_fourier_mask)
 
         if virtual_detector_masks is not None:
-            virtual_detector_masks = xp.asarray(virtual_detector_masks)
+            virtual_detector_masks = xp.asarray(virtual_detector_masks).astype(xp.bool_)
 
         if gaussian_filter_sigma_m is None:
             gaussian_filter_sigma_m = gaussian_filter_sigma_e
