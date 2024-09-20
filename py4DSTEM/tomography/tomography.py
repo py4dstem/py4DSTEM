@@ -1313,60 +1313,71 @@ class Tomography:
             ]
         )
 
-        weights = np.hstack(
-            [
-                np.repeat(
-                    (1 - self._positions_vox_dF[datacube_number][0][ind0])
-                    * (1 - self._positions_vox_dF[datacube_number][1][ind0]),
-                    dp_length,
-                ),
-                np.repeat(
-                    (1 - self._positions_vox_dF[datacube_number][0][ind0])
-                    * (self._positions_vox_dF[datacube_number][1][ind0]),
-                    dp_length,
-                ),
-                np.repeat(
-                    (self._positions_vox_dF[datacube_number][0][ind1])
-                    * (1 - self._positions_vox_dF[datacube_number][1][ind1]),
-                    dp_length,
-                ),
-                np.repeat(
-                    (self._positions_vox_dF[datacube_number][0][ind1])
-                    * (self._positions_vox_dF[datacube_number][1][ind1]),
-                    dp_length,
-                ),
-            ]
-        )
+        if dp_patterns.shape[0] == 0:
+            update = xp.zeros(object_sliced.shape)
 
-        positions_y = xp.clip(
-            xp.hstack(
+            ## TODO check this
+            error = xp.mean(object_sliced.ravel() ** 2)
+
+            error = copy_to_device(error, "cpu")
+
+        else:
+            weights = np.hstack(
                 [
-                    self._positions_vox[datacube_number][1][ind0],
-                    self._positions_vox[datacube_number][1][ind0] + 1,
-                    self._positions_vox[datacube_number][1][ind1],
-                    self._positions_vox[datacube_number][1][ind1] + 1,
-                ],
-            ),
-            0,
-            s[1] - 1,
-        )
+                    np.repeat(
+                        (1 - self._positions_vox_dF[datacube_number][0][ind0])
+                        * (1 - self._positions_vox_dF[datacube_number][1][ind0]),
+                        dp_length,
+                    ),
+                    np.repeat(
+                        (1 - self._positions_vox_dF[datacube_number][0][ind0])
+                        * (self._positions_vox_dF[datacube_number][1][ind0]),
+                        dp_length,
+                    ),
+                    np.repeat(
+                        (self._positions_vox_dF[datacube_number][0][ind1])
+                        * (1 - self._positions_vox_dF[datacube_number][1][ind1]),
+                        dp_length,
+                    ),
+                    np.repeat(
+                        (self._positions_vox_dF[datacube_number][0][ind1])
+                        * (self._positions_vox_dF[datacube_number][1][ind1]),
+                        dp_length,
+                    ),
+                ]
+            )
 
-        bincount_x = (
-            xp.tile(xp.arange(dp_length), dp_patterns.shape[0] // dp_length)
-            + xp.repeat(positions_y, dp_length) * dp_length
-        )
+            positions_y = xp.clip(
+                xp.hstack(
+                    [
+                        self._positions_vox[datacube_number][1][ind0],
+                        self._positions_vox[datacube_number][1][ind0] + 1,
+                        self._positions_vox[datacube_number][1][ind1],
+                        self._positions_vox[datacube_number][1][ind1] + 1,
+                    ],
+                ),
+                0,
+                s[1] - 1,
+            )
 
-        bincount_x = xp.asarray(bincount_x, dtype="int")
+            bincount_x = (
+                xp.tile(xp.arange(dp_length), dp_patterns.shape[0] // dp_length)
+                + xp.repeat(positions_y, dp_length) * dp_length
+            )
 
-        dp_patterns_counted = xp.bincount(
-            bincount_x, weights=dp_patterns * weights, minlength=s[1] * dp_length
-        ).reshape((s[1], dp_length))
+            bincount_x = xp.asarray(bincount_x, dtype="int")
 
-        update = dp_patterns_counted - object_sliced
+            dp_patterns_counted = xp.bincount(
+                bincount_x, weights=dp_patterns * weights, minlength=s[1] * dp_length
+            ).reshape((s[1], dp_length))
 
-        error = xp.mean(update.ravel() ** 2) / xp.mean(dp_patterns_counted.ravel() ** 2)
+            update = dp_patterns_counted - object_sliced
 
-        error = copy_to_device(error, "cpu")
+            error = xp.mean(update.ravel() ** 2) / xp.mean(
+                dp_patterns_counted.ravel() ** 2
+            )
+
+            error = copy_to_device(error, "cpu")
 
         return update, error
 
