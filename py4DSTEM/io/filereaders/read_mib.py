@@ -3,28 +3,6 @@
 # Edited: Amir ZangiAbadi aazangiabadi@gmail.com 2024-09-16
 # Based on the PyXEM load_mib module https://github.com/pyxem/pyxem/blob/563a3bb5f3233f46cd3e57f3cd6f9ddf7af55ad0/pyxem/utils/io_utils.py
 
-"""
-Example:
-
-file_path = '/Users/yourfilelocation/default.mib'
-
-# read the hdr (header) file, without loading the data. 
-print(py4DSTEM.io.filereaders.read_mib.parse_hdr(file_path)) 
-
-# Read/load the mib file. Binning while loading will take a bit longer, but saves time later.
-file_data = py4DSTEM.io.filereaders.read_mib.load_mib(file_path, mem='MEMMAP', binfactor=4, reshape=True, flip=True)
-
-
-# Save your file in .h5 format and load it as .h5 to continue processing it.
- py4DSTEM.save(
-     file_path[:-3] + "h5",
-     file_data
- )
-
-file_data = py4DSTEM.read(
-    file_path[:-3] + "h5"
-)
-"""
 
 import numpy as np
 from py4DSTEM.datacube import DataCube
@@ -35,22 +13,38 @@ import os
 def load_mib(
     file_path,
     mem="MEMMAP",
-    binfactor=2,
+    binfactor=1,
     reshape=True,
-    flip=True,
     scan=(256, 256),
-    **kwargs,
 ):
     """
     Read a MIB file and return as py4DSTEM DataCube.
 
-    The scan size is not encoded in the MIB metadata - by default it is
-    set to (256,256), and can be modified by passing the keyword `scan`.
+    Example:
+        `file_path = '/Users/yourfilelocation/default.mib'`
 
-    binfactor n, reduces the data size by n^2 times.
+        read the hdr (header) file, without loading the data:
+        `print(py4DSTEM.io.filereaders.read_mib.parse_hdr(file_path))`
+
+        load data:
+        `datacube = py4DSTEM.import_file(file_path)`
+
+
+    Parameters
+    ----------
+    mem: str ("memmap" or "ram")
+        load the data with numpy memmap or entirely into ram
+    file_path: str
+        location of data and .hdr file if included
+    binfactor: int
+        binning in reciprocal space of data
+    reshape: bool
+        if True, reshapes data in x and y to scan size
+    scan: 2-tuple
+        (x, y) scan size. This size is overwritten if there is a .hdr file
+        in the same folder
+
     """
-
-    # assert binfactor == 1, "MIB does not support bin-on-load...yet?"
 
     # Get scan info from kwargs
     header = parse_hdr(file_path)
@@ -58,7 +52,7 @@ def load_mib(
     height = header["Detector height"]
     width_height = width * height
 
-    scan = scan_size(file_path)
+    scan = scan_size(file_path, scan)
 
     data = get_mib_memmap(file_path)
     depth = get_mib_depth(header, file_path)
@@ -85,6 +79,8 @@ def load_mib(
 
     if reshape:
         data = data.reshape(scan[0], scan[1], width, height)
+    else:
+        data = data[:, None, :, :]
 
     if mem == "RAM":
         data = np.array(data)  # Load entire dataset into RAM
@@ -133,10 +129,12 @@ def manageHeader(fname):
     sensorLayout = elements_in_header[7].strip()
     Timestamp = elements_in_header[9]
     shuttertime = float(elements_in_header[10])
-    ScanX = scan_size(fname)[
-        0
-    ]  # It needs a .hdr file next to the .mib files, otherwise comment these two lines.
-    ScanY = scan_size(fname)[1]  # It needs a .hdr file next to the .mib files
+    try:
+        ScanX = scan_size(fname)[0]
+        ScanY = scan_size(fname)[1]
+    except:
+        ScanX = None
+        ScanY = None
 
     if PixelDepthInFile == "R64":
         bitdepth = int(elements_in_header[18])  # RAW
@@ -158,11 +156,10 @@ def manageHeader(fname):
         ScanX,
         ScanY,
     )
-
     return hdr
 
 
-def scan_size(path):
+def scan_size(path, scan):
     header_path = path[:-3] + "hdr"
     result = {}
     if os.path.exists(header_path):
@@ -177,8 +174,9 @@ def scan_size(path):
                     return (int(result["ScanY"]), int(result["ScanX"]))
     else:
         print(
-            "Header file (.hdr) does not exist in this folder. The scan size will be assumed to be 256 by 256 pix"
+            f"Header file (.hdr) does not exist in this folder. The scan size will be assumed to be {scan[0]} by {scan[1]} pix"
         )
+        return scan
 
 
 def parse_hdr(fp):
@@ -240,12 +238,8 @@ def parse_hdr(fp):
         hdr_info["Detector width"] = 514
         hdr_info["Detector height"] = 514
 
-    hdr_info["scan size X"] = read_hdr[
-        7
-    ]  # Make sure .hdr file exit otherwise comment this line.
-    hdr_info["scan size Y"] = read_hdr[
-        8
-    ]  # Make sure .hdr file exit otherwise comment this line.
+    hdr_info["scan size X"] = read_hdr[7]
+    hdr_info["scan size Y"] = read_hdr[8]
 
     hdr_info["Assembly Size"] = read_hdr[3]
 
