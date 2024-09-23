@@ -1018,7 +1018,7 @@ class Parallax(PhaseReconstruction):
         min_alignment_bin: int = 1,
         num_iter_at_min_bin: int = 2,
         alignment_bin_values: list = None,
-        centered_alignment_bins: bool = True,
+        centered_alignment_bins: bool = False,
         cross_correlation_upsample_factor: int = 8,
         regularizer_matrix_size: Tuple[int, int] = (1, 1),
         regularize_shifts: bool = False,
