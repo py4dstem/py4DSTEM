@@ -186,7 +186,7 @@ def show(
         and
 
             >>> show(dp, calibration=calibration, scalebar={'length':0.5,'width':2,
-                                                       'position':'ul','label':True})
+                                                       'position':'ul','label':True'})
 
         will display a more customized scalebar.
 
@@ -316,7 +316,7 @@ def show(
         if returnfig==False (default), the figure is plotted and nothing is returned.
         if returnfig==True, return the figure and the axis.
     """
-    if scalebar is True or scalebar is None:
+    if scalebar is True:
         scalebar = {}
 
     # Alias dep
@@ -428,7 +428,7 @@ def show(
             er = ".calibration attribute must be a Calibration instance"
             assert isinstance(cal, Calibration), er
             if isinstance(ar, DiffractionSlice):
-                defaultscalebar = {
+                scalebar = {
                     "Nx": ar.data.shape[0],
                     "Ny": ar.data.shape[1],
                     "pixelsize": cal.get_Q_pixel_size(),
@@ -436,13 +436,10 @@ def show(
                     "space": "Q",
                     "position": "br",
                 }
-                for key, value in defaultscalebar.items():
-                    if key not in scalebar.keys():
-                        scalebar[key] = value
                 pixelsize = cal.get_Q_pixel_size()
                 pixelunits = cal.get_Q_pixel_units()
             elif isinstance(ar, RealSlice):
-                defaultscalebar = {
+                scalebar = {
                     "Nx": ar.data.shape[0],
                     "Ny": ar.data.shape[1],
                     "pixelsize": cal.get_R_pixel_size(),
@@ -450,9 +447,6 @@ def show(
                     "space": "Q",
                     "position": "br",
                 }
-                for key, value in defaultscalebar.items():
-                    if key not in scalebar.keys():
-                        scalebar[key] = value
                 pixelsize = cal.get_R_pixel_size()
                 pixelunits = cal.get_R_pixel_units()
         # get the data
