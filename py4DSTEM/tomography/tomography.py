@@ -768,9 +768,9 @@ class Tomography:
             ind_diffraction_rotate_transpose = np.clip(
                 rotate(
                     ind_diffraction_rotate_transpose,
-                    self._force_q_to_r_rotation_deg,
+                    -self._force_q_to_r_rotation_deg, #negative makes this rotation consistant with phase contrast module rotation
                     reshape=False,
-                    order = 0,
+                    order=0,
                 ),
                 0,
                 np.max(ind_diffraction),
@@ -948,6 +948,12 @@ class Tomography:
         if positions is not None:
             data_masked = data.copy()
             data = xp.zeros((s[0] * s[1], data_masked.shape[1]))
+
+            positions = (
+                np.asarray(copy_to_device(positions[0], "cpu"), dtype="int"),
+                np.asarray(copy_to_device(positions[1], "cpu"), dtype="int"),
+            )
+
             indicies = np.ravel_multi_index(
                 (
                     positions[0],
