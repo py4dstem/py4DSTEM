@@ -1323,7 +1323,6 @@ class Tomography:
         if dp_patterns.shape[0] == 0:
             update = xp.zeros(object_sliced.shape)
 
-            ## TODO check this
             error = xp.mean(object_sliced.ravel() ** 2)
 
             error = copy_to_device(error, "cpu")
@@ -1380,9 +1379,7 @@ class Tomography:
 
             update = dp_patterns_counted - object_sliced
 
-            error = xp.mean(update.ravel() ** 2) / xp.mean(
-                dp_patterns_counted.ravel() ** 2
-            )
+            error = xp.mean(update.ravel() ** 2) 
 
             error = copy_to_device(error, "cpu")
 
