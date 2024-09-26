@@ -282,6 +282,7 @@ class Tomography:
         num_points: int = 60,
         progress_bar: bool = True,
         zero_edges: bool = True,
+        baseline_thresh: float = 0,
     ):
         """
         Main loop for reconstruct
@@ -302,6 +303,8 @@ class Tomography:
             if True, shows progress bar
         zero_edges: bool
             If True, zero edges along y and z
+        baseline_thresh: float
+            If not None, data is cropped below threshold
         """
         device = self._device
 
@@ -354,6 +357,7 @@ class Tomography:
 
             self._constraints(
                 zero_edges=zero_edges,
+                baseline_thresh=baseline_thresh,
             )
 
             self.error_iterations.append(error_iteration)
@@ -1379,7 +1383,7 @@ class Tomography:
 
             update = dp_patterns_counted - object_sliced
 
-            error = xp.mean(update.ravel() ** 2) 
+            error = xp.mean(update.ravel() ** 2)
 
             error = copy_to_device(error, "cpu")
 
@@ -1491,10 +1495,7 @@ class Tomography:
 
         self._object[x_index, yy, zz] += copy_to_device(update_r_summed, storage)
 
-    def _constraints(
-        self,
-        zero_edges: bool,
-    ):
+    def _constraints(self, zero_edges: bool, baseline_thresh: float):
         """
         Constrains for object
         TODO: add constrains and break into multiple functions possibly
@@ -1503,20 +1504,26 @@ class Tomography:
         ----------
         zero_edges: bool
             If True, zero edges along y and z
+        baseline_thresh: float
+            If not None, data is cropped below threshold
         """
-
         if zero_edges:
+            xp = self._xp_storage
             s = self._object_shape_6D
-            y = np.arange(s[1])
-            z = np.arange(s[2])
-            yy, zz = np.meshgrid(y, z, indexing="ij")
-            ind_zero = np.where(
+            y = xp.arange(s[1])
+            z = xp.arange(s[2])
+            yy, zz = xp.meshgrid(y, z, indexing="ij")
+            ind_zero = xp.where(
                 (yy.ravel() == 0)
                 | (zz.ravel() == 0)
                 | (yy.ravel() == y.max())
                 | (zz.ravel() == z.max())
             )[0]
             self._object[:, ind_zero] = 0
+
+        if baseline_thresh is not None:
+            xp = self._xp_storage
+            self._object = xp.clip(self._object - baseline_thresh, 0, np.inf)
 
     def set_storage(self, storage):
         """
