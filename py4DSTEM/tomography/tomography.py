@@ -97,7 +97,7 @@ class Tomography:
         self._import_kwargs = import_kwargs
         self._object_shape_x_y_z = object_shape_x_y_z
         self._voxel_size_A = voxel_size_A
-        self._datacube_R_pixel_size_A = datacube_R_pixel_size_A
+        self._datacube_R_pixel_size_A_init = datacube_R_pixel_size_A
         self._datacube_Q_pixel_size_inv_A = datacube_Q_pixel_size_inv_A
         self._tilt_deg = tilt_deg
         self._shift_px = shift_px
@@ -192,6 +192,8 @@ class Tomography:
         self._force_q_to_r_transpose = force_q_to_r_transpose
         self._force_q_to_r_rotation_deg = force_q_to_r_rotation_deg
 
+        self._datacube_R_pixel_size_A = self._datacube_R_pixel_size_A_init.copy()
+        
         # preprocessing of diffraction data
         for a0 in range(self._num_datacubes):
             # load and preprocess datacube
