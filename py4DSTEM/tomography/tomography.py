@@ -192,8 +192,8 @@ class Tomography:
         self._force_q_to_r_transpose = force_q_to_r_transpose
         self._force_q_to_r_rotation_deg = force_q_to_r_rotation_deg
 
-        self._datacube_R_pixel_size_A = self._datacube_R_pixel_size_A_init.copy()
-        
+        self._datacube_R_pixel_size_A = self._datacube_R_pixel_size_A_init
+
         # preprocessing of diffraction data
         for a0 in range(self._num_datacubes):
             # load and preprocess datacube
@@ -1161,6 +1161,7 @@ class Tomography:
         # solve for real space coordinates
         line_z = xp.linspace(0, 1, num_points) * (s[2] - 1)
         line_y = line_z * xp.tan(tilt)
+        line_y -= np.mean(line_y)
         offset = xp.arange(s[1], dtype="int")
 
         yF = xp.floor(line_y).astype("int")
