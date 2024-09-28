@@ -1156,7 +1156,8 @@ class Tomography:
         device = self._device
         obj = copy_to_device(self._object[x_index], device)
 
-        tilt = xp.deg2rad(tilt_deg)
+        #TODO check sign
+        tilt = -xp.deg2rad(tilt_deg)
 
         # solve for real space coordinates
         line_z = xp.linspace(0, 1, num_points) * (s[2] - 1)
