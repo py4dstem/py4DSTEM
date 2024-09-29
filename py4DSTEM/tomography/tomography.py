@@ -284,7 +284,7 @@ class Tomography:
         num_points: int = 60,
         progress_bar: bool = True,
         zero_edges: bool = True,
-        baseline_thresh: float = 0,
+        baseline_thresh: float = 0.9,
     ):
         """
         Main loop for reconstruct
@@ -306,7 +306,7 @@ class Tomography:
         zero_edges: bool
             If True, zero edges along y and z
         baseline_thresh: float
-            If not None, data is cropped below threshold
+            If not None, data is cropped below threshold. Value is fraction of max.
         """
         device = self._device
 
@@ -855,7 +855,7 @@ class Tomography:
                     wx = qx0 - xF
                     wy = qy0 - yF
 
-                    diffraction_patterns_reshaped[index] = (
+                    dp_projected = (
                         (
                             (
                                 (1 - wx)
@@ -895,8 +895,10 @@ class Tomography:
                             )
                         )
                     )
-                else:
 
+                    diffraction_patterns_reshaped[index] = dp_projected
+
+                else:
                     diffraction_patterns_reshaped[index] = np.bincount(
                         ind_diffraction_ravel,
                         dp.ravel(),
@@ -1156,7 +1158,7 @@ class Tomography:
         device = self._device
         obj = copy_to_device(self._object[x_index], device)
 
-        #TODO check sign
+        # TODO check sign
         tilt = -xp.deg2rad(tilt_deg)
 
         # solve for real space coordinates
@@ -1509,7 +1511,7 @@ class Tomography:
         zero_edges: bool
             If True, zero edges along y and z
         baseline_thresh: float
-            If not None, data is cropped below threshold
+            If not None, data is cropped below threshold.  Value is fraction of max.
         """
         if zero_edges:
             xp = self._xp_storage
@@ -1526,6 +1528,7 @@ class Tomography:
             self._object[:, ind_zero] = 0
 
         if baseline_thresh is not None:
+            baseline_thresh *= self._object.max()
             xp = self._xp_storage
             self._object = xp.clip(self._object - baseline_thresh, 0, np.inf)
 
