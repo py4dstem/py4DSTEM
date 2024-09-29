@@ -13,6 +13,7 @@ from py4DSTEM.process.calibration import fit_origin, get_origin
 from py4DSTEM.process.diffraction import Crystal
 from py4DSTEM.process.phase.utils import copy_to_device
 from py4DSTEM.utils import fourier_resample
+from py4DSTEM.visualize import return_scaled_histogram_ordering
 from scipy.ndimage import rotate, zoom
 from scipy.spatial.transform import Rotation as R
 
@@ -306,7 +307,7 @@ class Tomography:
         zero_edges: bool
             If True, zero edges along y and z
         baseline_thresh: float
-            If not None, data is cropped below threshold. Value is fraction of max.
+            If not None, data is cropped below threshold. Value is percentile of object.
         """
         device = self._device
 
@@ -1511,7 +1512,7 @@ class Tomography:
         zero_edges: bool
             If True, zero edges along y and z
         baseline_thresh: float
-            If not None, data is cropped below threshold.  Value is fraction of max.
+            If not None, data is cropped below threshold.  Value is percentile of object.
         """
         if zero_edges:
             xp = self._xp_storage
@@ -1528,9 +1529,9 @@ class Tomography:
             self._object[:, ind_zero] = 0
 
         if baseline_thresh is not None:
-            baseline_thresh *= self._object.max()
+            _, vmin, _ = return_scaled_histogram_ordering(self._object, vmin = baseline_thresh)
             xp = self._xp_storage
-            self._object = xp.clip(self._object - baseline_thresh, 0, np.inf)
+            self._object = xp.clip(self._object - vmin, 0, np.inf)
 
     def set_storage(self, storage):
         """
