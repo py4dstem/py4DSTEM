@@ -1257,10 +1257,10 @@ class Tomography:
             positions_y = xp.clip(
                 xp.hstack(
                     [
-                        self._positions_vox[datacube_number][1][ind0],
-                        self._positions_vox[datacube_number][1][ind0] + 1,
-                        self._positions_vox[datacube_number][1][ind1],
-                        self._positions_vox[datacube_number][1][ind1] + 1,
+                        self._positions_vox_F[datacube_number][1][ind0],
+                        self._positions_vox_F[datacube_number][1][ind0] + 1,
+                        self._positions_vox_F[datacube_number][1][ind1],
+                        self._positions_vox_F[datacube_number][1][ind1] + 1,
                     ],
                 ),
                 0,
