@@ -1152,7 +1152,6 @@ class Tomography:
         )
 
         ind_real = xp.ravel_multi_index((ind0, ind1), (s[1], s[2]), mode="clip")
-        self.ind_real = ind_real
 
         obj_projected = (
             (
@@ -1172,7 +1171,6 @@ class Tomography:
         self._ind0 = ind0
         self._ind1 = ind1
         self._weights_real = weights_real
-        self._bincount_x = bincount_x
         self._ind_diff = ind_diff
         self._ind0_diff = ind0_diff
         self._ind1_diff = ind1_diff
@@ -1207,8 +1205,8 @@ class Tomography:
 
         s = self._object_shape_6D
 
-        ind0 = self._positions_vox_F[datacube_number][0] == x_index
-        ind1 = self._positions_vox_F[datacube_number][0] == x_index + 1
+        ind0 = self._positions_vox_F[datacube_number][0] == x_index - 1
+        ind1 = self._positions_vox_F[datacube_number][0] == x_index
 
         dp_length = diffraction_patterns_projected.shape[1]
 
@@ -1232,22 +1230,22 @@ class Tomography:
             weights = np.hstack(
                 [
                     np.repeat(
-                        (1 - self._positions_vox_dF[datacube_number][0][ind0])
+                        (self._positions_vox_dF[datacube_number][0][ind0])
                         * (1 - self._positions_vox_dF[datacube_number][1][ind0]),
                         dp_length,
                     ),
                     np.repeat(
-                        (1 - self._positions_vox_dF[datacube_number][0][ind0])
+                        (self._positions_vox_dF[datacube_number][0][ind0])
                         * (self._positions_vox_dF[datacube_number][1][ind0]),
                         dp_length,
                     ),
                     np.repeat(
-                        (self._positions_vox_dF[datacube_number][0][ind1])
+                        (1 - self._positions_vox_dF[datacube_number][0][ind1])
                         * (1 - self._positions_vox_dF[datacube_number][1][ind1]),
                         dp_length,
                     ),
                     np.repeat(
-                        (self._positions_vox_dF[datacube_number][0][ind1])
+                        (1 - self._positions_vox_dF[datacube_number][0][ind1])
                         * (self._positions_vox_dF[datacube_number][1][ind1]),
                         dp_length,
                     ),
