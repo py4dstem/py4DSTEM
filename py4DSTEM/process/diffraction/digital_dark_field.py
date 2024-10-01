@@ -334,7 +334,7 @@ def pointlist_to_array(
         if True, applies rotational calibration to bragg_peaks
     rphi: bool
         if True, generates two extra columns of Qr and Qphi for addressing in polar
-        coordinates, Qphi is the angle anticlockwise from horizontal to the right
+        coordinates, Qphi is the angle in degrees anticlockwise from horizontal to the right
 
     Returns
     ----------
@@ -494,20 +494,106 @@ def DDFimage(points_array, aperture_positions, Rshape=None, tol=1):
     return image
 
 
-def DDF_radial_image(points_array, radius, Rshape, tol=1):
+def radial_filtered_array(points_array_w_rphi, radius, tol=1):
     """
     Calculates a Digital Dark Field image from a list of detected diffraction peak positions in a points_array matching a specific qr radius, within a defined matching tolerance
 
     Parameters
     ----------
-    points_array: numpy array
-        as produced by pointlist_to_array and defined in docstring for that function, must be the version with r and phi included
+    points_array_w_rphi: numpy array
+        as produced by pointlist_to_array with rphi=True and defined in docstring for that function
+    radius: float
+        the radius of diffraction spot you wish to filter by in pixels or calibrated units
+    tol: float
+        the tolerance in pixels or calibrated units for a point of qr in the points_array to be considered to match to the radius
+
+    Returns
+    ----------
+    radial_filtered_points_array: numpy array
+         This will be an 2D numpy array of n points x 7 columns:
+            qx
+            qy
+            I
+            Rx
+            Ry
+            qr
+            qphi
+
+    """
+    radial_filtered_points_array = np.delete(
+        points_array_w_rphi,
+        np.where(np.abs(points_array_w_rphi[:, 5] - radius) > tol),
+        axis=0,
+    )
+    return radial_filtered_points_array
+
+
+def DDF_radial_image(points_array_w_rphi, radius, Rshape, tol=1):
+    """
+    Calculates a Digital Dark Field image from a list of detected diffraction peak positions in a points_array matching a specific qr radius, within a defined matching tolerance
+
+    Parameters
+    ----------
+    points_array_w_rphi: numpy array
+        as produced by pointlist_to_array with rphi=True and defined in docstring for that function
     radius: float
         the radius of diffraction spot you wish to image in pixels or calibrated units
     Rshape: tuple, list, array
         a 2 element vector giving the real space dimensions.  If not specified, this is determined from the max along points_array
     tol: float
-        the tolerance in pixels or calibrated units for a point in the points_array to be considered to match to an aperture position in the aperture_positions array
+        the tolerance in pixels or calibrated units for a point of qr in the points_array to be considered to match to the radius
+
+    Returns
+    ----------
+    radialimage: numpy array
+        2D numpy array with dimensions determined by Rshape
+
+    """
+
+    if Rshape is None:
+        Rshape = (
+            np.max(np.max(points_array_w_rphi[:, 3])).astype("int") + 1,
+            np.max(np.max(points_array_w_rphi[:, 4])).astype("int") + 1,
+        )
+
+    radial_filtered_points_array = radial_filtered_array(
+        points_array_w_rphi, radius, tol
+    )
+
+    radialimage = np.zeros(shape=Rshape)
+
+    for i in range(Rshape[0]):
+        for j in range(Rshape[1]):
+            radialimage[i, j] = np.where(
+                np.logical_and(
+                    radial_filtered_points_array[:, 3] == i,
+                    radial_filtered_points_array[:, 4] == j,
+                ),
+                radial_filtered_points_array[:, 2],
+                0,
+            ).sum()
+
+    return radialimage
+
+
+def DDFradialazimuthimage(points_array_w_rphi, radius, phi0, phi1, Rshape, tol=1):
+    """
+    Calculates a Digital Dark Field image from a list of detected diffraction peak positions in a points_array matching a specific qr radius, within a defined matching tolerance
+
+    Parameters
+    ----------
+    points_array_w_rphi: numpy array
+        as produced by pointlist_to_array with rphi=True and defined in docstring for that function
+    radius: float
+        the radius of diffraction spot you wish to image in pixels or calibrated units
+    phi0: float
+        Angle in degrees anticlockwise from horizontal-right for setting minimum qphi for inclusion in the image calculation
+    phi1: float
+        Angle in degrees anticlockwise from horizontal-right for setting maximum qphi for inclusion in the image calculation
+    Rshape: tuple, list, array
+        a 2 element vector giving the real space dimensions.  If not specified, this is determined from the max along points_array
+    tol: float
+        the tolerance in pixels or calibrated units for a point of qr in the points_array to be considered to match to the radius
 
     Returns
     ----------
@@ -515,26 +601,36 @@ def DDF_radial_image(points_array, radius, Rshape, tol=1):
         2D numpy array with dimensions determined by Rshape
 
     """
-
     if Rshape is None:
         Rshape = (
-            np.max(np.max(points_array[:, 3])).astype("int") + 1,
-            np.max(np.max(points_array[:, 4])).astype("int") + 1,
+            np.max(np.max(points_array_w_rphi[:, 3])).astype("int") + 1,
+            np.max(np.max(points_array_w_rphi[:, 4])).astype("int") + 1,
         )
 
-    points_array_edit = np.delete(
-        points_array, np.where(np.abs(points_array[:, 5] - radius) > tol), axis=0
+    radial_filtered_points_array = radial_filtered_array(
+        points_array_w_rphi, radius, tol
     )
-    radialimage = np.zeros(shape=Rshape)
+
+    rphi_filtered_points_array = np.delete(
+        radial_filtered_points_array,
+        np.where(
+            np.logical_or(
+                radial_filtered_points_array[:, 6] < phi0,
+                radial_filtered_points_array[:, 6] > phi1,
+            )
+        ),
+        axis=0,
+    )
+    radiusazimuthimage = np.zeros(shape=Rshape)
 
     for i in range(Rshape[0]):
         for j in range(Rshape[1]):
-            radialimage[i, j] = np.where(
+            radiusazimuthimage[i, j] = np.where(
                 np.logical_and(
-                    points_array_edit[:, 3] == i, points_array_edit[:, 4] == j
+                    rphi_filtered_points_array[:, 3] == i,
+                    rphi_filtered_points_array[:, 4] == j,
                 ),
-                points_array_edit[:, 2],
+                rphi_filtered_points_array[:, 2],
                 0,
             ).sum()
-
-    return radialimage
+    return radiusazimuthimage
