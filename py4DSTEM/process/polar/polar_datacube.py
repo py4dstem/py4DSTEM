@@ -105,7 +105,13 @@ class PolarDatacube:
         plot_reduced_pdf,
         plot_pdf,
         background_pca,
+        cluster_grains,
+        plot_clusters,
+        plot_clusters_area,
+        plot_clusters_diameter,
+        plot_clusters_max_length,
     )
+
     from py4DSTEM.process.polar.polar_peaks import (
         find_peaks_single_pattern,
         find_peaks,
@@ -114,6 +120,8 @@ class PolarDatacube:
         plot_radial_peaks,
         plot_radial_background,
         model_radial_background,
+        fit_crystal_amorphous_fraction,
+        plot_crystal_amorphous_fraction,
         make_orientation_histogram,
     )
 
