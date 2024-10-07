@@ -1352,6 +1352,7 @@ class PhaseReconstruction(Custom):
         positions_mask,
         crop_patterns,
         in_place_datacube_modification,
+        return_intensities_instead=False,
     ):
         """
         Fix diffraction intensities CoM, shift to origin, and take square root
@@ -1442,7 +1443,10 @@ class PhaseReconstruction(Custom):
             )
 
             mean_intensity += np.sum(intensities)
-            diff_intensities[rx, ry] = np.sqrt(np.maximum(intensities, 0))
+            if return_intensities_instead:
+                diff_intensities[rx, ry] = np.maximum(intensities, 0)
+            else:
+                diff_intensities[rx, ry] = np.sqrt(np.maximum(intensities, 0))
 
         if positions_mask is not None:
             diff_intensities = diff_intensities[positions_mask]

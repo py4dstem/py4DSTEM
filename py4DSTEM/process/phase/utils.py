@@ -71,6 +71,8 @@ class ComplexProbe:
         Tapers the cutoff edge over the given angular range [mrad].
     vacuum_probe_intensity: np.ndarray, optional
         Squared of corner-centered aperture amplitude to use, instead of semiangle_cutoff + rolloff
+    force_spatial_frequencies: np.ndarray, optional
+        Corner-centered spatial frequencies. Useful for creating shifted probes necessary in direct ptychography.
     focal_spread: float, optional
         The 1/e width of the focal spread due to chromatic aberration and lens current instability [Å].
     angular_spread: float, optional
@@ -94,6 +96,7 @@ class ComplexProbe:
         semiangle_cutoff: float = np.inf,
         rolloff: float = 2.0,
         vacuum_probe_intensity: np.ndarray = None,
+        force_spatial_frequencies: Tuple[np.ndarray, np.ndarray] = None,
         device: str = "cpu",
         focal_spread: float = 0.0,
         angular_spread: float = 0.0,
@@ -116,6 +119,7 @@ class ComplexProbe:
                 raise ValueError("{} not a recognized parameter".format(key))
 
         self._vacuum_probe_intensity = vacuum_probe_intensity
+        self._force_spatial_frequencies = force_spatial_frequencies
         self._semiangle_cutoff = semiangle_cutoff
         self._rolloff = rolloff
         self._focal_spread = focal_spread
@@ -407,7 +411,12 @@ class ComplexProbe:
 
     def get_spatial_frequencies(self):
         xp = self._xp
-        kx, ky = spatial_frequencies(self._gpts, self._sampling, xp)
+        if self._force_spatial_frequencies is None:
+            kx, ky = spatial_frequencies(self._gpts, self._sampling, xp)
+        else:
+            kx, ky = self._force_spatial_frequencies
+            kx = xp.asarray(kx).astype(xp.float32)
+            ky = xp.asarray(ky).astype(xp.float32)
         return kx, ky
 
     def polar_coordinates(self, x, y):
