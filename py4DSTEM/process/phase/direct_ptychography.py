@@ -1,6 +1,6 @@
 """
-Module for reconstructing phase objects from 4DSTEM datasets using iterative methods,
-namely (single-slice) ptychography.
+Module for reconstructing phase objects from 4DSTEM datasets using direct ptychography,
+namely single-sideband and Wigner-distribution deconvolution.
 """
 
 from typing import Mapping, Sequence, Union
@@ -52,6 +52,8 @@ class DirectPtychography(
         Input 4D diffraction pattern intensities
     semiangle_cutoff: float, optional
         Semiangle cutoff for the initial probe guess in mrad
+    semiangle_cutoff_pixels: float, optional
+        Semiangle cutoff for the initial probe guess in pixels
     rolloff: float, optional
         Semiangle rolloff for the initial probe guess
     vacuum_probe_intensity: np.ndarray, optional
@@ -81,6 +83,7 @@ class DirectPtychography(
         energy: float,
         datacube: DataCube = None,
         semiangle_cutoff: float = None,
+        semiangle_cutoff_pixels: float = None,
         rolloff: float = 2.0,
         vacuum_probe_intensity: np.ndarray = None,
         polar_parameters: Mapping[str, float] = None,
@@ -120,6 +123,7 @@ class DirectPtychography(
         self._vacuum_probe_intensity = vacuum_probe_intensity
         self._energy = energy
         self._semiangle_cutoff = semiangle_cutoff
+        self._semiangle_cutoff_pixels = semiangle_cutoff_pixels
         self._rolloff = rolloff
         self._verbose = verbose
         self._preprocessed = False
@@ -144,6 +148,7 @@ class DirectPtychography(
             data={
                 "energy": self._energy,
                 "semiangle_cutoff": self._semiangle_cutoff,
+                "semiangle_cutoff_pixels": self._semiangle_cutoff_pixels,
                 "vacuum_probe_intensity": vacuum_probe_intensity,
                 "rolloff": self._rolloff,
                 "verbose": self._verbose,
@@ -224,6 +229,7 @@ class DirectPtychography(
             "energy": instance_md["energy"],
             "name": instance_md["name"],
             "semiangle_cutoff": instance_md["semiangle_cutoff"],
+            "semiangle_cutoff_pixels": instance_md["semiangle_cutoff_pixels"],
             "rolloff": instance_md["rolloff"],
             "vacuum_probe_intensity": instance_md["vacuum_probe_intensity"],
             "polar_parameters": aberrations_md._params,
@@ -297,7 +303,7 @@ class DirectPtychography(
         force_com_transpose: float = None,
         force_com_shifts: Union[Sequence[np.ndarray], Sequence[float]] = None,
         force_com_measured: Sequence[np.ndarray] = None,
-        vectorized_com_calculation: bool = True,
+        vectorized_com_calculation: bool = False,
         force_scan_sampling: float = None,
         force_angular_sampling: float = None,
         force_reciprocal_sampling: float = None,
@@ -405,6 +411,12 @@ class DirectPtychography(
             force_reciprocal_sampling=force_reciprocal_sampling,
         )
 
+        # handle semiangle specified in pixels
+        if self._semiangle_cutoff_pixels:
+            self._semiangle_cutoff = (
+                self._semiangle_cutoff_pixels * self._angular_sampling[0]
+            )
+
         # calculate CoM
         (
             self._com_measured_x,
@@ -490,7 +502,21 @@ class DirectPtychography(
         self._intensities_shape = np.array(self._intensities.shape[-2:])
 
         # take FFT wrt real-space
-        self._intensities_FFT = xp_storage.fft.fft2(self._intensities, axes=(0, 1))
+        if vectorized_com_calculation:
+            self._intensities_FFT = xp_storage.fft.fft2(self._intensities, axes=(0, 1))
+        else:
+            self._intensities_FFT = xp_storage.empty_like(
+                self._intensities, dtype=xp_storage.complex64
+            )
+            # transpose to loop over cols faster
+            intensities = self._intensities.transpose((2, 3, 0, 1))
+            for ind_x in range(self._intensities_shape[0]):
+                for ind_y in range(self._intensities_shape[1]):
+                    self._intensities_FFT[ind_x, ind_y] = xp_storage.fft.fft2(
+                        intensities[ind_x, ind_y]
+                    )
+            # transpose back
+            self._intensities_FFT = self._intensities_FFT.transpose((2, 3, 0, 1))
 
         # initialize probe
         self._probe = ComplexProbe(
@@ -529,8 +555,8 @@ class DirectPtychography(
                 .real
             )
             trotter_intensities[0, 0] = 0.0
-            trotter_inds = xp_storage.unravel_index(
-                xp_storage.argsort(-trotter_intensities.ravel()),
+            trotter_inds = np.unravel_index(
+                asnumpy(xp_storage.argsort(-trotter_intensities.ravel())),
                 trotter_intensities.shape,
             )
 
@@ -634,6 +660,158 @@ class DirectPtychography(
 
     def reconstruct(
         self,
+        wigner_deconvolution_wiener_epsilon=None,
+        virtual_detector_masks: Sequence[np.ndarray] = None,
+        progress_bar: bool = True,
+        device: str = None,
+        clear_fft_cache: bool = None,
+    ):
+        """
+        Ptychographic reconstruction main method.
+
+        Parameters
+        --------
+        wigner_deconvolution_wiener_epsilon: float, optional
+            If None (default), uses the direct inversion algorithm described in 10.1016/j.ultramic.2016.09.002.
+            If not None, Wigner Distribution Deconvolution is performed, using the specified relative Wiener epsilon
+            as described in 10.1016/j.ultramic.2017.02.006. A reasonable value is 0.01.
+        virtual_detector_masks: np.ndarray
+            List of corner-centered boolean masks for binning forward model trotters,
+            to allow comparison with arbitrary geometry detector datasets. TO-DO
+        progress_bar: bool, optional
+            If True, reconstruction progress is displayed
+        device: str, optional
+            If not none, overwrites self._device to set device preprocess will be perfomed on.
+        clear_fft_cache: bool, optional
+            If true, and device = 'gpu', clears the cached fft plan at the end of function calls
+
+        Returns
+        --------
+        self: DirectPtychography
+            Self to accommodate chaining
+        """
+
+        if wigner_deconvolution_wiener_epsilon is None:
+            return self._reconstruct_SSB_gamma(
+                virtual_detector_masks=virtual_detector_masks,
+                progress_bar=progress_bar,
+                device=device,
+                clear_fft_cache=clear_fft_cache,
+            )
+        else:
+            return self._reconstruct_WDD(
+                wigner_deconvolution_wiener_epsilon=wigner_deconvolution_wiener_epsilon,
+                virtual_detector_masks=virtual_detector_masks,
+                progress_bar=progress_bar,
+                device=device,
+                clear_fft_cache=clear_fft_cache,
+            )
+
+    def _reconstruct_WDD(
+        self,
+        wigner_deconvolution_wiener_epsilon,
+        virtual_detector_masks: Sequence[np.ndarray] = None,
+        progress_bar: bool = True,
+        device: str = None,
+        clear_fft_cache: bool = None,
+    ):
+        """
+        Ptychographic reconstruction main method.
+
+        Parameters
+        --------
+        wigner_deconvolution_wiener_epsilon: float, optional
+            If None (default), uses the direct inversion algorithm described in 10.1016/j.ultramic.2016.09.002.
+            If not None, Wigner Distribution Deconvolution is performed, using the specified relative Wiener epsilon
+            as described in 10.1016/j.ultramic.2017.02.006. A reasonable value is 0.01.
+        virtual_detector_masks: np.ndarray
+            List of corner-centered boolean masks for binning forward model trotters,
+            to allow comparison with arbitrary geometry detector datasets. TO-DO
+        progress_bar: bool, optional
+            If True, reconstruction progress is displayed
+        device: str, optional
+            If not none, overwrites self._device to set device preprocess will be perfomed on.
+        clear_fft_cache: bool, optional
+            If true, and device = 'gpu', clears the cached fft plan at the end of function calls
+
+        Returns
+        --------
+        self: DirectPtychography
+            Self to accommodate chaining
+        """
+        # handle device/storage
+        self.set_device(device, clear_fft_cache)
+
+        if device is not None:
+            attrs = [
+                "_probe",
+            ]
+            self.copy_attributes_to_device(attrs, device)
+
+        xp = self._xp
+        device = self._device
+        asnumpy = self._asnumpy
+
+        sx, sy = self._grid_scan_shape
+        psi = xp.empty((sx, sy), dtype=xp.complex64)
+
+        wdd_probe_0 = xp.fft.ifft2(self._probe * self._probe.conj())
+        epsilon = wigner_deconvolution_wiener_epsilon * xp.abs(wdd_probe_0[0, 0])
+
+        Kx, Ky = self._spatial_frequencies
+        Qx, Qy = self._scan_frequencies
+
+        if virtual_detector_masks is not None:
+            raise NotImplementedError()
+
+        # main loop
+        for ind_x, ind_y in tqdmnd(
+            sx,
+            sy,
+            desc="Reconstructing object",
+            unit="freq.",
+            disable=not progress_bar,
+        ):
+            Kx_plus_Qx = Kx + Qx[ind_x, ind_y]
+            Ky_plus_Qy = Ky + Qy[ind_x, ind_y]
+
+            probe_plus = ComplexProbe(
+                energy=self._energy,
+                gpts=self._intensities_shape,
+                sampling=self.sampling,
+                semiangle_cutoff=self._semiangle_cutoff,
+                rolloff=self._rolloff,
+                parameters=self._polar_parameters_relative,
+                device=self._device,
+                force_spatial_frequencies=(Kx_plus_Qx, Ky_plus_Qy),
+            )._evaluate_ctf()
+
+            wdd_probe = xp.fft.ifft2(self._probe * probe_plus.conj())
+            wdd_probe_conj = wdd_probe.conj()
+
+            array_G = xp.asarray(self._intensities_FFT[ind_x, ind_y])
+            array_H = xp.fft.ifft2(array_G)
+
+            array_D = wdd_probe_conj * array_H / (wdd_probe * wdd_probe_conj + epsilon)
+            array_D_FFT = xp.fft.fft2(array_D)
+
+            if ind_x == 0 and ind_y == 0:
+                normalization = xp.abs(array_D_FFT[0, 0]) / array_D_FFT.size
+
+            psi[ind_x, ind_y] = array_D_FFT[0, 0].conj() / normalization
+
+        self._object = xp.fft.ifft2(psi)
+
+        # store result
+        self.object = asnumpy(self._object)
+        self.probe = self.probe_centered
+
+        self.clear_device_mem(self._device, self._clear_fft_cache)
+
+        return self
+
+    def _reconstruct_SSB_gamma(
+        self,
         virtual_detector_masks: Sequence[np.ndarray] = None,
         progress_bar: bool = True,
         device: str = None,
@@ -688,7 +866,7 @@ class DirectPtychography(
             sx,
             sy,
             desc="Reconstructing object",
-            unit=" spatial frequency",
+            unit="freq.",
             disable=not progress_bar,
         ):
             G = xp.asarray(self._intensities_FFT[ind_x, ind_y])
