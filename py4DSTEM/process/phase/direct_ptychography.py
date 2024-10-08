@@ -540,10 +540,10 @@ class DirectPtychography(
                 * self._semiangle_cutoff
                 / self.angular_sampling[0]
             )
-            low_ind_x = trotter_inds[0][(f[*trotter_inds] < q_probe)][0]
-            low_ind_y = trotter_inds[1][(f[*trotter_inds] < q_probe)][0]
-            high_ind_x = trotter_inds[0][(f[*trotter_inds] > q_probe)][0]
-            high_ind_y = trotter_inds[1][(f[*trotter_inds] > q_probe)][0]
+            low_ind_x = trotter_inds[0][f[*trotter_inds] < q_probe][0]
+            low_ind_y = trotter_inds[1][f[*trotter_inds] < q_probe][0]
+            high_ind_x = trotter_inds[0][f[*trotter_inds] > q_probe][0]
+            high_ind_y = trotter_inds[1][f[*trotter_inds] > q_probe][0]
 
             figsize = kwargs.pop("figsize", (13, 4))
             chroma_boost = kwargs.pop("chroma_boost", 1)
