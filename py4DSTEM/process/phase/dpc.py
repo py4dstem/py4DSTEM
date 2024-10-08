@@ -237,7 +237,7 @@ class DPC(PhaseReconstruction):
         force_com_rotation: float = None,
         force_com_transpose: bool = None,
         force_com_shifts: Union[Sequence[np.ndarray], Sequence[float]] = None,
-        vectorized_com_calculation: bool = True,
+        vectorized_com_calculation: bool = False,
         force_com_measured: Sequence[np.ndarray] = None,
         plot_center_of_mass: str = "default",
         plot_rotation: bool = True,
