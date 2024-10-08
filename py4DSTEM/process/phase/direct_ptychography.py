@@ -27,6 +27,7 @@ from py4DSTEM.process.phase.phase_base_class import PhaseReconstruction
 from py4DSTEM.process.phase.utils import (
     ComplexProbe,
     copy_to_device,
+    mask_array_using_virtual_detectors,
     polar_aliases,
     polar_symbols,
     spatial_frequencies,
@@ -601,6 +602,7 @@ class DirectPtychography(
 
     def reconstruct(
         self,
+        virtual_detector_masks: Sequence[np.ndarray] = None,
         progress_bar: bool = True,
         device: str = None,
         clear_fft_cache: bool = None,
@@ -646,6 +648,9 @@ class DirectPtychography(
         Kx, Ky = self._spatial_frequencies
         Qx, Qy = self._scan_frequencies
 
+        if virtual_detector_masks is not None:
+            virtual_detector_masks = xp.asarray(virtual_detector_masks).astype(xp.bool_)
+
         # main loop
         for ind_x, ind_y in tqdmnd(
             sx,
@@ -687,10 +692,16 @@ class DirectPtychography(
                 )._evaluate_ctf()
 
                 gamma = probe_conj * probe_minus - self._probe * probe_plus.conj()
+
+                if virtual_detector_masks is not None:
+                    gamma = mask_array_using_virtual_detectors(
+                        gamma, virtual_detector_masks, in_place=True
+                    )
+
                 gamma_abs = np.abs(gamma)
                 gamma_ind = gamma_abs > threshold
                 psi[ind_x, ind_y] = (
-                    G[gamma_ind] * np.conj(gamma[gamma_ind]) / gamma_abs[gamma_ind]
+                    G[gamma_ind] * xp.conj(gamma[gamma_ind]) / gamma_abs[gamma_ind]
                 ).sum()
 
         self._object = xp.fft.ifft2(psi) / self._mean_diffraction_intensity

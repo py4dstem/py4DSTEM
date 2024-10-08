@@ -2609,6 +2609,29 @@ def vectorized_fourier_resample(
     return array_resize
 
 
+def mask_array_using_virtual_detectors(
+    corner_centered_array,
+    corner_centered_masks,
+    in_place=False,
+):
+    """ """
+    xp = get_array_module(corner_centered_array)
+    masks = xp.asarray(corner_centered_masks).astype(np.bool_)
+    inverse_mask = (1 - masks.sum(0)).astype(np.bool_)
+
+    if in_place:
+        out_array = corner_centered_array
+    else:
+        out_array = corner_centered_array.copy()
+
+    for mask in masks:
+        val = xp.sum(out_array * mask, axis=(-1, -2)) / xp.sum(mask)
+        out_array[..., mask] = val[..., None]
+    out_array[..., inverse_mask] = 0.0
+
+    return out_array
+
+
 def partition_list(lst, size):
     """Partitions lst into chunks of size. Returns a generator."""
     for i in range(0, len(lst), size):
