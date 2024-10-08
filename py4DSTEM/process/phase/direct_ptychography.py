@@ -523,6 +523,28 @@ class DirectPtychography(
         # plot probe overlaps
         if plot_overlap_trotters:
 
+            trotter_intensities = (
+                (self._intensities_FFT * self._intensities_FFT.conj())
+                .sum((-1, -2))
+                .real
+            )
+            trotter_intensities[0, 0] = 0.0
+            trotter_inds = xp_storage.unravel_index(
+                xp_storage.argsort(-trotter_intensities.ravel()),
+                trotter_intensities.shape,
+            )
+
+            f = fx**2 + fy**2
+            q_probe = (
+                self._reciprocal_sampling[0]
+                * self._semiangle_cutoff
+                / self.angular_sampling[0]
+            )
+            low_ind_x = trotter_inds[0][(f[*trotter_inds] < q_probe)][0]
+            low_ind_y = trotter_inds[1][(f[*trotter_inds] < q_probe)][0]
+            high_ind_x = trotter_inds[0][(f[*trotter_inds] > q_probe)][0]
+            high_ind_y = trotter_inds[1][(f[*trotter_inds] > q_probe)][0]
+
             figsize = kwargs.pop("figsize", (13, 4))
             chroma_boost = kwargs.pop("chroma_boost", 1)
             power = kwargs.pop("power", 2)
@@ -552,7 +574,11 @@ class DirectPtychography(
 
             # low frequency trotter
             low_trotter_rgb = Complex2RGB(
-                asnumpy(self._return_centered_probe(self._intensities_FFT[0, 2])),
+                asnumpy(
+                    self._return_centered_probe(
+                        self._intensities_FFT[low_ind_x, low_ind_y]
+                    )
+                ),
                 power=power,
                 chroma_boost=chroma_boost,
                 vmin=0,
@@ -566,7 +592,11 @@ class DirectPtychography(
 
             # high frequency trotter
             high_trotter_rgb = Complex2RGB(
-                asnumpy(self._return_centered_probe(self._intensities_FFT[2, 4])),
+                asnumpy(
+                    self._return_centered_probe(
+                        self._intensities_FFT[high_ind_x, high_ind_y]
+                    )
+                ),
                 power=power,
                 chroma_boost=chroma_boost,
                 vmin=0,
@@ -581,9 +611,9 @@ class DirectPtychography(
             for ax, title in zip(
                 [ax1, ax2, ax3],
                 [
-                    "Bright-field probe",
-                    "Low-frequency trotter",
-                    "High frequency trotter",
+                    "Bright-field complex probe",
+                    "Low frequency trotter example",
+                    "High frequency trotter example",
                 ],
             ):
                 divider = make_axes_locatable(ax)
