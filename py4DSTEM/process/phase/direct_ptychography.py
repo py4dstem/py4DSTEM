@@ -499,14 +499,15 @@ class DirectPtychography(
             del _intensities
 
         self._intensities = copy_to_device(self._intensities, storage)
-        self._intensities_shape = np.array(self._intensities.shape[-2:])
+        self._intensities_shape = self._intensities.shape[-2:]
 
         # take FFT wrt real-space
         if vectorized_com_calculation:
             self._intensities_FFT = xp_storage.fft.fft2(self._intensities, axes=(0, 1))
         else:
-            self._intensities_FFT = xp_storage.empty_like(
-                self._intensities, dtype=xp_storage.complex64
+            self._intensities_FFT = xp_storage.empty(
+                self._intensities_shape + self._grid_scan_shape,
+                dtype=xp_storage.complex64,
             )
             # transpose to loop over cols faster
             intensities = self._intensities.transpose((2, 3, 0, 1))
