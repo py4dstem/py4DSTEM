@@ -1,4 +1,5 @@
 import functools
+from collections import defaultdict
 from typing import Mapping, Tuple, Union
 
 import matplotlib.pyplot as plt
@@ -2656,3 +2657,85 @@ def copy_to_device(array, device="cpu"):
             return cp.asarray(array)
         else:
             raise ValueError(f"device must be either 'cpu' or 'gpu', not {device}")
+
+
+def polar_aberrations_to_cartesian(polar):
+    """
+    Convert between polar and Cartesian aberration coefficients.
+
+    Parameters
+    ----------
+    polar: dict
+        Mapping from polar aberration symbols to their corresponding values.
+
+    Returns
+    -------
+    dict
+        Mapping from cartesian aberration symbols to their corresponding values.
+    """
+
+    polar = defaultdict(lambda: 0.0, polar)
+
+    max_order = 5
+    cartesian = dict()
+    for n in range(1, max_order + 1):
+        for s in range(0, n + 2):
+            m = 2 * s - n - 1
+            if m < 0:
+                continue
+
+            modulus_name = "C" + str(n) + str(m)
+            Ca_name = modulus_name + "a"
+            Cb_name = modulus_name + "b"
+            if m != 0:
+                argument_name = "phi" + str(n) + str(m)
+                cartesian[Ca_name] = polar[modulus_name] * np.cos(
+                    polar[argument_name] * m
+                )
+                cartesian[Cb_name] = polar[modulus_name] * np.sin(
+                    polar[argument_name] * m
+                )
+            else:
+                cartesian[modulus_name] = polar[modulus_name]
+
+    return cartesian
+
+
+def cartesian_aberrations_to_polar(cartesian):
+    """
+    Convert between Cartesian and polar aberration coefficients.
+
+    Parameters
+    ----------
+    cartesian: dict
+        Mapping from Cartesian aberration symbols to their corresponding values.
+
+    Returns
+    -------
+    dict
+        Mapping from polar aberration symbols to their corresponding values.
+    """
+
+    cartesian = defaultdict(lambda: 0.0, cartesian)
+    max_order = 5
+    polar = dict()
+    for n in range(1, max_order + 1):
+        for s in range(0, n + 2):
+            m = 2 * s - n - 1
+            if m < 0:
+                continue
+
+            modulus_name = "C" + str(n) + str(m)
+            Ca_name = modulus_name + "a"
+            Cb_name = modulus_name + "b"
+            if m != 0:
+                argument_name = "phi" + str(n) + str(m)
+                polar[modulus_name] = np.sqrt(
+                    cartesian[Ca_name] ** 2 + cartesian[Cb_name] ** 2
+                )
+                polar[argument_name] = (
+                    np.arctan2(cartesian[Cb_name], cartesian[Ca_name]) / m
+                )
+            else:
+                polar[modulus_name] = cartesian[modulus_name]
+    return polar

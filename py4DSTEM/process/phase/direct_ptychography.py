@@ -26,13 +26,33 @@ from py4DSTEM.datacube import DataCube
 from py4DSTEM.process.phase.phase_base_class import PhaseReconstruction
 from py4DSTEM.process.phase.utils import (
     ComplexProbe,
+    cartesian_aberrations_to_polar,
     copy_to_device,
     mask_array_using_virtual_detectors,
+    polar_aberrations_to_cartesian,
     polar_aliases,
     polar_symbols,
     spatial_frequencies,
+    unwrap_phase_2d_skimage,
 )
 from py4DSTEM.process.utils import electron_wavelength_angstrom
+
+_aberration_names = {
+    (1, 0): "C1",
+    (1, 2): "stig",
+    (2, 1): "coma",
+    (2, 3): "trefoil",
+    (3, 0): "C3",
+    (3, 2): "stig2",
+    (3, 4): "quadfoil",
+    (4, 1): "coma2",
+    (4, 3): "trefoil2",
+    (4, 5): "pentafoil",
+    (5, 0): "C5",
+    (5, 2): "stig3",
+    (5, 4): "quadfoil2",
+    (5, 6): "hexafoil",
+}
 
 
 class DirectPtychography(
@@ -122,6 +142,7 @@ class DirectPtychography(
         # Common Metadata
         self._vacuum_probe_intensity = vacuum_probe_intensity
         self._energy = energy
+        self._wavelength = electron_wavelength_angstrom(self._energy)
         self._semiangle_cutoff = semiangle_cutoff
         self._semiangle_cutoff_pixels = semiangle_cutoff_pixels
         self._rolloff = rolloff
@@ -547,19 +568,20 @@ class DirectPtychography(
             fx, fy = fy, fx
         self._scan_frequencies = fx, fy
 
+        trotter_intensities = (
+            (self._intensities_FFT * self._intensities_FFT.conj()).sum((-1, -2)).real
+        )
+        trotter_intensities[0, 0] = 0.0
+        self._trotter_inds = np.unravel_index(
+            asnumpy(xp_storage.argsort(-trotter_intensities.ravel())),
+            trotter_intensities.shape,
+        )
+        self._normalized_trotter_intensities = (
+            trotter_intensities[self._trotter_inds] / trotter_intensities.max()
+        )
+
         # plot probe overlaps
         if plot_overlap_trotters:
-
-            trotter_intensities = (
-                (self._intensities_FFT * self._intensities_FFT.conj())
-                .sum((-1, -2))
-                .real
-            )
-            trotter_intensities[0, 0] = 0.0
-            trotter_inds = np.unravel_index(
-                asnumpy(xp_storage.argsort(-trotter_intensities.ravel())),
-                trotter_intensities.shape,
-            )
 
             f = fx**2 + fy**2
             q_probe = (
@@ -568,11 +590,11 @@ class DirectPtychography(
                 / self.angular_sampling[0]
             )
 
-            bf_inds = f[trotter_inds[0], trotter_inds[1]] < q_probe
-            low_ind_x = trotter_inds[0][bf_inds][0]
-            low_ind_y = trotter_inds[1][bf_inds][0]
-            high_ind_x = trotter_inds[0][~bf_inds][0]
-            high_ind_y = trotter_inds[1][~bf_inds][0]
+            bf_inds = f[self._trotter_inds[0], self._trotter_inds[1]] < q_probe
+            low_ind_x = self._trotter_inds[0][bf_inds][0]
+            low_ind_y = self._trotter_inds[1][bf_inds][0]
+            high_ind_x = self._trotter_inds[0][~bf_inds][0]
+            high_ind_y = self._trotter_inds[1][~bf_inds][0]
 
             figsize = kwargs.pop("figsize", (13, 4))
             chroma_boost = kwargs.pop("chroma_boost", 1)
@@ -658,6 +680,431 @@ class DirectPtychography(
         self.clear_device_mem(self._device, self._clear_fft_cache)
 
         return self
+
+    def aberration_fit(
+        self,
+        fit_aberrations_max_radial_order: int = 3,
+        fit_aberrations_max_angular_order: int = 4,
+        fit_aberrations_min_radial_order: int = 2,
+        fit_aberrations_min_angular_order: int = 0,
+        fit_aberrations_mn: list = None,
+        num_trotters=None,
+        trotter_intensity_threshold=1e-3,
+        relative_polar_parameters=None,
+        fit_method="recursive",
+        **kwargs,
+    ):
+        """
+        Fit aberrations to the measured probe overlap phase.
+
+        Parameters
+        ----------
+        fit_aberrations_max_radial_order: int
+            Max radial order for fitting of aberrations.
+        fit_aberrations_max_angular_order: int
+            Max angular order for fitting of aberrations.
+        fit_aberrations_min_radial_order: int
+            Min radial order for fitting of aberrations.
+        fit_aberrations_min_angular_order: int
+            Min angular order for fitting of aberrations.
+        fit_aberrations_mn: list
+            If not None, sets aberrations mn explicitly.
+        num_trotters : int
+            Number of trotters to use for aberration fitting. If None, trotters with
+            normalized intensity larger than trotter_intensity_threshold are used instead.
+        trotter_intensity_threshold: float
+            If `num_trotters` is None, trotters with normalized intensity larger than this are used.
+        relative_polar_parameters: dict
+            Known aberrations to compensate prior to fitting.
+        fit_method: str
+            Order in which to fit aberration coefficients. One of:
+            'global': all orders are fitted at-once.
+              I.e. [[C1,C12a,C12b,C21a,C21b,C23a,C23b, ...]]
+            'recursive': fit happens recursively in increasing order of radial-aberrations. (Default)
+              I.e. [[C1,C12a,C12b],[C1,C12a,C12b,C21a, C21b, C23a, C23b], ...]
+            'recursive-exclusive': same as 'recursive' but previous orders are not refined further.
+              I.e. [[C1,C12a,C12b],[C21a, C21b, C23a, C23b], ...]
+        """
+        xp = self._xp
+        asnumpy = self._asnumpy
+
+        if fit_aberrations_mn is None:
+            mn = []
+
+            for m in range(
+                fit_aberrations_min_radial_order - 1, fit_aberrations_max_radial_order
+            ):
+                n_max = np.minimum(fit_aberrations_max_angular_order, m + 1)
+                for n in range(fit_aberrations_min_angular_order, n_max + 1):
+                    if (m + n) % 2:
+                        mn.append([m, n, 0])
+                        if n > 0:
+                            mn.append([m, n, 1])
+        else:
+            mn = fit_aberrations_mn
+
+        self._aberrations_mn = np.array(mn)
+        sub = self._aberrations_mn[:, 1] > 0
+        self._aberrations_mn[sub, :] = self._aberrations_mn[sub, :][
+            np.argsort(self._aberrations_mn[sub, 0]), :
+        ]
+        self._aberrations_mn[~sub, :] = self._aberrations_mn[~sub, :][
+            np.argsort(self._aberrations_mn[~sub, 0]), :
+        ]
+        self._aberrations_num = self._aberrations_mn.shape[0]
+
+        split_by_radial_order = np.split(
+            self._aberrations_mn,
+            np.unique(self._aberrations_mn[:, 0], return_index=True)[1][1:],
+        )
+
+        if fit_method == "recursive-exclusive":
+            self._aberrations_mn_list = split_by_radial_order
+        elif fit_method == "recursive":
+            self._aberrations_mn_list = [
+                np.concatenate(split_by_radial_order[:n])
+                for n in range(1, len(split_by_radial_order) + 1)
+            ]
+        elif fit_method == "global":
+            self._aberrations_mn_list = [np.concatenate(split_by_radial_order)]
+        else:
+            raise ValueError()
+
+        if num_trotters is None:
+            num_trotters = (
+                self._normalized_trotter_intensities > trotter_intensity_threshold
+            ).sum()
+
+        self._num_trotters = num_trotters
+
+        def increment_relative_polar_parameters(
+            polar_parameters, fitted_cartesian_coeffs, aberrations_mn
+        ):
+            """ """
+            aberration_dict_cartesian = {
+                tuple(aberrations_mn[a0]): fitted_cartesian_coeffs[a0]
+                for a0 in range(len(aberrations_mn))
+            }
+            polar_dict_fitted = {}
+            unique_aberrations = np.unique(aberrations_mn[:, :2], axis=0)
+            for aberration_order in unique_aberrations:
+                m, n = aberration_order
+                modulus_name = "C" + str(m) + str(n)
+
+                if n != 0:
+                    value_a = aberration_dict_cartesian[(m, n, 0)]
+                    value_b = aberration_dict_cartesian[(m, n, 1)]
+                    polar_dict_fitted[modulus_name] = np.sqrt(value_a**2 + value_b**2)
+
+                    argument_name = "phi" + str(m) + str(n)
+                    polar_dict_fitted[argument_name] = np.arctan2(value_b, value_a) / n
+                else:
+                    polar_dict_fitted[modulus_name] = aberration_dict_cartesian[
+                        (m, n, 0)
+                    ]
+
+            cart_dict_fitted = polar_aberrations_to_cartesian(polar_dict_fitted)
+            cart_dict_relative = polar_aberrations_to_cartesian(polar_parameters)
+
+            for k, v in cart_dict_fitted.items():
+                cart_dict_fitted[k] = v + cart_dict_relative[k]
+
+            polar_dict_fitted = cartesian_aberrations_to_polar(cart_dict_fitted)
+            return polar_dict_fitted
+
+        if relative_polar_parameters is None:
+            relative_polar_parameters = self._polar_parameters_relative
+
+        for aberrations_mn in self._aberrations_mn_list:
+            coeffs, _, _ = self._aberration_fit_single(
+                relative_polar_parameters,
+                aberrations_mn,
+                self._num_trotters,
+                progress_bar=False,
+            )
+            relative_polar_parameters = increment_relative_polar_parameters(
+                relative_polar_parameters, coeffs, aberrations_mn
+            )
+
+        polar_parameters = relative_polar_parameters.copy()
+        for k, v in polar_parameters.items():
+            if k[:3] == "phi":
+                theta = v
+                if self._rotation_best_transpose:
+                    theta = np.pi / 2 - theta
+                theta = theta + self._rotation_best_rad
+                polar_parameters[k] = theta
+
+        self._fitted_polar_parameters = polar_parameters
+        self._fitted_cartesian_parameters = polar_aberrations_to_cartesian(
+            polar_parameters
+        )
+
+        if self._verbose:
+            heading = "Fitted aberration coefficients"
+            print(f"{heading:^50}")
+            print("-" * 50)
+            print("aberration    radial   angular   angle   magnitude")
+            print("   name       order     order    [deg]     [Ang]  ")
+            print("----------   -------   -------   -----   ---------")
+
+            for mn in np.unique(self._aberrations_mn[:, :2], axis=0):
+                m, n = mn
+                name = _aberration_names.get((m, n), "---")
+                mag = self._fitted_polar_parameters.get(f"C{m}{n}", "---")
+                angle = self._fitted_polar_parameters.get(f"phi{m}{n}", "---")
+                if angle != "---":
+                    angle = np.round(np.rad2deg(angle), decimals=1)
+                if mag != "---":
+                    mag = np.round(mag).astype("int")
+
+                name = f"{name:^10}"
+                radial_order = f"{m+1:^7}"
+                angular_order = f"{n:^7}"
+                angle = f"{angle:^5}"
+                mag = f"{mag:^9}"
+                print("   ".join([name, radial_order, angular_order, angle, mag]))
+
+        return self
+
+    def _aberration_fit_single(
+        self,
+        relative_polar_parameters,
+        aberrations_mn,
+        num_trotters,
+        progress_bar,
+    ):
+
+        xp = self._xp
+        asnumpy = self._asnumpy
+
+        def unwrap_trotter_phase(complex_data, mask):
+            """two-pass masked phase unwrapping"""
+            angle = xp.angle(complex_data)
+            angle = unwrap_phase_2d_skimage(angle * mask, corner_centered=True, xp=xp)
+            angle[~mask] = 0.0
+            angle = unwrap_phase_2d_skimage(angle * mask, corner_centered=True, xp=xp)
+            angle[~mask] = 0.0
+            return angle
+
+        sx, sy = self._grid_scan_shape
+        qx, qy = self._intensities_shape
+        aberrations_num = aberrations_mn.shape[0]
+        max_trotter_size = xp.round((xp.abs(self._probe) > 0).sum() * 1.05).astype(
+            "int"
+        )
+
+        Kx, Ky = self._spatial_frequencies
+        Qx, Qy = self._scan_frequencies
+
+        cmplx_probe = ComplexProbe(
+            energy=self._energy,
+            gpts=self._intensities_shape,
+            sampling=self.sampling,
+            semiangle_cutoff=self._semiangle_cutoff,
+            rolloff=self._rolloff,
+            parameters=relative_polar_parameters,
+            device=self._device,
+            force_spatial_frequencies=(Kx, Ky),
+        )
+        alpha, phi = cmplx_probe.get_scattering_angles()
+        aperture = cmplx_probe.evaluate_aperture(alpha, phi) > 0  # make sharp boolean
+        angle = cmplx_probe.evaluate_chi(alpha, phi)
+        probe = aperture * xp.exp(-1j * angle)
+        probe_conj = probe.conjugate()
+
+        aberrations_basis_plus = xp.full(
+            (
+                num_trotters,
+                max_trotter_size,
+                aberrations_num + num_trotters,
+            ),
+            np.inf,
+            dtype=xp.float32,
+        )
+
+        aberrations_basis_minus = xp.full(
+            (
+                num_trotters,
+                max_trotter_size,
+                aberrations_num + num_trotters,
+            ),
+            np.inf,
+            dtype=xp.float32,
+        )
+
+        measured_trotters_plus = xp.full(
+            (num_trotters, max_trotter_size), np.inf, dtype=xp.float32
+        )
+        measured_trotters_minus = xp.full(
+            (num_trotters, max_trotter_size), np.inf, dtype=xp.float32
+        )
+        compensate_phase = relative_polar_parameters is not None
+
+        # main loop
+        for ind in tqdmnd(num_trotters, disable=not progress_bar):
+
+            ind_x = self._trotter_inds[0][ind]
+            ind_y = self._trotter_inds[1][ind]
+
+            Kx_plus_Qx = Kx + Qx[ind_x, ind_y]
+            Ky_plus_Qy = Ky + Qy[ind_x, ind_y]
+
+            cmplx_probe_plus = ComplexProbe(
+                energy=self._energy,
+                gpts=self._intensities_shape,
+                sampling=self.sampling,
+                semiangle_cutoff=self._semiangle_cutoff,
+                rolloff=self._rolloff,
+                parameters=relative_polar_parameters,
+                device=self._device,
+                force_spatial_frequencies=(Kx_plus_Qx, Ky_plus_Qy),
+            )
+            alpha_plus, phi_plus = cmplx_probe_plus.get_scattering_angles()
+            aperture_plus = (
+                cmplx_probe_plus.evaluate_aperture(alpha_plus, phi_plus) > 0
+            )  # make sharp boolean
+            angle_plus = cmplx_probe_plus.evaluate_chi(alpha_plus, phi_plus)
+            probe_plus = aperture_plus * xp.exp(-1j * angle_plus)
+
+            Kx_minus_Qx = Kx - Qx[ind_x, ind_y]
+            Ky_minus_Qy = Ky - Qy[ind_x, ind_y]
+
+            cmplx_probe_minus = ComplexProbe(
+                energy=self._energy,
+                gpts=self._intensities_shape,
+                sampling=self.sampling,
+                semiangle_cutoff=self._semiangle_cutoff,
+                rolloff=self._rolloff,
+                parameters=relative_polar_parameters,
+                device=self._device,
+                force_spatial_frequencies=(Kx_minus_Qx, Ky_minus_Qy),
+            )
+            alpha_minus, phi_minus = cmplx_probe_minus.get_scattering_angles()
+            aperture_minus = (
+                cmplx_probe_minus.evaluate_aperture(alpha_minus, phi_minus) > 0
+            )  # make sharp boolean
+            angle_minus = cmplx_probe_minus.evaluate_chi(alpha_minus, phi_minus)
+            probe_minus = aperture_minus * xp.exp(-1j * angle_minus)
+
+            G = self._intensities_FFT[ind_x, ind_y].copy()
+
+            if compensate_phase:
+                overlap_minus = probe_conj * probe_minus
+                overlap_plus = probe * probe_plus.conj()
+                gamma_angle = xp.angle(overlap_minus - overlap_plus)
+                G *= xp.exp(-1j * gamma_angle)
+
+            aperture_plus_solo = xp.logical_and(
+                xp.logical_and(aperture, aperture_plus), ~aperture_minus
+            )
+            aperture_minus_solo = xp.logical_and(
+                xp.logical_and(aperture, aperture_minus), ~aperture_plus
+            )
+
+            trotters_plus_angle = unwrap_trotter_phase(G, aperture_plus_solo)[
+                aperture_plus_solo
+            ]
+            n_plus = trotters_plus_angle.shape[0]
+            measured_trotters_plus[ind, :n_plus] = trotters_plus_angle
+
+            trotters_minus_angle = unwrap_trotter_phase(G, aperture_minus_solo)[
+                aperture_minus_solo
+            ]
+            n_minus = trotters_minus_angle.shape[0]
+            measured_trotters_minus[ind, :n_minus] = trotters_minus_angle
+
+            unit_vec = xp.zeros(self._num_trotters)
+            unit_vec[ind] = 1
+
+            for a0 in range(aberrations_num):
+                m, n, a = aberrations_mn[a0]
+                if n == 0:
+                    # Radially symmetric basis
+                    aberrations_normalization = alpha ** (m + 1) / (m + 1)
+                    aberrations_basis_plus[ind, :n_plus, a0] = (
+                        alpha_plus[aperture_plus_solo] ** (m + 1) / (m + 1)
+                    ) - aberrations_normalization[aperture_plus_solo]
+                    aberrations_basis_minus[ind, :n_minus, a0] = (
+                        aberrations_normalization[aperture_minus_solo]
+                        - (alpha_minus[aperture_minus_solo] ** (m + 1) / (m + 1))
+                    )
+
+                elif a == 0:
+                    # cos coef
+                    aberrations_normalization = (
+                        alpha ** (m + 1) * xp.cos(n * phi) / (m + 1)
+                    )
+                    aberrations_basis_plus[ind, :n_plus, a0] = (
+                        alpha_plus[aperture_plus_solo] ** (m + 1)
+                        * xp.cos(n * phi_plus[aperture_plus_solo])
+                        / (m + 1)
+                    ) - aberrations_normalization[aperture_plus_solo]
+                    aberrations_basis_minus[
+                        ind, :n_minus, a0
+                    ] = aberrations_normalization[aperture_minus_solo] - (
+                        alpha_minus[aperture_minus_solo] ** (m + 1)
+                        * xp.cos(n * phi_minus[aperture_minus_solo])
+                        / (m + 1)
+                    )
+
+                else:
+                    # sin coef
+                    aberrations_normalization = (
+                        alpha ** (m + 1) * xp.sin(n * phi) / (m + 1)
+                    )
+                    aberrations_basis_plus[ind, :n_plus, a0] = (
+                        alpha_plus[aperture_plus_solo] ** (m + 1)
+                        * xp.sin(n * phi_plus[aperture_plus_solo])
+                    ) / (m + 1) - aberrations_normalization[aperture_plus_solo]
+                    aberrations_basis_minus[
+                        ind, :n_minus, a0
+                    ] = aberrations_normalization[aperture_plus_solo] - (
+                        alpha_minus[aperture_minus_solo] ** (m + 1)
+                        * xp.sin(n * phi_minus[aperture_minus_solo])
+                        / (m + 1)
+                    )
+
+            aberrations_basis_plus[ind, :n_plus, a0 + 1 :] = unit_vec
+            aberrations_basis_minus[ind, :n_minus, a0 + 1 :] = unit_vec
+
+        # global scaling
+        aberrations_basis_plus[..., :n_plus, :aberrations_num] *= (
+            2 * np.pi / self._wavelength
+        )
+        aberrations_basis_minus[..., :n_minus, :aberrations_num] *= (
+            2 * np.pi / self._wavelength
+        )
+
+        finite_inds_plus = xp.isfinite(aberrations_basis_plus)
+        aberrations_basis_plus = aberrations_basis_plus[finite_inds_plus].reshape(
+            (-1, aberrations_num + num_trotters)
+        )
+        measured_trotters_plus = measured_trotters_plus[finite_inds_plus[..., 0]]
+
+        finite_inds_minus = xp.isfinite(aberrations_basis_minus)
+        aberrations_basis_minus = aberrations_basis_minus[finite_inds_minus].reshape(
+            (-1, aberrations_num + num_trotters)
+        )
+        measured_trotters_minus = measured_trotters_minus[finite_inds_minus[..., 0]]
+
+        aberrations_basis = xp.vstack(
+            (
+                aberrations_basis_plus,
+                aberrations_basis_minus,
+            ),
+        )
+
+        measured_trotters = xp.hstack(
+            (
+                measured_trotters_plus,
+                measured_trotters_minus,
+            ),
+        )
+
+        coeffs = xp.linalg.lstsq(aberrations_basis, measured_trotters, rcond=None)[0]
+
+        return coeffs, aberrations_basis, measured_trotters
 
     def reconstruct(
         self,
