@@ -3,6 +3,7 @@ Module for reconstructing phase objects from 4DSTEM datasets using direct ptycho
 namely single-sideband and Wigner-distribution deconvolution.
 """
 
+import warnings
 from typing import Mapping, Sequence, Union
 
 import matplotlib.pyplot as plt
@@ -119,6 +120,11 @@ class DirectPtychography(
         if storage is None:
             storage = device
 
+        if device == "gpu":
+            warnings.warn(
+                "Note this class is not very well optimized on gpu.",
+                UserWarning,
+            )
         self.set_device(device, clear_fft_cache)
         self.set_storage(storage)
 
@@ -389,6 +395,11 @@ class DirectPtychography(
         """
 
         # handle device/storage
+        if device == "gpu":
+            warnings.warn(
+                "Note this class is not very well optimized on gpu.",
+                UserWarning,
+            )
         self.set_device(device, clear_fft_cache)
 
         device = self._device
@@ -1215,6 +1226,11 @@ class DirectPtychography(
         """
 
         # handle device/storage
+        if device == "gpu":
+            warnings.warn(
+                "Note this class is not very well optimized on gpu.",
+                UserWarning,
+            )
         self.set_device(device, clear_fft_cache)
 
         if device is not None:
