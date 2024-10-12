@@ -622,7 +622,17 @@ class DirectPtychography(
         if plot_overlap_trotters:
 
             f = fx**2 + fy**2
-            q_probe = self._reciprocal_sampling[0] * 20 / self.angular_sampling[0]
+
+            if self._semiangle_cutoff == np.inf:
+                alpha_probe = (
+                    xp.sqrt(xp.sum(xp.abs(self._fourier_probe_initial)) / np.pi)
+                    * self.angular_sampling[0]
+                )
+            else:
+                alpha_probe = self._semiangle_cutoff
+            q_probe = (
+                self._reciprocal_sampling[0] * alpha_probe / self.angular_sampling[0]
+            )
 
             bf_inds = f[self._trotter_inds[0], self._trotter_inds[1]] < q_probe
             low_ind_x = self._trotter_inds[0][bf_inds][0]
@@ -1167,7 +1177,7 @@ class DirectPtychography(
                     ) / (m + 1) - aberrations_normalization[aperture_plus_solo]
                     aberrations_basis_minus[
                         ind, :n_minus, a0
-                    ] = aberrations_normalization[aperture_plus_solo] - (
+                    ] = aberrations_normalization[aperture_minus_solo] - (
                         alpha_minus[aperture_minus_solo] ** (m + 1)
                         * xp.sin(n * phi_minus[aperture_minus_solo])
                         / (m + 1)

@@ -20,7 +20,7 @@ except (ImportError, ModuleNotFoundError):
         return np
 
 
-from py4DSTEM.process.utils import get_CoM
+from py4DSTEM.process.utils import get_CoM, get_shifted_ar
 from py4DSTEM.process.utils.cross_correlate import align_and_shift_images
 from py4DSTEM.process.utils.utils import electron_wavelength_angstrom
 
@@ -131,6 +131,7 @@ class ComplexProbe:
         self._wavelength = electron_wavelength_angstrom(energy)
         self._gpts = gpts
         self._sampling = sampling
+        self._device = device
 
         self._parameters = dict(zip(polar_symbols, [0.0] * len(polar_symbols)))
 
@@ -171,15 +172,19 @@ class ComplexProbe:
         semiangle_cutoff = self._semiangle_cutoff / 1000
 
         if self._vacuum_probe_intensity is not None:
-            vacuum_probe_intensity = xp.asarray(
-                self._vacuum_probe_intensity, dtype=xp.float32
-            )
-            vacuum_probe_amplitude = xp.sqrt(xp.maximum(vacuum_probe_intensity, 0))
             if self._force_spatial_frequencies is not None:
-                origin = np.unravel_index(alpha.argmin(), self._gpts)
-                vacuum_probe_amplitude = xp.roll(
-                    vacuum_probe_amplitude, -np.array(origin), axis=(0, 1)
+                vacuum_probe_intensity = get_shifted_ar(
+                    xp.asarray(self._vacuum_probe_intensity, dtype=xp.float32),
+                    self._origin[0],
+                    self._origin[1],
+                    bilinear=True,
+                    device=self._device,
                 )
+            else:
+                vacuum_probe_intensity = xp.asarray(
+                    self._vacuum_probe_intensity, dtype=xp.float32
+                )
+            vacuum_probe_amplitude = xp.sqrt(xp.maximum(vacuum_probe_intensity, 0))
             return vacuum_probe_amplitude
 
         if self._semiangle_cutoff == xp.inf:
@@ -423,6 +428,17 @@ class ComplexProbe:
             kx, ky = self._force_spatial_frequencies
             kx = xp.asarray(kx).astype(xp.float32)
             ky = xp.asarray(ky).astype(xp.float32)
+
+            def find_zero_crossing(x):
+                n = x.shape[0]
+                y0, y1 = np.argsort(np.abs(x))[:2]
+                x0, x1 = x[y0], x[y1]
+                y = (y0 * x1 - y1 * x0) / (x1 - x0)
+                dy = np.mod(y + n / 2, n) - n / 2
+                return dy
+
+            self._origin = tuple(find_zero_crossing(k) for k in [kx, ky])
+
         return kx, ky
 
     def polar_coordinates(self, x, y):
