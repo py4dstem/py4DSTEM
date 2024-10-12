@@ -206,9 +206,9 @@ class DirectPtychography(
             data=asnumpy(self._object),
         )
 
-        self._probe_emd = Array(
+        self._fourier_probe_emd = Array(
             name="initialized_probe",
-            data=asnumpy(self._probe),
+            data=asnumpy(self._fourier_probe),
         )
 
         # datacube
@@ -281,11 +281,12 @@ class DirectPtychography(
         # Data
         dict_data = Custom._get_emd_attr_data(Custom, group)
         obj = dict_data["_object_emd"].data
-        probe = dict_data["_probe_emd"].data
+        fourier_probe = dict_data["_fourier_probe_emd"].data
 
         self._object = obj
         self.object = obj
-        self._probe = probe
+        self._fourier_probe = fourier_probe
+        self._fourier_probe_initial = fourier_probe
 
     def _set_polar_parameters(self, parameters: dict):
         """
@@ -541,7 +542,7 @@ class DirectPtychography(
             self._intensities_FFT = self._intensities_FFT.transpose((2, 3, 0, 1))
 
         # initialize probe
-        self._probe = ComplexProbe(
+        self._fourier_probe_initial = ComplexProbe(
             energy=self._energy,
             gpts=self._intensities_shape,
             sampling=self.sampling,
@@ -550,6 +551,7 @@ class DirectPtychography(
             parameters=self._polar_parameters_relative,
             device=device,
         )._evaluate_ctf()
+        self._fourier_probe = self._fourier_probe_initial.copy()
 
         # initialize frequencies
         self._spatial_frequencies = spatial_frequencies(
@@ -611,7 +613,7 @@ class DirectPtychography(
 
             # BF probe
             complex_probe_rgb = Complex2RGB(
-                self.probe_centered,
+                asnumpy(self._return_centered_probe(self._fourier_probe_initial)),
                 power=power,
                 chroma_boost=chroma_boost,
                 vmin=0,
@@ -662,7 +664,7 @@ class DirectPtychography(
             for ax, title in zip(
                 [ax1, ax2, ax3],
                 [
-                    "Bright-field complex probe",
+                    "Initial bright-field complex probe",
                     "Low frequency trotter example",
                     "High frequency trotter example",
                 ],
@@ -683,15 +685,16 @@ class DirectPtychography(
 
     def aberration_fit(
         self,
-        fit_aberrations_max_radial_order: int = 3,
-        fit_aberrations_max_angular_order: int = 4,
-        fit_aberrations_min_radial_order: int = 2,
-        fit_aberrations_min_angular_order: int = 0,
-        fit_aberrations_mn: list = None,
+        max_radial_order: int = 3,
+        max_angular_order: int = 4,
+        min_radial_order: int = 2,
+        min_angular_order: int = 0,
+        aberrations_mn: list = None,
         num_trotters=None,
         trotter_intensity_threshold=1e-3,
         relative_polar_parameters=None,
         fit_method="recursive",
+        plot_fitted_fourier_probe=True,
         **kwargs,
     ):
         """
@@ -715,7 +718,7 @@ class DirectPtychography(
         trotter_intensity_threshold: float
             If `num_trotters` is None, trotters with normalized intensity larger than this are used.
         relative_polar_parameters: dict
-            Known aberrations to compensate prior to fitting.
+            Known aberrations to compensate prior to fitting. If None, uses initialization values.
         fit_method: str
             Order in which to fit aberration coefficients. One of:
             'global': all orders are fitted at-once.
@@ -725,23 +728,20 @@ class DirectPtychography(
             'recursive-exclusive': same as 'recursive' but previous orders are not refined further.
               I.e. [[C1,C12a,C12b],[C21a, C21b, C23a, C23b], ...]
         """
-        xp = self._xp
         asnumpy = self._asnumpy
 
-        if fit_aberrations_mn is None:
+        if aberrations_mn is None:
             mn = []
 
-            for m in range(
-                fit_aberrations_min_radial_order - 1, fit_aberrations_max_radial_order
-            ):
-                n_max = np.minimum(fit_aberrations_max_angular_order, m + 1)
-                for n in range(fit_aberrations_min_angular_order, n_max + 1):
+            for m in range(min_radial_order - 1, max_radial_order):
+                n_max = np.minimum(max_angular_order, m + 1)
+                for n in range(min_angular_order, n_max + 1):
                     if (m + n) % 2:
                         mn.append([m, n, 0])
                         if n > 0:
                             mn.append([m, n, 1])
         else:
-            mn = fit_aberrations_mn
+            mn = aberrations_mn
 
         self._aberrations_mn = np.array(mn)
         sub = self._aberrations_mn[:, 1] > 0
@@ -826,6 +826,7 @@ class DirectPtychography(
                 relative_polar_parameters, coeffs, aberrations_mn
             )
 
+        self._fitted_polar_parameters_relative = relative_polar_parameters
         polar_parameters = relative_polar_parameters.copy()
         for k, v in polar_parameters.items():
             if k[:3] == "phi":
@@ -836,9 +837,6 @@ class DirectPtychography(
                 polar_parameters[k] = theta
 
         self._fitted_polar_parameters = polar_parameters
-        self._fitted_cartesian_parameters = polar_aberrations_to_cartesian(
-            polar_parameters
-        )
 
         if self._verbose:
             heading = "Fitted aberration coefficients"
@@ -865,6 +863,72 @@ class DirectPtychography(
                 mag = f"{mag:^9}"
                 print("   ".join([name, radial_order, angular_order, angle, mag]))
 
+        if plot_fitted_fourier_probe:
+            fourier_probe = ComplexProbe(
+                energy=self._energy,
+                gpts=self._intensities_shape,
+                sampling=self.sampling,
+                semiangle_cutoff=self._semiangle_cutoff,
+                rolloff=self._rolloff,
+                parameters=self._fitted_polar_parameters_relative,
+                device=self._device,
+            )._evaluate_ctf()
+
+            figsize = kwargs.pop("figsize", (9, 4))
+            chroma_boost = kwargs.pop("chroma_boost", 1)
+            power = kwargs.pop("power", 2)
+
+            reciprocal_extent = [
+                -self.angular_sampling[1] * self._intensities_shape[1] / 2,
+                self.angular_sampling[1] * self._intensities_shape[1] / 2,
+                self.angular_sampling[0] * self._intensities_shape[0] / 2,
+                -self.angular_sampling[0] * self._intensities_shape[0] / 2,
+            ]
+
+            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=figsize)
+
+            complex_probe_rgb = Complex2RGB(
+                asnumpy(self._return_centered_probe(self._fourier_probe_initial)),
+                power=power,
+                chroma_boost=chroma_boost,
+                vmin=0,
+                vmax=1,
+            )
+
+            ax1.imshow(
+                complex_probe_rgb,
+                extent=reciprocal_extent,
+            )
+
+            complex_probe_rgb = Complex2RGB(
+                asnumpy(self._return_centered_probe(fourier_probe)),
+                power=power,
+                chroma_boost=chroma_boost,
+                vmin=0,
+                vmax=1,
+            )
+
+            ax2.imshow(
+                complex_probe_rgb,
+                extent=reciprocal_extent,
+            )
+
+            for ax, title in zip(
+                [ax1, ax2],
+                [
+                    "Initial bright-field complex probe",
+                    "Fitted bright-field complex probe",
+                ],
+            ):
+                divider = make_axes_locatable(ax)
+                cax = divider.append_axes("right", size="5%", pad="2.5%")
+                add_colorbar_arg(cax, chroma_boost=chroma_boost)
+                ax.set_ylabel("kx [mrad]")
+                ax.set_xlabel("ky [mrad]")
+                ax.set_title(title)
+
+            fig.tight_layout()
+
         return self
 
     def _aberration_fit_single(
@@ -876,7 +940,6 @@ class DirectPtychography(
     ):
 
         xp = self._xp
-        asnumpy = self._asnumpy
 
         def unwrap_trotter_phase(complex_data, mask):
             """two-pass masked phase unwrapping"""
@@ -890,9 +953,9 @@ class DirectPtychography(
         sx, sy = self._grid_scan_shape
         qx, qy = self._intensities_shape
         aberrations_num = aberrations_mn.shape[0]
-        max_trotter_size = xp.round((xp.abs(self._probe) > 0).sum() * 1.05).astype(
-            "int"
-        )
+        max_trotter_size = xp.round(
+            (xp.abs(self._fourier_probe_initial) > 0).sum() * 1.05
+        ).astype("int")
 
         Kx, Ky = self._spatial_frequencies
         Qx, Qy = self._scan_frequencies
@@ -1110,9 +1173,11 @@ class DirectPtychography(
         self,
         wigner_deconvolution_wiener_epsilon=None,
         virtual_detector_masks: Sequence[np.ndarray] = None,
+        polar_parameters: Mapping[str, float] = None,
         progress_bar: bool = True,
         device: str = None,
         clear_fft_cache: bool = None,
+        **kwargs,
     ):
         """
         Ptychographic reconstruction main method.
@@ -1139,20 +1204,91 @@ class DirectPtychography(
             Self to accommodate chaining
         """
 
+        # handle device/storage
+        self.set_device(device, clear_fft_cache)
+
+        if device is not None:
+            attrs = [
+                "_fourier_probe_initial",
+            ]
+            self.copy_attributes_to_device(attrs, device)
+
+        for key in kwargs.keys():
+            if (key not in polar_symbols) and (key not in polar_aliases.keys()):
+                raise ValueError("{} not a recognized parameter".format(key))
+
+        if polar_parameters is None:
+            polar_parameters = {}
+            polar_parameters.update(kwargs)
+            print_summary = True
+
+        if not polar_parameters and hasattr(self, "_fitted_polar_parameters"):
+            polar_parameters = self._fitted_polar_parameters
+            print_summary = False
+
+        if polar_parameters:
+            self._polar_parameters = dict(
+                zip(polar_symbols, [0.0] * len(polar_symbols))
+            )
+            self._set_polar_parameters(polar_parameters)
+
+            if print_summary:
+                heading = "Forced aberration coefficients"
+                print(f"{heading:^50}")
+                print("-" * 50)
+                print("aberration    radial   angular   angle   magnitude")
+                print("   name       order     order    [deg]     [Ang]  ")
+                print("----------   -------   -------   -----   ---------")
+
+                for mn in filter(lambda s: s[0] == "C", polar_symbols):
+                    m, n = mn[-2:]
+                    m = int(m)
+                    n = int(n)
+                    name = _aberration_names.get((m, n), "---")
+                    mag = self._polar_parameters.get(f"C{m}{n}", "---")
+                    if mag == 0.0:
+                        continue
+                    angle = self._polar_parameters.get(f"phi{m}{n}", "---")
+                    if angle != "---":
+                        angle = np.round(np.rad2deg(angle), decimals=1)
+                    if mag != "---":
+                        mag = np.round(mag).astype("int")
+
+                    name = f"{name:^10}"
+                    radial_order = f"{m+1:^7}"
+                    angular_order = f"{n:^7}"
+                    angle = f"{angle:^5}"
+                    mag = f"{mag:^9}"
+                    print("   ".join([name, radial_order, angular_order, angle, mag]))
+
+            self._polar_parameters_relative = self._polar_parameters.copy()
+            for k, v in self._polar_parameters_relative.items():
+                if k[:3] == "phi":
+                    theta = v - self._rotation_best_rad
+                    if self._rotation_best_transpose:
+                        theta = np.pi / 2 - theta
+                    self._polar_parameters_relative[k] = theta
+
+            self._fourier_probe = ComplexProbe(
+                energy=self._energy,
+                gpts=self._intensities_shape,
+                sampling=self.sampling,
+                semiangle_cutoff=self._semiangle_cutoff,
+                rolloff=self._rolloff,
+                parameters=self._polar_parameters_relative,
+                device=self._device,
+            )._evaluate_ctf()
+
         if wigner_deconvolution_wiener_epsilon is None:
             return self._reconstruct_SSB_gamma(
                 virtual_detector_masks=virtual_detector_masks,
                 progress_bar=progress_bar,
-                device=device,
-                clear_fft_cache=clear_fft_cache,
             )
         else:
             return self._reconstruct_WDD(
                 wigner_deconvolution_wiener_epsilon=wigner_deconvolution_wiener_epsilon,
                 virtual_detector_masks=virtual_detector_masks,
                 progress_bar=progress_bar,
-                device=device,
-                clear_fft_cache=clear_fft_cache,
             )
 
     def _reconstruct_WDD(
@@ -1160,8 +1296,6 @@ class DirectPtychography(
         wigner_deconvolution_wiener_epsilon,
         virtual_detector_masks: Sequence[np.ndarray] = None,
         progress_bar: bool = True,
-        device: str = None,
-        clear_fft_cache: bool = None,
     ):
         """
         Ptychographic reconstruction main method.
@@ -1177,33 +1311,20 @@ class DirectPtychography(
             to allow comparison with arbitrary geometry detector datasets. TO-DO
         progress_bar: bool, optional
             If True, reconstruction progress is displayed
-        device: str, optional
-            If not none, overwrites self._device to set device preprocess will be perfomed on.
-        clear_fft_cache: bool, optional
-            If true, and device = 'gpu', clears the cached fft plan at the end of function calls
 
         Returns
         --------
         self: DirectPtychography
             Self to accommodate chaining
         """
-        # handle device/storage
-        self.set_device(device, clear_fft_cache)
-
-        if device is not None:
-            attrs = [
-                "_probe",
-            ]
-            self.copy_attributes_to_device(attrs, device)
 
         xp = self._xp
-        device = self._device
         asnumpy = self._asnumpy
 
         sx, sy = self._grid_scan_shape
         psi = xp.empty((sx, sy), dtype=xp.complex64)
 
-        wdd_probe_0 = xp.fft.ifft2(self._probe * self._probe.conj())
+        wdd_probe_0 = xp.fft.ifft2(self._fourier_probe * self._fourier_probe.conj())
         epsilon = wigner_deconvolution_wiener_epsilon * xp.abs(wdd_probe_0[0, 0])
 
         Kx, Ky = self._spatial_frequencies
@@ -1234,7 +1355,7 @@ class DirectPtychography(
                 force_spatial_frequencies=(Kx_plus_Qx, Ky_plus_Qy),
             )._evaluate_ctf()
 
-            wdd_probe = xp.fft.ifft2(self._probe * probe_plus.conj())
+            wdd_probe = xp.fft.ifft2(self._fourier_probe * probe_plus.conj())
             wdd_probe_conj = wdd_probe.conj()
 
             array_G = xp.asarray(self._intensities_FFT[ind_x, ind_y])
@@ -1252,7 +1373,6 @@ class DirectPtychography(
 
         # store result
         self.object = asnumpy(self._object)
-        self.probe = self.probe_centered
 
         self.clear_device_mem(self._device, self._clear_fft_cache)
 
@@ -1262,8 +1382,6 @@ class DirectPtychography(
         self,
         virtual_detector_masks: Sequence[np.ndarray] = None,
         progress_bar: bool = True,
-        device: str = None,
-        clear_fft_cache: bool = None,
     ):
         """
         Ptychographic reconstruction main method.
@@ -1275,32 +1393,18 @@ class DirectPtychography(
             to allow comparison with arbitrary geometry detector datasets. TO-DO
         progress_bar: bool, optional
             If True, reconstruction progress is displayed
-        device: str, optional
-            If not none, overwrites self._device to set device preprocess will be perfomed on.
-        clear_fft_cache: bool, optional
-            If true, and device = 'gpu', clears the cached fft plan at the end of function calls
 
         Returns
         --------
         self: DirectPtychography
             Self to accommodate chaining
         """
-        # handle device/storage
-        self.set_device(device, clear_fft_cache)
-
-        if device is not None:
-            attrs = [
-                "_probe",
-            ]
-            self.copy_attributes_to_device(attrs, device)
-
         xp = self._xp
-        device = self._device
         asnumpy = self._asnumpy
 
         sx, sy = self._grid_scan_shape
         psi = xp.empty((sx, sy), dtype=xp.complex64)
-        probe_conj = xp.conj(self._probe)
+        probe_conj = xp.conj(self._fourier_probe)
         threshold = 1e-3
 
         Kx, Ky = self._spatial_frequencies
@@ -1349,7 +1453,9 @@ class DirectPtychography(
                     force_spatial_frequencies=(Kx_minus_Qx, Ky_minus_Qy),
                 )._evaluate_ctf()
 
-                gamma = probe_conj * probe_minus - self._probe * probe_plus.conj()
+                gamma = (
+                    probe_conj * probe_minus - self._fourier_probe * probe_plus.conj()
+                )
 
                 if virtual_detector_masks is not None:
                     gamma = mask_array_using_virtual_detectors(
@@ -1366,7 +1472,6 @@ class DirectPtychography(
 
         # store result
         self.object = asnumpy(self._object)
-        self.probe = self.probe_centered
 
         self.clear_device_mem(self._device, self._clear_fft_cache)
 
@@ -1456,20 +1561,20 @@ class DirectPtychography(
         xp = self._xp
 
         if probe is None:
-            probe = self._probe
+            probe = self._fourier_probe
         else:
             probe = xp.asarray(probe, dtype=xp.complex64)
 
         return xp.fft.fftshift(probe, axes=(-2, -1))
 
     @property
-    def probe_centered(self):
+    def probe_fourier(self):
         """Center-shifted probe"""
-        if not hasattr(self, "_probe"):
+        if not hasattr(self, "_fourier_probe"):
             return None
 
         asnumpy = self._asnumpy
-        return asnumpy(self._return_centered_probe(self._probe))
+        return asnumpy(self._return_centered_probe(self._fourier_probe))
 
     @property
     def scan_sampling(self):
