@@ -729,6 +729,7 @@ class DirectPtychography(
               I.e. [[C1,C12a,C12b],[C21a, C21b, C23a, C23b], ...]
         """
         asnumpy = self._asnumpy
+        storage = self._storage
 
         if aberrations_mn is None:
             mn = []
@@ -774,6 +775,8 @@ class DirectPtychography(
             num_trotters = (
                 self._normalized_trotter_intensities > trotter_intensity_threshold
             ).sum()
+            if storage == "gpu":
+                num_trotters = num_trotters.item()
 
         self._num_trotters = num_trotters
 
@@ -940,6 +943,7 @@ class DirectPtychography(
     ):
 
         xp = self._xp
+        asnumpy = self._asnumpy
 
         def unwrap_trotter_phase(complex_data, mask):
             """two-pass masked phase unwrapping"""
@@ -956,6 +960,9 @@ class DirectPtychography(
         max_trotter_size = xp.round(
             (xp.abs(self._fourier_probe_initial) > 0).sum() * 1.05
         ).astype("int")
+
+        if xp is not np:
+            max_trotter_size = max_trotter_size.item()
 
         Kx, Ky = self._spatial_frequencies
         Qx, Qy = self._scan_frequencies
@@ -1165,7 +1172,10 @@ class DirectPtychography(
             ),
         )
 
-        coeffs = xp.linalg.lstsq(aberrations_basis, measured_trotters, rcond=None)[0]
+        # coeffs = xp.linalg.lstsq(aberrations_basis, measured_trotters, rcond=None)[0] # somehow cp lstsq is wrong..
+        coeffs = np.linalg.lstsq(
+            asnumpy(aberrations_basis), asnumpy(measured_trotters), rcond=None
+        )[0]
 
         return coeffs, aberrations_basis, measured_trotters
 
