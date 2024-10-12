@@ -36,7 +36,7 @@ from py4DSTEM.process.phase.utils import (
     spatial_frequencies,
     unwrap_phase_2d_skimage,
 )
-from py4DSTEM.process.utils import electron_wavelength_angstrom
+from py4DSTEM.process.utils import electron_wavelength_angstrom, get_CoM, get_shifted_ar
 
 _aberration_names = {
     (1, 0): "C1",
@@ -404,6 +404,7 @@ class DirectPtychography(
 
         device = self._device
         storage = self._storage
+        xp = self._xp
         xp_storage = self._xp_storage
         asnumpy = self._asnumpy
 
@@ -553,11 +554,35 @@ class DirectPtychography(
             self._intensities_FFT = self._intensities_FFT.transpose((2, 3, 0, 1))
 
         # initialize probe
+        if self._vacuum_probe_intensity is not None:
+            self._semiangle_cutoff = np.inf
+            self._vacuum_probe_intensity = xp.asarray(
+                self._vacuum_probe_intensity, dtype=xp.float32
+            )
+
+            probe_x0, probe_y0 = get_CoM(
+                self._vacuum_probe_intensity,
+                device=device,
+            )
+            self._vacuum_probe_intensity = get_shifted_ar(
+                self._vacuum_probe_intensity,
+                -probe_x0,
+                -probe_y0,
+                bilinear=True,
+                device=device,
+            )
+
+            # normalize
+            self._vacuum_probe_intensity -= self._vacuum_probe_intensity.min()
+            self._vacuum_probe_intensity /= self._vacuum_probe_intensity.max()
+            self._vacuum_probe_intensity[self._vacuum_probe_intensity < 1e-2] = 0.0
+
         self._fourier_probe_initial = ComplexProbe(
             energy=self._energy,
             gpts=self._intensities_shape,
             sampling=self.sampling,
             semiangle_cutoff=self._semiangle_cutoff,
+            vacuum_probe_intensity=self._vacuum_probe_intensity,
             rolloff=self._rolloff,
             parameters=self._polar_parameters_relative,
             device=device,
@@ -597,11 +622,7 @@ class DirectPtychography(
         if plot_overlap_trotters:
 
             f = fx**2 + fy**2
-            q_probe = (
-                self._reciprocal_sampling[0]
-                * self._semiangle_cutoff
-                / self.angular_sampling[0]
-            )
+            q_probe = self._reciprocal_sampling[0] * 20 / self.angular_sampling[0]
 
             bf_inds = f[self._trotter_inds[0], self._trotter_inds[1]] < q_probe
             low_ind_x = self._trotter_inds[0][bf_inds][0]
@@ -883,6 +904,7 @@ class DirectPtychography(
                 gpts=self._intensities_shape,
                 sampling=self.sampling,
                 semiangle_cutoff=self._semiangle_cutoff,
+                vacuum_probe_intensity=self._vacuum_probe_intensity,
                 rolloff=self._rolloff,
                 parameters=self._fitted_polar_parameters_relative,
                 device=self._device,
@@ -983,6 +1005,7 @@ class DirectPtychography(
             gpts=self._intensities_shape,
             sampling=self.sampling,
             semiangle_cutoff=self._semiangle_cutoff,
+            vacuum_probe_intensity=self._vacuum_probe_intensity,
             rolloff=self._rolloff,
             parameters=relative_polar_parameters,
             device=self._device,
@@ -990,6 +1013,7 @@ class DirectPtychography(
         )
         alpha, phi = cmplx_probe.get_scattering_angles()
         aperture = cmplx_probe.evaluate_aperture(alpha, phi) > 0  # make sharp boolean
+
         angle = cmplx_probe.evaluate_chi(alpha, phi)
         probe = aperture * xp.exp(-1j * angle)
         probe_conj = probe.conjugate()
@@ -1036,6 +1060,7 @@ class DirectPtychography(
                 gpts=self._intensities_shape,
                 sampling=self.sampling,
                 semiangle_cutoff=self._semiangle_cutoff,
+                vacuum_probe_intensity=self._vacuum_probe_intensity,
                 rolloff=self._rolloff,
                 parameters=relative_polar_parameters,
                 device=self._device,
@@ -1045,6 +1070,7 @@ class DirectPtychography(
             aperture_plus = (
                 cmplx_probe_plus.evaluate_aperture(alpha_plus, phi_plus) > 0
             )  # make sharp boolean
+
             angle_plus = cmplx_probe_plus.evaluate_chi(alpha_plus, phi_plus)
             probe_plus = aperture_plus * xp.exp(-1j * angle_plus)
 
@@ -1056,6 +1082,7 @@ class DirectPtychography(
                 gpts=self._intensities_shape,
                 sampling=self.sampling,
                 semiangle_cutoff=self._semiangle_cutoff,
+                vacuum_probe_intensity=self._vacuum_probe_intensity,
                 rolloff=self._rolloff,
                 parameters=relative_polar_parameters,
                 device=self._device,
@@ -1300,6 +1327,7 @@ class DirectPtychography(
                 gpts=self._intensities_shape,
                 sampling=self.sampling,
                 semiangle_cutoff=self._semiangle_cutoff,
+                vacuum_probe_intensity=self._vacuum_probe_intensity,
                 rolloff=self._rolloff,
                 parameters=self._polar_parameters_relative,
                 device=self._device,
@@ -1375,6 +1403,7 @@ class DirectPtychography(
                 gpts=self._intensities_shape,
                 sampling=self.sampling,
                 semiangle_cutoff=self._semiangle_cutoff,
+                vacuum_probe_intensity=self._vacuum_probe_intensity,
                 rolloff=self._rolloff,
                 parameters=self._polar_parameters_relative,
                 device=self._device,
@@ -1459,6 +1488,7 @@ class DirectPtychography(
                     gpts=self._intensities_shape,
                     sampling=self.sampling,
                     semiangle_cutoff=self._semiangle_cutoff,
+                    vacuum_probe_intensity=self._vacuum_probe_intensity,
                     rolloff=self._rolloff,
                     parameters=self._polar_parameters_relative,
                     device=self._device,
@@ -1473,6 +1503,7 @@ class DirectPtychography(
                     gpts=self._intensities_shape,
                     sampling=self.sampling,
                     semiangle_cutoff=self._semiangle_cutoff,
+                    vacuum_probe_intensity=self._vacuum_probe_intensity,
                     rolloff=self._rolloff,
                     parameters=self._polar_parameters_relative,
                     device=self._device,

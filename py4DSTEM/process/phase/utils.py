@@ -175,6 +175,11 @@ class ComplexProbe:
                 self._vacuum_probe_intensity, dtype=xp.float32
             )
             vacuum_probe_amplitude = xp.sqrt(xp.maximum(vacuum_probe_intensity, 0))
+            if self._force_spatial_frequencies is not None:
+                origin = np.unravel_index(alpha.argmin(), self._gpts)
+                vacuum_probe_amplitude = xp.roll(
+                    vacuum_probe_amplitude, -np.array(origin), axis=(0, 1)
+                )
             return vacuum_probe_amplitude
 
         if self._semiangle_cutoff == xp.inf:
