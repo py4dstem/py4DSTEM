@@ -1284,6 +1284,8 @@ class DirectPtychography(
             polar_parameters = {}
             polar_parameters.update(kwargs)
             print_summary = True
+        else:
+            print_summary = True
 
         if not polar_parameters and hasattr(self, "_fitted_polar_parameters"):
             polar_parameters = self._fitted_polar_parameters
@@ -1295,7 +1297,7 @@ class DirectPtychography(
             )
             self._set_polar_parameters(polar_parameters)
 
-            if print_summary:
+            if print_summary and self._verbose:
                 heading = "Forced aberration coefficients"
                 print(f"{heading:^50}")
                 print("-" * 50)
