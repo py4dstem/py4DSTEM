@@ -733,7 +733,7 @@ class DirectPtychography(
         min_angular_order: int = 0,
         aberrations_mn: list = None,
         num_trotters=None,
-        trotter_intensity_threshold=1e-3,
+        trotter_intensity_threshold=1e-1,
         relative_polar_parameters=None,
         fit_method="recursive",
         plot_fitted_fourier_probe=True,
