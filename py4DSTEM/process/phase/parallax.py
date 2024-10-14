@@ -793,6 +793,7 @@ class Parallax(PhaseReconstruction):
         coma_angle_deg=0,
         spherical_aberration=0,
         max_batch_size=None,
+        interpolation_max_batch_size=None,
         plot_shifts_and_aligned_bf=True,
         return_shifts_and_aligned_bf=False,
         plot_arrow_freq=1,
@@ -839,6 +840,8 @@ class Parallax(PhaseReconstruction):
             Frequency of shifts to plot in quiver plot
         scale_arrows: float, optional
             Scale to multiply shifts by
+        interpolation_max_batch_size: int, optional
+            Max number of pixels to use at once in upsampling (max is #BF * upsampled_pixels)
 
         """
         xp = self._xp
@@ -935,6 +938,7 @@ class Parallax(PhaseReconstruction):
                 kde_sigma_px * kde_upsample_factor,
                 lanczos_alpha=lanczos_interpolation_order,
                 lowpass_filter=kde_lowpass_filter,
+                max_batch_size=interpolation_max_batch_size,
             )
 
             # hack since cropping requires "_kde_upsample_factor"
@@ -1366,6 +1370,7 @@ class Parallax(PhaseReconstruction):
         position_correction_butterworth_order=(2, 2),
         plot_position_correction_convergence: bool = True,
         progress_bar: bool = True,
+        interpolation_max_batch_size: int = None,
         **kwargs,
     ):
         """
@@ -1412,6 +1417,8 @@ class Parallax(PhaseReconstruction):
             If True, position correction convergence is plotted
         progress_bar: bool, optional
             If True, a progress bar is printed with position correction progress
+        interpolation_max_batch_size: int, optional
+            Max number of pixels to use at once in upsampling (max is #BF * upsampled_pixels)
 
         """
         xp = self._xp
@@ -1520,6 +1527,7 @@ class Parallax(PhaseReconstruction):
                 kde_sigma_px * self._kde_upsample_factor,
                 lanczos_alpha=lanczos_interpolation_order,
                 lowpass_filter=kde_lowpass_filter,
+                max_batch_size=interpolation_max_batch_size,
             )
         else:
             upsample_fraction, upsample_int = np.modf(self._kde_upsample_factor)
@@ -1580,6 +1588,7 @@ class Parallax(PhaseReconstruction):
                             xa,
                             ya,
                             lanczos_alpha=None,
+                            max_batch_size=interpolation_max_batch_size,
                         )
                         - stack_BF_unshifted
                     ),
@@ -1653,6 +1662,7 @@ class Parallax(PhaseReconstruction):
                                 xa,
                                 ya,
                                 lanczos_alpha=None,
+                                max_batch_size=interpolation_max_batch_size,
                             )
                             - stack_BF_unshifted
                         ),
@@ -1701,6 +1711,7 @@ class Parallax(PhaseReconstruction):
                                     xa,
                                     ya,
                                     lanczos_alpha=None,
+                                    max_batch_size=interpolation_max_batch_size,
                                 )
                                 - stack_BF_unshifted
                             ),
@@ -1806,6 +1817,7 @@ class Parallax(PhaseReconstruction):
                     kde_sigma_px * self._kde_upsample_factor,
                     lanczos_alpha=lanczos_interpolation_order,
                     lowpass_filter=kde_lowpass_filter,
+                    max_batch_size=interpolation_max_batch_size,
                 )
 
                 # update cost function and stats
@@ -1817,6 +1829,7 @@ class Parallax(PhaseReconstruction):
                                 xa,
                                 ya,
                                 lanczos_alpha=None,
+                                max_batch_size=interpolation_max_batch_size,
                             )
                             - stack_BF_unshifted
                         ),
@@ -2057,19 +2070,23 @@ class Parallax(PhaseReconstruction):
         xa,
         ya,
         lanczos_alpha,
+        max_batch_size=None,
     ):
         """ """
 
         xp = self._xp
 
         if lanczos_alpha is not None:
-            return lanczos_interpolate_array(image, xa, ya, lanczos_alpha, xp=xp)
+            return lanczos_interpolate_array(
+                image, xa, ya, lanczos_alpha, xp=xp, max_batch_size=max_batch_size
+            )
         else:
             return bilinearly_interpolate_array(
                 image,
                 xa,
                 ya,
                 xp=xp,
+                max_batch_size=max_batch_size,
             )
 
     def _kernel_density_estimate(
@@ -2081,6 +2098,7 @@ class Parallax(PhaseReconstruction):
         kde_sigma,
         lanczos_alpha=None,
         lowpass_filter=False,
+        max_batch_size=None,
     ):
         """ """
 
@@ -2098,6 +2116,7 @@ class Parallax(PhaseReconstruction):
                 lowpass_filter=lowpass_filter,
                 xp=xp,
                 gaussian_filter=gaussian_filter,
+                max_batch_size=max_batch_size,
             )
         else:
             return bilinear_kernel_density_estimate(
@@ -2109,6 +2128,7 @@ class Parallax(PhaseReconstruction):
                 lowpass_filter=lowpass_filter,
                 xp=xp,
                 gaussian_filter=gaussian_filter,
+                max_batch_size=max_batch_size,
             )
 
     def aberration_fit(
