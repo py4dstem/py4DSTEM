@@ -1229,6 +1229,7 @@ class DirectPtychography(
 
     def reconstruct(
         self,
+        use_OBF_weighting=False,
         wigner_deconvolution_wiener_epsilon=None,
         virtual_detector_masks: Sequence[np.ndarray] = None,
         polar_parameters: Mapping[str, float] = None,
@@ -1242,6 +1243,9 @@ class DirectPtychography(
 
         Parameters
         --------
+        use_OBF_weighting: bool
+            If True, the complex double probe overlap function is normalized using the
+            expresion in 10.1016/j.ultramic.2020.113133 instead of the amplitude.
         wigner_deconvolution_wiener_epsilon: float, optional
             If None (default), uses the direct inversion algorithm described in 10.1016/j.ultramic.2016.09.002.
             If not None, Wigner Distribution Deconvolution is performed, using the specified relative Wiener epsilon
@@ -1347,6 +1351,7 @@ class DirectPtychography(
 
         if wigner_deconvolution_wiener_epsilon is None:
             return self._reconstruct_SSB_gamma(
+                use_OBF_weighting=use_OBF_weighting,
                 virtual_detector_masks=virtual_detector_masks,
                 progress_bar=progress_bar,
             )
@@ -1447,6 +1452,7 @@ class DirectPtychography(
 
     def _reconstruct_SSB_gamma(
         self,
+        use_OBF_weighting: bool = False,
         virtual_detector_masks: Sequence[np.ndarray] = None,
         progress_bar: bool = True,
     ):
@@ -1455,6 +1461,9 @@ class DirectPtychography(
 
         Parameters
         --------
+        use_OBF_weighting: bool
+            If True, the complex double probe overlap function is normalized using the
+            expresion in 10.1016/j.ultramic.2020.113133 instead of the amplitude.
         virtual_detector_masks: np.ndarray
             List of corner-centered boolean masks for binning forward model trotters,
             to allow comparison with arbitrary geometry detector datasets. TO-DO
@@ -1479,6 +1488,14 @@ class DirectPtychography(
 
         if virtual_detector_masks is not None:
             virtual_detector_masks = xp.asarray(virtual_detector_masks).astype(xp.bool_)
+
+        if use_OBF_weighting:
+            probe_normalization = xp.abs(self._fourier_probe) ** 2
+            probe_normalization /= probe_normalization.sum()
+            if virtual_detector_masks is not None:
+                probe_normalization = mask_array_using_virtual_detectors(
+                    probe_normalization, virtual_detector_masks, in_place=True
+                )
 
         # main loop
         for ind_x, ind_y in tqdmnd(
@@ -1533,8 +1550,14 @@ class DirectPtychography(
 
                 gamma_abs = np.abs(gamma)
                 gamma_ind = gamma_abs > threshold
+
+                normalization = gamma_abs[gamma_ind]
+                if use_OBF_weighting:
+                    d = probe_normalization[gamma_ind]
+                    normalization = d * xp.sqrt(xp.sum(normalization**2 / d))
+
                 psi[ind_x, ind_y] = (
-                    G[gamma_ind] * xp.conj(gamma[gamma_ind]) / gamma_abs[gamma_ind]
+                    G[gamma_ind] * xp.conj(gamma[gamma_ind]) / normalization
                 ).sum()
 
         self._object = xp.fft.ifft2(psi) / self._mean_diffraction_intensity
