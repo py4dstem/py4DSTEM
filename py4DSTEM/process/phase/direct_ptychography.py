@@ -1516,7 +1516,8 @@ class SSBPtychography(
     def reconstruct(
         self,
         trotter_sign="-",
-        worker_pool=None,
+        num_jobs=None,
+        threads_per_job=None,
         progress_bar: bool = True,
         device: str = None,
         clear_fft_cache: bool = None,
@@ -1528,6 +1529,11 @@ class SSBPtychography(
         --------
         trotter_sign: str, optional
             Sign of single-side trotter to use. One of '+','-'.
+        num_jobs: int, optional
+            Number of processes to use. If None, then as many processes as CPUs on
+            the system will be spawned.
+        threads_per_job: int, optional
+            Number of threads to use to avoid over-subscribing when using multiple processors.
         worker_pool: WorkerPool, optional
             If not None, reconstruction is dispatched to mpire WorkerPool instance.
         progress_bar: bool, optional
@@ -1556,10 +1562,6 @@ class SSBPtychography(
             self.copy_attributes_to_device(attrs, device)
         self.set_device(device, clear_fft_cache)
 
-        if worker_pool is not None:
-            if self._device == "gpu":
-                raise NotImplementedError()
-
         sx, sy = self._grid_scan_shape
         psi = xp.empty((sx, sy), dtype=xp.complex64)
         probe_conj = xp.conj(self._fourier_probe)
@@ -1586,7 +1588,7 @@ class SSBPtychography(
 
         # main loop
 
-        if worker_pool is None:
+        if num_jobs == 1:
             for ind_x, ind_y in tqdmnd(
                 sx,
                 sy,
@@ -1608,6 +1610,18 @@ class SSBPtychography(
                     xp=xp,
                 )
         else:
+
+            if self._device == "gpu":
+                raise NotImplementedError()
+
+            from mpire import WorkerPool, cpu_count
+            from threadpoolctl import threadpool_limits
+
+            num_jobs = num_jobs or cpu_count()
+
+            if threads_per_job is not None:
+                num_jobs = num_jobs // threads_per_job
+
             map_inputs = [
                 {
                     "intensities_FFT": self._intensities_FFT[ind_x, ind_y],
@@ -1619,21 +1633,24 @@ class SSBPtychography(
             ]
 
             def wrapper_function(**kwargs):
-                return self._reconstruct_single_frequency(
-                    **kwargs,
-                    Kx=Kx,
-                    Ky=Ky,
-                    probe=self._fourier_probe,
-                    probe_conj=probe_conj,
-                    aperture=aperture,
-                    probe_kwargs=probe_kwargs,
-                    trotter_sign=trotter_sign,
-                    xp=xp,
+                with threadpool_limits(limits=threads_per_job):
+                    return self._reconstruct_single_frequency(
+                        **kwargs,
+                        Kx=Kx,
+                        Ky=Ky,
+                        probe=self._fourier_probe,
+                        probe_conj=probe_conj,
+                        aperture=aperture,
+                        probe_kwargs=probe_kwargs,
+                        trotter_sign=trotter_sign,
+                        xp=xp,
+                    )
+
+            with WorkerPool(n_jobs=num_jobs) as pool:
+                flat_results = pool.map(
+                    wrapper_function, map_inputs, progress_bar=progress_bar
                 )
 
-            flat_results = worker_pool.map(
-                wrapper_function, map_inputs, progress_bar=progress_bar
-            )
             for (ind_x, ind_y), res in zip(np.ndindex((sx, sy)), flat_results):
                 psi[ind_x, ind_y] = res
 
@@ -1713,7 +1730,8 @@ class PhaseCompensatedSSBPtychography(
     def reconstruct(
         self,
         trotter_sign="-",
-        worker_pool=None,
+        num_jobs=None,
+        threads_per_job=None,
         virtual_detector_masks: Sequence[np.ndarray] = None,
         progress_bar: bool = True,
         polar_parameters: Mapping[str, float] = None,
@@ -1726,8 +1744,13 @@ class PhaseCompensatedSSBPtychography(
 
         Parameters
         --------
-        worker_pool: WorkerPool
-            If not None, reconstruction is dispatched to mpire WorkerPool instance.
+        trotter_sign: str, optional
+            Sign of single-side trotter to use. One of '+','-'.
+        num_jobs: int, optional
+            Number of processes to use. Default is None, which spawns as many processes as CPUs on
+            the system.
+        threads_per_job: int, optional
+            Number of threads to use to avoid over-subscribing when using multiple processors.
         virtual_detector_masks: np.ndarray
             List of corner-centered boolean masks for binning forward model trotters,
             to allow comparison with arbitrary geometry detector datasets. TO-DO
@@ -1749,10 +1772,6 @@ class PhaseCompensatedSSBPtychography(
             clear_fft_cache=clear_fft_cache,
             **kwargs,
         )
-
-        if worker_pool is not None:
-            if self._device == "gpu":
-                raise NotImplementedError()
 
         sx, sy = self._grid_scan_shape
         psi = xp.empty((sx, sy), dtype=xp.complex64)
@@ -1776,7 +1795,7 @@ class PhaseCompensatedSSBPtychography(
 
         # main loop
 
-        if worker_pool is None:
+        if num_jobs == 1:
             for ind_x, ind_y in tqdmnd(
                 sx,
                 sy,
@@ -1798,6 +1817,16 @@ class PhaseCompensatedSSBPtychography(
                     xp=xp,
                 )
         else:
+            if self._device == "gpu":
+                raise NotImplementedError()
+
+            from mpire import WorkerPool, cpu_count
+            from threadpoolctl import threadpool_limits
+
+            num_jobs = num_jobs or cpu_count()
+            if threads_per_job is not None:
+                num_jobs = num_jobs // threads_per_job
+
             map_inputs = [
                 {
                     "intensities_FFT": self._intensities_FFT[ind_x, ind_y],
@@ -1809,21 +1838,24 @@ class PhaseCompensatedSSBPtychography(
             ]
 
             def wrapper_function(**kwargs):
-                return self._reconstruct_single_frequency(
-                    **kwargs,
-                    Kx=Kx,
-                    Ky=Ky,
-                    probe=self._fourier_probe,
-                    probe_conj=probe_conj,
-                    probe_kwargs=probe_kwargs,
-                    trotter_sign=trotter_sign,
-                    virtual_detector_masks=virtual_detector_masks,
-                    xp=xp,
+                with threadpool_limits(limits=threads_per_job):
+                    return self._reconstruct_single_frequency(
+                        **kwargs,
+                        Kx=Kx,
+                        Ky=Ky,
+                        probe=self._fourier_probe,
+                        probe_conj=probe_conj,
+                        probe_kwargs=probe_kwargs,
+                        trotter_sign=trotter_sign,
+                        virtual_detector_masks=virtual_detector_masks,
+                        xp=xp,
+                    )
+
+            with WorkerPool(n_jobs=num_jobs) as pool:
+                flat_results = pool.map(
+                    wrapper_function, map_inputs, progress_bar=progress_bar
                 )
 
-            flat_results = worker_pool.map(
-                wrapper_function, map_inputs, progress_bar=progress_bar
-            )
             for (ind_x, ind_y), res in zip(np.ndindex((sx, sy)), flat_results):
                 psi[ind_x, ind_y] = res
 
@@ -1907,7 +1939,8 @@ class OBFPtychography(
     def reconstruct(
         self,
         trotter_sign="-",
-        worker_pool=None,
+        num_jobs=None,
+        threads_per_job=None,
         virtual_detector_masks: Sequence[np.ndarray] = None,
         progress_bar: bool = True,
         polar_parameters: Mapping[str, float] = None,
@@ -1920,8 +1953,13 @@ class OBFPtychography(
 
         Parameters
         --------
-        worker_pool: WorkerPool
-            If not None, reconstruction is dispatched to mpire WorkerPool instance.
+        trotter_sign: str, optional
+            Sign of single-side trotter to use. One of '+','-'.
+        num_jobs: int, optional
+            Number of processes to use. Default is None, which spawns as many processes as CPUs on
+            the system.
+        threads_per_job: int, optional
+            Number of threads to use to avoid over-subscribing when using multiple processors.
         virtual_detector_masks: np.ndarray
             List of corner-centered boolean masks for binning forward model trotters,
             to allow comparison with arbitrary geometry detector datasets. TO-DO
@@ -1943,10 +1981,6 @@ class OBFPtychography(
             clear_fft_cache=clear_fft_cache,
             **kwargs,
         )
-
-        if worker_pool is not None:
-            if self._device == "gpu":
-                raise NotImplementedError()
 
         sx, sy = self._grid_scan_shape
         psi = xp.empty((sx, sy), dtype=xp.complex64)
@@ -1976,7 +2010,7 @@ class OBFPtychography(
 
         # main loop
 
-        if worker_pool is None:
+        if num_jobs == 1:
             for ind_x, ind_y in tqdmnd(
                 sx,
                 sy,
@@ -1999,6 +2033,16 @@ class OBFPtychography(
                     xp=xp,
                 )
         else:
+            if self._device == "gpu":
+                raise NotImplementedError()
+
+            from mpire import WorkerPool, cpu_count
+            from threadpoolctl import threadpool_limits
+
+            num_jobs = num_jobs or cpu_count()
+            if threads_per_job is not None:
+                num_jobs = num_jobs // threads_per_job
+
             map_inputs = [
                 {
                     "intensities_FFT": self._intensities_FFT[ind_x, ind_y],
@@ -2010,22 +2054,25 @@ class OBFPtychography(
             ]
 
             def wrapper_function(**kwargs):
-                return self._reconstruct_single_frequency(
-                    **kwargs,
-                    Kx=Kx,
-                    Ky=Ky,
-                    probe=self._fourier_probe,
-                    probe_conj=probe_conj,
-                    probe_normalization=probe_normalization,
-                    probe_kwargs=probe_kwargs,
-                    trotter_sign=trotter_sign,
-                    virtual_detector_masks=virtual_detector_masks,
-                    xp=xp,
+                with threadpool_limits(limits=threads_per_job):
+                    return self._reconstruct_single_frequency(
+                        **kwargs,
+                        Kx=Kx,
+                        Ky=Ky,
+                        probe=self._fourier_probe,
+                        probe_conj=probe_conj,
+                        probe_normalization=probe_normalization,
+                        probe_kwargs=probe_kwargs,
+                        trotter_sign=trotter_sign,
+                        virtual_detector_masks=virtual_detector_masks,
+                        xp=xp,
+                    )
+
+            with WorkerPool(n_jobs=num_jobs) as pool:
+                flat_results = pool.map(
+                    wrapper_function, map_inputs, progress_bar=progress_bar
                 )
 
-            flat_results = worker_pool.map(
-                wrapper_function, map_inputs, progress_bar=progress_bar
-            )
             for (ind_x, ind_y), res in zip(np.ndindex((sx, sy)), flat_results):
                 psi[ind_x, ind_y] = res
 
@@ -2092,7 +2139,8 @@ class WDDPtychography(
         self,
         relative_wiener_epsilon,
         trotter_sign="-",
-        worker_pool=None,
+        num_jobs=None,
+        threads_per_job=None,
         virtual_detector_masks: Sequence[np.ndarray] = None,
         progress_bar: bool = True,
         polar_parameters: Mapping[str, float] = None,
@@ -2131,10 +2179,6 @@ class WDDPtychography(
             **kwargs,
         )
 
-        if worker_pool is not None:
-            if self._device == "gpu":
-                raise NotImplementedError()
-
         sx, sy = self._grid_scan_shape
         psi = xp.empty((sx, sy), dtype=xp.complex64)
         wdd_probe_0 = xp.fft.ifft2(self._fourier_probe * self._fourier_probe.conj())
@@ -2160,7 +2204,7 @@ class WDDPtychography(
 
         # main loop
 
-        if worker_pool is None:
+        if num_jobs == 1:
             for ind_x, ind_y in tqdmnd(
                 sx,
                 sy,
@@ -2181,6 +2225,16 @@ class WDDPtychography(
                     xp=xp,
                 )
         else:
+            if self._device == "gpu":
+                raise NotImplementedError()
+
+            from mpire import WorkerPool, cpu_count
+            from threadpoolctl import threadpool_limits
+
+            num_jobs = num_jobs or cpu_count()
+            if threads_per_job is not None:
+                num_jobs = num_jobs // threads_per_job
+
             map_inputs = [
                 {
                     "intensities_FFT": self._intensities_FFT[ind_x, ind_y],
@@ -2192,20 +2246,23 @@ class WDDPtychography(
             ]
 
             def wrapper_function(**kwargs):
-                return self._reconstruct_single_frequency(
-                    **kwargs,
-                    Kx=Kx,
-                    Ky=Ky,
-                    probe=self._fourier_probe,
-                    epsilon=epsilon,
-                    probe_kwargs=probe_kwargs,
-                    trotter_sign=trotter_sign,
-                    xp=xp,
+                with threadpool_limits(limits=threads_per_job):
+                    return self._reconstruct_single_frequency(
+                        **kwargs,
+                        Kx=Kx,
+                        Ky=Ky,
+                        probe=self._fourier_probe,
+                        epsilon=epsilon,
+                        probe_kwargs=probe_kwargs,
+                        trotter_sign=trotter_sign,
+                        xp=xp,
+                    )
+
+            with WorkerPool(n_jobs=num_jobs) as pool:
+                flat_results = pool.map(
+                    wrapper_function, map_inputs, progress_bar=progress_bar
                 )
 
-            flat_results = worker_pool.map(
-                wrapper_function, map_inputs, progress_bar=progress_bar
-            )
             for (ind_x, ind_y), res in zip(np.ndindex((sx, sy)), flat_results):
                 psi[ind_x, ind_y] = res
 
