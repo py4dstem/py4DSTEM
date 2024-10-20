@@ -1661,6 +1661,12 @@ class SSB(
 
         self._object = xp.fft.ifft2(psi) / self._mean_diffraction_intensity
 
+        # no idea why this is necessary..
+        if phase_compensation:
+            self._object = (2 - xp.abs(self._object)) * xp.exp(
+                1j * xp.angle(self._object)
+            )
+
         # store result
         self.object = asnumpy(self._object)
         self.clear_device_mem(self._device, self._clear_fft_cache)
@@ -1864,6 +1870,8 @@ class OBF(
                 psi[ind_x, ind_y] = res
 
         self._object = xp.fft.ifft2(psi) / self._mean_diffraction_intensity
+        # no idea why this is necessary..
+        self._object = (2 - xp.abs(self._object)) * xp.exp(1j * xp.angle(self._object))
 
         # store result
         self.object = asnumpy(self._object)
