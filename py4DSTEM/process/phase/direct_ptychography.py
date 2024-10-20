@@ -1521,7 +1521,7 @@ class SSB(
                 aperture_solo = xp.logical_and(
                     xp.logical_and(aperture, aperture_minus), ~aperture_plus
                 )
-                return G[aperture_solo].sum()
+                return G[aperture_solo].sum() * 2  # factor of 2 since using single band
 
     def reconstruct(
         self,
