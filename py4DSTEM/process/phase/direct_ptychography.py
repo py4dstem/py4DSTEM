@@ -2038,9 +2038,7 @@ class WDD(
             for (ind_x, ind_y), res in zip(np.ndindex((sx, sy)), flat_results):
                 psi[ind_x, ind_y] = res
 
-        normalization = (
-            xp.abs(psi[0, 0]) / np.prod(self._intensities_shape) / wdd_probe_0
-        )
+        normalization = xp.abs(psi[0, 0]) / sx / sy
         psi /= normalization
 
         self._object = xp.fft.ifft2(psi)
