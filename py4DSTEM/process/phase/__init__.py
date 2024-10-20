@@ -3,7 +3,7 @@
 _emd_hook = True
 
 from py4DSTEM import is_package_lite
-from py4DSTEM.process.phase.direct_ptychography import DirectPtychography
+from py4DSTEM.process.phase.direct_ptychography import OBFPtychography, PhaseCompensatedSSBPtychography, SSBPtychography, WDDPtychography
 from py4DSTEM.process.phase.dpc import DPC
 from py4DSTEM.process.phase.magnetic_ptychographic_tomography import MagneticPtychographicTomography
 from py4DSTEM.process.phase.magnetic_ptychography import MagneticPtychography

@@ -1227,44 +1227,14 @@ class DirectPtychography(
 
         return coeffs, aberrations_basis, measured_trotters
 
-    def reconstruct(
+    def _reconstruct_prep(
         self,
-        use_OBF_weighting=False,
-        wigner_deconvolution_wiener_epsilon=None,
-        virtual_detector_masks: Sequence[np.ndarray] = None,
         polar_parameters: Mapping[str, float] = None,
-        progress_bar: bool = True,
         device: str = None,
         clear_fft_cache: bool = None,
         **kwargs,
     ):
-        """
-        Ptychographic reconstruction main method.
-
-        Parameters
-        --------
-        use_OBF_weighting: bool
-            If True, the complex double probe overlap function is normalized using the
-            expresion in 10.1016/j.ultramic.2020.113133 instead of the amplitude.
-        wigner_deconvolution_wiener_epsilon: float, optional
-            If None (default), uses the direct inversion algorithm described in 10.1016/j.ultramic.2016.09.002.
-            If not None, Wigner Distribution Deconvolution is performed, using the specified relative Wiener epsilon
-            as described in 10.1016/j.ultramic.2017.02.006. A reasonable value is 0.01.
-        virtual_detector_masks: np.ndarray
-            List of corner-centered boolean masks for binning forward model trotters,
-            to allow comparison with arbitrary geometry detector datasets. TO-DO
-        progress_bar: bool, optional
-            If True, reconstruction progress is displayed
-        device: str, optional
-            If not none, overwrites self._device to set device preprocess will be perfomed on.
-        clear_fft_cache: bool, optional
-            If true, and device = 'gpu', clears the cached fft plan at the end of function calls
-
-        Returns
-        --------
-        self: DirectPtychography
-            Self to accommodate chaining
-        """
+        """ """
 
         # handle device/storage
         if device == "gpu":
@@ -1349,225 +1319,7 @@ class DirectPtychography(
                 device=self._device,
             )._evaluate_ctf()
 
-        if wigner_deconvolution_wiener_epsilon is None:
-            return self._reconstruct_SSB_gamma(
-                use_OBF_weighting=use_OBF_weighting,
-                virtual_detector_masks=virtual_detector_masks,
-                progress_bar=progress_bar,
-            )
-        else:
-            return self._reconstruct_WDD(
-                wigner_deconvolution_wiener_epsilon=wigner_deconvolution_wiener_epsilon,
-                virtual_detector_masks=virtual_detector_masks,
-                progress_bar=progress_bar,
-            )
-
-    def _reconstruct_WDD(
-        self,
-        wigner_deconvolution_wiener_epsilon,
-        virtual_detector_masks: Sequence[np.ndarray] = None,
-        progress_bar: bool = True,
-    ):
-        """
-        Ptychographic reconstruction main method.
-
-        Parameters
-        --------
-        wigner_deconvolution_wiener_epsilon: float, optional
-            If None (default), uses the direct inversion algorithm described in 10.1016/j.ultramic.2016.09.002.
-            If not None, Wigner Distribution Deconvolution is performed, using the specified relative Wiener epsilon
-            as described in 10.1016/j.ultramic.2017.02.006. A reasonable value is 0.01.
-        virtual_detector_masks: np.ndarray
-            List of corner-centered boolean masks for binning forward model trotters,
-            to allow comparison with arbitrary geometry detector datasets. TO-DO
-        progress_bar: bool, optional
-            If True, reconstruction progress is displayed
-
-        Returns
-        --------
-        self: DirectPtychography
-            Self to accommodate chaining
-        """
-
-        xp = self._xp
-        asnumpy = self._asnumpy
-
-        sx, sy = self._grid_scan_shape
-        psi = xp.empty((sx, sy), dtype=xp.complex64)
-
-        wdd_probe_0 = xp.fft.ifft2(self._fourier_probe * self._fourier_probe.conj())
-        epsilon = wigner_deconvolution_wiener_epsilon * xp.abs(wdd_probe_0[0, 0])
-
-        Kx, Ky = self._spatial_frequencies
-        Qx, Qy = self._scan_frequencies
-
-        if virtual_detector_masks is not None:
-            raise NotImplementedError()
-
-        # main loop
-        for ind_x, ind_y in tqdmnd(
-            sx,
-            sy,
-            desc="Reconstructing object",
-            unit="freq.",
-            disable=not progress_bar,
-        ):
-            Kx_plus_Qx = Kx + Qx[ind_x, ind_y]
-            Ky_plus_Qy = Ky + Qy[ind_x, ind_y]
-
-            probe_plus = ComplexProbe(
-                energy=self._energy,
-                gpts=self._intensities_shape,
-                sampling=self.sampling,
-                semiangle_cutoff=self._semiangle_cutoff,
-                vacuum_probe_intensity=self._vacuum_probe_intensity,
-                rolloff=self._rolloff,
-                parameters=self._polar_parameters_relative,
-                device=self._device,
-                force_spatial_frequencies=(Kx_plus_Qx, Ky_plus_Qy),
-            )._evaluate_ctf()
-
-            wdd_probe = xp.fft.ifft2(self._fourier_probe * probe_plus.conj())
-            wdd_probe_conj = wdd_probe.conj()
-
-            array_G = xp.asarray(self._intensities_FFT[ind_x, ind_y])
-            array_H = xp.fft.ifft2(array_G)
-
-            array_D = wdd_probe_conj * array_H / (wdd_probe * wdd_probe_conj + epsilon)
-            array_D_FFT = xp.fft.fft2(array_D)
-
-            if ind_x == 0 and ind_y == 0:
-                normalization = xp.abs(array_D_FFT[0, 0]) / array_D_FFT.size
-
-            psi[ind_x, ind_y] = array_D_FFT[0, 0].conj() / normalization
-
-        self._object = xp.fft.ifft2(psi)
-
-        # store result
-        self.object = asnumpy(self._object)
-
-        self.clear_device_mem(self._device, self._clear_fft_cache)
-
-        return self
-
-    def _reconstruct_SSB_gamma(
-        self,
-        use_OBF_weighting: bool = False,
-        virtual_detector_masks: Sequence[np.ndarray] = None,
-        progress_bar: bool = True,
-    ):
-        """
-        Ptychographic reconstruction main method.
-
-        Parameters
-        --------
-        use_OBF_weighting: bool
-            If True, the complex double probe overlap function is normalized using the
-            expresion in 10.1016/j.ultramic.2020.113133 instead of the amplitude.
-        virtual_detector_masks: np.ndarray
-            List of corner-centered boolean masks for binning forward model trotters,
-            to allow comparison with arbitrary geometry detector datasets. TO-DO
-        progress_bar: bool, optional
-            If True, reconstruction progress is displayed
-
-        Returns
-        --------
-        self: DirectPtychography
-            Self to accommodate chaining
-        """
-        xp = self._xp
-        asnumpy = self._asnumpy
-
-        sx, sy = self._grid_scan_shape
-        psi = xp.empty((sx, sy), dtype=xp.complex64)
-        probe_conj = xp.conj(self._fourier_probe)
-        threshold = 1e-3
-
-        Kx, Ky = self._spatial_frequencies
-        Qx, Qy = self._scan_frequencies
-
-        if virtual_detector_masks is not None:
-            virtual_detector_masks = xp.asarray(virtual_detector_masks).astype(xp.bool_)
-
-        if use_OBF_weighting:
-            probe_normalization = xp.abs(self._fourier_probe) ** 2
-            probe_normalization /= probe_normalization.sum()
-            if virtual_detector_masks is not None:
-                probe_normalization = mask_array_using_virtual_detectors(
-                    probe_normalization, virtual_detector_masks, in_place=True
-                )
-
-        # main loop
-        for ind_x, ind_y in tqdmnd(
-            sx,
-            sy,
-            desc="Reconstructing object",
-            unit="freq.",
-            disable=not progress_bar,
-        ):
-            G = xp.asarray(self._intensities_FFT[ind_x, ind_y])
-            if ind_x == 0 and ind_y == 0:
-                psi[ind_x, ind_y] = xp.abs(G).sum()
-            else:
-                Kx_plus_Qx = Kx + Qx[ind_x, ind_y]
-                Ky_plus_Qy = Ky + Qy[ind_x, ind_y]
-
-                probe_plus = ComplexProbe(
-                    energy=self._energy,
-                    gpts=self._intensities_shape,
-                    sampling=self.sampling,
-                    semiangle_cutoff=self._semiangle_cutoff,
-                    vacuum_probe_intensity=self._vacuum_probe_intensity,
-                    rolloff=self._rolloff,
-                    parameters=self._polar_parameters_relative,
-                    device=self._device,
-                    force_spatial_frequencies=(Kx_plus_Qx, Ky_plus_Qy),
-                )._evaluate_ctf()
-
-                Kx_minus_Qx = Kx - Qx[ind_x, ind_y]
-                Ky_minus_Qy = Ky - Qy[ind_x, ind_y]
-
-                probe_minus = ComplexProbe(
-                    energy=self._energy,
-                    gpts=self._intensities_shape,
-                    sampling=self.sampling,
-                    semiangle_cutoff=self._semiangle_cutoff,
-                    vacuum_probe_intensity=self._vacuum_probe_intensity,
-                    rolloff=self._rolloff,
-                    parameters=self._polar_parameters_relative,
-                    device=self._device,
-                    force_spatial_frequencies=(Kx_minus_Qx, Ky_minus_Qy),
-                )._evaluate_ctf()
-
-                gamma = (
-                    probe_conj * probe_minus - self._fourier_probe * probe_plus.conj()
-                )
-
-                if virtual_detector_masks is not None:
-                    gamma = mask_array_using_virtual_detectors(
-                        gamma, virtual_detector_masks, in_place=True
-                    )
-
-                gamma_abs = np.abs(gamma)
-                gamma_ind = gamma_abs > threshold
-
-                normalization = gamma_abs[gamma_ind]
-                if use_OBF_weighting:
-                    d = probe_normalization[gamma_ind]
-                    normalization = d * xp.sqrt(xp.sum(normalization**2 / d))
-
-                psi[ind_x, ind_y] = (
-                    G[gamma_ind] * xp.conj(gamma[gamma_ind]) / normalization
-                ).sum()
-
-        self._object = xp.fft.ifft2(psi) / self._mean_diffraction_intensity
-
-        # store result
-        self.object = asnumpy(self._object)
-
-        self.clear_device_mem(self._device, self._clear_fft_cache)
-
-        return self
+            return None
 
     def visualize(self, fig=None, cbar: bool = True, **kwargs):
         """
@@ -1689,3 +1441,783 @@ class DirectPtychography(
             electron_wavelength_angstrom(self._energy) * 1e3 / dk / n
             for dk, n in zip(self.angular_sampling, self._intensities_shape)
         )
+
+
+class SSBPtychography(
+    DirectPtychography,
+):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if sum(self._polar_parameters.values()) != 0.0:
+            warnings.warn(
+                "Note aberrations will effectively be ignored in this class",
+                UserWarning,
+            )
+
+    def aberration_fit(self, *args, **kwargs):
+        raise NotImplementedError()
+
+    def _reconstruct_single_frequency(
+        self,
+        intensities_FFT,
+        Qx,
+        Qy,
+        Kx,
+        Ky,
+        probe,
+        probe_conj,
+        aperture,
+        probe_kwargs,
+        trotter_sign,
+        xp=np,
+    ):
+        """ """
+        G = xp.asarray(intensities_FFT)
+        if Qx == 0.0 and Qy == 0.0:
+            return xp.abs(G).sum()
+        else:
+
+            Kx_plus_Qx = Kx + Qx
+            Ky_plus_Qy = Ky + Qy
+
+            cmplx_probe_plus = ComplexProbe(
+                **probe_kwargs,
+                force_spatial_frequencies=(Kx_plus_Qx, Ky_plus_Qy),
+            )
+            alpha_plus, phi_plus = cmplx_probe_plus.get_scattering_angles()
+            aperture_plus = cmplx_probe_plus.evaluate_aperture(alpha_plus, phi_plus) > 0
+
+            Kx_minus_Qx = Kx - Qx
+            Ky_minus_Qy = Ky - Qy
+
+            cmplx_probe_minus = ComplexProbe(
+                **probe_kwargs,
+                force_spatial_frequencies=(Kx_minus_Qx, Ky_minus_Qy),
+            )
+            alpha_minus, phi_minus = cmplx_probe_minus.get_scattering_angles()
+            aperture_minus = (
+                cmplx_probe_minus.evaluate_aperture(alpha_minus, phi_minus) > 0
+            )
+
+            if trotter_sign == "+":
+                aperture_plus_solo = xp.logical_and(
+                    xp.logical_and(aperture, aperture_plus), ~aperture_minus
+                )
+                return G[aperture_plus_solo].sum().conj()
+            elif trotter_sign == "-":
+                aperture_minus_solo = xp.logical_and(
+                    xp.logical_and(aperture, aperture_minus), ~aperture_plus
+                )
+                return G[aperture_minus_solo].sum()
+            else:
+                raise ValueError()
+
+    def reconstruct(
+        self,
+        trotter_sign="-",
+        worker_pool=None,
+        progress_bar: bool = True,
+        device: str = None,
+        clear_fft_cache: bool = None,
+    ):
+        """
+        Ptychographic reconstruction main method.
+
+        Parameters
+        --------
+        trotter_sign: str, optional
+            Sign of single-side trotter to use. One of '+','-'.
+        worker_pool: WorkerPool, optional
+            If not None, reconstruction is dispatched to mpire WorkerPool instance.
+        progress_bar: bool, optional
+            If True, reconstruction progress is displayed
+
+        Returns
+        --------
+        self: DirectPtychography
+            Self to accommodate chaining
+        """
+
+        xp = self._xp
+        asnumpy = self._asnumpy
+
+        # handle device/storage
+        if device == "gpu":
+            warnings.warn(
+                "Note this class is not very well optimized on gpu.",
+                UserWarning,
+            )
+
+        if device is not None:
+            attrs = [
+                "_fourier_probe_initial",
+            ]
+            self.copy_attributes_to_device(attrs, device)
+        self.set_device(device, clear_fft_cache)
+
+        if worker_pool is not None:
+            if self._device == "gpu":
+                raise NotImplementedError()
+
+        sx, sy = self._grid_scan_shape
+        psi = xp.empty((sx, sy), dtype=xp.complex64)
+        probe_conj = xp.conj(self._fourier_probe)
+        probe_kwargs = {
+            "energy": self._energy,
+            "gpts": self._intensities_shape,
+            "sampling": self.sampling,
+            "semiangle_cutoff": self._semiangle_cutoff,
+            "vacuum_probe_intensity": self._vacuum_probe_intensity,
+            "rolloff": self._rolloff,
+            "device": self._device,
+        }
+
+        Kx, Ky = self._spatial_frequencies
+        Qx, Qy = self._scan_frequencies
+
+        cmplx_probe = ComplexProbe(
+            **probe_kwargs,
+            force_spatial_frequencies=(Kx, Ky),
+        )
+
+        alpha, phi = cmplx_probe.get_scattering_angles()
+        aperture = cmplx_probe.evaluate_aperture(alpha, phi) > 0
+
+        # main loop
+
+        if worker_pool is None:
+            for ind_x, ind_y in tqdmnd(
+                sx,
+                sy,
+                desc="Reconstructing object",
+                unit="freq.",
+                disable=not progress_bar,
+            ):
+                psi[ind_x, ind_y] = self._reconstruct_single_frequency(
+                    self._intensities_FFT[ind_x, ind_y],
+                    Qx[ind_x, ind_y],
+                    Qy[ind_x, ind_y],
+                    Kx,
+                    Ky,
+                    self._fourier_probe,
+                    probe_conj,
+                    aperture,
+                    probe_kwargs,
+                    trotter_sign=trotter_sign,
+                    xp=xp,
+                )
+        else:
+            map_inputs = [
+                {
+                    "intensities_FFT": self._intensities_FFT[ind_x, ind_y],
+                    "Qx": Qx[ind_x, ind_y],
+                    "Qy": Qy[ind_x, ind_y],
+                }
+                for ind_x in range(sx)
+                for ind_y in range(sy)
+            ]
+
+            def wrapper_function(**kwargs):
+                return self._reconstruct_single_frequency(
+                    **kwargs,
+                    Kx=Kx,
+                    Ky=Ky,
+                    probe=self._fourier_probe,
+                    probe_conj=probe_conj,
+                    aperture=aperture,
+                    probe_kwargs=probe_kwargs,
+                    trotter_sign=trotter_sign,
+                    xp=xp,
+                )
+
+            flat_results = worker_pool.map(
+                wrapper_function, map_inputs, progress_bar=progress_bar
+            )
+            for (ind_x, ind_y), res in zip(np.ndindex((sx, sy)), flat_results):
+                psi[ind_x, ind_y] = res
+
+        self._object = xp.fft.ifft2(psi) / self._mean_diffraction_intensity
+
+        # store result
+        self.object = asnumpy(self._object)
+        self.clear_device_mem(self._device, self._clear_fft_cache)
+
+        return self
+
+
+class PhaseCompensatedSSBPtychography(
+    DirectPtychography,
+):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def _reconstruct_single_frequency(
+        self,
+        intensities_FFT,
+        Qx,
+        Qy,
+        Kx,
+        Ky,
+        probe,
+        probe_conj,
+        probe_kwargs,
+        trotter_sign,
+        virtual_detector_masks: Sequence[np.ndarray] = None,
+        xp=np,
+    ):
+        """ """
+        threshold = 1e-3
+
+        G = xp.asarray(intensities_FFT)
+        if Qx == 0.0 and Qy == 0.0:
+            return xp.abs(G).sum()
+        else:
+            Kx_plus_Qx = Kx + Qx
+            Ky_plus_Qy = Ky + Qy
+
+            probe_plus = ComplexProbe(
+                **probe_kwargs,
+                force_spatial_frequencies=(Kx_plus_Qx, Ky_plus_Qy),
+            )._evaluate_ctf()
+
+            Kx_minus_Qx = Kx - Qx
+            Ky_minus_Qy = Ky - Qy
+
+            probe_minus = ComplexProbe(
+                **probe_kwargs,
+                force_spatial_frequencies=(Kx_minus_Qx, Ky_minus_Qy),
+            )._evaluate_ctf()
+
+            gamma = probe_conj * probe_minus - probe * probe_plus.conj()
+
+            if virtual_detector_masks is not None:
+                gamma = mask_array_using_virtual_detectors(
+                    gamma, virtual_detector_masks, in_place=True
+                )
+
+            gamma_abs = xp.abs(gamma)
+            gamma_ind = gamma_abs > threshold
+
+            normalization = gamma_abs[gamma_ind]
+            if trotter_sign == "+":
+                numerator = -G[gamma_ind].conj() * gamma[gamma_ind]
+            elif trotter_sign == "-":
+                numerator = G[gamma_ind] * gamma[gamma_ind].conj()
+            else:
+                raise ValueError()
+
+            return (numerator / normalization).sum()
+
+    def reconstruct(
+        self,
+        trotter_sign="-",
+        worker_pool=None,
+        virtual_detector_masks: Sequence[np.ndarray] = None,
+        progress_bar: bool = True,
+        polar_parameters: Mapping[str, float] = None,
+        device: str = None,
+        clear_fft_cache: bool = None,
+        **kwargs,
+    ):
+        """
+        Ptychographic reconstruction main method.
+
+        Parameters
+        --------
+        worker_pool: WorkerPool
+            If not None, reconstruction is dispatched to mpire WorkerPool instance.
+        virtual_detector_masks: np.ndarray
+            List of corner-centered boolean masks for binning forward model trotters,
+            to allow comparison with arbitrary geometry detector datasets. TO-DO
+        progress_bar: bool, optional
+            If True, reconstruction progress is displayed
+
+        Returns
+        --------
+        self: DirectPtychography
+            Self to accommodate chaining
+        """
+
+        xp = self._xp
+        asnumpy = self._asnumpy
+
+        self._reconstruct_prep(
+            polar_parameters=polar_parameters,
+            device=device,
+            clear_fft_cache=clear_fft_cache,
+            **kwargs,
+        )
+
+        if worker_pool is not None:
+            if self._device == "gpu":
+                raise NotImplementedError()
+
+        sx, sy = self._grid_scan_shape
+        psi = xp.empty((sx, sy), dtype=xp.complex64)
+        probe_conj = xp.conj(self._fourier_probe)
+        probe_kwargs = {
+            "energy": self._energy,
+            "gpts": self._intensities_shape,
+            "sampling": self.sampling,
+            "semiangle_cutoff": self._semiangle_cutoff,
+            "vacuum_probe_intensity": self._vacuum_probe_intensity,
+            "rolloff": self._rolloff,
+            "parameters": self._polar_parameters_relative,
+            "device": self._device,
+        }
+
+        Kx, Ky = self._spatial_frequencies
+        Qx, Qy = self._scan_frequencies
+
+        if virtual_detector_masks is not None:
+            virtual_detector_masks = xp.asarray(virtual_detector_masks).astype(xp.bool_)
+
+        # main loop
+
+        if worker_pool is None:
+            for ind_x, ind_y in tqdmnd(
+                sx,
+                sy,
+                desc="Reconstructing object",
+                unit="freq.",
+                disable=not progress_bar,
+            ):
+                psi[ind_x, ind_y] = self._reconstruct_single_frequency(
+                    self._intensities_FFT[ind_x, ind_y],
+                    Qx[ind_x, ind_y],
+                    Qy[ind_x, ind_y],
+                    Kx,
+                    Ky,
+                    self._fourier_probe,
+                    probe_conj,
+                    probe_kwargs,
+                    trotter_sign=trotter_sign,
+                    virtual_detector_masks=virtual_detector_masks,
+                    xp=xp,
+                )
+        else:
+            map_inputs = [
+                {
+                    "intensities_FFT": self._intensities_FFT[ind_x, ind_y],
+                    "Qx": Qx[ind_x, ind_y],
+                    "Qy": Qy[ind_x, ind_y],
+                }
+                for ind_x in range(sx)
+                for ind_y in range(sy)
+            ]
+
+            def wrapper_function(**kwargs):
+                return self._reconstruct_single_frequency(
+                    **kwargs,
+                    Kx=Kx,
+                    Ky=Ky,
+                    probe=self._fourier_probe,
+                    probe_conj=probe_conj,
+                    probe_kwargs=probe_kwargs,
+                    trotter_sign=trotter_sign,
+                    virtual_detector_masks=virtual_detector_masks,
+                    xp=xp,
+                )
+
+            flat_results = worker_pool.map(
+                wrapper_function, map_inputs, progress_bar=progress_bar
+            )
+            for (ind_x, ind_y), res in zip(np.ndindex((sx, sy)), flat_results):
+                psi[ind_x, ind_y] = res
+
+        self._object = xp.fft.ifft2(psi) / self._mean_diffraction_intensity
+
+        # store result
+        self.object = asnumpy(self._object)
+        self.clear_device_mem(self._device, self._clear_fft_cache)
+
+        return self
+
+
+class OBFPtychography(
+    DirectPtychography,
+):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def _reconstruct_single_frequency(
+        self,
+        intensities_FFT,
+        Qx,
+        Qy,
+        Kx,
+        Ky,
+        probe,
+        probe_conj,
+        probe_normalization,
+        probe_kwargs,
+        trotter_sign,
+        virtual_detector_masks: Sequence[np.ndarray] = None,
+        xp=np,
+    ):
+        """ """
+        threshold = 1e-3
+
+        G = xp.asarray(intensities_FFT)
+        if Qx == 0.0 and Qy == 0.0:
+            return xp.abs(G).sum()
+        else:
+            Kx_plus_Qx = Kx + Qx
+            Ky_plus_Qy = Ky + Qy
+
+            probe_plus = ComplexProbe(
+                **probe_kwargs,
+                force_spatial_frequencies=(Kx_plus_Qx, Ky_plus_Qy),
+            )._evaluate_ctf()
+
+            Kx_minus_Qx = Kx - Qx
+            Ky_minus_Qy = Ky - Qy
+
+            probe_minus = ComplexProbe(
+                **probe_kwargs,
+                force_spatial_frequencies=(Kx_minus_Qx, Ky_minus_Qy),
+            )._evaluate_ctf()
+
+            gamma = probe_conj * probe_minus - probe * probe_plus.conj()
+
+            if virtual_detector_masks is not None:
+                gamma = mask_array_using_virtual_detectors(
+                    gamma, virtual_detector_masks, in_place=True
+                )
+
+            gamma_abs = xp.abs(gamma)
+            gamma_ind = gamma_abs > threshold
+
+            normalization = gamma_abs[gamma_ind]
+            d = probe_normalization[gamma_ind]
+            normalization = d * xp.sqrt(xp.sum(normalization**2 / d))
+
+            if trotter_sign == "+":
+                numerator = -G[gamma_ind].conj() * gamma[gamma_ind]
+            elif trotter_sign == "-":
+                numerator = G[gamma_ind] * gamma[gamma_ind].conj()
+            else:
+                raise ValueError()
+
+            return (numerator / normalization).sum()
+
+    def reconstruct(
+        self,
+        trotter_sign="-",
+        worker_pool=None,
+        virtual_detector_masks: Sequence[np.ndarray] = None,
+        progress_bar: bool = True,
+        polar_parameters: Mapping[str, float] = None,
+        device: str = None,
+        clear_fft_cache: bool = None,
+        **kwargs,
+    ):
+        """
+        Ptychographic reconstruction main method.
+
+        Parameters
+        --------
+        worker_pool: WorkerPool
+            If not None, reconstruction is dispatched to mpire WorkerPool instance.
+        virtual_detector_masks: np.ndarray
+            List of corner-centered boolean masks for binning forward model trotters,
+            to allow comparison with arbitrary geometry detector datasets. TO-DO
+        progress_bar: bool, optional
+            If True, reconstruction progress is displayed
+
+        Returns
+        --------
+        self: DirectPtychography
+            Self to accommodate chaining
+        """
+
+        xp = self._xp
+        asnumpy = self._asnumpy
+
+        self._reconstruct_prep(
+            polar_parameters=polar_parameters,
+            device=device,
+            clear_fft_cache=clear_fft_cache,
+            **kwargs,
+        )
+
+        if worker_pool is not None:
+            if self._device == "gpu":
+                raise NotImplementedError()
+
+        sx, sy = self._grid_scan_shape
+        psi = xp.empty((sx, sy), dtype=xp.complex64)
+        probe_conj = xp.conj(self._fourier_probe)
+        probe_kwargs = {
+            "energy": self._energy,
+            "gpts": self._intensities_shape,
+            "sampling": self.sampling,
+            "semiangle_cutoff": self._semiangle_cutoff,
+            "vacuum_probe_intensity": self._vacuum_probe_intensity,
+            "rolloff": self._rolloff,
+            "parameters": self._polar_parameters_relative,
+            "device": self._device,
+        }
+
+        Kx, Ky = self._spatial_frequencies
+        Qx, Qy = self._scan_frequencies
+
+        probe_normalization = xp.abs(self._fourier_probe) ** 2
+        probe_normalization /= probe_normalization.sum()
+
+        if virtual_detector_masks is not None:
+            virtual_detector_masks = xp.asarray(virtual_detector_masks).astype(xp.bool_)
+            probe_normalization = mask_array_using_virtual_detectors(
+                probe_normalization, virtual_detector_masks, in_place=True
+            )
+
+        # main loop
+
+        if worker_pool is None:
+            for ind_x, ind_y in tqdmnd(
+                sx,
+                sy,
+                desc="Reconstructing object",
+                unit="freq.",
+                disable=not progress_bar,
+            ):
+                psi[ind_x, ind_y] = self._reconstruct_single_frequency(
+                    self._intensities_FFT[ind_x, ind_y],
+                    Qx[ind_x, ind_y],
+                    Qy[ind_x, ind_y],
+                    Kx,
+                    Ky,
+                    self._fourier_probe,
+                    probe_conj,
+                    probe_normalization,
+                    probe_kwargs,
+                    trotter_sign=trotter_sign,
+                    virtual_detector_masks=virtual_detector_masks,
+                    xp=xp,
+                )
+        else:
+            map_inputs = [
+                {
+                    "intensities_FFT": self._intensities_FFT[ind_x, ind_y],
+                    "Qx": Qx[ind_x, ind_y],
+                    "Qy": Qy[ind_x, ind_y],
+                }
+                for ind_x in range(sx)
+                for ind_y in range(sy)
+            ]
+
+            def wrapper_function(**kwargs):
+                return self._reconstruct_single_frequency(
+                    **kwargs,
+                    Kx=Kx,
+                    Ky=Ky,
+                    probe=self._fourier_probe,
+                    probe_conj=probe_conj,
+                    probe_normalization=probe_normalization,
+                    probe_kwargs=probe_kwargs,
+                    trotter_sign=trotter_sign,
+                    virtual_detector_masks=virtual_detector_masks,
+                    xp=xp,
+                )
+
+            flat_results = worker_pool.map(
+                wrapper_function, map_inputs, progress_bar=progress_bar
+            )
+            for (ind_x, ind_y), res in zip(np.ndindex((sx, sy)), flat_results):
+                psi[ind_x, ind_y] = res
+
+        self._object = xp.fft.ifft2(psi) / self._mean_diffraction_intensity
+
+        # store result
+        self.object = asnumpy(self._object)
+        self.clear_device_mem(self._device, self._clear_fft_cache)
+
+        return self
+
+
+class WDDPtychography(
+    DirectPtychography,
+):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def _reconstruct_single_frequency(
+        self,
+        intensities_FFT,
+        Qx,
+        Qy,
+        Kx,
+        Ky,
+        probe,
+        epsilon,
+        probe_kwargs,
+        trotter_sign,
+        xp=np,
+    ):
+        """ """
+
+        array_G = xp.asarray(intensities_FFT)
+        array_H = xp.fft.ifft2(array_G)
+
+        if trotter_sign == "+":
+            Kx_Qx = Kx + Qx
+            Ky_Qy = Ky + Qy
+        elif trotter_sign == "-":
+            Kx_Qx = Kx - Qx
+            Ky_Qy = Ky - Qy
+        else:
+            raise ValueError()
+
+        probe_shifted = ComplexProbe(
+            **probe_kwargs,
+            force_spatial_frequencies=(Kx_Qx, Ky_Qy),
+        )._evaluate_ctf()
+
+        if trotter_sign == "+":
+            wdd_probe = xp.fft.ifft2(probe * probe_shifted.conj())
+        else:
+            wdd_probe = xp.fft.ifft2(probe.conj() * probe_shifted)
+        wdd_probe_conj = wdd_probe.conj()
+
+        array_D = wdd_probe_conj * array_H / (wdd_probe * wdd_probe_conj + epsilon)
+        array_D_FFT = xp.fft.fft2(array_D)
+
+        return array_D_FFT[0, 0].conj() if trotter_sign == "+" else array_D_FFT[0, 0]
+
+    def reconstruct(
+        self,
+        relative_wiener_epsilon,
+        trotter_sign="-",
+        worker_pool=None,
+        virtual_detector_masks: Sequence[np.ndarray] = None,
+        progress_bar: bool = True,
+        polar_parameters: Mapping[str, float] = None,
+        device: str = None,
+        clear_fft_cache: bool = None,
+        **kwargs,
+    ):
+        """
+        Ptychographic reconstruction main method.
+
+        Parameters
+        --------
+        trotter_sign: str, optional
+            Sign of single-side trotter to use. One of '+','-'.
+        worker_pool: WorkerPool
+            If not None, reconstruction is dispatched to mpire WorkerPool instance.
+        virtual_detector_masks: np.ndarray
+            List of corner-centered boolean masks for binning forward model trotters,
+            to allow comparison with arbitrary geometry detector datasets. TO-DO
+        progress_bar: bool, optional
+            If True, reconstruction progress is displayed
+
+        Returns
+        --------
+        self: DirectPtychography
+            Self to accommodate chaining
+        """
+
+        xp = self._xp
+        asnumpy = self._asnumpy
+
+        self._reconstruct_prep(
+            polar_parameters=polar_parameters,
+            device=device,
+            clear_fft_cache=clear_fft_cache,
+            **kwargs,
+        )
+
+        if worker_pool is not None:
+            if self._device == "gpu":
+                raise NotImplementedError()
+
+        sx, sy = self._grid_scan_shape
+        psi = xp.empty((sx, sy), dtype=xp.complex64)
+        wdd_probe_0 = xp.fft.ifft2(self._fourier_probe * self._fourier_probe.conj())
+        wdd_probe_0 = xp.abs(wdd_probe_0[0, 0])
+        epsilon = relative_wiener_epsilon * wdd_probe_0
+
+        probe_kwargs = {
+            "energy": self._energy,
+            "gpts": self._intensities_shape,
+            "sampling": self.sampling,
+            "semiangle_cutoff": self._semiangle_cutoff,
+            "vacuum_probe_intensity": self._vacuum_probe_intensity,
+            "rolloff": self._rolloff,
+            "parameters": self._polar_parameters_relative,
+            "device": self._device,
+        }
+
+        Kx, Ky = self._spatial_frequencies
+        Qx, Qy = self._scan_frequencies
+
+        if virtual_detector_masks is not None:
+            virtual_detector_masks = xp.asarray(virtual_detector_masks).astype(xp.bool_)
+
+        # main loop
+
+        if worker_pool is None:
+            for ind_x, ind_y in tqdmnd(
+                sx,
+                sy,
+                desc="Reconstructing object",
+                unit="freq.",
+                disable=not progress_bar,
+            ):
+                psi[ind_x, ind_y] = self._reconstruct_single_frequency(
+                    self._intensities_FFT[ind_x, ind_y],
+                    Qx[ind_x, ind_y],
+                    Qy[ind_x, ind_y],
+                    Kx,
+                    Ky,
+                    self._fourier_probe,
+                    epsilon,
+                    probe_kwargs,
+                    trotter_sign=trotter_sign,
+                    xp=xp,
+                )
+        else:
+            map_inputs = [
+                {
+                    "intensities_FFT": self._intensities_FFT[ind_x, ind_y],
+                    "Qx": Qx[ind_x, ind_y],
+                    "Qy": Qy[ind_x, ind_y],
+                }
+                for ind_x in range(sx)
+                for ind_y in range(sy)
+            ]
+
+            def wrapper_function(**kwargs):
+                return self._reconstruct_single_frequency(
+                    **kwargs,
+                    Kx=Kx,
+                    Ky=Ky,
+                    probe=self._fourier_probe,
+                    epsilon=epsilon,
+                    probe_kwargs=probe_kwargs,
+                    trotter_sign=trotter_sign,
+                    xp=xp,
+                )
+
+            flat_results = worker_pool.map(
+                wrapper_function, map_inputs, progress_bar=progress_bar
+            )
+            for (ind_x, ind_y), res in zip(np.ndindex((sx, sy)), flat_results):
+                psi[ind_x, ind_y] = res
+
+        normalization = (
+            xp.abs(psi[0, 0]) / np.prod(self._intensities_shape) / wdd_probe_0
+        )
+        psi /= normalization
+
+        self._object = xp.fft.ifft2(psi)
+
+        # store result
+        self.object = asnumpy(self._object)
+        self.clear_device_mem(self._device, self._clear_fft_cache)
+
+        return self
