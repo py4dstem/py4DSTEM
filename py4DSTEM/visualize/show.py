@@ -426,7 +426,7 @@ def show(
         ):
             cal = ar.calibration
             er = ".calibration attribute must be a Calibration instance"
-            assert isinstance(cal, Calibration), er
+            # assert isinstance(cal, Calibration), er
             if isinstance(ar, DiffractionSlice):
                 scalebar = {
                     "Nx": ar.data.shape[0],

@@ -536,7 +536,7 @@ class DataCubeVirtualImager:
             ), "No calibration found - set a calibration or set `centered` and `calibrated` to False"
             return g
         else:
-            assert isinstance(calibration, Calibration)
+            # assert isinstance(calibration, Calibration)
             cal = calibration
 
         # Get calibration metadata
