@@ -127,42 +127,42 @@ def Metadata_to_h5(metadata, group):
         # None
         if v is None:
             v = "_None"
-            v = np.string_(v)  # convert to byte string
+            v = np.bytes_(v)  # convert to byte string
             dset = grp.create_dataset(k, data=v)
-            dset.attrs["type"] = np.string_("None")
+            dset.attrs["type"] = np.bytes_("None")
 
         # strings
         elif isinstance(v, str):
-            v = np.string_(v)  # convert to byte string
+            v = np.bytes_(v)  # convert to byte string
             dset = grp.create_dataset(k, data=v)
-            dset.attrs["type"] = np.string_("string")
+            dset.attrs["type"] = np.bytes_("string")
 
         # bools
         elif isinstance(v, bool):
             dset = grp.create_dataset(k, data=v, dtype=bool)
-            dset.attrs["type"] = np.string_("bool")
+            dset.attrs["type"] = np.bytes_("bool")
 
         # numbers
         elif isinstance(v, Number):
             dset = grp.create_dataset(k, data=v, dtype=type(v))
-            dset.attrs["type"] = np.string_("number")
+            dset.attrs["type"] = np.bytes_("number")
 
         # arrays
         elif isinstance(v, np.ndarray):
             dset = grp.create_dataset(k, data=v, dtype=v.dtype)
-            dset.attrs["type"] = np.string_("array")
+            dset.attrs["type"] = np.bytes_("array")
 
         # tuples
         elif isinstance(v, tuple):
             # of numbers
             if isinstance(v[0], Number):
                 dset = grp.create_dataset(k, data=v)
-                dset.attrs["type"] = np.string_("tuple")
+                dset.attrs["type"] = np.bytes_("tuple")
 
             # of tuples
             elif any([isinstance(v[i], tuple) for i in range(len(v))]):
                 dset_grp = grp.create_group(k)
-                dset_grp.attrs["type"] = np.string_("tuple_of_tuples")
+                dset_grp.attrs["type"] = np.bytes_("tuple_of_tuples")
                 dset_grp.attrs["length"] = len(v)
                 for i, x in enumerate(v):
                     dset_grp.create_dataset(str(i), data=x)
@@ -170,7 +170,7 @@ def Metadata_to_h5(metadata, group):
             # of arrays
             elif isinstance(v[0], np.ndarray):
                 dset_grp = grp.create_group(k)
-                dset_grp.attrs["type"] = np.string_("tuple_of_arrays")
+                dset_grp.attrs["type"] = np.bytes_("tuple_of_arrays")
                 dset_grp.attrs["length"] = len(v)
                 for i, ar in enumerate(v):
                     dset_grp.create_dataset(str(i), data=ar, dtype=ar.dtype)
@@ -178,10 +178,10 @@ def Metadata_to_h5(metadata, group):
             # of strings
             elif isinstance(v[0], str):
                 dset_grp = grp.create_group(k)
-                dset_grp.attrs["type"] = np.string_("tuple_of_strings")
+                dset_grp.attrs["type"] = np.bytes_("tuple_of_strings")
                 dset_grp.attrs["length"] = len(v)
                 for i, s in enumerate(v):
-                    dset_grp.create_dataset(str(i), data=np.string_(s))
+                    dset_grp.create_dataset(str(i), data=np.bytes_(s))
 
             else:
                 er = f"Metadata only supports writing tuples with numeric and array-like arguments; found type {type(v[0])}"
@@ -192,12 +192,12 @@ def Metadata_to_h5(metadata, group):
             # of numbers
             if isinstance(v[0], Number):
                 dset = grp.create_dataset(k, data=v)
-                dset.attrs["type"] = np.string_("list")
+                dset.attrs["type"] = np.bytes_("list")
 
             # of arrays
             elif isinstance(v[0], np.ndarray):
                 dset_grp = grp.create_group(k)
-                dset_grp.attrs["type"] = np.string_("list_of_arrays")
+                dset_grp.attrs["type"] = np.bytes_("list_of_arrays")
                 dset_grp.attrs["length"] = len(v)
                 for i, ar in enumerate(v):
                     dset_grp.create_dataset(str(i), data=ar, dtype=ar.dtype)
@@ -205,10 +205,10 @@ def Metadata_to_h5(metadata, group):
             # of strings
             elif isinstance(v[0], str):
                 dset_grp = grp.create_group(k)
-                dset_grp.attrs["type"] = np.string_("list_of_strings")
+                dset_grp.attrs["type"] = np.bytes_("list_of_strings")
                 dset_grp.attrs["length"] = len(v)
                 for i, s in enumerate(v):
-                    dset_grp.create_dataset(str(i), data=np.string_(s))
+                    dset_grp.create_dataset(str(i), data=np.bytes_(s))
 
             else:
                 er = f"Metadata only supports writing lists with numeric and array-like arguments; found type {type(v[0])}"
@@ -490,7 +490,7 @@ def PointList_to_h5(pointlist, group):
     # Add data
     for f, t in zip(pointlist.fields, pointlist.types):
         group_current_field = grp.create_dataset(f, data=pointlist.data[f])
-        group_current_field.attrs.create("dtype", np.string_(t))
+        group_current_field.attrs.create("dtype", np.bytes_(t))
         # group_current_field.create_dataset(
         #    "data",
         #    data = pointlist.data[f]

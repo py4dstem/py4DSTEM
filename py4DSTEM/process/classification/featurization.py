@@ -967,7 +967,7 @@ def _gmm_single(x, cv, components, num_models, random_seed=None, return_all=True
         gmm_list = []
         gmm_labels = []
         gmm_proba = []
-    lowest_bic = np.infty
+    lowest_bic = np.inf
     bic_temp = 0
     if random_seed is None:
         rng = np.random.RandomState(seed=42)

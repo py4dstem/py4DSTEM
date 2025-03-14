@@ -320,8 +320,8 @@ def elliptical_resample(
 
     # Get (qx,qy) corresponding to the coordinates distorted by the ellipse
     xr, yr = np.mgrid[0:Nx, 0:Ny]
-    xr0 = xr.astype(np.float_) - qx0
-    yr0 = yr.astype(np.float_) - qy0
+    xr0 = xr.astype(np.float64) - qx0
+    yr0 = yr.astype(np.float64) - qy0
     xr = xr0 * np.cos(-theta) - yr0 * np.sin(-theta)
     yr = xr0 * np.sin(-theta) + yr0 * np.cos(-theta)
     qx = qx0 + xr * np.cos(theta) - yr * (b / a) * np.sin(theta)
