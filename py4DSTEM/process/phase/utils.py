@@ -1,4 +1,6 @@
 import functools
+import itertools
+from collections import defaultdict
 from typing import Mapping, Tuple, Union
 
 import matplotlib.pyplot as plt
@@ -6,6 +8,7 @@ import numpy as np
 from scipy.fft import dctn, idctn
 from scipy.ndimage import gaussian_filter, uniform_filter1d, zoom
 from scipy.optimize import curve_fit
+from scipy.spatial.transform import Rotation
 
 try:
     import cupy as cp
@@ -19,7 +22,7 @@ except (ImportError, ModuleNotFoundError):
         return np
 
 
-from py4DSTEM.process.utils import get_CoM
+from py4DSTEM.process.utils import get_CoM, get_shifted_ar
 from py4DSTEM.process.utils.cross_correlate import align_and_shift_images
 from py4DSTEM.process.utils.utils import electron_wavelength_angstrom
 
@@ -71,6 +74,8 @@ class ComplexProbe:
         Tapers the cutoff edge over the given angular range [mrad].
     vacuum_probe_intensity: np.ndarray, optional
         Squared of corner-centered aperture amplitude to use, instead of semiangle_cutoff + rolloff
+    force_spatial_frequencies: np.ndarray, optional
+        Corner-centered spatial frequencies. Useful for creating shifted probes necessary in direct ptychography.
     focal_spread: float, optional
         The 1/e width of the focal spread due to chromatic aberration and lens current instability [Å].
     angular_spread: float, optional
@@ -94,6 +99,7 @@ class ComplexProbe:
         semiangle_cutoff: float = np.inf,
         rolloff: float = 2.0,
         vacuum_probe_intensity: np.ndarray = None,
+        force_spatial_frequencies: Tuple[np.ndarray, np.ndarray] = None,
         device: str = "cpu",
         focal_spread: float = 0.0,
         angular_spread: float = 0.0,
@@ -116,6 +122,7 @@ class ComplexProbe:
                 raise ValueError("{} not a recognized parameter".format(key))
 
         self._vacuum_probe_intensity = vacuum_probe_intensity
+        self._force_spatial_frequencies = force_spatial_frequencies
         self._semiangle_cutoff = semiangle_cutoff
         self._rolloff = rolloff
         self._focal_spread = focal_spread
@@ -126,6 +133,7 @@ class ComplexProbe:
         self._wavelength = electron_wavelength_angstrom(energy)
         self._gpts = gpts
         self._sampling = sampling
+        self._device = device
 
         self._parameters = dict(zip(polar_symbols, [0.0] * len(polar_symbols)))
 
@@ -166,9 +174,18 @@ class ComplexProbe:
         semiangle_cutoff = self._semiangle_cutoff / 1000
 
         if self._vacuum_probe_intensity is not None:
-            vacuum_probe_intensity = xp.asarray(
-                self._vacuum_probe_intensity, dtype=xp.float32
-            )
+            if self._force_spatial_frequencies is not None:
+                vacuum_probe_intensity = get_shifted_ar(
+                    xp.asarray(self._vacuum_probe_intensity, dtype=xp.float32),
+                    self._origin[0],
+                    self._origin[1],
+                    bilinear=True,
+                    device=self._device,
+                )
+            else:
+                vacuum_probe_intensity = xp.asarray(
+                    self._vacuum_probe_intensity, dtype=xp.float32
+                )
             vacuum_probe_amplitude = xp.sqrt(xp.maximum(vacuum_probe_intensity, 0))
             return vacuum_probe_amplitude
 
@@ -407,7 +424,23 @@ class ComplexProbe:
 
     def get_spatial_frequencies(self):
         xp = self._xp
-        kx, ky = spatial_frequencies(self._gpts, self._sampling, xp)
+        if self._force_spatial_frequencies is None:
+            kx, ky = spatial_frequencies(self._gpts, self._sampling, xp)
+        else:
+            kx, ky = self._force_spatial_frequencies
+            kx = xp.asarray(kx).astype(xp.float32)
+            ky = xp.asarray(ky).astype(xp.float32)
+
+            def find_zero_crossing(x):
+                n = x.shape[0]
+                y0, y1 = np.argsort(np.abs(x))[:2]
+                x0, x1 = x[y0], x[y1]
+                y = (y0 * x1 - y1 * x0) / (x1 - x0)
+                dy = np.mod(y + n / 2, n) - n / 2
+                return dy
+
+            self._origin = tuple(find_zero_crossing(k) for k in [kx, ky])
+
         return kx, ky
 
     def polar_coordinates(self, x, y):
@@ -981,8 +1014,8 @@ def return_1D_profile(
     if pixel_size is None:
         pixel_size = (1, 1)
 
-    x = xp.fft.fftfreq(intensity.shape[0], pixel_size[0])
-    y = xp.fft.fftfreq(intensity.shape[1], pixel_size[1])
+    x = xp.fft.fftfreq(intensity.shape[0], pixel_size[0]).astype(xp.float32)
+    y = xp.fft.fftfreq(intensity.shape[1], pixel_size[1]).astype(xp.float32)
     q = xp.sqrt(x[:, None] ** 2 + y[None, :] ** 2)
     q = q.ravel()
 
@@ -1061,8 +1094,8 @@ def fourier_rotate_real_volume(array, angle, axes=(0, 1), xp=np):
     rotation_ax = np.setdiff1d([0, 1, 2], axes)[0]
     plane_dims = array_shape[axes]
 
-    qx = xp.fft.fftfreq(plane_dims[0], 1)
-    qy = xp.fft.fftfreq(plane_dims[1], 1)
+    qx = xp.fft.fftfreq(plane_dims[0], 1).astype(xp.float32)
+    qy = xp.fft.fftfreq(plane_dims[1], 1).astype(xp.float32)
     qxa, qya = xp.meshgrid(qx, qy, indexing="ij")
 
     x = xp.arange(plane_dims[0]) - plane_dims[0] / 2
@@ -1341,11 +1374,11 @@ def polar_to_cartesian_transform_2Ddata(
     cx, cy = xy_center
 
     if corner_centered:
-        x = xp.fft.fftfreq(sx, d=1 / sx)
-        y = xp.fft.fftfreq(sy, d=1 / sy)
+        x = xp.fft.fftfreq(sx, d=1 / sx).astype(xp.float32)
+        y = xp.fft.fftfreq(sy, d=1 / sy).astype(xp.float32)
     else:
-        x = xp.arange(sx)
-        y = xp.arange(sy)
+        x = xp.arange(sx, dtype=xp.float32)
+        y = xp.arange(sy, dtype=xp.float32)
 
     xa, ya = xp.meshgrid(x, y, indexing="ij")
     ra = xp.hypot(xa - cx, ya - cy)
@@ -1515,8 +1548,8 @@ def calculate_aberration_gradient_basis(
     """ """
     sx, sy = sampling
     nx, ny = gpts
-    qx = xp.fft.fftfreq(nx, sx)
-    qy = xp.fft.fftfreq(ny, sy)
+    qx = xp.fft.fftfreq(nx, sx).astype(xp.float32)
+    qy = xp.fft.fftfreq(ny, sy).astype(xp.float32)
     qx, qy = xp.meshgrid(qx, qy, indexing="ij")
 
     # passive rotation
@@ -1620,8 +1653,8 @@ def aberrations_basis_function(
     dx, dy = probe_sampling
     wavelength = electron_wavelength_angstrom(energy)
 
-    qx = xp.fft.fftfreq(sx, dx)
-    qy = xp.fft.fftfreq(sy, dy)
+    qx = xp.fft.fftfreq(sx, dx).astype(xp.float32)
+    qy = xp.fft.fftfreq(sy, dy).astype(xp.float32)
     qr2 = qx[:, None] ** 2 + qy[None, :] ** 2
     alpha = xp.sqrt(qr2) * wavelength
     theta = xp.arctan2(qy[None, :], qx[:, None])
@@ -1929,6 +1962,7 @@ def bilinearly_interpolate_array(
     xa,
     ya,
     xp=np,
+    max_batch_size=None,
 ):
     """
     Bilinear sampling of intensities from an image array and pixel positions.
@@ -1949,58 +1983,47 @@ def bilinearly_interpolate_array(
 
     """
 
-    xF = xp.floor(xa).astype("int")
-    yF = xp.floor(ya).astype("int")
-    dx = xa - xF
-    dy = ya - yF
-
-    #     all_inds = [
-    #         [xF, yF],
-    #         [xF + 1, yF],
-    #         [xF, yF + 1],
-    #         [xF + 1, yF + 1],
-    #     ]
-
-    #     all_weights = [
-    #         (1 - dx) * (1 - dy),
-    #         (dx) * (1 - dy),
-    #         (1 - dx) * (dy),
-    #         (dx) * (dy),
-    #     ]
+    xF = xp.floor(xa.ravel()).astype("int")
+    yF = xp.floor(ya.ravel()).astype("int")
+    dx = xa.ravel() - xF
+    dy = ya.ravel() - yF
 
     raveled_image = image.ravel()
-    intensities = xp.zeros(xa.shape, dtype=xp.float32)
-    # filter_weights = xp.zeros(xa.shape, dtype=xp.float32)
+    intensities = xp.zeros(xF.shape, dtype=xp.float32)
 
-    #     for inds, weights in zip(all_inds, all_weights):
-    for basis_index in range(4):
-        match basis_index:
-            case 0:
-                inds = [xF, yF]
-                weights = (1 - dx) * (1 - dy)
-            case 1:
-                inds = [xF + 1, yF]
-                weights = (dx) * (1 - dy)
-            case 2:
-                inds = [xF, yF + 1]
-                weights = (1 - dx) * (dy)
-            case 3:
-                inds = [xF + 1, yF + 1]
-                weights = (dx) * (dy)
+    if max_batch_size is None:
+        max_batch_size = xF.shape[0]
 
-        intensities += (
-            raveled_image[
-                xp.ravel_multi_index(
-                    inds,
-                    image.shape,
-                    mode=["wrap", "wrap"],
-                )
-            ]
-            * weights
-        )
-        # filter_weights += weights
+    for start, end in generate_batches(xF.shape[0], max_batch=max_batch_size):
+        for basis_index in range(4):
+            match basis_index:
+                case 0:
+                    inds = [xF[start:end], yF[start:end]]
+                    weights = (1 - dx[start:end]) * (1 - dy[start:end])
+                case 1:
+                    inds = [xF[start:end] + 1, yF[start:end]]
+                    weights = (dx[start:end]) * (1 - dy[start:end])
+                case 2:
+                    inds = [xF[start:end], yF[start:end] + 1]
+                    weights = (1 - dx[start:end]) * (dy[start:end])
+                case 3:
+                    inds = [xF[start:end] + 1, yF[start:end] + 1]
+                    weights = (dx[start:end]) * (dy[start:end])
 
-    return intensities  # / filter_weights # unnecessary, sums up to unity
+            inds_1D = xp.ravel_multi_index(
+                inds,
+                image.shape,
+                mode=["wrap", "wrap"],
+            )
+
+            intensities[start:end] += raveled_image[inds_1D] * weights
+
+    intensities = xp.reshape(
+        intensities,
+        xa.shape,
+    )
+
+    return intensities
 
 
 def lanczos_interpolate_array(
@@ -2009,6 +2032,7 @@ def lanczos_interpolate_array(
     ya,
     alpha,
     xp=np,
+    max_batch_size=None,
 ):
     """
     Lanczos sampling of intensities from an image array and pixel positions.
@@ -2030,34 +2054,43 @@ def lanczos_interpolate_array(
         Lanczos-sampled intensities of array at (xa,ya) positions
 
     """
-    xF = xp.floor(xa).astype("int")
-    yF = xp.floor(ya).astype("int")
-    dx = xa - xF
-    dy = ya - yF
+    xF = xp.floor(xa.ravel()).astype("int")
+    yF = xp.floor(ya.ravel()).astype("int")
+    dx = xa.ravel() - xF
+    dy = ya.ravel() - yF
 
     raveled_image = image.ravel()
-    intensities = xp.zeros(xa.shape, dtype=xp.float32)
-    filter_weights = xp.zeros(xa.shape, dtype=xp.float32)
+    intensities = xp.zeros(xF.shape, dtype=xp.float32)
+    filter_weights = xp.zeros(xF.shape, dtype=xp.float32)
 
-    for i in range(-alpha + 1, alpha + 1):
-        for j in range(-alpha + 1, alpha + 1):
-            inds = [xF + i, yF + j]
-            weights = (xp.sinc(i - dx) * xp.sinc((i - dx) / alpha)) * (
-                xp.sinc(j - dy) * xp.sinc((i - dy) / alpha)
-            )
+    if max_batch_size is None:
+        max_batch_size = xF.shape[0]
 
-            intensities += (
-                raveled_image[
-                    xp.ravel_multi_index(
-                        inds,
-                        image.shape,
-                        mode=["wrap", "wrap"],
-                    )
-                ]
-                * weights
-            )
-            filter_weights += weights
+    for start, end in generate_batches(xF.shape[0], max_batch=max_batch_size):
+        for i in range(-alpha + 1, alpha + 1):
+            for j in range(-alpha + 1, alpha + 1):
+                inds = [xF[start:end] + i, yF[start:end] + j]
+                weights = (
+                    xp.sinc(i - dx[start:end]) * xp.sinc((i - dx[start:end]) / alpha)
+                ) * (xp.sinc(j - dy[start:end]) * xp.sinc((i - dy[start:end]) / alpha))
 
+                inds_1D = xp.ravel_multi_index(
+                    inds,
+                    image.shape,
+                    mode=["wrap", "wrap"],
+                )
+                intensities[start:end] += raveled_image[inds_1D] * weights
+                filter_weights[start:end] += weights
+
+    intensities = xp.reshape(
+        intensities,
+        xa.shape,
+    )
+
+    filter_weights = xp.reshape(
+        filter_weights,
+        xa.shape,
+    )
     return intensities / filter_weights
 
 
@@ -2091,27 +2124,26 @@ def pixel_rolling_kernel_density_estimate(
     pix_output: np.ndarray
         Upsampled intensity image
     """
-    upsampled_shape = np.array(stack.shape)
-    upsampled_shape *= (1, upsampling_factor, upsampling_factor)
+    upsampled_shape = np.array(stack.shape[-2:])
+    upsampled_shape *= upsampling_factor
 
     upsampled_shifts = shifts * upsampling_factor
     upsampled_shifts_int = xp.modf(upsampled_shifts)[-1].astype("int")
 
+    pix_output = xp.zeros(upsampled_shape, dtype=xp.float32)
+    pix_count = xp.zeros(upsampled_shape, dtype=xp.float32)
     upsampled_stack = xp.zeros(upsampled_shape, dtype=xp.float32)
-    upsampled_stack[..., ::upsampling_factor, ::upsampling_factor] = stack
-    pix_output = xp.zeros(upsampled_shape[-2:], dtype=xp.float32)
 
-    for BF_index in range(upsampled_stack.shape[0]):
+    for BF_index in range(stack.shape[0]):
         shift = upsampled_shifts_int[BF_index]
-        pix_output += xp.roll(upsampled_stack[BF_index], shift, axis=(0, 1))
 
-    upsampled_stack[..., ::upsampling_factor, ::upsampling_factor] = 1
-    pix_count = xp.zeros(upsampled_shape[-2:], dtype=xp.float32)
+        # values
+        upsampled_stack[::upsampling_factor, ::upsampling_factor] = stack[BF_index]
+        pix_output += xp.roll(upsampled_stack, shift, axis=(0, 1))
 
-    # sequential looping for memory reasons
-    for BF_index in range(upsampled_stack.shape[0]):
-        shift = upsampled_shifts_int[BF_index]
-        pix_count += xp.roll(upsampled_stack[BF_index], shift, axis=(0, 1))
+        # counts
+        upsampled_stack[::upsampling_factor, ::upsampling_factor] = 1
+        pix_count += xp.roll(upsampled_stack, shift, axis=(0, 1))
 
     # kernel density estimate
     pix_count = gaussian_filter(pix_count, kde_sigma)
@@ -2123,8 +2155,12 @@ def pixel_rolling_kernel_density_estimate(
 
     if lowpass_filter:
         pix_fft = xp.fft.fft2(pix_output)
-        pix_fft /= xp.sinc(xp.fft.fftfreq(pix_output.shape[0], d=1.0))[:, None]
-        pix_fft /= xp.sinc(xp.fft.fftfreq(pix_output.shape[1], d=1.0))[None]
+        pix_fft /= xp.sinc(
+            xp.fft.fftfreq(pix_output.shape[0], d=1.0).astype(xp.float32)
+        )[:, None]
+        pix_fft /= xp.sinc(
+            xp.fft.fftfreq(pix_output.shape[1], d=1.0).astype(xp.float32)
+        )[None]
         pix_output = xp.real(xp.fft.ifft2(pix_fft))
 
     return pix_output
@@ -2139,6 +2175,7 @@ def bilinear_kernel_density_estimate(
     lowpass_filter=False,
     xp=np,
     gaussian_filter=gaussian_filter,
+    max_batch_size=None,
 ):
     """
     kernel density estimate from a set coordinates (xa,ya) and intensity weights.
@@ -2170,56 +2207,45 @@ def bilinear_kernel_density_estimate(
     dx = xa.ravel() - xF
     dy = ya.ravel() - yF
 
-    #     all_inds = [
-    #         [xF, yF],
-    #         [xF + 1, yF],
-    #         [xF, yF + 1],
-    #         [xF + 1, yF + 1],
-    #     ]
-
-    #     all_weights = [
-    #         (1 - dx) * (1 - dy),
-    #         (dx) * (1 - dy),
-    #         (1 - dx) * (dy),
-    #         (dx) * (dy),
-    #     ]
-
     raveled_intensities = intensities.ravel()
     pix_count = xp.zeros(np.prod(output_shape), dtype=xp.float32)
     pix_output = xp.zeros(np.prod(output_shape), dtype=xp.float32)
 
-    #     for inds, weights in zip(all_inds, all_weights):
-    for basis_index in range(4):
-        match basis_index:
-            case 0:
-                inds = [xF, yF]
-                weights = (1 - dx) * (1 - dy)
-            case 1:
-                inds = [xF + 1, yF]
-                weights = (dx) * (1 - dy)
-            case 2:
-                inds = [xF, yF + 1]
-                weights = (1 - dx) * (dy)
-            case 3:
-                inds = [xF + 1, yF + 1]
-                weights = (dx) * (dy)
+    if max_batch_size is None:
+        max_batch_size = xF.shape[0]
 
-        inds_1D = xp.ravel_multi_index(
-            inds,
-            output_shape,
-            mode=["wrap", "wrap"],
-        )
+    for start, end in generate_batches(xF.shape[0], max_batch=max_batch_size):
+        for basis_index in range(4):
+            match basis_index:
+                case 0:
+                    inds = [xF[start:end], yF[start:end]]
+                    weights = (1 - dx[start:end]) * (1 - dy[start:end])
+                case 1:
+                    inds = [xF[start:end] + 1, yF[start:end]]
+                    weights = (dx[start:end]) * (1 - dy[start:end])
+                case 2:
+                    inds = [xF[start:end], yF[start:end] + 1]
+                    weights = (1 - dx[start:end]) * (dy[start:end])
+                case 3:
+                    inds = [xF[start:end] + 1, yF[start:end] + 1]
+                    weights = (dx[start:end]) * (dy[start:end])
 
-        pix_count += xp.bincount(
-            inds_1D,
-            weights=weights,
-            minlength=np.prod(output_shape),
-        )
-        pix_output += xp.bincount(
-            inds_1D,
-            weights=weights * raveled_intensities,
-            minlength=np.prod(output_shape),
-        )
+            inds_1D = xp.ravel_multi_index(
+                inds,
+                output_shape,
+                mode=["wrap", "wrap"],
+            )
+
+            pix_count += xp.bincount(
+                inds_1D,
+                weights=weights,
+                minlength=np.prod(output_shape),
+            )
+            pix_output += xp.bincount(
+                inds_1D,
+                weights=weights * raveled_intensities[start:end],
+                minlength=np.prod(output_shape),
+            )
 
     # reshape 1D arrays to 2D
     pix_count = xp.reshape(
@@ -2240,8 +2266,12 @@ def bilinear_kernel_density_estimate(
 
     if lowpass_filter:
         pix_fft = xp.fft.fft2(pix_output)
-        pix_fft /= xp.sinc(xp.fft.fftfreq(pix_output.shape[0], d=1.0))[:, None]
-        pix_fft /= xp.sinc(xp.fft.fftfreq(pix_output.shape[1], d=1.0))[None]
+        pix_fft /= xp.sinc(
+            xp.fft.fftfreq(pix_output.shape[0], d=1.0).astype(xp.float32)
+        )[:, None]
+        pix_fft /= xp.sinc(
+            xp.fft.fftfreq(pix_output.shape[1], d=1.0).astype(xp.float32)
+        )[None]
         pix_output = xp.real(xp.fft.ifft2(pix_fft))
 
     return pix_output
@@ -2257,6 +2287,7 @@ def lanczos_kernel_density_estimate(
     lowpass_filter=False,
     xp=np,
     gaussian_filter=gaussian_filter,
+    max_batch_size=None,
 ):
     """
     kernel density estimate from a set coordinates (xa,ya) and intensity weights.
@@ -2294,29 +2325,33 @@ def lanczos_kernel_density_estimate(
     pix_count = xp.zeros(np.prod(output_shape), dtype=xp.float32)
     pix_output = xp.zeros(np.prod(output_shape), dtype=xp.float32)
 
-    for i in range(-alpha + 1, alpha + 1):
-        for j in range(-alpha + 1, alpha + 1):
-            inds = [xF + i, yF + j]
-            weights = (xp.sinc(i - dx) * xp.sinc((i - dx) / alpha)) * (
-                xp.sinc(j - dy) * xp.sinc((i - dy) / alpha)
-            )
+    if max_batch_size is None:
+        max_batch_size = xF.shape[0]
 
-            inds_1D = xp.ravel_multi_index(
-                inds,
-                output_shape,
-                mode=["wrap", "wrap"],
-            )
+    for start, end in generate_batches(xF.shape[0], max_batch=max_batch_size):
+        for i in range(-alpha + 1, alpha + 1):
+            for j in range(-alpha + 1, alpha + 1):
+                inds = [xF[start:end] + i, yF[start:end] + j]
+                weights = (
+                    xp.sinc(i - dx[start:end]) * xp.sinc((i - dx[start:end]) / alpha)
+                ) * (xp.sinc(j - dy[start:end]) * xp.sinc((i - dy[start:end]) / alpha))
 
-            pix_count += xp.bincount(
-                inds_1D,
-                weights=weights,
-                minlength=np.prod(output_shape),
-            )
-            pix_output += xp.bincount(
-                inds_1D,
-                weights=weights * raveled_intensities,
-                minlength=np.prod(output_shape),
-            )
+                inds_1D = xp.ravel_multi_index(
+                    inds,
+                    output_shape,
+                    mode=["wrap", "wrap"],
+                )
+
+                pix_count += xp.bincount(
+                    inds_1D,
+                    weights=weights,
+                    minlength=np.prod(output_shape),
+                )
+                pix_output += xp.bincount(
+                    inds_1D,
+                    weights=weights * raveled_intensities[start:end],
+                    minlength=np.prod(output_shape),
+                )
 
     # reshape 1D arrays to 2D
     pix_count = xp.reshape(
@@ -2337,8 +2372,12 @@ def lanczos_kernel_density_estimate(
 
     if lowpass_filter:
         pix_fft = xp.fft.fft2(pix_output)
-        pix_fft /= xp.sinc(xp.fft.fftfreq(pix_output.shape[0], d=1.0))[:, None]
-        pix_fft /= xp.sinc(xp.fft.fftfreq(pix_output.shape[1], d=1.0))[None]
+        pix_fft /= xp.sinc(
+            xp.fft.fftfreq(pix_output.shape[0], d=1.0).astype(xp.float32)
+        )[:, None]
+        pix_fft /= xp.sinc(
+            xp.fft.fftfreq(pix_output.shape[1], d=1.0).astype(xp.float32)
+        )[None]
         pix_output = xp.real(xp.fft.ifft2(pix_fft))
 
     return pix_output
@@ -2600,6 +2639,29 @@ def vectorized_fourier_resample(
     return array_resize
 
 
+def mask_array_using_virtual_detectors(
+    corner_centered_array,
+    corner_centered_masks,
+    in_place=False,
+):
+    """ """
+    xp = get_array_module(corner_centered_array)
+    masks = xp.asarray(corner_centered_masks).astype(np.bool_)
+    inverse_mask = (1 - masks.sum(0)).astype(np.bool_)
+
+    if in_place:
+        out_array = corner_centered_array
+    else:
+        out_array = corner_centered_array.copy()
+
+    for mask in masks:
+        val = xp.sum(out_array * mask, axis=(-1, -2)) / xp.sum(mask)
+        out_array[..., mask] = val[..., None]
+    out_array[..., inverse_mask] = 0.0
+
+    return out_array
+
+
 def partition_list(lst, size):
     """Partitions lst into chunks of size. Returns a generator."""
     for i in range(0, len(lst), size):
@@ -2624,3 +2686,380 @@ def copy_to_device(array, device="cpu"):
             return cp.asarray(array)
         else:
             raise ValueError(f"device must be either 'cpu' or 'gpu', not {device}")
+
+
+def polar_aberrations_to_cartesian(polar):
+    """
+    Convert between polar and Cartesian aberration coefficients.
+
+    Parameters
+    ----------
+    polar: dict
+        Mapping from polar aberration symbols to their corresponding values.
+
+    Returns
+    -------
+    dict
+        Mapping from cartesian aberration symbols to their corresponding values.
+    """
+
+    polar = defaultdict(lambda: 0.0, polar)
+
+    max_order = 5
+    cartesian = dict()
+    for n in range(1, max_order + 1):
+        for s in range(0, n + 2):
+            m = 2 * s - n - 1
+            if m < 0:
+                continue
+
+            modulus_name = "C" + str(n) + str(m)
+            Ca_name = modulus_name + "a"
+            Cb_name = modulus_name + "b"
+            if m != 0:
+                argument_name = "phi" + str(n) + str(m)
+                cartesian[Ca_name] = polar[modulus_name] * np.cos(
+                    polar[argument_name] * m
+                )
+                cartesian[Cb_name] = polar[modulus_name] * np.sin(
+                    polar[argument_name] * m
+                )
+            else:
+                cartesian[modulus_name] = polar[modulus_name]
+
+    return cartesian
+
+
+def cartesian_aberrations_to_polar(cartesian):
+    """
+    Convert between Cartesian and polar aberration coefficients.
+
+    Parameters
+    ----------
+    cartesian: dict
+        Mapping from Cartesian aberration symbols to their corresponding values.
+
+    Returns
+    -------
+    dict
+        Mapping from polar aberration symbols to their corresponding values.
+    """
+
+    cartesian = defaultdict(lambda: 0.0, cartesian)
+    max_order = 5
+    polar = dict()
+    for n in range(1, max_order + 1):
+        for s in range(0, n + 2):
+            m = 2 * s - n - 1
+            if m < 0:
+                continue
+
+            modulus_name = "C" + str(n) + str(m)
+            Ca_name = modulus_name + "a"
+            Cb_name = modulus_name + "b"
+            if m != 0:
+                argument_name = "phi" + str(n) + str(m)
+                polar[modulus_name] = np.sqrt(
+                    cartesian[Ca_name] ** 2 + cartesian[Cb_name] ** 2
+                )
+                polar[argument_name] = (
+                    np.arctan2(cartesian[Cb_name], cartesian[Ca_name]) / m
+                )
+            else:
+                polar[modulus_name] = cartesian[modulus_name]
+    return polar
+
+
+### 3D Fourier Rotation
+@functools.cache
+def compute_fourier_rotation_shear_coefficients(X, Y, Z, W):
+    """
+    Returns the a..h shear coefficients for the rotation decomposition:
+
+        R(q(X,Y,Z,W)) = Sy(a,b)@Sz(c,d)@Sx(e,f)@Sy(g,h),
+
+    where q(X,Y,Z,W) is the quaternion representation of a rotation.
+
+    Reference: 10.1016/j.gmod.2005.11.004
+    """
+    # force scalars
+    X, Y, Z, W = float(X), float(Y), float(Z), float(W)
+
+    try:
+        # special cases
+        if X == 0.0:
+            a = Y / Z
+            b = (1 - W**2) / (W * Z)
+            c = -2 * Y / W
+            d = -2 * Y * Z
+            e = -2 * W * Z
+            f = 0
+            g = -Y / Z
+            h = (1 - W**2) / (W * Z)
+
+        elif Y == 0.0:
+            a = -X / W
+            b = Z / W
+            c = 0
+            d = 2 * W * X
+            e = -2 * W * Z
+            f = 0
+            g = -X / W
+            h = Z / W
+
+        elif Z == 0.0:
+            a = (W**2 - 1) / (W * X)
+            b = Y / X
+            c = 0
+            d = 2 * W * X
+            e = 2 * X * Y
+            f = 2 * Y / W
+            g = (W**2 - 1) / (W * X)
+            h = -Y / X
+
+        # general case
+        else:
+            a = (X**2 + Y**2) / (Y * Z - X * W)
+            b = (Y**2 - Z**2) / (X * Y - Z * W) - 2 * (
+                Y * Z * (X**2 + Y**2)
+            ) / ((X * Y - Z * W) * (Y * Z - X * W))
+            c = 2 * Y * Z / (X * Y - Z * W)
+            d = 2 * (X * W - Y * Z)
+            e = 2 * (X * Y - Z * W)
+            f = -2 * X * Y / (Y * Z - X * W)
+            g = (X**2 - Y**2) / (Y * Z - X * W) + 2 * (
+                X * Y * (Y**2 + Z**2)
+            ) / ((X * Y - Z * W) * (Y * Z - X * W))
+            h = (-1 + X**2 + W**2) / (X * Y - Z * W)
+
+        return np.array([a, b, c, d, e, f, g, h]).reshape(4, 2)
+
+    # singular
+    except ZeroDivisionError:
+        return np.full((4, 2), np.inf)
+
+
+def compute_fourier_rotation_shears_combination(X, Y, Z, W):
+    """
+    Computes all six sets of shear coefficients for the combinations:
+        SySzSxSy, SzSxSySz, SxSySzSx, SySxSzSy, SzSySxSz, SxSzSySx
+    """
+    all_coeffs = np.empty((6, 4, 2))
+
+    for index in range(6):
+        match index:
+            case 0:  # SySzSxSy
+                coeffs = compute_fourier_rotation_shear_coefficients(X, Y, Z, W)
+            case 1:  # SzSxSySz
+                coeffs = compute_fourier_rotation_shear_coefficients(Y, Z, X, W)
+            case 2:  # SxSySzSx
+                coeffs = compute_fourier_rotation_shear_coefficients(Z, X, Y, W)
+            case 3:  # SySzSxSy complement
+                coeffs = -np.flipud(
+                    compute_fourier_rotation_shear_coefficients(X, Y, Z, -W)
+                )
+            case 4:  # SzSxSySz complement
+                coeffs = -np.flipud(
+                    compute_fourier_rotation_shear_coefficients(Y, Z, X, -W)
+                )
+            case 5:  # SxSySzSx complement
+                coeffs = -np.flipud(
+                    compute_fourier_rotation_shear_coefficients(Z, X, Y, -W)
+                )
+
+        all_coeffs[index] = coeffs
+
+    return all_coeffs
+
+
+def compute_fourier_rotation_best_shears_combination(X, Y, Z, W):
+    """
+    Computes all six sets of shear coefficients for the combinations:
+        SySzSxSy, SzSxSySz, SxSySzSx, SySxSzSy, SzSySxSz, SxSzSySx
+    and returns the one with the smallest squared coefficients.
+    """
+    all_coeffs = compute_fourier_rotation_shears_combination(X, Y, Z, W)
+    all_orders = np.array(
+        [
+            [1, 2, 0, 1],
+            [2, 0, 1, 2],
+            [0, 1, 2, 0],
+            [1, 0, 2, 1],
+            [2, 1, 0, 2],
+            [0, 2, 1, 0],
+        ]
+    )
+
+    # ind = np.argmin(np.sum(all_coeffs**2, axis=(-1, -2)))
+
+    flat_coeffs = all_coeffs.reshape((6, -1))
+    metric = np.zeros(6)
+    for indices in [[0, 6], [1, 7], [2], [3], [4], [5]]:  # |a+g| + |b+h| + |c| + ...
+        metric += np.abs(flat_coeffs[:, indices].sum(-1))
+    ind = np.argmin(metric)
+
+    return all_orders[ind], all_coeffs[ind]
+
+
+def fourier_rotation_best_shears_combination(tf):
+    """Memoized version of function above which accepts tf matrices as input"""
+    quaternion = Rotation.from_matrix(tf).as_quat()
+    return compute_fourier_rotation_best_shears_combination(*quaternion)
+
+
+def fourier_shear_Sx(array, a, b, xp=np):
+    """ """
+    Nx, Ny, Nz = array.shape
+    nx = xp.arange(Nx, dtype=xp.float32) - (Nx - 1) / 2
+    ny, nz = tuple(xp.fft.fftfreq(N, 1 / N).astype(xp.float32) for N in [Ny, Nz])
+    nxa, nya, nza = xp.meshgrid(nx, ny, nz, indexing="ij")
+    phase_shift = xp.exp(-2j * np.pi * (a * nya + b * nza) * nxa / Nx)
+
+    array_fft = xp.fft.fft2(array, axes=(1, 2))
+    return xp.fft.ifft2(array_fft * phase_shift, axes=(1, 2))
+
+
+def fourier_shear_Sy(array, a, b, xp=np):
+    """ """
+    Nx, Ny, Nz = array.shape
+    ny = xp.arange(Ny, dtype=xp.float32) - (Ny - 1) / 2
+    nx, nz = tuple(xp.fft.fftfreq(N, 1 / N).astype(xp.float32) for N in [Nx, Nz])
+    nxa, nya, nza = xp.meshgrid(nx, ny, nz, indexing="ij")
+    phase_shift = xp.exp(-2j * np.pi * (a * nza + b * nxa) * nya / Ny)
+
+    array_fft = xp.fft.fft2(array, axes=(0, 2))
+    return xp.fft.ifft2(array_fft * phase_shift, axes=(0, 2))
+
+
+def fourier_shear_Sz(array, a, b, xp=np):
+    """ """
+    Nx, Ny, Nz = array.shape
+    nz = xp.arange(Nz, dtype=xp.float32) - (Nz - 1) / 2
+    nx, ny = tuple(xp.fft.fftfreq(N, 1 / N).astype(xp.float32) for N in [Nx, Ny])
+    nxa, nya, nza = xp.meshgrid(nx, ny, nz, indexing="ij")
+    phase_shift = xp.exp(-2j * np.pi * (a * nxa + b * nya) * nza / Nz)
+
+    array_fft = xp.fft.fft2(array, axes=(0, 1))
+    return xp.fft.ifft2(array_fft * phase_shift, axes=(0, 1))
+
+
+def fourier_rotate_volume_base(array, tf, xp=np):
+    """ """
+    order, coeffs = fourier_rotation_best_shears_combination(tf)
+    ordered_fns = [fourier_shear_Sx, fourier_shear_Sy, fourier_shear_Sz]
+
+    if np.all(np.isinf(coeffs)):
+        coeffs = np.zeros_like(coeffs)
+
+    out_array = xp.asarray(array)
+    for j, index in enumerate(order):
+        fn = ordered_fns[index]
+        out_array = fn(out_array, *coeffs[j], xp=xp)
+
+    return out_array
+
+
+def fourier_rotate_volume(array, tf, angle_threshold=np.pi / 9, xp=np):
+    """ """
+
+    cmplx_obj = xp.iscomplexobj(array)
+
+    rot_vec = Rotation.from_matrix(tf).as_rotvec()
+    k_rotations = np.ceil(np.linalg.norm(rot_vec) / angle_threshold).astype("int")
+    if k_rotations > 1:
+        tf_prime = Rotation.from_rotvec(rot_vec / k_rotations).as_matrix()
+        for k in range(k_rotations):
+            array = fourier_rotate_volume_base(array, tf_prime, xp=xp)
+    else:
+        array = fourier_rotate_volume_base(array, tf, xp=xp)
+
+    return array if cmplx_obj else array.real
+
+
+def distance_bw_orientation_matrices(tf1, tf2):
+    """ """
+    tf = tf1 @ tf2.T
+    return Rotation.from_matrix(tf).magnitude()
+
+
+def return_tsp_and_edge_weighted_graph(old_graph):
+
+    try:
+        import networkx as nx
+    except (ImportError, ModuleNotFoundError) as exc:
+        raise Exception(
+            "traveling salesman weighting requires package networkx"
+        ) from exc
+
+    # permute nodes
+    nodes = old_graph.nodes()
+    order = old_graph.order()
+    nodes = np.roll(nodes, np.random.randint(order))
+
+    # calculate tsp on weighted graph with permuted nodes
+    tsp = nx.approximation.traveling_salesman_problem(
+        old_graph, cycle=False, nodes=nodes, method=nx.approximation.greedy_tsp
+    )
+
+    # weight previously visited edges to add diversity
+    graph = old_graph.copy(as_view=False)
+    for u, v in nx.utils.pairwise(tsp):
+        graph[u][v]["weight"] += 0.5
+        graph[v][u]["weight"] += 0.5
+
+    return tsp, graph
+
+
+def calculate_orientation_matrices_tsp_ordering(
+    orientation_matrices, num_iter, angle_threshold=np.pi / 9
+):
+    """ """
+    try:
+        import networkx as nx
+    except (ImportError, ModuleNotFoundError) as exc:
+        raise Exception(
+            "traveling salesman weighting requires package networkx"
+        ) from exc
+
+    n = len(orientation_matrices)
+    distance_matrix = np.zeros((n, n))
+
+    # loop over upper-triangular
+    for ind_x in range(n):
+        tf1 = orientation_matrices[ind_x]
+        for ind_y in range(ind_x, n):
+            tf2 = orientation_matrices[ind_y]
+            distance_matrix[ind_x, ind_y] = distance_bw_orientation_matrices(tf1, tf2)
+
+    # symmetrize and remove self-loops
+    distance_matrix += distance_matrix.T
+    distance_matrix[distance_matrix == 0.0] = np.inf
+
+    # build graph
+    edges = np.stack(np.where(distance_matrix <= angle_threshold), -1)
+    nodes = np.arange(n)
+
+    graph = nx.Graph()
+    graph.add_nodes_from(nodes)
+    graph.add_edges_from(edges, weight=1)
+
+    # compute nested tsp
+    tsps = []
+    for n in range(num_iter):
+        tsp, graph = return_tsp_and_edge_weighted_graph(graph)
+        tsps.append(tsp)
+
+    return tsps
+
+
+def calculate_orientation_matrices_serpentine_ordering(
+    orientation_matrices,
+    num_iter,
+    collective_measurement_updates,
+):
+    """ """
+    fwd = np.arange(len(orientation_matrices))
+    rvs = fwd[::-1] if collective_measurement_updates else np.flip(fwd[1:-1])
+
+    tsps = list(itertools.islice(itertools.cycle((fwd, rvs)), num_iter))
+    return tsps

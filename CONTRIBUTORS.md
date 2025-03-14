@@ -20,11 +20,11 @@ There are many ways to contribute to py4DSTEM, including:
 
 ### Coding Guidelines
 
-* **Code style:** py4DSTEM uses the black code formatter and flake8 linter. All code must pass these checks without error before it can be merged. We suggest using `pre-commit` to help ensure any code commited follows these practices, checkout the [setting up developer environment section below](#install). We also try to abide by PEP8 coding style guide where possible.
+* **Code style:** py4DSTEM uses the black code formatter and flake8 linter. All code must pass these checks without error before it can be merged. We suggest using `pre-commit` to help ensure any code committed follows these practices, checkout the [setting up developer environment section below](#install). We also try to abide by PEP8 coding style guide where possible.
 
 * **Documentation:** All code should be well-documented, and use Numpy style docstrings. Use docstrings to document functions and classes, add comments to explain complex code both blocks and individual lines, and use informative variable names.
 
-* **Testing:** Ideally all new code should be accompanied by tests using pyTest framework; at the least we require examples of old and new behaviour caused by the PR. For bug fixes this can be a block of code which currently fails and works with the proposed changes. For new workflows or extensive feature additions, please also include a Jupyter notebook demonstrating the changes for an entire workflow i.e. from loading the input data to visualizing and saving any processed results. 
+* **Testing:** Ideally all new code should be accompanied by tests using pyTest framework; at the least we require examples of old and new behaviour caused by the PR. For bug fixes this can be a block of code which currently fails and works with the proposed changes. For new workflows or extensive feature additions, please also include a Jupyter notebook demonstrating the changes for an entire workflow i.e. from loading the input data to visualizing and saving any processed results.
 
 * **Dependencies:** New dependencies represent a significant change to the package, and any PRs which add new dependencies will require discussion and agreement from the development team. If a new dependency is required, please prioritize adding dependencies that are actively maintained, have permissive installation requirements, and are accessible through both pip and conda.
 
@@ -107,20 +107,20 @@ You can now make changes to the code and test them using your favorite Python ID
     cd <path-to-your-fork-of-the-py4DSTEM-git-repo>   # go to your py4DSTEM repo
     pre-commit install
     ```
-    
+
 This will setup pre-commit to work on this repo by creating/changing a file in .git/hooks/pre-commit, which tells `pre-commit` to automatically run flake8 and black when you try to commit code.  It won't affect any other repos.
 
-**_extra tips_:** 
+**_extra tips_:**
 
 ```bash
 # You can call pre commit manually at any time without committing
-pre-commit run # will check any staged files 
+pre-commit run # will check any staged files
 pre-commit run -a # will run on all files in repo
 
-# you can bypass the hook and commit files without the checks 
+# you can bypass the hook and commit files without the checks
 # (this isn't best practice and should be avoided, but there are times it can be useful)
 
-git add file # stage file as usual 
+git add file # stage file as usual
 git commit -m "you commit message" --no-verify # commit without running checks
-git push # push to repo. 
+git push # push to repo.
 ```

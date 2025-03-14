@@ -96,6 +96,12 @@ class ObjectNDConstraintsMixin:
 
         return current_object
 
+    def _object_vacuum_transmission_constraint(self, current_object, vacuum_mask):
+        """ """
+        val = 1.0 if self._object_type == "complex" else 0.0
+        current_object[..., vacuum_mask] = val
+        return current_object
+
     def _object_positivity_constraint(self, current_object):
         """
         Ptychographic positivity constraint.
@@ -178,8 +184,12 @@ class ObjectNDConstraintsMixin:
             Constrained object estimate
         """
         xp = self._xp
-        qx = xp.fft.fftfreq(current_object.shape[-2], self.sampling[0])
-        qy = xp.fft.fftfreq(current_object.shape[-1], self.sampling[1])
+        qx = xp.fft.fftfreq(current_object.shape[-2], self.sampling[0]).astype(
+            xp.float32
+        )
+        qy = xp.fft.fftfreq(current_object.shape[-1], self.sampling[1]).astype(
+            xp.float32
+        )
 
         qya, qxa = xp.meshgrid(qy, qx)
         qra = xp.sqrt(qxa**2 + qya**2)
@@ -424,6 +434,7 @@ class ObjectNDConstraintsMixin:
         object_positivity,
         shrinkage_rad,
         object_mask,
+        vacuum_mask,
         **kwargs,
     ):
         """ObjectNDConstraints wrapper function"""
@@ -460,6 +471,12 @@ class ObjectNDConstraintsMixin:
             )
         elif object_positivity:
             current_object = self._object_positivity_constraint(current_object)
+
+        # explicitly sets vacuum to zero
+        if vacuum_mask is not None:
+            current_object = self._object_vacuum_transmission_constraint(
+                current_object, vacuum_mask
+            )
 
         return current_object
 
@@ -607,9 +624,15 @@ class Object2p5DConstraintsMixin:
         pad_width = ((z_padding, z_padding), (0, 0), (0, 0))
         current_object = xp.pad(current_object, pad_width=pad_width, mode="constant")
 
-        qz = xp.fft.fftfreq(current_object.shape[0], self._slice_thicknesses[0])
-        qx = xp.fft.fftfreq(current_object.shape[1], self.sampling[0])
-        qy = xp.fft.fftfreq(current_object.shape[2], self.sampling[1])
+        qz = xp.fft.fftfreq(current_object.shape[0], self._slice_thicknesses[0]).astype(
+            xp.float32
+        )
+        qx = xp.fft.fftfreq(current_object.shape[1], self.sampling[0]).astype(
+            xp.float32
+        )
+        qy = xp.fft.fftfreq(current_object.shape[2], self.sampling[1]).astype(
+            xp.float32
+        )
 
         kz_regularization_gamma *= self._slice_thicknesses[0] / self.sampling[0]
 
@@ -668,6 +691,7 @@ class Object2p5DConstraintsMixin:
         object_positivity,
         shrinkage_rad,
         object_mask,
+        vacuum_mask,
         **kwargs,
     ):
         """Object2p5DConstraints wrapper function"""
@@ -722,6 +746,12 @@ class Object2p5DConstraintsMixin:
             )
         elif object_positivity:
             current_object = self._object_positivity_constraint(current_object)
+
+        # explicitly sets vacuum to zero
+        if vacuum_mask is not None:
+            current_object = self._object_vacuum_transmission_constraint(
+                current_object, vacuum_mask
+            )
 
         return current_object
 
@@ -811,9 +841,15 @@ class Object3DConstraintsMixin:
             Constrained object estimate
         """
         xp = self._xp
-        qz = xp.fft.fftfreq(current_object.shape[0], self.sampling[1])
-        qx = xp.fft.fftfreq(current_object.shape[1], self.sampling[0])
-        qy = xp.fft.fftfreq(current_object.shape[2], self.sampling[1])
+        qz = xp.fft.fftfreq(current_object.shape[0], self.sampling[1]).astype(
+            xp.float32
+        )
+        qx = xp.fft.fftfreq(current_object.shape[1], self.sampling[0]).astype(
+            xp.float32
+        )
+        qy = xp.fft.fftfreq(current_object.shape[2], self.sampling[1]).astype(
+            xp.float32
+        )
         qza, qxa, qya = xp.meshgrid(qz, qx, qy, indexing="ij")
         qra = xp.sqrt(qza**2 + qxa**2 + qya**2)
 
@@ -848,6 +884,7 @@ class Object3DConstraintsMixin:
         object_positivity,
         shrinkage_rad,
         object_mask,
+        object_real_space_support_mask,
         **kwargs,
     ):
         """Object3DConstraints wrapper function"""
@@ -878,6 +915,10 @@ class Object3DConstraintsMixin:
                 shrinkage_rad,
                 object_mask,
             )
+
+        # 3D support mask
+        if object_real_space_support_mask is not None:
+            current_object *= object_real_space_support_mask
 
         # Positivity
         if object_positivity:
@@ -917,6 +958,13 @@ class ProbeConstraintsMixin:
 
         return shifted_probe
 
+    def _probe_real_space_support_constraint(
+        self, current_probe, probe_real_space_support_mask
+    ):
+        """ """
+        current_probe[..., ~probe_real_space_support_mask] = 0.0
+        return current_probe
+
     def _probe_amplitude_constraint(
         self, current_probe, relative_radius, relative_width
     ):
@@ -943,8 +991,8 @@ class ProbeConstraintsMixin:
         probe_intensity = xp.abs(current_probe) ** 2
         current_probe_sum = xp.sum(probe_intensity)
 
-        X = xp.fft.fftfreq(current_probe.shape[0])[:, None]
-        Y = xp.fft.fftfreq(current_probe.shape[1])[None]
+        X = xp.fft.fftfreq(current_probe.shape[0]).astype(xp.float32)[:, None]
+        Y = xp.fft.fftfreq(current_probe.shape[1]).astype(xp.float32)[None]
         r = xp.hypot(X, Y) - relative_radius
 
         sigma = np.sqrt(np.pi) / relative_width
@@ -1105,6 +1153,7 @@ class ProbeConstraintsMixin:
         constrain_probe_amplitude,
         constrain_probe_amplitude_relative_radius,
         constrain_probe_amplitude_relative_width,
+        probe_real_space_support_mask,
         **kwargs,
     ):
         """ProbeConstraints wrapper function"""
@@ -1142,6 +1191,12 @@ class ProbeConstraintsMixin:
                 current_probe,
                 constrain_probe_amplitude_relative_radius,
                 constrain_probe_amplitude_relative_width,
+            )
+
+        # Explicit real-space support mask
+        if probe_real_space_support_mask is not None:
+            current_probe = self._probe_real_space_support_constraint(
+                current_probe, probe_real_space_support_mask
             )
 
         return current_probe
@@ -1234,6 +1289,7 @@ class ProbeMixedConstraintsMixin:
         constrain_probe_amplitude_relative_radius,
         constrain_probe_amplitude_relative_width,
         orthogonalize_probe,
+        probe_real_space_support_mask,
         **kwargs,
     ):
         """ProbeMixedConstraints wrapper function"""
@@ -1276,6 +1332,12 @@ class ProbeMixedConstraintsMixin:
                     constrain_probe_amplitude_relative_radius,
                     constrain_probe_amplitude_relative_width,
                 )
+
+        # Explicit real-space support mask
+        if probe_real_space_support_mask is not None:
+            current_probe = self._probe_real_space_support_constraint(
+                current_probe, probe_real_space_support_mask
+            )
 
         # Probe orthogonalization
         if orthogonalize_probe:

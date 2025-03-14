@@ -307,7 +307,9 @@ class Probe(DiffractionSlice, Data):
         alpha_max=1.2,
     ):
         """
-        Sets pixels outside of the probe's central disk to zero.
+        Sets pixels outside of the probe's central disk to zero using a
+        hard mask at alpha*alpha_max.  To use a continuous mask, try
+        zero_vacuum_sinusoid.
 
         The probe origin and convergence semiangle must be set for this
         method to run - these can be set using `measure_disk`. Pixels are
@@ -334,6 +336,57 @@ class Probe(DiffractionSlice, Data):
         # zero the vacuum
         self.probe *= mask
         pass
+
+    def zero_vacuum_sinusoid(self, s=0.1, w=1, p=1, update_inplace=True):
+        """
+        Sets pixels outside of the probe's central disk to zero using a
+        continuous mask with sinusoidal^p decay over the range
+        [alpha+s, alpha+s+w] for semiangle alpha.
+
+        The probe origin and convergence semiangle must be set for this
+        method to run - these can be set using `measure_disk`. Pixels are
+        defined as outside the central disk if their distance from the origin
+        exceeds the semiconvergence angle * alpha_max.
+
+        Parameters
+        ----------
+        s : number
+            Damping begins at radius alpha*(1+s)
+        w : number
+            Width of damping window, i.e. damping ends at alpha*(1+s)+w
+        p : number
+            Scaling power for damping sindusoid
+        update_inplace : bool
+            Toggle updating the self.probe value or returning it only
+        """
+        # validate inputs
+        assert (
+            self.alpha is not None
+        ), "no probe semiconvergence angle found; try running `Probe.measure_disk`"
+        assert (
+            self.origin is not None
+        ), "no probe origin found; try running `Probe.measure_disk`"
+        # prepare vars
+        qx0, qy0 = self.origin
+        alpha = self.alpha
+        probe = self.probe
+        Q_Nx, Q_Ny = probe.shape
+        # setup mesh
+        qyy, qxx = np.meshgrid(np.arange(Q_Ny), np.arange(Q_Nx))
+        qrr = np.hypot(qxx - qx0, qyy - qy0)
+        # find damping curve
+        r = alpha * (1 + s)
+        _w = alpha * w
+        f = 1 + (r - qrr) / _w
+        f = np.minimum(np.maximum(f, 0), 1)
+        f = np.sin(f) ** p
+        # scale probe
+        probe *= f
+        # update
+        if update_inplace:
+            self.probe = probe
+        # return scaled probe
+        return probe
 
     # Kernel generation methods
 
@@ -400,15 +453,9 @@ class Probe(DiffractionSlice, Data):
         # check for the origin
         if origin is None:
             try:
-                x = self.calibration.get_probe_params()
+                origin = self.origin
             except AttributeError:
-                x = None
-            finally:
-                if x is None:
-                    origin = None
-                else:
-                    r, x, y = x
-                    origin = (x, y)
+                origin = None
 
         # get the data
         probe = data if data is not None else self.probe
@@ -592,7 +639,7 @@ class Probe(DiffractionSlice, Data):
             np.mod(np.arange(Q_Ny) + Q_Ny // 2, Q_Ny) - Q_Ny // 2,
             np.mod(np.arange(Q_Nx) + Q_Nx // 2, Q_Nx) - Q_Nx // 2,
         )
-        qr = np.sqrt(qx**2 + qy**2)
+        qr = np.hypot(qx, qy)
         # Calculate sigmoid
         if type == "logistic":
             r0 = 0.5 * (ro + ri)

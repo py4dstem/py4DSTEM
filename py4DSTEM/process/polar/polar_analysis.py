@@ -28,15 +28,15 @@ def calculate_radial_statistics(
     compute the mean and standard deviation pattern by pattern, i.e. for
     diffraction signal d(x,y; q,theta) we take
 
-        d_mean_all(x,y; q) = \int_{0}^{2\pi} d(x,y; q,\theta) d\theta
-        d_var_all(x,y; q) = \int_{0}^{2\pi}
-            \( d(x,y; q,\theta) - d_mean_all(x,y; q,\theta) \)^2 d\theta
+        d_mean_all(x,y; q) = \\int_{0}^{2\\pi} d(x,y; q,\\theta) d\\theta
+        d_var_all(x,y; q) = \\int_{0}^{2\\pi}
+            \\( d(x,y; q,\\theta) - d_mean_all(x,y; q,\\theta) \\)^2 d\\theta
 
     Then we find the mean and variance profiles by taking the means of these
     quantities over all scan positions:
 
-        d_mean(q) = \sum_{x,y} d_mean_all(x,y; q)
-        d_var(q) = \sum_{x,y} d_var_all(x,y; q)
+        d_mean(q) = \\sum_{x,y} d_mean_all(x,y; q)
+        d_var(q) = \\sum_{x,y} d_var_all(x,y; q)
 
     and the normalized variance is d_var/d_mean.
 
@@ -264,13 +264,13 @@ def calculate_pair_dist_function(
     filters are optionally applied. The structure factor is then inverted into
     the reduced pair distribution function g(r) using
 
-        g(r) = \frac{2}{\pi) \int sin( 2\pi r k ) S(k) dk
+        g(r) = \\frac{2}{\\pi) \\int sin( 2\\pi r k ) S(k) dk
 
     The value of the integral is (optionally) damped to zero at the origin to
     match the physical requirement that this condition holds. Finally, the
     full PDF G(r) is computed if a known density is provided, using
 
-        G(r) = 1 + [ \frac{2}{\pi} * g(r) / ( 4\pi * D * r dr ) ]
+        G(r) = 1 + [ \\frac{2}{\\pi} * g(r) / ( 4\\pi * D * r dr ) ]
 
     This follows the methods described in [@cophus TODO ADD CITATION].
 

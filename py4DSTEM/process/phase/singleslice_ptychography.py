@@ -192,6 +192,7 @@ class SingleslicePtychography(
         self,
         diffraction_intensities_shape: Tuple[int, int] = None,
         reshaping_method: str = "bilinear",
+        shifting_interpolation_order: int = 3,
         padded_diffraction_intensities_shape: Tuple[int, int] = None,
         region_of_interest_shape: Tuple[int, int] = None,
         dp_mask: np.ndarray = None,
@@ -229,6 +230,8 @@ class SingleslicePtychography(
             If None, no resampling of diffraction intenstities is performed
         reshaping_method: str, optional
             Method to use for reshaping, either 'bin, 'bilinear', or 'fourier' (default)
+        shifting_interpolation_order: int
+            Spline interpolation order used in shifting DPs to origin. Default is bi-cubic.
         padded_diffraction_intensities_shape: (int,int), optional
             Padded diffraction intensities shape.
             If None, no padding is performed
@@ -417,6 +420,7 @@ class SingleslicePtychography(
             self._positions_mask,
             crop_patterns,
             in_place_datacube_modification,
+            shifting_interpolation_order=shifting_interpolation_order,
         )
 
         # explicitly transfer arrays to storage
@@ -648,7 +652,10 @@ class SingleslicePtychography(
         object_positivity: bool = True,
         shrinkage_rad: float = 0.0,
         fix_potential_baseline: bool = True,
+        vacuum_mask: np.ndarray = None,
         detector_fourier_mask: np.ndarray = None,
+        virtual_detector_masks: Sequence[np.ndarray] = None,
+        probe_real_space_support_mask: np.ndarray = None,
         store_iterations: bool = False,
         progress_bar: bool = True,
         reset: bool = None,
@@ -755,9 +762,16 @@ class SingleslicePtychography(
             Phase shift in radians to be subtracted from the potential at each iteration
         fix_potential_baseline: bool
             If true, the potential mean outside the FOV is forced to zero at each iteration
+        vacuum_mask: np.ndarray
+            Boolean mask of the projected potential, to be set to unit transmission at each iteration
         detector_fourier_mask: np.ndarray
             Corner-centered mask to multiply the detector-plane gradients with (a value of zero supresses those pixels).
             Useful when detector has artifacts such as dead-pixels. Usually binary.
+        virtual_detector_masks: np.ndarray
+            List of corner-centered boolean masks for binning forward model exit waves,
+            to allow comparison with arbitrary geometry detector datasets.
+        probe_real_space_support_mask: np.ndarray
+            Corner-centered boolean mask, outside of which the probe amplitude will be set to zero.
         store_iterations: bool, optional
             If True, reconstructed objects and probes are stored at each iteration
         progress_bar: bool, optional
@@ -843,6 +857,9 @@ class SingleslicePtychography(
         if detector_fourier_mask is not None:
             detector_fourier_mask = xp.asarray(detector_fourier_mask)
 
+        if virtual_detector_masks is not None:
+            virtual_detector_masks = xp.asarray(virtual_detector_masks).astype(xp.bool_)
+
         # main loop
         for a0 in tqdmnd(
             num_iter,
@@ -890,6 +907,7 @@ class SingleslicePtychography(
                     amplitudes_device,
                     self._exit_waves,
                     detector_fourier_mask,
+                    virtual_detector_masks,
                     use_projection_scheme,
                     projection_a,
                     projection_b,
@@ -952,6 +970,7 @@ class SingleslicePtychography(
                 fit_probe_aberrations_using_scikit_image=fit_probe_aberrations_using_scikit_image,
                 fix_probe_aperture=fix_probe_aperture and not fix_probe,
                 initial_probe_aperture=self._probe_initial_aperture,
+                probe_real_space_support_mask=probe_real_space_support_mask,
                 fix_positions=fix_positions,
                 fix_positions_com=fix_positions_com and not fix_positions,
                 global_affine_transformation=global_affine_transformation,
@@ -973,6 +992,7 @@ class SingleslicePtychography(
                     and self._object_fov_mask_inverse.sum() > 0
                     else None
                 ),
+                vacuum_mask=vacuum_mask,
                 pure_phase_object=pure_phase_object and self._object_type == "complex",
             )
 

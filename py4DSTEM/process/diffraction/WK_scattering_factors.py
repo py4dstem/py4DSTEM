@@ -83,7 +83,7 @@ def compute_WK_factor(
     WK = np.zeros_like(S)
     for i in range(4):
         argu = B[i] * S**2
-        sub = argu < 1.0
+        sub = argu < 0.1
         WK[sub] += A[i] * B[i] * (1.0 - 0.5 * argu[sub])
         sub = np.logical_and(argu >= 1.0, argu <= 20.0)
         WK[sub] += A[i] * (1.0 - np.exp(-argu[sub])) / S[sub] ** 2
@@ -174,14 +174,9 @@ def compute_WK_factor(
         B1 = B / (4.0 * np.pi) ** 2
 
         for jj in range(4):
-            Fphon += (
-                A1[jj]
-                * A1[jj]
-                * (DWF * RI1(B1[jj], B1[jj], G) - RI2(B1[jj], B1[jj], G, UL))
-            )
             for ii in range(jj + 1):
                 Fphon += (
-                    2.0
+                    (2.0 if jj != ii else 1.0)
                     * A1[jj]
                     * A1[ii]
                     * (DWF * RI1(B1[ii], B1[jj], G) - RI2(B1[ii], B1[jj], G, UL))

@@ -4,7 +4,7 @@ namely joint ptychographic tomography.
 """
 
 import warnings
-from typing import Mapping, Sequence, Tuple
+from typing import Mapping, Sequence, Tuple, Union
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -38,12 +38,15 @@ from py4DSTEM.process.phase.ptychographic_methods import (
 from py4DSTEM.process.phase.ptychographic_visualizations import VisualizationsMixin
 from py4DSTEM.process.phase.utils import (
     ComplexProbe,
+    calculate_orientation_matrices_serpentine_ordering,
+    calculate_orientation_matrices_tsp_ordering,
     copy_to_device,
     fft_shift,
     generate_batches,
     polar_aliases,
     polar_symbols,
 )
+from py4DSTEM.process.utils import electron_wavelength_angstrom
 
 
 class PtychographicTomography(
@@ -106,6 +109,9 @@ class PtychographicTomography(
     initial_scan_positions: list of np.ndarray, optional
         Probe positions in Å for each diffraction intensity per tilt
         If None, initialized to a grid scan centered along tilt axis
+    object_fov_ang: Tuple[int,int], optional
+        Fixed object field of view in Å. If None, the fov is initialized using the
+        probe positions and object_padding_px
     positions_offset_ang: list of np.ndarray, optional
         Offset of positions in A
     verbose: bool, optional
@@ -151,6 +157,7 @@ class PtychographicTomography(
         initial_object_guess: np.ndarray = None,
         initial_probe_guess: np.ndarray = None,
         initial_scan_positions: Sequence[np.ndarray] = None,
+        object_fov_ang: Tuple[float, float] = None,
         positions_offset_ang: Sequence[np.ndarray] = None,
         verbose: bool = True,
         device: str = "cpu",
@@ -203,6 +210,7 @@ class PtychographicTomography(
         self._rolloff = rolloff
         self._object_type = object_type
         self._object_padding_px = object_padding_px
+        self._object_fov_ang = object_fov_ang
         self._positions_mask = positions_mask
         self._verbose = verbose
         self._preprocessed = False
@@ -212,10 +220,164 @@ class PtychographicTomography(
         self._tilt_orientation_matrices = tuple(tilt_orientation_matrices)
         self._num_measurements = num_tilts
 
+    def slim_preprocess(
+        self,
+        list_of_amplitudes,
+        list_of_probe_arrays,
+        object_array,
+        list_of_positions_px,
+        reciprocal_sampling=None,
+        angular_sampling=None,
+        store_initial_arrays=True,
+    ):
+        """
+        Alternative function for ptychographic preprocessing.
+        This accepts the necessary arrays, and simply sets the appropriate attributes.
+
+        Parameters
+        ----------
+        list_of_amplitudes: np.ndarray
+            List of corner-centered diffraction amplitudes each with dimension (N,Qx,Qy)
+        list_of_probe_arrays: np.ndarray
+            List of corner-centered guess for complex-valued probe of dimensions (...,Qx,Qy)
+        object_array: np.ndarray
+            Initial guess for object of dimensions (...,Px,Py)
+        list_of_positions_px: np.ndarray
+            List of initial guess for probe positions in pixels of dimensions (N,2)
+        reciprocal_sampling: (float,float), optional
+            (dk_x, dk_y) reciprocal space sampling in inverse Angstroms
+        angular_sampling: (float,float), optional
+            (dalpha_x, dalpha_y) angluar sampling in mrad
+        store_initial_arrays: bool
+            If True, preprocesed object and probe arrays are stored allowing reset=True in reconstruct.
+
+        Returns
+        --------
+        self: PtychographicReconstruction
+            Self to accommodate chaining
+        """
+        xp = self._xp
+        xp_storage = self._xp_storage
+
+        if len(list_of_amplitudes) != self._num_measurements:
+            raise ValueError()
+        if len(list_of_probe_arrays) != self._num_measurements:
+            raise ValueError()
+        if len(list_of_positions_px) != self._num_measurements:
+            raise ValueError()
+
+        # attach arrays
+        num_probes_per_measurement = [0] + [amp.shape[0] for amp in list_of_amplitudes]
+        num_probes_per_measurement = np.array(num_probes_per_measurement)
+
+        self._probes_all = []
+        self._mean_diffraction_intensity = []
+        self._num_diffraction_patterns = num_probes_per_measurement.sum()
+
+        self._cum_probes_per_measurement = np.cumsum(num_probes_per_measurement)
+        self._positions_px_all = np.empty((self._num_diffraction_patterns, 2))
+
+        self._amplitudes_shape = np.array(list_of_amplitudes[0][0].shape)
+        self._amplitudes = xp_storage.empty(
+            (self._num_diffraction_patterns,) + tuple(self._amplitudes_shape)
+        )
+        self._object = xp.asarray(object_array, dtype=xp.float32)
+
+        if store_initial_arrays:
+            self._probes_all_initial = []
+            self._probes_all_initial_aperture = []
+        else:
+            self._probes_all_initial_aperture = [None] * self._num_measurements
+
+        for index in range(self._num_measurements):
+            amps = xp_storage.asarray(
+                list_of_amplitudes[index], dtype=xp_storage.float32
+            )
+            probe = xp.asarray(list_of_probe_arrays[index], dtype=xp.complex64)
+            pos = xp_storage.asarray(
+                list_of_positions_px[index], dtype=xp_storage.float32
+            )
+            idx_start = self._cum_probes_per_measurement[index]
+            idx_end = self._cum_probes_per_measurement[index + 1]
+            self._amplitudes[idx_start:idx_end] = amps
+            self._positions_px_all[idx_start:idx_end] = pos
+            self._mean_diffraction_intensity.append((amps**2).sum((-1, -2)).mean(0))
+
+            self._probes_all.append(probe.copy())
+            if store_initial_arrays:
+                self._probes_all_initial.append(probe.copy())
+                self._probes_all_initial_aperture.append(xp.abs(xp.fft.fft2(probe)))
+
+        # specify sampling
+        if angular_sampling is None and reciprocal_sampling is None:
+            raise ValueError(
+                "One of angular or reciprocal calibration has to be specified."
+            )
+
+        wavelength = electron_wavelength_angstrom(self._energy)
+        if angular_sampling is not None:
+            if reciprocal_sampling is not None:
+                raise ValueError(
+                    "Only one of angular or reciprocal calibration can be specified."
+                )
+            self._angular_sampling = tuple(angular_sampling)
+            self._reciprocal_sampling = tuple(
+                d_alpha / wavelength / 1e3 for d_alpha in self._angular_sampling
+            )
+        else:
+            self._reciprocal_sampling = tuple(reciprocal_sampling)
+            self._angular_sampling = tuple(
+                d_k * wavelength * 1e3 for d_k in self._reciprocal_sampling
+            )
+
+        # necessary probe attributes
+        self._resample_exit_waves = False
+        self._region_of_interest_shape = self._amplitudes_shape
+
+        # necessary object attributes
+        self._object_shape = self._object.shape[-2:]
+        self._num_voxels = self._object.shape[0]
+        self._object_fov_mask_inverse = np.full(self._object_shape, False)
+
+        thickness = self._num_voxels * self.sampling[0]
+        self._slice_thicknesses = np.tile(
+            thickness / (self._num_slices - 1), self._num_slices - 1
+        )
+        self._propagator_arrays = self._precompute_propagator_arrays(
+            self._region_of_interest_shape,
+            self.sampling,
+            self._energy,
+            self._slice_thicknesses,
+        )
+
+        # necessary general attributes
+        self._rotation_best_transpose = False
+        self._rotation_best_rad = 0
+        self._preprocessed = True
+
+        # necessary position attributes
+        self._positions_px_initial_all = self._positions_px_all.copy()
+        self._positions_initial_all = self._positions_px_initial_all.copy()
+        self._positions_initial_all[:, 0] *= self.sampling[0]
+        self._positions_initial_all[:, 1] *= self.sampling[1]
+
+        self._positions_initial = self._return_average_positions()
+        if self._positions_initial is not None:
+            self._positions_initial[:, 0] *= self.sampling[0]
+            self._positions_initial[:, 1] *= self.sampling[1]
+
+        # necessary restarting attributes
+        if store_initial_arrays:
+            self._object_initial = self._object.copy()
+            self._object_type_initial = self._object_type
+
+        return self
+
     def preprocess(
         self,
         diffraction_intensities_shape: Tuple[int, int] = None,
         reshaping_method: str = "bilinear",
+        shifting_interpolation_order: int = 3,
         padded_diffraction_intensities_shape: Tuple[int, int] = None,
         region_of_interest_shape: Tuple[int, int] = None,
         dp_mask: np.ndarray = None,
@@ -233,6 +395,7 @@ class PtychographicTomography(
         force_reciprocal_sampling: float = None,
         progress_bar: bool = True,
         object_fov_mask: np.ndarray = True,
+        center_positions_in_fov=True,
         crop_patterns: bool = False,
         main_tilt_axis: str = "vertical",
         store_initial_arrays: bool = True,
@@ -254,6 +417,8 @@ class PtychographicTomography(
             If None, no resampling of diffraction intenstities is performed
         reshaping_method: str, optional
             Method to use for reshaping, either 'bin, 'bilinear', or 'fourier' (default)
+        shifting_interpolation_order: int
+            Spline interpolation order used in shifting DPs to origin. Default is bi-cubic.
         padded_diffraction_intensities_shape: (int,int), optional
             Padded diffraction intensities shape.
             If None, no padding is performed
@@ -489,6 +654,8 @@ class PtychographicTomography(
                 com_fitted_y,
                 self._positions_mask[index],
                 crop_patterns,
+                in_place_datacube_modification,
+                shifting_interpolation_order=shifting_interpolation_order,
             )
 
             self._mean_diffraction_intensity.append(mean_diffraction_intensity_temp)
@@ -497,7 +664,6 @@ class PtychographicTomography(
             self._amplitudes[idx_start:idx_end] = copy_to_device(amplitudes, storage)
 
             del (
-                intensities,
                 amplitudes,
                 com_measured_x,
                 com_measured_y,
@@ -506,6 +672,9 @@ class PtychographicTomography(
                 com_normalized_x,
                 com_normalized_y,
             )
+
+            if not in_place_datacube_modification:
+                del intensities
 
             # initialize probe positions
             (
@@ -553,8 +722,12 @@ class PtychographicTomography(
             idx_end = self._cum_probes_per_measurement[index + 1]
 
             positions_px = self._positions_px_all[idx_start:idx_end]
-            positions_px_com = positions_px.mean(0)
-            positions_px -= positions_px_com - xp_storage.array(self._object_shape) / 2
+
+            if center_positions_in_fov:
+                positions_px_com = positions_px.mean(0)
+                positions_px -= (
+                    positions_px_com - xp_storage.array(self._object_shape) / 2
+                )
             self._positions_px_all[idx_start:idx_end] = positions_px.copy()
 
         self._positions_px_initial_all = self._positions_px_all.copy()
@@ -613,7 +786,7 @@ class PtychographicTomography(
             thickness = max(thickness_h, thickness_v)
 
         self._slice_thicknesses = np.tile(
-            thickness / self._num_slices, self._num_slices - 1
+            thickness / (self._num_slices - 1), self._num_slices - 1
         )
         self._propagator_arrays = self._precompute_propagator_arrays(
             self._region_of_interest_shape,
@@ -749,6 +922,8 @@ class PtychographicTomography(
     def reconstruct(
         self,
         num_iter: int = 8,
+        orientation_matrices_ordering: Union[str, Sequence] = "shuffled",
+        use_fourier_rotation: bool = False,
         reconstruction_method: str = "gradient-descent",
         reconstruction_parameter: float = 1.0,
         reconstruction_parameter_a: float = None,
@@ -788,6 +963,10 @@ class PtychographicTomography(
         shrinkage_rad: float = 0.0,
         fix_potential_baseline: bool = True,
         detector_fourier_mask: np.ndarray = None,
+        virtual_detector_masks: Sequence[np.ndarray] = None,
+        probe_real_space_support_mask: np.ndarray = None,
+        symmetric_object_real_space_support_mask: np.ndarray = None,
+        asymmetric_object_real_space_support_mask: np.ndarray = None,
         tv_denoise: bool = True,
         tv_denoise_weights: float = None,
         tv_denoise_inner_iter=40,
@@ -901,6 +1080,11 @@ class PtychographicTomography(
         detector_fourier_mask: np.ndarray
             Corner-centered mask to apply at the detector-plane for zeroing-out unreliable gradients.
             Useful when detector has artifacts such as dead-pixels. Usually binary.
+        virtual_detector_masks: np.ndarray
+            List of corner-centered boolean masks for binning forward model exit waves,
+            to allow comparison with arbitrary geometry detector datasets.
+        probe_real_space_support_mask: np.ndarray
+            Corner-centered boolean mask, outside of which the probe amplitude will be set to zero.
         store_iterations: bool, optional
             If True, reconstructed objects and probes are stored at each iteration
         progress_bar: bool, optional
@@ -979,6 +1163,66 @@ class PtychographicTomography(
         if detector_fourier_mask is not None:
             detector_fourier_mask = xp.asarray(detector_fourier_mask)
 
+        if virtual_detector_masks is not None:
+            virtual_detector_masks = xp.asarray(virtual_detector_masks).astype(xp.bool_)
+
+        if asymmetric_object_real_space_support_mask is None:
+            asymmetric_mask = False
+            if symmetric_object_real_space_support_mask is None:
+                nz, nx, ny = self._object.shape
+                z, x, y = xp.ogrid[-1 : 1 : nz * 1j, -1 : 1 : nx * 1j, -1 : 1 : ny * 1j]
+                r = xp.sqrt(z**2 + x**2 + y**2).astype(xp.float32)
+                object_real_space_support_mask = xp.sqrt(
+                    xp.clip((1 - r) / 0.05 + 0.5, 0, 1)
+                )
+            else:
+                object_real_space_support_mask = xp.asarray(
+                    symmetric_object_real_space_support_mask, dtype=xp.float32
+                ).clip(0, 1)
+        else:
+            asymmetric_mask = True
+            object_real_space_support_mask = xp.asarray(
+                asymmetric_object_real_space_support_mask, dtype=xp.float32
+            ).clip(0, 1)
+
+        # compute orientation matrices ordering
+        if orientation_matrices_ordering == "shuffled":
+            all_indices = []
+            order = np.arange(self._num_measurements)
+            for i in range(num_iter):
+                np.random.shuffle(order)
+                all_indices.append(order.tolist())
+        elif orientation_matrices_ordering == "serpentine-scan":
+            all_indices = calculate_orientation_matrices_serpentine_ordering(
+                self._tilt_orientation_matrices,
+                num_iter,
+                collective_measurement_updates,
+            )
+        elif orientation_matrices_ordering == "traveling-salesman":
+            all_indices = calculate_orientation_matrices_tsp_ordering(
+                self._tilt_orientation_matrices, num_iter, angle_threshold=np.pi / 6
+            )
+        else:
+            # check if iterable
+            try:
+                iter(orientation_matrices_ordering)
+            except TypeError:
+                raise ValueError()
+            else:
+                # check if iterable of iterables
+                try:
+                    iter(orientation_matrices_ordering[0])
+                except TypeError:
+                    all_indices = [orientation_matrices_ordering] * num_iter
+                else:
+                    if len(orientation_matrices_ordering) != num_iter:
+                        raise ValueError()
+
+                    all_indices = orientation_matrices_ordering
+
+        # only return b/w iterations
+        old_rot_matrix = np.eye(3)  # identity
+
         # main loop
         for a0 in tqdmnd(
             num_iter,
@@ -991,10 +1235,7 @@ class PtychographicTomography(
             if collective_measurement_updates:
                 collective_object = xp.zeros_like(self._object)
 
-            indices = np.arange(self._num_measurements)
-            np.random.shuffle(indices)
-
-            old_rot_matrix = np.eye(3)  # identity
+            indices = all_indices[a0]
 
             for index in indices:
                 self._active_measurement_index = index
@@ -1004,10 +1245,19 @@ class PtychographicTomography(
                 rot_matrix = self._tilt_orientation_matrices[
                     self._active_measurement_index
                 ]
+
                 self._object = self._rotate_zxy_volume(
                     self._object,
                     rot_matrix @ old_rot_matrix.T,
+                    use_fourier_rotation,
                 )
+
+                if not collective_measurement_updates and asymmetric_mask:
+                    object_real_space_support_mask = self._rotate_zxy_volume(
+                        object_real_space_support_mask,
+                        rot_matrix @ old_rot_matrix.T,
+                        use_fourier_rotation,
+                    ).clip(0, 1)
 
                 object_sliced = self._project_sliced_object(
                     self._object, self._num_slices
@@ -1071,6 +1321,7 @@ class PtychographicTomography(
                         amplitudes_device,
                         self._exit_waves,
                         detector_fourier_mask,
+                        virtual_detector_masks,
                         use_projection_scheme,
                         projection_a,
                         projection_b,
@@ -1120,7 +1371,9 @@ class PtychographicTomography(
 
                 if collective_measurement_updates:
                     collective_object += self._rotate_zxy_volume(
-                        object_update, rot_matrix.T
+                        object_update,
+                        rot_matrix.T,
+                        use_fourier_rotation,
                     )
                 else:
                     self._object += object_update
@@ -1156,6 +1409,7 @@ class PtychographicTomography(
                         fit_probe_aberrations_using_scikit_image=fit_probe_aberrations_using_scikit_image,
                         fix_probe_aperture=fix_probe_aperture and not fix_probe,
                         initial_probe_aperture=_probe_initial_aperture,
+                        probe_real_space_support_mask=probe_real_space_support_mask,
                     )
 
                     self._positions_px_all[batch_indices] = self._positions_constraints(
@@ -1193,6 +1447,7 @@ class PtychographicTomography(
                         fit_probe_aberrations_using_scikit_image=fit_probe_aberrations_using_scikit_image,
                         fix_probe_aperture=fix_probe_aperture and not fix_probe,
                         initial_probe_aperture=_probe_initial_aperture,
+                        probe_real_space_support_mask=probe_real_space_support_mask,
                         fix_positions=fix_positions,
                         fix_positions_com=fix_positions_com and not fix_positions,
                         global_affine_transformation=global_affine_transformation,
@@ -1212,18 +1467,28 @@ class PtychographicTomography(
                             and self._object_fov_mask_inverse.sum() > 0
                             else None
                         ),
+                        object_real_space_support_mask=object_real_space_support_mask,
                         tv_denoise=tv_denoise and tv_denoise_weights is not None,
                         tv_denoise_weights=tv_denoise_weights,
                         tv_denoise_inner_iter=tv_denoise_inner_iter,
                     )
 
-            self._object = self._rotate_zxy_volume(self._object, old_rot_matrix.T)
-
             # Normalize Error Over Tilts
-            error /= self._num_measurements
+            error /= len(indices)
 
             if collective_measurement_updates:
-                self._object += collective_object / self._num_measurements
+                self._object += self._rotate_zxy_volume(
+                    collective_object / len(indices),
+                    old_rot_matrix,
+                    use_fourier_rotation,
+                )
+
+                if asymmetric_mask:
+                    object_real_space_support_mask = self._rotate_zxy_volume(
+                        object_real_space_support_mask,
+                        old_rot_matrix,
+                        use_fourier_rotation,
+                    ).clip(0, 1)
 
                 # object only
                 self._object = self._object_constraints(
@@ -1244,6 +1509,7 @@ class PtychographicTomography(
                         and self._object_fov_mask_inverse.sum() > 0
                         else None
                     ),
+                    object_real_space_support_mask=object_real_space_support_mask,
                     tv_denoise=tv_denoise and tv_denoise_weights is not None,
                     tv_denoise_weights=tv_denoise_weights,
                     tv_denoise_inner_iter=tv_denoise_inner_iter,
@@ -1252,8 +1518,32 @@ class PtychographicTomography(
             self.error_iterations.append(error.item())
 
             if store_iterations:
-                self.object_iterations.append(asnumpy(self._object.copy()))
+                rotated_object = self._rotate_zxy_volume(
+                    self._object, old_rot_matrix.T, use_fourier_rotation
+                )
+                if asymmetric_mask:
+                    rotated_mask = self._rotate_zxy_volume(
+                        object_real_space_support_mask,
+                        old_rot_matrix.T,
+                        use_fourier_rotation,
+                    ).clip(0, 1)
+                    rotated_object *= rotated_mask
+                else:
+                    rotated_object *= object_real_space_support_mask
+
+                self.object_iterations.append(asnumpy(rotated_object))
                 self.probe_iterations.append(self.probe_centered)
+
+        self._object = self._rotate_zxy_volume(
+            self._object, old_rot_matrix.T, use_fourier_rotation
+        )
+        if asymmetric_mask:
+            object_real_space_support_mask = self._rotate_zxy_volume(
+                object_real_space_support_mask,
+                old_rot_matrix.T,
+                use_fourier_rotation,
+            ).clip(0, 1)
+        self._object *= object_real_space_support_mask
 
         # store result
         self.object = asnumpy(self._object)

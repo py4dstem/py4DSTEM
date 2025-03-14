@@ -7,6 +7,7 @@ import numpy as np
 from matplotlib.gridspec import GridSpec
 from py4DSTEM.process.phase.phase_base_class import PhaseReconstruction
 from py4DSTEM.process.phase.utils import AffineTransform
+from py4DSTEM.visualize.vis_special import return_scaled_histogram_ordering
 from skopt import gp_minimize
 from skopt.plots import plot_convergence as skopt_plot_convergence
 from skopt.plots import plot_evaluations as skopt_plot_evaluations
@@ -127,6 +128,7 @@ class PtychographyOptimizer:
         n_points: Union[tuple, int] = 3,
         error_metric: Union[Callable, str] = "log",
         plot_reconstructed_objects: bool = True,
+        plot_reconstructed_objects_fft: bool = False,
         return_reconstructed_objects: bool = False,
         **kwargs: dict,
     ):
@@ -230,7 +232,14 @@ class PtychographyOptimizer:
                 row_index, col_index = np.unravel_index(index, (nrows, ncols))
 
                 ax = fig.add_subplot(spec[row_index, col_index])
-                ax.imshow(res[0], cmap=cmap)
+                if plot_reconstructed_objects_fft:
+                    im_plot, _, _ = return_scaled_histogram_ordering(
+                        np.abs(np.fft.fftshift(np.fft.fft2(res[0])))
+                    )
+
+                else:
+                    im_plot, _, _ = return_scaled_histogram_ordering(res[0])
+                ax.imshow(im_plot, cmap=cmap)
 
                 title_substrings = [
                     f"{param.name}: {val:.3e}"

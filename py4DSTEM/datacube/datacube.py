@@ -11,11 +11,13 @@ from scipy.ndimage import (
     gaussian_filter,
 )
 from typing import Optional, Union
+import matplotlib.pyplot as plt
 
 from emdfile import Array, Metadata, Node, Root, tqdmnd
 from py4DSTEM.data import Data, Calibration
 from py4DSTEM.datacube.virtualimage import DataCubeVirtualImager
 from py4DSTEM.datacube.virtualdiffraction import DataCubeVirtualDiffraction
+from py4DSTEM.visualize import show
 
 
 class DataCube(
@@ -515,11 +517,9 @@ class DataCube(
         self,
         ROI=None,
         align=True,
+        zero_vacuum=True,
         mask=None,
-        threshold=0.0,
-        expansion=12,
-        opening=3,
-        verbose=False,
+        plot=True,
         returncalc=True,
     ):
         """
@@ -541,20 +541,20 @@ class DataCube(
             (rx_min,rx_max,ry_min,ry_max)
         align : optional, bool
             if True, aligns the probes before averaging
+        zero_vacuum : bool
+            if True, zeros vacuum pixels outside the central probe using a
+            sinusoidal^p decay over the range [alpha+s, alpha+s+w].
+        s : number
+            See zero vacuum
+        w : number
+            See zero vacuum
+        p : number
+            See zero vacuum
         mask : optional, array
             mask applied to each diffraction pattern before alignment and
             averaging
-        threshold : float
-            in the final masking step, values less than max(probe)*threshold
-            are considered outside the probe
-        expansion : int
-            number of pixels by which the final mask is expanded after
-            thresholding
-        opening : int
-            size of binary opening applied to the final mask to eliminate stray
-            bright pixels
-        verbose : bool
-            toggles verbose output
+        plot : bool
+            Toggle displays
         returncalc : bool
             if True, returns the answer
 
@@ -594,23 +594,78 @@ class DataCube(
                 curr_DP = get_shifted_ar(curr_DP, xshift, yshift)
             probe = probe * (n - 1) / n + curr_DP / n
 
-        # mask
-        mask = probe > np.max(probe) * threshold
-        mask = binary_opening(mask, iterations=opening)
-        mask = binary_dilation(mask, iterations=1)
-        mask = (
-            np.cos(
-                (np.pi / 2)
-                * np.minimum(
-                    distance_transform_edt(np.logical_not(mask)) / expansion, 1
-                )
-            )
-            ** 2
-        )
-        probe *= mask
-
-        # make a probe, add to tree, and return
+        # make a probe
         probe = Probe(probe)
+
+        # measure probe size
+        probe.measure_disk(zero_vacuum=False, plot=False)
+
+        # zero vacuum
+        _p = probe.probe
+        if zero_vacuum:
+            probe.zero_vacuum_sinusoid()
+
+        # show
+        if plot:
+            fig, axs = plt.subplots(2, 3, figsize=(12, 8))
+            show(
+                probe.probe,
+                scaling="log",
+                circle={
+                    "center": probe.origin,
+                    "R": probe.alpha,
+                    "alpha": 0.2,
+                    "fill": True,
+                },
+                figax=(fig, axs[0, 0]),
+            )
+            show(
+                probe.probe,
+                scaling="none",
+                intensity_range="minmax",
+                circle={
+                    "center": probe.origin,
+                    "R": probe.alpha,
+                    "alpha": 0.2,
+                    "fill": True,
+                },
+                figax=(fig, axs[0, 1]),
+            )
+            show(
+                probe.probe,
+                scaling="none",
+                intensity_range="absolute",
+                vmin=0,
+                vmax=np.max(probe.probe) * 0.1,
+                circle={
+                    "center": probe.origin,
+                    "R": probe.alpha,
+                    "alpha": 0.2,
+                    "fill": True,
+                },
+                figax=(fig, axs[0, 2]),
+            )
+            show(probe.probe, scaling="log", figax=(fig, axs[1, 0]))
+            show(
+                probe.probe,
+                scaling="none",
+                intensity_range="minmax",
+                figax=(fig, axs[1, 1]),
+            )
+            show(
+                probe.probe,
+                scaling="none",
+                intensity_range="absolute",
+                vmin=0,
+                vmax=np.max(probe.probe) * 0.1,
+                figax=(fig, axs[1, 2]),
+            )
+            axs[0, 0].set_title("log")
+            axs[0, 1].set_title("linear | min/max")
+            axs[0, 2].set_title("linear | min/0.1*max")
+            plt.show()
+
+        # add probe to tree and return
         self.attach(probe)
         if returncalc:
             return probe

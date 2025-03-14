@@ -7,10 +7,11 @@ from py4DSTEM.preprocess.utils import bin2D
 
 def read_arina(
     filename,
-    scan_width=1,
+    scan_width=None,
     mem="RAM",
     binfactor: int = 1,
     dtype_bin: float = None,
+    fix_transpose=False,
     flatfield: np.ndarray = None,
     median_filter_masked_pixels_array: np.ndarray = None,
     median_filter_masked_pixels_kernel: int = 4,
@@ -28,9 +29,15 @@ def read_arina(
         binfactor (int): Diffraction space binning factor for bin-on-load.
         dtype_bin(float): specify datatype for bin on load if need something
             other than uint16
+        fix_transpose: bool
+            if True, flips data on load to remove transpose (only necessary for old
+            Arina files)
         flatfield (np.ndarray):
             flatfield for correction factors, converts data to float
-
+        median_filter_masked_pixels_array:
+            a boolean mask that specifies the bad pixels in the datacube
+        median_filter_masked_pixels_kernel (optional):
+            specifies the width of the median kernel
     Returns:
         DataCube
     """
@@ -48,6 +55,9 @@ def read_arina(
 
     width = width // binfactor
     height = height // binfactor
+
+    if scan_width is None:
+        scan_width = int(np.sqrt(nimages))
 
     assert (
         nimages % scan_width < 1e-6
@@ -90,19 +100,38 @@ def read_arina(
 
     scan_height = int(nimages / scan_width)
 
-    datacube = DataCube(
-        np.flip(
+    if fix_transpose:
+        datacube = DataCube(
+            np.flip(
+                array_3D.reshape(
+                    scan_width,
+                    scan_height,
+                    array_3D.data.shape[1],
+                    array_3D.data.shape[2],
+                ),
+                0,
+            )
+        )
+    else:
+        datacube = DataCube(
             array_3D.reshape(
                 scan_width, scan_height, array_3D.data.shape[1], array_3D.data.shape[2]
-            ),
-            0,
+            )
         )
-    )
 
     if median_filter_masked_pixels_array is not None and binfactor == 1:
         datacube = datacube.median_filter_masked_pixels(
             median_filter_masked_pixels_array, median_filter_masked_pixels_kernel
         )
+
+    try:
+        with h5py.File(f"{filename[:-10]}.h5", "r") as f:
+            pixel_size = f["STEM Metadata"].attrs["Pixel Size"][0]
+        datacube.calibration.set_R_pixel_size(pixel_size * 10)
+        datacube.calibration.set_R_pixel_units("A")
+
+    except:
+        pass
 
     return datacube
 

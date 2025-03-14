@@ -237,7 +237,7 @@ class DPC(PhaseReconstruction):
         force_com_rotation: float = None,
         force_com_transpose: bool = None,
         force_com_shifts: Union[Sequence[np.ndarray], Sequence[float]] = None,
-        vectorized_com_calculation: bool = True,
+        vectorized_com_calculation: bool = False,
         force_com_measured: Sequence[np.ndarray] = None,
         plot_center_of_mass: str = "default",
         plot_rotation: bool = True,
@@ -569,8 +569,12 @@ class DPC(PhaseReconstruction):
             Constrained object estimate
         """
         xp = self._xp
-        qx = xp.fft.fftfreq(current_object.shape[0], self.sampling[0])
-        qy = xp.fft.fftfreq(current_object.shape[1], self.sampling[1])
+        qx = xp.fft.fftfreq(current_object.shape[0], self.sampling[0]).astype(
+            xp.float32
+        )
+        qy = xp.fft.fftfreq(current_object.shape[1], self.sampling[1]).astype(
+            xp.float32
+        )
 
         qya, qxa = xp.meshgrid(qy, qx)
         qra = xp.sqrt(qxa**2 + qya**2)
