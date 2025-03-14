@@ -23,7 +23,7 @@ setup(
     keywords="STEM,4DSTEM",
     python_requires=">=3.10",
     install_requires=[
-        "numpy >= 1.19, < 2.0",
+        "numpy >= 1.19",
         "scipy >= 1.5.2",
         "h5py >= 3.2.0",
         "hdf5plugin >= 4.1.3",
