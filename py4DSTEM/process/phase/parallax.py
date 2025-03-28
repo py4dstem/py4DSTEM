@@ -2982,7 +2982,7 @@ class Parallax(PhaseReconstruction):
 
         if use_CTF_fit:
             sin_chi = xp.sin(
-                self._calculate_CTF((nx, ny), (sx, sy), *self._aberrations_coefs)
+                self._calculate_CTF((nx, ny), (sx, sy), self._aberrations_mn, self._aberrations_coefs)
             )
         else:
             sin_chi = xp.sin((xp.pi * self._wavelength * self.aberrations_C1) * kra2)
