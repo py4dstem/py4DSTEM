@@ -2214,7 +2214,7 @@ class Tomography:
             ind[:, 0],
             ind[:, 1],
             ind[:, 2],
-            s=plot_data[ind[:, 1], ind[:, 0], ind[:, 2]] / 2,
+            s=plot_data[ind[:, 0], ind[:, 1], ind[:, 2]] / 2,
             color="red",
         )
 
@@ -2254,6 +2254,7 @@ class Tomography:
             minimum_threshold,
             intensities_power,
             scale_intensities,
+            block_center,
         ):
             ax0.clear()
             ax0.imshow(
@@ -2300,6 +2301,15 @@ class Tomography:
                 > min_intensity**intensities_power
             )
             ind = ind[ind_keep]
+
+            if block_center:
+                center = (obj_6D.shape[3] / 2, obj_6D.shape[4] / 2, obj_6D.shape[5] / 2)
+                dist = (
+                    (ind[:, 0] - center[0]) ** 2
+                    + (ind[:, 1] - center[1]) ** 2
+                    + (ind[:, 2] - center[2]) ** 2
+                ) ** 0.5
+                ind = ind[dist > min_distance]
 
             ax2.clear()
             ax2.scatter(
@@ -2413,6 +2423,10 @@ class Tomography:
             layout=layout,
         )
 
+        block_center = widgets.Checkbox(
+            value=True, description="block center", disabled=False
+        )
+
         widgets.interactive_output(
             update_images,
             {
@@ -2423,6 +2437,7 @@ class Tomography:
                 "minimum_threshold": minimum_threshold,
                 "intensities_power": intensities_power,
                 "scale_intensities": scale_intensities,
+                "block_center": block_center,
             },
         )
 
@@ -2440,7 +2455,7 @@ class Tomography:
                 HBox([x, y]),
                 HBox([z, gaussian_filter_diffraction]),
                 HBox([minimum_threshold, scale_intensities]),
-                HBox([intensities_power]),
+                HBox([intensities_power, block_center]),
             ],
         )
 
