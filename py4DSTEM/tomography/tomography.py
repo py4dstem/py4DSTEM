@@ -137,7 +137,7 @@ class Tomography:
         robust_thresh: int = 2,
         force_q_to_r_rotation_deg=None,
         force_q_to_r_transpose=False,
-        dp_shift_method="pixel",
+        dp_shift_method="subpixel",
         num_points: int = None,
         device: str = None,
         clear_fft_cache: bool = True,
