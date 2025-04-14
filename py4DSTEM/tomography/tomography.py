@@ -378,6 +378,7 @@ class Tomography:
         zero_edges_real: bool = True,
         zero_edges_diffraction: bool = True,
         cylinder_mask: bool = True,
+        support_thin_slab: int = None,
         diffraction_gaussian_filter: float = 0,
         real_space_gaussian_filter: float = 0,
         baseline_thresh: float = None,
@@ -569,6 +570,7 @@ class Tomography:
                 baseline_thresh=baseline_thresh,
                 diffraction_shrinkage=diffraction_shrinkage,
                 diffraction_shrinkage_threshold=diffraction_shrinkage_threshold,
+                support_thin_slab=support_thin_slab,
             )
 
             if position_refinement and a0 % position_refinement_frequency < 1e-6:
@@ -1359,6 +1361,28 @@ class Tomography:
         )
         weights_real = weights_real * correction_factor_real
 
+        # normalization diff space
+        # bincount_diff_max = s[3] * s[4] * s[5]
+
+        # ind_diff_bincount_weight = np.bincount(
+        #     ind_diff.ravel(), weights_diff.ravel(), minlength=bincount_diff_max
+        # )
+        # ind_diff_bincount = np.bincount(ind_diff.ravel(), minlength=bincount_diff_max)
+
+        # ind_diff_bincount_weight = ind_diff_bincount_weight[ind_diff_bincount > 0]
+        # ind_diff_bincount = ind_diff_bincount[ind_diff_bincount > 0]
+
+        # ind_diff_bincount_weight[ind_diff_bincount_weight == 0 ] = 1
+
+        # correction_factor_diff = 1 / ind_diff_bincount_weight
+
+        # correction_factor_diff = np.repeat(correction_factor_diff, ind_diff_bincount)
+        # sorted_indicies = np.argsort(np.argsort(ind_diff.ravel()))
+        # correction_factor_diff = correction_factor_diff[sorted_indicies].reshape(
+        #     ind_diff.shape
+        # )
+        # weights_diff = weights_diff * correction_factor_diff
+
         if datacube_number == 0:
             self._ind_real = []
             self._weights_real = []
@@ -1857,6 +1881,7 @@ class Tomography:
         real_space_gaussian_filter: float,
         diffraction_shrinkage: bool,
         diffraction_shrinkage_threshold: float,
+        support_thin_slab: int,
     ):
         """
         Constrains for object
@@ -1905,6 +1930,20 @@ class Tomography:
                 | (yy.ravel() == y.max())
                 | (zz.ravel() == z.max())
             )[0]
+            self._object[:, ind_zero] = 0
+
+        if support_thin_slab is not None:
+            xp = self._xp_storage
+            s = self._object_shape_6D
+            y = xp.arange(s[1])
+            z = xp.arange(s[2])
+            yy, zz = xp.meshgrid(y, z, indexing="ij")
+
+            ind_zero = xp.where(
+                (zz.ravel() < support_thin_slab)
+                | (zz.ravel() > z.max() - support_thin_slab)
+            )[0]
+
             self._object[:, ind_zero] = 0
 
         if zero_edges_diffraction:
