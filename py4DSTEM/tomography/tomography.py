@@ -382,9 +382,10 @@ class Tomography:
         diffraction_gaussian_filter: float = 0,
         real_space_gaussian_filter: float = 0,
         baseline_thresh: float = None,
-        shrinkage: float = False,
+        shrinkage: float = None,
         shrinkage_threshold: float = None,
         shrinkage_q_weight: float = None,
+        shrinkage_r_weight: float = None,
         position_refinement: bool = False,
         position_refinement_frequency: int = 1,
         position_refinement_step_size: float = 1,
@@ -572,6 +573,7 @@ class Tomography:
                 shrinkage=shrinkage,
                 shrinkage_threshold=shrinkage_threshold,
                 shrinkage_q_weight=shrinkage_q_weight,
+                shrinkage_r_weight=shrinkage_r_weight,
                 support_thin_slab=support_thin_slab,
             )
 
@@ -1884,6 +1886,7 @@ class Tomography:
         shrinkage: bool,
         shrinkage_threshold: float,
         shrinkage_q_weight: float,
+        shrinkage_r_weight: float,
         support_thin_slab: int,
     ):
         """
@@ -1913,6 +1916,16 @@ class Tomography:
         xp_storage = self._xp_storage
 
         storage = self._storage
+
+        if shrinkage is None:
+            if (
+                shrinkage_threshold is not None
+                or shrinkage_q_weight is not None
+                or shrinkage_r_weight is not None
+            ):
+                shrinkage = True
+            else:
+                shrinkage = False
 
         if cylinder_mask:
             int_zero = (
@@ -1987,15 +2000,20 @@ class Tomography:
         if shrinkage is True:
             if shrinkage_threshold is None:
                 shrinkage_threshold = self._object.mean()
+            if shrinkage_r_weight is not None:
+                obj_mean = self._object.mean(-1)
+                shrinkage_threshold = (
+                    shrinkage_threshold - obj_mean * shrinkage_r_weight
+                )
+                shrinkage_threshold = shrinkage_threshold[:, :, None]
             if shrinkage_q_weight is not None:
-                print("hello")
                 qx = (np.arange(s[3]) - (s[3] - 1) / 2)[:, None, None]
                 qy = (np.arange(s[4]) - (s[4] - 1) / 2)[None, :, None]
                 qz = (np.arange(s[5]) - (s[5] - 1) / 2)[None, None, :]
-                qr = np.sqrt(qx**2 + qy**2 + qz**2)
+                qr = np.sqrt(qx**2 + qy**2 + qz**2).reshape((s[3] * s[4] * s[5]))
                 shrinkage_threshold = shrinkage_threshold * qr**shrinkage_q_weight
-                shrinkage_threshold = shrinkage_threshold.reshape((s[3] * s[4] * s[5]))
-                shrinkage_threshold = copy_to_device(shrinkage_threshold, storage)
+                shrinkage_threshold = shrinkage_threshold
+            shrinkage_threshold = copy_to_device(shrinkage_threshold, storage)
             self._object -= shrinkage_threshold
             self._object[self._object < 0] = 0
 
