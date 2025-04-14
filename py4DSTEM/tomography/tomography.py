@@ -382,8 +382,9 @@ class Tomography:
         diffraction_gaussian_filter: float = 0,
         real_space_gaussian_filter: float = 0,
         baseline_thresh: float = None,
-        diffraction_shrinkage: float = False,
-        diffraction_shrinkage_threshold: float = None,
+        shrinkage: float = False,
+        shrinkage_threshold: float = None,
+        shrinkage_q_weight: float = None,
         position_refinement: bool = False,
         position_refinement_frequency: int = 1,
         position_refinement_step_size: float = 1,
@@ -430,10 +431,10 @@ class Tomography:
             Gaussian filter for real space (in pixels)
         baseline_thresh: float
             if not None, data is cropped below threshold. Value is percentile of object.
-        diffraction_shrinkage: bool
+        shrinkage: bool
             if True, subtracts baseline from each kernel in real space and zeros any residual negative values. If no
             theshold is provided, uses mean of object
-        diffraction_shrinkage_threshold: None
+        shrinkage_threshold: None
             threshold for shrinkage
         position_refinement: bool
             if True, refines positions
@@ -568,8 +569,9 @@ class Tomography:
                 diffraction_gaussian_filter=diffraction_gaussian_filter,
                 real_space_gaussian_filter=real_space_gaussian_filter,
                 baseline_thresh=baseline_thresh,
-                diffraction_shrinkage=diffraction_shrinkage,
-                diffraction_shrinkage_threshold=diffraction_shrinkage_threshold,
+                shrinkage=shrinkage,
+                shrinkage_threshold=shrinkage_threshold,
+                shrinkage_q_weight=shrinkage_q_weight,
                 support_thin_slab=support_thin_slab,
             )
 
@@ -1879,8 +1881,9 @@ class Tomography:
         baseline_thresh: float,
         diffraction_gaussian_filter: float,
         real_space_gaussian_filter: float,
-        diffraction_shrinkage: bool,
-        diffraction_shrinkage_threshold: float,
+        shrinkage: bool,
+        shrinkage_threshold: float,
+        shrinkage_q_weight: float,
         support_thin_slab: int,
     ):
         """
@@ -1899,16 +1902,19 @@ class Tomography:
             Gaussian filter sigma for diffraction space (in pixels)
         real_space_gaussian_filter: flooat
             Gaussian filter for real space (in pixels)
-        diffraction_shrinkage: bool
+        shrinkage: bool
             if True, subtracts baseline from each kernel in real space and zeros any residual negative values. If no
             theshold is provided, uses mean of object
-        diffraction_shrinkage_threshold: None
+        shrinkage_threshold: None
             threshold for shrinkage
         """
-        if cylinder_mask:
-            storage = self._storage
-            s = self._object_shape_6D
+        s = self._object_shape_6D
 
+        xp_storage = self._xp_storage
+
+        storage = self._storage
+
+        if cylinder_mask:
             int_zero = (
                 copy_to_device(
                     self._cylinder_mask.reshape((s[0], s[1] * s[2])), storage
@@ -1919,12 +1925,10 @@ class Tomography:
             self._object[int_zero] = 0
 
         elif zero_edges_real:
-            xp = self._xp_storage
-            s = self._object_shape_6D
-            y = xp.arange(s[1])
-            z = xp.arange(s[2])
-            yy, zz = xp.meshgrid(y, z, indexing="ij")
-            ind_zero = xp.where(
+            y = xp_storage.arange(s[1])
+            z = xp_storage.arange(s[2])
+            yy, zz = xp_storage.meshgrid(y, z, indexing="ij")
+            ind_zero = xp_storage.where(
                 (yy.ravel() == 0)
                 | (zz.ravel() == 0)
                 | (yy.ravel() == y.max())
@@ -1933,13 +1937,11 @@ class Tomography:
             self._object[:, ind_zero] = 0
 
         if support_thin_slab is not None:
-            xp = self._xp_storage
-            s = self._object_shape_6D
-            y = xp.arange(s[1])
-            z = xp.arange(s[2])
-            yy, zz = xp.meshgrid(y, z, indexing="ij")
+            y = xp_storage.arange(s[1])
+            z = xp_storage.arange(s[2])
+            yy, zz = xp_storage.meshgrid(y, z, indexing="ij")
 
-            ind_zero = xp.where(
+            ind_zero = xp_storage.where(
                 (zz.ravel() < support_thin_slab)
                 | (zz.ravel() > z.max() - support_thin_slab)
             )[0]
@@ -1947,15 +1949,11 @@ class Tomography:
             self._object[:, ind_zero] = 0
 
         if zero_edges_diffraction:
-            storage = self._storage
             diffraction_edge_mask = copy_to_device(self._diffraction_edge_mask, storage)
             self._object = self._object * diffraction_edge_mask[None, None, :]
 
         if diffraction_gaussian_filter > 0:
             from scipy.ndimage import gaussian_filter
-
-            storage = self._storage
-            s = self._object.shape
 
             obj_6D = copy_to_device(self.object_6D, device="cpu")
 
@@ -1963,13 +1961,12 @@ class Tomography:
                 obj_6D, diffraction_gaussian_filter, axes=(-1, -2, -3)
             )  # axes only supported in cpu
 
-            self._object = copy_to_device(obj_6D.reshape(s), device=storage)
+            self._object = copy_to_device(
+                obj_6D.reshape((s[0], s[1] * s[2], s[3] * s[4] * s[5])), device=storage
+            )
 
         if real_space_gaussian_filter > 0:
             from scipy.ndimage import gaussian_filter
-
-            storage = self._storage
-            s = self._object.shape
 
             obj_6D = copy_to_device(self.object_6D, device="cpu")
 
@@ -1977,19 +1974,29 @@ class Tomography:
                 obj_6D, real_space_gaussian_filter, axes=(0, 1, 2)
             )  # axes only supported in cpu
 
-            self._object = copy_to_device(obj_6D.reshape(s), device=storage)
+            self._object = copy_to_device(
+                obj_6D.reshape((s[0], s[1] * s[2], s[3] * s[4] * s[5])), device=storage
+            )
 
         if baseline_thresh is not None:
             _, vmin, _ = return_scaled_histogram_ordering(
                 self._object, vmin=baseline_thresh
             )
-            xp = self._xp_storage
-            self._object = xp.clip(self._object - vmin, 0, np.inf)
+            self._object = xp_storage.clip(self._object - vmin, 0, np.inf)
 
-        if diffraction_shrinkage is True:
-            if diffraction_shrinkage_threshold is None:
-                diffraction_shrinkage_threshold = self._object.mean()
-            self._object -= diffraction_shrinkage_threshold
+        if shrinkage is True:
+            if shrinkage_threshold is None:
+                shrinkage_threshold = self._object.mean()
+            if shrinkage_q_weight is not None:
+                print("hello")
+                qx = (np.arange(s[3]) - (s[3] - 1) / 2)[:, None, None]
+                qy = (np.arange(s[4]) - (s[4] - 1) / 2)[None, :, None]
+                qz = (np.arange(s[5]) - (s[5] - 1) / 2)[None, None, :]
+                qr = np.sqrt(qx**2 + qy**2 + qz**2)
+                shrinkage_threshold = shrinkage_threshold * qr**shrinkage_q_weight
+                shrinkage_threshold = shrinkage_threshold.reshape((s[3] * s[4] * s[5]))
+                shrinkage_threshold = copy_to_device(shrinkage_threshold, storage)
+            self._object -= shrinkage_threshold
             self._object[self._object < 0] = 0
 
     def set_storage(self, storage):
