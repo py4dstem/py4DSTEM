@@ -117,8 +117,6 @@ class Tomography:
         self.set_device(device, clear_fft_cache)
         self.set_storage(storage)
 
-        print('hello george')
-
     def preprocess(
         self,
         diffraction_intensities_shape: int = None,
