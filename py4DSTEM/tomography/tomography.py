@@ -380,7 +380,7 @@ class Tomography:
         num_iter: int = 1,
         store_iterations: bool = False,
         store_initial_object: bool = True,
-        store_error_per_step: bool = False,
+        store_error_per_step: bool = True,
         reset: bool = True,
         step_size: float = 0.5,
         zero_edges_real: bool = True,
