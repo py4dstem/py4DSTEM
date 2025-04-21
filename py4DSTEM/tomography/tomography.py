@@ -211,6 +211,14 @@ class Tomography:
         self._positions_vox_F = []
         self._positions_vox_dF = []
 
+        if self._tilt_rotation_axis_angle_deg is not None:
+            if force_q_to_r_rotation_deg is None:
+                force_q_to_r_rotation_deg = -self._tilt_rotation_axis_angle_deg
+            else:
+                force_q_to_r_rotation_deg = (
+                    force_q_to_r_rotation_deg - self._tilt_rotation_axis_angle_deg
+                )
+
         self._force_q_to_r_transpose = force_q_to_r_transpose
         self._force_q_to_r_rotation_deg = force_q_to_r_rotation_deg
 
