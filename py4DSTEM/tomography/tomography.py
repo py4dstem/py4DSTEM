@@ -100,6 +100,25 @@ class Tomography:
             - the tilt axis is along y
             - for a thin foil geometry, pass a smaller value for z
         """
+        # Input validation
+        if datacubes is not None and not isinstance(datacubes, (list, tuple)):
+            raise TypeError("datacubes must be a sequence of DataCube objects or strings")
+        
+        if object_shape_x_y_z is not None and len(object_shape_x_y_z) != 3:
+            raise ValueError("object_shape_x_y_z must be a 3-tuple")
+        
+        if tilt_deg is not None and not isinstance(tilt_deg, (list, tuple, np.ndarray)):
+            raise TypeError("tilt_deg must be a sequence or numpy array")
+        
+        if shift_px is not None and not isinstance(shift_px, (list, tuple, np.ndarray)):
+            raise TypeError("shift_px must be a sequence or numpy array")
+        
+        if device not in ["cpu", "gpu"]:
+            raise ValueError("device must be either 'cpu' or 'gpu'")
+        
+        if storage not in ["cpu", "gpu"]:
+            raise ValueError("storage must be either 'cpu' or 'gpu'")
+
         self._datacubes = datacubes
         self._import_kwargs = import_kwargs
         self._object_shape_x_y_z = object_shape_x_y_z
@@ -113,6 +132,9 @@ class Tomography:
         self._transpose_xy = transpose_xy
         self._verbose = verbose
         self._initial_object_guess = initial_object_guess
+
+        # Initialize position refinements array
+        self._position_refinements = np.zeros((len(datacubes) if datacubes is not None else 0, 2))
 
         self.set_device(device, clear_fft_cache)
         self.set_storage(storage)
@@ -1192,16 +1214,22 @@ class Tomography:
             maximum q in inverse angstroms
 
         """
-
         s = self._initial_datacube_shape
 
+        # Create mask with proper handling of odd/even sizes
         mask = np.ones((s[-1], s[-1]), dtype="bool")
-        mask[:, int(np.ceil(s[-1] / 2)) :] = 0
-        mask[: int(np.ceil(s[-1] / 2)), int(np.floor(s[-1] / 2))] = 0
+        center = s[-1] // 2
+        mask[:, center:] = 0
+        mask[:center, center] = 0
+
+        # Ensure mask is symmetric
+        if s[-1] % 2 == 0:
+            mask[center, :] = 0
+            mask[:, center] = 0
 
         ind_diffraction = np.roll(
             np.arange(s[-1] * s[-1]).reshape(s[-1], s[-1]),
-            (int(np.floor(s[-1] / 2)), int(np.floor(s[-1] / 2))),
+            (center, center),
             axis=(0, 1),
         )
 
@@ -1446,7 +1474,7 @@ class Tomography:
             ind_diffraction_ravel = self._ind_diffraction_ravel
 
         for a0 in range(s[0]):
-            for a1 in range(s[0]):
+            for a1 in range(s[1]):  # Fixed: Changed s[0] to s[1]
                 dp = data[a0, a1]
                 index = np.ravel_multi_index((a0, a1), (s[0], s[1]))
                 if qx0_fit is not None:
@@ -2070,7 +2098,6 @@ class Tomography:
         self: TomoReconstruction
             Self to enable chaining
         """
-
         if clear_fft_cache is not None:
             self._clear_fft_cache = clear_fft_cache
 
@@ -2079,16 +2106,15 @@ class Tomography:
 
         if device == "cpu":
             import scipy
-
             self._xp = np
             self._scipy = scipy
 
         elif device == "gpu":
+            if cp is None:
+                raise RuntimeError("GPU device requested but CuPy is not available")
             from cupyx import scipy
-
             self._xp = cp
             self._scipy = scipy
-
         else:
             raise ValueError(f"device must be either 'cpu' or 'gpu', not {device}")
 
