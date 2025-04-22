@@ -1232,18 +1232,21 @@ class Tomography:
 
         # Create mask with proper handling of odd/even sizes
         mask = np.ones((s[-1], s[-1]), dtype="bool")
-        center = s[-1] // 2
-        mask[:, center:] = 0
-        mask[:center, center] = 0
+        # center = s[-1] // 2
+        # mask[:, center:] = 0
+        # mask[:center, center] = 0
+        mask[:, int(np.ceil(s[-1] / 2)) :] = 0
+        mask[: int(np.ceil(s[-1] / 2)), int(np.floor(s[-1] / 2))] = 0
 
-        # Ensure mask is symmetric
-        if s[-1] % 2 == 0:
-            mask[center, :] = 0
-            mask[:, center] = 0
+        # # Ensure mask is symmetric
+        # if s[-1] % 2 == 0:
+        #     mask[center, :] = 0
+        #     mask[:, center] = 0
 
         ind_diffraction = np.roll(
             np.arange(s[-1] * s[-1]).reshape(s[-1], s[-1]),
-            (center, center),
+            # (center, center),
+            (int(np.floor(s[-1] / 2)), int(np.floor(s[-1] / 2))),
             axis=(0, 1),
         )
 
