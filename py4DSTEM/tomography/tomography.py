@@ -102,20 +102,22 @@ class Tomography:
         """
         # Input validation
         if datacubes is not None and not isinstance(datacubes, (list, tuple)):
-            raise TypeError("datacubes must be a sequence of DataCube objects or strings")
-        
+            raise TypeError(
+                "datacubes must be a sequence of DataCube objects or strings"
+            )
+
         if object_shape_x_y_z is not None and len(object_shape_x_y_z) != 3:
             raise ValueError("object_shape_x_y_z must be a 3-tuple")
-        
+
         if tilt_deg is not None and not isinstance(tilt_deg, (list, tuple, np.ndarray)):
             raise TypeError("tilt_deg must be a sequence or numpy array")
-        
+
         if shift_px is not None and not isinstance(shift_px, (list, tuple, np.ndarray)):
             raise TypeError("shift_px must be a sequence or numpy array")
-        
+
         if device not in ["cpu", "gpu"]:
             raise ValueError("device must be either 'cpu' or 'gpu'")
-        
+
         if storage not in ["cpu", "gpu"]:
             raise ValueError("storage must be either 'cpu' or 'gpu'")
 
@@ -134,7 +136,9 @@ class Tomography:
         self._initial_object_guess = initial_object_guess
 
         # Initialize position refinements array
-        self._position_refinements = np.zeros((len(datacubes) if datacubes is not None else 0, 2))
+        self._position_refinements = np.zeros(
+            (len(datacubes) if datacubes is not None else 0, 2)
+        )
 
         self.set_device(device, clear_fft_cache)
         self.set_storage(storage)
@@ -161,6 +165,7 @@ class Tomography:
         force_q_to_r_transpose=False,
         dp_shift_method="subpixel",
         num_points: int = None,
+        normalize_scans: bool = False,
         device: str = None,
         clear_fft_cache: bool = True,
         progress_bar: bool = True,
@@ -219,6 +224,8 @@ class Tomography:
             method to shift diffraction patterns "subpixel" or "pixel"
         num_points: int
             number of points for bilinear interpolation in real space
+        normalize_scans: bool
+            if True, normalizes all scans
         """
         self.set_device(device, clear_fft_cache)
 
@@ -345,6 +352,7 @@ class Tomography:
                 qy0_fit=qy0_fit,
                 q_max_inv_A=q_max_inv_A,
                 dp_shift_method=dp_shift_method,
+                normalize_scans=normalize_scans,
             )
 
             self._solve_for_indicies(
@@ -1165,6 +1173,7 @@ class Tomography:
         qy0_fit,
         q_max_inv_A,
         dp_shift_method,
+        normalize_scans,
     ):
         """
         Reshapes diffraction data into a 2 column array
@@ -1200,9 +1209,14 @@ class Tomography:
 
         del datacube
 
-        self._diffraction_patterns_projected.append(
-            diffraction_patterns_reshaped[mask_real_space.ravel()]
-        )
+        diffraction_patterns_reshaped = diffraction_patterns_reshaped[
+            mask_real_space.ravel()
+        ]
+
+        if normalize_scans:
+            diffraction_patterns_reshaped /= diffraction_patterns_reshaped.mean()
+
+        self._diffraction_patterns_projected.append(diffraction_patterns_reshaped)
 
     def _make_diffraction_masks(self, q_max_inv_A):
         """
@@ -2106,6 +2120,7 @@ class Tomography:
 
         if device == "cpu":
             import scipy
+
             self._xp = np
             self._scipy = scipy
 
@@ -2113,6 +2128,7 @@ class Tomography:
             if cp is None:
                 raise RuntimeError("GPU device requested but CuPy is not available")
             from cupyx import scipy
+
             self._xp = cp
             self._scipy = scipy
         else:
