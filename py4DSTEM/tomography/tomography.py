@@ -410,7 +410,6 @@ class Tomography:
         num_iter: int = 1,
         store_iterations: bool = False,
         store_initial_object: bool = True,
-        store_error_per_step: bool = True,
         reset: bool = True,
         step_size: float = 0.5,
         zero_edges_real: bool = True,
@@ -450,8 +449,6 @@ class Tomography:
             if True, stores number of iterations
         store_initial_object: bool
             if True, keeps a copy of an initial object to reset without preprocessing
-        store_error_per_step: bool
-            if True, stores error for each tilt for each iteration and order of tilts
         reset: bool
             if True, resets object
         step_size: float
@@ -520,9 +517,8 @@ class Tomography:
             else:
                 self._object = self._object_initial
 
-            if store_error_per_step:
-                self._tilt_order = []
-                self._error_per_step = []
+            self._tilt_order = []
+            self._error_per_step = []
 
         for a0 in tqdmnd(
             num_iter,
@@ -595,9 +591,8 @@ class Tomography:
                 else:
                     raise ValueError(("distributed not implemented for gpu"))
 
-                if store_error_per_step:
-                    self._tilt_order.append(a1_shuffle)
-                    self._error_per_step.append(error_iteration_datacube)
+                self._tilt_order.append(a1_shuffle)
+                self._error_per_step.append(error_iteration_datacube)
 
                 error_iteration += error_iteration_datacube
 
@@ -629,6 +624,22 @@ class Tomography:
             self.error = error_iteration
             if store_iterations:
                 self.object_iterations.append(self._object.copy())
+
+        num_iter = len(self._tilt_order) // self._num_datacubes
+        iterations = np.repeat(np.arange(num_iter), self._num_datacubes)
+        order = np.asarray(self._tilt_order)
+        ind = np.argsort(
+            np.ravel_multi_index((iterations, order), (num_iter, self._num_datacubes))
+        )
+        error_per_step_sorted = (np.asarray(self._error_per_step)[ind]).reshape(
+            (num_iter, self._num_datacubes)
+        )
+
+        tilts_order = self._tilt_deg
+        tilts_order = np.argsort(tilts_order)
+
+        error_per_step_sorted = error_per_step_sorted[:, tilts_order]
+        self.error_per_step_sorted = error_per_step_sorted
 
         return self
 
@@ -1199,6 +1210,9 @@ class Tomography:
         if datacube_number == 0:
             self._make_diffraction_masks(q_max_inv_A=q_max_inv_A)
 
+        if normalize_scans:
+            datacube.data /= datacube.data.mean()
+
         diffraction_patterns_reshaped = self._reshape_4D_array_to_2D(
             data=datacube.data,
             qx0_fit=qx0_fit,
@@ -1212,9 +1226,6 @@ class Tomography:
         diffraction_patterns_reshaped = diffraction_patterns_reshaped[
             mask_real_space.ravel()
         ]
-
-        if normalize_scans:
-            diffraction_patterns_reshaped /= diffraction_patterns_reshaped.mean()
 
         self._diffraction_patterns_projected.append(diffraction_patterns_reshaped)
 
@@ -2204,32 +2215,24 @@ class Tomography:
         return self
 
     def show_error_per_iteration(self, **kwargs):
-        num_iter = len(self._tilt_order) // self._num_datacubes
-        iterations = np.repeat(np.arange(num_iter), self._num_datacubes)
-        order = np.asarray(self._tilt_order)
-        ind = np.argsort(
-            np.ravel_multi_index((iterations, order), (num_iter, self._num_datacubes))
-        )
-        error = (np.asarray(self._error_per_step)[ind]).reshape(
-            (num_iter, self._num_datacubes)
-        )
-
-        tilts_order = self._tilt_deg
-        tilts_order = np.argsort(tilts_order)
-
-        error = error[:, tilts_order]
-
         vmin = kwargs.pop("vmin", None)
         vmax = kwargs.pop("vmax", None)
 
         fig, ax = show(
-            error, cmap="magma", returnfig=True, vmax=vmax, vmin=vmin, **kwargs
+            self.error_per_step_sorted,
+            cmap="magma",
+            returnfig=True,
+            vmax=vmax,
+            vmin=vmin,
+            **kwargs,
         )
+
+        ax.tick_params(top=False, labeltop=False, bottom=True, labelbottom=True)
 
         ax.set_title("error")
         ax.set_ylabel("iteration")
         ax.set_xlabel("tilts (negative -> positive)")
-        ax.set_xticks([])
+        # ax.set_xticks([])
 
         return self
 
