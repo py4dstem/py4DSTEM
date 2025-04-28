@@ -545,11 +545,14 @@ class Tomography:
                 diffraction_patterns_projected = copy_to_device(
                     self._diffraction_patterns_projected[a1_shuffle], device
                 )
+                random_x_order = np.arange(self._object_shape_6D[0])
+                np.random.shuffle(random_x_order)
 
                 if distributed is False:
                     for a2 in range(self._object_shape_6D[0]):
+                        a2_shuffle = random_x_order[a2]
                         x_index, yy, zz, update_r_summed, error = self._reconstruct(
-                            a2=a2,
+                            a2=a2_shuffle,
                             a1_shuffle=a1_shuffle,
                             num_points=num_points,
                             diffraction_patterns_projected=diffraction_patterns_projected,
@@ -563,7 +566,7 @@ class Tomography:
                     inputs = [
                         (
                             {
-                                "a2": a2,
+                                "a2": random_x_order[a2],
                                 "a1_shuffle": a1_shuffle,
                                 "num_points": num_points,
                                 "diffraction_patterns_projected": diffraction_patterns_projected,
@@ -2232,7 +2235,7 @@ class Tomography:
         ax.set_title("error")
         ax.set_ylabel("iteration")
         ax.set_xlabel("tilts (negative -> positive)")
-        xtickslocs = np.array(ax.get_xticks()[1:-1], dtype = "int")
+        xtickslocs = np.array(ax.get_xticks()[1:-1], dtype="int")
         ax.set_xticks(xtickslocs)
         ax.set_xticklabels(np.sort(self._tilt_deg)[xtickslocs])
 
