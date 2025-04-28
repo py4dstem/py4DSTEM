@@ -2232,7 +2232,9 @@ class Tomography:
         ax.set_title("error")
         ax.set_ylabel("iteration")
         ax.set_xlabel("tilts (negative -> positive)")
-        # ax.set_xticks([])
+        xtickslocs = np.array(ax.get_xticks()[1:-1], dtype = "int")
+        ax.set_xticks(xtickslocs)
+        ax.set_xticklabels(np.sort(self._tilt_deg)[xtickslocs])
 
         return self
 
