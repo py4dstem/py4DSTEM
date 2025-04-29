@@ -519,6 +519,7 @@ class Tomography:
 
             self._tilt_order = []
             self._error_per_step = []
+            self._position_refinements = np.zeros_like(self._position_refinements)
 
         for a0 in tqdmnd(
             num_iter,
@@ -729,33 +730,33 @@ class Tomography:
         for a0 in range(datacube_numbers.shape[0]):
             for a1 in range(max_num_iter):
                 positions_save = (
-                    self._positions_vox[a0][0].copy(),
-                    self._positions_vox[a0][1].copy(),
+                    self._positions_vox[datacube_numbers[a0]][0].copy(),
+                    self._positions_vox[datacube_numbers[a0]][1].copy(),
                 )
                 positions_F_save = (
-                    self._positions_vox_F[a0][0].copy(),
-                    self._positions_vox_F[a0][1].copy(),
+                    self._positions_vox_F[datacube_numbers[a0]][0].copy(),
+                    self._positions_vox_F[datacube_numbers[a0]][1].copy(),
                 )
 
                 diffraction_patterns_projected = copy_to_device(
-                    self._diffraction_patterns_projected[a0], device
+                    self._diffraction_patterns_projected[datacube_numbers[a0]], device
                 )
                 error_shifts = np.zeros((y_values.shape[0], 4))
                 position_deltas = [(1, 0), (-1, 0), (0, 1), (0, -1)]
 
                 for a2 in range(y_values.shape[0]):
                     object_sliced = self._forward(
-                        datacube_number=a0,
+                        datacube_number=datacube_numbers[a0],
                         x_index=a2,
                         num_points=num_points,
                     )
 
                     for a3 in range(4):
-                        self._positions_vox[a0] = (
+                        self._positions_vox[datacube_numbers[a0]] = (
                             positions_save[0].copy() + position_deltas[a3][0],
                             positions_save[1].copy() + position_deltas[a3][1],
                         )
-                        self._positions_vox_F[a0] = (
+                        self._positions_vox_F[datacube_numbers[a0]] = (
                             positions_F_save[0].copy() + position_deltas[a3][0],
                             positions_F_save[1].copy() + position_deltas[a3][1],
                         )
@@ -763,60 +764,61 @@ class Tomography:
                         _, error = self._calculate_update(
                             object_sliced=object_sliced,
                             diffraction_patterns_projected=diffraction_patterns_projected,
-                            datacube_number=a0,
+                            datacube_number=datacube_numbers[a0],
                             x_index=a2,
                         )
 
                         error_shifts[a2, a3] = error
 
                 error_shifts_mean = np.ma.array(
-                    data=error_shifts, mask=error_shifts == 0
+                    data=error_shifts,
+                    mask=np.logical_or(error_shifts == 0, error_shifts == np.inf),
                 )
 
                 weights = error_shifts_mean.mean(0).data
-                weights -= weights.mean()
-                weights = -1 * weights
-                weights /= np.abs(weights).sum()
+                position_update = np.zeros(2)
+                position_update[0] = (weights[1] - weights[0]) / (
+                    weights[0] + weights[1]
+                )
+                position_update[1] = (weights[3] - weights[2]) / (
+                    weights[2] + weights[3]
+                )
 
-                position_delta = (
-                    np.asarray(position_deltas, dtype="float") * weights[:, None]
-                ).sum(0)
-
-                position_delta = position_delta * step_size
+                position_update = position_update * step_size
                 if max_step_displacement is not None:
-                    position_delta = np.clip(
-                        position_delta, -max_step_displacement, max_step_displacement
+                    position_update = np.clip(
+                        position_update, -max_step_displacement, max_step_displacement
                     )
 
                 if max_total_displacement is not None:
-                    position_delta = np.clip(
-                        position_delta,
-                        -max_total_displacement - self._position_refinements[a0],
-                        max_total_displacement - self._position_refinements[a0],
+                    position_update = np.clip(
+                        position_update,
+                        -max_total_displacement - self._position_refinements[datacube_numbers[a0]],
+                        max_total_displacement - self._position_refinements[datacube_numbers[a0]],
                     )
 
-                x_vox = positions_save[0].copy() + position_delta[0]
-                y_vox = positions_save[1].copy() + position_delta[1]
+                x_vox = positions_save[0].copy() + position_update[0]
+                y_vox = positions_save[1].copy() + position_update[1]
                 x_vox_F = np.floor(x_vox).astype("int")
                 y_vox_F = np.floor(y_vox).astype("int")
                 dx = x_vox - x_vox_F
                 dy = y_vox - y_vox_F
 
-                self._positions_vox[a0] = (
+                self._positions_vox[datacube_numbers[a0]] = (
                     copy_to_device(x_vox, device),
                     copy_to_device(y_vox, device),
                 )
-                self._positions_vox_F[a0] = (
+                self._positions_vox_F[datacube_numbers[a0]] = (
                     copy_to_device(x_vox_F, device),
                     copy_to_device(y_vox_F, device),
                 )
-                self._positions_vox_dF[a0] = (
+                self._positions_vox_dF[datacube_numbers[a0]] = (
                     copy_to_device(dx, device),
                     copy_to_device(dy, device),
                 )
-                self._position_refinements[a0] += position_delta
+                self._position_refinements[datacube_numbers[a0]] += position_update
 
-                if np.max(position_delta) < stop_criteria_shift_size:
+                if np.max(np.abs(position_update)) < stop_criteria_shift_size:
                     break
 
     def _prepare_datacube(
