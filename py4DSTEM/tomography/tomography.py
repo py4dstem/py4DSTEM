@@ -741,10 +741,10 @@ class Tomography:
                 diffraction_patterns_projected = copy_to_device(
                     self._diffraction_patterns_projected[datacube_numbers[a0]], device
                 )
-                error_shifts = np.zeros((y_values.shape[0], 4))
+                error_shifts = np.zeros((y_values.shape[0] - 2, 4))
                 position_deltas = [(1, 0), (-1, 0), (0, 1), (0, -1)]
 
-                for a2 in range(y_values.shape[0]):
+                for a2 in range(y_values.shape[0] - 2):
                     object_sliced = self._forward(
                         datacube_number=datacube_numbers[a0],
                         x_index=a2,
@@ -765,7 +765,7 @@ class Tomography:
                             object_sliced=object_sliced,
                             diffraction_patterns_projected=diffraction_patterns_projected,
                             datacube_number=datacube_numbers[a0],
-                            x_index=a2,
+                            x_index=a2 + 1,
                         )
 
                         error_shifts[a2, a3] = error
@@ -793,8 +793,10 @@ class Tomography:
                 if max_total_displacement is not None:
                     position_update = np.clip(
                         position_update,
-                        -max_total_displacement - self._position_refinements[datacube_numbers[a0]],
-                        max_total_displacement - self._position_refinements[datacube_numbers[a0]],
+                        -max_total_displacement
+                        - self._position_refinements[datacube_numbers[a0]],
+                        max_total_displacement
+                        - self._position_refinements[datacube_numbers[a0]],
                     )
 
                 x_vox = positions_save[0].copy() + position_update[0]
@@ -1772,6 +1774,7 @@ class Tomography:
             update = xp.zeros(object_sliced.shape)
             error = 0
             error = copy_to_device(error, "cpu")
+            dp_patterns_counted = np.asarray([0])
 
         else:
             weights = np.hstack(
@@ -1826,6 +1829,7 @@ class Tomography:
             ).reshape((s[1], dp_length))
 
             update = dp_patterns_counted - object_sliced
+            update[dp_patterns_counted.sum(1) == 0] = 0
 
             error = (
                 xp.mean(update.ravel() ** 2) ** 0.5 / dp_patterns_counted.mean(0).sum()
