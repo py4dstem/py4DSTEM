@@ -42,9 +42,9 @@ class Tomography:
         datacubes: Union[Sequence[DataCube], Sequence[str]] = None,
         import_kwargs: dict = {},
         object_shape_x_y_z: Tuple = None,
-        voxel_size_A: float = None,
-        datacube_R_pixel_size_A: float = None,
-        datacube_Q_pixel_size_inv_A: float = None,  # do we even need this?
+        voxel_size_A: float = 1,
+        datacube_R_pixel_size_A: float = 1,
+        datacube_Q_pixel_size_inv_A: float = 1,  # do we even need this?
         tilt_deg: Union[Sequence, np.ndarray] = None,
         shift_px: Union[Sequence, np.ndarray] = None,
         tilt_rotation_axis_angle_deg: float = None,
