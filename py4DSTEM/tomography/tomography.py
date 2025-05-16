@@ -1246,25 +1246,23 @@ class Tomography:
             maximum q in inverse angstroms
 
         """
-        s = self._initial_datacube_shape
+        shape = self._initial_datacube_shape[-1]
+
+        if shape % 2 < 1e-6:
+            shape += 1
+            even = True
+        else:
+            even = False
 
         # Create mask with proper handling of odd/even sizes
-        mask = np.ones((s[-1], s[-1]), dtype="bool")
-        # center = s[-1] // 2
-        # mask[:, center:] = 0
-        # mask[:center, center] = 0
-        mask[:, int(np.ceil(s[-1] / 2)) :] = 0
-        mask[: int(np.ceil(s[-1] / 2)), int(np.floor(s[-1] / 2))] = 0
-
-        # # Ensure mask is symmetric
-        # if s[-1] % 2 == 0:
-        #     mask[center, :] = 0
-        #     mask[:, center] = 0
+        mask = np.ones((shape, shape), dtype="bool")
+        mask[:, int(np.ceil(shape / 2)) :] = 0
+        mask[: int(np.ceil(shape / 2)), int(np.floor(shape / 2))] = 0
 
         ind_diffraction = np.roll(
-            np.arange(s[-1] * s[-1]).reshape(s[-1], s[-1]),
+            np.arange(shape * shape).reshape(shape, shape),
             # (center, center),
-            (int(np.floor(s[-1] / 2)), int(np.floor(s[-1] / 2))),
+            (int(np.floor(shape / 2)), int(np.floor(shape / 2))),
             axis=(0, 1),
         )
 
@@ -1273,12 +1271,15 @@ class Tomography:
         a = np.argsort(ind_diffraction.ravel())
         i = np.empty_like(a)
         i[a] = np.arange(a.size)
-        i = i.reshape((s[-1], s[-1]))
+        i = i.reshape((shape, shape))
 
         ind_diffraction = i
         ind_diffraction_rot = np.rot90(ind_diffraction, 2)
 
         ind_diffraction[mask] = ind_diffraction_rot[mask]
+
+        if even is True:
+            ind_diffraction = ind_diffraction[:-1, :-1]
 
         ind_diffraction_rotate_transpose = ind_diffraction.copy()
 
@@ -1286,6 +1287,13 @@ class Tomography:
             ind_diffraction_rotate_transpose = (
                 ind_diffraction_rotate_transpose.swapaxes(-1, -2)
             )
+
+        unique, counts = np.unique(ind_diffraction, return_counts=True)
+        count_dict = dict(zip(unique, counts))
+        normalize_diff = np.array(
+            [2 if count_dict[x] == 2 else 1 for x in ind_diffraction.ravel()]
+        )
+        self._normalize_diff = normalize_diff
 
         self._ind_diffraction = ind_diffraction
         self._ind_diffraction_ravel = ind_diffraction.ravel()
@@ -1298,10 +1306,13 @@ class Tomography:
         # pixels to remove
         q_max_px = q_max_inv_A / self._datacube_Q_pixel_size_inv_A
 
-        x = np.arange(s[-1]) - ((s[-1] - 1) / 2)
-        y = np.arange(s[-1]) - ((s[-1] - 1) / 2)
+        x = np.arange(shape) - ((shape - 1) / 2)
+        y = np.arange(shape) - ((shape - 1) / 2)
         xx, yy = np.meshgrid(x, y, indexing="ij")
         circular_mask = ((xx) ** 2 + (yy) ** 2) ** 0.5 < q_max_px
+
+        if even is True:
+            circular_mask = circular_mask[:-1, :-1]
 
         self._circular_mask = circular_mask
         self._circular_mask_ravel = circular_mask.ravel()
@@ -1874,19 +1885,17 @@ class Tomography:
         i[a] = xp.arange(a.size)
         i = xp.tile(i, 4) + xp.repeat(xp.arange(4), i.shape[0]) * (i.shape[0])
 
-        if s[-1] % 2 > 0:
-            normalize = xp.ones((xp.repeat(update, 2, axis=1)[:, 1:]).shape) * 2
-            normalize[:, 0] = 1
+        normalize_diff = self._normalize_diff[self._circular_mask_ravel][a]
+        keep_diff = np.ones(len(normalize_diff) + np.sum(normalize_diff == 1), dtype=bool)
+        ind_false = np.argwhere(normalize_diff==1) + np.arange(np.sum(normalize_diff==1)) 
+        keep_diff[ind_false] = False
 
-            update_reshaped = (
-                (xp.tile(xp.repeat(update, 2, axis=1)[:, 1:] / normalize, 4))[:, i]
-            ) * (self._weights_diff[datacube_number][ind_update])
-        else:
-            normalize = xp.ones((xp.repeat(update, 2, axis=1)).shape) * 2
 
-            update_reshaped = (
-                (xp.tile(xp.repeat(update, 2, axis=1) / normalize, (4)))[:, i]
-            ) * (self._weights_diff[datacube_number][ind_update])
+        update_reshaped = (
+            (xp.tile(xp.repeat(update, 2, axis=1)[:, keep_diff] / normalize_diff, 4))[
+                :, i
+            ]
+        ) * (self._weights_diff[datacube_number][ind_update])
 
         ind_real = self._ind_real[datacube_number].ravel()
         ind_diff = self._ind_diff[datacube_number][ind_update]
