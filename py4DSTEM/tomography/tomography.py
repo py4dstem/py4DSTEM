@@ -1301,7 +1301,7 @@ class Tomography:
         self._ind_diffraction_rotate_transpose_ravel = (
             ind_diffraction_rotate_transpose.ravel()
         )
-        self._q_length = np.unique(self._ind_diffraction).shape[0]
+        self._q_length = np.unique(self._ind_diffraction).max() + 1
 
         # pixels to remove
         q_max_px = q_max_inv_A / self._datacube_Q_pixel_size_inv_A
@@ -1886,10 +1886,13 @@ class Tomography:
         i = xp.tile(i, 4) + xp.repeat(xp.arange(4), i.shape[0]) * (i.shape[0])
 
         normalize_diff = self._normalize_diff[self._circular_mask_ravel][a]
-        keep_diff = np.ones(len(normalize_diff) + np.sum(normalize_diff == 1), dtype=bool)
-        ind_false = np.argwhere(normalize_diff==1) + np.arange(np.sum(normalize_diff==1)) 
+        keep_diff = np.ones(
+            len(normalize_diff) + np.sum(normalize_diff == 1), dtype=bool
+        )
+        ind_false = np.argwhere(normalize_diff == 1) + np.arange(
+            np.sum(normalize_diff == 1)
+        )
         keep_diff[ind_false] = False
-
 
         update_reshaped = (
             (xp.tile(xp.repeat(update, 2, axis=1)[:, keep_diff] / normalize_diff, 4))[
@@ -2072,7 +2075,7 @@ class Tomography:
             #     for j in range(obj_6D.shape[4]):
             #         for k in range(obj_6D.shape[5]):
             #             obj_6D[:, :, :, i, j, k] = gaussian_filter(
-            #                 obj_6D[:, :, :, i, j, k], 
+            #                 obj_6D[:, :, :, i, j, k],
             #                 sigma=real_space_gaussian_filter
             #             )
 
@@ -2271,7 +2274,16 @@ class Tomography:
         **kwargs,
     ):
         """ """
-        from ipywidgets import HBox, VBox, widgets, interact, Dropdown, Label, Layout, widgets
+        from ipywidgets import (
+            HBox,
+            VBox,
+            widgets,
+            interact,
+            Dropdown,
+            Label,
+            Layout,
+            widgets,
+        )
         from skimage.feature import peak_local_max
         from scipy.ndimage import gaussian_filter
         from py4DSTEM.visualize import return_scaled_histogram_ordering
@@ -2319,11 +2331,11 @@ class Tomography:
             fig.canvas.draw_idle()
 
         def on_click_xz(b):
-            ax2.view_init(elev=0, azim=-90)   # Front-on
+            ax2.view_init(elev=0, azim=-90)  # Front-on
             fig.canvas.draw_idle()
 
         def on_click_yz(b):
-            ax2.view_init(elev=0, azim=0)     # Side-on
+            ax2.view_init(elev=0, azim=0)  # Side-on
             fig.canvas.draw_idle()
 
         button_xy.on_click(on_click_xy)
@@ -2331,7 +2343,6 @@ class Tomography:
         button_yz.on_click(on_click_yz)
 
         view_buttons = widgets.HBox([button_xy, button_xz, button_yz])
-
 
         # %matplotlib ipympl
 
@@ -2343,7 +2354,8 @@ class Tomography:
 
             from mpl_toolkits.mplot3d import Axes3D
             from mpl_toolkits.mplot3d import axes3d
-            ax2.set_proj_type('ortho')
+
+            ax2.set_proj_type("ortho")
 
         x = obj_6D.shape[0] // 2
         y = obj_6D.shape[1] // 2
@@ -2627,14 +2639,16 @@ class Tomography:
         fig.canvas.layout.height = "400px"
         fig.canvas.toolbar_position = "bottom"
 
-        widget = widgets.VBox([
-            fig.canvas,
-            view_buttons,
-            HBox([x, y]),
-            HBox([z, gaussian_filter_diffraction]),
-            HBox([minimum_threshold, scale_intensities]),
-            HBox([intensities_power, block_center]),
-        ])
+        widget = widgets.VBox(
+            [
+                fig.canvas,
+                view_buttons,
+                HBox([x, y]),
+                HBox([z, gaussian_filter_diffraction]),
+                HBox([minimum_threshold, scale_intensities]),
+                HBox([intensities_power, block_center]),
+            ]
+        )
 
         # widget = widgets.VBox(
         #     [
@@ -2649,6 +2663,7 @@ class Tomography:
         display(widget)
 
         return self
+
 
 def set_axes_equal(ax):
     """Set 3D plot axes to equal scale (for matplotlib >= 3.3)."""
@@ -2673,5 +2688,3 @@ def set_axes_equal(ax):
         ax.set_box_aspect([1, 1, 1])  # Requires matplotlib >= 3.3
     except AttributeError:
         pass
-
-
