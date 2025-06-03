@@ -1893,6 +1893,8 @@ class Tomography:
             np.sum(normalize_diff == 1)
         )
         keep_diff[ind_false] = False
+        keep_diff = xp.asarray(keep_diff)
+        normalize_diff = xp.asarray(normalize_diff)
 
         update_reshaped = (
             (xp.tile(xp.repeat(update, 2, axis=1)[:, keep_diff] / normalize_diff, 4))[
