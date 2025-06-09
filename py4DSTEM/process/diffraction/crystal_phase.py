@@ -102,6 +102,7 @@ class CrystalPhase:
         plot_correlation_radius=False,
         scale_markers_experiment=40,
         scale_markers_calculated=200,
+        max_marker_size = 400,
         crystal_inds_plot=None,
         phase_colors=None,
         figsize=(10, 7),
@@ -615,8 +616,11 @@ class CrystalPhase:
                 qy0,
                 qx0,
                 # s = scale_markers_experiment * intensity0,
-                s=scale_markers_experiment
-                * bragg_peaks.data["intensity"][np.logical_not(keep)],
+                s=np.minimum(
+                    scale_markers_experiment
+                    * bragg_peaks.data["intensity"][np.logical_not(keep)],
+                    max_marker_size,
+                ),
                 marker="o",
                 facecolor=[0.7, 0.7, 0.7],
             )
@@ -624,7 +628,11 @@ class CrystalPhase:
                 qy,
                 qx,
                 # s = scale_markers_experiment * intensity,
-                s=scale_markers_experiment * bragg_peaks.data["intensity"][keep],
+                s=np.minimum(
+                    scale_markers_experiment 
+                    * bragg_peaks.data["intensity"][keep],
+                    max_marker_size,
+                ),
                 marker="o",
                 facecolor=[0.7, 0.7, 0.7],
             )
@@ -799,6 +807,7 @@ class CrystalPhase:
         strain_max=0.02,
         include_false_positives=True,
         weight_false_positives=1.0,
+        weight_unmatched_peaks=1.0,
         progress_bar=True,
     ):
         """
@@ -899,6 +908,7 @@ class CrystalPhase:
                 strain_max=strain_max,
                 include_false_positives=include_false_positives,
                 weight_false_positives=weight_false_positives,
+                weight_unmatched_peaks=weight_unmatched_peaks,
                 plot_result=False,
                 verbose=False,
                 returnfig=False,
@@ -1220,6 +1230,7 @@ class CrystalPhase:
         self,
         use_correlation_scores=False,
         reliability_range=(0.0, 1.0),
+        normalize_exp_intensity = True,
         sigma=0.0,
         phase_colors=None,
         ticks=True,
@@ -1302,6 +1313,12 @@ class CrystalPhase:
                     sigma=sigma,
                     mode="nearest",
                 )
+        self.phase_sig = phase_sig
+
+        # # normalize the signal by the intensity of each experimental pattern
+        # if normalize_exp_intensity:
+        #     phase_sig /= self.int_total[None,:,:]
+
 
         # find highest correlation score for each crystal and match index
         for a0 in range(self.num_crystals):
@@ -1327,6 +1344,12 @@ class CrystalPhase:
 
             # Estimate the reliability
             phase_rel = phase_corr - phase_corr_2nd
+
+            # normalize the reliability by the intensity of each experimental pattern
+            if normalize_exp_intensity:
+                phase_rel /= self.int_total
+
+
             phase_scale = np.clip(
                 (phase_rel - reliability_range[0])
                 / (reliability_range[1] - reliability_range[0]),
@@ -1351,6 +1374,8 @@ class CrystalPhase:
             sub = phase_map == a0
             for a1 in range(3):
                 self.phase_rgb[:, :, a1][sub] = phase_colors[a0, a1] * phase_scale[sub]
+
+        self.phase_scale = phase_scale
         # normalize
         # self.phase_rgb = np.clip(
         #     (self.phase_rgb - rel_range[0]) / (rel_range[1] - rel_range[0]),

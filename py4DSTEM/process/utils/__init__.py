@@ -4,6 +4,7 @@ from py4DSTEM.process.utils.multicorr import *
 from py4DSTEM.process.utils.elliptical_coords import *
 from py4DSTEM.process.utils.masks import *
 from py4DSTEM.process.utils.single_atom_scatter import *
+from py4DSTEM.process.utils.cluster import Cluster
 
 # from preprocessing
 from py4DSTEM.preprocess.utils import (

@@ -8,6 +8,8 @@ from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from scipy.signal import medfilt
 from scipy.ndimage import gaussian_filter
 from scipy.ndimage import distance_transform_edt
+from skimage.morphology import dilation, erosion
+from scipy.optimize import nnls
 
 import warnings
 import numpy as np
@@ -1113,6 +1115,7 @@ def plot_orientation_maps(
     self,
     orientation_map=None,
     orientation_ind: int = 0,
+    mask = None,
     dir_in_plane_degrees: float = 0.0,
     corr_range: np.ndarray = np.array([0, 5]),
     corr_normalize: bool = True,
@@ -1135,6 +1138,7 @@ def plot_orientation_maps(
         orientation_map (OrientationMap):   Class containing orientation matrices, correlation values, etc.
                                             Optional - can reference internally stored OrientationMap.
         orientation_ind (int):              Which orientation match to plot if num_matches > 1
+        mask (np.array):                    Manually apply a mask
         dir_in_plane_degrees (float):       In-plane angle to plot in degrees.  Default is 0 / x-axis / vertical down.
         corr_range (np.ndarray):            Correlation intensity range for the plot
         corr_normalize (bool):              If true, set mean correlation to 1.
@@ -1213,21 +1217,39 @@ def plot_orientation_maps(
     dir_in_plane = np.deg2rad(dir_in_plane_degrees)
     ct = np.cos(dir_in_plane)
     st = np.sin(dir_in_plane)
-    basis_x = np.zeros((orientation_map.num_x, orientation_map.num_y, 3))
-    basis_y = np.zeros((orientation_map.num_x, orientation_map.num_y, 3))
-    basis_z = np.zeros((orientation_map.num_x, orientation_map.num_y, 3))
+    
     rgb_x = np.zeros((orientation_map.num_x, orientation_map.num_y, 3))
     rgb_z = np.zeros((orientation_map.num_x, orientation_map.num_y, 3))
 
-    # Basis for fitting orientation projections
-    A = np.linalg.inv(self.orientation_zone_axis_range).T
+    if self.pointgroup.get_crystal_system() == 'monoclinic':
+        basis_x = np.zeros((orientation_map.num_x, orientation_map.num_y, 6))
+        # basis_y = np.zeros((orientation_map.num_x, orientation_map.num_y, 4))
+        basis_z = np.zeros((orientation_map.num_x, orientation_map.num_y, 6))
+        # Basis for fitting orientation projections
+        A = np.linalg.inv(self.orientation_zone_axis_range).T
+        A = np.hstack((A,-A))
 
-    # Correlation masking
-    corr = orientation_map.corr[:, :, orientation_ind]
-    if corr_normalize:
-        corr = corr / np.mean(corr)
-    mask = (corr - corr_range[0]) / (corr_range[1] - corr_range[0])
-    mask = np.clip(mask, 0, 1)
+        # Testing
+        # print(np.round(self.orientation_zone_axis_range))
+        # print()
+        # d = np.array((-1,0,0))
+        # s = nnls(A,d)[0]
+        # print(np.round(s,3))
+
+    else:
+        basis_x = np.zeros((orientation_map.num_x, orientation_map.num_y, 3))
+        basis_y = np.zeros((orientation_map.num_x, orientation_map.num_y, 3))
+        basis_z = np.zeros((orientation_map.num_x, orientation_map.num_y, 3))
+        # Basis for fitting orientation projections
+        A = np.linalg.inv(self.orientation_zone_axis_range).T
+
+    # Correlation or manual masking
+    if mask is None:
+        corr = orientation_map.corr[:, :, orientation_ind]
+        if corr_normalize:
+            corr = corr / np.mean(corr)
+        mask = (corr - corr_range[0]) / (corr_range[1] - corr_range[0])
+        mask = np.clip(mask, 0, 1)
 
     # Generate images
     for rx, ry in tqdmnd(
@@ -1237,22 +1259,33 @@ def plot_orientation_maps(
         unit=" PointList",
         disable=not progress_bar,
     ):
-        if self.pymatgen_available:
-            basis_x[rx, ry, :] = (
-                A @ orientation_map.family[rx, ry, orientation_ind, :, 0]
-            )
-            basis_y[rx, ry, :] = (
-                A @ orientation_map.family[rx, ry, orientation_ind, :, 1]
-            )
-            basis_x[rx, ry, :] = basis_x[rx, ry, :] * ct + basis_y[rx, ry, :] * st
 
-            basis_z[rx, ry, :] = (
-                A @ orientation_map.family[rx, ry, orientation_ind, :, 2]
-            )
-        else:
-            basis_z[rx, ry, :] = (
-                A @ orientation_map.matrix[rx, ry, orientation_ind, :, 2]
-            )
+        if self.pointgroup.get_crystal_system() == 'monoclinic':
+            dir_x = orientation_map.matrix[rx, ry, orientation_ind, :, 0] * ct \
+                + orientation_map.matrix[rx, ry, orientation_ind, :, 1] * st
+            dir_z = orientation_map.matrix[rx, ry, orientation_ind, :, 2] 
+            basis_x[rx,ry,:] = nnls(A,dir_x)[0]
+            basis_z[rx,ry,:] = nnls(A,dir_z)[0]
+
+
+        else:    
+            if self.pymatgen_available:
+
+                basis_x[rx, ry, :] = (
+                    A @ orientation_map.family[rx, ry, orientation_ind, :, 0]
+                )
+                basis_y[rx, ry, :] = (
+                    A @ orientation_map.family[rx, ry, orientation_ind, :, 1]
+                )
+                basis_x[rx, ry, :] = basis_x[rx, ry, :] * ct + basis_y[rx, ry, :] * st
+
+                basis_z[rx, ry, :] = (
+                    A @ orientation_map.family[rx, ry, orientation_ind, :, 2]
+                )
+            else:
+                basis_z[rx, ry, :] = (
+                    A @ orientation_map.matrix[rx, ry, orientation_ind, :, 2]
+                )
     basis_x = np.clip(basis_x, 0, 1)
     basis_z = np.clip(basis_z, 0, 1)
 
@@ -1260,101 +1293,270 @@ def plot_orientation_maps(
     basis_x_max = np.max(basis_x, axis=2)
     sub = basis_x_max > 0
     basis_x_scale = basis_x * mask[:, :, None]
-    for a0 in range(3):
-        basis_x_scale[:, :, a0][sub] /= basis_x_max[sub]
-        basis_x_scale[:, :, a0][np.logical_not(sub)] = 0
-    rgb_x = (
-        basis_x_scale[:, :, 0][:, :, None] * color_basis[0, :][None, None, :]
-        + basis_x_scale[:, :, 1][:, :, None] * color_basis[1, :][None, None, :]
-        + basis_x_scale[:, :, 2][:, :, None] * color_basis[2, :][None, None, :]
-    )
+    if self.pointgroup.get_crystal_system() == 'monoclinic':
+        rgb_x = (
+            basis_x_scale[:, :, 0][:, :, None] * np.array((1,1,1))[None, None, :]
+            + basis_x_scale[:, :, 1][:, :, None] * color_basis[2, :][None, None, :]
+            + basis_x_scale[:, :, 2][:, :, None] * color_basis[1, :][None, None, :]
+            + basis_x_scale[:, :, 3][:, :, None] * np.array((1,1,1))[None, None, :]
+            + basis_x_scale[:, :, 4][:, :, None] * color_basis[2, :][None, None, :]
+            + basis_x_scale[:, :, 5][:, :, None] * color_basis[0, :][None, None, :]
+        )
+    else:
+        for a0 in range(3):
+            basis_x_scale[:, :, a0][sub] /= basis_x_max[sub]
+            basis_x_scale[:, :, a0][np.logical_not(sub)] = 0
+        rgb_x = (
+            basis_x_scale[:, :, 0][:, :, None] * color_basis[0, :][None, None, :]
+            + basis_x_scale[:, :, 1][:, :, None] * color_basis[1, :][None, None, :]
+            + basis_x_scale[:, :, 2][:, :, None] * color_basis[2, :][None, None, :]
+        )
 
     basis_z_max = np.max(basis_z, axis=2)
     sub = basis_z_max > 0
     basis_z_scale = basis_z * mask[:, :, None]
-    for a0 in range(3):
-        basis_z_scale[:, :, a0][sub] /= basis_z_max[sub]
-        basis_z_scale[:, :, a0][np.logical_not(sub)] = 0
-    rgb_z = (
-        basis_z_scale[:, :, 0][:, :, None] * color_basis[0, :][None, None, :]
-        + basis_z_scale[:, :, 1][:, :, None] * color_basis[1, :][None, None, :]
-        + basis_z_scale[:, :, 2][:, :, None] * color_basis[2, :][None, None, :]
-    )
+    if self.pointgroup.get_crystal_system() == 'monoclinic':
+        rgb_z = (
+            basis_z_scale[:, :, 0][:, :, None] * np.array((1,1,1))[None, None, :]
+            + basis_z_scale[:, :, 1][:, :, None] * color_basis[2, :][None, None, :]
+            + basis_z_scale[:, :, 2][:, :, None] * color_basis[1, :][None, None, :]
+            + basis_z_scale[:, :, 3][:, :, None] * np.array((1,1,1))[None, None, :]
+            + basis_z_scale[:, :, 4][:, :, None] * color_basis[2, :][None, None, :]
+            + basis_z_scale[:, :, 5][:, :, None] * color_basis[0, :][None, None, :]
+        )
+    else:
+        for a0 in range(3):
+            basis_z_scale[:, :, a0][sub] /= basis_z_max[sub]
+            basis_z_scale[:, :, a0][np.logical_not(sub)] = 0
+        rgb_z = (
+            basis_z_scale[:, :, 0][:, :, None] * color_basis[0, :][None, None, :]
+            + basis_z_scale[:, :, 1][:, :, None] * color_basis[1, :][None, None, :]
+            + basis_z_scale[:, :, 2][:, :, None] * color_basis[2, :][None, None, :]
+        )
 
-    # Legend init
-    # projection vector
-    cam_dir = np.mean(self.orientation_zone_axis_range, axis=0)
-    cam_dir = cam_dir / np.linalg.norm(cam_dir)
-    az = np.rad2deg(np.arctan2(cam_dir[0], cam_dir[1]))
-    # el = np.rad2deg(np.arccos(cam_dir[2]))
-    el = np.rad2deg(np.arcsin(cam_dir[2]))
-    # coloring
-    wx = self.orientation_inds[:, 0] / self.orientation_zone_axis_steps
-    wy = self.orientation_inds[:, 1] / self.orientation_zone_axis_steps
-    w0 = 1 - wx - 0.5 * wy
-    w1 = wx - wy
-    w2 = wy
-    # w0 = 1 - w1/2 - w2/2
-    w_scale = np.maximum(np.maximum(w0, w1), w2)
-    w_scale = 1 - np.exp(-w_scale)
-    w0 = w0 / w_scale
-    w1 = w1 / w_scale
-    w2 = w2 / w_scale
-    rgb_legend = np.clip(
-        w0[:, None] * color_basis[0, :]
-        + w1[:, None] * color_basis[1, :]
-        + w2[:, None] * color_basis[2, :],
+    rgb_x = np.clip(rgb_x,0,1)
+    rgb_z = np.clip(rgb_z,0,1)
+
+    # if np.abs(self.cell[4] - 120.0) < 1e-6 or np.abs(self.cell[5] - 120.0) or np.abs(self.cell[6] - 120.0):
+    #     label_0 = self.rational_ind(
+    #         self.lattice_to_hexagonal(
+    #             self.cartesian_to_lattice(self.orientation_zone_axis_range[0, :])
+    #         )
+    #     )
+    #     label_1 = self.rational_ind(
+    #         self.lattice_to_hexagonal(
+    #             self.cartesian_to_lattice(self.orientation_zone_axis_range[1, :])
+    #         )
+    #     )
+    #     label_2 = self.rational_ind(
+    #         self.lattice_to_hexagonal(
+    #             self.cartesian_to_lattice(self.orientation_zone_axis_range[2, :])
+    #         )
+    #     )
+    # else:
+    #     label_0 = self.rational_ind(
+    #         self.cartesian_to_lattice(self.orientation_zone_axis_range[0, :])
+    #     )
+    #     label_1 = self.rational_ind(
+    #         self.cartesian_to_lattice(self.orientation_zone_axis_range[1, :])
+    #     )
+    #     label_2 = self.rational_ind(
+    #         self.cartesian_to_lattice(self.orientation_zone_axis_range[2, :])
+    #     )
+    # inds_legend = np.array(
+    #     [
+    #         0,
+    #         self.orientation_num_zones - self.orientation_zone_axis_steps - 1,
+    #         self.orientation_num_zones - 1,
+    #     ]
+    # )
+    # print(label_0)
+    # print(label_1)
+    # print(label_2)
+
+    # Legend coordinates
+    # TODO - potentially replace approx. coordinates with stereographic projection
+    power_radial = 0.9
+    num_points = 90+1
+    r = np.linspace(0,1,num_points)
+    xa,ya = np.meshgrid(np.flip(r),r,indexing='ij')
+    if self.pointgroup.get_crystal_system() == 'monoclinic':
+        xa = np.hstack((
+            xa,
+            xa[:,1:]
+        ))
+        ya = np.hstack((
+            ya - 1,
+            ya[:,1:]
+        ))
+    ra = np.sqrt(xa**2 + ya**2)
+    rmask = np.clip(
+        (1-ra)/(r[1]-r[0]) + 0.5,
+        0,
+        1,
+    )
+    # angular range to span - assume zone axis range vectors are normalized
+    ta = np.arctan2(xa,ya)  # Note theta direction is opposite from standard
+    if self.pointgroup.get_crystal_system() == 'monoclinic':
+        tspan = np.pi/2
+        tmask = np.ones_like(rmask)
+    else:
+        tspan = np.arccos(
+            np.clip(
+                self.orientation_zone_axis_range[1] @ self.orientation_zone_axis_range[2],
+                0,
+                1,
+            )
+        )
+        tmask = np.clip(
+            (tspan - ta)/(r[1]-r[0]) + 0.5,
+            0,
+            1,
+        )
+    # rscale = 1 - np.clip(1-ra,0,1)**power_radial
+    rscale = ra**power_radial
+    mask_leg = tmask * rmask
+
+    if self.pointgroup.get_crystal_system() == 'monoclinic':
+        scale = 1.5
+
+        # Right side coloring
+        weight_0 = np.clip(1-rscale, 0, 1)
+        weight_1 = np.clip(ya, 0, 1)
+        weight_2 = np.clip(xa, 0, 1)
+        weight_total = np.maximum(weight_0 + weight_1 + weight_2, 0) + 1e-8
+        weight_0 /= weight_total
+        weight_1 /= weight_total
+        weight_2 /= weight_total
+        weight_0 = np.minimum(weight_0,1)
+        weight_1 = np.minimum(weight_1,1)
+        weight_2 = np.minimum(weight_2,1)
+        weight_max = (weight_0**scale + weight_1**scale + weight_2**scale)**(1/scale) + 1e-8
+        weight_0 /= weight_max
+        weight_1 /= weight_max
+        weight_2 /= weight_max
+        rgb_leg_right = (
+            weight_0[:, :, None] * np.array((1.0,1.0,1.0))[None, None, :]
+            + weight_1[:, :, None] * color_basis[1, :][None, None, :]
+            + weight_2[:, :, None] * color_basis[2, :][None, None, :]
+        ) 
+
+        # left side coloring
+        weight_0 = np.clip(1-rscale, 0, 1)
+        weight_1 = np.clip(rscale * (ta - tspan) / tspan, 0, 1)
+        weight_2 = np.clip(xa, 0, 1)
+        weight_total = np.maximum(weight_0 + weight_1 + weight_2, 0) + 1e-8
+        weight_0 /= weight_total
+        weight_1 /= weight_total
+        weight_2 /= weight_total
+        weight_0 = np.minimum(weight_0,1)
+        weight_1 = np.minimum(weight_1,1)
+        weight_2 = np.minimum(weight_2,1)
+        weight_max = (weight_0**scale + weight_1**scale + weight_2**scale)**(1/scale) + 1e-8
+        weight_0 /= weight_max
+        weight_1 /= weight_max
+        weight_2 /= weight_max
+        rgb_leg_left = (
+            weight_0[:, :, None] * np.array((1.0,1.0,1.0))[None, None, :]
+            + weight_1[:, :, None] * color_basis[0, :][None, None, :]
+            + weight_2[:, :, None] * color_basis[2, :][None, None, :]
+        ) 
+
+        # combined legend
+        rgb_leg = np.zeros((num_points,2*num_points-1,3))        
+        sub_right = ya >= 0
+        sub_left = np.logical_not(sub_right)
+        for a0 in range(3):
+            rgb_leg[:,:,a0][sub_right] = rgb_leg_right[:,:,a0][sub_right] 
+            rgb_leg[:,:,a0][sub_left] = rgb_leg_left[:,:,a0][sub_left] 
+      
+    else:
+        weight_0 = np.maximum(1-rscale, 0)
+        weight_1 = np.maximum(rscale * (tspan - ta) / tspan, 0)
+        weight_2 = np.maximum(rscale * ta / tspan, 0)
+        weight_total = np.maximum(weight_0 + weight_1 + weight_2, 0) + 1e-8
+        weight_0 /= weight_total
+        weight_1 /= weight_total
+        weight_2 /= weight_total
+        weight_0 = np.minimum(weight_0,1)
+        weight_1 = np.minimum(weight_1,1)
+        weight_2 = np.minimum(weight_2,1)
+
+        # Generate rgb legend image
+        hkl = weight_0[:,:,None] * self.orientation_zone_axis_range[0][None,None] \
+            + weight_1[:,:,None] * self.orientation_zone_axis_range[1][None,None] \
+            + weight_2[:,:,None] * self.orientation_zone_axis_range[2][None,None]
+        hkl /= np.linalg.norm(hkl,axis=2)[:,:,None]
+        basis_leg = np.zeros((num_points,num_points,3))
+        for rx in range(num_points):
+            for ry in range(num_points):
+                basis_leg[rx, ry, :] = (
+                    A @ hkl[rx,ry,:]
+                )
+        basis_leg_max = np.max(basis_leg, axis=2)
+        basis_leg_scale = basis_leg
+        for a0 in range(3):
+            basis_leg_scale[:, :, a0] /= basis_leg_max
+        rgb_leg = (
+            basis_leg_scale[:, :, 0][:, :, None] * color_basis[0, :][None, None, :]
+            + basis_leg_scale[:, :, 1][:, :, None] * color_basis[1, :][None, None, :]
+            + basis_leg_scale[:, :, 2][:, :, None] * color_basis[2, :][None, None, :]
+        ) 
+
+    rgb_leg = np.clip(
+        rgb_leg * mask_leg[:,:,None] + (1-mask_leg[:,:,None]),
         0,
         1,
     )
 
-    if np.abs(self.cell[5] - 120.0) < 1e-6:
-        label_0 = self.rational_ind(
-            self.lattice_to_hexagonal(
-                self.cartesian_to_lattice(self.orientation_zone_axis_range[0, :])
-            )
-        )
-        label_1 = self.rational_ind(
-            self.lattice_to_hexagonal(
-                self.cartesian_to_lattice(self.orientation_zone_axis_range[1, :])
-            )
-        )
-        label_2 = self.rational_ind(
-            self.lattice_to_hexagonal(
-                self.cartesian_to_lattice(self.orientation_zone_axis_range[2, :])
-            )
-        )
-    else:
-        label_0 = self.rational_ind(
-            self.cartesian_to_lattice(self.orientation_zone_axis_range[0, :])
-        )
-        label_1 = self.rational_ind(
-            self.cartesian_to_lattice(self.orientation_zone_axis_range[1, :])
-        )
-        label_2 = self.rational_ind(
-            self.cartesian_to_lattice(self.orientation_zone_axis_range[2, :])
-        )
 
-    inds_legend = np.array(
-        [
-            0,
-            self.orientation_num_zones - self.orientation_zone_axis_steps - 1,
-            self.orientation_num_zones - 1,
-        ]
-    )
+    # rgb_leg = weight_0
+    # w_scale = np.maximum(np.maximum(weight_0, w1), w2)
+    # w_scale = 1 - np.exp(-w_scale)
+    # w0 = w0 / w_scale
+    # w1 = w1 / w_scale
+    # w2 = w2 / w_scale
+    # im_leg = weight_0[:,:,None] * color_basis[0, :][None,None,:] \
+    #     + weight_1[:,:,None] * color_basis[1, :][None,None,:] \
+    #     + weight_2[:,:,None] * color_basis[2, :][None,None,:]
 
-    # Determine if lattice direction labels should be left-right
-    # or right-left aligned.
-    v0 = self.orientation_vecs[inds_legend[0], :]
-    v1 = self.orientation_vecs[inds_legend[1], :]
-    v2 = self.orientation_vecs[inds_legend[2], :]
-    n = np.cross(v0, cam_dir)
-    if np.sum(v1 * n) < np.sum(v2 * n):
-        ha_1 = "left"
-        ha_2 = "right"
-    else:
-        ha_1 = "right"
-        ha_2 = "left"
+    # fig,ax = plt.subplots(1,4,figsize=(12,4))
+    # ax[0].imshow(basis_leg[:,:,0])
+    # ax[1].imshow(basis_leg[:,:,1])
+    # ax[2].imshow(basis_leg[:,:,2])
+    # ax[3].imshow(rgb_leg)
+
+    # ax[0].imshow(weight_0)
+    # ax[1].imshow(weight_1)
+    # ax[2].imshow(weight_2)
+    # ax[3].imshow(im_leg)
+
+
+    # # projection vector
+    # cam_dir = np.mean(self.orientation_zone_axis_range, axis=0)
+    # cam_dir = cam_dir / np.linalg.norm(cam_dir)
+    # az = np.rad2deg(np.arctan2(cam_dir[0], cam_dir[1]))
+    # # el = np.rad2deg(np.arccos(cam_dir[2]))
+    # el = np.rad2deg(np.arcsin(cam_dir[2]))
+    # coloring
+    # wx = self.orientation_inds[:, 0] / self.orientation_zone_axis_steps
+    # wy = self.orientation_inds[:, 1] / self.orientation_zone_axis_steps
+    # w0 = 1 - wx - 0.5 * wy
+    # w1 = wx - wy
+    # w2 = wy
+    # # w0 = 1 - w1/2 - w2/2
+    # w_scale = np.maximum(np.maximum(w0, w1), w2)
+    # w_scale = 1 - np.exp(-w_scale)
+    # w0 = w0 / w_scale
+    # w1 = w1 / w_scale
+    # w2 = w2 / w_scale
+    # rgb_legend = np.clip(
+    #     w0[:, None] * color_basis[0, :]
+    #     + w1[:, None] * color_basis[1, :]
+    #     + w2[:, None] * color_basis[2, :],
+    #     0,
+    #     1,
+    # )
 
     # plotting frame
     # fig, ax = plt.subplots(1, 3, figsize=figsize)
@@ -1364,18 +1566,18 @@ def plot_orientation_maps(
         ax_z = fig.add_axes([0.4 + figbound[0], 0.0, 0.4 - 2 * +figbound[0], 1.0])
         ax_l = fig.add_axes(
             [0.8 + figbound[0], 0.0, 0.2 - 2 * +figbound[0], 1.0],
-            projection="3d",
-            elev=el,
-            azim=az,
+            # projection="3d",
+            # elev=el,
+            # azim=az,
         )
     elif plot_layout == 1:
         ax_x = fig.add_axes([0.0, 0.0 + figbound[0], 1.0, 0.4 - 2 * +figbound[0]])
         ax_z = fig.add_axes([0.0, 0.4 + figbound[0], 1.0, 0.4 - 2 * +figbound[0]])
         ax_l = fig.add_axes(
             [0.0, 0.8 + figbound[0], 1.0, 0.2 - 2 * +figbound[0]],
-            projection="3d",
-            elev=el,
-            azim=az,
+            # projection="3d",
+            # elev=el,
+            # azim=az,
         )
 
     # orientation images
@@ -1413,63 +1615,10 @@ def plot_orientation_maps(
         ax_x.axis("off")
         ax_z.axis("off")
 
+    # Legend
     if show_legend:
-        # Triangulate faces
-        p = self.orientation_vecs[:, (1, 0, 2)]
-        tri = mtri.Triangulation(
-            self.orientation_inds[:, 1] - self.orientation_inds[:, 0] * 1e-3,
-            self.orientation_inds[:, 0] - self.orientation_inds[:, 1] * 1e-3,
-        )
-        # convert rgb values of pixels to faces
-        rgb_faces = (
-            rgb_legend[tri.triangles[:, 0], :]
-            + rgb_legend[tri.triangles[:, 1], :]
-            + rgb_legend[tri.triangles[:, 2], :]
-        ) / 3
-        # Add triangulated surface plot to axes
-        pc = art3d.Poly3DCollection(
-            p[tri.triangles],
-            facecolors=rgb_faces,
-            alpha=1,
-        )
-        pc.set_antialiased(False)
-        ax_l.add_collection(pc)
+        ax_l.imshow(rgb_leg)
 
-        if plot_limit is None:
-            plot_limit = np.array(
-                [
-                    [np.min(p[:, 0]), np.min(p[:, 1]), np.min(p[:, 2])],
-                    [np.max(p[:, 0]), np.max(p[:, 1]), np.max(p[:, 2])],
-                ]
-            )
-            # plot_limit = (plot_limit - np.mean(plot_limit, axis=0)) * 1.5 + np.mean(
-            #     plot_limit, axis=0
-            # )
-            plot_limit[:, 0] = (
-                plot_limit[:, 0] - np.mean(plot_limit[:, 0])
-            ) * 1.5 + np.mean(plot_limit[:, 0])
-            plot_limit[:, 1] = (
-                plot_limit[:, 2] - np.mean(plot_limit[:, 1])
-            ) * 1.5 + np.mean(plot_limit[:, 1])
-            plot_limit[:, 2] = (
-                plot_limit[:, 1] - np.mean(plot_limit[:, 2])
-            ) * 1.1 + np.mean(plot_limit[:, 2])
-
-        # ax_l.view_init(elev=el, azim=az)
-        # Appearance
-        ax_l.invert_yaxis()
-        if swap_axes_xy_limits:
-            ax_l.axes.set_xlim3d(left=plot_limit[0, 0], right=plot_limit[1, 0])
-            ax_l.axes.set_ylim3d(bottom=plot_limit[0, 1], top=plot_limit[1, 1])
-            ax_l.axes.set_zlim3d(bottom=plot_limit[0, 2], top=plot_limit[1, 2])
-        else:
-            ax_l.axes.set_xlim3d(left=plot_limit[0, 1], right=plot_limit[1, 1])
-            ax_l.axes.set_ylim3d(bottom=plot_limit[0, 0], top=plot_limit[1, 0])
-            ax_l.axes.set_zlim3d(bottom=plot_limit[0, 2], top=plot_limit[1, 2])
-        axisEqual3D(ax_l)
-        if camera_dist is not None:
-            ax_l.dist = camera_dist
-        ax_l.axis("off")
 
         # Add text labels
         text_scale_pos = 0.1
@@ -1478,127 +1627,384 @@ def plot_orientation_maps(
             "family": "sans-serif",
             "fontweight": "normal",
             "color": "k",
-            "size": 14,
+            "size": 12,
         }
         format_labels = "{0:.2g}"
-        vec = self.orientation_vecs[inds_legend[0], :] - cam_dir
-        vec = vec / np.linalg.norm(vec)
-        if np.abs(self.cell[5] - 120.0) > 1e-6:
-            ax_l.text(
-                self.orientation_vecs[inds_legend[0], 1] + vec[1] * text_scale_pos,
-                self.orientation_vecs[inds_legend[0], 0] + vec[0] * text_scale_pos,
-                self.orientation_vecs[inds_legend[0], 2] + vec[2] * text_scale_pos,
-                "["
-                + format_labels.format(label_0[0])
-                + " "
-                + format_labels.format(label_0[1])
-                + " "
-                + format_labels.format(label_0[2])
-                + "]",
-                None,
-                zorder=11,
-                ha="center",
-                **text_params,
-            )
-        else:
-            ax_l.text(
-                self.orientation_vecs[inds_legend[0], 1] + vec[1] * text_scale_pos,
-                self.orientation_vecs[inds_legend[0], 0] + vec[0] * text_scale_pos,
-                self.orientation_vecs[inds_legend[0], 2] + vec[2] * text_scale_pos,
-                "["
-                + format_labels.format(label_0[0])
-                + " "
-                + format_labels.format(label_0[1])
-                + " "
-                + format_labels.format(label_0[2])
-                + " "
-                + format_labels.format(label_0[3])
-                + "]",
-                None,
-                zorder=11,
-                ha="center",
-                **text_params,
-            )
-        vec = self.orientation_vecs[inds_legend[1], :] - cam_dir
-        vec = vec / np.linalg.norm(vec)
-        if np.abs(self.cell[5] - 120.0) > 1e-6:
-            ax_l.text(
-                self.orientation_vecs[inds_legend[1], 1] + vec[1] * text_scale_pos,
-                self.orientation_vecs[inds_legend[1], 0] + vec[0] * text_scale_pos,
-                self.orientation_vecs[inds_legend[1], 2] + vec[2] * text_scale_pos,
-                "["
-                + format_labels.format(label_1[0])
-                + " "
-                + format_labels.format(label_1[1])
-                + " "
-                + format_labels.format(label_1[2])
-                + "]",
-                None,
-                zorder=12,
-                ha=ha_1,
-                **text_params,
-            )
-        else:
-            ax_l.text(
-                self.orientation_vecs[inds_legend[1], 1] + vec[1] * text_scale_pos,
-                self.orientation_vecs[inds_legend[1], 0] + vec[0] * text_scale_pos,
-                self.orientation_vecs[inds_legend[1], 2] + vec[2] * text_scale_pos,
-                "["
-                + format_labels.format(label_1[0])
-                + " "
-                + format_labels.format(label_1[1])
-                + " "
-                + format_labels.format(label_1[2])
-                + " "
-                + format_labels.format(label_1[3])
-                + "]",
-                None,
-                zorder=12,
-                ha=ha_1,
-                **text_params,
-            )
-        vec = self.orientation_vecs[inds_legend[2], :] - cam_dir
-        vec = vec / np.linalg.norm(vec)
-        if np.abs(self.cell[5] - 120.0) > 1e-6:
-            ax_l.text(
-                self.orientation_vecs[inds_legend[2], 1] + vec[1] * text_scale_pos,
-                self.orientation_vecs[inds_legend[2], 0] + vec[0] * text_scale_pos,
-                self.orientation_vecs[inds_legend[2], 2] + vec[2] * text_scale_pos,
-                "["
-                + format_labels.format(label_2[0])
-                + " "
-                + format_labels.format(label_2[1])
-                + " "
-                + format_labels.format(label_2[2])
-                + "]",
-                None,
-                zorder=13,
-                ha=ha_2,
-                **text_params,
-            )
-        else:
-            ax_l.text(
-                self.orientation_vecs[inds_legend[2], 1] + vec[1] * text_scale_pos,
-                self.orientation_vecs[inds_legend[2], 0] + vec[0] * text_scale_pos,
-                self.orientation_vecs[inds_legend[2], 2] + vec[2] * text_scale_pos,
-                "["
-                + format_labels.format(label_2[0])
-                + " "
-                + format_labels.format(label_2[1])
-                + " "
-                + format_labels.format(label_2[2])
-                + " "
-                + format_labels.format(label_2[3])
-                + "]",
-                None,
-                zorder=13,
-                ha=ha_2,
-                **text_params,
-            )
 
-        plt.show()
-    else:
-        ax_l.set_axis_off()
+
+        bound = num_points*0.25
+        shift = num_points*0.10
+        if self.pointgroup.get_crystal_system() == 'monoclinic':
+            p0 = np.array((1,1))*num_points
+            p1 = np.array((0,1))*num_points
+            p2 = np.array((1,2))*num_points
+            p3 = np.array((1,0))*num_points
+        else:
+            p0 = np.array((1,0))*num_points
+            p1 = np.array((1,1))*num_points
+            p2 = np.array((1-np.cos(np.pi/2-tspan),np.sin(np.pi/2-tspan)))*num_points
+
+
+        if self.pointgroup.get_crystal_system() == 'monoclinic':
+            v = np.double(self.orientation_zone_axis_range[0,:]).copy()
+            v /= np.max(np.abs(v))
+            v = np.round(v,2)
+            ax_l.text(
+                p0[1],
+                p0[0]+shift,
+                "["
+                + format_labels.format(v[0])
+                + " "
+                + format_labels.format(v[1])
+                + " "
+                + format_labels.format(v[2])
+                + "]",
+                None,
+                zorder=11,
+                ha="center",
+                **text_params,
+            )
+            v = np.double(self.orientation_zone_axis_range[1,:]).copy()
+            v /= np.max(np.abs(v))
+            v = np.round(v,2)
+            ax_l.text(
+                p1[1],
+                p1[0]-shift,
+                "["
+                + format_labels.format(v[0])
+                + " "
+                + format_labels.format(v[1])
+                + " "
+                + format_labels.format(v[2])
+                + "]",
+                None,
+                zorder=11,
+                ha="center",
+                **text_params,
+            )
+            v = np.double(self.orientation_zone_axis_range[2,:]).copy()
+            v /= np.max(np.abs(v))
+            v = np.round(v,2)
+            ax_l.text(
+                p2[1],
+                p2[0]+shift,
+                "["
+                + format_labels.format(v[0])
+                + " "
+                + format_labels.format(v[1])
+                + " "
+                + format_labels.format(v[2])
+                + "]",
+                None,
+                zorder=11,
+                ha="center",
+                **text_params,
+            )
+            v = -1*np.double(self.orientation_zone_axis_range[2,:].copy()) + 0
+            v /= np.max(np.abs(v))
+            v = np.round(v,2)
+            ax_l.text(
+                p3[1],
+                p3[0]+shift,
+                "["
+                + format_labels.format(v[0])
+                + " "
+                + format_labels.format(v[1])
+                + " "
+                + format_labels.format(v[2])
+                + "]",
+                None,
+                zorder=11,
+                ha="center",
+                **text_params,
+            )
+            
+
+        else:
+            v = self.orientation_zone_axis_range[0,:].copy()
+            v /= np.max(np.abs(v))
+            v = np.round(v,2)
+            ax_l.text(
+                p0[1],
+                p0[0]+shift,
+                "["
+                + format_labels.format(v[0])
+                + " "
+                + format_labels.format(v[1])
+                + " "
+                + format_labels.format(v[2])
+                + "]",
+                None,
+                zorder=11,
+                ha="center",
+                **text_params,
+            )
+            v = self.orientation_zone_axis_range[1,:].copy()
+            v /= np.max(np.abs(v))
+            v = np.round(v,2)
+            ax_l.text(
+                p1[1],
+                p1[0]+shift,
+                "["
+                + format_labels.format(v[0])
+                + " "
+                + format_labels.format(v[1])
+                + " "
+                + format_labels.format(v[2])
+                + "]",
+                None,
+                zorder=11,
+                ha="center",
+                **text_params,
+            )
+            v = self.orientation_zone_axis_range[2,:].copy()
+            v /= np.max(np.abs(v))
+            v = np.round(v,2)
+            ax_l.text(
+                p2[1],
+                p2[0]-shift,
+                "["
+                + format_labels.format(v[0])
+                + " "
+                + format_labels.format(v[1])
+                + " "
+                + format_labels.format(v[2])
+                + "]",
+                None,
+                zorder=11,
+                ha="center",
+                **text_params,
+            )
+        
+            
+
+
+        if self.pointgroup.get_crystal_system() == 'monoclinic':
+            ax_l.set_xlim((-bound,num_points*2-1+bound))
+        else:
+            ax_l.set_xlim((-bound,num_points+bound))
+        ax_l.set_ylim((num_points+bound,-bound))
+        ax_l.axis("off")
+
+        # if np.abs(self.cell[5] - 120.0) > 1e-6:
+        #     ax_l.text(
+        #         self.orientation_vecs[inds_legend[0], 1] + vec[1] * text_scale_pos,
+        #         self.orientation_vecs[inds_legend[0], 0] + vec[0] * text_scale_pos,
+        #         self.orientation_vecs[inds_legend[0], 2] + vec[2] * text_scale_pos,
+        #         "["
+        #         + format_labels.format(label_0[0])
+        #         + " "
+        #         + format_labels.format(label_0[1])
+        #         + " "
+        #         + format_labels.format(label_0[2])
+        #         + "]",
+        #         None,
+        #         zorder=11,
+        #         ha="center",
+        #         **text_params,
+        #     )
+        # else:
+        #     ax_l.text(
+        #         self.orientation_vecs[inds_legend[0], 1] + vec[1] * text_scale_pos,
+        #         self.orientation_vecs[inds_legend[0], 0] + vec[0] * text_scale_pos,
+        #         self.orientation_vecs[inds_legend[0], 2] + vec[2] * text_scale_pos,
+        #         "["
+        #         + format_labels.format(label_0[0])
+        #         + " "
+        #         + format_labels.format(label_0[1])
+        #         + " "
+        #         + format_labels.format(label_0[2])
+        #         + " "
+        #         + format_labels.format(label_0[3])
+        #         + "]",
+        #         None,
+        #         zorder=11,
+        #         ha="center",
+        #         **text_params,
+        #     )
+
+
+    # # Triangulate faces
+    # p = self.orientation_vecs[:, (1, 0, 2)]
+    # tri = mtri.Triangulation(
+    #     self.orientation_inds[:, 1] - self.orientation_inds[:, 0] * 1e-3,
+    #     self.orientation_inds[:, 0] - self.orientation_inds[:, 1] * 1e-3,
+    # )
+    # convert rgb values of pixels to faces
+    # rgb_faces = (
+    #     rgb_legend[tri.triangles[:, 0], :]
+    #     + rgb_legend[tri.triangles[:, 1], :]
+    #     + rgb_legend[tri.triangles[:, 2], :]
+    # ) / 3
+    # Add triangulated surface plot to axes
+    # pc = art3d.Poly3DCollection(
+    #     p[tri.triangles],
+    #     facecolors=rgb_faces,
+    #     alpha=1,
+    # )
+    # pc.set_antialiased(False)
+    # ax_l.add_collection(pc)
+
+    # if plot_limit is None:
+    #     plot_limit = np.array(
+    #         [
+    #             [np.min(p[:, 0]), np.min(p[:, 1]), np.min(p[:, 2])],
+    #             [np.max(p[:, 0]), np.max(p[:, 1]), np.max(p[:, 2])],
+    #         ]
+    #     )
+    #     # plot_limit = (plot_limit - np.mean(plot_limit, axis=0)) * 1.5 + np.mean(
+    #     #     plot_limit, axis=0
+    #     # )
+    #     plot_limit[:, 0] = (
+    #         plot_limit[:, 0] - np.mean(plot_limit[:, 0])
+    #     ) * 1.5 + np.mean(plot_limit[:, 0])
+    #     plot_limit[:, 1] = (
+    #         plot_limit[:, 2] - np.mean(plot_limit[:, 1])
+    #     ) * 1.5 + np.mean(plot_limit[:, 1])
+    #     plot_limit[:, 2] = (
+    #         plot_limit[:, 1] - np.mean(plot_limit[:, 2])
+    #     ) * 1.1 + np.mean(plot_limit[:, 2])
+
+    # # ax_l.view_init(elev=el, azim=az)
+    # # Appearance
+    # ax_l.invert_yaxis()
+    # if swap_axes_xy_limits:
+    #     ax_l.axes.set_xlim3d(left=plot_limit[0, 0], right=plot_limit[1, 0])
+    #     ax_l.axes.set_ylim3d(bottom=plot_limit[0, 1], top=plot_limit[1, 1])
+    #     ax_l.axes.set_zlim3d(bottom=plot_limit[0, 2], top=plot_limit[1, 2])
+    # else:
+    #     ax_l.axes.set_xlim3d(left=plot_limit[0, 1], right=plot_limit[1, 1])
+    #     ax_l.axes.set_ylim3d(bottom=plot_limit[0, 0], top=plot_limit[1, 0])
+    #     ax_l.axes.set_zlim3d(bottom=plot_limit[0, 2], top=plot_limit[1, 2])
+    # axisEqual3D(ax_l)
+    # if camera_dist is not None:
+    #     ax_l.dist = camera_dist
+    # ax_l.axis("off")
+
+    # # Add text labels
+    # text_scale_pos = 0.1
+    # text_params = {
+    #     "va": "center",
+    #     "family": "sans-serif",
+    #     "fontweight": "normal",
+    #     "color": "k",
+    #     "size": 14,
+    # }
+    # format_labels = "{0:.2g}"
+    # vec = self.orientation_vecs[inds_legend[0], :] - cam_dir
+    # vec = vec / np.linalg.norm(vec)
+    # if np.abs(self.cell[5] - 120.0) > 1e-6:
+    #     ax_l.text(
+    #         self.orientation_vecs[inds_legend[0], 1] + vec[1] * text_scale_pos,
+    #         self.orientation_vecs[inds_legend[0], 0] + vec[0] * text_scale_pos,
+    #         self.orientation_vecs[inds_legend[0], 2] + vec[2] * text_scale_pos,
+    #         "["
+    #         + format_labels.format(label_0[0])
+    #         + " "
+    #         + format_labels.format(label_0[1])
+    #         + " "
+    #         + format_labels.format(label_0[2])
+    #         + "]",
+    #         None,
+    #         zorder=11,
+    #         ha="center",
+    #         **text_params,
+    #     )
+    # else:
+    #     ax_l.text(
+    #         self.orientation_vecs[inds_legend[0], 1] + vec[1] * text_scale_pos,
+    #         self.orientation_vecs[inds_legend[0], 0] + vec[0] * text_scale_pos,
+    #         self.orientation_vecs[inds_legend[0], 2] + vec[2] * text_scale_pos,
+    #         "["
+    #         + format_labels.format(label_0[0])
+    #         + " "
+    #         + format_labels.format(label_0[1])
+    #         + " "
+    #         + format_labels.format(label_0[2])
+    #         + " "
+    #         + format_labels.format(label_0[3])
+    #         + "]",
+    #         None,
+    #         zorder=11,
+    #         ha="center",
+    #         **text_params,
+    #     )
+    # vec = self.orientation_vecs[inds_legend[1], :] - cam_dir
+    # vec = vec / np.linalg.norm(vec)
+    # if np.abs(self.cell[5] - 120.0) > 1e-6:
+    #     ax_l.text(
+    #         self.orientation_vecs[inds_legend[1], 1] + vec[1] * text_scale_pos,
+    #         self.orientation_vecs[inds_legend[1], 0] + vec[0] * text_scale_pos,
+    #         self.orientation_vecs[inds_legend[1], 2] + vec[2] * text_scale_pos,
+    #         "["
+    #         + format_labels.format(label_1[0])
+    #         + " "
+    #         + format_labels.format(label_1[1])
+    #         + " "
+    #         + format_labels.format(label_1[2])
+    #         + "]",
+    #         None,
+    #         zorder=12,
+    #         ha=ha_1,
+    #         **text_params,
+    #     )
+    # else:
+    #     ax_l.text(
+    #         self.orientation_vecs[inds_legend[1], 1] + vec[1] * text_scale_pos,
+    #         self.orientation_vecs[inds_legend[1], 0] + vec[0] * text_scale_pos,
+    #         self.orientation_vecs[inds_legend[1], 2] + vec[2] * text_scale_pos,
+    #         "["
+    #         + format_labels.format(label_1[0])
+    #         + " "
+    #         + format_labels.format(label_1[1])
+    #         + " "
+    #         + format_labels.format(label_1[2])
+    #         + " "
+    #         + format_labels.format(label_1[3])
+    #         + "]",
+    #         None,
+    #         zorder=12,
+    #         ha=ha_1,
+    #         **text_params,
+    #     )
+    # vec = self.orientation_vecs[inds_legend[2], :] - cam_dir
+    # vec = vec / np.linalg.norm(vec)
+    # if np.abs(self.cell[5] - 120.0) > 1e-6:
+    #     ax_l.text(
+    #         self.orientation_vecs[inds_legend[2], 1] + vec[1] * text_scale_pos,
+    #         self.orientation_vecs[inds_legend[2], 0] + vec[0] * text_scale_pos,
+    #         self.orientation_vecs[inds_legend[2], 2] + vec[2] * text_scale_pos,
+    #         "["
+    #         + format_labels.format(label_2[0])
+    #         + " "
+    #         + format_labels.format(label_2[1])
+    #         + " "
+    #         + format_labels.format(label_2[2])
+    #         + "]",
+    #         None,
+    #         zorder=13,
+    #         ha=ha_2,
+    #         **text_params,
+    #     )
+    # else:
+    #     ax_l.text(
+    #         self.orientation_vecs[inds_legend[2], 1] + vec[1] * text_scale_pos,
+    #         self.orientation_vecs[inds_legend[2], 0] + vec[0] * text_scale_pos,
+    #         self.orientation_vecs[inds_legend[2], 2] + vec[2] * text_scale_pos,
+    #         "["
+    #         + format_labels.format(label_2[0])
+    #         + " "
+    #         + format_labels.format(label_2[1])
+    #         + " "
+    #         + format_labels.format(label_2[2])
+    #         + " "
+    #         + format_labels.format(label_2[3])
+    #         + "]",
+    #         None,
+    #         zorder=13,
+    #         ha=ha_2,
+    #         **text_params,
+    #     )
 
     images_orientation = np.zeros((orientation_map.num_x, orientation_map.num_y, 3, 2))
     if self.pymatgen_available:

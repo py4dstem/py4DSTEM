@@ -97,7 +97,7 @@ class Crystal:
         # [a a a 90 90 90]
         # [a b c 90 90 90]
         # [a b c alpha beta gamma]
-        cell = np.asarray(cell, dtype="float_")
+        cell = np.array(cell, dtype="float")
         if np.size(cell) == 1:
             self.cell = np.hstack([cell, cell, cell, 90, 90, 90])
         elif np.size(cell) == 3:
@@ -653,7 +653,7 @@ class Crystal:
         # Calculate single atom scattering factors
         # Note this can be sped up a lot, but we may want to generalize to allow non-1.0 occupancy in the future.
         f_all = np.zeros(
-            (np.size(self.g_vec_leng, 0), self.positions.shape[0]), dtype="float_"
+            (np.size(self.g_vec_leng, 0), self.positions.shape[0]), dtype="float"
         )
         for a0 in range(self.positions.shape[0]):
             atom_sf = single_atom_scatter([self.numbers[a0]], [1], self.g_vec_leng, "A")
