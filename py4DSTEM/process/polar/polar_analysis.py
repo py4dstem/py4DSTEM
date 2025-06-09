@@ -331,7 +331,7 @@ def calculate_pair_dist_function(
 
     k_width = np.array(k_width)
     if k_width.size == 1:
-        k_width = k_width*np.ones(2)
+        k_width = k_width * np.ones(2)
 
     # set up coordinates and scaling
     k = self.qq
@@ -350,35 +350,44 @@ def calculate_pair_dist_function(
     # sub_fit = np.logical_and(
     #     k >= k_min
 
-    # Calculate structure factor mask 
+    # Calculate structure factor mask
     if k_max is None:
         k_max = np.max(k)
-    mask_low = np.sin(
-        np.clip(
-            (k - k_min) / k_width[0],
-            0,
-            1,
-        ) * np.pi/2.0,
-    )**2
-    mask_high = np.sin(
-        np.clip(
-            (k_max - k) / k_width[1],
-            0,
-            1,
-        ) * np.pi/2.0,
-    )**2
+    mask_low = (
+        np.sin(
+            np.clip(
+                (k - k_min) / k_width[0],
+                0,
+                1,
+            )
+            * np.pi
+            / 2.0,
+        )
+        ** 2
+    )
+    mask_high = (
+        np.sin(
+            np.clip(
+                (k_max - k) / k_width[1],
+                0,
+                1,
+            )
+            * np.pi
+            / 2.0,
+        )
+        ** 2
+    )
     mask = mask_low * mask_high
 
     # weighting function for fitting atomic scattering factors
     weights_fit = np.divide(
         1,
         mask_low,
-        where = mask_low > 1e-4,
+        where=mask_low > 1e-4,
     )
     weights_fit[mask_low <= 1e-4] = np.inf
     # Scale weighting to favour high k values
-    weights_fit *= ((k[-1] - 0.9*k + dk))
-
+    weights_fit *= k[-1] - 0.9 * k + dk
 
     # fig,ax = plt.subplots()
     # ax.plot(
@@ -390,7 +399,6 @@ def calculate_pair_dist_function(
     #     k,
     #     mask_high,
     # )
-
 
     # initial guesses for background coefs
     const_bg = np.min(Ik) / int_mean
@@ -440,7 +448,7 @@ def calculate_pair_dist_function(
     # fk = scattering_model(k2, coefs_fk)
     bg = scattering_model(k2, coefs)
     fk = bg - coefs[0]
-    
+
     # Estimate the reduced structure factor S(k)
     Sk = (Ik - bg) * k / fk
 
@@ -486,20 +494,19 @@ def calculate_pair_dist_function(
     #     m = pdf_thresh / r_thresh
     #     pdf_reduced[r < r_thresh] = r[r < r_thresh] * m
 
-        # pdf_reduced[r < r[ind_thresh]] = m * r[ind_thresh]
+    # pdf_reduced[r < r[ind_thresh]] = m * r[ind_thresh]
 
-        # r_ind_max = r[ind_max]
-        # r_mask = np.minimum(r / r_ind_max, 1.0)
-        # r_mask = np.sin(r_mask * np.pi / 2) ** 2
-        # pdf_reduced *= r_mask
+    # r_ind_max = r[ind_max]
+    # r_mask = np.minimum(r / r_ind_max, 1.0)
+    # r_mask = np.sin(r_mask * np.pi / 2) ** 2
+    # pdf_reduced *= r_mask
 
-
-        # original version        
-        # ind_max = np.argmax(pdf_reduced)
-        # r_ind_max = r[ind_max]
-        # r_mask = np.minimum(r / r_ind_max, 1.0)
-        # r_mask = np.sin(r_mask * np.pi / 2) ** 2
-        # pdf_reduced *= r_mask
+    # original version
+    # ind_max = np.argmax(pdf_reduced)
+    # r_ind_max = r[ind_max]
+    # r_mask = np.minimum(r / r_ind_max, 1.0)
+    # r_mask = np.sin(r_mask * np.pi / 2) ** 2
+    # pdf_reduced *= r_mask
 
     # Store results
     self.pdf_r = r
@@ -516,7 +523,6 @@ def calculate_pair_dist_function(
         pdf = pdf_reduced.copy()
         pdf[1:] /= 4 * np.pi * density * r[1:] * (r[1] - r[0])
         pdf += 1
-
 
         # Damp the unphysical fluctuations at the PDF origin
         if damp_origin_fluctuations:
@@ -535,7 +541,6 @@ def calculate_pair_dist_function(
             # replace low r values with linear fit
             m = pdf_thresh / r_thresh
             pdf[r < r_thresh] = r[r < r_thresh] * m
-
 
         # damp and clip values below zero
         # if damp_origin_fluctuations:

@@ -102,7 +102,7 @@ class CrystalPhase:
         plot_correlation_radius=False,
         scale_markers_experiment=40,
         scale_markers_calculated=200,
-        max_marker_size = 400,
+        max_marker_size=400,
         crystal_inds_plot=None,
         phase_colors=None,
         figsize=(10, 7),
@@ -629,8 +629,7 @@ class CrystalPhase:
                 qx,
                 # s = scale_markers_experiment * intensity,
                 s=np.minimum(
-                    scale_markers_experiment 
-                    * bragg_peaks.data["intensity"][keep],
+                    scale_markers_experiment * bragg_peaks.data["intensity"][keep],
                     max_marker_size,
                 ),
                 marker="o",
@@ -1230,7 +1229,7 @@ class CrystalPhase:
         self,
         use_correlation_scores=False,
         reliability_range=(0.0, 1.0),
-        normalize_exp_intensity = True,
+        normalize_exp_intensity=True,
         sigma=0.0,
         phase_colors=None,
         ticks=True,
@@ -1319,7 +1318,6 @@ class CrystalPhase:
         # if normalize_exp_intensity:
         #     phase_sig /= self.int_total[None,:,:]
 
-
         # find highest correlation score for each crystal and match index
         for a0 in range(self.num_crystals):
             sub = phase_sig[a0] > phase_corr
@@ -1348,7 +1346,6 @@ class CrystalPhase:
             # normalize the reliability by the intensity of each experimental pattern
             if normalize_exp_intensity:
                 phase_rel /= self.int_total
-
 
             phase_scale = np.clip(
                 (phase_rel - reliability_range[0])

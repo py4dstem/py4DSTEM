@@ -1,6 +1,3 @@
-this is a test -- 
-
-
 > :warning: **py4DSTEM version 0.14 update** :warning: Warning: this is a major update and we expect some workflows to break.  You can still install previous versions of py4DSTEM [as discussed here](#legacyinstall)
 
 > :warning: **Phase retrieval refactor version 0.14.9** :warning: Warning: The phase-retrieval modules in py4DSTEM (DPC, parallax, and ptychography) underwent a major refactor in version 0.14.9 and as such older tutorial notebooks will not work as expected. Notably, class names have been pruned to remove the trailing "Reconstruction" (`DPCReconstruction` -> `DPC` etc.), and regularization functions have dropped the `_iter` suffix (and are instead specified as boolean flags). See the [updated tutorials](https://github.com/py4dstem/py4DSTEM_tutorials) for more information.
