@@ -115,6 +115,9 @@ class PolarDatacube:
         plot_radial_background,
         model_radial_background,
         make_orientation_histogram,
+        # Added
+        find_peaks_single_pattern_segmented,
+        find_peaks_segmented,
     )
 
     # sampling methods + properties
