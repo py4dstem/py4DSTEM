@@ -311,8 +311,8 @@ def find_peaks_single_pattern(
         t = np.linspace(0, 2 * np.pi, 180 + 1)
         ct = np.cos(t)
         st = np.sin(t)
-        if kwargs.get('figax'):
-            fig, ax = kwargs.pop('figax')
+        if kwargs.get("figax"):
+            fig, ax = kwargs.pop("figax")
         else:
             fig, ax = plt.subplots(figsize=figsize)
 
@@ -376,31 +376,31 @@ def find_peaks_single_pattern(
 
 
 def find_peaks_single_pattern_segmented(
-        self,
-        x,
-        y,
-        mask=None,
-        bragg_peaks=None,
-        bragg_mask_radius=None,
-        sigma_annular_deg=10.0,
-        sigma_radial_px=3.0,
-        sigma_annular_deg_max=None,
-        radial_background_subtract=True,
-        radial_background_thresh=0.25,
-        num_peaks_max=100,
-        threshold_abs=1.0,
-        threshold_prom_annular=None,
-        threshold_prom_radial=None,
-        remove_masked_peaks=False,
-        scale_sigma_annular=0.5,
-        scale_sigma_radial=0.25,
-        return_background=False,
-        plot_result=True,
-        plot_power_scale=1.0,
-        plot_scale_size=10.0,
-        figsize=(12, 6),
-        returnfig=False,
-        **kwargs
+    self,
+    x,
+    y,
+    mask=None,
+    bragg_peaks=None,
+    bragg_mask_radius=None,
+    sigma_annular_deg=10.0,
+    sigma_radial_px=3.0,
+    sigma_annular_deg_max=None,
+    radial_background_subtract=True,
+    radial_background_thresh=0.25,
+    num_peaks_max=100,
+    threshold_abs=1.0,
+    threshold_prom_annular=None,
+    threshold_prom_radial=None,
+    remove_masked_peaks=False,
+    scale_sigma_annular=0.5,
+    scale_sigma_radial=0.25,
+    return_background=False,
+    plot_result=True,
+    plot_power_scale=1.0,
+    plot_scale_size=10.0,
+    figsize=(12, 6),
+    returnfig=False,
+    **kwargs
 ):
     """
     Peak detection function for polar transformations.
@@ -646,7 +646,7 @@ def find_peaks_single_pattern_segmented(
             else:
                 peaks_new = np.vstack((peaks_new, peaks_all[a0, :]))
         peaks_all = peaks_new
-    
+
     return peaks_all, sig_bg, sig_bg_mask
 
 
@@ -718,7 +718,9 @@ def find_peaks(
         dtype="bool",
     )
     if mask_real is None:
-        mask_real = np.ones((self._datacube.Rshape[0], self._datacube.Rshape[1])).astype(bool)
+        mask_real = np.ones(
+            (self._datacube.Rshape[0], self._datacube.Rshape[1])
+        ).astype(bool)
 
     # Loop over probe positions
     for rx, ry in tqdmnd(
@@ -827,7 +829,9 @@ def find_peaks_segmented(
         dtype="bool",
     )
     if mask_real is None:
-        mask_real = np.ones((self._datacube.Rshape[0], self._datacube.Rshape[1])).astype(bool)
+        mask_real = np.ones(
+            (self._datacube.Rshape[0], self._datacube.Rshape[1])
+        ).astype(bool)
 
     # Loop over probe positions
     for rx, ry in tqdmnd(
@@ -841,16 +845,16 @@ def find_peaks_segmented(
         if mask_real[rx, ry] == False:
             continue
         for k0 in range(len(kwargs_pass)):
-            if 'sigma_annular_deg' in kwargs_pass[k0]:
-                sigma_annular_deg = kwargs_pass[k0]['sigma_annular_deg']
-            if 'sigma_radial_px' in kwargs_pass[k0]:
-                sigma_radial_px = kwargs_pass[k0]['sigma_radial_px']
-            if 'threshold_abs' in kwargs_pass[k0]:
-                threshold_abs = kwargs_pass[k0]['threshold_abs']
-            if 'threshold_prom_radial' in kwargs_pass[k0]:
-                threshold_prom_radial = kwargs_pass[k0]['threshold_prom_radial']
-            if 'threshold_prom_annular' in kwargs_pass[k0]:
-                threshold_prom_annular = kwargs_pass[k0]['threshold_prom_annular']
+            if "sigma_annular_deg" in kwargs_pass[k0]:
+                sigma_annular_deg = kwargs_pass[k0]["sigma_annular_deg"]
+            if "sigma_radial_px" in kwargs_pass[k0]:
+                sigma_radial_px = kwargs_pass[k0]["sigma_radial_px"]
+            if "threshold_abs" in kwargs_pass[k0]:
+                threshold_abs = kwargs_pass[k0]["threshold_abs"]
+            if "threshold_prom_radial" in kwargs_pass[k0]:
+                threshold_prom_radial = kwargs_pass[k0]["threshold_prom_radial"]
+            if "threshold_prom_annular" in kwargs_pass[k0]:
+                threshold_prom_annular = kwargs_pass[k0]["threshold_prom_annular"]
 
             peaks, sig_bg, sig_bg_mask = self.find_peaks_single_pattern_segmented(
                 rx,
@@ -874,7 +878,10 @@ def find_peaks_segmented(
                 plot_result=False,
             )
             # print((kwargs_pass[k0]['radial_lower_bound'] <= peaks[:, 1]) & (peaks[:, 1] < kwargs_pass[k0]['radial_upper_bound']))
-            peaks = peaks[(kwargs_pass[k0]['radial_lower_bound'] <= peaks[:, 1]) & (peaks[:, 1] < kwargs_pass[k0]['radial_upper_bound'])]
+            peaks = peaks[
+                (kwargs_pass[k0]["radial_lower_bound"] <= peaks[:, 1])
+                & (peaks[:, 1] < kwargs_pass[k0]["radial_upper_bound"])
+            ]
             if k0 == 0:
                 peaks_all = peaks
             else:
@@ -1200,7 +1207,7 @@ def plot_radial_peaks(
 
     if returnfig:
         return fig, ax
-    
+
     if return_plot_data:
         return q_bins, int_peaks
 

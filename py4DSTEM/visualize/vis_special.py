@@ -159,10 +159,10 @@ def show_amorphous_ring_fit(
         return_intensity_range=True,
         **kwargs,
     )
-    if kwargs.get('vmax') is not None:
-        vmax = kwargs.pop('vmax')
-    if kwargs.get('vmin') is not None:
-        vmin = kwargs.pop('vmin')
+    if kwargs.get("vmax") is not None:
+        vmax = kwargs.pop("vmax")
+    if kwargs.get("vmin") is not None:
+        vmin = kwargs.pop("vmin")
     show(
         fit,
         scaling=scaling,
