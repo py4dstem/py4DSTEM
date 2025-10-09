@@ -97,6 +97,8 @@ def show_amorphous_ring_fit(
     ellipse_alpha=0.7,
     ellipse_lw=2,
     returnfig=False,
+    vmin=None,
+    vmax=None,
     **kwargs,
 ):
     """
@@ -149,7 +151,7 @@ def show_amorphous_ring_fit(
     fit = double_sided_gaussian(p_dsg, qxx, qyy)
 
     # Show
-    (fig, ax), (vmin, vmax) = show(
+    (fig, ax), (_vmin, _vmax) = show(
         dp,
         scaling=scaling,
         cmap=cmap_data,
@@ -159,10 +161,10 @@ def show_amorphous_ring_fit(
         return_intensity_range=True,
         **kwargs,
     )
-    if kwargs.get("vmax") is not None:
-        vmax = kwargs.pop("vmax")
-    if kwargs.get("vmin") is not None:
-        vmin = kwargs.pop("vmin")
+    if vmin is None:
+        vmin = _vmin
+    if vmax is None:
+        vmax = _vmax
     show(
         fit,
         scaling=scaling,

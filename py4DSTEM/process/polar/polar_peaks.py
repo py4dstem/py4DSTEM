@@ -325,8 +325,7 @@ def find_peaks_single_pattern(
         ax.scatter(
             peaks_polar["qr"],
             peaks_polar["qt"],
-            # s=peaks_polar["intensity"] * plot_scale_size,
-            s=10,
+            s=peaks_polar["intensity"] * plot_scale_size,
             marker="o",
             color=(1, 0, 0),
         )
@@ -787,10 +786,17 @@ def find_peaks_segmented(
 
     Parameters
     --------
+    mask:
+        mask for diffraction image pixels
+    mask_real:
+        mask for which real space probe positions to do peak detection on
     sigma_annular_deg: float
         smoothing along the annular direction in degrees, periodic
     sigma_radial_px: float
         smoothing along the radial direction in pixels, not periodic
+    kwargs_pass:
+        a list of dictionaries, with each dictionary containing the parameters for 
+        peak finding for a given q-range 
 
     Returns
     --------
@@ -1097,6 +1103,7 @@ def plot_radial_peaks(
     label_y_axis=False,
     figsize=(8, 4),
     v_lines=None,
+    v_lines_colors=None,
     returnfig=False,
     return_plot_data=False,
 ):
@@ -1200,10 +1207,18 @@ def plot_radial_peaks(
         y_min, y_max = ax.get_ylim()
 
         if np.isscalar(v_lines):
-            ax.vlines(v_lines, y_min, y_max, color="g")
+            if v_lines_colors is None:
+                color = "g"
+            else:
+                color = v_lines_colors
+            ax.vlines(v_lines, y_min, y_max, color=color)
         else:
             for a0 in range(len(v_lines)):
-                ax.vlines(v_lines[a0], y_min, y_max, color="g")
+                if v_lines_colors is None:
+                    color = "g"
+                else:
+                    color = v_lines_colors[a0]
+                ax.vlines(v_lines[a0], y_min, y_max, color=color)
 
     if returnfig:
         return fig, ax
@@ -1766,7 +1781,8 @@ def make_orientation_histogram(
                     theta = self.peaks[rx, ry]["qt"][sub] * self._annular_step
                 if orientation_flip_sign:
                     theta *= -1
-                theta += orientation_offset_degrees
+                # theta += orientation_offset_degrees
+                theta += orientation_offset_degrees * np.pi / 180  # theta is in radians so need to convert
 
                 t = theta / dtheta
 
