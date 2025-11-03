@@ -335,7 +335,8 @@ def orientation_plan(
     )
     self.orientation_zone_axis_steps = (
         np.round(step / self.orientation_refine_ratio) * self.orientation_refine_ratio
-    ).astype(np.integer)
+    ).astype(np.int32)
+    # ).astype(np.integer)
 
     if self.orientation_fiber and self.orientation_fiber_angles[0] == 0:
         self.orientation_num_zones = int(1)
@@ -370,7 +371,8 @@ def orientation_plan(
             (self.orientation_zone_axis_steps + 1)
             * (self.orientation_zone_axis_steps + 2)
             / 2
-        ).astype(np.integer)
+        ).astype(np.int32)
+        # ).astype(np.integer)
         self.orientation_vecs = np.zeros((self.orientation_num_zones, 3))
         self.orientation_vecs[0, :] = self.orientation_zone_axis_range[0, :]
         self.orientation_inds = np.zeros((self.orientation_num_zones, 3), dtype="int")
@@ -379,7 +381,8 @@ def orientation_plan(
         # or circular arc SLERP for fiber texture
         for a0 in np.arange(1, self.orientation_zone_axis_steps + 1):
             inds = np.arange(a0 * (a0 + 1) / 2, a0 * (a0 + 1) / 2 + a0 + 1).astype(
-                np.integer
+                np.int32
+                # np.integer
             )
 
             p0 = pv[a0, :]
@@ -617,7 +620,8 @@ def orientation_plan(
 
     # Solve for number of angular steps along in-plane rotation direction
     self.orientation_in_plane_steps = np.round(360 / angle_step_in_plane).astype(
-        np.integer
+        np.int32
+        # np.integer
     )
 
     # Calculate -z angles (Euler angle 3)
@@ -2208,8 +2212,6 @@ def calculate_strain(
     deformation tensor which transforms the simulated diffraction pattern
     into the experimental pattern, for all probe positons.
 
-    TODO: add robust fitting?
-
     Parameters
     ----------
     bragg_peaks_array (PointListArray):
@@ -2330,71 +2332,72 @@ def calculate_strain(
                     inds_match[a0] = ind_min
                     keep[a0] = True
 
-            # Get all paired peaks
-            qxy = np.vstack((p.data["qx"][keep], p.data["qy"][keep])).T
-            qxy_ref = np.vstack(
-                (p_ref.data["qx"][inds_match[keep]], p_ref.data["qy"][inds_match[keep]])
-            ).T
+            if np.sum(keep) >= min_num_peaks:
+                # Get all paired peaks
+                qxy = np.vstack((p.data["qx"][keep], p.data["qy"][keep])).T
+                qxy_ref = np.vstack(
+                    (p_ref.data["qx"][inds_match[keep]], p_ref.data["qy"][inds_match[keep]])
+                ).T
 
-            # Fit transformation matrix
-            # Note - not sure about transpose here
-            # (though it might not matter if rotation isn't included)
-            if intensity_weighting:
-                weights = np.sqrt(p.data["intensity"][keep, None]) * 0 + 1
-                m = lstsq(
-                    qxy_ref * weights,
-                    qxy * weights,
-                    rcond=None,
-                )[0].T
-            else:
-                m = lstsq(
-                    qxy_ref,
-                    qxy,
-                    rcond=None,
-                )[0].T
-
-            # Robust fitting
-            if robust:
-                for a0 in range(5):
-                    # calculate new weights
-                    qxy_fit = qxy_ref @ m
-                    diff2 = np.sum((qxy_fit - qxy) ** 2, axis=1)
-
-                    weights = np.exp(
-                        diff2 / ((-2 * robust_thresh**2) * np.median(diff2))
-                    )[:, None]
-                    if intensity_weighting:
-                        weights *= np.sqrt(p.data["intensity"][keep, None])
-
-                    # calculate new fits
+                # Fit transformation matrix
+                # Note - not sure about transpose here
+                # (though it might not matter if rotation isn't included)
+                if intensity_weighting:
+                    weights = np.sqrt(p.data["intensity"][keep, None]) * 0 + 1
                     m = lstsq(
                         qxy_ref * weights,
                         qxy * weights,
                         rcond=None,
                     )[0].T
+                else:
+                    m = lstsq(
+                        qxy_ref,
+                        qxy,
+                        rcond=None,
+                    )[0].T
 
-            # Set values into the infinitesimal strain matrix
-            strain_map.get_slice("e_xx").data[rx, ry] = 1 - m[0, 0]
-            strain_map.get_slice("e_yy").data[rx, ry] = 1 - m[1, 1]
-            strain_map.get_slice("e_xy").data[rx, ry] = -(m[0, 1] + m[1, 0]) / 2.0
-            strain_map.get_slice("theta").data[rx, ry] = (m[0, 1] - m[1, 0]) / 2.0
+                # Robust fitting
+                if robust:
+                    for a0 in range(5):
+                        # calculate new weights
+                        qxy_fit = qxy_ref @ m
+                        diff2 = np.sum((qxy_fit - qxy) ** 2, axis=1)
 
-            # Add finite rotation from ACOM orientation map.
-            # I am not sure about the relative signs here.
-            # Also, maybe I need to add in the mirror operator?
-            if orientation_map.mirror[rx, ry, 0]:
-                strain_map.get_slice("theta").data[rx, ry] += (
-                    orientation_map.angles[rx, ry, 0, 0]
-                    + orientation_map.angles[rx, ry, 0, 2]
-                )
+                        weights = np.exp(
+                            diff2 / ((-2 * robust_thresh**2) * np.median(diff2))
+                        )[:, None]
+                        if intensity_weighting:
+                            weights *= np.sqrt(p.data["intensity"][keep, None])
+
+                        # calculate new fits
+                        m = lstsq(
+                            qxy_ref * weights,
+                            qxy * weights,
+                            rcond=None,
+                        )[0].T
+
+                # Set values into the infinitesimal strain matrix
+                strain_map.get_slice("e_xx").data[rx, ry] = 1 - m[0, 0]
+                strain_map.get_slice("e_yy").data[rx, ry] = 1 - m[1, 1]
+                strain_map.get_slice("e_xy").data[rx, ry] = -(m[0, 1] + m[1, 0]) / 2.0
+                strain_map.get_slice("theta").data[rx, ry] = (m[0, 1] - m[1, 0]) / 2.0
+
+                # Add finite rotation from ACOM orientation map.
+                # I am not sure about the relative signs here.
+                # Also, maybe I need to add in the mirror operator?
+                if orientation_map.mirror[rx, ry, 0]:
+                    strain_map.get_slice("theta").data[rx, ry] += (
+                        orientation_map.angles[rx, ry, 0, 0]
+                        + orientation_map.angles[rx, ry, 0, 2]
+                    )
+                else:
+                    strain_map.get_slice("theta").data[rx, ry] -= (
+                        orientation_map.angles[rx, ry, 0, 0]
+                        + orientation_map.angles[rx, ry, 0, 2]
+                    )
+
             else:
-                strain_map.get_slice("theta").data[rx, ry] -= (
-                    orientation_map.angles[rx, ry, 0, 0]
-                    + orientation_map.angles[rx, ry, 0, 2]
-                )
-
-        else:
-            strain_map.get_slice("mask").data[rx, ry] = 0.0
+                strain_map.get_slice("mask").data[rx, ry] = 0.0
 
     if rotation_range is not None:
         strain_map.get_slice("theta").data[:] = np.mod(
