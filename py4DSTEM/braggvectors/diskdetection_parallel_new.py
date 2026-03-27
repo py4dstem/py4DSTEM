@@ -21,7 +21,6 @@ import py4DSTEM
 from emdfile import PointListArray, PointList
 from py4DSTEM.braggvectors.diskdetection import _find_Bragg_disks_single_DP_FK
 
-
 #### SERIALISERS ####
 # Define Serialiser
 # these are functions which allow the hdf5 objects to be passed. May not be required anymore

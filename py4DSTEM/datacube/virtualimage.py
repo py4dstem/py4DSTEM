@@ -13,7 +13,6 @@ from py4DSTEM.data import Calibration, RealSlice, Data, DiffractionSlice
 from py4DSTEM.preprocess import get_shifted_ar
 from py4DSTEM.visualize import show
 
-
 # Virtual image container class
 
 

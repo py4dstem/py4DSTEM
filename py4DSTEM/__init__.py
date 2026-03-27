@@ -25,7 +25,6 @@ _emd_hook = True
 from py4DSTEM import io
 from py4DSTEM.io import import_file, read, save
 
-
 ### basic data classes
 
 # data
@@ -39,7 +38,6 @@ from py4DSTEM.data import (
 
 # datacube
 from py4DSTEM.datacube import DataCube, VirtualImage, VirtualDiffraction
-
 
 ### visualization
 
@@ -64,14 +62,11 @@ except (ImportError, ModuleNotFoundError) as exc:
 # diffraction
 from py4DSTEM.process.diffraction import Crystal, Orientation
 
-
 # ptycho
 from py4DSTEM.process import phase
 
-
 # polar
 from py4DSTEM.process.polar import PolarDatacube
-
 
 # strain
 from py4DSTEM.process.strain.strain import StrainMap
@@ -88,7 +83,6 @@ except (ImportError, ModuleNotFoundError) as exc:
 
 from py4DSTEM import preprocess
 from py4DSTEM import process
-
 
 ### utilities
 

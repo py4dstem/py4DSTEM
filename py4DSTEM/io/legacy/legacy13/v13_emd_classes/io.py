@@ -6,7 +6,6 @@ import h5py
 from numbers import Number
 from emdfile import tqdmnd
 
-
 # Define the EMD group types
 
 EMD_group_types = {
