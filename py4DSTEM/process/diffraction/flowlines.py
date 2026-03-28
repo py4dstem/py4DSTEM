@@ -1297,7 +1297,11 @@ def plot_orientation_correlation(
             z = np.maximum(z, 1.0)
             coefs = [np.max(z), np.min(z), x[-1] * 0.25, 2]
             bounds = ((1e-3, 0, 1e-3, 1.0), (np.inf, np.inf, np.inf, np.inf))
-            coefs = curve_fit(fit_dist, x, z, p0=coefs, bounds=bounds)[0]
+            try:
+                coefs = curve_fit(fit_dist, x, z, p0=coefs, bounds=bounds)[0]
+            except RuntimeError as e:
+                print(f"A runtime error has occured: {e}")
+                continue
             coef_annular = coefs[2] * (np.log(1 / fraction_coefs) ** (1 / coefs[3]))
             if orient_corr[ind, 0, 0] <= orient_corr[ind, -1, 0]:
                 coef_annular = orient_corr.shape[1] - 1 - coef_annular
