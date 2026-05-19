@@ -15,6 +15,28 @@ from py4DSTEM.process.fit import (
 from py4DSTEM.visualize import show
 
 
+def _find_peaks_single_pattern_worker(shared_objects, rx, ry):
+    self, find_peaks_kwargs, threads_per_job = shared_objects
+
+    if threads_per_job is None:
+        polar_peaks, sig_bg, sig_bg_mask = self.find_peaks_single_pattern(
+            rx,
+            ry,
+            **find_peaks_kwargs,
+        )
+    else:
+        from threadpoolctl import threadpool_limits
+
+        with threadpool_limits(limits=threads_per_job):
+            polar_peaks, sig_bg, sig_bg_mask = self.find_peaks_single_pattern(
+                rx,
+                ry,
+                **find_peaks_kwargs,
+            )
+
+    return rx, ry, polar_peaks.data, sig_bg, sig_bg_mask
+
+
 def find_peaks_single_pattern(
     self,
     x,
@@ -133,9 +155,11 @@ def find_peaks_single_pattern(
     # Change sign convention of mask
     mask_bool = np.logical_not(mask_bool)
 
+    sig_bg = np.zeros(im_polar.shape[1])
+    sig_bg_mask = np.zeros(im_polar.shape[1], dtype="bool")
+
     # Background subtraction
     if radial_background_subtract:
-        sig_bg = np.zeros(im_polar.shape[1])
         for a0 in range(im_polar.shape[1]):
             if np.any(mask_bool[:, a0]):
                 vals = np.sort(im_polar[mask_bool[:, a0], a0])
@@ -388,6 +412,8 @@ def find_peaks(
     scale_sigma_annular=0.5,
     scale_sigma_radial=0.25,
     progress_bar=True,
+    num_jobs=1,
+    threads_per_job=1,
 ):
     """
     Peak detection function for polar transformations. Loop through all probe positions,
@@ -399,11 +425,22 @@ def find_peaks(
         smoothing along the annular direction in degrees, periodic
     sigma_radial_px: float
         smoothing along the radial direction in pixels, not periodic
+    num_jobs: int or None
+        Number of parallel worker processes to use. Set to 1 for serial
+        execution. Set to None to use all available cores.
+    threads_per_job: int or None
+        Number of native library threads available to each worker. If num_jobs
+        is None, the number of workers is chosen as CPU_count // threads_per_job.
 
     Returns
     --------
 
     """
+
+    if num_jobs is not None and num_jobs < 1:
+        raise ValueError("num_jobs must be None or a positive integer")
+    if threads_per_job is not None and threads_per_job < 1:
+        raise ValueError("threads_per_job must be None or a positive integer")
 
     # init
     self.bragg_peaks = bragg_peaks
@@ -437,39 +474,73 @@ def find_peaks(
         dtype="bool",
     )
 
-    # Loop over probe positions
-    for rx, ry in tqdmnd(
-        self._datacube.Rshape[0],
-        self._datacube.Rshape[1],
-        desc="Finding peaks ",
-        unit=" images",
-        disable=not progress_bar,
-    ):
-        polar_peaks, sig_bg, sig_bg_mask = self.find_peaks_single_pattern(
-            rx,
-            ry,
-            mask=mask,
-            bragg_peaks=bragg_peaks,
-            bragg_mask_radius=bragg_mask_radius,
-            sigma_annular_deg=sigma_annular_deg,
-            sigma_radial_px=sigma_radial_px,
-            sigma_annular_deg_max=sigma_annular_deg_max,
-            radial_background_subtract=radial_background_subtract,
-            radial_background_thresh=radial_background_thresh,
-            num_peaks_max=num_peaks_max,
-            threshold_abs=threshold_abs,
-            threshold_prom_annular=threshold_prom_annular,
-            threshold_prom_radial=threshold_prom_radial,
-            remove_masked_peaks=remove_masked_peaks,
-            scale_sigma_annular=scale_sigma_annular,
-            scale_sigma_radial=scale_sigma_radial,
-            return_background=True,
-            plot_result=False,
-        )
+    find_peaks_kwargs = {
+        "mask": mask,
+        "bragg_peaks": bragg_peaks,
+        "bragg_mask_radius": bragg_mask_radius,
+        "sigma_annular_deg": sigma_annular_deg,
+        "sigma_radial_px": sigma_radial_px,
+        "sigma_annular_deg_max": sigma_annular_deg_max,
+        "radial_background_subtract": radial_background_subtract,
+        "radial_background_thresh": radial_background_thresh,
+        "num_peaks_max": num_peaks_max,
+        "threshold_abs": threshold_abs,
+        "threshold_prom_annular": threshold_prom_annular,
+        "threshold_prom_radial": threshold_prom_radial,
+        "remove_masked_peaks": remove_masked_peaks,
+        "scale_sigma_annular": scale_sigma_annular,
+        "scale_sigma_radial": scale_sigma_radial,
+        "return_background": True,
+        "plot_result": False,
+    }
 
-        self.peaks[rx, ry] = polar_peaks
-        self.background_radial[rx, ry] = sig_bg
-        self.background_radial_mask[rx, ry] = sig_bg_mask
+    if num_jobs == 1:
+        # Loop over probe positions
+        for rx, ry in tqdmnd(
+            self._datacube.Rshape[0],
+            self._datacube.Rshape[1],
+            desc="Finding peaks ",
+            unit=" images",
+            disable=not progress_bar,
+        ):
+            polar_peaks, sig_bg, sig_bg_mask = self.find_peaks_single_pattern(
+                rx,
+                ry,
+                **find_peaks_kwargs,
+            )
+
+            self.peaks[rx, ry] = polar_peaks
+            self.background_radial[rx, ry] = sig_bg
+            self.background_radial_mask[rx, ry] = sig_bg_mask
+    else:
+        from mpire import WorkerPool, cpu_count
+
+        if num_jobs is None:
+            if threads_per_job is None:
+                num_jobs = cpu_count()
+            else:
+                num_jobs = max(cpu_count() // threads_per_job, 1)
+        num_positions = int(np.prod(self._datacube.Rshape))
+        num_jobs = min(num_jobs, num_positions)
+
+        positions = np.ndindex(self._datacube.Rshape)
+
+        with WorkerPool(
+            n_jobs=num_jobs,
+            shared_objects=(self, find_peaks_kwargs, threads_per_job),
+        ) as pool:
+            results = pool.map(
+                _find_peaks_single_pattern_worker,
+                positions,
+                iterable_len=num_positions,
+                n_splits=num_jobs,
+                progress_bar=progress_bar,
+            )
+
+        for rx, ry, polar_peaks_data, sig_bg, sig_bg_mask in results:
+            self.peaks[rx, ry] = PointList(polar_peaks_data, name="peaks_polar")
+            self.background_radial[rx, ry] = sig_bg
+            self.background_radial_mask[rx, ry] = sig_bg_mask
 
 
 def refine_peaks_local(
