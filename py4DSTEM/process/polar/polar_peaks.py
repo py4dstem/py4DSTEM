@@ -317,23 +317,23 @@ def find_peaks_single_pattern(
         vmax = kwargs.pop("vmax", 1)
         vmin = kwargs.pop("vmin", 0)
 
-        if 'figax' in kwargs:
-            fig,ax = kwargs['figax']
+        if "figax" in kwargs:
+            fig, ax = kwargs["figax"]
             show(
-                im_plot, 
-                cmap=cmap, 
-                vmax=vmax, 
-                vmin=vmin, 
+                im_plot,
+                cmap=cmap,
+                vmax=vmax,
+                vmin=vmin,
                 **kwargs,
             )
         else:
             fig, ax = plt.subplots(figsize=figsize)
             show(
-                im_plot, 
-                figax=(fig, ax), 
-                cmap=cmap, 
-                vmax=vmax, 
-                vmin=vmin, 
+                im_plot,
+                figax=(fig, ax),
+                cmap=cmap,
+                vmax=vmax,
+                vmin=vmin,
                 **kwargs,
             )
 
@@ -905,7 +905,7 @@ def model_radial_background(
     # plotting
     if plot_result:
         if returnfig:
-            fig,ax = self.plot_radial_background(
+            fig, ax = self.plot_radial_background(
                 q_pixel_units=False,
                 plot_background_model=True,
                 figsize=figsize,
@@ -917,7 +917,7 @@ def model_radial_background(
                 q_pixel_units=False,
                 plot_background_model=True,
                 figsize=figsize,
-            )            
+            )
 
 
 def refine_peaks(
