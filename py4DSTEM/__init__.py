@@ -1,6 +1,29 @@
 from py4DSTEM.version import __version__
 from emdfile import tqdmnd
 
+# matplotlib < 3.11 mathtext calls pyparsing's deprecated camelCase API
+# (parseString / parseAll / resetCache) once per rendered math label, which
+# floods plotting output with deprecation messages under pyparsing >= 3.3.
+# Rebind those compatibility aliases to call the snake_case API directly with
+# the renamed arguments, so the deprecated code paths are never executed.
+# Upgrading matplotlib instead is not an option in hosted notebooks (Colab
+# preimports matplotlib, and a mid-session upgrade leaves a broken half-old,
+# half-new install). Skipped entirely on matplotlib >= 3.11.
+import matplotlib as _matplotlib
+import pyparsing as _pyparsing
+
+if getattr(_matplotlib, "__version_info__", (99,)) < (3, 11) and hasattr(
+    _pyparsing.ParserElement, "parse_string"
+):
+
+    def _parse_string_compat(self, instring, parseAll=False, *, parse_all=None):
+        return self.parse_string(
+            instring, parse_all=parseAll if parse_all is None else parse_all
+        )
+
+    _pyparsing.ParserElement.parseString = _parse_string_compat
+    _pyparsing.ParserElement.resetCache = classmethod(lambda cls: cls.reset_cache())
+
 from importlib.metadata import packages_distributions
 
 is_package_lite = "py4DSTEM-lite" in packages_distributions()["py4DSTEM"]
