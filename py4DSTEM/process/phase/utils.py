@@ -2983,7 +2983,6 @@ def distance_bw_orientation_matrices(tf1, tf2):
 
 
 def return_tsp_and_edge_weighted_graph(old_graph):
-
     try:
         import networkx as nx
     except (ImportError, ModuleNotFoundError) as exc:

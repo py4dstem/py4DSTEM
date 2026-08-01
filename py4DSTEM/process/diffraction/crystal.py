@@ -27,6 +27,8 @@ class Crystal:
 
     # Automated Crystal Orientation Mapping is implemented in crystal_ACOM.py
     from py4DSTEM.process.diffraction.crystal_ACOM import (
+        _calc_polar_image,
+        _calc_correlogram_batch,
         orientation_plan,
         match_orientations,
         match_single_pattern,

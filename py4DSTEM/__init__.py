@@ -1,6 +1,21 @@
 from py4DSTEM.version import __version__
 from emdfile import tqdmnd
 
+# pyparsing >= 3.3 raises PyparsingDeprecationWarning -- a UserWarning
+# subclass, so it is displayed by default -- whenever a dependency such as
+# older matplotlib mathtext calls its camelCase compatibility API. This fires
+# once per rendered label and floods plotting output with messages like
+# "'parseString' deprecated - use 'parse_string'". There is nothing a py4DSTEM
+# user can do about it, so silence that category here.
+import warnings as _warnings
+
+try:
+    from pyparsing import PyparsingDeprecationWarning as _PyparsingDeprecationWarning
+
+    _warnings.filterwarnings("ignore", category=_PyparsingDeprecationWarning)
+except ImportError:
+    pass
+
 from importlib.metadata import packages_distributions
 
 is_package_lite = "py4DSTEM-lite" in packages_distributions()["py4DSTEM"]

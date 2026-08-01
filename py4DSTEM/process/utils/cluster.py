@@ -182,7 +182,6 @@ class Cluster:
         cluster_count_ind = 0
 
         while np.any(sim_averaged != -1):
-
             # finding the pixel that has the highest self.similarity among the pixel that hasn't been clustered yet
             # this will be the 'starting pixel' of a new cluster
             rx0, ry0 = np.unravel_index(sim_averaged.argmax(), sim_averaged.shape)
@@ -209,9 +208,7 @@ class Cluster:
                 counting_added_pixel = 0
 
                 for rx0, ry0 in cluster_indices:
-
                     if sim_averaged[rx0, ry0] != -1:
-
                         # counter to check if pixel in the cluster are checked for NN
                         counting_added_pixel += 1
 
@@ -228,7 +225,6 @@ class Cluster:
                                 and x_ind < self.similarity.shape[0] - 2
                                 and y_ind < self.similarity.shape[1] - 2
                             ):
-
                                 r_ok = (
                                     True
                                     if self.r_space_mask is None
@@ -241,7 +237,6 @@ class Cluster:
                                     and self.cluster_map[x_ind, y_ind] == -1
                                     and r_ok
                                 ):
-
                                     cluster_indices = np.append(
                                         cluster_indices, [[x_ind, y_ind]], axis=0
                                     )
