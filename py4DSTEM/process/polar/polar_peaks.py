@@ -208,9 +208,12 @@ def find_peaks_single_pattern(
         )
 
         # output
-        peaks_prom[a0, 0] = p_annular[0]
+        # scipy's peak_prominences returns length-1 arrays here; index into
+        # them explicitly, since numpy >= 2.0 no longer allows assigning a
+        # size-1 array to a scalar element.
+        peaks_prom[a0, 0] = p_annular[0][0]
         peaks_prom[a0, 1] = sigma_annular[0]
-        peaks_prom[a0, 2] = p_radial[0]
+        peaks_prom[a0, 2] = p_radial[0][0]
         peaks_prom[a0, 3] = sigma_radial[0]
 
     # if needed, remove peaks using prominance criteria
