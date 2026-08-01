@@ -28,7 +28,11 @@ setup(
         "h5py >= 3.2.0",
         "hdf5plugin >= 4.1.3",
         "ncempy >= 1.8.1",
-        "matplotlib >= 3.2.2",
+        # matplotlib < 3.11 calls pyparsing's deprecated camelCase API from
+        # mathtext, which floods plotting output with deprecation warnings
+        # under pyparsing >= 3.3; require 3.11 wherever python allows it
+        "matplotlib >= 3.2.2; python_version < '3.11'",
+        "matplotlib >= 3.11; python_version >= '3.11'",
         "scikit-image >= 0.17.2",
         "scikit-learn >= 0.23.2",
         "scikit-optimize >= 0.9.0",
