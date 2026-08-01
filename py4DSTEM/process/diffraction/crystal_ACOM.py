@@ -868,6 +868,150 @@ def orientation_plan(
             self.orientation_ref = np.conj(np.fft.fft(self.orientation_ref))
 
 
+def _calc_polar_image(
+    self,
+    qx,
+    qy,
+    intensity,
+):
+    """
+    Compute the polar (shell radius x in-plane angle) image of a set of Bragg
+    peaks, as used by the ACOM correlation matching. This is the single source
+    of truth for the polar transform used by both `match_single_pattern` and
+    the batched path in `match_orientations`.
+    """
+    qr = np.sqrt(qx**2 + qy**2)
+    qphi = np.arctan2(qy, qx)
+
+    im_polar = np.zeros(
+        (
+            np.size(self.orientation_shell_radii),
+            self.orientation_in_plane_steps,
+        ),
+        dtype="float",
+    )
+
+    for ind_radial, radius in enumerate(self.orientation_shell_radii):
+        dqr = np.abs(qr - radius)
+        sub = dqr < self.orientation_kernel_size
+
+        if np.any(sub):
+            im_polar[ind_radial, :] = np.sum(
+                np.power(
+                    np.maximum(intensity[sub, None], 0.0),
+                    self.orientation_power_intensity_experiment,
+                )
+                * np.exp(
+                    (
+                        dqr[sub, None] ** 2
+                        + (
+                            (
+                                np.mod(
+                                    self.orientation_gamma[None, :]
+                                    - qphi[sub, None]
+                                    + np.pi,
+                                    2 * np.pi,
+                                )
+                                - np.pi
+                            )
+                            * radius
+                        )
+                        ** 2
+                    )
+                    / (-2 * self.orientation_kernel_size**2)
+                ),
+                axis=0,
+            )
+
+    return im_polar
+
+
+def _calc_correlogram_batch(
+    self,
+    im_polar_fft_all,
+    conjugate=False,
+    max_memory_GB=2.0,
+):
+    """
+    Compute ACOM orientation correlograms for a batch of patterns at once.
+
+    Evaluates, for every pattern b and candidate zone axis z,
+        corr[b, z, :] = max(0, Re ifft_gamma( sum_shells
+                            orientation_ref[z] * im_polar_fft[b] ))
+    which is identical (by linearity of the inverse FFT) to the per-pattern
+    computation in `match_single_pattern`, but performs the shell contraction
+    as one batched matrix product per gamma bin - a large speedup on both CPU
+    (BLAS) and GPU (CuPy).
+
+    In refinement mode only the coarse-sieve zones are evaluated, matching the
+    per-pattern code path; the remaining rows are zero.
+
+    Parameters
+    --------
+    im_polar_fft_all: complex ndarray
+        (num_patterns, num_shells, num_gamma) FFT (along gamma) of the polar
+        images of each pattern. A cupy array when self.CUDA is True.
+    conjugate: bool
+        Correlate against the conjugated pattern FFTs (the in-plane mirror,
+        used for inversion symmetry checks).
+    max_memory_GB: float
+        Approximate bound on the temporary correlation arrays; the zone axis
+        dimension is processed in chunks sized to stay below this.
+
+    Returns
+    --------
+    corr: ndarray (numpy)
+        (num_patterns, num_zones, num_gamma) correlograms.
+    """
+    if self.CUDA:
+        xp = cp
+    else:
+        xp = np
+
+    num_patterns = im_polar_fft_all.shape[0]
+    num_gamma = self.orientation_in_plane_steps
+
+    if self.orientation_refine:
+        zone_inds = np.nonzero(self.orientation_sieve)[0]
+    else:
+        zone_inds = np.arange(self.orientation_num_zones)
+
+    fft_use = xp.conj(im_polar_fft_all) if conjugate else im_polar_fft_all
+
+    # process the zone axis dimension in chunks to bound memory use:
+    # each chunk holds ~2 complex128 temporaries of shape (B, chunk, gamma)
+    bytes_per_zone = num_patterns * num_gamma * 16 * 2
+    zones_per_chunk = max(1, int(max_memory_GB * 1e9 // max(bytes_per_zone, 1)))
+
+    corr = np.zeros(
+        (num_patterns, self.orientation_num_zones, num_gamma), dtype="float"
+    )
+    for a0 in range(0, zone_inds.size, zones_per_chunk):
+        inds = zone_inds[a0 : a0 + zones_per_chunk]
+        if self.CUDA:
+            ref_chunk = self.orientation_ref[cp.asarray(inds), :, :]
+        else:
+            ref_chunk = self.orientation_ref[inds, :, :]
+
+        # contract over the shell dimension with a matrix product batched
+        # over gamma (BLAS / cuBLAS), then a single inverse FFT:
+        # prod[b, z, g] = sum_s ref[z, s, g] * fft[b, s, g]
+        prod = xp.matmul(
+            ref_chunk.transpose(2, 0, 1),  # (gamma, zones, shells)
+            fft_use.transpose(2, 1, 0),  # (gamma, shells, patterns)
+        ).transpose(
+            2, 1, 0
+        )  # -> (patterns, zones, gamma)
+        corr_chunk = xp.maximum(xp.real(xp.fft.ifft(prod, axis=-1)), 0)
+
+        if self.CUDA:
+            corr[:, inds, :] = corr_chunk.get()
+        else:
+            corr[:, inds, :] = corr_chunk
+
+    return corr
+
+
 def match_orientations(
     self,
     bragg_peaks_array: PointListArray,
@@ -877,6 +1021,8 @@ def match_orientations(
     inversion_symmetry: bool = True,
     multiple_corr_reset: bool = True,
     return_orientation: bool = True,
+    batch_size=100,
+    batch_max_memory_GB: float = 2.0,
     progress_bar: bool = True,
 ):
     """
@@ -898,6 +1044,16 @@ def match_orientations(
     return_orientation: bool
         Return orientation map from function for inspection.
         The map is always stored in the Crystal object.
+    batch_size: int or None
+        Number of patterns to correlate at once. Batching evaluates the
+        orientation correlograms for many patterns with a single matrix
+        product and inverse FFT, which is much faster on both CPU and GPU
+        while returning the same result as the per-pattern path. Set to
+        None (or 1) for the original one-pattern-at-a-time behavior. The
+        batch is reduced automatically if it would exceed
+        `batch_max_memory_GB`.
+    batch_max_memory_GB: float
+        Approximate memory budget for the batched correlograms.
     progress_bar: bool
         Show or hide the progress bar
 
@@ -920,33 +1076,146 @@ def match_orientations(
     else:
         rotate = True
 
-    for rx, ry in tqdmnd(
-        *bragg_peaks_array.shape,
-        desc="Matching Orientations",
-        unit=" PointList",
-        disable=not progress_bar,
-    ):
-        vectors = bragg_peaks_array.get_vectors(
-            scan_x=rx,
-            scan_y=ry,
-            center=True,
-            ellipse=ellipse,
-            pixel=True,
-            rotate=rotate,
+    if batch_size is None or batch_size <= 1:
+        # original per-pattern path
+        for rx, ry in tqdmnd(
+            *bragg_peaks_array.shape,
+            desc="Matching Orientations",
+            unit=" PointList",
+            disable=not progress_bar,
+        ):
+            vectors = bragg_peaks_array.get_vectors(
+                scan_x=rx,
+                scan_y=ry,
+                center=True,
+                ellipse=ellipse,
+                pixel=True,
+                rotate=rotate,
+            )
+
+            orientation = self.match_single_pattern(
+                bragg_peaks=vectors,
+                num_matches_return=num_matches_return,
+                min_angle_between_matches_deg=min_angle_between_matches_deg,
+                min_number_peaks=min_number_peaks,
+                inversion_symmetry=inversion_symmetry,
+                multiple_corr_reset=multiple_corr_reset,
+                plot_corr=False,
+                verbose=False,
+            )
+
+            orientation_map.set_orientation(orientation, rx, ry)
+
+    else:
+        # batched path: evaluate the first-match correlograms for many
+        # patterns at once, then hand each pattern (with its precomputed
+        # correlograms) to match_single_pattern for selection, refinement
+        # and any additional matches
+        from tqdm import tqdm
+
+        num_gamma = self.orientation_in_plane_steps
+
+        # clamp the batch so the resident correlograms stay within budget
+        bytes_per_pattern = (
+            self.orientation_num_zones
+            * num_gamma
+            * 8
+            * (2 if inversion_symmetry else 1)
+        )
+        batch_use = int(
+            np.clip(
+                batch_max_memory_GB * 1e9 * 0.5 // max(bytes_per_pattern, 1),
+                1,
+                batch_size,
+            )
         )
 
-        orientation = self.match_single_pattern(
-            bragg_peaks=vectors,
-            num_matches_return=num_matches_return,
-            min_angle_between_matches_deg=min_angle_between_matches_deg,
-            min_number_peaks=min_number_peaks,
-            inversion_symmetry=inversion_symmetry,
-            multiple_corr_reset=multiple_corr_reset,
-            plot_corr=False,
-            verbose=False,
-        )
+        xy_inds = [
+            (rx, ry)
+            for rx in range(bragg_peaks_array.shape[0])
+            for ry in range(bragg_peaks_array.shape[1])
+        ]
 
-        orientation_map.set_orientation(orientation, rx, ry)
+        pbar = tqdm(
+            total=len(xy_inds),
+            desc="Matching Orientations",
+            unit=" PointList",
+            disable=not progress_bar,
+        )
+        for start in range(0, len(xy_inds), batch_use):
+            chunk = xy_inds[start : start + batch_use]
+
+            # gather peaks and polar images for this batch
+            vectors_all = []
+            polar_all = []
+            polar_inds = []
+            for a0, (rx, ry) in enumerate(chunk):
+                vectors = bragg_peaks_array.get_vectors(
+                    scan_x=rx,
+                    scan_y=ry,
+                    center=True,
+                    ellipse=ellipse,
+                    pixel=True,
+                    rotate=rotate,
+                )
+                vectors_all.append(vectors)
+                if vectors.data.shape[0] >= min_number_peaks:
+                    polar_all.append(
+                        self._calc_polar_image(
+                            vectors.data["qx"],
+                            vectors.data["qy"],
+                            vectors.data["intensity"],
+                        )
+                    )
+                    polar_inds.append(a0)
+
+            # batched correlograms for all patterns with enough peaks
+            if len(polar_all) > 0:
+                im_polar_stack = np.stack(polar_all, axis=0)
+                if self.CUDA:
+                    im_polar_fft_all = cp.fft.fft(cp.asarray(im_polar_stack))
+                else:
+                    im_polar_fft_all = np.fft.fft(im_polar_stack)
+                corr_all = self._calc_correlogram_batch(
+                    im_polar_fft_all,
+                    conjugate=False,
+                    max_memory_GB=batch_max_memory_GB,
+                )
+                if inversion_symmetry:
+                    corr_inv_all = self._calc_correlogram_batch(
+                        im_polar_fft_all,
+                        conjugate=True,
+                        max_memory_GB=batch_max_memory_GB,
+                    )
+
+            # per-pattern selection, refinement, and any additional matches
+            lookup = {a0: b0 for b0, a0 in enumerate(polar_inds)}
+            for a0, (rx, ry) in enumerate(chunk):
+                b0 = lookup.get(a0)
+                if b0 is None:
+                    precomputed = None
+                else:
+                    precomputed = (
+                        im_polar_stack[b0],
+                        corr_all[b0],
+                        corr_inv_all[b0] if inversion_symmetry else None,
+                    )
+
+                orientation = self.match_single_pattern(
+                    bragg_peaks=vectors_all[a0],
+                    num_matches_return=num_matches_return,
+                    min_angle_between_matches_deg=min_angle_between_matches_deg,
+                    min_number_peaks=min_number_peaks,
+                    inversion_symmetry=inversion_symmetry,
+                    multiple_corr_reset=multiple_corr_reset,
+                    plot_corr=False,
+                    verbose=False,
+                    _precomputed=precomputed,
+                )
+
+                orientation_map.set_orientation(orientation, rx, ry)
+            pbar.update(len(chunk))
+        pbar.close()
 
     # assign and return
     self.orientation_map = orientation_map
@@ -970,6 +1239,7 @@ def match_single_pattern(
     returnfig: bool = False,
     figsize: Union[list, tuple, np.ndarray] = (12, 4),
     verbose: bool = False,
+    _precomputed=None,
     # plot_corr_3D: bool = False,
 ):
     """
@@ -1038,112 +1308,12 @@ def match_single_pattern(
 
     # loop over the number of matches to return
     for match_ind in range(num_matches_return):
-        # Convert Bragg peaks to polar coordinates
-        qr = np.sqrt(qx**2 + qy**2)
-        qphi = np.arctan2(qy, qx)
-
-        # Calculate polar Bragg peak image
-        im_polar = np.zeros(
-            (
-                np.size(self.orientation_shell_radii),
-                self.orientation_in_plane_steps,
-            ),
-            dtype="float",
-        )
-
-        for ind_radial, radius in enumerate(self.orientation_shell_radii):
-            dqr = np.abs(qr - radius)
-            sub = dqr < self.orientation_kernel_size
-
-            if np.any(sub):
-                im_polar[ind_radial, :] = np.sum(
-                    np.power(
-                        np.maximum(intensity[sub, None], 0.0),
-                        self.orientation_power_intensity_experiment,
-                    )
-                    * np.exp(
-                        (
-                            dqr[sub, None] ** 2
-                            + (
-                                (
-                                    np.mod(
-                                        self.orientation_gamma[None, :]
-                                        - qphi[sub, None]
-                                        + np.pi,
-                                        2 * np.pi,
-                                    )
-                                    - np.pi
-                                )
-                                * radius
-                            )
-                            ** 2
-                        )
-                        / (-2 * self.orientation_kernel_size**2)
-                    ),
-                    axis=0,
-                )
-
-                # im_polar[ind_radial, :] = np.sum(
-                #     np.power(
-                #         np.maximum(intensity[sub, None], 0.0),
-                #         self.orientation_power_intensity_experiment,
-                #     )
-                #     * np.maximum(
-                #         1
-                #         - np.sqrt(
-                #             dqr[sub, None] ** 2
-                #             + (
-                #                 (
-                #                     np.mod(
-                #                         self.orientation_gamma[None, :]
-                #                         - qphi[sub, None]
-                #                         + np.pi,
-                #                         2 * np.pi,
-                #                     )
-                #                     - np.pi
-                #                 )
-                #                 * radius
-                #             )
-                #             ** 2
-                #         )
-                #         / self.orientation_kernel_size,
-                #         0,
-                #     ),
-                #     axis=0,
-                # )
-
-                # im_polar[ind_radial, :] = np.sum(
-                #     np.power(radius, self.orientation_power_radial)
-                #     * np.power(
-                #         np.maximum(intensity[sub, None], 0.0),
-                #         self.orientation_power_intensity,
-                #     )
-                #     * np.maximum(
-                #         1
-                #         - np.sqrt(
-                #             dqr[sub, None] ** 2
-                #             + (
-                #                 (
-                #                     np.mod(
-                #                         self.orientation_gamma[None, :]
-                #                         - qphi[sub, None]
-                #                         + np.pi,
-                #                         2 * np.pi,
-                #                     )
-                #                     - np.pi
-                #                 )
-                #                 * radius
-                #             )
-                #             ** 2
-                #         )
-                #         / self.orientation_kernel_size,
-                #         0,
-                #     ),
-                #     axis=0,
-                # )
-
-            # normalization
-            # im_polar -= np.mean(im_polar)
+        # Calculate polar Bragg peak image (or use the precomputed one that
+        # the batched `match_orientations` path provides for the first match)
+        if match_ind == 0 and _precomputed is not None:
+            im_polar = _precomputed[0]
+        else:
+            im_polar = self._calc_polar_image(qx, qy, intensity)
 
         # Determine the RMS signal from im_polar for the first match.
         # Note that we use scaling slightly below RMS so that following matches
@@ -1178,11 +1348,14 @@ def match_single_pattern(
             ax.imshow(im_polar)
             plt.show()
 
-        # FFT along theta
-        if self.CUDA:
-            im_polar_fft = cp.fft.fft(cp.asarray(im_polar))
-        else:
-            im_polar_fft = np.fft.fft(im_polar)
+        # FFT along theta (skipped for the first match when the batched path
+        # already provides the correlograms; later matches recompute as usual)
+        _use_precomputed = match_ind == 0 and _precomputed is not None
+        if not _use_precomputed:
+            if self.CUDA:
+                im_polar_fft = cp.fft.fft(cp.asarray(im_polar))
+            else:
+                im_polar_fft = np.fft.fft(im_polar)
         if self.orientation_refine:
             if self.CUDA:
                 im_polar_refine_fft = cp.fft.fft(cp.asarray(im_polar_refine))
@@ -1190,7 +1363,9 @@ def match_single_pattern(
                 im_polar_refine_fft = np.fft.fft(im_polar_refine)
 
         # Calculate full orientation correlogram
-        if self.orientation_refine:
+        if _use_precomputed:
+            corr_full = _precomputed[1]
+        elif self.orientation_refine:
             corr_full = np.zeros(
                 (
                     self.orientation_num_zones,
@@ -1270,7 +1445,9 @@ def match_single_pattern(
 
         # Calculate orientation correlogram for inverse pattern (in-plane mirror)
         if inversion_symmetry:
-            if self.orientation_refine:
+            if _use_precomputed:
+                corr_full_inv = _precomputed[2]
+            elif self.orientation_refine:
                 corr_full_inv = np.zeros(
                     (
                         self.orientation_num_zones,
