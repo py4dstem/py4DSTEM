@@ -208,9 +208,12 @@ def find_peaks_single_pattern(
         )
 
         # output
-        peaks_prom[a0, 0] = p_annular[0]
+        # scipy's peak_prominences returns length-1 arrays here; index into
+        # them explicitly, since numpy >= 2.0 no longer allows assigning a
+        # size-1 array to a scalar element.
+        peaks_prom[a0, 0] = p_annular[0][0]
         peaks_prom[a0, 1] = sigma_annular[0]
-        peaks_prom[a0, 2] = p_radial[0]
+        peaks_prom[a0, 2] = p_radial[0][0]
         peaks_prom[a0, 3] = sigma_radial[0]
 
     # if needed, remove peaks using prominance criteria
@@ -310,12 +313,29 @@ def find_peaks_single_pattern(
         ct = np.cos(t)
         st = np.sin(t)
 
-        fig, ax = plt.subplots(figsize=figsize)
-
         cmap = kwargs.pop("cmap", "gray")
         vmax = kwargs.pop("vmax", 1)
         vmin = kwargs.pop("vmin", 0)
-        show(im_plot, figax=(fig, ax), cmap=cmap, vmax=vmax, vmin=vmin, **kwargs)
+
+        if "figax" in kwargs:
+            fig, ax = kwargs["figax"]
+            show(
+                im_plot,
+                cmap=cmap,
+                vmax=vmax,
+                vmin=vmin,
+                **kwargs,
+            )
+        else:
+            fig, ax = plt.subplots(figsize=figsize)
+            show(
+                im_plot,
+                figax=(fig, ax),
+                cmap=cmap,
+                vmax=vmax,
+                vmin=vmin,
+                **kwargs,
+            )
 
         # peaks
         ax.scatter(
@@ -780,6 +800,7 @@ def model_radial_background(
     refine_model=True,
     plot_result=True,
     figsize=(8, 4),
+    returnfig=False,
 ):
     """
     User provided radial background model, of the form:
@@ -883,11 +904,20 @@ def model_radial_background(
 
     # plotting
     if plot_result:
-        self.plot_radial_background(
-            q_pixel_units=False,
-            plot_background_model=True,
-            figsize=figsize,
-        )
+        if returnfig:
+            fig, ax = self.plot_radial_background(
+                q_pixel_units=False,
+                plot_background_model=True,
+                figsize=figsize,
+                returnfig=returnfig,
+            )
+            return fig, ax
+        else:
+            self.plot_radial_background(
+                q_pixel_units=False,
+                plot_background_model=True,
+                figsize=figsize,
+            )
 
 
 def refine_peaks(
