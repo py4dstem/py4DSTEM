@@ -3,7 +3,6 @@
 
 import warnings
 
-
 # This is the abstract pattern:
 
 

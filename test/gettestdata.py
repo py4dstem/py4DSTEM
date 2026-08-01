@@ -8,7 +8,6 @@ from os import makedirs
 from py4DSTEM import _TESTPATH as testpath
 from py4DSTEM.io import gdrive_download as download
 
-
 # Make the argument parser
 parser = argparse.ArgumentParser(
     description="A command line tool for downloading data to run the py4DSTEM test suite"

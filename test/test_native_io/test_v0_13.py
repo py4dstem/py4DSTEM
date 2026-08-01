@@ -1,7 +1,6 @@
 from py4DSTEM import read, print_h5_tree, _TESTPATH
 from os.path import join
 
-
 # Set filepaths
 filepath = join(_TESTPATH, "test_io/legacy_v0.13.h5")
 

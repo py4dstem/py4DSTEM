@@ -8,28 +8,55 @@ from scipy.ndimage import gaussian_filter
 
 class Cluster:
     """
-    Clustering 4D data
-
+    Class for clustering data in 4D-STEM DataCube based on
+    similarity of neighboring diffraction patterns.
     """
 
     def __init__(
         self,
         datacube,
+        r_space_mask=None,
     ):
         """
-        Args:
-            datacube (py4DSTEM.DataCube):            4D-STEM data
-
-
+        Parameters
+        ----------
+        datacube: DataCube
+            4D-STEM data
+        r_space_mask: np.ndarray
+            Mask in real space to apply background thresholding on the similarity array.
         """
-
         self.datacube = datacube
+        self.r_space_mask = r_space_mask
+        self.similarity = None
+        self.similarity_raw = None
+
+    def _apply_bg_mask(self, similarity):
+        if self.r_space_mask is None:
+            return similarity
+        return similarity * self.r_space_mask[..., None]
 
     def find_similarity(
-        self,
-        mask=None,  # by default
+        self, q_space_mask=None, smooth_sigma=0, return_similarity=False
     ):
-        # Which neighbors to search
+        """
+        Find similarity to neighboring pixels
+
+        Parameters
+        ----------
+        q_space_mask : np.ndarray, optional
+            boolean q_space_mask to apply on the diffraction patterns
+        smooth_sigma : float, optional
+            sigma for Gaussian smoothing of the diffraction patterns
+            before calculating similarity
+        return_similarity : bool, optinal
+            if True, return the similarity array
+
+        Returns
+        --------
+        similarity: np.ndarray
+            similarity scores for each pixel
+        """
+        # List of neighbors to search
         # (-1,-1) will be equivalent to (1,1)
         self.dxy = np.array(
             (
@@ -54,10 +81,17 @@ class Cluster:
             range(self.datacube.shape[0]),
             range(self.datacube.shape[1]),
         ):
-            if mask is None:
-                diff_ref = self.datacube[rx, ry]
-            else:
-                diff_ref = self.datacube[rx, ry][mask]
+            diff_ref = self.datacube[rx, ry].copy().astype("float")
+            diff_ref -= diff_ref.mean()
+
+            if smooth_sigma > 0:
+                diff_ref = gaussian_filter(diff_ref, smooth_sigma)
+
+            if q_space_mask is not None:
+                diff_ref = diff_ref[q_space_mask]
+
+            norm_diff_ref = np.sqrt(np.sum(diff_ref * diff_ref))
+            # diff_ref_mean = np.mean(diff_ref)
 
             # loop over neighbors
             for ind in range(self.dxy.shape[0]):
@@ -69,25 +103,27 @@ class Cluster:
                     and x_ind < self.datacube.shape[0]
                     and y_ind < self.datacube.shape[1]
                 ):
+                    diff = self.datacube[x_ind, y_ind].copy().astype("float")
+                    diff -= diff.mean()
 
-                    if mask is None:
-                        diff = self.datacube[x_ind, y_ind]
-                    else:
-                        diff = self.datacube[x_ind, y_ind][mask]
+                    if smooth_sigma > 0:
+                        diff = gaussian_filter(diff, smooth_sigma)
 
-                    # # image self.similarity with mean abs difference
-                    # self.similarity[rx,ry,ind] = np.mean(
-                    #     np.abs(
-                    #         diff - diff_ref
-                    #     )
-                    # )
+                    if q_space_mask is not None:
+                        diff = diff[q_space_mask]
 
-                    # image self.similarity with normalized corr: cosine self.similarity?
+                    # image self.similarity with normalized cosine correlation
                     self.similarity[rx, ry, ind] = (
                         np.sum(diff * diff_ref)
                         / np.sqrt(np.sum(diff * diff))
-                        / np.sqrt(np.sum(diff_ref * diff_ref))
+                        / norm_diff_ref
                     )
+
+        self.similarity_raw = self.similarity.copy()
+        self.similarity = self._apply_bg_mask(self.similarity)
+
+        if return_similarity:
+            return self.similarity
 
     # Create a function to map cluster index to color
     def get_color(self, cluster_index):
@@ -108,30 +144,33 @@ class Cluster:
     # Find the pixel with the highest self.similarity and start the clustering from there
     def indexing_clusters_all(
         self,
-        mask,
         threshold,
     ):
+        """
+        Index all pixsl in a cluster
 
-        self.dxy = np.array(
-            (
-                (-1, -1),
-                (-1, 0),
-                (-1, 1),
-                (0, -1),
-                (1, 1),
-                (1, 0),
-                (1, -1),
-                (0, 1),
-            )
-        )
+        Parameters
+        ----------
+        threshold: float
+            similarity score threshold to consider pixels as part
+            of the same cluster
+        """
 
         sim_averaged = np.mean(self.similarity, axis=2)
 
+        # Assigning the background as 'counted'
+        if self.r_space_mask is not None:
+            sim_averaged[~self.r_space_mask] = -1.0
+
         # color the pixels with the cluster index
-        # map_cluster = np.zeros((sim_averaged.shape[0],sim_averaged.shape[1]))
-        self.cluster_map = np.zeros(
+        self.cluster_map = -1 * np.ones(
+            (sim_averaged.shape[0], sim_averaged.shape[1]), dtype=np.float64
+        )
+        self.cluster_map_rgb = np.zeros(
             (sim_averaged.shape[0], sim_averaged.shape[1], 4), dtype=np.float64
         )
+
+        self.cluster_map_rgb[..., 3] = 1.0  # start as opaque black
 
         # store arrays of cluster_indices in a list
         self.cluster_list = []
@@ -143,20 +182,24 @@ class Cluster:
         cluster_count_ind = 0
 
         while np.any(sim_averaged != -1):
-
             # finding the pixel that has the highest self.similarity among the pixel that hasn't been clustered yet
             # this will be the 'starting pixel' of a new cluster
             rx0, ry0 = np.unravel_index(sim_averaged.argmax(), sim_averaged.shape)
-            # print(rx0, ry0)
+
+            # Guarding to check if the seed is background
+            if self.r_space_mask is not None and not self.r_space_mask[rx0, ry0]:
+                sim_averaged[rx0, ry0] = -1  # mark processed so we don't pick it again
+                continue
 
             cluster_indices = np.empty((0, 2))
             cluster_indices = (np.append(cluster_indices, [[rx0, ry0]], axis=0)).astype(
                 np.int32
             )
 
-            # map_cluster[rx0, ry0] = cluster_count_ind+1
+            self.cluster_map[rx0, ry0] = cluster_count_ind
+
             color = self.get_color(cluster_count_ind + 1)
-            self.cluster_map[rx0, ry0] = plt.cm.colors.to_rgba(color)
+            self.cluster_map_rgb[rx0, ry0] = plt.cm.colors.to_rgba(color)
 
             # Clustering: one cluster per while loop(until it breaks)
             # Marching algorithm: find a new position and search the nearest neighbor
@@ -165,58 +208,78 @@ class Cluster:
                 counting_added_pixel = 0
 
                 for rx0, ry0 in cluster_indices:
-
                     if sim_averaged[rx0, ry0] != -1:
-
                         # counter to check if pixel in the cluster are checked for NN
                         counting_added_pixel += 1
 
-                        # set to -1 as its NN will be checked
+                        # set to -1 since now its NN will be checked
                         sim_averaged[rx0, ry0] = -1
 
                         for ind in range(self.dxy.shape[0]):
                             x_ind = rx0 + self.dxy[ind, 0]
                             y_ind = ry0 + self.dxy[ind, 1]
 
-                            # add if the neighbor is similar, but don't add if the neighbor is already in a cluster
-                            if self.similarity[
-                                rx0, ry0, ind
-                            ] > threshold and np.array_equal(
-                                self.cluster_map[x_ind, y_ind], [0, 0, 0, 0]
+                            if (
+                                x_ind > 1
+                                and y_ind > 1
+                                and x_ind < self.similarity.shape[0] - 2
+                                and y_ind < self.similarity.shape[1] - 2
                             ):
+                                r_ok = (
+                                    True
+                                    if self.r_space_mask is None
+                                    else bool(self.r_space_mask[x_ind, y_ind])
+                                )
 
-                                cluster_indices = np.append(
-                                    cluster_indices, [[x_ind, y_ind]], axis=0
-                                )
-                                # self.cluster_map[x_ind, y_ind] = cluster_count_ind+1
-                                color = self.get_color(cluster_count_ind + 1)
-                                self.cluster_map[x_ind, y_ind] = plt.cm.colors.to_rgba(
-                                    color
-                                )
+                                # add if the neighbor is similar, but don't add if the neighbor is already in a cluster
+                                if (
+                                    self.similarity[rx0, ry0, ind] >= threshold
+                                    and self.cluster_map[x_ind, y_ind] == -1
+                                    and r_ok
+                                ):
+                                    cluster_indices = np.append(
+                                        cluster_indices, [[x_ind, y_ind]], axis=0
+                                    )
+
+                                    self.cluster_map[x_ind, y_ind] = cluster_count_ind
+
+                                    color = self.get_color(cluster_count_ind + 1)
+                                    self.cluster_map_rgb[x_ind, y_ind] = (
+                                        plt.cm.colors.to_rgba(color)
+                                    )
 
                 # if no new pixel is checked for NN then break
                 if counting_added_pixel == 0:
                     break
 
-            # single pixel cluster
-            if cluster_indices.shape[0] == 1:
-                self.cluster_map[cluster_indices[0, 0], cluster_indices[0, 1]] = [
-                    0,
-                    0,
-                    0,
-                    1,
-                ]
-
             self.cluster_list.append(cluster_indices)
             cluster_count_ind += 1
-
-        # return cluster_count_ind, self.cluster_list, map_cluster, sim_averaged
 
     def create_cluster_cube(
         self,
         min_cluster_size,
         return_cluster_datacube=False,
     ):
+        """
+        Create dataset (N, 1, qx, qy), where N is the number of clusters
+        that contains diffraction patterns that are averaged across pixels
+        in each cluster
+
+        Parameters
+        ----------
+        min_cluster_size: int
+            minimum size for a clsuter to be included in dataset
+        return_cluster_datacube: bool
+            if True, returns clustered dataset and list of indicies
+            of clusters
+
+        Returns
+        --------
+        cluster_cube: np.ndarray
+            dataset with clsutered diffraction patterns
+        filtered_cluster_list: list
+            list of indicies in real space of each pixel of each cluster
+        """
 
         self.filtered_cluster_list = [
             arr for arr in self.cluster_list if arr.shape[0] >= min_cluster_size

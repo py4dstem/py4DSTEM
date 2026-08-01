@@ -639,7 +639,6 @@ class DirectPtychography(
 
         # plot probe overlaps
         if plot_overlap_trotters:
-
             f = fx**2 + fy**2
 
             if self._semiangle_cutoff == np.inf:
@@ -1005,7 +1004,6 @@ class DirectPtychography(
         num_trotters,
         progress_bar,
     ):
-
         xp = self._xp
         asnumpy = self._asnumpy
 
@@ -1079,7 +1077,6 @@ class DirectPtychography(
 
         # main loop
         for ind in tqdmnd(num_trotters, disable=not progress_bar):
-
             ind_x = self._trotter_inds[0][ind]
             ind_y = self._trotter_inds[1][ind]
 
@@ -1467,7 +1464,6 @@ class DirectPtychography(
 class SSB(
     DirectPtychography,
 ):
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -1693,7 +1689,6 @@ class SSB(
 
             psi = output_array.view(xp.complex64).reshape((sx, sy))
         else:
-
             if self._device == "gpu":
                 raise NotImplementedError()
 
@@ -1747,7 +1742,6 @@ class SSB(
 class OBF(
     DirectPtychography,
 ):
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -1951,7 +1945,6 @@ class OBF(
 
             psi = output_array.view(xp.complex64).reshape((sx, sy))
         else:
-
             if self._device == "gpu":
                 raise NotImplementedError()
 
@@ -2001,7 +1994,6 @@ class OBF(
 class WDD(
     DirectPtychography,
 ):
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -2169,7 +2161,6 @@ class WDD(
 
             psi = output_array.view(xp.complex64).reshape((sx, sy))
         else:
-
             if self._device == "gpu":
                 raise NotImplementedError()
 

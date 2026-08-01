@@ -1,7 +1,6 @@
 import py4DSTEM
 from os.path import join, exists
 
-
 path = join(py4DSTEM._TESTPATH, "test_io/legacy_v0.14.h5")
 
 

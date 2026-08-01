@@ -3,7 +3,6 @@ from py4DSTEM import StrainMap
 from os.path import join
 from numpy import zeros
 
-
 # set filepath
 path = join(py4DSTEM._TESTPATH, "strain/downsample_Si_SiGe_analysis_braggdisks_cal.h5")
 

@@ -13,7 +13,6 @@ from py4DSTEM.data import Calibration, RealSlice, Data, DiffractionSlice
 from py4DSTEM.preprocess import get_shifted_ar
 from py4DSTEM.visualize import show
 
-
 # Virtual image container class
 
 
@@ -536,7 +535,7 @@ class DataCubeVirtualImager:
             ), "No calibration found - set a calibration or set `centered` and `calibrated` to False"
             return g
         else:
-            assert isinstance(calibration, Calibration)
+            # assert isinstance(calibration, Calibration)
             cal = calibration
 
         # Get calibration metadata
