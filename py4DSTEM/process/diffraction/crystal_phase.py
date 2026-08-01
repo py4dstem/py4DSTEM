@@ -1359,7 +1359,6 @@ class CrystalPhase:
 
         # else:
         if not self.single_phase:
-
             # find the second correlation score for each crystal and match index
             for a0 in range(self.num_crystals):
                 corr = phase_sig[a0].copy()

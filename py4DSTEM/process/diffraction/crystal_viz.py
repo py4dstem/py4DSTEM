@@ -1269,7 +1269,6 @@ def plot_orientation_maps(
         unit=" PointList",
         disable=not progress_bar,
     ):
-
         if self.pointgroup.get_crystal_system() == "monoclinic":
             dir_x = (
                 orientation_map.matrix[rx, ry, orientation_ind, :, 0] * ct
@@ -1281,7 +1280,6 @@ def plot_orientation_maps(
 
         else:
             if self.pymatgen_available:
-
                 basis_x[rx, ry, :] = (
                     A @ orientation_map.family[rx, ry, orientation_ind, :, 0]
                 )
