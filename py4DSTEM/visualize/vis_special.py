@@ -845,7 +845,7 @@ def show_complex(
             add_scalebar(ax[0, 0], scalebar)
     else:
         figsize = kwargs.pop("axsize", None)
-        figsize = kwargs.pop("figsize", figsize)
+        figsize = kwargs.pop("figsize", (5, 5))
 
         fig, ax = show(
             rgb,
