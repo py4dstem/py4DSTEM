@@ -412,7 +412,7 @@ def generate_dynamical_diffraction_pattern(
     t0 = time()
 
     psi_0 = np.zeros((n_beams,))
-    psi_0[int(np.where((hkl == [0, 0, 0]).all(axis=1))[0])] = 1.0
+    psi_0[int(np.where((hkl == [0, 0, 0]).all(axis=1))[0].item())] = 1.0
 
     # calculate the diffraction intensities (and amplitudes) for each thichness matrix
     # I = |psi|^2 ; psi = C @ E(z) @ C^-1 @ psi_0, where E(z) is the thickness matrix
